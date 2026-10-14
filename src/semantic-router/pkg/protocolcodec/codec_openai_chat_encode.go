@@ -210,6 +210,9 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		wire.Content, _ = json.Marshal(state.parts[0].Text)
 	} else if len(state.parts) > 0 {
 		wire.Content, _ = json.Marshal(state.parts)
+	} else if message.Role == llmprotocol.RoleTool {
+		// Chat tool messages require content even when the result has no parts.
+		wire.Content = json.RawMessage(`""`)
 	}
 	return wire, nil
 }
