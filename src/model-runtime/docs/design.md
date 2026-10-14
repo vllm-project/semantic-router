@@ -320,6 +320,12 @@ golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
 instruction set and native or emulated BF16 capability, for example
 `cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
 
+`tools/golden_answers.py --record` writes both the generic device-class baseline
+and any qualified reference. The first generic baseline is preserved within a
+revision; later hardware runs update only their qualified entries. A revision
+change clears all old references. Record the new revision on the intended
+baseline device before adding other hardware classes.
+
 ### 5.4 Profile
 
 | Profile | Numerics | What it does |

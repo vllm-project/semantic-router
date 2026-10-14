@@ -10,8 +10,11 @@ The model is served as ``vllm-srun serve`` serves it (verification,
 pinned kernel choices, readiness) and answers its family's golden requests on
 the exact profile, recorded as the readiness check compares them: decision
 answers, or a surface response's numbers (``LoadedModel.golden_values``).
-``--record`` merges this hardware-qualified reference into the file's entries,
-keyed by repository and pinned revision. Older device-class references remain.
+``--record`` writes a generic device-class reference and any hardware-qualified
+reference, keyed by repository and pinned revision. Within a revision, the first
+generic baseline is retained while hardware entries are updated. A new revision
+discards the old references and starts a new baseline; record it on the intended
+baseline device before adding other hardware classes.
 """
 
 from __future__ import annotations
@@ -47,6 +50,10 @@ def answers(
         for golden in served.family.golden(served.package):
             values.update(served.golden_surface(golden["surface"], golden["body"]))
         info = served.model.info
+        goldens = {served.placement.device.accelerator: values}
+        key = served.placement.accelerator.golden_reference(served.placement.device)
+        if key is not None:
+            goldens[key] = values
         return {
             "model": info.id,
             "repo": info.repo,
@@ -54,10 +61,7 @@ def answers(
             "model_sha256": info.model_sha256,
             "device": served.placement.device.label,
             "readiness": served.health.golden.describe(),
-            "golden_answers": {
-                served.placement.accelerator.golden_reference(served.placement.device)
-                or served.placement.device.accelerator: values
-            },
+            "golden_answers": goldens,
         }
     finally:
         runtime.stop()
@@ -69,7 +73,12 @@ def record(path: Path, entries: list[dict[str, Any]]) -> None:
         current = table.get(entry["repo"])
         if current is None or current.get("revision") != entry["revision"]:
             current = {"revision": entry["revision"], "answers": {}}
-        current["answers"].update(entry["golden_answers"])
+        generic = entry["device"].split(":", 1)[0]
+        for key, values in entry["golden_answers"].items():
+            if key == generic:
+                current["answers"].setdefault(key, values)
+            else:
+                current["answers"][key] = values
         table[entry["repo"]] = current
     path.write_text(
         json.dumps(table, indent=1, sort_keys=True) + "\n", encoding="utf-8"

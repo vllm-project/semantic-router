@@ -575,7 +575,7 @@ class Accelerator(ABC):
         return {}
 
     def golden_reference(self, device: DeviceInfo) -> str | None:
-        """Hardware-qualified recorded reference, with the device class as the fallback."""
+        """Optional hardware reference key; callers own device-class fallback."""
         return f"{self.name}:{device.arch}" if device.arch else None
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:

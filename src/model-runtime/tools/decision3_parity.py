@@ -279,6 +279,7 @@ def compare(
             {k: actual["response"].get(k) for k in ("answers", "usage")},
         )
         numeric = [d["delta"] for d in drift if "delta" in d]
+        # A Score's integer level is a changed decision, even though its drift is numeric.
         changed = [d for d in drift if "delta" not in d or d["path"].endswith(".level")]
         answered = True
         for record in (ref, actual):

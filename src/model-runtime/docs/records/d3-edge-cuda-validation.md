@@ -157,6 +157,32 @@ The restarted CUDA worker showed about 1,590 MiB process GPU memory after the
 panel and 6,851–6,854 MiB host RSS. These are snapshots, not peak memory results.
 Single second-call timings are not a latency or throughput benchmark.
 
+## Recorder regression follow-up — 2026-10-14
+
+Review identified that the recorder emitted only a qualified key, leaving no
+generic baseline when starting a new revision. It now records both keys, keeps
+the first generic baseline within a revision, and updates qualified entries.
+Revision changes still discard all old references; record the intended baseline
+device first for the new revision. The accelerator hook docstring and the
+parity tool's explanation of discrete Score levels were also clarified.
+
+Seven recorder cases cover an actual offline tiny-model recording with and
+without a qualified key, CPU/CUDA/ROCm merges, revision replacement and unrelated
+model preservation. The merge cases exercise the real readiness checker to
+prove that an unrecorded hardware class still uses the generic drift gate.
+
+```text
+Recorder regression before fix: 5 failed, 2 passed
+Focused recorder/readiness/startup/D3/parity checks: 80 passed, 11 skipped
+Fresh Linux CPU suite: 1004 passed, 3 skipped, 24 deselected
+Mypy: no issues found in 112 source files
+```
+
+Formatting, structure/architecture checks and generated-client verification
+passed. This follow-up does not change inference numerics, golden data, kernel
+choices or tolerances. The model-backed CPU/L4 measurements above remain the
+2026-10-12 qualification; no new GPU run was needed for the recorder correction.
+
 ## Managed CPU container qualification
 
 A separate ephemeral Modal VM ran a real Docker daemon. The Router image was
