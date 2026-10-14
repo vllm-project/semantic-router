@@ -71,7 +71,6 @@ func newReplicaPool(manager *Manager, name string, declaration config.ModelDeplo
 	generated, _ := api.NewClientWithResponses("http://model-runtime", api.WithHTTPClient(p))
 	p.client = &Client{endpoint: "pool", base: "http://model-runtime", httpClient: p, api: generated}
 	p.client.bundleTasks.Store(DefaultBundleTasks)
-	p.client.apiMinor.Store(-1)
 	// A single worker reuses its existing result cache. Multi-worker output
 	// equivalence is not inferred from structural capabilities, so those pools
 	// bypass the Router result cache.
@@ -125,7 +124,7 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 	defer p.mu.Unlock()
 	var ready []replicaWorker
 	reasons := make(map[string]string)
-	limit, minor := int64(0), int64(-1)
+	limit := int64(0)
 	for _, w := range p.workers {
 		card, err := p.workerCard(w)
 		if err != nil {
@@ -153,14 +152,9 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 		if limit == 0 || current < limit {
 			limit = current
 		}
-		current = w.member.group.client.apiMinor.Load()
-		if minor < 0 || current < minor {
-			minor = current
-		}
 	}
 	if len(ready) > 0 {
 		p.client.bundleTasks.Store(limit)
-		p.client.apiMinor.Store(minor)
 		inputs := map[string]int{p.name: p.baseline.MaxInputs}
 		scanning := map[string]bool{p.name: p.baseline.MaxScanTokens > 0}
 		p.client.maxInputs.Store(&inputs)

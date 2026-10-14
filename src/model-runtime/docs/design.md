@@ -589,8 +589,8 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
 HTTP, whatever its models' states. All three report `api_version`, the
-contract version (`info.version`); a client refuses a runtime of another
-major version.
+contract version (`info.version`). A router and its runtime come from one
+release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 
