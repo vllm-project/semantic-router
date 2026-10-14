@@ -1,5 +1,5 @@
 import torch
-from vllm_sr_runtime.engines.native.models.lora import LoRALinear, adapter_key
+from vllm_srun.engines.native.models.lora import LoRALinear, adapter_key
 
 from .conftest import QUESTIONS, STATE, start_runtime
 

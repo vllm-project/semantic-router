@@ -154,7 +154,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
         # Check Envoy/ExtProc with simple test
         try:
             test_payload = {
-                "model": "auto",
+                "model": "vllm-sr/auto",
                 "messages": [
                     {"role": "user", "content": f"Setup test {str(uuid.uuid4())[:8]}"}
                 ],
@@ -333,7 +333,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                     confidence = entity.get("confidence", 0.0)
                     value = entity.get("value", "")
                     print(
-                        f"  {i+1}. Type: {entity_type}, Confidence: {confidence:.3f}, Value: {value}"
+                        f"  {i + 1}. Type: {entity_type}, Confidence: {confidence:.3f}, Value: {value}"
                     )
 
             if is_pii_detected:
@@ -389,7 +389,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
         pii_content = pii_cases[4]["text"]  # Use multiple PII types case
 
         payload = {
-            "model": "auto",
+            "model": "vllm-sr/auto",
             "messages": [{"role": "user", "content": pii_content}],
             "temperature": 0.1,
         }
@@ -516,7 +516,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
 
             # Send request through full ExtProc pipeline
             payload = {
-                "model": "auto",
+                "model": "vllm-sr/auto",
                 "messages": [{"role": "user", "content": test_case["content"]}],
                 "temperature": 0.1,
             }
@@ -742,7 +742,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                 )
 
             status = "✅" if (is_pii_case == detected_as_pii) else "❌"
-            print(f"  {i+1}. {status} '{test_case['text'][:50]}...'")
+            print(f"  {i + 1}. {status} '{test_case['text'][:50]}...'")
             print(
                 f"     Expected: {'PII detected' if is_pii_case else 'no PII'} | "
                 f"Actual: {actual_category} | Confidence: {confidence:.3f}"

@@ -450,6 +450,7 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "selection_reason": "",
         "selection_method": "",
         "signal_errors": {},
+        "expected_signal_errors": dict(probe.expected_signal_errors),
         "expected_recipe": probe.expected_recipe or "default",
         "actual_recipe": "",
         "expected_algorithm": probe.expected_algorithm,

@@ -49,6 +49,10 @@ func cacheEmbeddingConfig(spec config.ResolvedModelBinding) *config.RouterConfig
 func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 	b.Helper()
 	cacheEmbeddingOnce.Do(func() {
+		// benchmarkDeployment stops this benchmark (b.Fatalf) inside Do, and Do
+		// still counts as done, so later benchmarks fail on this error unless
+		// setup ends.
+		cacheEmbeddingErr = errors.New("prepare Vela embedding: an earlier benchmark stopped while preparing it")
 		spec := benchmarkDeployment(b, "embedding", "embedding.v1", cacheEmbeddingDeployment, benchmarkInput)
 		cfg := cacheEmbeddingConfig(spec)
 		set, err := modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, benchmarkRuntime)
@@ -63,6 +67,7 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 		}
 		cacheEmbeddingOwner = set
 		cacheEmbeddingProvider = provider
+		cacheEmbeddingErr = nil
 	})
 	if cacheEmbeddingErr != nil {
 		b.Fatal(cacheEmbeddingErr)

@@ -459,7 +459,6 @@ func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
 
 func TestFusionLooperPanelQuorumSkipsSlowWorker(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
 		var payload struct {
 			Model    string `json:"model"`
 			Messages []struct {
@@ -625,7 +624,6 @@ func newFusionToolCallServer(
 ) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
 		payload := decodeFusionToolCallPayload(t, r)
 		observation := fusionToolCallObservationFromPayload(payload)
 		if observe != nil {

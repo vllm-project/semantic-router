@@ -2,10 +2,11 @@
 
 import pytest
 import torch
-from vllm_sr_runtime.accel import onednn
-from vllm_sr_runtime.accel.kernels import reference_kernels
-from vllm_sr_runtime.engines.native import encoder, models
-from vllm_sr_runtime.engines.native.models.modernbert import (
+from vllm_srun.accel import onednn
+from vllm_srun.accel.kernels import Kernel, reference_kernels
+from vllm_srun.engines.native import encoder, models
+from vllm_srun.engines.native.models import modernbert
+from vllm_srun.engines.native.models.modernbert import (
     BAND_FROM,
     FULL,
     SLIDING,
@@ -17,8 +18,8 @@ from vllm_sr_runtime.engines.native.models.modernbert import (
     rope_frequencies,
     rope_parameters,
 )
-from vllm_sr_runtime.engines.native.weights import lay_out_linears, load_backbone
-from vllm_sr_runtime.testing.fixtures import modernbert_config, random_backbone, save
+from vllm_srun.engines.native.weights import lay_out_linears, load_backbone
+from vllm_srun.testing.fixtures import modernbert_config, random_backbone, save
 
 VOCAB = 300
 # Shorter and longer than the 4-token half-window and the 9-token band, padded and not.
@@ -246,9 +247,9 @@ def test_layer_exits_outside_the_encoder_are_refused():
 
 
 def test_native_engine_encodes_packed_and_padded_batches(tmp_path):
-    from vllm_sr_runtime.accel.cpu import CPUAccelerator
-    from vllm_sr_runtime.engines.native.engine import NativeEngine
-    from vllm_sr_runtime.plugins.base import (
+    from vllm_srun.accel.cpu import CPUAccelerator
+    from vllm_srun.engines.native.engine import NativeEngine
+    from vllm_srun.plugins.base import (
         BackboneSpec,
         DtypePolicy,
         EncoderBatch,
@@ -306,6 +307,38 @@ def test_local_layers_in_query_blocks_match_the_dense_band(lengths):
         expected = backbone.encode(flat, dense)[backbone.num_layers]
         actual = backbone.encode(flat, blocked)[backbone.num_layers]
     torch.testing.assert_close(actual, expected, rtol=0, atol=1e-5)
+
+
+@pytest.mark.parametrize("variant", [None, "additive_masks"])
+@pytest.mark.parametrize("lengths", [[40], [37, 9, 22], [64, 64], [61]])
+def test_local_layers_read_query_blocks_a_few_at_a_time_bit_for_bit(
+    monkeypatch, lengths, variant
+):
+    """CPU calls of ``BAND_CALL_TOKENS`` query tokens give the result of one call over every block."""
+    backbone, _ = native(CONFIGS["yarn"], seed=13)
+    backbone.kernels.use_variants({"sdpa": variant} if variant else {})
+    ids, mask = batch(lengths, seed=10)
+    flat = ids[mask.bool()]
+    layout = packed_layout(lengths, backbone.window, "cpu", band_from=1, block=8)
+    sdpa, calls = backbone.kernels.select("sdpa"), []
+
+    def counted(query, *args, **kwargs):
+        calls.append(query.shape[1])
+        return sdpa.fn(query, *args, **kwargs)
+
+    backbone.kernels.register(
+        Kernel("sdpa", counted, "counted", exact=True, variant=sdpa.variant)
+    )
+    with torch.inference_mode():
+        monkeypatch.setattr(modernbert, "BAND_CALL_TOKENS", 1 << 20)
+        whole = backbone.encode(flat, layout, (1, 2, 4))
+        monkeypatch.setattr(modernbert, "BAND_CALL_TOKENS", 16)
+        calls.clear()
+        chunked = backbone.encode(flat, layout, (1, 2, 4))
+    heads = CONFIGS["yarn"]["num_attention_heads"]
+    assert calls and max(calls) <= heads * 16 // 8
+    for layer, value in whole.items():
+        assert torch.equal(chunked[layer], value)
 
 
 def test_length_groups_cut_where_a_grid_pads_too_much():

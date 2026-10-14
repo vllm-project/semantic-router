@@ -4,8 +4,8 @@ import json
 
 import pytest
 import torch
-from vllm_sr_runtime.heads.candidate import load_head, logits
-from vllm_sr_runtime.text.segments import collate
+from vllm_srun.heads.candidate import load_head, logits
+from vllm_srun.text.segments import collate
 
 transformers = pytest.importorskip("transformers")
 pytestmark = pytest.mark.reference

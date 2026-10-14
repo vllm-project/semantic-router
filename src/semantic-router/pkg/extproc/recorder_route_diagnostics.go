@@ -33,6 +33,7 @@ func buildReplayRouteDiagnostics(
 		SelectionReasoning:             ctx.VSRSelectionReasoning,
 		SelectionTrace:                 ctx.VSRSelectionTrace.Clone(),
 		FusionQuorum:                   ctx.VSRFusionQuorum,
+		TopicContinuity:                routerreplay.NewTopicContinuityRecords(ctx.TopicContinuityEvaluations),
 		Looper:                         ctx.VSRLooperDiagnostics,
 		PromptHelperModel:              ctx.VSRPromptHelperModel,
 		PromptHelperPromptTokens:       ctx.VSRPromptHelperPromptTokens,
@@ -205,5 +206,7 @@ func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionR
 		DecidedBy:     trace.DecidedBy,
 		Winner:        trace.Winner,
 		Candidates:    trace.Candidates,
+		RunnerUp:      trace.RunnerUp,
+		Reason:        trace.Reason,
 	}
 }

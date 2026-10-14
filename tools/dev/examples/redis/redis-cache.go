@@ -14,7 +14,7 @@ import (
 )
 
 // runtimeEmbedding serves the Vela embedding model from a model runtime this
-// example starts (VLLM_SR_RUNTIME_COMMAND, else vllm-sr-runtime on PATH).
+// example starts (VLLM_SRUN_COMMAND, else vllm-srun on PATH).
 func runtimeEmbedding(ctx context.Context) (*serving.EmbeddingProvider, func(), error) {
 	deployment, err := config.ImplicitModelRuntimeDeployment("models/Vela-1.0-Encoder-307M-Embedding", true)
 	if err != nil {

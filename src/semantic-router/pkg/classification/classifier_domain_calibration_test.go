@@ -1,7 +1,6 @@
 package classification
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -113,27 +112,16 @@ func TestDomainCalibrationNeedsTheServedModel(t *testing.T) {
 	}
 }
 
-// cardServices serves one deployment's card; no other call is expected.
-type cardServices struct {
-	serving.Services
-	deployment string
-	card       modelservice.ModelCard
-}
-
-func (s cardServices) Card(_ context.Context, deployment string) (modelservice.ModelCard, error) {
-	if deployment != s.deployment {
-		return modelservice.ModelCard{}, os.ErrNotExist
-	}
-	return s.card, nil
-}
-
 func TestCategoryBackendReportsTheServedModelIdentity(t *testing.T) {
 	spec := config.ResolvedModelBinding{Binding: config.ModelBinding{Deployment: "domain"}}
-	services := cardServices{deployment: "domain", card: modelservice.ModelCard{ModelSHA256: fittedModel}}
+	services := &cardServices{card: modelservice.ModelCard{ModelSHA256: fittedModel}}
 	backend := ownedCategoryBackend{&ownedSequenceBackend{runtime: serving.New(services, nil), spec: spec}}
 	identity, err := backend.ModelSHA256()
 	if err != nil || identity != fittedModel {
 		t.Fatalf("ModelSHA256() = %q, %v, want %q", identity, err, fittedModel)
+	}
+	if len(services.asked) != 1 || services.asked[0] != "domain" {
+		t.Fatalf("ModelSHA256() asked for the cards of %v, want [domain]", services.asked)
 	}
 	if _, err := (ownedCategoryBackend{&ownedSequenceBackend{runtime: serving.New(nil, nil), spec: spec}}).ModelSHA256(); err == nil {
 		t.Fatal("ModelSHA256() without runtime services succeeded")

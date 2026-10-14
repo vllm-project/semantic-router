@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the profile's tiny fixture packages, then run the runtime command.
 
-The Router starts its managed runtimes through VLLM_SR_RUNTIME_COMMAND, and the
+The Router starts its managed runtimes through VLLM_SRUN_COMMAND, and the
 attached runtime pod starts through this script as well, so every runtime of
 the profile serves the same deterministic random-weight packages without
 downloading a model. The Router may start several processes at once; a file
@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(os.environ.get("VSR_E2E_FIXTURES", "/tmp/vsr-fixtures"))
 # The CPU runtime image puts the runtime on PATH; router images keep it in its
 # own environment.
-RUNTIME_COMMANDS = ("vllm-sr-runtime", "/opt/vllm-sr-runtime/bin/vllm-sr-runtime")
+RUNTIME_COMMANDS = ("vllm-srun", "/opt/vllm-srun/bin/vllm-srun")
 # name: (family, variant, seed); values.yaml and the attached models file name
 # these directories.
 PACKAGES = {
@@ -33,6 +33,7 @@ PACKAGES = {
     "embedding": ("task_heads", "embedding", 6),
     "reranker": ("task_heads", "reranker", 7),
     "modality": ("task_heads", "modality", 8),
+    "vela2-attached": ("vela2", "encoder", 9),
 }
 
 

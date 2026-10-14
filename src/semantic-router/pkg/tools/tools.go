@@ -2,10 +2,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"runtime"
 	"sort"
 	"sync"
 
@@ -68,139 +65,30 @@ func (db *ToolsDatabase) IsEnabled() bool {
 	return db.enabled
 }
 
-// LoadToolsFromFile loads tools from a JSON file
-func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
-	if !db.enabled {
-		return nil
-	}
-
-	// Read the JSON file
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read tools file: %w", err)
-	}
-
-	// Parse the JSON data into ToolEntry slice
-	var toolEntries []ToolEntry
-	if err := json.Unmarshal(data, &toolEntries); err != nil {
-		return fmt.Errorf("failed to parse tools JSON: %w", err)
-	}
-
-	// Use worker pool for concurrent embedding generation
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > len(toolEntries) {
-		numWorkers = len(toolEntries)
-	}
-	logging.ComponentEvent("tools", "tool_database_load_started", map[string]interface{}{
-		"file_path":        filePath,
-		"model_type":       db.modelType,
-		"target_dimension": db.targetDim,
-		"tool_count":       len(toolEntries),
-		"worker_count":     numWorkers,
-	})
-
-	type result struct {
-		entry ToolEntry
-		err   error
-	}
-
-	resultChan := make(chan result, len(toolEntries))
-	entryChan := make(chan ToolEntry, len(toolEntries))
-
-	// Send all entries to channel
-	for _, entry := range toolEntries {
-		entryChan <- entry
-	}
-	close(entryChan)
-
-	// Start workers
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			for entry := range entryChan {
-				embedding, err := db.embedText(entry.Description)
-				if err != nil {
-					resultChan <- result{entry: entry, err: err}
-				} else {
-					entry.Embedding = embedding
-					resultChan <- result{entry: entry, err: nil}
-				}
-			}
-		}(i)
-	}
-
-	// Close result channel when all workers are done
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results
-	successCount := 0
-	failedCount := 0
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	for res := range resultChan {
-		if res.err != nil {
-			logging.ComponentWarnEvent("tools", "tool_embedding_failed", map[string]interface{}{
-				"tool_name": res.entry.Tool.Function.Name,
-				"error":     res.err.Error(),
-			})
-			failedCount++
-		} else {
-			// Add to the database
-			db.entries = append(db.entries, res.entry)
-			logging.ComponentDebugEvent("tools", "tool_loaded", map[string]interface{}{
-				"tool_name":       res.entry.Tool.Function.Name,
-				"category":        res.entry.Category,
-				"has_tags":        len(res.entry.Tags) > 0,
-				"description_len": len(res.entry.Description),
-			})
-			successCount++
-		}
-	}
-
-	logging.ComponentEvent("tools", "tool_database_loaded", map[string]interface{}{
-		"file_path":        filePath,
-		"model_type":       db.modelType,
-		"target_dimension": db.targetDim,
-		"tool_count":       len(toolEntries),
-		"loaded_count":     successCount,
-		"failed_count":     failedCount,
-		"worker_count":     numWorkers,
-	})
-	return nil
-}
-
-// AddTool adds a tool to the database with automatic embedding generation
+// AddTool admits an isolated definition under its normalized unique name.
+// Validation and embedding failures leave the catalog unchanged.
 func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, description string, category string, tags []string) error {
 	if !db.enabled {
 		return nil
 	}
-
-	embedding, err := db.embedText(description)
+	entry, err := prepareToolEntry(ToolEntry{Tool: tool, Description: description, Category: category, Tags: tags})
 	if err != nil {
-		return fmt.Errorf("failed to generate embedding for tool %s: %w", tool.Function.Name, err)
+		return err
 	}
-
-	entry := ToolEntry{Tool: tool, Description: description, Embedding: embedding, Category: category, Tags: tags}
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.entries = append(db.entries, entry)
+	entry.Embedding, err = db.embedText(description)
+	if err != nil {
+		return fmt.Errorf("failed to generate tool embedding: %w", err)
+	}
+	if err := validateEmbedding(entry.Embedding); err != nil {
+		return err
+	}
+	if err := db.appendEntries([]ToolEntry{entry}); err != nil {
+		return err
+	}
 	logging.ComponentEvent("tools", "tool_added", map[string]interface{}{
-		"tool_name":       tool.Function.Name,
-		"category":        category,
-		"has_tags":        len(tags) > 0,
-		"description_len": len(description),
-		"model_type":      db.modelType,
+		"tool_name": entry.Tool.Function.Name, "category": category,
+		"has_tags": len(tags) > 0, "description_len": len(description), "model_type": db.modelType,
 	})
-
 	return nil
 }
 
@@ -243,6 +131,13 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		return nil, fmt.Errorf("failed to generate embedding for query: %w", err)
 	}
 
+	if err := validateEmbedding(queryEmbedding); err != nil {
+		return nil, err
+	}
+	floor := db.similarityFloor(minSimilarity)
+	if !finiteScore(floor) {
+		return nil, fmt.Errorf("tools: similarity threshold must be finite")
+	}
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -252,7 +147,9 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		n := min(len(queryEmbedding), len(entry.Embedding))
 		dotProduct := vecmath.Dot(queryEmbedding[:n], entry.Embedding[:n])
 
-		floor := db.similarityFloor(minSimilarity)
+		if !finiteScore(dotProduct) {
+			return nil, fmt.Errorf("tools: similarity score must be finite")
+		}
 		logging.Debugf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
 			entry.Tool.Function.Name, dotProduct, floor)
 
@@ -269,8 +166,11 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		return []ToolSimilarity{}, nil
 	}
 
-	// Sort by similarity (highest first)
+	// Name is the final tie-breaker before truncation, independent of load order.
 	sort.Slice(results, func(i, j int) bool {
+		if results[i].Similarity == results[j].Similarity {
+			return results[i].Entry.Tool.Function.Name < results[j].Entry.Tool.Function.Name
+		}
 		return results[i].Similarity > results[j].Similarity
 	})
 
@@ -279,8 +179,9 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		limit = len(results)
 	}
 
-	selected := results[:limit]
-	for _, result := range selected {
+	selected := make([]ToolSimilarity, limit)
+	for i, result := range results[:limit] {
+		selected[i] = ToolSimilarity{Entry: cloneToolEntry(result.Entry), Similarity: result.Similarity}
 		logging.Infof("Selected tool: %s (similarity=%.4f)",
 			result.Entry.Tool.Function.Name, result.Similarity)
 	}
@@ -296,7 +197,7 @@ func (db *ToolsDatabase) embedText(text string) ([]float32, error) {
 	return nil, fmt.Errorf("tools embedding provider was not prepared")
 }
 
-// GetAllTools returns all tools in the database
+// GetAllTools returns isolated definitions in normalized-name order.
 func (db *ToolsDatabase) GetAllTools() []openai.ChatCompletionToolParam {
 	if !db.enabled {
 		return []openai.ChatCompletionToolParam{}
@@ -307,7 +208,7 @@ func (db *ToolsDatabase) GetAllTools() []openai.ChatCompletionToolParam {
 
 	tools := make([]openai.ChatCompletionToolParam, len(db.entries))
 	for i, entry := range db.entries {
-		tools[i] = entry.Tool
+		tools[i] = cloneToolDefinition(entry.Tool)
 	}
 
 	return tools

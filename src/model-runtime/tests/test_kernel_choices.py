@@ -14,14 +14,14 @@ import threading
 from dataclasses import replace
 
 import pytest
-from vllm_sr_runtime.accel import autotune
-from vllm_sr_runtime.accel.autotune import (
+from vllm_srun.accel import autotune
+from vllm_srun.accel.autotune import (
     KernelChoices,
     PinnedKernel,
     RoutedCache,
     fla_key_hash,
 )
-from vllm_sr_runtime.registry import builtin
+from vllm_srun.registry import builtin
 
 L2NORM = "l2norm_fwd_kernel"
 KEY = [128, 1, "torch.bfloat16"]
@@ -190,10 +190,10 @@ def two_fla_models(tmp_path, monkeypatch, fla):
     Every forward launches the fake FLA kernel, as a Qwen3.5 forward launches FLA's, and records
     the configuration it ran with.
     """
-    from vllm_sr_runtime import runtime as runtime_module
-    from vllm_sr_runtime.families.decision1.family import Decision1Family
-    from vllm_sr_runtime.families.decision1.model import QwenDecisionModel
-    from vllm_sr_runtime.testing.decision1 import write_package
+    from vllm_srun import runtime as runtime_module
+    from vllm_srun.families.decision1.family import Decision1Family
+    from vllm_srun.families.decision1.model import QwenDecisionModel
+    from vllm_srun.testing.decision1 import write_package
 
     roots = [
         write_package(tmp_path / name, seed=index, model_name=name)
@@ -226,8 +226,8 @@ def two_fla_models(tmp_path, monkeypatch, fla):
 
 
 def serve(roots):
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     runtime = Runtime(
         ServeConfig(
@@ -280,7 +280,7 @@ def test_a_model_whose_choices_cannot_run_loads_unverified_and_says_why(
 ):
     roots, choices, launched = two_fla_models
     choices["second"] = recorded((KEY, config(BT=32)), fla="0.6.0")
-    with caplog.at_level(logging.WARNING, logger="vllm_sr_runtime"):
+    with caplog.at_level(logging.WARNING, logger="vllm_srun"):
         runtime = serve(roots)
     try:
         ask(runtime, "second")
@@ -306,7 +306,7 @@ def test_a_model_whose_choices_cannot_run_loads_unverified_and_says_why(
 def test_a_pinned_model_without_a_device_thread_runs_inline_in_its_scope(
     two_fla_models, fla, monkeypatch
 ):
-    from vllm_sr_runtime.families.decision1.model import QwenDecisionModel
+    from vllm_srun.families.decision1.model import QwenDecisionModel
 
     roots, _, launched = two_fla_models
     threads = set()
@@ -328,7 +328,7 @@ def test_a_pinned_model_without_a_device_thread_runs_inline_in_its_scope(
         runtime.stop()
     # Requests ran on their planning threads (a request that arrives while the worker
     # still holds the model runs on the worker instead); every forward ran its own choices.
-    assert threads - {"vllm-sr-runtime-worker"}
+    assert threads - {"vllm-srun-worker"}
     assert not any(name.startswith("vllm-sr-cpu") for name in threads)
     assert launched == {
         "first": {json.dumps(config(BT=8))},
@@ -338,8 +338,8 @@ def test_a_pinned_model_without_a_device_thread_runs_inline_in_its_scope(
 
 
 def test_models_without_choices_never_enter_a_scope(tmp_path, monkeypatch):
-    from vllm_sr_runtime.families.decision1.model import QwenDecisionModel
-    from vllm_sr_runtime.testing.decision1 import write_package
+    from vllm_srun.families.decision1.model import QwenDecisionModel
+    from vllm_srun.testing.decision1 import write_package
 
     scopes = []
     run = QwenDecisionModel.run_shared
@@ -420,7 +420,7 @@ def test_the_resolver_picks_what_fla_picks_from_the_entries_as_config_files(
 def test_fla_s_gated_delta_rule_runs_each_scoped_model_s_configurations():
     torch = pytest.importorskip("torch")
     pytest.importorskip("fla")
-    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
 
     accelerator = ROCmAccelerator()
     if not accelerator.available():

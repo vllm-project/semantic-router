@@ -6,7 +6,7 @@ SR_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 cd "${SR_ROOT}"
 
 # The router starts its classifiers in the model runtime (make model-runtime-install).
-export VLLM_SR_RUNTIME_COMMAND="${VLLM_SR_RUNTIME_COMMAND:-${SR_ROOT}/.venv-agent/bin/vllm-sr-runtime}"
+export VLLM_SRUN_COMMAND="${VLLM_SRUN_COMMAND:-${SR_ROOT}/.venv-agent/bin/vllm-srun}"
 
 ROUTER_CONFIG=${ROUTER_CONFIG:-"e2e/config/config.e2e.yaml"}
 MOCK_PYTHON=${MOCK_PYTHON:-"python3"}
@@ -44,9 +44,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-runtime_bin=${VLLM_SR_RUNTIME_COMMAND%% *}
+runtime_bin=${VLLM_SRUN_COMMAND%% *}
 command -v "${runtime_bin}" >/dev/null 2>&1 ||
-  fail "model runtime command ${runtime_bin} not found; run make harness-venv-install model-runtime-install or set VLLM_SR_RUNTIME_COMMAND"
+  fail "model runtime command ${runtime_bin} not found; run make harness-venv-install model-runtime-install or set VLLM_SRUN_COMMAND"
 
 log "Setting up provider mocker backend venv..."
 "${MOCK_PYTHON}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "provider-mocker requires Python 3.11+; set MOCK_PYTHON")'

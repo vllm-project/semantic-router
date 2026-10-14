@@ -38,7 +38,7 @@ The launcher expects:
 
 - a Router binary (`make build-router`) and the model runtime
   (`make model-runtime-install`), with `.venv-agent/bin` on `PATH` so the Router
-  finds `vllm-sr-runtime`; the runtime downloads its models on first start;
+  finds `vllm-srun`; the runtime downloads its models on first start;
 - the isolated provider environment from `make provider-mocker-install`
   (Python 3.11+) and the client dependencies used by the scripts;
 - `curl`, `lsof`, and `func-e` on `PATH`;

@@ -14,12 +14,12 @@ from pathlib import Path
 
 import yaml
 from ci_results import actual_platform, collection_errors
+from prepare_model_test_assets import pins, verify
 from workflow_evidence import go_cases
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = Path("tools/calibration/image-routing/testdata/calibration-set.json")
 RULES = Path("config/fragments/signal/embedding/image-routing.yaml")
-OMNI_MANIFEST = "vela_omni_manifest.json"
 
 
 def read(path: Path) -> dict:
@@ -39,45 +39,47 @@ def model_identity(manifest: dict) -> tuple[dict, dict[str, str]]:
     if (
         model.get("name") != "Multimodal"
         or model.get("env") != "MULTIMODAL_MODEL_PATH"
+        or not model.get("repo_id")
         or not re.fullmatch(r"[0-9a-f]{40}", model.get("revision", ""))
+        or not model.get("files")
     ):
         raise ValueError("image calibration model identity is invalid")
     directory = Path(model["path"]).resolve()
-    artifact = read(directory / OMNI_MANIFEST)
-    if (
-        artifact.get("format_version") != 1
-        or artifact.get("adapter") != "vela_omni"
-        or artifact.get("source")
-        != {"repo_id": model["repo_id"], "revision": model["revision"]}
-        or not artifact.get("files")
-    ):
-        raise ValueError("Omni manifest source identity mismatch")
-    hashes = {OMNI_MANIFEST: file_sha(directory / OMNI_MANIFEST)}
-    for name, expected in artifact["files"].items():
+    hashes = {}
+    for name, expected in model["files"].items():
         path = (directory / name).resolve()
         if (
             Path(name).is_absolute()
             or not path.is_relative_to(directory)
             or ".." in Path(name).parts
         ):
-            raise ValueError(f"Omni manifest path escape: {name}")
+            raise ValueError(f"Omni snapshot path escape: {name}")
         actual = file_sha(path)
         if actual != "sha256:" + expected:
-            raise ValueError(f"Omni manifest checksum mismatch: {name}")
+            raise ValueError(f"Omni snapshot checksum mismatch: {name}")
         hashes[name] = actual
     return model, hashes
 
 
-def prepare_manifest(artifact: Path, destination: Path) -> None:
-    source = read(artifact / OMNI_MANIFEST)["source"]
+def prepare_manifest(snapshot: Path, destination: Path) -> None:
+    """Identify the snapshot as the runtime-pinned Omni release its bytes match."""
+    table = pins()
+    for repo_id in ("vllm-sr/Vela-1.0-Omni-Nano", "vllm-sr/Vela-1.0-Omni-Mini"):
+        pinned = table.lookup(repo_id)
+        if verify(snapshot, pinned):
+            break
+    else:
+        raise ValueError(f"{snapshot} is not a pinned Vela Omni release")
     manifest = {
         "provider": "model_runtime",
         "models": [
             {
                 "name": "Multimodal",
                 "env": "MULTIMODAL_MODEL_PATH",
-                "path": str(artifact.resolve()),
-                **source,
+                "path": str(snapshot.resolve()),
+                "repo_id": pinned.repo_id,
+                "revision": pinned.revision,
+                "files": dict(sorted(pinned.files.items())),
             }
         ],
     }
@@ -269,6 +271,8 @@ def run(manifest: Path, output: Path) -> None:
                     [
                         "-model",
                         model["path"],
+                        "-artifact-repository",
+                        model["repo_id"],
                         "-artifact-revision",
                         model["revision"],
                         "-expect-artifact-revision",
@@ -321,7 +325,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--artifact", type=Path)
+    parser.add_argument("--artifact", type=Path, help="the pinned Omni snapshot")
     parser.add_argument("--prepare-manifest", action="store_true")
     args = parser.parse_args()
     if args.prepare_manifest:

@@ -175,6 +175,22 @@ def test_reference_config_matches_generated_structure() -> None:
 
 
 @pytest.mark.parametrize(
+    "config_path",
+    sorted(
+        (Path(__file__).resolve().parents[3] / "config" / "recipes").glob(
+            "*/config.yaml"
+        )
+    ),
+    ids=lambda path: path.parent.name,
+)
+def test_maintained_recipes_match_generated_structure(config_path: Path) -> None:
+    with config_path.open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+
+    assert validate_config_structure(config) == []
+
+
+@pytest.mark.parametrize(
     "persistence",
     [
         None,

@@ -16,14 +16,17 @@ import (
 // the model's input cap, and splits the answer back to each caller.
 
 // bundleTask is one task of a /v1/bundle request and the calls it answers; a
-// fused classify task answers several, sizes[i] inputs each.
+// fused classify task answers several, sizes[i] inputs each, and a decisions
+// task answers each of its calls' questions (see fusion_decisions.go).
 type bundleTask struct {
-	task  api.BundleTask
-	calls []*bundleCall
-	sizes []int
+	task     api.BundleTask
+	calls    []*bundleCall
+	sizes    []int
+	decision *fusedDecision
 }
 
-// fuse turns one client's parked calls into bundle tasks in call order.
+// fuse turns one client's parked classify, embeddings and rerank calls into
+// bundle tasks in call order.
 func fuse(client *Client, calls []*bundleCall) []*bundleTask {
 	tasks := make([]*bundleTask, 0, len(calls))
 	open := make(map[string]*bundleTask)
@@ -107,6 +110,10 @@ func fusedClassify(first api.BundleTask, calls []*bundleCall, list api.ClassifyI
 
 // answer hands every call its part of the task's result.
 func (t *bundleTask) answer(result api.BundleResult, err error) {
+	if t.decision != nil {
+		t.answerDecision(result, err)
+		return
+	}
 	if len(t.calls) == 1 {
 		call := t.calls[0]
 		call.result, call.err = result, err

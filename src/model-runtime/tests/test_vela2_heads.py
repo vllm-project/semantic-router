@@ -9,8 +9,8 @@ import pytest
 torch = pytest.importorskip("torch")
 F = torch.nn.functional
 
-from vllm_sr_runtime.heads.marker import MarkerHead  # noqa: E402
-from vllm_sr_runtime.heads.span import SpanHead  # noqa: E402
+from vllm_srun.heads.marker import MarkerHead  # noqa: E402
+from vllm_srun.heads.span import SpanHead  # noqa: E402
 
 HIDDEN = torch.Generator().manual_seed(1)
 Q_INDEX = torch.tensor([[0, 1, 2, 6], [1, 0, 3, 9]])

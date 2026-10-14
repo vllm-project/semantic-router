@@ -2,13 +2,13 @@
 
     python3 tools/golden_answers.py vllm-sr/Decision-2.0-Kai-0.6B --device cpu
     python3 tools/golden_answers.py vllm-sr/Decision-1.0-Lux-9B --device rocm:0 \\
-        --autotune-cache /var/cache/vllm-sr-runtime/autotune
+        --autotune-cache /var/cache/vllm-srun/autotune
     python3 tools/golden_answers.py --family task_heads --device cpu --offline \\
-        --record vllm_sr_runtime/registry/golden_answers_vela1.json
+        --record vllm_srun/registry/golden_answers_vela1.json
 
-The model is served as ``vllm-sr-runtime serve`` serves it (verification,
-pinned kernel choices, readiness) and answers its family's golden requests on
-the exact profile, recorded as the readiness check compares them: decision
+The model is served as ``vllm-srun serve`` serves it (verification,
+pinned kernel choices, readiness) and answers its family's golden requests
+alone, in their released forwards, recorded as the readiness check compares them: decision
 answers, or a surface response's numbers (``LoadedModel.golden_values``).
 ``--record`` merges this device class into the file's entries, keyed by
 repository and pinned revision.
@@ -21,9 +21,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.registry import builtin
+from vllm_srun.runtime import Runtime
 
 
 def answers(

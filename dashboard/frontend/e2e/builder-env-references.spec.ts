@@ -1,12 +1,12 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import path from 'node:path'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { mockAuthenticatedAppShell, test } from './support/compiler'
 
 test.use({ screenshot: 'only-on-failure' })
 
-// These tests use the actual Go WASM compiler built by dashboard-build-wasm.
-// Deploy writes the imported values back, and the browser has no process
+// These tests use the production Go compiler through its HTTP handler.
+// Deploy writes the imported values back, and the compiler preserves references instead of resolving its process
 // environment, so references and $$ escapes must survive the import as written.
 const referencesConfig = `version: v0.3
 providers:

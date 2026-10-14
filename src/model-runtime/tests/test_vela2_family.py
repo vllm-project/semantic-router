@@ -3,27 +3,30 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.engines.native.engine import NativeEngine
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.vela2.family import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.errors import PackageError
+from vllm_srun.families.vela2.family import (
     GOLDEN_QUESTIONS,
     GOLDEN_STATE,
     Vela2Family,
 )
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.plugins.base import (
     DEADLINE,
     EngineOptions,
     PackageRef,
     SurfacePlan,
     TreeBatch,
 )
-from vllm_sr_runtime.testing.vela2 import write_decoder_package, write_encoder_package
+from vllm_srun.runtime import Runtime
+from vllm_srun.testing.vela2 import write_decoder_package, write_encoder_package
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 # The 0.8B's backbone has as many gated-delta value heads as key heads; the 4B and 9B have twice as many.
@@ -98,6 +101,68 @@ def test_verification_checks_sums_and_manifest_weights(packages, tmp_path) -> No
     (copy / "SHA256SUMS").unlink()
     with pytest.raises(PackageError, match="MODEL_MANIFEST"):
         Vela2Family().verify(PackageRef(copy))
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_incomplete_builtin_modernbert_package_stays_not_ready(
+    packages, tmp_path, monkeypatch, damage
+) -> None:
+    from vllm_srun.registry import builtin
+    from vllm_srun.registry.tables.common import BuiltinModel
+
+    family = Vela2Family()
+    complete = family.verify(PackageRef(packages["encoder"]))
+    details = complete.details["package"]
+    repo_id, revision = "vllm-sr/Fixture-ModernBERT", "a" * 40
+    entry = BuiltinModel(
+        repo_id=repo_id,
+        revision=revision,
+        family="vela2",
+        model_sha256=complete.model_sha256,
+        manifest_sha256="",
+        loaded_parameters=0,
+        backbone="modernbert",
+        min_device_memory_gib=1,
+        files=details.files,
+    )
+    real_lookup = builtin.lookup
+    monkeypatch.setattr(
+        builtin, "lookup", lambda name: entry if name == repo_id else real_lookup(name)
+    )
+
+    root = Path(shutil.copytree(packages["encoder"], tmp_path / damage))
+    weights = root / "model.safetensors"
+    if damage == "missing":
+        weights.unlink()
+    else:
+        weights.write_bytes(b"corrupt")
+
+    resolves = 0
+
+    def resolve_fixture(model, **_options):
+        nonlocal resolves
+        resolves += 1
+        assert model == repo_id
+        return PackageRef(root, repo_id, revision)
+
+    monkeypatch.setattr("vllm_srun.runtime.resolve", resolve_fixture)
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=repo_id, device="cpu"),),
+            load_attempts=3,
+            load_retry_seconds=0.001,
+        )
+    )
+    runtime.start(background=True)
+    try:
+        assert not runtime.wait(timeout=10)
+        health = runtime.served[0].health
+        assert health.state == "failed"
+        assert health.reason is not None and health.reason.startswith("PackageError:")
+        assert "model.safetensors" in health.reason
+        assert resolves == 1
+    finally:
+        runtime.stop()
 
 
 def test_bundled_engine_is_never_imported(models) -> None:
@@ -200,17 +265,19 @@ def test_decoder_shared_context_path_runs_one_parts_pass(
 
 
 @pytest.mark.parametrize("name", ["encoder", "decoder"])
-def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
-    from vllm_sr_runtime.plugins.base import Job
-    from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
+def test_shared_context_packs_only_decoder_trees(models, name) -> None:
+    from vllm_srun.config import EngineArgs
+    from vllm_srun.plugins.base import Job
+    from vllm_srun.scheduler.batching import Batcher, SharedContext
 
     model = models[name]
-    profile = SharedContextProfile()
-    assert profile.available(model) is None
-    profile.bind(model)
+    sharing = SharedContext()
+    assert sharing.unavailable(model) is None
+    batcher = Batcher(EngineArgs(), sharing)
+    batcher.bind(model)
     plan = model.plan(GOLDEN_STATE, GOLDEN_QUESTIONS)
-    job = Job(items=plan.items, deadline=None, enqueued=0.0, profile=profile.name)
-    batches = profile.plan([job], model.forward_token_budget())
+    job = Job(items=plan.items, deadline=None, enqueued=0.0)
+    batches = batcher.plan([job], model.forward_token_budget())
     assert [b.shared_prefix for b in batches] == ([1] if name == "decoder" else [0])
     surface = SurfacePlan("decisions", plan.items, plan.input_tokens, plan)
     assert model.finish_surface(
@@ -218,12 +285,12 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
     ) == model.finish_surface(surface, model.run_shared(plan.items, 1))
 
 
-def test_coalescing_profiles_fill_a_cpu_forward_only_up_to_the_budget(models) -> None:
-    from vllm_sr_runtime.families.vela2.family import CPU_PACKED_TOKENS
-    from vllm_sr_runtime.plugins.base import Job
-    from vllm_sr_runtime.profiles.batching import BatchingProfile
-    from vllm_sr_runtime.profiles.exact import ExactProfile
-    from vllm_sr_runtime.scheduler.planner import padded
+def test_merged_forwards_fill_a_cpu_forward_only_up_to_the_budget(models) -> None:
+    from vllm_srun.config import EngineArgs
+    from vllm_srun.families.vela2.family import CPU_PACKED_TOKENS
+    from vllm_srun.plugins.base import Job
+    from vllm_srun.scheduler.batching import Batcher, reference
+    from vllm_srun.scheduler.planner import padded
 
     model = models["encoder"]
     assert model.forward_token_budget() == CPU_PACKED_TOKENS
@@ -231,17 +298,17 @@ def test_coalescing_profiles_fill_a_cpu_forward_only_up_to_the_budget(models) ->
     short = model.plan(GOLDEN_STATE, {"domain": GOLDEN_QUESTIONS["domain"]}).items
     long = model.plan("A much longer request about billing. " * 60, GOLDEN_QUESTIONS)
     jobs = [
-        Job(items=items, deadline=None, enqueued=0.0, profile="batching")
+        Job(items=items, deadline=None, enqueued=0.0)
         for items in [short] * 4 + [long.items] * 2
     ]
-    exact = ExactProfile()
-    exact.bind(model)
-    planned = exact.plan(jobs, model.forward_token_budget())
+    planned = reference(model, jobs, model.forward_token_budget())
     assert [[len(i) for _, i in b.parts] for b in planned] == [
         [len(job.items)] for job in jobs
     ]
     assert model.exact_batches([]) == []
-    batches = BatchingProfile().plan(jobs, model.forward_token_budget())
+    batcher = Batcher(EngineArgs())
+    batcher.bind(model)
+    batches = batcher.plan(jobs, model.forward_token_budget())
     for batch in batches:
         rows = [job.items[i] for job, indices in batch.parts for i in indices]
         width = max(padded(len(row.ids)) for row in rows)
@@ -278,8 +345,8 @@ def test_packed_encoder_batches_match_padded_ones(models) -> None:
 
 def consent(monkeypatch, verified, reduced: dict[str, str]) -> None:
     """Make ``verified`` a built-in whose entry consents to ``reduced`` copies."""
-    from vllm_sr_runtime.families.vela2 import family as module
-    from vllm_sr_runtime.registry.tables.common import BuiltinModel
+    from vllm_srun.families.vela2 import family as module
+    from vllm_srun.registry.tables.common import BuiltinModel
 
     entry = BuiltinModel(
         repo_id="vllm-sr/fixture",
@@ -313,7 +380,7 @@ def test_encoder_consent_to_a_reduced_copy_comes_from_its_builtin_entry(
 
 
 def test_only_the_measured_copy_is_consented() -> None:
-    from vllm_sr_runtime.registry import builtin
+    from vllm_srun.registry import builtin
 
     consent = {
         model.repo_id.rsplit("/", 1)[1]: dict(model.reduced)
@@ -323,11 +390,10 @@ def test_only_the_measured_copy_is_consented() -> None:
     assert consent == {"Vela-2.0-0.3B": {"cpu": "float32-packed"}}
 
 
-def test_max_speed_runs_encoder_approximate_batches_on_the_copy(
+def test_merged_encoder_batches_run_on_the_consented_copy(
     packages, monkeypatch
 ) -> None:
-    from vllm_sr_runtime.engines.native.reduced import unavailable
-    from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile
+    from vllm_srun.engines.native.reduced import unavailable
 
     reason = unavailable("float32-packed", torch.device("cpu"))
     if reason:
@@ -341,7 +407,10 @@ def test_max_speed_runs_encoder_approximate_batches_on_the_copy(
     exact_model = NativeEngine().load(spec, accelerator, device, EngineOptions())
     assert "reduced" not in exact_model.receipt()
     engine_model = NativeEngine().load(
-        spec, accelerator, device, MaxSpeedProfile().engine_options(EngineOptions())
+        spec,
+        accelerator,
+        device,
+        EngineOptions(exact_kernels_only=False, reduced_precision=True),
     )
     assert engine_model.receipt()["reduced"]["kind"] == "float32-packed"
     model = family.load(verified, spec, engine_model)
@@ -395,10 +464,13 @@ def test_failed_rows_deadlines_and_invalid_questions(models) -> None:
             "bad": {"type": "rank"},
         },
     )
-    assert response["answers"] == {
-        "big": {"type": "choice", "error": "max_length_exceeded"},
-        "bad": {"type": "rank", "error": "invalid_question"},
+    assert {key: answer["error"] for key, answer in response["answers"].items()} == {
+        "big": "max_length_exceeded",
+        "bad": "invalid_question",
     }
+    assert response["answers"]["big"]["type"] == "choice"
+    assert response["answers"]["bad"]["type"] == "rank"
+    assert "type must be one of" in response["answers"]["bad"]["message"]
     plan = model.plan("text", {"q": GOLDEN_QUESTIONS["jailbreak"]})
     expired = model.finish_surface(
         SurfacePlan("decisions", plan.items, plan.input_tokens, plan), DEADLINE
@@ -409,7 +481,7 @@ def test_failed_rows_deadlines_and_invalid_questions(models) -> None:
 
 
 def test_noul_calibration_is_a_model_option(packages) -> None:
-    from vllm_sr_runtime.plugins.base import RegistryOptions
+    from vllm_srun.plugins.base import RegistryOptions
 
     family = Vela2Family(RegistryOptions(model_options={"noul_calibration": True}))
     verified = family.verify(PackageRef(packages["decoder"]))

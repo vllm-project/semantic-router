@@ -121,14 +121,20 @@ func (c *Classifier) GroundingBackends() *looper.GroundingBackends {
 	}
 	backends := &looper.GroundingBackends{}
 	if c.IsHallucinationDetectorReady() {
-		backends.Detect = func(ctx context.Context, contextText, question, answer string) ([]string, float32, error) {
+		backends.Detect = func(ctx context.Context, contextText, question, answer string) (looper.GroundingEvidence, error) {
 			result, err := c.DetectHallucination(ctx, contextText, question, answer)
 			if err != nil {
-				return nil, 0, err
+				return looper.GroundingEvidence{}, err
 			}
-			// The score is the detector's summary, its highest
-			// hallucinated-token probability when it reports one.
-			return result.UnsupportedSpans, result.Confidence, nil
+			if result == nil {
+				return looper.GroundingEvidence{}, fmt.Errorf("hallucination detector returned no evidence")
+			}
+			evidence := looper.GroundingEvidence{Unsupported: result.HallucinationDetected, Spans: result.UnsupportedSpans}
+			if result.ScoreAvailable && result.ScoreKind == "probability" {
+				score := result.Confidence
+				evidence.Probability = &score
+			}
+			return evidence, nil
 		}
 	}
 	return backends

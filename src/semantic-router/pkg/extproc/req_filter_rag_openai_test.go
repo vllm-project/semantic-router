@@ -160,4 +160,31 @@ func TestRAGSystemInstructionPreservesAuthority(t *testing.T) {
 	}
 }
 
+func TestInjectRAGContextRejectsNegativeMaxContextLength(t *testing.T) {
+	request := testNeutralRequest("model", "test query")
+	ctx := &RequestContext{SemanticRequest: request}
+	negative := -1
+	err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", &config.RAGPluginConfig{
+		MaxContextLength: &negative,
+	})
+	if err == nil || !strings.Contains(err.Error(), "max_context_length") {
+		t.Fatalf("negative max_context_length: %v", err)
+	}
+	if len(request.Messages) != 1 {
+		t.Fatalf("invalid config mutated the request: %#v", request.Messages)
+	}
+}
+
+func TestInjectRAGContextZeroMaxContextLengthDoesNotError(t *testing.T) {
+	request := testNeutralRequest("model", "test query")
+	ctx := &RequestContext{SemanticRequest: request}
+	zero := 0
+	err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", &config.RAGPluginConfig{
+		MaxContextLength: &zero,
+	})
+	if err != nil {
+		t.Fatalf("zero max_context_length should not error, got: %v", err)
+	}
+}
+
 func intPtr(value int) *int { return &value }

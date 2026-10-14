@@ -182,3 +182,12 @@ ROUTE observe (description = "Inspect Vela signals and send the request to the c
   MODEL "vela-default" (reasoning = false)
   ALGORITHM static
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vela-auto"]
+  recipe: "default"
+}

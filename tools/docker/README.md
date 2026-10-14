@@ -7,26 +7,33 @@ This directory contains the Router image and lint toolchain Dockerfiles:
 | `Dockerfile.extproc` | Every Router image: the Go router with the built-in model runtime. |
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |
 
-`Dockerfile.extproc` builds all five published Router images from one stage
-graph. The router binary, the Vela Omni bundle and the image-routing assets are
-shared; `ACCELERATOR` selects the runtime's PyTorch build, and the target
-selects the Kubernetes image or the `vllm-sr serve` stack image:
+`Dockerfile.extproc` builds the three published Router images from one stage
+graph and one target, `vllm-sr`. The router binary and the image-routing
+assets are shared; `ACCELERATOR` selects the runtime's PyTorch build. Each
+image serves `vllm-sr serve`, the Helm chart and the Operator, in standalone
+or extproc mode:
 
-| Image | Target | `ACCELERATOR` | Platforms |
-| --- | --- | --- | --- |
-| `extproc` | `extproc` (default) | `cpu` (default) | amd64, arm64 |
-| `extproc-rocm` | `extproc` | `rocm` | amd64 |
-| `vllm-sr` | `vllm-sr` | `cpu` | amd64, arm64 |
-| `vllm-sr-rocm` | `vllm-sr` | `rocm` | amd64 |
-| `vllm-sr-cuda` | `vllm-sr` | `cuda` | amd64 |
+| Image | `ACCELERATOR` | Platforms |
+| --- | --- | --- |
+| `vllm-sr` | `cpu` (default) | amd64, arm64 |
+| `vllm-sr-rocm` | `rocm` | amd64 |
+| `vllm-sr-cuda` | `cuda` | amd64 |
+
+For one release, `vllm-sr` is also published as `extproc` and `vllm-sr-rocm`
+as `extproc-rocm`, with the same digests, for deployments that still name the
+former Kubernetes images.
+
+The entrypoint, `/app/start-router.sh`, runs the Router on
+`/app/config/config.yaml` when it gets no arguments or Router flags (the Helm
+chart and the Operator pass `-gateway=...`), and starts the Router of a
+`vllm-sr serve` stack when it gets a config path, as the CLI passes.
 
 Build from the repository root so the Dockerfile can access every module:
 
 ```bash
-docker build -f tools/docker/Dockerfile.extproc -t extproc:local .
-docker build -f tools/docker/Dockerfile.extproc --target vllm-sr -t vllm-sr:local .
+docker build -f tools/docker/Dockerfile.extproc -t vllm-sr:local .
 docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm \
-  --target vllm-sr -t vllm-sr-rocm:local .
+  -t vllm-sr-rocm:local .
 ```
 
 CPU images carry CPU-only PyTorch. GPU images take PyTorch from the official

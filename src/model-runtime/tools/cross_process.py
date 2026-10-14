@@ -5,9 +5,9 @@
         [--cache-dir DIR] [--base-path DIR] [--offline]
     python3 tools/cross_process.py compare REFERENCE.jsonl OTHER.jsonl ... --output OUT.json
 
-answer   loads MODEL as ``vllm-sr-runtime serve`` does (resolution, verification, placement, the golden check that
-         gates readiness, ``--autotune-cache``) and answers every prompt as one request on the exact profile through
-         the scheduler. The receipt records the golden check, the device, the library versions and the autotune
+answer   loads MODEL as ``vllm-srun serve`` does (resolution, verification, placement, the golden check that
+         gates readiness, ``--autotune-cache``) and answers every prompt as one request alone, in its released
+         forwards, through the scheduler. The receipt records the golden check, the device, the library versions and the autotune
          entries in the cache before and after the run (no new entry: every choice was reused).
 compare  every other answers file against the first, prompt by prompt: identical prompts (canonical JSON), category
          changes, values that differ and the largest absolute difference of any probability, Noul or Score value.
@@ -28,8 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gpu_parity import canonical, category, numbers
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.runtime import Runtime
 
 
 def autotune_entries(directory: str | None) -> int | None:
@@ -87,11 +87,11 @@ def answer(args: argparse.Namespace) -> int:
                         {
                             "state": prompt["state"],
                             "questions": prompt["questions"],
-                            "options": {"profile": "exact", "return_meta": False},
+                            "options": {"return_meta": False},
                         },
                     )
                     results = served.submit_items(
-                        prepared.plan.items, None, "exact"
+                        prepared.plan.items, None, reference=True
                     ).result()
                     answers = runtime.finish(prepared, results, 0.0, 0.0)
                     row = {

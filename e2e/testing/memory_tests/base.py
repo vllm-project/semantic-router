@@ -254,7 +254,7 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         user = user_id or self.test_user
 
         payload = {
-            "model": "MoM",
+            "model": "vllm-sr/auto",
             "input": message,
             "auto_store": auto_store,
             "instructions": (

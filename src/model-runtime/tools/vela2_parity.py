@@ -8,8 +8,8 @@
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
 autocast for the decoders' backbones, FP32 for the 0.3B encoder). The runtime side verifies and loads the
-package through the vela2 family, the native engine and the accelerator, and answers every request alone on
-the exact profile. Per request the tool compares:
+package through the vela2 family, the native engine and the accelerator, and answers every request alone, in
+its released forwards. Per request the tool compares:
 
 - **rendering:** the token IDs of every sequence (0.3B) or of the parts and every block (decoders), and every
   position the readout reads (markers, pools, endpoints, label blocks, words), windows included;
@@ -19,18 +19,18 @@ the exact profile. Per request the tool compares:
 ``--generate N`` builds N synthetic requests (seeded): router-style questions, every question type, presets,
 typed JSON states with ``over``, thresholds, open span labels, long parts that are windowed or cut, Unicode.
 The design's bar (section 17): decisions and span sets identical; max |dp| <= 1e-4 on CPU, <= 0.02 on GPUs.
-``--approximate`` answers through the approximate batches instead (packed trees and sequences), for the
-accuracy record of the faster profiles.
+``--approximate`` answers through the batches that merge requests instead (packed trees and sequences), for
+the accuracy record of cross-request batching and shared context.
 
-``--reduced`` records reduced copies (``max_speed``) against the runtime's exact path, which is the reference
-then (the package engine is not loaded): each KIND (``float32-packed``, ``bfloat16``, ``int8``) is loaded as
-``max_speed`` loads it, consenting for the run, and answers through the approximate batches. Per KIND: the
-share of questions whose decision is unchanged, per question type (design section 5.4's floor: at least 99%
-each), and the largest probability differences.
+``--reduced`` records reduced copies against the runtime's released forwards, which are the reference then
+(the package engine is not loaded): each KIND (``float32-packed``, ``bfloat16``, ``int8``) is loaded as a
+consented copy loads, consenting for the run, and answers through the merged batches. Per KIND: the share of
+questions whose decision is unchanged, per question type (design section 5.4's floor: at least 99% each),
+and the largest probability differences.
 
 ``--shared-with`` checks models that share one runtime process, as one device's models do in a deployment:
 one ``Runtime`` loads ``--package`` and every ``--shared-with`` package on ``--device`` in that order and
-answers each request on every model in turn (exact profile). Each response must be byte-identical to both
+answers each request on every model in turn, alone. Each response must be byte-identical to both
 responses of that package's single-package run of this tool (``--answers``, one file per package in the
 same order, given as ``--reference-answers``): the package engine's and the runtime's.
 """
@@ -49,18 +49,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.families.vela2.decoder_layout import DecoderTree  # noqa: E402
-from vllm_sr_runtime.families.vela2.family import Vela2Family  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.families.vela2.decoder_layout import DecoderTree  # noqa: E402
+from vllm_srun.families.vela2.family import Vela2Family  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     EngineOptions,
     PackageRef,
     SurfacePlan,
 )
-from vllm_sr_runtime.plugins.registry import instantiate  # noqa: E402
-from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile  # noqa: E402
+from vllm_srun.plugins.registry import instantiate  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 CPU_BAR, GPU_BAR = 1e-4, 0.02
@@ -280,8 +279,8 @@ def pin_choices(package: Path, device: str) -> bool:
 
     Both sides answer on this thread, so they run the same kernels.
     """
-    from vllm_sr_runtime.accel.autotune import KernelChoices
-    from vllm_sr_runtime.registry import builtin
+    from vllm_srun.accel.autotune import KernelChoices
+    from vllm_srun.registry import builtin
 
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
@@ -307,12 +306,17 @@ def device_executor(device: str) -> Any:
 
 
 def load_runtime(
-    package: Path, device: str, engine: str = "native", reduced: str | None = None
+    package: Path,
+    device: str,
+    engine: str = "native",
+    reduced: str | None = None,
+    options: EngineOptions | None = None,
 ) -> Any:
     """The package through the vela2 family on the named engine plugin.
 
-    ``reduced`` loads it as ``max_speed`` does, consenting to that copy kind on
-    the device for this process (the built-in table's consent follows records).
+    ``reduced`` loads that copy kind as a consented copy loads, consenting to it
+    on the device for this process (the built-in table's consent follows records).
+    ``options`` replaces the default engine options (fast paths switched off).
     """
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
@@ -320,11 +324,11 @@ def load_runtime(
     family = Vela2Family()
     verified = family.verify(PackageRef(package))
     spec = family.describe(verified)
-    options = EngineOptions()
+    options = options or EngineOptions()
     if reduced is not None:
         field = "reduced_cpu" if device == "cpu" else "reduced_gpu"
         spec = replace(spec, dtype=replace(spec.dtype, **{field: reduced}))
-        options = MaxSpeedProfile().engine_options(options)
+        options = replace(options, exact_kernels_only=False, reduced_precision=True)
     engine_model = instantiate("engines", engine).load(
         spec, accelerator, devices[index], options
     )
@@ -780,7 +784,7 @@ def reduced_summary(
 
 
 def run_reduced(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int:
-    """``--reduced``: every copy's ``max_speed`` answers against the runtime's exact path."""
+    """``--reduced``: every copy's answers against the runtime's released forwards."""
     import torch
 
     torch.manual_seed(0)
@@ -826,7 +830,7 @@ def run_reduced(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int
         "package": str(args.package),
         "device": args.device,
         "reference": "exact",
-        "path": "max_speed",
+        "path": "merged",
         "engine": args.engine,
         "floor": REDUCED_FLOOR,
         "exact_s": round(seconds["exact"], 2),
@@ -858,8 +862,8 @@ def run_shared(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int:
     """``--shared-with``: every package in one runtime process, each against its single-package run."""
     import asyncio
 
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     packages = [args.package, *args.shared_with]
     if len(args.reference_answers) != len(packages):
@@ -1004,7 +1008,7 @@ def main() -> int:
     parser.add_argument(
         "--approximate",
         action="store_true",
-        help="answer through the approximate batches (packed trees and sequences)",
+        help="answer through the batches that merge requests (packed trees and sequences)",
     )
     parser.add_argument("--engine", default="native", help="runtime engine plugin")
     parser.add_argument(
@@ -1015,7 +1019,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--reduced",
-        help="reduced copy kinds (comma-separated) to record against the exact path (max_speed)",
+        help="reduced copy kinds (comma-separated) to record against the released forwards",
     )
     parser.add_argument(
         "--shared-with",

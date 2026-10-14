@@ -1,3 +1,6 @@
+# The gateway in front of the Router calls it over ext_proc.
+gateway:
+  mode: extproc
 replicaCount: 1
 
 # ExtProc-only Responses state and protocol conversion. The external gateway

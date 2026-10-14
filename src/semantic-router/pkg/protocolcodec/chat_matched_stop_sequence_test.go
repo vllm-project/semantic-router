@@ -12,8 +12,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// Captured from vLLM 0.26.0 with Qwen/Qwen3.8-27B-FP8 and "stop": ["CHARLIE"].
-// vLLM reports the matched stop string in the non-standard choices[].stop_reason.
+// Captured vLLM responses with Qwen/Qwen3.8-27B-FP8: vllm-chat-stop-sequence-* from
+// 0.26.0 with "stop": ["CHARLIE"], vllm-chat-long-stop-sequence-* from 0.30.0 with a
+// 129-byte stop string. vLLM reports the matched stop string in the non-standard
+// choices[].stop_reason.
 func vllmStopSequenceCapture(t *testing.T, name string) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("testdata", "providers", name))
@@ -117,5 +119,51 @@ func TestChatStopSequenceRepeatedTerminalChunk(t *testing.T) {
 		if !errors.As(pushErr, &protocolErr) || protocolErr.Code != "stream_finish_reason_changed" {
 			t.Fatalf("repeat %s: want stream_finish_reason_changed, got %v", stopReason, pushErr)
 		}
+	}
+}
+
+// Captured from vLLM 0.30.0 with Qwen/Qwen3.8-27B-FP8 and a 129-byte stop string:
+// longer than the 128 bytes the Chat wire used to accept, well inside StopBytes.
+const vllmLongStopSequence = "alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima mike " +
+	"november oscar papa quebec romeo sierra tango unif"
+
+func TestChatLongStopSequenceReachesClient(t *testing.T) {
+	if len(vllmLongStopSequence) != 129 {
+		t.Fatalf("stop string is %d bytes, want 129", len(vllmLongStopSequence))
+	}
+	match, _ := json.Marshal(vllmLongStopSequence)
+	anthropicStop := `"stop_reason":"stop_sequence","stop_sequence":` + string(match)
+	buffered := []byte(vllmStopSequenceCapture(t, "vllm-chat-long-stop-sequence-out.json"))
+	stream := vllmStopSequenceCapture(t, "vllm-chat-long-stop-sequence-stream.sse")
+
+	chat, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, buffered, nil)
+	if err != nil {
+		t.Fatalf("buffered Chat client: %v", err)
+	}
+	if !strings.Contains(string(chat.Body), `"stop_reason":`+string(match)) {
+		t.Fatalf("Chat client lost vLLM's stop_reason: %s", chat.Body)
+	}
+	anthropic, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, buffered, nil)
+	if err != nil {
+		t.Fatalf("buffered Anthropic client: %v", err)
+	}
+	if !strings.Contains(string(anthropic.Body), anthropicStop) {
+		t.Fatalf("Anthropic client lost the matched stop sequence: %s", anthropic.Body)
+	}
+	if out := translateMatchedStopStream(t, llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, stream); !strings.Contains(out, "GIN ") || !strings.Contains(out, "[DONE]") {
+		t.Fatalf("streamed Chat client lost the final chunk:\n%s", out)
+	}
+	if out := translateMatchedStopStream(t, llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, stream); !strings.Contains(out, anthropicStop) {
+		t.Fatalf("streamed Anthropic client lost the matched stop sequence:\n%s", out)
+	}
+}
+
+// An empty stop_reason string is still malformed, for a Chat client too.
+func TestChatEmptyStopReasonStringIsRejected(t *testing.T) {
+	body := strings.Replace(vllmStopSequenceCapture(t, "vllm-chat-stop-sequence-out.json"), `"stop_reason":"CHARLIE"`, `"stop_reason":""`, 1)
+	_, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(body), nil)
+	var protocolErr *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolErr) || protocolErr.Code != "invalid_upstream_json" {
+		t.Fatalf("want invalid_upstream_json for an empty stop_reason, got %v", err)
 	}
 }

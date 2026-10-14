@@ -275,6 +275,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.fact_check", false, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", false, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
 	appendTask("classifier.feedback", false, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
+	appendTask("classifier.decision", false, len(c.labelledDecisionRules()) > 0, c.prepareDecisionSignals)
 
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
@@ -315,9 +316,9 @@ func (c *Classifier) initializeConfiguredCategoryRuntime() error {
 	return nil
 }
 
-// servedModel is a category backend that reports the identity of the model
+// modelIdentity is a category backend that reports the identity of the model
 // the runtime serves it from.
-type servedModel interface {
+type modelIdentity interface {
 	ModelSHA256() (string, error)
 }
 
@@ -328,7 +329,7 @@ func (c *Classifier) loadDomainCalibration() error {
 	if ref == nil {
 		return nil
 	}
-	served, ok := c.categoryInitializer.(servedModel)
+	served, ok := c.categoryInitializer.(modelIdentity)
 	if !ok {
 		return fmt.Errorf("classifier.domain.calibration requires a category classifier served by the model runtime")
 	}

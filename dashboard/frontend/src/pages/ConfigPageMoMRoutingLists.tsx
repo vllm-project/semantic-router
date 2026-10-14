@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { effectiveChatEntrypoints } from '../utils/routingScopes'
 import ProductIcon from '../components/ProductIcon'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
 import {
@@ -42,7 +43,7 @@ export function ConfigPageMoMEntrypointsList({
   onTopology,
 }: EntrypointsListProps) {
   const [search, setSearch] = useState('')
-  const entrypoints = config.entrypoints ?? []
+  const entrypoints = effectiveChatEntrypoints(config)
   const query = search.trim().toLowerCase()
   const filtered = entrypoints.filter(
     (entrypoint) =>
@@ -80,7 +81,8 @@ export function ConfigPageMoMEntrypointsList({
           const key = entrypoint.model_names.join('|')
           const recipe = getRecipeByName(config, entrypoint.recipe)
           const targetCount = collectRecipeTargetModels(recipe).length
-          const originalIndex = entrypoints.indexOf(entrypoint)
+          const originalIndex = (config.entrypoints ?? []).indexOf(entrypoint)
+          const builtin = originalIndex < 0
           return (
             <article key={key} className={pageStyles.portfolioItem}>
               <div
@@ -90,7 +92,10 @@ export function ConfigPageMoMEntrypointsList({
                   {entrypoint.model_names.map((name) => (
                     <code key={name}>{name}</code>
                   ))}
-                  <span>Routes through {entrypoint.recipe}</span>
+                  <span>
+                    Routes through {entrypoint.recipe}
+                    {builtin ? ' · Built-in default' : ''}
+                  </span>
                 </div>
                 <div className={pageStyles.portfolioMeta}>
                   <span>{targetCount} models</span>
@@ -133,15 +138,17 @@ export function ConfigPageMoMEntrypointsList({
                         <ProductIcon name="edit" />
                         Edit
                       </button>
-                      <button
-                        type="button"
-                        className={pageStyles.deleteAction}
-                        aria-label={`Delete ${entrypoint.model_names.join(', ')}`}
-                        onClick={() => onDelete(entrypoint, originalIndex)}
-                      >
-                        <ProductIcon name="trash" />
-                        Delete
-                      </button>
+                      {!builtin && (
+                        <button
+                          type="button"
+                          className={pageStyles.deleteAction}
+                          aria-label={`Delete ${entrypoint.model_names.join(', ')}`}
+                          onClick={() => onDelete(entrypoint, originalIndex)}
+                        >
+                          <ProductIcon name="trash" />
+                          Delete
+                        </button>
+                      )}
                     </>
                   ) : null}
                 </div>

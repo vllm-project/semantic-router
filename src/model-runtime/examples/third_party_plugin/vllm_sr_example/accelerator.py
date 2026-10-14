@@ -10,8 +10,8 @@ from __future__ import annotations
 import platform
 
 import torch
-from vllm_sr_runtime.accel.kernels import KernelSet, reference_kernels
-from vllm_sr_runtime.plugins.base import Accelerator, DeviceInfo
+from vllm_srun.accel.kernels import KernelSet, reference_kernels
+from vllm_srun.plugins.base import Accelerator, DeviceInfo
 
 
 class HostAccelerator(Accelerator):

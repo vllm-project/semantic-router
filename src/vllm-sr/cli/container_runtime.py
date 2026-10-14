@@ -26,6 +26,7 @@ from cli.consts import (
     CONTAINER_RUNTIME_PODMAN,
     SUPPORTED_CONTAINER_RUNTIMES,
 )
+from cli.terminal import HEADLINE
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -44,22 +45,6 @@ def reset_container_runtime_cache() -> None:
 def resolve_runtime_cli_path(runtime: str) -> str | None:
     """Return the resolved path to a runtime CLI on $PATH (or ``None``)."""
     return shutil.which(runtime)
-
-
-def resolve_container_cli_path(preferred_path: str | None = None) -> str | None:
-    """Resolve the docker-compatible CLI used for OpenClaw provisioning.
-
-    When the active runtime is Podman, this still has to return a usable
-    *Docker* binary because the dashboard's OpenClaw subsystem talks to a real
-    Docker daemon. Returns ``None`` if no Docker CLI is found.
-    """
-    docker_path = preferred_path or shutil.which("docker")
-    if not docker_path:
-        return None
-    if _docker_path_looks_like_podman(docker_path):
-        # Real docker is required for OpenClaw — a Podman shim cannot satisfy it.
-        return None
-    return docker_path
 
 
 def _persisted_runtime_env_path() -> str:
@@ -341,7 +326,7 @@ def container_pull_image(image_name):
     """
     runtime = get_container_runtime()
     try:
-        log.info(f"Pulling container image: {image_name}")
+        log.info(f"Pulling container image: {image_name}", extra=HEADLINE)
         log.info("This may take a few minutes...")
 
         subprocess.run(

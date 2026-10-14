@@ -5,12 +5,12 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from vllm_sr_runtime.errors import INVALID_MODEL_OUTPUT
-from vllm_sr_runtime.families.vela2.answers import Answerer
-from vllm_sr_runtime.families.vela2.calibration import Calibration, sigmoid, softmax
-from vllm_sr_runtime.families.vela2.raw import RawRow, RawSpan
-from vllm_sr_runtime.families.vela2.request import QuestionReader
-from vllm_sr_runtime.testing.vela2 import calibration
+from vllm_srun.errors import INVALID_MODEL_OUTPUT
+from vllm_srun.families.vela2.answers import Answerer
+from vllm_srun.families.vela2.calibration import Calibration, sigmoid, softmax
+from vllm_srun.families.vela2.raw import RawRow, RawSpan
+from vllm_srun.families.vela2.request import QuestionReader
+from vllm_srun.testing.vela2 import calibration
 
 CAL = Calibration(calibration(decoder=True))
 TEXT = "mail tom.b@ex.com now"

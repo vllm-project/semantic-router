@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from vllm_sr_runtime.families.vela2.calibration import Calibration
-from vllm_sr_runtime.families.vela2.request import (
+from vllm_srun.families.vela2.calibration import Calibration
+from vllm_srun.families.vela2.request import (
     NOUL_DEFAULT_NO,
     NOUL_DEFAULT_YES,
     QuestionReader,
     read_state,
 )
-from vllm_sr_runtime.testing.vela2 import calibration
+from vllm_srun.testing.vela2 import calibration
 
 CHOICE = {
     "type": "choice",
@@ -212,3 +212,55 @@ def test_span_head_override_needs_a_broad_head() -> None:
         },
     )
     assert plan.questions[0].head == "broad"
+
+
+def test_labels_is_the_router_configs_form_of_set_and_span_criteria() -> None:
+    labels = [
+        {"key": "billing", "description": "A payment problem"},
+        {"key": "shipping"},
+    ]
+    plan = reader().read(
+        "My card was charged twice and the parcel never arrived.",
+        {
+            "set": {"type": "set", "instructions": "Which apply?", "labels": labels},
+            "span": {"type": "span", "instructions": "Find them", "labels": labels},
+            "both": {
+                "type": "set",
+                "instructions": "x",
+                "labels": labels,
+                "criteria": {"billing": "b"},
+            },
+            "shape": {"type": "set", "instructions": "x", "labels": {"billing": "b"}},
+        },
+    )
+    by_id = {q.id: q for q in plan.questions}
+    assert by_id["set"].options == (("billing", "A payment problem"), ("shipping", ""))
+    assert by_id["span"].options == by_id["set"].options
+    assert plan.errors["both"]["message"] == "use criteria or labels, not both"
+    assert (
+        plan.errors["shape"]["message"] == "labels must be a list of {key, description}"
+    )
+
+
+def test_an_invalid_question_says_why() -> None:
+    plan = reader().read(
+        "text",
+        {
+            "unknown": {
+                "type": "set",
+                "instructions": "x",
+                "criteria": {"a": "b"},
+                "colour": 1,
+            },
+            "few": {"type": "choice", "instructions": "x", "criteria": {"a": "b"}},
+            "s": {"type": "set", "instructions": "x", "criteria": {"a": "b"}},
+            "s.a": {"type": "noul", "instructions": "y"},
+        },
+    )
+    assert plan.errors["unknown"] == {
+        "type": "set",
+        "error": "invalid_question",
+        "message": "set questions do not take ['colour']",
+    }
+    assert plan.errors["few"]["message"] == "criteria must name 2 to 255 options"
+    assert "s.<label>" in plan.errors["s"]["message"]

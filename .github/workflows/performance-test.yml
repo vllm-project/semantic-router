@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 90
     env:
       HF_HUB_DISABLE_XET: "1"
-      VLLM_SR_RUNTIME_CACHE_DIR: ${{ github.workspace }}/.cache/model-runtime
+      VLLM_SRUN_CACHE_DIR: ${{ github.workspace }}/.cache/model-runtime
 
     steps:
       - name: Check out the repo
@@ -52,7 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/model-runtime
-          key: ${{ runner.os }}-perf-runtime-models-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go', 'src/model-runtime/vllm_sr_runtime/registry/**') }}
+          key: ${{ runner.os }}-perf-runtime-models-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go', 'src/model-runtime/vllm_srun/registry/**') }}
           restore-keys: |
             ${{ runner.os }}-perf-runtime-models-
         continue-on-error: true

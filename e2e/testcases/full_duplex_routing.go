@@ -168,8 +168,8 @@ func checkFullDuplexRequest(
 	if request.reject {
 		// The mocker would accept this body, so a 400 carrying the Router's
 		// error envelope is the Router's immediate response.
-		if status != http.StatusBadRequest || !strings.Contains(responseBody, "invalid inference request") {
-			return fmt.Errorf("expected the Router's HTTP 400, got %d: %s", status, responseBody)
+		if status != http.StatusBadRequest || !strings.Contains(responseBody, `"code":"model_not_found"`) {
+			return fmt.Errorf("expected the Router's HTTP 400 with code model_not_found, got %d: %s", status, responseBody)
 		}
 		if selected != nil || unrouted != nil {
 			return fmt.Errorf("a rejected request reached a backend (%s %v, %s %v)",

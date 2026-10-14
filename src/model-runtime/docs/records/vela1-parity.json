@@ -5170,7 +5170,7 @@
  },
  "rocm_golden_answers": {
   "device_class": "rocm",
-  "file": "vllm_sr_runtime/registry/golden_answers_vela1.json",
+  "file": "vllm_srun/registry/golden_answers_vela1.json",
   "models": ["Qwen/Qwen3-Embedding-0.6B", "vllm-sr/Vela-1.0-Encoder-307M-Domain", "vllm-sr/Vela-1.0-Encoder-307M-Embedding", "vllm-sr/Vela-1.0-Encoder-307M-FactCheck", "vllm-sr/Vela-1.0-Encoder-307M-Feedback", "vllm-sr/Vela-1.0-Encoder-307M-Guard", "vllm-sr/Vela-1.0-Encoder-307M-Halu", "vllm-sr/Vela-1.0-Encoder-307M-Hazard", "vllm-sr/Vela-1.0-Encoder-307M-Modality", "vllm-sr/Vela-1.0-Encoder-307M-PII", "vllm-sr/Vela-1.0-Encoder-307M-Reranker", "vllm-sr/Vela-1.0-Encoder-307M-Safety", "vllm-sr/Vela-1.0-Encoder-307M-Shield"],
   "note": "tools/golden_answers.py --family task_heads --device rocm:0, one fresh process per run; every recorded value is byte-identical, so the file is unchanged",
   "re_recorded": false,

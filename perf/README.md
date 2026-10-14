@@ -71,7 +71,7 @@ The parser writes `reports/current.json`; the comparison writes
 Classification and cache benchmarks serve the router catalog's revision-pinned
 Vela models through the model runtime, the way the Router does: one runtime
 manager, the serving facade, and a runtime process per deployment, which
-downloads its pinned model on first start (`VLLM_SR_RUNTIME_CACHE_DIR` keeps
+downloads its pinned model on first start (`VLLM_SRUN_CACHE_DIR` keeps
 it). Failed downloads or inference fail the run. `VLLM_SR_DOMAIN_MODEL`,
 `VLLM_SR_PII_MODEL`, `VLLM_SR_JAILBREAK_MODEL`, and `VLLM_SR_EMBEDDING_MODEL`
 can point to local packages instead. No model IDs or revisions are maintained
@@ -104,6 +104,24 @@ loaded, device, precision, engine, and benchmark protocol. Missing measurements
 or identity differences fail the comparison; Qwen3 and legacy classifier numbers
 cannot become Vela baselines. Model correctness belongs to the runtime's golden
 answers; these benchmarks do not publish accuracy from a missing optional dataset.
+
+### Release comparisons
+
+A release compares with its development cycle's base instead of its parent
+revision:
+
+```bash
+make perf-check PERF_BASE_REF="$(python3 tools/ci/ci_plan.py performance-base --version X.Y.Z)"
+```
+
+The base is the previous release unless `PERFORMANCE_BASES` in
+`tools/ci/ci_plan.py` declares one. v0.4.0 predates the model runtime, so 0.5.0
+declares #4707 (`abae8ff99`): it pinned the classify benchmarks to the Vela 1.0
+specialists, and its own Production Benchmarks job passed with this harness.
+From 0.5.0 on, the previous release has the model runtime; when it can't run
+the current harness, declare a reviewed `main` commit whose Production
+Benchmarks job passed with it. Resolution refuses a previous release that
+predates the model runtime rather than turning the comparison into a reset.
 
 ## Input-length measurement protocol
 
