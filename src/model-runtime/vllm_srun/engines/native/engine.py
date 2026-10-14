@@ -151,8 +151,8 @@ class NativeEngineModel(EngineModel):
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs.
 
-        The host masks and graphs are causal, so a noncausal backbone takes only the
-        fused layers and builds its masks per forward (``noncausal_masks``).
+        A noncausal backbone builds its masks per forward as ``noncausal_masks``
+        does (``fast.NoncausalMasks``), so its graphs capture those.
         """
         options, backbone = self.options, self.backbone
         if options.fused_kernels:
@@ -160,12 +160,14 @@ class NativeEngineModel(EngineModel):
             self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
             if reason:
                 self.fast["fused_skipped"] = reason
-        if self.noncausal:
-            return
-        if self.spec.backbone.lora is not None and self.residency is not None:
+        if (
+            self.spec.backbone.lora is not None
+            and self.residency is not None
+            and not self.noncausal
+        ):
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
-            self.masks = fast.Masks()
+            self.masks = fast.NoncausalMasks() if self.noncausal else fast.Masks()
         if options.graphs:
             assert self.masks is not None
             self.graphs = fast.Graphs(backbone, self.masks)
@@ -217,6 +219,11 @@ class NativeEngineModel(EngineModel):
     @property
     def replays_graphs(self) -> bool:
         return self.graphs is not None
+
+    def replays_shape(self, rows: int, width: int, padded: bool) -> bool:
+        return self.graphs is not None and self.graphs.admits(
+            (rows, width, padded), rows * width
+        )
 
     @property
     def approximate_kernels(self) -> bool:

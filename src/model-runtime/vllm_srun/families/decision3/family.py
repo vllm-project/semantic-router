@@ -67,6 +67,9 @@ __all__ = ["Decision3Family", "Decision3Model"]
 
 BATCH_SIZE = 8
 VISION_TOWER = "vision"
+# Approximate text passes pad their width to a multiple of this when the padded shape replays a graph or
+# may still capture one, so many lengths share one captured graph (docs/records/decision3-buckets.md).
+BUCKET_TOKENS = 32
 # Device time one forward that merges requests should take, so a full queue is
 # answered over several short forwards instead of one long one; the running cost per token sizes it.
 COALESCED_FORWARD_SECONDS = 0.3
@@ -699,9 +702,10 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
     def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
         """A batch that merges requests: rows of several requests, text rows and media rows in a pass each.
 
-        Text rows run as one left-padded pass, as a request's text rows do. Media rows run in one pass whatever
-        their requests, each request's images through the tower once and their features copied into its rows
-        (the exact path runs one copy per row, which rounds differently). The pass time sizes later batches.
+        Text rows run as one left-padded pass, its width rounded up to ``BUCKET_TOKENS`` when that shape replays a
+        graph or may still capture one. Media rows run in one pass whatever their requests, each request's images
+        through the tower once and their features copied into its rows (the exact path runs one copy per row,
+        which rounds differently). The pass time sizes later batches.
         """
         started = time.perf_counter()
         text = [index for index, item in enumerate(items) if item.media is None]
@@ -709,7 +713,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         out: list[list[float] | None] = [None] * len(items)
         if text:
             for index, value in zip(
-                text, self._pass([items[i] for i in text]), strict=True
+                text, self._pass([items[i] for i in text], BUCKET_TOKENS), strict=True
             ):
                 out[index] = value
         if media:
@@ -724,10 +728,15 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return out
 
     def _padded(
-        self, items: list[Item]
+        self, items: list[Item], bucket: int = 1
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         width = max(len(item.ids) for item in items)
         rows = len(items)
+        bucketed = -(-width // bucket) * bucket
+        if bucketed != width and self.engine_model.replays_shape(
+            rows, bucketed, padded=True
+        ):
+            width = bucketed
         ids = torch.full((rows, width), self.pad_id, dtype=torch.long)
         mask = torch.zeros((rows, width), dtype=torch.long)
         for row, item in enumerate(items):
@@ -737,8 +746,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             mask[row, width - len(item.ids) :] = 1
         return ids, mask, torch.full((rows,), width - 1, dtype=torch.long)
 
-    def _pass(self, items: list[Item]) -> list[list[float] | None]:
-        ids, mask, last = self._padded(items)
+    def _pass(self, items: list[Item], bucket: int = 1) -> list[list[float] | None]:
+        ids, mask, last = self._padded(items, bucket)
         rows = len(items)
         shared = items[0].media
         images = None
