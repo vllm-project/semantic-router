@@ -220,7 +220,7 @@ management, Dashboard and the explicitly published System One API.
 
 | Group | Applies to | Options |
 | --- | --- | --- |
-| Instance and models | docker, kubernetes | `MODEL`, `--engine`, `--revision`, `--data-parallel-size`, `--runtime-profile`, `--platform`, `--image`, `--log-level` |
+| Instance and models | docker, kubernetes | `MODEL`, `--engine`, `--revision`, `--data-parallel-size`, `--max-num-seqs`, `--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`, `--enable-shared-context`, `--platform`, `--image`, `--log-level` |
 | Instance configuration | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm` |
 | Container options | docker | `--image-pull-policy`, `--container-runtime` |
 | Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env`, `--device-ids` |
