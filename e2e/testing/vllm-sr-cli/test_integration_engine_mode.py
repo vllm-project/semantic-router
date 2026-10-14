@@ -4,9 +4,9 @@
 The tiny Decision fixtures run offline in the built Router image. The tests
 check public auth/discovery and native inference after starting both Engine
 and Router modes with the supported serve flags, that images and videos
-reach a Decision 3.0 model through the public System One API, and that Engine
-mode starts only the Router container by default. Each test owns an isolated
-stack.
+reach a Decision 3.0 model through the public System One API, that the Router
+refuses options that API does not define, and that Engine mode starts only the
+Router container by default. Each test owns an isolated stack.
 """
 
 import base64
@@ -448,6 +448,21 @@ class TestEngineModeEngineArgs(EngineStack):
         body["model"] = PUBLIC_MODEL
         status, response = self.public("/v1/systemone", body)
         self.assertEqual(status, HTTP_OK, response)
+        body["options"] = {"return_meta": True}
+        status, response = self.public("/v1/systemone", body)
+        self.assertEqual(status, HTTP_OK, response)
+        self.assertEqual(response["meta"]["numerics"], "approximate", response)
+        self.assertNotIn("profile", response["meta"], response)
+        # The Router refuses options the public System One API does not define.
+        for options, message in (
+            ({"profile": "exact"}, "options.profile was removed: "),
+            ({"verbose": True}, "options.verbose is not a System One option; "),
+        ):
+            body["options"] = options
+            status, failure = self.public("/v1/systemone", body)
+            self.assertEqual(status, 400, failure)
+            self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+            self.assertTrue(failure["error"]["message"].startswith(message), failure)
 
 
 class TestEngineModeImages(EngineStack):
