@@ -43,7 +43,7 @@ func TestResponsesTruncationDisabledTranslatesToStatelessTargets(t *testing.T) {
 func TestResponsesTruncationUnknownValueIsRejected(t *testing.T) {
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
 		t.Run(string(target), func(t *testing.T) {
-			body := []byte(`{"model":"m","input":"hi","truncation":"disbaled"}`)
+			body := []byte(`{"model":"m","input":"hi","truncation":"disable"}`)
 			_, err := NewBuiltinEngine().TranslateRequest(llmprotocol.OpenAIResponsesV1, target, body, nil)
 			if err == nil || !strings.Contains(err.Error(), "invalid_truncation") {
 				t.Fatalf("an unknown truncation value must be rejected, got %v", err)
