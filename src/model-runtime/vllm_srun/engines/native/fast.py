@@ -47,6 +47,7 @@ from .models import Backbone
 from .models.common import attention
 from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
+from .models.packed import Packed, is_packed, packed_rule
 from .models.tree import Tree, is_tree, suffix_rule
 
 if TYPE_CHECKING:
@@ -428,11 +429,51 @@ def _tree_gated_delta(
     return projected
 
 
+def _packed_gated_delta(
+    m: GatedDeltaNet,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    packed: Packed,
+    kernels: KernelSet,
+) -> torch.Tensor:
+    """``packed.packed_gated_delta`` with the fused kernels: ``gdn_prep`` over the gapped rows.
+
+    The projections feeding the convolution have no bias, so the zero rows
+    ``gapped`` puts before every row stay zero through them; their outputs are
+    dropped before the delta rule.
+    """
+    _, length, _ = normed.shape
+    window = m.conv_kernel_size
+    gapped = packed.gapped(normed, window)
+    q, k, v, g, beta = (
+        packed.ungapped(x, window)
+        for x in kernels("gdn_prep")(
+            m.in_proj_qkv(gapped).contiguous(), m.in_proj_b(gapped).contiguous(),
+            m.in_proj_a(gapped).contiguous(), p["conv_w"], p["A_log"], p["dt_bias"],
+            m.num_k_heads, m.head_k_dim,
+        )
+    )  # fmt: skip
+    z = m.in_proj_z(normed)
+    repeat = m.num_v_heads // m.num_k_heads
+    if repeat > 1:
+        q = q.repeat_interleave(repeat, dim=2)
+        k = k.repeat_interleave(repeat, dim=2)
+    core = packed_rule(kernels("chunk_gated_delta_rule"), packed, q, k, v, g, beta)
+    out = kernels("gated_rmsnorm")(
+        core.reshape(-1, m.head_v_dim).contiguous(),
+        z.reshape(-1, m.head_v_dim).contiguous(),
+        m.norm.weight,
+        m.norm.variance_epsilon,
+    )
+    projected: torch.Tensor = m.out_proj(out.reshape(1, length, -1))
+    return projected
+
+
 def _gated_delta(
     m: GatedDeltaNet,
     p: dict[str, Any],
     normed: torch.Tensor,
-    mask: torch.Tensor | Tree | None,
+    mask: torch.Tensor | Tree | Packed | None,
     kernels: KernelSet,
 ) -> torch.Tensor:
     conv = kernels.select("causal_conv1d").variant
@@ -444,6 +485,8 @@ def _gated_delta(
         return eager
     if is_tree(mask):
         return _tree_gated_delta(m, p, normed, mask, kernels)
+    if is_packed(mask):
+        return _packed_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:
         normed = (normed * mask[:, :, None]).to(normed.dtype)
     batch, length, _ = normed.shape

@@ -23,6 +23,7 @@ import time
 import unittest
 import uuid
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
@@ -461,6 +462,38 @@ class TestEngineModeImages(EngineStack):
         if videos is not None:
             body["videos"] = videos
         return self.public(path, body)
+
+    def test_unset_limits_resolve_for_the_device_and_lanes_merge_requests(self):
+        status, inventory = call(
+            f"http://127.0.0.1:{8080 + self.offset}",
+            "/api/v1/inventory/model-runtime",
+            headers={"Authorization": "Bearer " + MANAGEMENT_KEY},
+        )
+        self.assertEqual(status, HTTP_OK, inventory)
+        (primary,) = [
+            deployment
+            for deployment in inventory["deployments"]
+            if deployment["name"] == "primary"
+        ]
+        # Batch limits the deployment leaves unset come back as the ones the
+        # worker chose for its device: the CPU's.
+        engine_args = primary["engine_args"]
+        self.assertEqual(
+            (engine_args["max_num_seqs"], engine_args["max_num_batched_tokens"]),
+            (8192, 65536),
+        )
+        # Image and text requests sent together merge in lanes and all answer.
+        _, alone = self.ask("/v1/systemone")
+        with ThreadPoolExecutor(8) as pool:
+            futures = [
+                pool.submit(self.ask, "/v1/systemone", [png_data_url(64, 48, seed=s)])
+                for s in (11, 12, 13)
+            ]
+            futures += [pool.submit(self.ask, "/v1/systemone") for _ in range(6)]
+            replies = [future.result() for future in futures]
+        for status, reply in replies:
+            self.assertEqual(status, 200, reply)
+            self.assertEqual(set(reply["answers"]), set(alone["answers"]))
 
     def test_images_and_videos_reach_the_model_through_the_public_api(self):
         status, text = self.ask("/v1/systemone")

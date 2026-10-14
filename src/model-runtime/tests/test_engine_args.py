@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from vllm_srun import dtypes
 from vllm_srun.accel import onednn
-from vllm_srun.config import EngineArgs, ModelConfig, ServeConfig
+from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, EngineArgs, ModelConfig, ServeConfig
 from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
@@ -193,7 +193,7 @@ def test_a_models_own_engine_arguments_reach_its_batcher_and_scheduler(qwen3_pac
         assert own.scheduler.batcher.max_num_seqs == 3
         assert own.scheduler.batcher.max_num_batched_tokens == 1024
         assert own.scheduler.limits.batch_window_ms == 0.0
-        assert process.scheduler.batcher.max_num_seqs == EngineArgs().max_num_seqs
+        assert process.scheduler.batcher.max_num_seqs == DEFAULT_MAX_NUM_SEQS
         assert process.scheduler.limits.batch_window_ms == 5.0
         assert own.card([])["engine_args"] == {
             "max_num_seqs": 3,
