@@ -35,6 +35,7 @@ from . import fast, models
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
 from .models.lora import attach
+from .models.packed import Packed, packed_unavailable
 from .models.qwen3_5 import noncausal_masks, rope_index
 from .models.tree import Tree
 from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view, unavailable
@@ -74,7 +75,7 @@ class NativeEngineModel(EngineModel):
         reduced_kind: str | None = None,
         towers: dict[str, nn.Module] | None = None,
     ):
-        """``reduced_kind`` asks for a reduced copy of every layer stack, which approximate batches run (``reduced.py``).
+        """``reduced_kind`` asks for a reduced copy of every layer stack, which batches that merge requests run (``reduced.py``).
 
         A copy the device cannot run is skipped, and the receipt says why.
         ``towers`` are the model's other backbones (``ModelSpec.towers``).
@@ -132,6 +133,12 @@ class NativeEngineModel(EngineModel):
         self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
         self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
         self.noncausal = bool(getattr(backbone, "noncausal", False))
+        # Why merged forwards cannot pack their rows here (``models/packed.py``); None when they can.
+        self.packed_reason = (
+            "encoders pack rows through encode"
+            if spec.encoder
+            else packed_unavailable(backbone, self.kernels)
+        )
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
         if self.device.type == "cuda" and spec.encoder and options.graphs:
@@ -173,6 +180,12 @@ class NativeEngineModel(EngineModel):
     def receipt(self) -> dict[str, Any]:
         """What runs this model: kernels, fast-path pieces and graph statistics."""
         out: dict[str, Any] = {"kernels": self.kernels.describe(), **self.fast}
+        if not self.spec.encoder:
+            out["packed"] = (
+                {"attention": self.kernels.preferred_source("varlen_attention")}
+                if self.packed_reason is None
+                else {"skipped": self.packed_reason}
+            )
         if self.graphs is not None:
             out["graphs"] = self.graphs.receipt()
         if self.encoder_graphs:
@@ -217,6 +230,14 @@ class NativeEngineModel(EngineModel):
     @property
     def replays_graphs(self) -> bool:
         return self.graphs is not None
+
+    @property
+    def approximate_kernels(self) -> bool:
+        return any(
+            not self.kernels.select(name).exact
+            for name in self.kernels.available
+            if self.kernels.has(name)
+        )
 
     def _run_tree(
         self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
@@ -328,9 +349,15 @@ class NativeEngineModel(EngineModel):
             prefix_ids.numel() + block_ids.numel(),
         ).clone()
 
+    @property
+    def supports_packed(self) -> bool:
+        return self.packed_reason is None
+
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
             return self._forward_tree(batch)
+        if batch.packed:
+            return self._forward_packed(batch)
         input_ids = batch.input_ids.to(self.device)
         attention_mask = batch.attention_mask.to(self.device)
         gather = batch.gather.to(self.device)
@@ -371,6 +398,34 @@ class NativeEngineModel(EngineModel):
         The rotary positions come from the batch's host-side token IDs, so the
         forward never reads the device back.
         """
+        positions, image_features = self._media(
+            batch, batch.input_ids.cpu(), batch.attention_mask.cpu()
+        )
+        images = cast(ImageInputs, batch.images)
+        videos = images.videos
+        hidden: torch.Tensor = cast(Any, self.backbone).forward_images(
+            input_ids,
+            attention_mask,
+            image_features,
+            images.token_id,
+            positions,
+            padded,
+            videos=(
+                (videos.features.to(self.device), videos.token_id)
+                if videos is not None
+                else None
+            ),
+        )
+        return hidden
+
+    def _media(
+        self, batch: ForwardBatch, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Rotary positions ``[3, B, L]`` of padded host rows with image placeholders, and the image features.
+
+        The rotary positions come from the batch's host-side token IDs, so the
+        forward never reads the device back.
+        """
         images = cast(ImageInputs, batch.images)
         tower = self.towers.get(images.tower)
         if tower is None or not hasattr(self.backbone, "forward_images"):
@@ -388,8 +443,8 @@ class NativeEngineModel(EngineModel):
                     f"{placeholders} {kind} tokens but {features} {kind} features"
                 )
         positions = rope_index(
-            batch.input_ids.cpu(),
-            batch.attention_mask.cpu(),
+            input_ids,
+            attention_mask,
             images.grids,
             images.token_id,
             merge,
@@ -402,29 +457,75 @@ class NativeEngineModel(EngineModel):
             image_features = tower(images.pixel_values.to(self.device), images.grids)
         else:
             raise ValueError("image inputs need pixel values or features")
-        hidden: torch.Tensor = cast(Any, self.backbone).forward_images(
-            input_ids,
-            attention_mask,
-            image_features,
-            images.token_id,
-            positions,
-            padded,
-            videos=(
-                (videos.features.to(self.device), videos.token_id)
-                if videos is not None
-                else None
-            ),
-        )
-        return hidden
+        return positions, image_features
+
+    def _forward_packed(self, batch: ForwardBatch) -> ForwardOutput:
+        """Rows back to back in one row (``ForwardBatch.packed``, ``models/packed.py``).
+
+        Image rows take the rotary positions each row has alone (``rope_index``
+        over the rows left-padded on the host), laid out as the packed row.
+        """
+        if self.packed_reason is not None:
+            raise ValueError(f"packed forwards are unavailable: {self.packed_reason}")
+        if sum(batch.lengths) != batch.input_ids.shape[-1]:
+            raise ValueError("packed lengths do not cover the input IDs")
+        layout = Packed(batch.lengths, self.device)
+        input_ids = batch.input_ids.to(self.device)
+        backbone = cast(Any, self.backbone)
+        with torch.inference_mode(), self.autocast():
+            if batch.images is None:
+                hidden = backbone.forward_packed(input_ids, layout)
+            else:
+                host = batch.input_ids.reshape(-1).cpu()
+                width = layout.max_length
+                rows = torch.zeros((layout.rows, width), dtype=host.dtype)
+                mask = torch.zeros((layout.rows, width), dtype=torch.long)
+                for row, (start, end) in enumerate(
+                    zip(
+                        layout.cu_seqlens_cpu[:-1].tolist(),
+                        layout.cu_seqlens_cpu[1:].tolist(),
+                        strict=True,
+                    )
+                ):
+                    rows[row, width - (end - start) :] = host[start:end]
+                    mask[row, width - (end - start) :] = 1
+                positions, image_features = self._media(batch, rows, mask)
+                positions = positions[:, mask.to(positions.device).bool()][:, None]
+                videos = batch.images.videos
+                hidden = backbone.forward_images_packed(
+                    input_ids,
+                    layout,
+                    image_features,
+                    batch.images.token_id,
+                    positions,
+                    videos=(
+                        (videos.features.to(self.device), videos.token_id)
+                        if videos is not None
+                        else None
+                    ),
+                )
+            flat = hidden[0]
+            gathered = flat[batch.gather.to(self.device)]
+            queried = flat[batch.query.to(self.device)]
+        return ForwardOutput(gathered=gathered, query=queried)
 
     def tower_features(
-        self, name: str, pixel_values: torch.Tensor, grids: list[tuple[int, int, int]]
+        self,
+        name: str,
+        pixel_values: torch.Tensor,
+        grids: list[tuple[int, int, int]],
+        packed: bool = False,
     ) -> torch.Tensor:
         tower = self.towers.get(name)
         if tower is None:
             raise ValueError(f"the {self.spec.name} model has no {name} tower")
         with torch.inference_mode(), self.autocast():
-            features: torch.Tensor = tower(pixel_values.to(self.device), grids)
+            if packed and self.packed_reason is None:
+                features: torch.Tensor = tower(
+                    pixel_values.to(self.device), grids, packed=True
+                )
+            else:
+                features = tower(pixel_values.to(self.device), grids)
         return features
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
@@ -589,6 +690,7 @@ class HostStacks:
 class NativeEngine(Engine):
     name = "native"
     auto_priority = 0
+    dtypes = ("auto", "float32", "bfloat16", "float16")
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -611,6 +713,8 @@ class NativeEngine(Engine):
             and spec.dtype.needs_gpu_bf16
         ):
             return f"{device.label} has no BF16 support"
+        if device.accelerator == "cpu" and spec.dtype.cpu_weights == "float16":
+            return "float16 runs on GPUs; use bfloat16 or float32 on a CPU"
         return None
 
     def read(
@@ -669,7 +773,7 @@ class NativeEngine(Engine):
         if lora is not None:
             if options.merge_lora:
                 raise ValueError(
-                    "merged LoRA changes answers; it belongs to the max_speed profile"
+                    "merged LoRA changes answers; the runtime runs adapters unmerged"
                 )
             with torch.device("meta"):
                 attach(
