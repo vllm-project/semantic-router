@@ -16,8 +16,8 @@
 <a href="https://trendshift.io/repositories/15581?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-15581" target="_blank" rel="noopener noreferrer">
   <img src="https://trendshift.io/api/badge/trendshift/repositories/15581/daily?language=Go" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
 </a>
-<a href="https://huggingface.co/collections/vllm-sr/decision-20">
-  <img src="website/static/img/hf-trending.svg" alt="Decision 2.0 — #1 on Hugging Face Trending Collections, October 6, 2026" width="300" height="55"/>
+<a href="https://huggingface.co/collections/vllm-sr/decision-30">
+  <img src="website/static/img/hf-trending.svg" alt="Decision 3.0 — #1 on Hugging Face Trending Collections, October 14, 2026" width="300" height="55"/>
 </a>
 
 [![Main](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml/badge.svg)](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml)
@@ -73,6 +73,8 @@ Credentials:
 
 ## Latest News
 
+- [2026/10/14] [Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30) reached #1 on Hugging Face Trending Collections.
+- [2026/10/14] [d3](https://huggingface.co/vllm-sr/d3) ranks first on both the text and vision boards of the [Jev Decision Index 0.3.2](https://huggingface.co/spaces/multimodalart/jev-decision-index). The other Decision 3.0 sizes are on the Pareto frontier for their size on both boards, except d3-edge on the text board.
 - [2026/10/06] [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20) reached #1 on Hugging Face Trending Collections.
 - [2026/10/06] [Vela 2.0: Towards Open Foundation Routing Models](https://vllm-sr.ai/blog/vela-2-0-open-foundation-routing-models/)
 - [2026/09/24] [vLLM Semantic Router v0.4 Hermes: Many Models, One Improving System](https://vllm-sr.ai/blog/v0.4-vllm-sr-hermes-release/)
