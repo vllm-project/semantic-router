@@ -211,7 +211,8 @@ may match. An explicit predicate queries the raw independent score instead.
 Scores do not sum to one. Categorical and unbound classifiers still require
 their existing predicates.
 
-The model runtime applies the policy in its exact FP32 profile. The sidecar
+The model runtime applies the policy at the model's published FP32 precision
+(`dtype: auto`). The sidecar
 binds the weights, tokenizer and window geometry by SHA256; a changed artifact
 is rejected. The document budget remains separate from each window's execution
 budget.
@@ -230,7 +231,8 @@ describes calibration provenance. Execution errors remain `Unknown`,
 including under `NOT`, and follow the existing `on_unknown` policy.
 
 Version 3 policies that bound the retired ONNX Runtime CK Flash Attention path
-are no longer accepted; re-qualify the policy on the runtime's exact profile.
+are no longer accepted; re-qualify the policy on the model runtime at
+`dtype: auto`.
 
 To bind an already selected runtime-only score policy to final native files,
 run the packaging tool from `src/semantic-router`:

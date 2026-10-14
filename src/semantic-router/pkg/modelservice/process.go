@@ -30,13 +30,17 @@ type processPlan struct {
 	threads int
 }
 
-// modelEntry is one model of a --models file.
+// modelEntry is one model of a --models file; unset engine arguments keep the runtime's defaults.
 type modelEntry struct {
-	Model    string `json:"model"`
-	Revision string `json:"revision,omitempty"`
-	Name     string `json:"name"`
-	Device   string `json:"device"`
-	Profile  string `json:"profile"`
+	Model               string   `json:"model"`
+	Revision            string   `json:"revision,omitempty"`
+	Name                string   `json:"name"`
+	Device              string   `json:"device"`
+	MaxNumSeqs          *int     `json:"max_num_seqs,omitempty"`
+	MaxNumBatchedTokens *int     `json:"max_num_batched_tokens,omitempty"`
+	BatchWindowMS       *float64 `json:"batch_window_ms,omitempty"`
+	Dtype               string   `json:"dtype,omitempty"`
+	EnableSharedContext *bool    `json:"enable_shared_context,omitempty"`
 }
 
 // planProcesses assigns every logical deployment worker its own process. The
@@ -68,7 +72,11 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				if device == autoDevice && auto == "cpu" {
 					device = "cpu"
 				}
-				plan.models = []modelEntry{{Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: device, Profile: deployment.Profile}}
+				plan.models = []modelEntry{{
+					Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: device,
+					MaxNumSeqs: deployment.MaxNumSeqs, MaxNumBatchedTokens: deployment.MaxNumBatchedTokens, BatchWindowMS: deployment.BatchWindowMS,
+					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext,
+				}}
 				if device == "cpu" {
 					plan.threads = cpuThreads(cores)
 				}
