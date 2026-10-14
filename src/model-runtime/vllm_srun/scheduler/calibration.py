@@ -1,6 +1,7 @@
 """The batch limits a model's engine arguments leave to the runtime.
 
-A GPU takes the limits of its memory class (``DEVICE_CLASSES``); the CPU keeps
+A GPU takes the limits of its memory class (``DEVICE_CLASSES``); the CPU and a
+device that reports no memory (MPS, a plugin's accelerator) keep
 ``config.DEFAULT_MAX_NUM_SEQS`` and ``config.DEFAULT_MAX_NUM_BATCHED_TOKENS``.
 On a GPU the runtime then calibrates the token budget once the golden check
 has warmed the model's kernels (``calibrate``): it times merged forwards of the
@@ -62,10 +63,10 @@ DEVICE_CLASSES = (
 
 
 def device_class(device: DeviceInfo) -> DeviceClass | None:
-    """The class of a GPU by its memory (the smallest when unknown); None for the CPU."""
-    if device.accelerator == "cpu":
+    """The class of a GPU by its memory; None for the CPU and for a device that reports no memory."""
+    if device.accelerator == "cpu" or not device.total_memory:
         return None
-    gib = (device.total_memory or 0) / GIB
+    gib = device.total_memory / GIB
     return next(entry for entry in DEVICE_CLASSES if gib >= entry.min_memory_gib)
 
 
@@ -79,7 +80,7 @@ def resolve(args: EngineArgs, device: DeviceInfo) -> tuple[EngineArgs, str]:
         if entry is None
         else (entry.max_num_seqs, entry.max_num_batched_tokens)
     )
-    source = "the CPU defaults" if entry is None else f"the {entry.name} device class"
+    source = "the defaults" if entry is None else f"the {entry.name} device class"
     return (
         replace(
             args,

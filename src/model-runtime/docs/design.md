@@ -339,7 +339,8 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 
 Limits left unset take the device's memory class (`scheduler/calibration.py`:
 32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
-8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU keeps 65,536 / 8,192). On a
+8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU and a device that reports no
+memory, such as MPS or a plugin's accelerator, keep 65,536 / 8,192). On a
 GPU the runtime then calibrates the token budget after the golden check, from
 merged forwards of the model's calibration rows (`calibration_items`) at
 doubling budgets: the largest budget whose cost per token is within 2% of

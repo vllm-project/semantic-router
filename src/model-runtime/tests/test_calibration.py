@@ -18,7 +18,6 @@ GIB = 1 << 30
         (64, (16_384, 128)),
         (48, (8_192, 64)),
         (24, (4_096, 32)),
-        (None, (4_096, 32)),
     ],
 )
 def test_gpus_take_the_limits_of_their_memory_class(memory_gib, limits):
@@ -32,7 +31,12 @@ def test_gpus_take_the_limits_of_their_memory_class(memory_gib, limits):
 def test_the_cpu_keeps_its_defaults_and_set_limits_are_kept():
     args, source = calibration.resolve(EngineArgs(), DeviceInfo("cpu", None, "cpu"))
     assert (args.max_num_seqs, args.max_num_batched_tokens) == (8_192, 65_536)
-    assert source == "the CPU defaults"
+    assert source == "the defaults"
+    for unsized in (DeviceInfo("mps", 0, "gpu"), DeviceInfo("example_host", 0, "gpu")):
+        args, source = calibration.resolve(EngineArgs(), unsized)
+        assert (args.max_num_seqs, args.max_num_batched_tokens) == (8_192, 65_536)
+        assert source == "the defaults"
+        assert calibration.device_class(unsized) is None
     gpu = DeviceInfo("cuda", 0, "gpu", total_memory=256 * GIB)
     args, _ = calibration.resolve(EngineArgs(max_num_seqs=8), gpu)
     assert (args.max_num_seqs, args.max_num_batched_tokens) == (8, 32_768)

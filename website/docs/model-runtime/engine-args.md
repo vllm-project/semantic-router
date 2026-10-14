@@ -91,7 +91,7 @@ the limits of its device's memory class:
 | 64 to 160 GB | 16,384 | 128 |
 | 32 to 64 GB | 8,192 | 64 |
 | under 32 GB | 4,096 | 32 |
-| CPU | 65,536 | 8,192 |
+| CPU, or a device that reports no memory (MPS, a plugin's accelerator) | 65,536 | 8,192 |
 
 On a GPU the runtime then calibrates the token budget once the model passed
 its readiness check, in a few seconds: it times merged forwards of 4,096
