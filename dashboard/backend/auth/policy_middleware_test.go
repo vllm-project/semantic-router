@@ -2,6 +2,7 @@ package auth
 
 import (
 	"database/sql"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -360,17 +361,18 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 func waitForAuditStatus(t *testing.T, db *sql.DB, action string) int {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
+	for {
 		var status int
 		err := db.QueryRow(`SELECT status_code FROM user_audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1`,
 			action).Scan(&status)
 		if err == nil {
 			return status
 		}
+		if !errors.Is(err, sql.ErrNoRows) || time.Now().After(deadline) {
+			t.Fatalf("audit row for %s: %v", action, err)
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("no audit row for %s arrived within the deadline", action)
-	return 0
 }
 
 func TestMutationRejectsRevocationWhileBodyIsPaused(t *testing.T) {
