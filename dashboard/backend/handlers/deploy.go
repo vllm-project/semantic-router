@@ -411,6 +411,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 // Node-level merging makes the transport forward-compatible: a new signal or
 // projection is carried without adding another field-by-field merge branch.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
+	preserveBaseDecisionAdaptations(baseRoot, fragmentRoot)
 	fragmentRouting := mappingValueNode(fragmentRoot, "routing")
 	if mode == DeployModeReplace {
 		if fragmentRouting == nil {

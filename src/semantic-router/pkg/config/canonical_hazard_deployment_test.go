@@ -44,7 +44,7 @@ func TestDefaultHazardDeploymentIsPinnedAndOptIn(t *testing.T) {
 	}
 	want := ModelDeployment{
 		Artifact: model.RepoID, Revision: model.Revision,
-		Provider: ModelRuntimeProvider, Device: "cpu", Profile: "exact",
+		Provider: ModelRuntimeProvider, Device: "cpu",
 		Input: ModelInputBudget{MaxTokens: 32768, Overflow: "reject"},
 	}
 	if !reflect.DeepEqual(deployment, want) {

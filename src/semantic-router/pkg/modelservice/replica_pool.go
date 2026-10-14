@@ -97,8 +97,8 @@ func (p *replicaPool) workerCard(w replicaWorker) (ModelCard, error) {
 		if p.declaration.Revision != "" && card.Revision != p.declaration.Revision {
 			return ModelCard{}, fmt.Errorf("replica revision does not match deployment")
 		}
-		if card.Profile != p.declaration.Profile {
-			return ModelCard{}, fmt.Errorf("replica profile does not match deployment")
+		if field := engineArgsMismatch(p.declaration, card.EngineArgs); field != "" {
+			return ModelCard{}, fmt.Errorf("replica %s does not match deployment", field)
 		}
 		if card.ModelSHA256 == "" {
 			return ModelCard{}, fmt.Errorf("replica does not report model identity")
@@ -394,4 +394,22 @@ func (l *Lease) assemblePools(declarations map[string]config.ModelDeployment) {
 		}
 		l.members[name] = newReplicaPool(l.manager, name, declaration, workers).poolMember()
 	}
+}
+
+// engineArgsMismatch names the first engine argument the deployment declares
+// that a replica's card reports otherwise, or "" when every declared one matches.
+func engineArgsMismatch(declaration config.ModelDeployment, args EngineArgs) string {
+	switch {
+	case declaration.MaxNumSeqs != nil && *declaration.MaxNumSeqs != args.MaxNumSeqs:
+		return "max_num_seqs"
+	case declaration.MaxNumBatchedTokens != nil && *declaration.MaxNumBatchedTokens != args.MaxNumBatchedTokens:
+		return "max_num_batched_tokens"
+	case declaration.BatchWindowMS != nil && *declaration.BatchWindowMS != args.BatchWindowMS:
+		return "batch_window_ms"
+	case declaration.Dtype != "" && declaration.Dtype != args.Dtype:
+		return "dtype"
+	case declaration.EnableSharedContext != nil && *declaration.EnableSharedContext != args.EnableSharedContext:
+		return "enable_shared_context"
+	}
+	return ""
 }
