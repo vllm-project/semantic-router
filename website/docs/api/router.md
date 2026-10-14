@@ -125,6 +125,33 @@ See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
 field-level portability boundaries.
 
+### System One API stability
+
+The public System One API is what a Router's listener serves:
+`POST /v1/systemone`, `POST /v1/decisions` and `GET /v1/systemone/models`,
+with `/health` and `/ready`. It is the only System One interface with a
+compatibility promise:
+
+- Within a release line it changes only by addition: new optional request
+  fields, new response fields and new error codes, each documented with its
+  HTTP status.
+- A removal or a change of meaning is announced in the release notes at least
+  one release before it takes effect.
+
+The Router checks a request's `options` against this API before a model reads
+them. The options are `deadline_ms` (a number greater than 0), `max_tokens`
+(an integer of at least 1) and `return_meta` (`true` or `false`); `null` sets
+none. Any other option, or a value of another type, returns `400` with
+`invalid_request` and a message that names it. `options.profile` was removed in
+[#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
+runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
+and `meta` reports `dtype` and `numerics` instead of `profile`.
+
+The model runtime's HTTP API, which the Router calls, belongs to one release
+and makes no such promise. A Router accepts only a runtime that serves exactly
+its contract version; see
+[Attach to a runtime you run](../model-runtime/deploy.md#attach-to-a-runtime-you-run).
+
 ## Send a routed request
 
 Use `vllm-sr/auto` or an explicitly declared recipe entrypoint when you want the router to select a

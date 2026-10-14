@@ -8,7 +8,13 @@ and runs the batches one at a time. A job is answered as soon as its own
 batches have run.
 
 Planned batches run in order of their jobs' expected finish: the time a job
-was queued plus its tokens at the measured cost per token. Short work goes
+was queued plus its tokens at the measured cost per token of their lane
+(``LoadedModel.lane``), each lane measured from its own forwards, so slow
+image forwards do not make text rows look slow. The batches of different
+lanes that one planning round makes share a turn (``Batch.sub``): each runs
+as its own forward, the one expected to take least first, and its jobs are
+answered as soon as it ran, so text rows never wait for an image forward and
+a round never leaves more turns behind than it runs. Short work goes
 first, yet a long job still runs once the work queued before its expected
 finish is done, so nothing starves. Between two forwards the worker takes the
 jobs that arrived meanwhile (on a model whose batcher coalesces, once they
@@ -47,8 +53,8 @@ from .planner import cost
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
 
-# Seconds per token assumed until the first forward is measured, and the
-# weight of each later forward in the running estimate.
+# Seconds per token assumed until a lane's first forward is measured, and the
+# weight of each later forward in the lane's running estimate.
 INITIAL_TOKEN_COST = 2e-5
 COST_SMOOTHING = 0.1
 
@@ -65,6 +71,7 @@ class _Pending:
     job: Job
     future: Future[Results[Any]]
     tokens: int
+    lanes: dict[str, int] = field(default_factory=dict)
     results: list[Any] = field(default_factory=list)
     remaining: int = 0
     finish: float = 0.0
@@ -114,7 +121,7 @@ class Scheduler:
         self._failure: BaseException | None = None
         self._ready: list[_Planned] = []
         self._sequence = itertools.count()
-        self._token_cost: float | None = None
+        self._token_cost: dict[str, float] = {}
         self._owned = False
         self._thread = threading.Thread(
             target=self._loop, name="vllm-srun-worker", daemon=True
@@ -242,10 +249,18 @@ class Scheduler:
                 group=group,
                 reference=reference,
             )
+            lanes: dict[str, int] = {}
+            for item in items:
+                lane = self._lane(item)
+                lanes[lane] = lanes.get(lane, 0) + cost(item)
             pending.append(
-                _Pending(job, future, sum(cost(item) for item in items), timing=timing)
+                _Pending(job, future, sum(lanes.values()), lanes, timing=timing)
             )
         return futures, pending
+
+    def _lane(self, item: Any) -> str:
+        lane = getattr(self.model, "lane", None)
+        return lane(item) if lane is not None else "text"
 
     def _admit(self, pending: list[_Pending]) -> None:
         """Count jobs as pending until they are answered (the caller holds the lock)."""
@@ -341,8 +356,9 @@ class Scheduler:
                 continue
             pending.results = [None] * len(pending.job.items)
             pending.remaining = len(pending.job.items)
-            pending.finish = pending.job.enqueued + pending.tokens * (
-                self._token_cost or INITIAL_TOKEN_COST
+            pending.finish = pending.job.enqueued + sum(
+                tokens * self._token_cost.get(lane, INITIAL_TOKEN_COST)
+                for lane, tokens in pending.lanes.items()
             )
             by_kind.setdefault(pending.job.reference, []).append(pending)
         for references, group in by_kind.items():
@@ -381,6 +397,7 @@ class Scheduler:
                     )
 
     def _run(self, planned: _Planned) -> None:
+        """Run a planned batch, or each batch of a turn that merges lanes, cheapest first."""
         now = time.monotonic()
         for pending in planned.owners:
             if (
@@ -391,10 +408,25 @@ class Scheduler:
                 self._expire(pending)
         if all(pending.future.done() for pending in planned.owners):
             return
-        batch = planned.batch
+        owners = {id(pending.job): pending for pending in planned.owners}
+        batches = sorted(planned.batch.sub or (planned.batch,), key=self._seconds)
+        for batch in batches:
+            members = [owners[id(job)] for job, _ in batch.parts]
+            if self._failure is not None:
+                for pending in members:
+                    _fail(pending.future, self._failure)
+            elif not all(pending.future.done() for pending in members):
+                self._run_batch(batch, members, next(self._sequence))
+
+    def _seconds(self, batch: Batch) -> float:
+        """A batch's expected forward time at its lane's measured cost per token."""
+        tokens = sum(cost(item) for item in batch.items())
+        return tokens * self._token_cost.get(batch.lane, INITIAL_TOKEN_COST)
+
+    def _run_batch(self, batch: Batch, members: list[_Pending], sequence: int) -> None:
         items = batch.items()
         started = time.monotonic()
-        for pending in planned.owners:
+        for pending in members:
             if not pending.started:
                 pending.started = True
                 self.observe("queue", {"seconds": started - pending.job.enqueued})
@@ -407,27 +439,30 @@ class Scheduler:
                 work = partial(self.model.run, items)
             values = self.execute(work)
         except Exception as exc:
-            _timed(planned, started, time.monotonic())
+            _timed(members, sequence, started, time.monotonic())
             if self.device_fault(exc):
                 self._failure = exc
-            for pending in planned.owners:
+            for pending in members:
                 _fail(pending.future, exc)
             return
         ended = time.monotonic()
-        _timed(planned, started, ended)
+        _timed(members, sequence, started, ended)
         seconds = ended - started
         tokens = sum(cost(item) for item in items)
         self.observe(
             "forward", {"seconds": seconds, "rows": len(items), "tokens": tokens}
         )
-        if tokens:
+        lanes = (
+            {batch.lane} if not batch.exact else {self._lane(item) for item in items}
+        )
+        if tokens and len(lanes) == 1:
+            lane = lanes.pop()
             sample = seconds / tokens
-            self._token_cost = (
-                sample
-                if self._token_cost is None
-                else self._token_cost + COST_SMOOTHING * (sample - self._token_cost)
+            known = self._token_cost.get(lane)
+            self._token_cost[lane] = (
+                sample if known is None else known + COST_SMOOTHING * (sample - known)
             )
-        owners = {id(pending.job): pending for pending in planned.owners}
+        owners = {id(pending.job): pending for pending in members}
         cursor = 0
         for job, indices in batch.parts:
             pending = owners[id(job)]
@@ -456,11 +491,13 @@ class Scheduler:
             _fail(pending.future, error)
 
 
-def _timed(planned: _Planned, started: float, ended: float) -> None:
+def _timed(
+    members: list[_Pending], sequence: int, started: float, ended: float
+) -> None:
     """Record a forward in the timing of every group it ran items for, before any is answered."""
-    for pending in planned.owners:
+    for pending in members:
         if pending.timing is not None and not pending.future.done():
-            pending.timing.ran(planned.sequence, ended - started, ended)
+            pending.timing.ran(sequence, ended - started, ended)
 
 
 def _resolve(future: Future[Results[Any]], result: Results[Any]) -> None:
