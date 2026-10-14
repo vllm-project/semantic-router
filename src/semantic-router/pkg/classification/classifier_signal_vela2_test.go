@@ -174,13 +174,18 @@ func TestHallucinationDetectorOnVela2ReadsTheWholeAnswerInOneQuestion(t *testing
 }
 
 func TestGenericDecisionSetCompositionAndNativeSpanCapability(t *testing.T) {
+	// A Set question is allowed on any deployment; it does not need a native span head.
 	yaml := strings.Replace(vela2RoutingConfig, "      - name: topics\n        deployment: vela2", "      - name: topics\n        deployment: kai", 1)
 	classifier, _ := vela2Classifier(t, yaml)
 	if err := classifier.InitializeRuntime(); err != nil {
 		t.Fatalf("a set task can compose native noul questions: %v", err)
 	}
-	yaml = strings.Replace(vela2RoutingConfig, "      - name: places\n        deployment: vela2", "      - name: places\n        deployment: kai", 1)
-	classifier, _ = vela2Classifier(t, yaml)
+}
+
+func TestPreciseSpanRequiresNativeSpanCapability(t *testing.T) {
+	// A Span question must be backed by a deployment that can return spans.
+	yaml := strings.Replace(vela2RoutingConfig, "      - name: places\n        deployment: vela2", "      - name: places\n        deployment: kai", 1)
+	classifier, _ := vela2Classifier(t, yaml)
 	err := classifier.InitializeRuntime()
 	if err == nil || !strings.Contains(err.Error(), "routing.signals.decision[places]") || !strings.Contains(err.Error(), "span") {
 		t.Fatalf("precise spans require a native span capability, got %v", err)
