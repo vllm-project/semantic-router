@@ -112,12 +112,12 @@ func sharedDeploymentName(spec *ModelSpec, device string) string {
 // ImplicitModelRuntimeDeployment resolves a module's model reference to the
 // model_runtime deployment that serves it: a built-in model (a registry path
 // or alias) at its pinned revision, or a local package directory. It runs on
-// CPU when useCPU, else on the best available device; a built-in model runs
-// its registered CPU profile on CPU, every other deployment exact. A model
-// that requires a GPU runs on the best available device whatever useCPU says;
-// the model runtime manager refuses it on a host without a GPU.
+// CPU when useCPU, else on the best available device, with the runtime's
+// default engine arguments. A model that requires a GPU runs on the best
+// available device whatever useCPU says; the model runtime manager refuses it
+// on a host without a GPU.
 func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment, error) {
-	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact"}
+	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto"}
 	reference := strings.TrimSpace(model)
 	spec := GetModelByPath(reference)
 	if spec != nil && spec.RequiresGPU {
@@ -131,9 +131,6 @@ func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment,
 			return ModelDeployment{}, fmt.Errorf("model %q has no model_runtime family; run `vllm-sr config migrate` to move to its Vela 1.0 replacement", reference)
 		}
 		deployment.Artifact, deployment.Revision = spec.RepoID, spec.Revision
-		if useCPU && spec.CPUProfile != "" {
-			deployment.Profile = spec.CPUProfile
-		}
 		return deployment, nil
 	}
 	if reference == "" {

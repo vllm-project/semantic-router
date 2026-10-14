@@ -732,10 +732,11 @@ def test_passes_of_one_size_reuse_the_tower_features_of_their_images(
         return tower(name, pixel_values, grids)
 
     monkeypatch.setattr(model.engine_model, "tower_features", counted)
-    status, cached = call(d3_runtime, body)
-    assert status == 200 and calls == [BATCH_SIZE]
+    served = d3_runtime.lookup(None)
+    cached = served.answer_alone("decisions", body)
+    assert calls == [BATCH_SIZE]
     model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
-    status, again = call(d3_runtime, body)
+    again = served.answer_alone("decisions", body)
     assert again == cached and calls == [BATCH_SIZE, BATCH_SIZE]
 
 

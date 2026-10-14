@@ -2,7 +2,7 @@
 
 Every piece reproduces the eager backbone under BF16 autocast bit for bit (the
 parity records compare the result with the released packages' runtime on the
-four scored panels), so it belongs to the exact profile:
+four scored panels), so it runs at the published precision by default:
 
 - **Fused layers.** The element-wise ops of each Qwen3.5 / Qwen3 decoder layer
   run as the accelerator's fused kernels (``FUSED_SLOTS``; ROCm gfx942 Triton),

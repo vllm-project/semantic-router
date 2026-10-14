@@ -12,7 +12,7 @@ findings shape the runtime's CPU path:
    structural: an eager OMP wait policy makes it far worse, not better.
 3. Responses are bit-identical across intra-op thread counts for both Vela
    1.0 encoders and the Vela 2.0 0.3B decoder, so adapting the thread count
-   per input cannot change `exact`-profile answers. The optimal count,
+   per input cannot change an answer. The optimal count,
    however, differs between host generations, so a static default is not
    optimal everywhere.
 
@@ -26,7 +26,7 @@ This is a measurement record only; it changes no behavior.
   - Kunpeng 920, 192 cores, 8 NUMA nodes. Load stayed between 11 and 15.
 - **Runtime:** model runtime from main `738bf4839`, PyTorch 2.10.0 (CPU,
   oneDNN with the ACL backend), Python 3.11. Standalone
-  `vllm-srun serve` over a Unix socket, `device cpu`, profile `exact`,
+  `vllm-srun serve` over a Unix socket, `device cpu`, each request alone,
   the whole stack under `taskset -c 0-31` (32 cores spanning two NUMA
   nodes on the 950, two on the 920).
 - **Models:** `Vela-1.0-Encoder-307M-Domain` (local package) for
@@ -114,7 +114,7 @@ decisions call for counts {4, 8, 16} — every response pair is identical
 (max float difference 0.0). GEMM parallelizes over output rows and the
 attention and elementwise kernels over independent elements, so the thread
 count does not reorder any output element's summation. Adapting the thread
-count per request therefore cannot change an `exact`-profile answer.
+count per request therefore cannot change an answer.
 
 ### An eager OMP wait policy is not a fix
 

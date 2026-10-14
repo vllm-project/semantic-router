@@ -98,7 +98,7 @@ p50 in ms.
   its times stay within 1%.
 
 This is the ROCm baseline for porting the kernels to other devices: CUDA
-(#4621) and the approximate `max_speed` kernels of `docs/design.md`.
+(#4621) and the approximate kernels of `docs/design.md`.
 
 ## Reproduce
 

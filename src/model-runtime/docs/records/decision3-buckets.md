@@ -2,15 +2,15 @@
 
 Decision 3.0 graphs are captured per exact padded shape, so real traffic, where
 almost every prompt has its own length, keeps meeting shapes it has not
-captured and runs them eagerly. Under the approximate profiles (`batching`,
-`max_speed`) a text forward now pads its width up to a multiple of 32 tokens,
+captured and runs them eagerly. A text forward that the batcher merges across
+requests (the default) now pads its width up to a multiple of 32 tokens,
 on the left like every d3 row, when the padded shape replays a captured graph
 or the graph cache can still capture it: within the graph limit
 (`MAX_GRAPH_TOKENS`, 4,096), not failed before, and with room left in the cache
 (`Graphs.admits`). Prompts of nearby lengths then share one graph. Once the
 cache is full, only shapes it already holds are padded, so no forward pays for
-padding it cannot replay. The exact profile, media passes and larger forwards
-are unchanged.
+padding it cannot replay. Exact forwards, media passes and larger forwards are
+unchanged.
 
 - **Date:** 2026-10-13 (bucket size), 2026-10-14 (serving).
 - **Device:** one AMD Instinct MI300X (gfx942) in the router's ROCm image
@@ -33,9 +33,9 @@ the work.
 
 ## Throughput and latency
 
-`vllm-srun serve --profile batching` over HTTP, 240 two-question requests of
-new lengths (5 to 250 words), each concurrency after a 16-request warm-up. The
-second set sends 240 other prompts of the same length distribution to the same
+`vllm-srun serve` with batching (then `--profile batching`, now the default)
+over HTTP, 240 two-question requests of new lengths (5 to 250 words), each
+concurrency after a 16-request warm-up. The second set sends 240 other prompts of the same length distribution to the same
 server. Every server was started fresh. Main ran twice, and the two runs show
 the run-to-run spread at concurrency 16.
 
