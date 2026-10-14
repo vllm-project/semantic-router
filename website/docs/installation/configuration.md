@@ -84,6 +84,13 @@ response contract. Omit `backend` to keep the runtime-served model. The earlier
 `variant`, `use_modernbert` and `use_mmbert_32k` selectors are gone;
 `vllm-sr config migrate` removes them.
 
+PII rules default to the legacy prompt and optional history scope. To inspect
+textual tool results, opt in per rule with `source: tool_result`; the router
+uses the neutral protocol representation, so the same rule applies to the
+supported chat, responses, and messages wire formats. Tool-result scope does
+not implicitly include the prompt or conversation history, and unsupported
+source values fail configuration validation.
+
 Complexity attaches the same block under
 `global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
 two contracts, so `contract` cannot be defaulted and must be stated:
@@ -152,6 +159,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `reask` — learned signal | `reask` detects when the current user turn semantically repeats recent user turns in the same conversation. | [`config/fragments/signal/reask/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/reask/) | [Guide](../tutorials/signal/learned/reask) |
 | `safety` — learned signal | The `safety` signal predicts content risks. | [`config/fragments/signal/safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/safety/) | [Guide](../tutorials/signal/learned/safety) |
 | `structure` — heuristic signal | `structure` detects request-shape facts such as many explicit questions, ordered workflow markers, or dense constraint phrasing. | [`config/fragments/signal/structure/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/structure/) | [Guide](../tutorials/signal/heuristic/structure) |
+| `topic-continuity` — heuristic signal | `topic_continuity` reports whether the live user turn still depends on the retained conversation history. | [`config/fragments/signal/topic-continuity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/topic-continuity/) | [Guide](../tutorials/signal/heuristic/topic-continuity) |
 | `user-feedback` — learned signal | `user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [Guide](../tutorials/signal/learned/user-feedback) |
 
 ### Selection algorithms

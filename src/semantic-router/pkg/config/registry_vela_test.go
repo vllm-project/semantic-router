@@ -87,8 +87,8 @@ func TestVela2SignalModelIsAPinnedRuntimeServedRelease(t *testing.T) {
 		if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(model.Revision) || !model.RuntimeProvisioned || !servedBuiltIn(model) {
 			t.Fatalf("Vela 2.0 0.3B must be a pinned release the runtime serves: %+v", model)
 		}
-		if !model.SharedDeployment || model.CPUProfile != "max_speed" || model.MaxContextLength != 8192 {
-			t.Fatalf("Vela 2.0 0.3B runs one shared deployment, max_speed on CPU, 8K input: %+v", model)
+		if !model.SharedDeployment || model.MaxContextLength != 8192 {
+			t.Fatalf("Vela 2.0 0.3B runs one shared deployment with 8K input: %+v", model)
 		}
 	}
 }

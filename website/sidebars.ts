@@ -93,6 +93,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
+                'tutorials/signal/heuristic/topic-continuity',
               ],
             },
             {
@@ -277,7 +278,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'model-runtime/deploy',
-        'model-runtime/profiles',
+        'model-runtime/engine-args',
         'installation/runtime/external',
         'model-runtime/migrate',
         'model-runtime/troubleshooting',

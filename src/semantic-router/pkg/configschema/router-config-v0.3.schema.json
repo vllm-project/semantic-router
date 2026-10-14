@@ -876,16 +876,14 @@
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              },
-              "profile": "exact"
+              }
             },
             "primary": {
               "artifact": "vllm-sr/Vela-2.0-0.3B",
               "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
               "provider": "model_runtime",
               "device": "cpu",
-              "input": {},
-              "profile": "max_speed"
+              "input": {}
             }
           }
         },
@@ -1490,6 +1488,12 @@
         "decision": {
           "items": {
             "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
+        },
+        "topic_continuity": {
+          "items": {
+            "$ref": "#/$defs/TopicContinuityRule"
           },
           "type": "array"
         }
@@ -4630,8 +4634,20 @@
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },
-        "profile": {
+        "max_num_seqs": {
+          "type": "integer"
+        },
+        "max_num_batched_tokens": {
+          "type": "integer"
+        },
+        "batch_window_ms": {
+          "type": "number"
+        },
+        "dtype": {
           "type": "string"
+        },
+        "enable_shared_context": {
+          "type": "boolean"
         },
         "endpoint": {
           "type": "string"
@@ -5190,6 +5206,9 @@
         },
         "include_history": {
           "type": "boolean"
+        },
+        "source": {
+          "type": "string"
         },
         "description": {
           "type": "string"
@@ -7376,6 +7395,54 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "TopicContinuityEvidenceLimits": {
+      "properties": {
+        "max_prior_turns": {
+          "type": "integer"
+        },
+        "max_turn_bytes": {
+          "type": "integer"
+        },
+        "max_input_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "include_assistant": {
+          "type": "boolean"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/TopicContinuityThresholds"
+        },
+        "limits": {
+          "$ref": "#/$defs/TopicContinuityEvidenceLimits"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityThresholds": {
+      "properties": {
+        "continuation": {
+          "type": "number"
+        },
+        "change": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "TracingConfig": {
       "properties": {
         "enabled": {
@@ -8134,6 +8201,13 @@
         "decision_referenceable": true,
         "reference_qualifier": "label",
         "schema_ref": "#/$defs/DecisionSignalRule"
+      },
+      {
+        "type": "topic_continuity",
+        "display_name": "Topic Continuity",
+        "collection": "topic_continuity",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/TopicContinuityRule"
       }
     ],
     "algorithms": [

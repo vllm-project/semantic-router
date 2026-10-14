@@ -41,8 +41,10 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 	memory.UpdatedAt = time.Now()
 
 	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
+	var existing *Memory
 	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
-		existing, err := m.Get(ctx, id)
+		var err error
+		existing, err = m.Get(ctx, id)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("memory not found: %s", id)
@@ -50,12 +52,16 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		if memory.CreatedAt.IsZero() {
 			memory.CreatedAt = existing.CreatedAt
 		}
-		if len(memory.Embedding) == 0 {
-			memory.Embedding = existing.Embedding
-		}
 	}
+	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, m.embeddingConfig)
+	if err != nil {
+		status = "error"
+		return err
+	}
+	writeMemory := *memory
+	writeMemory.Embedding = embedding
 
-	err := m.upsert(ctx, memory)
+	err = m.upsert(ctx, &writeMemory)
 	if err != nil {
 		status = "error"
 		return err
