@@ -37,7 +37,6 @@ type MemoryStatus struct {
 type Registry struct {
 	modelPool              *binding.Pool
 	configPublicationMu    sync.Mutex
-	configReportMu         sync.Mutex
 	mu                     sync.RWMutex
 	config                 *config.RouterConfig
 	classificationService  *services.ClassificationService

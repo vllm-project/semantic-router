@@ -70,41 +70,11 @@ func (r *Registry) FinishConfigActivation(attempt uint64, status string, err err
 }
 
 // ReportConfigAttempt publishes the lifecycle's latest attempt. An attempt
-// older than the published one never replaces it. A finished attempt reaches
-// its listeners before it is published, so a reader that sees the outcome also
-// sees what the listeners recorded, such as its audit entry.
+// older than the published one never replaces it.
 func (r *Registry) ReportConfigAttempt(attempt configsnapshot.Attempt, err error) {
 	if r == nil {
 		return
 	}
-	r.configReportMu.Lock()
-	defer r.configReportMu.Unlock()
-	activation := newConfigActivation(attempt, err)
-	r.mu.RLock()
-	stale := activation.Attempt < r.configActivation.Attempt
-	listeners := append([]func(configsnapshot.Attempt){}, r.configAttemptListeners...)
-	r.mu.RUnlock()
-	if stale {
-		return
-	}
-	if attempt.FinishedAt != nil {
-		for _, listener := range listeners {
-			listener(attempt)
-		}
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if activation.Attempt < r.configActivation.Attempt {
-		return
-	}
-	r.configActivation = activation
-	if attempt.Status == configsnapshot.AttemptFailed {
-		rejected := activation
-		r.configRejection = &rejected
-	}
-}
-
-func newConfigActivation(attempt configsnapshot.Attempt, err error) ConfigActivation {
 	activation := ConfigActivation{
 		Attempt: attempt.ID, DocumentHash: attempt.Hash, Source: string(attempt.Origin.Source),
 		Status: string(attempt.Status), Stage: attempt.Step, StartedAt: attempt.StartedAt,
@@ -117,7 +87,24 @@ func newConfigActivation(attempt configsnapshot.Attempt, err error) ConfigActiva
 	if err != nil {
 		activation.FailureDetail = err.Error()
 	}
-	return activation
+	r.mu.Lock()
+	if activation.Attempt < r.configActivation.Attempt {
+		r.mu.Unlock()
+		return
+	}
+	r.configActivation = activation
+	if attempt.Status == configsnapshot.AttemptFailed {
+		rejected := activation
+		r.configRejection = &rejected
+	}
+	listeners := append([]func(configsnapshot.Attempt){}, r.configAttemptListeners...)
+	r.mu.Unlock()
+	if attempt.FinishedAt == nil {
+		return
+	}
+	for _, listener := range listeners {
+		listener(attempt)
+	}
 }
 
 // OnConfigAttempt registers a listener that receives every configuration
