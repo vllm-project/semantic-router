@@ -90,10 +90,6 @@ type ModelSpec struct {
 	// so the model loads once and a request's questions share one call.
 	SharedDeployment bool `json:"-" yaml:"-"`
 
-	// CPUProfile is the model_runtime profile an implicit CPU deployment of
-	// the model runs; the runtime's accuracy record for the model backs it.
-	CPUProfile string `json:"-" yaml:"-"`
-
 	// RequiresGPU marks a model whose implicit deployment runs on a GPU only:
 	// a module that names it runs it on the best GPU, and a host without one
 	// cannot serve it.
@@ -120,8 +116,8 @@ var DefaultModelRegistry = []ModelSpec{
 	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
 	// feedback and modality signals as questions, and PII and hallucination
 	// with its span presets. The model runtime downloads and verifies it; on
-	// CPU, max_speed runs its float32-packed copy, which keeps its answers
-	// (src/model-runtime/docs/records/vela2-parity.md).
+	// CPU it runs its consented float32-packed copy by default, which keeps
+	// its answers (src/model-runtime/docs/records/vela2-parity.md).
 	{
 		LocalPath:          Vela2SignalModel,
 		RepoID:             "vllm-sr/Vela-2.0-0.3B",
@@ -133,7 +129,6 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:   8192,
 		RuntimeProvisioned: true,
 		SharedDeployment:   true,
-		CPUProfile:         "max_speed",
 		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
 	},
 	// The larger Vela 2.0 sizes answer the same questions and span presets as
