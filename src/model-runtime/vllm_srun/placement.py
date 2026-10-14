@@ -84,21 +84,26 @@ def resident_dtype(spec: ModelSpec, accelerator: str) -> str:
     return policy.gpu_weights or policy.weights
 
 
-def estimate_bytes(spec: ModelSpec, parameters: int, accelerator: str) -> int:
+def estimate_bytes(
+    spec: ModelSpec, parameters: int, accelerator: str, bf16_parameters: int = 0
+) -> int:
     """The weights in the dtype ``accelerator`` holds them in, plus an activation reserve.
 
     Weights a family holds in BF16 there (``gpu_weights`` / ``cpu_weights``)
-    count two bytes each plus ``RESIDENT_HEADROOM``; FP32 stays an upper bound
-    for the others (BF16-resident Linear weights only lower it). The reserve
-    covers loading and ordinary requests: inputs of tens of thousands of
-    tokens need more, and a forward that runs out of device memory fails
-    only its own requests.
+    count two bytes each plus ``RESIDENT_HEADROOM``, and so do the
+    ``bf16_parameters`` a ``bf16_resident`` family holds in BF16 on a GPU, its
+    BF16-stored Linear weights (docs/records/bf16-resident-device-memory.md);
+    the rest count as FP32. The reserve covers loading and ordinary requests:
+    inputs of tens of thousands of tokens need more, and a forward that runs
+    out of device memory fails only its own requests.
     """
     width = DTYPE_BYTES.get(resident_dtype(spec, accelerator), FP32_BYTES)
-    weights = parameters * width
-    if width < FP32_BYTES:
-        weights += int(weights * RESIDENT_HEADROOM)
-    return weights + ACTIVATION_RESERVE
+    held = parameters if width < FP32_BYTES else 0
+    if width == FP32_BYTES and accelerator != "cpu" and spec.dtype.bf16_resident:
+        width, held = DTYPE_BYTES["bfloat16"], min(bf16_parameters, parameters)
+    weights = held * width
+    weights += int(weights * RESIDENT_HEADROOM)
+    return weights + (parameters - held) * FP32_BYTES + ACTIVATION_RESERVE
 
 
 def place(
@@ -106,6 +111,7 @@ def place(
     device: str,
     parameters: int,
     memory_budget_gib: float | None = None,
+    bf16_parameters: int = 0,
 ) -> Placement:
     kind, index = parse_device(device)
     budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
@@ -124,7 +130,7 @@ def place(
         if not accelerator.available():
             absent.append(f"{name}: not available on this host")
             continue
-        needed = estimate_bytes(spec, parameters, name)
+        needed = estimate_bytes(spec, parameters, name, bf16_parameters)
         if budget is not None and needed > budget:
             reasons.append(
                 f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "

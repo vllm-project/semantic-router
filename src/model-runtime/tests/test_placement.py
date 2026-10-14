@@ -253,6 +253,53 @@ def test_the_estimate_counts_weights_in_the_dtype_the_device_holds():
     assert estimate_bytes(fp32_on_cpu, billion, "cpu") == 4 * billion + 2 * GIB
 
 
+def test_a_bf16_resident_family_counts_its_bf16_linear_weights_on_gpus():
+    billion, linear = 1_000_000_000, 750_000_000
+    held = 1_500_000_000 + 150_000_000 + 4 * 250_000_000
+    assert estimate_bytes(SPEC, billion, "cuda", linear) == held + 2 * GIB
+    assert estimate_bytes(SPEC, billion, "cpu", linear) == 4 * billion + 2 * GIB
+    fp32 = replace(SPEC, dtype=replace(SPEC.dtype, bf16_resident=False))
+    assert estimate_bytes(fp32, billion, "cuda", linear) == 4 * billion + 2 * GIB
+    assert estimate_bytes(D3, billion, "cuda", linear) == 2_200_000_000 + 2 * GIB
+
+
+# docs/records/bf16-resident-device-memory.md: parameters, BF16-stored Linear
+# parameters and the peak with short requests on an RTX 4090.
+BF16_RESIDENT_PEAKS_GIB = {
+    "Decision-2.0-Lux-9B": (7_940_895_744, 6_918_504_448, 19.03),
+    "Vela-2.0-9B": (7_949_850_627, 6_918_504_448, 18.48),
+}
+
+
+@pytest.mark.parametrize("model", sorted(BF16_RESIDENT_PEAKS_GIB))
+def test_the_estimate_covers_each_measured_bf16_resident_peak_on_a_24_gb_gpu(model):
+    parameters, bf16, peak = BF16_RESIDENT_PEAKS_GIB[model]
+    needed = estimate_bytes(SPEC, parameters, "cuda", bf16) / GIB
+    assert peak + 0.6 <= needed < 22
+
+
+def test_the_bf16_count_is_what_the_native_engine_holds_on_a_gpu(tmp_path):
+    from vllm_srun.engines.native.engine import (
+        bf16_resident_parameters,
+        build_on_meta,
+    )
+    from vllm_srun.engines.native.weights import keep_linear_bf16, load_backbone
+    from vllm_srun.testing.fixtures import qwen3_5_config, random_backbone, save
+
+    config = qwen3_5_config(384)
+    state = random_backbone("qwen3_5_text", config, seed=3)
+    save({f"backbone.{n}": v for n, v in state.items()}, tmp_path / "m.safetensors")
+    spec = BackboneSpec(
+        config["model_type"], config, (tmp_path / "m.safetensors",), "backbone."
+    )
+    module = build_on_meta(spec)
+    load_backbone(module, spec.weight_files, spec.weight_prefix)
+    keep_linear_bf16(module)
+    held = sum(p.numel() for p in module.parameters() if p.dtype == torch.bfloat16)
+    assert 0 < held < sum(p.numel() for p in module.parameters())
+    assert bf16_resident_parameters(spec) == held
+
+
 @pytest.mark.parametrize("model", sorted(DECISION3_PEAKS_GIB))
 def test_the_estimate_covers_each_measured_decision3_peak_with_margin(model):
     parameters, peak = DECISION3_PEAKS_GIB[model]
