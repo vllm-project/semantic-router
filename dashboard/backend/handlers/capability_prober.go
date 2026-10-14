@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
 const (
@@ -32,9 +31,17 @@ type capabilityProbe struct {
 	check func(context.Context) bool
 }
 
+// RouterReadinessSource reports the newest Router readiness observation;
+// StatusMonitor implements it.
+type RouterReadinessSource interface {
+	RouterReadiness() (RouterReadiness, bool)
+}
+
 // CapabilityProber refreshes dependency health in the background so capability
-// reads never wait on an upstream.
+// reads never wait on an upstream. Router readiness comes from router, which
+// already probes the Router for /api/status.
 type CapabilityProber struct {
+	router    RouterReadinessSource
 	probes    []capabilityProbe
 	interval  time.Duration
 	mu        sync.RWMutex
@@ -45,15 +52,10 @@ type CapabilityProber struct {
 	closeOnce sync.Once
 }
 
-// NewCapabilityProber probes the Router management API, the sr-bench service,
-// and the ML service when it runs as a sidecar.
-func NewCapabilityProber(cfg *config.Config, credentialProvider ...routerauth.CredentialProvider) *CapabilityProber {
+// NewCapabilityProber probes the sr-bench service, and the ML service when it
+// runs as a sidecar.
+func NewCapabilityProber(cfg *config.Config, router RouterReadinessSource) *CapabilityProber {
 	probes := []capabilityProbe{{
-		name: probeRouter,
-		check: func(context.Context) bool {
-			return checkRouterManagementHealth(cfg.RouterAPIURL+"/ready", credentialProvider...)
-		},
-	}, {
 		name: probeSRBench,
 		check: func(ctx context.Context) bool {
 			token := strings.TrimSpace(os.Getenv(cfg.SRBenchTokenEnv))
@@ -68,11 +70,12 @@ func NewCapabilityProber(cfg *config.Config, credentialProvider ...routerauth.Cr
 			},
 		})
 	}
-	return newCapabilityProber(probes, capabilityProbeInterval)
+	return newCapabilityProber(router, probes, capabilityProbeInterval)
 }
 
-func newCapabilityProber(probes []capabilityProbe, interval time.Duration) *CapabilityProber {
+func newCapabilityProber(router RouterReadinessSource, probes []capabilityProbe, interval time.Duration) *CapabilityProber {
 	return &CapabilityProber{
+		router:   router,
 		probes:   probes,
 		interval: interval,
 		results:  map[string]probeResult{},
@@ -103,8 +106,14 @@ func (p *CapabilityProber) Snapshot() map[string]probeResult {
 		return nil
 	}
 	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return maps.Clone(p.results)
+	snapshot := maps.Clone(p.results)
+	p.mu.RUnlock()
+	if p.router != nil {
+		if readiness, ok := p.router.RouterReadiness(); ok {
+			snapshot[probeRouter] = probeResult{ok: readiness.Ready, checkedAt: readiness.CheckedAt}
+		}
+	}
+	return snapshot
 }
 
 func (p *CapabilityProber) run() {

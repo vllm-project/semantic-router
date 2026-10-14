@@ -233,7 +233,7 @@ func TestCapabilitiesHandlerUsesCallerPermissionsAndHidesSecrets(t *testing.T) {
 	fixture.cfg.SRBenchURL = "http://sr-bench.internal:8090"
 	fixture.cfg.SRBenchTokenEnv = "CAPABILITY_TEST_TOKEN"
 	fixture.cfg.RouterAPIURL = "http://router.internal:8080"
-	prober := newCapabilityProber(nil, time.Hour)
+	prober := newCapabilityProber(nil, nil, time.Hour)
 	handler := CapabilitiesHandler(fixture.cfg, fixture.setup, prober)
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/capabilities", nil)
@@ -268,8 +268,8 @@ func TestCapabilitiesHandlerUsesCallerPermissionsAndHidesSecrets(t *testing.T) {
 
 func TestCapabilityProberDoesNotBlockReads(t *testing.T) {
 	release := make(chan struct{})
-	prober := newCapabilityProber([]capabilityProbe{{
-		name: probeRouter,
+	prober := newCapabilityProber(nil, []capabilityProbe{{
+		name: probeSRBench,
 		check: func(context.Context) bool {
 			<-release
 			return true
@@ -279,7 +279,7 @@ func TestCapabilityProberDoesNotBlockReads(t *testing.T) {
 	t.Cleanup(func() { _ = prober.Close() })
 
 	started := time.Now()
-	if _, ok := prober.Snapshot()[probeRouter]; ok {
+	if _, ok := prober.Snapshot()[probeSRBench]; ok {
 		t.Fatal("snapshot reports a probe that has not completed")
 	}
 	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
@@ -289,7 +289,7 @@ func TestCapabilityProberDoesNotBlockReads(t *testing.T) {
 	close(release)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if result, ok := prober.Snapshot()[probeRouter]; ok {
+		if result, ok := prober.Snapshot()[probeSRBench]; ok {
 			if !result.ok || result.checkedAt.IsZero() {
 				t.Fatalf("result = %+v", result)
 			}
@@ -301,7 +301,7 @@ func TestCapabilityProberDoesNotBlockReads(t *testing.T) {
 }
 
 func TestCapabilityProberCloseWithoutStart(t *testing.T) {
-	if err := newCapabilityProber(nil, time.Hour).Close(); err != nil {
+	if err := newCapabilityProber(nil, nil, time.Hour).Close(); err != nil {
 		t.Fatal(err)
 	}
 }

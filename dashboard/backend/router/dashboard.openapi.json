@@ -760,8 +760,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -772,8 +772,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -784,8 +784,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               },
@@ -801,8 +801,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               },
@@ -818,8 +818,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -830,8 +830,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -842,8 +842,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -854,8 +854,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -866,8 +866,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -928,8 +928,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -940,8 +940,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -952,8 +952,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               },
@@ -969,8 +969,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               },
@@ -986,8 +986,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -998,8 +998,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -1010,8 +1010,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -1022,8 +1022,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -1034,8 +1034,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "nullable": true,
+                  "type": "object",
                   "additionalProperties": true
                 }
               }
@@ -5856,8 +5856,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "nullable": true,
+                  "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
@@ -5871,8 +5871,8 @@
                         "type": "string"
                       },
                       "required_models": {
-                        "type": "array",
                         "nullable": true,
+                        "type": "array",
                         "items": {
                           "type": "object",
                           "properties": {
@@ -5958,8 +5958,8 @@
                 "type": "object",
                 "properties": {
                   "models": {
-                    "type": "array",
                     "nullable": true,
+                    "type": "array",
                     "items": {
                       "type": "string"
                     }
@@ -5985,15 +5985,15 @@
                   "type": "object",
                   "properties": {
                     "configured_models": {
-                      "type": "array",
                       "nullable": true,
+                      "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "missing_models": {
-                      "type": "array",
                       "nullable": true,
+                      "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -8590,8 +8590,8 @@
                   "type": "object",
                   "properties": {
                     "capabilities": {
-                      "type": "array",
                       "nullable": true,
+                      "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -8599,9 +8599,9 @@
                             "type": "boolean"
                           },
                           "checkedAt": {
+                            "nullable": true,
                             "type": "string",
-                            "format": "date-time",
-                            "nullable": true
+                            "format": "date-time"
                           },
                           "configured": {
                             "type": "boolean"
@@ -8814,8 +8814,8 @@
                       "type": "object",
                       "properties": {
                         "securitySchemes": {
-                          "type": "object",
                           "nullable": true,
+                          "type": "object",
                           "additionalProperties": {
                             "type": "object",
                             "properties": {
@@ -8871,14 +8871,14 @@
                       "type": "string"
                     },
                     "paths": {
-                      "type": "object",
                       "nullable": true,
+                      "type": "object",
                       "additionalProperties": {
-                        "type": "object",
                         "nullable": true,
+                        "type": "object",
                         "additionalProperties": {
-                          "type": "object",
                           "nullable": true,
+                          "type": "object",
                           "properties": {
                             "description": {
                               "type": "string"
@@ -8887,8 +8887,8 @@
                               "type": "string"
                             },
                             "parameters": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
                                 "type": "object",
                                 "properties": {
@@ -8907,13 +8907,16 @@
                                   "schema": {
                                     "type": "object",
                                     "properties": {
+                                      "$ref": {
+                                        "type": "string"
+                                      },
                                       "additionalProperties": {},
                                       "description": {
                                         "type": "string"
                                       },
                                       "enum": {
-                                        "type": "array",
                                         "nullable": true,
+                                        "type": "array",
                                         "items": {
                                           "type": "string"
                                         }
@@ -8922,29 +8925,33 @@
                                         "type": "string"
                                       },
                                       "items": {
-                                        "type": "object",
-                                        "nullable": true
+                                        "nullable": true,
+                                        "type": "object"
+                                      },
+                                      "minimum": {
+                                        "nullable": true,
+                                        "type": "integer"
                                       },
                                       "nullable": {
                                         "type": "boolean"
                                       },
                                       "oneOf": {
-                                        "type": "array",
                                         "nullable": true,
+                                        "type": "array",
                                         "items": {
                                           "type": "object"
                                         }
                                       },
                                       "properties": {
-                                        "type": "object",
                                         "nullable": true,
+                                        "type": "object",
                                         "additionalProperties": {
                                           "type": "object"
                                         }
                                       },
                                       "required": {
-                                        "type": "array",
                                         "nullable": true,
+                                        "type": "array",
                                         "items": {
                                           "type": "string"
                                         }
@@ -8964,26 +8971,29 @@
                               }
                             },
                             "requestBody": {
-                              "type": "object",
                               "nullable": true,
+                              "type": "object",
                               "properties": {
                                 "content": {
-                                  "type": "object",
                                   "nullable": true,
+                                  "type": "object",
                                   "additionalProperties": {
                                     "type": "object",
                                     "properties": {
                                       "schema": {
-                                        "type": "object",
                                         "nullable": true,
+                                        "type": "object",
                                         "properties": {
+                                          "$ref": {
+                                            "type": "string"
+                                          },
                                           "additionalProperties": {},
                                           "description": {
                                             "type": "string"
                                           },
                                           "enum": {
-                                            "type": "array",
                                             "nullable": true,
+                                            "type": "array",
                                             "items": {
                                               "type": "string"
                                             }
@@ -8992,29 +9002,33 @@
                                             "type": "string"
                                           },
                                           "items": {
-                                            "type": "object",
-                                            "nullable": true
+                                            "nullable": true,
+                                            "type": "object"
+                                          },
+                                          "minimum": {
+                                            "nullable": true,
+                                            "type": "integer"
                                           },
                                           "nullable": {
                                             "type": "boolean"
                                           },
                                           "oneOf": {
-                                            "type": "array",
                                             "nullable": true,
+                                            "type": "array",
                                             "items": {
                                               "type": "object"
                                             }
                                           },
                                           "properties": {
-                                            "type": "object",
                                             "nullable": true,
+                                            "type": "object",
                                             "additionalProperties": {
                                               "type": "object"
                                             }
                                           },
                                           "required": {
-                                            "type": "array",
                                             "nullable": true,
+                                            "type": "array",
                                             "items": {
                                               "type": "string"
                                             }
@@ -9040,28 +9054,31 @@
                               ]
                             },
                             "responses": {
-                              "type": "object",
                               "nullable": true,
+                              "type": "object",
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
                                   "content": {
-                                    "type": "object",
                                     "nullable": true,
+                                    "type": "object",
                                     "additionalProperties": {
                                       "type": "object",
                                       "properties": {
                                         "schema": {
-                                          "type": "object",
                                           "nullable": true,
+                                          "type": "object",
                                           "properties": {
+                                            "$ref": {
+                                              "type": "string"
+                                            },
                                             "additionalProperties": {},
                                             "description": {
                                               "type": "string"
                                             },
                                             "enum": {
-                                              "type": "array",
                                               "nullable": true,
+                                              "type": "array",
                                               "items": {
                                                 "type": "string"
                                               }
@@ -9070,29 +9087,33 @@
                                               "type": "string"
                                             },
                                             "items": {
-                                              "type": "object",
-                                              "nullable": true
+                                              "nullable": true,
+                                              "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
                                             },
                                             "oneOf": {
-                                              "type": "array",
                                               "nullable": true,
+                                              "type": "array",
                                               "items": {
                                                 "type": "object"
                                               }
                                             },
                                             "properties": {
-                                              "type": "object",
                                               "nullable": true,
+                                              "type": "object",
                                               "additionalProperties": {
                                                 "type": "object"
                                               }
                                             },
                                             "required": {
-                                              "type": "array",
                                               "nullable": true,
+                                              "type": "array",
                                               "items": {
                                                 "type": "string"
                                               }
@@ -9115,14 +9136,14 @@
                               }
                             },
                             "security": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
-                                "type": "object",
                                 "nullable": true,
+                                "type": "object",
                                 "additionalProperties": {
-                                  "type": "array",
                                   "nullable": true,
+                                  "type": "array",
                                   "items": {
                                     "type": "string"
                                   }
@@ -9133,15 +9154,15 @@
                               "type": "string"
                             },
                             "tags": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
                                 "type": "string"
                               }
                             },
                             "x-vllm-sr-additional-permissions": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
                                 "type": "string"
                               }
