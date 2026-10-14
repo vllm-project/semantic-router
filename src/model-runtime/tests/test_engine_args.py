@@ -15,7 +15,9 @@ from vllm_srun.testing.fixtures import write_fixture
 
 from .conftest import QUESTIONS, STATE
 
-DECISION2_GPU = DtypePolicy(approximate_kernels=True)
+# The qwen3 fixture stores its Linear weights (73,728 elements) BF16; the
+# family reports that share so placement can price BF16 residency.
+DECISION2_GPU = DtypePolicy(approximate_kernels=True, bf16_parameters=73_728)
 DECISION3 = DtypePolicy(
     autocast=None, bf16_resident=False, gpu_weights="bfloat16", cpu_weights="bfloat16"
 )

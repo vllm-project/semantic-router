@@ -29,7 +29,7 @@ from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 __all__ = ["Decision2Family", "Decision2Model"]
 from ...heads.candidate import CandidateHead, forward_logits, load_head
 from ...registry import builtin, policy
-from ...registry.artifacts import read_json
+from ...registry.artifacts import read_json, safetensors_bf16_elements
 from ...registry.resolve import download_base
 from ...systemone import (
     GOLDEN_STATE,
@@ -46,6 +46,21 @@ from . import package as pkg
 from .answers import apply_score_bias, product_answer
 
 GOLDEN_QUESTIONS = golden_questions("Anything else")
+
+
+def _bf16_parameters(backbone: BackboneSpec) -> int | None:
+    """The parameters the checkpoint stores BF16: the Linear weights a GPU holds BF16.
+
+    Only tensors under the backbone's weight prefix count — the tensors its
+    runtime loads. None when no weight file stores BF16, which keeps
+    placement's FP32 upper bound for packages this family cannot
+    characterize.
+    """
+    stored = sum(
+        safetensors_bf16_elements(path, backbone.weight_prefix)
+        for path in backbone.weight_files
+    )
+    return stored or None
 
 
 class Decision2Family(ModelFamily):
@@ -179,7 +194,10 @@ class Decision2Family(ModelFamily):
             backbone=backbone,
             # cuda-fused-approximate.md: no decision changed with CUDA's
             # approximate fused kernels, so they run by default there.
-            dtype=DtypePolicy(approximate_kernels=True),
+            dtype=DtypePolicy(
+                approximate_kernels=True,
+                bf16_parameters=_bf16_parameters(backbone),
+            ),
             max_input_tokens=package.max_input_tokens,
             requires=backbone.requires,
         )
