@@ -57,6 +57,7 @@
     source: https://huggingface.co/MiniMaxAI/MiniMax-M2.7
     license: MiniMax-Community-License
   family: minimax-m2
+  reasoning_family: minimax-m2-always-on
   parameter_size: 230B
   lifecycle: active
   limits:
