@@ -252,9 +252,10 @@ func TestWebSearchRateLimitStatsHandlerReturnsAggregateOnly(t *testing.T) {
 	resetRateLimiter(t)
 	now := time.Now()
 	globalRateLimiter.requests["user:secret"] = []time.Time{now.Add(-time.Second)}
+	globalRateLimiter.requests["ip:192.0.2.10"] = []time.Time{now.Add(-time.Second)}
 	globalRateLimiter.globalReqs = []time.Time{now.Add(-time.Second), now.Add(-2 * time.Second)}
 
-	beforeClients, beforeGlobal := globalRateLimiter.getStats()
+	wantClients, wantGlobal := 2, 2
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/tools/web-search/stats", nil)
 	WebSearchRateLimitStatsHandler()(response, request)
@@ -274,8 +275,8 @@ func TestWebSearchRateLimitStatsHandlerReturnsAggregateOnly(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &payload); err != nil {
 		t.Fatalf("decode stats response: %v; body=%s", err, body)
 	}
-	if payload.TrackedClients != beforeClients || payload.GlobalRequests != beforeGlobal {
-		t.Fatalf("stats = %+v, want tracked=%d global=%d", payload, beforeClients, beforeGlobal)
+	if payload.TrackedClients != wantClients || payload.GlobalRequests != wantGlobal {
+		t.Fatalf("stats = %+v, want tracked=%d global=%d", payload, wantClients, wantGlobal)
 	}
 	if payload.WindowSeconds != int(rateLimitWindow/time.Second) ||
 		payload.PerClientLimit != rateLimitMaxReqs || payload.GlobalLimit != globalRateLimit {
@@ -295,16 +296,16 @@ func TestWebSearchRateLimitStatsHandlerReturnsAggregateOnly(t *testing.T) {
 			t.Fatalf("response is missing field %q: %v", field, fields)
 		}
 	}
-	for _, forbidden := range []string{"user:secret", "query", "192.0.2."} {
+	for _, forbidden := range []string{"user:secret", "ip:192.0.2.10", "query"} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("response contains forbidden value %q: %s", forbidden, body)
 		}
 	}
 
 	afterClients, afterGlobal := globalRateLimiter.getStats()
-	if afterClients != beforeClients || afterGlobal != beforeGlobal {
+	if afterClients != wantClients || afterGlobal != wantGlobal {
 		t.Fatalf("stats read changed limiter: before=(%d,%d) after=(%d,%d)",
-			beforeClients, beforeGlobal, afterClients, afterGlobal)
+			wantClients, wantGlobal, afterClients, afterGlobal)
 	}
 }
 

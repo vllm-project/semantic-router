@@ -681,6 +681,8 @@ func sendErrorResponse(w http.ResponseWriter, query string, code SearchErrorCode
 // snapshot of the WebSearch rate limiter.
 func WebSearchRateLimitStatsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// PolicyMux may pass OPTIONS through as a preflight candidate; stats must
+		// remain GET-only so preflight cannot expose the aggregate snapshot.
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
