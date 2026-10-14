@@ -9,6 +9,8 @@ document) are reported in place, for example ``{"type": ..., "error":
 
 from __future__ import annotations
 
+from typing import Any
+
 # Item-level codes (inside a 200 response).
 INVALID_QUESTION = "invalid_question"
 INVALID_INPUT = "invalid_input"
@@ -75,6 +77,10 @@ class MediaError(ValueError):
     def at(self, where: str) -> MediaError:
         """The same rejection, its message prefixed with where it happened (``videos[1]``)."""
         return MediaError(self.reason, f"{where}: {self}", self.limit)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickle by reason, message and limit, so a rejection crosses from a media worker process."""
+        return (MediaError, (self.reason, str(self), self.limit))
 
 
 class RuntimeServiceError(Exception):
