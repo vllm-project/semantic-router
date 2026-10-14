@@ -11,11 +11,9 @@ import tempfile
 import unittest
 from collections import UserDict
 from pathlib import Path
-from unittest.mock import patch
 
 from src.training.model_classifier.sequence_repair.retention import (
     RetentionCache,
-    file_digest,
     masked_teacher_kl,
     row_identity,
     tokenizer_file_receipt,
@@ -80,23 +78,19 @@ class CacheFixture:
 
 
 class CacheIdentityTests(CacheFixture, unittest.TestCase):
-    def test_file_digest_python_310_fallback(self):
-        test_file = self.root / "digest_test.bin"
-        payload = b"test payload for file digest verification"
-        test_file.write_bytes(payload)
-        expected = hashlib.sha256(payload).hexdigest()
+    def test_tokenizer_file_receipt_without_hashlib_file_digest(self):
+        base = self.root / "tokenizer_fallback"
+        base.mkdir()
+        for name in ("tokenizer.json", "tokenizer_config.json"):
+            (base / name).write_text("{}")
+        expected = tokenizer_file_receipt(base)
 
-        with test_file.open("rb") as stream:
-            self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
+        original = getattr(hashlib, "file_digest", None)
+        if original is not None:
+            self.addCleanup(setattr, hashlib, "file_digest", original)
+            del hashlib.file_digest
 
-        with (
-            patch(
-                "src.training.model_classifier.sequence_repair.retention.hasattr",
-                return_value=False,
-            ),
-            test_file.open("rb") as stream,
-        ):
-            self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
+        self.assertEqual(tokenizer_file_receipt(base), expected)
 
     def test_exact_cache_covers_only_explicit_replay_and_derives_compatibility(self):
         cache = self.load()

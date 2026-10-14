@@ -66,8 +66,12 @@ class ImageArtifactTests(unittest.TestCase):
             path.write_bytes(content)
             expected = hashlib.sha256(content).hexdigest()
             self.assertEqual(images.sha256(path), expected)
-            with patch("image_artifacts.hasattr", return_value=False):
-                self.assertEqual(images.sha256(path), expected)
+
+            original = getattr(hashlib, "file_digest", None)
+            if original is not None:
+                self.addCleanup(setattr, hashlib, "file_digest", original)
+                del hashlib.file_digest
+            self.assertEqual(images.sha256(path), expected)
 
     def test_identity_rejects_stale_source_and_changed_archive(self):
         with (
