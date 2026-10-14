@@ -235,7 +235,9 @@ func (decoder *chatStreamDecoder) decodeOrHoldChunk(chunk chatChunkWire) ([]llmp
 }
 
 func (decoder *chatStreamDecoder) opensWithoutOrder(chunk chatChunkWire) bool {
-	if len(chunk.Choices) != 1 || decoder.lastWasReasoning {
+	// A Chat target carries reasoning and answer in separate fields, so there is
+	// no block order to choose.
+	if len(chunk.Choices) != 1 || decoder.lastWasReasoning || decoder.context.Target == llmprotocol.OpenAIChatV1 {
 		return false
 	}
 	choice := chunk.Choices[0]
