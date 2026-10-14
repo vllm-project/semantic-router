@@ -653,12 +653,10 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 if image is None:
                     try:
                         if number in pending:
-                            image = img.loaded(
-                                *workers.outcome(
-                                    pending[number], img.load, value, self.settings
-                                ),
-                                self.settings,
+                            pixels, digest = workers.outcome(
+                                pending[number], img.load, value, self.settings
                             )
+                            image = img.loaded(pixels, digest, self.settings)
                         else:
                             picture, digest = img.decode(value)
                             image = img.preprocess(picture, digest, self.settings)
@@ -953,9 +951,13 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 [image.grid for media in missing for image in media.images],
                 packed=self.packs_merged_rows,
             )
-            sizes = [sum(image.tokens for image in media.images) for media in missing]
-            for media, view in zip(missing, features.split(sizes), strict=True):
-                part = view.clone()
+            ends = itertools.accumulate(
+                sum(image.tokens for image in media.images) for media in missing
+            )
+            start = 0
+            for media, end in zip(missing, ends, strict=True):
+                part = features[start:end].clone()
+                start = end
                 digests = tuple(image.digest for image in media.images)
                 self.feature_cache.put(("merged", digests), part, _bytes(part))
                 out[id(media)] = part

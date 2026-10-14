@@ -19,6 +19,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Any
 
 from ..config import DEFAULT_MAX_NUM_BATCHED_TOKENS, DEFAULT_MAX_NUM_SEQS, EngineArgs
@@ -159,13 +160,13 @@ def calibrate(
         items = model.calibration_items(rows, size // rows)
         if items is None:
             return None
-        execute(lambda items=items: model.run_approximate(items))
+        execute(partial(model.run_approximate, items))
         available, probe = memory() if memory is not None else (None, None)
         seconds = float("inf")
         peak: int | None = None
         for _ in range(TIMED_FORWARDS):
             begun = clock()
-            execute(lambda items=items: model.run_approximate(items))
+            execute(partial(model.run_approximate, items))
             seconds = min(seconds, clock() - begun)
             if probe is not None:
                 measured = probe()

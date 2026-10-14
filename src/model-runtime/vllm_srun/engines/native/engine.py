@@ -491,12 +491,12 @@ class NativeEngineModel(EngineModel):
                     mask[row, width - (end - start) :] = 1
                 positions, image_features = self._media(batch, rows, mask)
                 positions = positions[:, mask.to(positions.device).bool()][:, None]
-                videos = cast(ImageInputs, batch.images).videos
+                videos = batch.images.videos
                 hidden = backbone.forward_images_packed(
                     input_ids,
                     layout,
                     image_features,
-                    cast(ImageInputs, batch.images).token_id,
+                    batch.images.token_id,
                     positions,
                     videos=(
                         (videos.features.to(self.device), videos.token_id)
