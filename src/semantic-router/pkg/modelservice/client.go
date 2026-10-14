@@ -100,7 +100,7 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	return response.JSON200.Data, nil
 }
 
-// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
+// contractMinor is the minor version of a contract version "3.<minor>.<patch>"
 // of the major this client speaks, or -1.
 func contractMinor(version string) int64 {
 	major, rest, _ := strings.Cut(version, ".")

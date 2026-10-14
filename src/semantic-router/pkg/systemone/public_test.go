@@ -27,14 +27,14 @@ func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 		if json.Unmarshal(body, &native) != nil || string(native["questions"]) != `{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}` {
 			t.Fatalf("native question order/types changed: %s", body)
 		}
-		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"profile":"exact"}}`), nil
+		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"dtype":"float32"}}`), nil
 	})
 	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
 		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"vllm-sr/test","state":"input","questions":{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}}`))
 		request.Header.Set("Authorization", "Bearer test-key")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if response.Code != 200 || strings.Contains(response.Body.String(), "private-") || !strings.Contains(response.Body.String(), `"profile":"exact"`) {
+		if response.Code != 200 || strings.Contains(response.Body.String(), "private-") || !strings.Contains(response.Body.String(), `"dtype":"float32"`) {
 			t.Fatalf("native response %d %s", response.Code, response.Body.String())
 		}
 	}
