@@ -112,7 +112,8 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 ```
 
 Add `"options": {"return_meta": true}` to the request to also get `meta`: the
-revision, profile and device that answered and how long it took. On 16 CPU
+revision, precision (`dtype`) and device that answered, whether batching can
+move its answers (`numerics`), and how long it took. On 16 CPU
 cores this request takes about 0.2 seconds in the recorded worker benchmark.
 `POST /v1/decisions` is an alias of `/v1/systemone`; both use the same explicit
 public model ID. Native discovery uses `/v1/systemone/models`, while `/v1/models`

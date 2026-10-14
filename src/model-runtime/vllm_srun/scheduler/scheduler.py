@@ -2,18 +2,19 @@
 
 Requests are validated and rendered before they reach the queue, so the
 queue only holds runnable work. One worker thread owns the model's device:
-it takes queued jobs, drops those whose deadline passed, asks each job's
-profile to form batches and runs the batches one at a time. A job is answered
-as soon as its own batches have run.
+it takes queued jobs, drops those whose deadline passed, asks the model's
+batcher (``batching.Batcher``, from its engine arguments) to form batches
+and runs the batches one at a time. A job is answered as soon as its own
+batches have run.
 
 Planned batches run in order of their jobs' expected finish: the time a job
 was queued plus its tokens at the measured cost per token. Short work goes
 first, yet a long job still runs once the work queued before its expected
 finish is done, so nothing starves. Between two forwards the worker takes the
-jobs that arrived meanwhile (those of profiles that coalesce once they have
-waited one batching window), so a short request waits for the forward in flight,
-not for the rest of a long request. The order of forwards never changes what
-a batch contains, so answers are unchanged.
+jobs that arrived meanwhile (on a model whose batcher coalesces, once they
+have waited one batching window), so a short request waits for the forward in
+flight, not for the rest of a long request. The order of forwards never
+changes what a batch contains, so answers are unchanged.
 
 A model whose batches need no device thread may also run a request on the
 thread that planned it (``run_now``), but only when the scheduler is idle:
@@ -39,8 +40,9 @@ from functools import partial
 from typing import Any
 
 from ..errors import RuntimeServiceError
-from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile, Results
+from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Results
 from ..timing import RunTiming
+from .batching import Batcher, reference
 from .planner import cost
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
@@ -84,7 +86,7 @@ class Scheduler:
     def __init__(
         self,
         model: LoadedModel[Any, Any],
-        profiles: dict[str, Profile],
+        batcher: Batcher,
         limits: SchedulerLimits | None = None,
         observe: Callable[[str, dict[str, Any]], None] | None = None,
         execute: Callable[[Callable[[], Any]], Any] | None = None,
@@ -97,7 +99,7 @@ class Scheduler:
         forward, which fails only the jobs of that batch.
         """
         self.model = model
-        self.profiles = profiles
+        self.batcher = batcher
         self.limits = limits or SchedulerLimits()
         self.observe = observe or (lambda event, values: None)
         self.execute = execute or (lambda work: work())
@@ -144,25 +146,26 @@ class Scheduler:
     # -- submission ----------------------------------------------------------
 
     def submit(
-        self, items: list[Any], *, deadline: float | None, profile: str
+        self, items: list[Any], *, deadline: float | None, reference: bool = False
     ) -> Future[Results[Any]]:
-        return self.submit_group([items], deadlines=[deadline], profile=profile)[0]
+        return self.submit_group([items], deadlines=[deadline], reference=reference)[0]
 
     def submit_group(
         self,
         item_lists: list[list[Any]],
         *,
         deadlines: list[float | None],
-        profile: str,
         timing: RunTiming | None = None,
+        reference: bool = False,
     ) -> list[Future[Results[Any]]]:
         """Queue one job per item list at once, as one group (a bundle's tasks for this model).
 
         ``deadlines`` holds each job's own deadline. Admission counts every
         job not yet answered, queued or planned, and refuses the whole group
-        or none of it. ``timing`` records the group's forwards.
+        or none of it. ``timing`` records the group's forwards. ``reference``
+        jobs (the golden check) run alone, in their released forwards.
         """
-        futures, pending = self._jobs(item_lists, deadlines, profile, timing)
+        futures, pending = self._jobs(item_lists, deadlines, timing, reference)
         if not pending:
             return futures
         tokens = sum(entry.tokens for entry in pending)
@@ -186,7 +189,6 @@ class Scheduler:
         item_lists: list[list[Any]],
         *,
         deadlines: list[float | None],
-        profile: str,
         timing: RunTiming | None = None,
     ) -> list[Future[Results[Any]]] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
@@ -203,7 +205,7 @@ class Scheduler:
                 return None
             self._owned = True
         try:
-            futures, pending = self._jobs(item_lists, deadlines, profile, timing)
+            futures, pending = self._jobs(item_lists, deadlines, timing)
             with self._lock:
                 self._admit(pending)
             self._plan(pending)
@@ -220,13 +222,9 @@ class Scheduler:
         self,
         item_lists: list[list[Any]],
         deadlines: list[float | None],
-        profile: str,
         timing: RunTiming | None,
+        reference: bool = False,
     ) -> tuple[list[Future[Results[Any]]], list[_Pending]]:
-        if profile not in self.profiles:
-            raise RuntimeServiceError(
-                "invalid_request", f"profile {profile!r} is not enabled"
-            )
         futures: list[Future[Results[Any]]] = [Future() for _ in item_lists]
         pending = []
         enqueued = time.monotonic()
@@ -241,8 +239,8 @@ class Scheduler:
                 items=items,
                 deadline=deadline,
                 enqueued=enqueued,
-                profile=profile,
                 group=group,
+                reference=reference,
             )
             pending.append(
                 _Pending(job, future, sum(cost(item) for item in items), timing=timing)
@@ -288,12 +286,13 @@ class Scheduler:
     def _take(self, *, wait: bool) -> list[_Pending] | None:
         """Own the model and take queued jobs to plan, or None once stopped.
 
-        With ``wait`` (nothing planned) block until work arrives and, when a
-        queued job's profile coalesces, hold the batching window, then take
-        everything. Without it take at once the jobs of profiles that don't
-        coalesce and the coalescing jobs that have already waited a window.
-        Either way wait while a ``run_now`` caller owns the model; batches a
-        caller left planned count as planned work.
+        With ``wait`` (nothing planned) block until work arrives and, when the
+        batcher coalesces and a queued job may merge, hold the batching window,
+        then take everything. Without it take at once the jobs that need not
+        wait (all of them when the batcher does not coalesce, and references)
+        and the others once they have waited a window. Either way wait while a
+        ``run_now`` caller owns the model; batches a caller left planned count
+        as planned work.
         """
         window = self.limits.batch_window_ms / 1000.0
         with self._lock:
@@ -310,15 +309,13 @@ class Scheduler:
                 kept: deque[_Pending] = deque()
                 for pending in self._queue:
                     ripe = now - pending.job.enqueued >= window
-                    if ripe or not self.profiles[pending.job.profile].coalesces:
+                    if ripe or not self._waits(pending):
                         taken.append(pending)
                     else:
                         kept.append(pending)
                 self._queue = kept
                 return taken
-            coalescing = any(
-                self.profiles[pending.job.profile].coalesces for pending in self._queue
-            )
+            coalescing = any(self._waits(pending) for pending in self._queue)
             if window > 0 and coalescing:
                 deadline = time.monotonic() + window
                 while (
@@ -329,9 +326,13 @@ class Scheduler:
             self._queue.clear()
             return taken
 
+    def _waits(self, pending: _Pending) -> bool:
+        """Whether a queued job waits for the batching window before it is planned."""
+        return self.batcher.coalesces and not pending.job.reference
+
     def _plan(self, taken: list[_Pending]) -> None:
         now = time.monotonic()
-        by_profile: dict[str, list[_Pending]] = {}
+        by_kind: dict[bool, list[_Pending]] = {}
         for pending in taken:
             if pending.future.done():
                 continue
@@ -343,13 +344,16 @@ class Scheduler:
             pending.finish = pending.job.enqueued + pending.tokens * (
                 self._token_cost or INITIAL_TOKEN_COST
             )
-            by_profile.setdefault(pending.job.profile, []).append(pending)
-        for name, group in by_profile.items():
+            by_kind.setdefault(pending.job.reference, []).append(pending)
+        for references, group in by_kind.items():
             owners = {id(pending.job): pending for pending in group}
+            jobs = [pending.job for pending in group]
+            budget = self.model.forward_token_budget()
             try:
-                batches = self.profiles[name].plan(
-                    [pending.job for pending in group],
-                    self.model.forward_token_budget(),
+                batches = (
+                    reference(self.model, jobs, budget)
+                    if references
+                    else self.batcher.plan(jobs, budget)
                 )
             except Exception as exc:
                 for pending in group:
@@ -373,7 +377,7 @@ class Scheduler:
                 if rows != owners[key].remaining:
                     _fail(
                         owners[key].future,
-                        RuntimeError(f"profile {name!r} did not plan every item once"),
+                        RuntimeError("the batcher did not plan every item once"),
                     )
 
     def _run(self, planned: _Planned) -> None:

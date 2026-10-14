@@ -15740,6 +15740,10 @@
                           "nullable": true,
                           "type": "string"
                         },
+                        "dtype": {
+                          "nullable": true,
+                          "type": "string"
+                        },
                         "engine": {
                           "nullable": true,
                           "type": "string"
@@ -15757,10 +15761,6 @@
                           "type": "string"
                         },
                         "numerics": {
-                          "nullable": true,
-                          "type": "string"
-                        },
-                        "profile": {
                           "nullable": true,
                           "type": "string"
                         },
@@ -15965,6 +15965,10 @@
                                 "nullable": true,
                                 "type": "string"
                               },
+                              "dtype": {
+                                "nullable": true,
+                                "type": "string"
+                              },
                               "engine": {
                                 "nullable": true,
                                 "type": "string"
@@ -15982,10 +15986,6 @@
                                 "type": "string"
                               },
                               "numerics": {
-                                "nullable": true,
-                                "type": "string"
-                              },
-                              "profile": {
                                 "nullable": true,
                                 "type": "string"
                               },
@@ -16744,10 +16744,6 @@
                           "max_tokens": {
                             "nullable": true,
                             "type": "integer"
-                          },
-                          "profile": {
-                            "nullable": true,
-                            "type": "string"
                           },
                           "return_meta": {
                             "nullable": true,
@@ -19525,10 +19521,6 @@
                             "nullable": true,
                             "type": "integer"
                           },
-                          "profile": {
-                            "nullable": true,
-                            "type": "string"
-                          },
                           "return_meta": {
                             "nullable": true,
                             "type": "boolean"
@@ -21395,6 +21387,34 @@
                           "engine": {
                             "type": "string"
                           },
+                          "engine_args": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "batch_window_ms": {
+                                "type": "number"
+                              },
+                              "dtype": {
+                                "type": "string"
+                              },
+                              "enable_shared_context": {
+                                "type": "boolean"
+                              },
+                              "max_num_batched_tokens": {
+                                "type": "integer"
+                              },
+                              "max_num_seqs": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "max_num_seqs",
+                              "max_num_batched_tokens",
+                              "batch_window_ms",
+                              "dtype",
+                              "enable_shared_context"
+                            ]
+                          },
                           "family": {
                             "type": "string"
                           },
@@ -21430,10 +21450,10 @@
                           "name": {
                             "type": "string"
                           },
-                          "process": {
+                          "numerics": {
                             "type": "string"
                           },
-                          "profile": {
+                          "process": {
                             "type": "string"
                           },
                           "ready": {
