@@ -26,6 +26,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 EDGE = [
     "Ünïcödé, 中文, العربية, हिन्दी, 🚀 and emoji 👩‍💻 in one line.",
@@ -180,8 +181,16 @@ def concurrent_pass(client: Client, work: list[str], concurrency: int) -> dict:
 
 def cmd_run(args: argparse.Namespace) -> None:
     texts = json.loads(Path(args.corpus).read_text(encoding="utf-8"))
-    host, _, port = args.url.rpartition(":")
-    client = Client(host.replace("http://", ""), int(port))
+    if not texts:
+        raise SystemExit(f"corpus {args.corpus} contains no inputs")
+    parsed = urlparse(args.url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise SystemExit(f"invalid --url {args.url!r}: expected http://host:port")
+    if parsed.port is None:
+        raise SystemExit(
+            f"--url {args.url!r} must include a port, e.g. http://host:8080"
+        )
+    client = Client(parsed.hostname, parsed.port)
     for text in texts[: args.warmup]:
         client.preview(text)
     result: dict[str, Any] = {"label": args.label, "inputs": len(texts), "passes": {}}
