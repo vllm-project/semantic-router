@@ -23,7 +23,7 @@ import hashlib
 import math
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import torch
@@ -260,6 +260,19 @@ def _video(
     return Video(
         np.ascontiguousarray(stacked), float(fps), tuple(indices), int(total), digest
     )
+
+
+def load(value: Any) -> Video:
+    """``decode`` as a media worker process runs it: the frames come back as a tensor, which crosses through shared memory."""
+    video = decode(value)
+    return replace(video, frames=torch.from_numpy(video.frames))
+
+
+def loaded(video: Video) -> Video:
+    """A ``load`` result with its frames as ``decode`` returns them (a NumPy view of the tensor)."""
+    if isinstance(video.frames, torch.Tensor):
+        return replace(video, frames=video.frames.numpy())
+    return video
 
 
 def smart_resize(
