@@ -167,7 +167,7 @@ func historyResetReplayDiagnostics(ctx *RequestContext) *store.HistoryResetDiagn
 		ProtectedMessages: diagnostics.ProtectedMessages,
 		RemovedMessages:   diagnostics.RemovedMessages,
 		RemovedTurns:      diagnostics.RemovedTurns,
-		RecoveryStatus:    diagnostics.RecoveryStatus,
+		RecoveryStatus:    store.HistoryResetRecoveryStatus(diagnostics.RecoveryStatus),
 		RecoveryEntries:   diagnostics.RecoveryEntries,
 	}
 }

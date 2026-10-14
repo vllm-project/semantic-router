@@ -4,17 +4,15 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 )
 
 // Recovery status is a closed set on the wire, and an unset status or zero
 // entries are omitted rather than encoded as empty values.
 func TestHistoryResetRecoveryFieldsEncodeTheClosedSet(t *testing.T) {
-	cases := map[historyreset.RecoveryStatus]string{
-		historyreset.RecoveryNotRequired: `"recovery_status":"not_required"`,
-		historyreset.RecoveryStored:      `"recovery_status":"stored"`,
-		historyreset.RecoveryFailed:      `"recovery_status":"failed"`,
+	cases := map[HistoryResetRecoveryStatus]string{
+		HistoryResetRecoveryNotRequired: `"recovery_status":"not_required"`,
+		HistoryResetRecoveryStored:      `"recovery_status":"stored"`,
+		HistoryResetRecoveryFailed:      `"recovery_status":"failed"`,
 	}
 	for status, want := range cases {
 		encoded, err := json.Marshal(HistoryResetDiagnostics{RecoveryStatus: status, RecoveryEntries: 1})
@@ -25,7 +23,7 @@ func TestHistoryResetRecoveryFieldsEncodeTheClosedSet(t *testing.T) {
 			t.Fatalf("%s encoded as %s", status, encoded)
 		}
 	}
-	if len(cases) != len(historyreset.RecoveryStatus("").JSONEnumValues()) {
+	if len(cases) != len(HistoryResetRecoveryStatus("").JSONEnumValues()) {
 		t.Fatal("the test no longer covers every declared status")
 	}
 
@@ -42,7 +40,7 @@ func TestHistoryResetRecoveryFieldsEncodeTheClosedSet(t *testing.T) {
 // the clone copies: changing the clone must not change the stored original.
 func TestCloneRouteDiagnosticsCopiesTheHistoryResetReceipt(t *testing.T) {
 	original := &RouteDiagnostics{HistoryReset: &HistoryResetDiagnostics{
-		Outcome: "applied", RemovedMessages: 2, RecoveryStatus: historyreset.RecoveryStored,
+		Outcome: "applied", RemovedMessages: 2, RecoveryStatus: HistoryResetRecoveryStored,
 	}}
 	cloned := cloneRouteDiagnostics(original)
 	if cloned.HistoryReset == nil || *cloned.HistoryReset != *original.HistoryReset {

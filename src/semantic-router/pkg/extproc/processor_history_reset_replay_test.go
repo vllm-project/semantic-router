@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -81,5 +82,25 @@ func TestResetReplayDiagnosticsCarryTheEligibleScope(t *testing.T) {
 	}
 	if record.RemovedTurns != 2 || record.RetainedMessages != 1 {
 		t.Fatalf("unexpected replay counts %+v", record)
+	}
+}
+
+// Replay keeps its own recovery-status vocabulary so the store does not
+// import the action. Every status the action can report must map onto a
+// value the Replay schema advertises, and the two sets must stay the same size.
+func TestResetRecoveryStatusesMatchTheReplayVocabulary(t *testing.T) {
+	statuses := []historyreset.RecoveryStatus{
+		historyreset.RecoveryNotRequired, historyreset.RecoveryStored, historyreset.RecoveryFailed,
+	}
+	wire := store.HistoryResetRecoveryStatus("").JSONEnumValues()
+	if len(statuses) != len(wire) {
+		t.Fatalf("action reports %d statuses, Replay advertises %v", len(statuses), wire)
+	}
+	for _, status := range statuses {
+		ctx := &RequestContext{HistoryResetDiagnostics: &historyreset.Diagnostics{RecoveryStatus: status}}
+		recorded := historyResetReplayDiagnostics(ctx).RecoveryStatus
+		if !slices.Contains(wire, string(recorded)) {
+			t.Fatalf("status %q recorded as %q, which Replay does not advertise", status, recorded)
+		}
 	}
 }

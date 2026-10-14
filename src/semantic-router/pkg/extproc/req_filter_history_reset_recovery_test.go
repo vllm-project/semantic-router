@@ -118,7 +118,7 @@ func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 	// Replay reports that recovery happened, but never the key or the
 	// removed content it protects.
 	record := historyResetReplayDiagnostics(ctx)
-	if record.RecoveryStatus != historyreset.RecoveryStored || record.RecoveryEntries != 1 {
+	if string(record.RecoveryStatus) != string(historyreset.RecoveryStored) || record.RecoveryEntries != 1 {
 		t.Fatalf("unexpected replay recovery fields %+v", record)
 	}
 	encoded, err := json.Marshal(record)

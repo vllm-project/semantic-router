@@ -6,7 +6,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -292,8 +291,8 @@ type HistoryResetDiagnostics struct {
 	// RecoveryStatus and RecoveryEntries say whether the removed turns were
 	// stored recoverably and how many entries were written. They carry no
 	// key, scope, or payload.
-	RecoveryStatus  historyreset.RecoveryStatus `json:"recovery_status,omitempty"`
-	RecoveryEntries int                         `json:"recovery_entries,omitempty"`
+	RecoveryStatus  HistoryResetRecoveryStatus `json:"recovery_status,omitempty"`
+	RecoveryEntries int                        `json:"recovery_entries,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its details, mirroring

@@ -138,13 +138,6 @@ const (
 	RecoveryFailed      RecoveryStatus = "failed"
 )
 
-// JSONEnumValues lists every value a recorded status can take on the wire,
-// for generated API schemas. The empty status is not one of them: it is
-// omitted rather than encoded.
-func (RecoveryStatus) JSONEnumValues() []string {
-	return []string{string(RecoveryNotRequired), string(RecoveryStored), string(RecoveryFailed)}
-}
-
 // evaluationFailure separates a failed evaluation from a normal negative.
 // A continuation, an inherited follow-up, and history with nothing eligible
 // are ordinary no-ops in both failure modes. Everything else means the action
