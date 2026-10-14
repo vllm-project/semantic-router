@@ -2598,7 +2598,6 @@ global:
         public_name: decision-public
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
-        profile: exact
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
       # worker started elsewhere with `vllm-srun serve <hf-model>`.
@@ -2607,13 +2606,11 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
-        profile: exact
       content-risk:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: cpu
-        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
@@ -2622,7 +2619,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: cpu
-        profile: exact
         input:
           max_tokens: 4096
           overflow: reject
@@ -2632,7 +2628,6 @@ global:
         public_name: decision-replicas
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
-        profile: exact
         replicas:
           - device: cpu
           - endpoint: http://decision-worker:8100

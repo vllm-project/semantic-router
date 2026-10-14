@@ -143,7 +143,7 @@ def model(nano):
 
 
 def request(body):
-    return SurfaceRequest("embeddings", body, None, "exact", True, time.monotonic())
+    return SurfaceRequest("embeddings", body, None, True, time.monotonic())
 
 
 def serve(model, body):

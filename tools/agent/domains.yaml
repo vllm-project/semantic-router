@@ -247,6 +247,7 @@ domains:
       - tools/dev/dsl/**
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
+      - tools/calibration/shadow-dataset/**
       - bench/grounded_fusion/fusioneval/**
       - bench/memory_coldstart/**
       - tools/make/go-tools.mk
@@ -919,6 +920,7 @@ profiles:
       - e2e/profiles/pii-remote-backend/**
       - deploy/kubernetes/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+      - e2e/testcases/pii_repeated_value_masking.go
   masking:
     display_name: PII Masking
     owner: e2e

@@ -1,11 +1,12 @@
-"""Plugin interfaces: model family, engine, accelerator and numerics profile.
+"""Plugin interfaces: model family, engine and accelerator.
 
 A family owns a model format's task contract (package format, rendering,
 readout, answers, limits) and declares the API surfaces it serves. An engine
 executes a backbone described by a ``ModelSpec`` on an accelerator and returns
 gathered hidden rows (decoders), hidden states at layer exits (encoders) or
 named graph outputs. An accelerator describes a device class and supplies
-kernels. A profile is a numerics and scheduling policy. Built-in plugins
+kernels. How queued requests become forwards is the scheduler's, set by each
+served model's engine arguments (``scheduler/batching.py``). Built-in plugins
 register through the same entry points as third-party ones
 (``plugins/registry.py``).
 """
@@ -34,7 +35,6 @@ if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
-    from ..config import ServeConfig
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -138,23 +138,25 @@ class VerifiedPackage:
 class DtypePolicy:
     """How a backbone holds and computes its tensors on a device.
 
+    This is the precision the model was published in, which ``--dtype auto``
+    runs (``dtypes.apply`` derives the policy of any other ``--dtype``).
     ``autocast`` applies only on GPUs; CPU inference runs in ``weights`` dtype.
     ``bf16_resident`` holds BF16-exact Linear weights in BF16 on GPUs, which
     BF16 autocast multiplies with anyway. ``gpu_weights`` holds every backbone
     parameter in that dtype on GPUs, so the hidden-state stream follows it
     (released runtimes that load the backbone in BF16); CPU keeps ``weights``
     unless ``cpu_weights`` names the dtype a released runtime held there too.
-    ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
-    the backbone's linear layers when the configured profile asks for one
+    ``reduced_gpu`` / ``reduced_cpu`` consent to a faster copy of the
+    backbone's linear layers, which the batches that merge requests run
     (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
     ``"bfloat16"`` (only where ``DeviceInfo.bf16``), ``"float32-packed"``
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
-    exact weights. A family consents only
-    where its records show at least 99% label agreement with the exact path
-    (embeddings: cosine of at least 0.999). ``approximate_kernels`` consents,
-    on the same evidence per question type, to the accelerator's approximate
-    kernels when the profile allows them (``EngineOptions.exact_kernels_only``
-    off).
+    exact weights. ``approximate_kernels`` consents to the accelerator's
+    approximate kernels (``EngineOptions.exact_kernels_only`` off). Consented
+    copies and kernels run by default at the published precision, so a family
+    consents only where its records show no decision changed and at least 99%
+    agreement per answer type against the model's own batches (embeddings:
+    cosine of at least 0.999).
     """
 
     weights: str = "float32"
@@ -166,6 +168,11 @@ class DtypePolicy:
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
+
+    @property
+    def needs_gpu_bf16(self) -> bool:
+        """Whether GPU autocast or weight storage requires BF16 support."""
+        return self.autocast == "bfloat16" or self.gpu_weights == "bfloat16"
 
 
 @dataclass(frozen=True)
@@ -279,10 +286,11 @@ class DeviceInfo:
 
 @dataclass(frozen=True)
 class EngineOptions:
-    """Execution switches a profile may change. Defaults are the exact path.
+    """Execution switches the runtime derives from a model's engine arguments. Defaults are the exact path.
 
-    ``reduced_precision`` loads, next to the exact weights, the reduced copy the
-    model's ``DtypePolicy`` consents to on its device. ``cpu_neighbors`` names
+    ``exact_kernels_only`` off lets the kernels the model's ``DtypePolicy``
+    consents to run. ``reduced_precision`` loads, next to the exact weights,
+    the copy the policy consents to on its device. ``cpu_neighbors`` names
     the engines of the process's other CPU models (``auto`` where only loading
     can tell): threads an engine leaves spinning after a run slow another
     engine's next forward on those cores.
@@ -442,7 +450,7 @@ class EngineModel(ABC):
     hidden_states: ClassVar[bool] = True
     # Whether ``forward`` runs a batch's ``shared_prefix`` once, as a shared-context tree.
     supports_shared_context: ClassVar[bool] = False
-    # The spec an engine that builds the backbone loaded; profiles read its config.
+    # The spec an engine that builds the backbone loaded; shared context reads its config.
     spec: ModelSpec | None = None
     # Set at load when every encoder forward returns each row the same alone or in any batch.
     batch_invariant: bool = False
@@ -450,6 +458,11 @@ class EngineModel(ABC):
     @property
     def replays_graphs(self) -> bool:
         """Whether decoder forwards replay captured device graphs."""
+        return False
+
+    @property
+    def approximate_kernels(self) -> bool:
+        """Whether a kernel this model runs is not bit-exact against its reference (``KernelSet``)."""
         return False
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -498,20 +511,24 @@ class Engine(ABC):
 
     ``auto_priority`` places the engine in ``--engine auto``'s order, lowest
     first, after the engine a built-in model's table prefers for the device
-    class; engines without one (the default) follow, by name.
+    class; engines without one (the default) follow, by name. ``dtypes`` are
+    the ``--dtype`` values it runs: ``auto`` alone for an engine that runs a
+    model only in its published precision (a graph's own dtypes); an engine
+    that honours any ``DtypePolicy`` lists the others too.
     """
 
     name: ClassVar[str]
     auto_priority: ClassVar[int | None] = None
+    dtypes: ClassVar[tuple[str, ...]] = ("auto",)
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
-        """Capability descriptor listed in ``/v1/models``: ``auto_priority``, then architectures, outputs, devices.
+        """Capability descriptor listed in ``/v1/models``: ``auto_priority`` and ``dtypes``, then architectures, outputs, devices.
 
         An engine's own descriptor extends this one, so every card shows where
         ``auto`` tries the engine.
         """
-        return {"auto_priority": cls.auto_priority}
+        return {"auto_priority": cls.auto_priority, "dtypes": list(cls.dtypes)}
 
     @abstractmethod
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
@@ -682,16 +699,15 @@ class SurfaceRequest:
     """A validated request to one surface of one model.
 
     ``body`` is the JSON body; the runtime has checked its top-level fields
-    and parsed the generic options (deadline, profile, return_meta). The
-    family validates everything else in ``plan_surface``. ``part`` marks one
-    state of a decisions request with several (``states``): only the whole
-    request is refused when none of its questions is valid.
+    and parsed the generic options (deadline, return_meta). The family
+    validates everything else in ``plan_surface``. ``part`` marks one state
+    of a decisions request with several (``states``): only the whole request
+    is refused when none of its questions is valid.
     """
 
     surface: str
     body: dict[str, Any]
     deadline: float | None
-    profile: str
     return_meta: bool
     received: float
     part: bool = False
@@ -732,15 +748,15 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     and the item metrics read every surface through ``golden_values``,
     ``golden_compare`` and ``outcomes``.
 
-    ``fuse_bundled_jobs`` lets the ``exact`` profile run the jobs of one
-    bundle as one batch, so a family can compute each distinct input once for
-    several heads; decision families keep it off because their released
-    numerics batch one request at a time. ``batch_invariant``, set at load,
-    says every row's result on this device is the same alone or inside any
-    batch (a test must show it); the ``exact`` profile then runs the jobs of
-    concurrent requests that are queued together in shared batches, without
-    waiting for more. ``packs_rows`` says ``run`` lays rows back to back with
-    no padding, so rows of any lengths share those batches at no extra cost.
+    ``batch_invariant``, set at load, says every row's result on this device
+    is the same alone or inside any batch (a test must show it); the jobs of
+    concurrent requests that are queued together then share batches without
+    waiting for the batching window, and their answers never change.
+    ``packs_rows`` says ``run`` lays rows back to back with no padding, so
+    rows of any lengths share those batches at no extra cost.
+    ``shared_context_default`` is whether the model runs shared-context trees
+    when the engine arguments leave ``enable_shared_context`` unset: on only
+    where the family's records show no accuracy loss.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -752,8 +768,8 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
     info: ModelInfo
     engine_model: EngineModel
-    fuse_bundled_jobs: ClassVar[bool] = False
     device_thread: ClassVar[bool] = True
+    shared_context_default: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
 
@@ -776,7 +792,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         )
 
     def run_approximate(self, items: list[ItemT]) -> list[ResultT]:
-        """``run`` for a batch of an approximate profile, where a family may trade exactness for speed."""
+        """``run`` for a batch that merges concurrent requests, where a family may trade exactness for speed."""
         return self.run(items)
 
     @abstractmethod
@@ -824,14 +840,22 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         """Most padded tokens one forward may hold; None when nothing limits it."""
         return None
 
+    def coalesced_token_budget(self) -> int | None:
+        """Most padded tokens a forward that merges requests should hold; None leaves it to ``--max-num-batched-tokens``.
+
+        A family whose forwards take long per token keeps merged forwards short this way, so a full queue is
+        answered over several forwards in expected-finish order instead of in one long one.
+        """
+        return None
+
     def shared_context(
         self, items: list[ItemT], token_budget: int | None
     ) -> int | None:
-        """How a job's items share context on the shared-context path.
+        """How a job's items share context when shared context is enabled.
 
         A positive value runs them through ``run_shared(items, value)``,
-        0 runs them exactly, and None lets the profile find the common token
-        prefix of decision items itself.
+        0 batches them as usual, and None lets the scheduler find the common
+        token prefix of decision items itself.
         """
         return None
 
@@ -840,8 +864,8 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
         None (the default) is one padded batch, split only by the forward
         token budget. A family whose released runtime batches otherwise (for
-        example in fixed physical batches) returns its split, which ``exact``
-        and the exact fallback of the other profiles then run.
+        example in fixed physical batches) returns its split, which the golden
+        check runs.
         """
         return None
 
@@ -916,7 +940,7 @@ class ModelFamily(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Profiles
+# Scheduling
 # ---------------------------------------------------------------------------
 
 
@@ -925,24 +949,24 @@ class Job:
     """One request's rendered items waiting for execution.
 
     Jobs submitted together for one model (a bundle's tasks) share a
-    ``group``; ``exact`` may run a group as one batch when the model allows it
-    (``LoadedModel.fuse_bundled_jobs``).
+    ``group``. A ``reference`` job (the golden check) runs alone, in its
+    released forwards, whatever the model's engine arguments.
     """
 
     items: list[WorkItem]
     deadline: float | None
     enqueued: float
-    profile: str
     payload: Any = None
     group: int | None = None
+    reference: bool = False
 
 
 @dataclass
 class Batch:
     """Items from one or more jobs that run as one forward, in order.
 
-    ``shared_prefix`` > 0 (shared-context profile): the items' common prefix length, run once.
-    ``exact`` False marks a batch an approximate profile formed (``LoadedModel.run_approximate``).
+    ``shared_prefix`` > 0 (shared context): the items' common prefix length, run once.
+    ``exact`` False marks a batch that merges concurrent requests (``LoadedModel.run_approximate``).
     """
 
     parts: list[tuple[Job, list[int]]]
@@ -951,41 +975,3 @@ class Batch:
 
     def items(self) -> list[WorkItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]
-
-
-class Profile(ABC):
-    """How queued jobs become forwards.
-
-    ``coalesces`` profiles merge jobs of concurrent requests into one batch, so
-    the scheduler holds a queue that has any of their jobs for the batching
-    window before planning it.
-    """
-
-    name: ClassVar[str]
-    numerics: ClassVar[Literal["exact", "approximate"]]
-    description: ClassVar[str]
-    coalesces: ClassVar[bool] = False
-
-    @classmethod
-    def descriptor(cls) -> dict[str, Any]:
-        """Capability descriptor listed in ``/v1/models``."""
-        return {"numerics": cls.numerics, "coalesces": cls.coalesces}
-
-    @classmethod
-    def from_config(cls, config: ServeConfig) -> Profile:
-        """The profile a process's options ask for; one that reads none ignores them."""
-        return cls()
-
-    def engine_options(self, base: EngineOptions) -> EngineOptions:
-        return base
-
-    def available(self, model: LoadedModel[Any, Any]) -> str | None:
-        """None when the profile can run on ``model``, else the reason it cannot."""
-        return None
-
-    def bind(self, model: LoadedModel[Any, Any]) -> None:  # noqa: B027 - optional hook
-        """Take what planning needs from the model this instance serves, once ``available`` passed."""
-
-    @abstractmethod
-    def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
-        """Turn pending jobs into forwards; every item of every job must appear once."""

@@ -24,8 +24,9 @@ longer run on eight Vela 1.0 specialists.
 - **Questions:** each signal asks the question the model was trained on for it,
   with the labels of its Vela 1.0 model, so rules and policies read the answer
   as before.
-- **CPU profile:** on a CPU the deployment runs `max_speed`, which gives the
-  same answers to within about 0.00001.
+- **On a CPU:** the deployment batches requests on a packed FP32 copy of the
+  model's linear layers, the runtime's default, which gives the same answers
+  to within about 0.00001.
 - **Input:** the model reads up to 8,192 tokens of a request and truncates the
   rest. The Vela 1.0 Guard and PII specialists scanned up to 32K in windows.
 - **Modality:** a `modality_detector` with `method: classifier` and no
