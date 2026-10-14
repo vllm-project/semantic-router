@@ -142,7 +142,7 @@ def test_models_describe_both_models_and_the_plugins(client):
     assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}
 
 
-def test_a_third_party_accelerator_and_profile_serve_a_model(
+def test_a_third_party_accelerator_serves_a_model_with_its_engine_arguments(
     example_plugin, keyword_package
 ):
     assert "example_host" in registry.names("accelerators")
@@ -152,7 +152,7 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         name="keywords",
         device="example_host",
         engine="example_counts",
-        profile="example_one_by_one",
+        max_num_seqs=1,
     )
     runtime = Runtime(ServeConfig(models=(config,)))
     runtime.start(background=False)
@@ -162,33 +162,66 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         assert (
             card["accelerator"] == "example_host" and card["device"] == "example_host"
         )
-        assert card["profile"] == "example_one_by_one"
+        assert card["engine_args"]["max_num_seqs"] == 1
+        assert card["engine_args"]["dtype"] == "auto"
         plugins = {(p["group"], p["name"]): p for p in card["plugins"]}
         assert plugins[("vllm_srun.accelerators", "example_host")]["capabilities"] == {
             "validated": False,
             "auto_priority": None,
         }
-        assert (
-            plugins[("vllm_srun.profiles", "example_one_by_one")]["capabilities"][
-                "numerics"
-            ]
-            == "exact"
-        )
+        assert plugins[("vllm_srun.engines", "example_counts")]["capabilities"][
+            "dtypes"
+        ] == ["auto"]
         body = client.post(
             "/v1/classify",
             json={
                 "input": ["Please refund the invoice", "Where is my parcel?"],
-                "options": {"profile": "example_one_by_one", "return_meta": True},
+                "options": {"return_meta": True},
             },
         ).json()
         assert [result["label"] for result in body["results"]] == [
             "billing",
             "shipping",
         ]
-        assert body["meta"]["profile"] == "example_one_by_one"
         assert body["meta"]["accelerator"] == "example_host"
+        assert body["meta"]["dtype"] == "float32"
     finally:
         runtime.stop()
+
+
+def test_an_engine_that_runs_only_the_published_precision_refuses_another_dtype(
+    example_plugin, keyword_package
+):
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        dtype="bfloat16",
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    with pytest.raises(RuntimeError, match="example_counts: runs --dtype auto only"):
+        runtime.start(background=False)
+    runtime.stop()
+
+
+def test_shared_context_is_refused_on_an_engine_without_a_shared_forward(
+    example_plugin, keyword_package
+):
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        enable_shared_context=True,
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    with pytest.raises(
+        RuntimeError,
+        match="enable_shared_context: the loaded engine model has no shared-context forward",
+    ):
+        runtime.start(background=False)
+    runtime.stop()
 
 
 @pytest.mark.parametrize("device_thread", [True, False])

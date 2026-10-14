@@ -90,7 +90,7 @@ of a few thousand tokens) or 4 rerank sets of 8 documents.
 | Qwen3-Embedding | 6 | 2.18 | 8.35 | +6.16 [+5.81, +6.28] better |
 
 The runtime runs the encoder's linear layers through oneDNN's pre-packed
-FP32 kernels (the `exact` path's kernel variant on x86 CPUs), packs a rerank
+FP32 kernels (the reference path's kernel variant on x86 CPUs), packs a rerank
 set's pairs into one forward (the legacy scorer ran them one by one), and
 runs long documents packed with block-local attention instead of candle's
 dense padded path.
@@ -460,7 +460,7 @@ in this image in every value (parity record).
 - **Vela Embedding:** PyTorch. The native engine is 1.4–1.7× faster than
   ONNX Runtime (the runtime's engine or the legacy execution) on single texts
   and 1.8× faster than the runtime's ONNX Runtime engine on 32 texts. Before
-  the `exact` path took oneDNN's pre-packed FP32 linears (`5a73fc17e`), ONNX
+  the reference path took oneDNN's pre-packed FP32 linears (`5a73fc17e`), ONNX
   Runtime was 7–30 % faster than native on single texts.
 - **Vela Reranker:** PyTorch: 1.7× faster than the ONNX Runtime engine with
   10 documents and 1.5× with 50. Native also serves all twenty pair scorers

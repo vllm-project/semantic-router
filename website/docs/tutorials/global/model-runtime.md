@@ -54,6 +54,6 @@ Start here:
 - [Quickstart](../../model-runtime/quickstart.md): serve a model and use it from the router.
 - [Choose a model, size and hardware](../../model-runtime/choose-a-model.md).
 - [Run it with the router](../../model-runtime/deploy.md): devices, processes, attaching, Kubernetes.
-- [Profiles](../../model-runtime/profiles.md): exact answers or faster, approximate settings.
+- [Engine arguments](../../model-runtime/engine-args.md): batching, precision and shared context.
 - [Migrate from the native bindings](../../model-runtime/migrate.md).
 - [Troubleshooting and FAQ](../../model-runtime/troubleshooting.md).

@@ -183,6 +183,22 @@ passed. This follow-up does not change inference numerics, golden data, kernel
 choices or tolerances. The model-backed CPU/L4 measurements above remain the
 2026-10-12 qualification; no new GPU run was needed for the recorder correction.
 
+## Upstream merge verification
+
+The merge with upstream `a61d0e9ab109abc6cf1ab3c2201f5dbced2fe8fb` preserves
+qualified reference selection and the recorder baseline policy alongside the
+NPU run-to-run tolerance and validation of both responses against the reference.
+Two regression cases cover a qualified NPU reference, including second-run drift
+that would pass the generic reference but must fail the selected qualified one.
+
+Focused checks passed: **91 passed, 12 skipped**. Mypy checked **113 source
+files** cleanly; formatting, structure/architecture and generated-client checks
+passed. The merged Linux suite had **1,127 passed, 3 skipped, 31 deselected** and
+one failure in `test_repeated_media_are_processed_once_and_answer_alike`
+(`decoded["images"]` was 0 rather than 1). Unmodified upstream on the same Linux
+dependencies reproduced the identical assertion: **1,098 passed** and that one
+failure. The upstream test is unchanged in this PR.
+
 ## Managed CPU container qualification
 
 A separate ephemeral Modal VM ran a real Docker daemon. The Router image was
@@ -236,6 +252,11 @@ model inventory. All test containers were stopped and the VM terminated.
 
 ### Run the managed CPU smoke test
 
+The measurements above used the 2026-10-12 `exact` profile. Upstream has since
+replaced profiles with engine arguments; the commands below use the current
+CLI and published precision (`dtype: auto`). The historical measurements do
+not qualify the updated serving defaults on a new model-backed run.
+
 Build the local image from this branch, then save this complete declaration as
 `d3-config.yaml` in a dedicated test directory:
 
@@ -259,7 +280,8 @@ global:
         provider: model_runtime
         artifact: vllm-sr/d3-edge
         device: auto
-        profile: exact
+        engine_args:
+          dtype: auto
         revision: 18d61df78684675463af9ae732872478845c5a79
 ```
 
@@ -273,7 +295,7 @@ export VLLM_SR_STACK_NAME=d3-managed-probe
 export VLLM_SR_STATE_ROOT_DIR=/absolute/path/to/dedicated-test-directory
 vllm-sr serve vllm-sr/d3-edge --engine \
   --revision 18d61df78684675463af9ae732872478845c5a79 \
-  --runtime-profile exact --config "$VLLM_SR_STATE_ROOT_DIR/d3-config.yaml" \
+  --dtype auto --config "$VLLM_SR_STATE_ROOT_DIR/d3-config.yaml" \
   --image d3-router-local:ab8ac7b86 --image-pull-policy never \
   --platform cpu --gateway standalone --minimal --startup-timeout 600
 curl -fsS http://127.0.0.1:8899/v1/systemone/models
