@@ -167,6 +167,11 @@ class DtypePolicy:
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
 
+    @property
+    def needs_gpu_bf16(self) -> bool:
+        """Whether GPU autocast or weight storage requires BF16 support."""
+        return self.autocast == "bfloat16" or self.gpu_weights == "bfloat16"
+
 
 @dataclass(frozen=True)
 class LoRASpec:
