@@ -1478,8 +1478,13 @@ vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm -dp 2 --device-ids 0
 ```
 
 Without --engine the instance starts in Router mode, including on restart.
---engine (-e) disables recipe routing; the frontend, Dashboard and native
-System One APIs remain available. Saved routing configuration is retained.
+--engine (-e) disables recipe routing and serves the model. On the docker
+target only the Router container (the frontend, the native System One APIs
+and the model runtime) starts; --dashboard, --observability or --no-minimal
+add the rest. Without --config, and with no ./config.yaml, Engine mode keeps
+each model's config and state in ~/.local/state/vllm-sr/engine/&lt;model&gt; and
+prints a short summary (--verbose prints every detail). Saved routing
+configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
 Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
@@ -1497,9 +1502,13 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--envoy-image TEXT` | Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
+| `--restart-policy CHOICE` | Restart policy of the containers this start creates: no (default), on-failure, unless-stopped, always. unless-stopped and always restart a crashed container and bring the stack back after a host reboot; vllm-sr stop still stops it. Choices: no, on-failure, unless-stopped, always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
-| `--minimal` | Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana) Default: false. |
+| `--minimal / --no-minimal` | Start without the Dashboard, sr-bench and the observability stack (Jaeger, Prometheus, Grafana). The default in engine mode; --no-minimal starts them all. |
+| `--dashboard` | Also start the Dashboard and sr-bench when minimal (engine mode's default). Default: false. |
+| `--observability` | Also start Jaeger, Prometheus and Grafana when minimal (engine mode's default). Default: false. |
+| `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |

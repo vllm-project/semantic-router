@@ -4,7 +4,7 @@ description: 安装模型运行时，运行一个模型，向它发送请求，�
 translation:
   source_commit: "2e7e0775e88b0fc9426daf7c4fa0fe6e0ec20654"
   source_file: "docs/model-runtime/quickstart.md"
-  outdated: false
+  outdated: true
 ---
 
 # 快速开始

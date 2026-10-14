@@ -3,9 +3,10 @@
 
 The tiny Decision fixtures run offline in the built Router image. The tests
 check public auth/discovery and native inference after starting both Engine
-and Router modes with the supported serve flags, and that images and videos
-reach a Decision 3.0 model through the public System One API. Each test owns an
-isolated stack.
+and Router modes with the supported serve flags, that images and videos
+reach a Decision 3.0 model through the public System One API, and that Engine
+mode starts only the Router container by default. Each test owns an isolated
+stack.
 """
 
 import base64
@@ -18,6 +19,7 @@ import socket
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 import uuid
 import zlib
@@ -25,7 +27,7 @@ from pathlib import Path
 
 import yaml
 from cli.runtime_stack import MAX_PORT_OFFSET
-from runtime_http import call, page_requests, write_fixture
+from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
@@ -35,6 +37,8 @@ MANAGEMENT_KEY = "engine-e2e-management-key"
 PUBLIC_MODEL = "test/decision"
 # The public System One API accepted at most 2 MiB before images.
 FORMER_REQUEST_LIMIT = 2 << 20
+# The most bytes of a request body the public System One API reads.
+REQUEST_LIMIT = 48 << 20
 # A 64 x 48 MPEG-4 clip (8 frames, 4 per second) of a blue square moving over a green ramp.
 TINY_MP4 = (
     "data:video/mp4;base64,"
@@ -216,14 +220,14 @@ class EngineStack(unittest.TestCase):
         self.serve(engine=True)
 
     def serve(self, *, engine):
+        # Engine mode is minimal by default; Router mode needs the flag.
         self.cli(
             "serve",
             "--config",
             str(self.config),
-            *(["--engine"] if engine else []),
+            "--engine" if engine else "--minimal",
             "--gateway",
             "standalone",
-            "--minimal",
             "--image-pull-policy",
             "ifnotpresent",
             "--startup-timeout",
@@ -303,6 +307,98 @@ class TestEngineMode(EngineStack):
             self.native()
 
 
+class TestEngineModeContainers(EngineStack):
+    def containers(self):
+        runtime = shutil.which(os.environ.get("CONTAINER_RUNTIME") or "docker") or (
+            shutil.which("podman")
+        )
+        listed = subprocess.run(
+            [runtime, "ps", "-a", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        return {name for name in listed.stdout.split() if name.startswith(self.stack)}
+
+    def test_engine_mode_starts_only_the_router_and_stop_removes_it(self):
+        # No Dashboard, sr-bench, Redis, Jaeger, Prometheus or Grafana.
+        self.assertEqual(self.containers(), {self.container})
+        status = self.cli("status")
+        self.assertIn("Router", status)
+        self.assertNotIn("Dashboard", status)
+        status, models = self.public("/v1/systemone/models")
+        self.assertEqual(status, 200, models)
+        self.stop()
+        self.assertEqual(self.containers(), set())
+
+
+class TestEngineModeRestartPolicy(EngineStack):
+    """--restart-policy brings the stack back after its process exits."""
+
+    def serve(self, *, engine):
+        self.cli(
+            "serve",
+            "--config",
+            str(self.config),
+            "--engine" if engine else "--minimal",
+            "--gateway",
+            "standalone",
+            "--image-pull-policy",
+            "ifnotpresent",
+            "--startup-timeout",
+            "300",
+            "--restart-policy",
+            "unless-stopped",
+        )
+
+    def runtime(self, *arguments):
+        binary = shutil.which(os.environ.get("CONTAINER_RUNTIME") or "docker") or (
+            shutil.which("podman")
+        )
+        return subprocess.run(
+            [binary, *arguments],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    def inspect(self, template):
+        result = self.runtime("inspect", "-f", template, self.container)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_the_router_comes_back_after_its_process_exits(self):
+        self.assertEqual(
+            self.inspect("{{.HostConfig.RestartPolicy.Name}}"), "unless-stopped"
+        )
+        status, _ = self.public("/v1/systemone/models")
+        self.assertEqual(status, 200)
+        restarts = int(self.inspect("{{.RestartCount}}"))
+        # The Router exits as on a crash; the runtime, not the CLI, restarts it.
+        self.runtime("exec", self.container, "sh", "-c", "kill -TERM 1; kill -TERM -1")
+        deadline = time.monotonic() + 240
+        status = None
+        while time.monotonic() < deadline:
+            if int(self.inspect("{{.RestartCount}}")) > restarts:
+                try:
+                    status, _ = self.public("/v1/systemone/models")
+                except OSError:  # the listener is not back yet
+                    status = None
+                if status == HTTP_OK:
+                    break
+            time.sleep(2)
+        self.assertGreater(int(self.inspect("{{.RestartCount}}")), restarts)
+        self.assertEqual(status, 200)
+        self.stop()
+        self.assertNotEqual(
+            self.runtime("inspect", self.container).returncode,
+            0,
+            "vllm-sr stop must still remove a container with a restart policy",
+        )
+
+
 class TestEngineModeImages(EngineStack):
     fixture = ("decision3", "vision")
 
@@ -333,6 +429,8 @@ class TestEngineModeImages(EngineStack):
         self.assertNotEqual(both["answers"], seen["answers"])
         status, failure = self.ask("/v1/systemone", ["data:image/png;base64,AAAA"])
         self.assertEqual(status, 400, failure)
+        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["message"], "malformed image", failure)
         status, clip = self.ask("/v1/systemone", videos=[TINY_MP4])
         self.assertEqual(status, 200, clip)
         self.assertNotEqual(clip["answers"], text["answers"])
@@ -341,6 +439,14 @@ class TestEngineModeImages(EngineStack):
             "/v1/systemone", videos=["data:video/mp4;base64,AAAA"]
         )
         self.assertEqual(status, 400, failure)
+        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["message"], "malformed video", failure)
+        body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
+        body["model"] = PUBLIC_MODEL
+        body["state"] = "x" * (REQUEST_LIMIT + 1024)
+        status, failure = self.public("/v1/systemone", body)
+        self.assertEqual(status, 413, failure)
+        self.assertEqual(failure["error"]["code"], "request_too_large", failure)
 
 
 if __name__ == "__main__":

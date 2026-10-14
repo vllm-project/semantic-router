@@ -106,7 +106,10 @@ def _prepare_docker_runtime_config(
     engine: bool = False,
     available_devices: tuple[int, ...] = (),
     model_options: dict | None = None,
+    observability: bool | None = None,
 ):
+    if observability is None:
+        observability = not minimal
     stack_layout = resolve_runtime_stack()
     state_root_dir = Path(resolve_state_root_dir(str(config_path)))
     effective_config_path = _runtime_config_output_path(
@@ -157,7 +160,7 @@ def _prepare_docker_runtime_config(
                 recipe_env_bindings,
             )
             validate_package_tracing_mode(
-                effective_config_path, stack_layout, minimal=minimal
+                effective_config_path, stack_layout, minimal=not observability
             )
         else:
             recover_runtime_tracing_projection(effective_config_path)
@@ -208,7 +211,7 @@ def _prepare_docker_runtime_config(
             reconcile_runtime_tracing(
                 effective_config_path,
                 stack_layout,
-                enable_observability=not minimal,
+                enable_observability=observability,
                 reset_projection=source_candidate_selected,
                 before_replace=lambda data: _prepare_runtime_config_replacement(
                     data, stack_layout, minimal=minimal, readonly=readonly
@@ -234,8 +237,13 @@ def _prepare_effective_serve_config(
     engine: bool = False,
     available_devices: tuple[int, ...] = (),
     model_options: dict | None = None,
+    observability: bool | None = None,
 ):
-    """Prepare the target-specific active config and its optional runtime lock."""
+    """Prepare the target-specific active config and its optional runtime lock.
+
+    *minimal* leaves the Dashboard out; *observability* (default: not
+    *minimal*) starts the local tracing and metrics collectors.
+    """
 
     if resolved_target != "docker" and recipe_env_bindings:
         raise ValueError(
@@ -258,6 +266,7 @@ def _prepare_effective_serve_config(
             engine=engine,
             available_devices=available_devices,
             model_options=model_options,
+            observability=observability,
         )
         return effective_path, setup_mode, runtime_lock, None
 
