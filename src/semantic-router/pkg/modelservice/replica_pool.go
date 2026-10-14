@@ -107,9 +107,14 @@ func (p *replicaPool) workerCard(w replicaWorker) (ModelCard, error) {
 	return card, nil
 }
 
+// comparableReplicaCard leaves out what may differ between the replicas of one
+// deployment. Batch limits the deployment leaves unset are each worker's own (a
+// GPU worker calibrates its token budget on its device at startup); limits it
+// sets are checked against every replica by engineArgsMismatch.
 func comparableReplicaCard(card ModelCard) ModelCard {
 	card.ID, card.Device, card.Accelerator, card.Engine, card.Dtype, card.Status, card.Reason = "", "", "", "", "", "", ""
 	card.Ready = false
+	card.EngineArgs.MaxNumSeqs, card.EngineArgs.MaxNumBatchedTokens = 0, 0
 	return card
 }
 

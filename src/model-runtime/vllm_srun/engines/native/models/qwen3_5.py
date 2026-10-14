@@ -28,6 +28,7 @@ from .common import (
     recurrent_mask,
 )
 from .forest import Forest, ForestShape, forest_attention, forest_gated_delta
+from .packed import Packed, is_packed, packed_gated_delta
 from .tree import Tree, is_tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
@@ -68,11 +69,13 @@ class GatedDeltaNet(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        mask: torch.Tensor | Tree | None,
+        mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         if is_tree(mask):
             return tree_gated_delta(self, hidden_states, mask, kernels)
+        if is_packed(mask):
+            return packed_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
             hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
@@ -148,7 +151,7 @@ class GatedAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        mask: torch.Tensor | Tree | None,
+        mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
@@ -195,8 +198,8 @@ class Qwen3_5Layer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        full_mask: torch.Tensor | Tree | None,
-        linear_mask: torch.Tensor | Tree | None,
+        full_mask: torch.Tensor | Tree | Packed | None,
+        linear_mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         residual = hidden_states
@@ -412,8 +415,8 @@ class Qwen3_5Backbone(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rope_positions: torch.Tensor,
-        full_mask: torch.Tensor | Tree | None,
-        linear_mask: torch.Tensor | Tree | None,
+        full_mask: torch.Tensor | Tree | Packed | None,
+        linear_mask: torch.Tensor | Tree | Packed | None,
     ) -> torch.Tensor:
         """Every layer and the final norm over input embeddings, with rotary positions ``[3, B, L]``."""
         assert self.kernels is not None, "bind kernels before running the backbone"
@@ -450,6 +453,35 @@ class Qwen3_5Backbone(nn.Module):
             )
         full_mask, linear_mask = noncausal_masks(attention_mask, padded)
         return self.forward_embeds(embeds, positions, full_mask, linear_mask)
+
+    def forward_packed(self, input_ids: torch.Tensor, packed: Packed) -> torch.Tensor:
+        """Packed text rows (``[1, T]`` ids, ``packed.py``) through every layer; ``[1, T, hidden]``."""
+        embeds = self.embed_tokens(input_ids)
+        positions = packed.positions[None, None].expand(3, 1, -1)
+        return self.forward_embeds(embeds, positions, packed, packed)
+
+    def forward_images_packed(
+        self,
+        input_ids: torch.Tensor,
+        packed: Packed,
+        features: torch.Tensor,
+        image_token_id: int,
+        positions: torch.Tensor,
+        videos: tuple[torch.Tensor, int] | None = None,
+    ) -> torch.Tensor:
+        """``forward_images`` over packed rows: ``[1, T]`` ids, rotary ``positions`` ``[3, 1, T]`` (each row's ``rope_index``)."""
+        embeds = self.embed_tokens(input_ids)
+        embeds = embeds.masked_scatter(
+            (input_ids == image_token_id).unsqueeze(-1),
+            features.to(embeds.device, embeds.dtype),
+        )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
+        return self.forward_embeds(embeds, positions, packed, packed)
 
     def forward_forest(
         self,
