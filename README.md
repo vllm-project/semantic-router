@@ -74,7 +74,7 @@ Credentials:
 ## Latest News
 
 - [2026/10/14] [Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30) reached #1 on Hugging Face Trending Collections.
-- [2026/10/14] [d3](https://huggingface.co/vllm-sr/d3) ranks #1 on text and vision in the [Jev Decision Index 0.3.2](https://huggingface.co/spaces/multimodalart/jev-decision-index), with most smaller sizes on the Pareto frontier.
+- [2026/10/14] [d3](https://huggingface.co/vllm-sr/d3) ranks #1 on text and vision in the [Jev Decision Index 0.3.2](https://huggingface.co/spaces/multimodalart/jev-decision-index), with smaller sizes on the Pareto frontier.
 - [2026/10/06] [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20) reached #1 on Hugging Face Trending Collections.
 - [2026/10/06] [Vela 2.0: Towards Open Foundation Routing Models](https://vllm-sr.ai/blog/vela-2-0-open-foundation-routing-models/)
 - [2026/09/24] [vLLM Semantic Router v0.4 Hermes: Many Models, One Improving System](https://vllm-sr.ai/blog/v0.4-vllm-sr-hermes-release/)
