@@ -54,7 +54,7 @@ def test_bundle_correctness_has_priority_over_mean_typed_loss():
     assert selected["action"] == "safe"
 
 
-def test_compute_time_requires_pinned_model_and_complete_profile():
+def test_compute_time_requires_pinned_model_and_complete_identity():
     target = {"model_id": "vllm-sr/Decision-2.0-Kai-0.6B", "revision": "a" * 40}
     response = {
         "model": target["model_id"],
@@ -62,8 +62,8 @@ def test_compute_time_requires_pinned_model_and_complete_profile():
             "revision": target["revision"],
             "model_sha256": "b" * 64,
             "engine": "native",
-            "profile": "exact",
-            "numerics": "exact",
+            "dtype": "bfloat16",
+            "numerics": "approximate",
             "accelerator": "rocm",
             "compute_ms": 18.379,
         },
@@ -76,7 +76,7 @@ def test_compute_time_requires_pinned_model_and_complete_profile():
         ("compute_ms", True),
         ("compute_ms", float("nan")),
         ("revision", "c" * 40),
-        ("profile", ""),
+        ("dtype", ""),
         ("model_sha256", "not-a-digest"),
     ):
         changed = copy.deepcopy(response)

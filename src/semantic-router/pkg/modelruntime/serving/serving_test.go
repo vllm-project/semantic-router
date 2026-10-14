@@ -107,7 +107,7 @@ func spec(deployment, contract string, input config.ModelInputBudget) config.Res
 	return config.ResolvedModelBinding{
 		Recipe: "default", Name: deployment + "_consumer",
 		Binding:    config.ModelBinding{Deployment: deployment, Contract: contract},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cpu", Profile: "exact", Input: input},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cpu", Input: input},
 	}
 }
 

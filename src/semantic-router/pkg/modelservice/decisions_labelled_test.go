@@ -204,9 +204,9 @@ func TestBundleAsksOneModelTheStagesQuestionsAboutOneStateInOneTask(t *testing.T
 	}
 }
 
-func TestBundleAsksAnOlderRuntimeOneTaskPerState(t *testing.T) {
+func TestBundleAsksARuntimeWithoutAMinorVersionOneTaskPerState(t *testing.T) {
 	runtime := runtimetest.New(vela2Fake("vela"))
-	runtime.SetAPIVersion("2.1.0")
+	runtime.SetAPIVersion("3")
 	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
 	first := Request{State: "refund my billing to Tom", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
 	second := Request{State: "a different message", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
