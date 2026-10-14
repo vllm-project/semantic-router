@@ -232,7 +232,7 @@ func requestStateCapabilities(request Request) Capability {
 	if request.AutoStore != nil {
 		required |= CapabilityAutomaticStorage
 	}
-	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Truncation != "" {
+	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Truncation == "auto" {
 		required |= CapabilityConversationState
 	}
 	return required
