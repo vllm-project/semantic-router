@@ -34,7 +34,6 @@ export const COMMUNITY_NAV_GROUPS: CommunityNavGroup[] = [
     items: [
       { key: 'governance', label: 'Governance', to: '/community/governance' },
       { key: 'contributing', label: 'Contributing', to: '/community/contributing' },
-      { key: 'ecosystem', label: 'Ecosystem & Partnerships', to: '/community/ecosystem' },
       { key: 'code-of-conduct', label: 'Code of Conduct', to: '/community/code-of-conduct' },
     ],
   },

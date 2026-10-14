@@ -6,7 +6,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -66,8 +65,10 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-recipe-list-filter",
 		"router-replay-session-list-filter",
 		"router-replay-session-turn-progression",
+		"topic-continuity-replay-receipts",
 		"shadow-dispatch-observes-candidate-model",
 		"shadow-dataset-export-manifest",
+		"shadow-dataset-judge-tasks",
 		"shadow-dispatch-fail-open-unreachable-backend",
 		"shadow-dispatch-fail-open-timeout",
 		"shadow-dispatch-fail-open-malformed-response",

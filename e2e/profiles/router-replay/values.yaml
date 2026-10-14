@@ -71,10 +71,14 @@ config:
   entrypoints:
     - model_names: ["vllm-sr/replay-first"]
       recipe: replay-first
+    - model_names: ["vllm-sr/topic-continuity"]
+      recipe: topic-continuity
     - model_names: ["vllm-sr/replay-second"]
       recipe: replay-second
     - model_names: ["vllm-sr/shadow-ok"]
       recipe: shadow-ok
+    - model_names: ["vllm-sr/shadow-judge"]
+      recipe: shadow-judge
     - model_names: ["vllm-sr/shadow-down"]
       recipe: shadow-down
     - model_names: ["vllm-sr/shadow-timeout"]
@@ -105,6 +109,34 @@ config:
                   capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
+    # Declares a topic-continuity rule. It is context-policy evidence only:
+    # routing must stay on the catch-all decision, and Replay records the
+    # receipt.
+    - name: topic-continuity
+      routing:
+        strategy: priority
+        signals:
+          topic_continuity:
+            - name: topic_boundary
+              description: Whether the live turn still depends on retained history.
+              limits:
+                max_prior_turns: 2
+        decisions:
+          - name: topic_continuity_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: false
     - name: replay-second
       routing:
         strategy: priority
@@ -158,6 +190,39 @@ config:
                   max_response_bytes: 1048576
                   max_retries: 0
                   capture_response_body: false
+    - name: shadow-judge
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_judge_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: true
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-candidate
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 20
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: true
+                  max_capture_bytes: 4096
     - name: shadow-timeout
       routing:
         strategy: priority

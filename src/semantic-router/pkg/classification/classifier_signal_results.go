@@ -65,6 +65,7 @@ type SignalResults struct {
 	KBMetricValues            map[string]float64
 	MatchedConversationRules  []string
 	MatchedEventRules         []string // Matched event rule names (event type, severity, temporal, action codes)
+	MatchedActionRules        []string // The request's single action, when a rule declares it
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedClassifierRules    []string // Matched generic classifier label names
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
@@ -124,5 +125,6 @@ type SignalMetricsCollection struct {
 	Metadata      SignalMetrics `json:"metadata"`
 	Classifier    SignalMetrics `json:"classifier"`
 	InputModality SignalMetrics `json:"input_modality"`
+	Action        SignalMetrics `json:"action"`
 	Decision      SignalMetrics `json:"decision"`
 }
