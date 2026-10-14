@@ -387,14 +387,17 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
-	if _, err := s.Get(ctx, id); err != nil {
+	existing, err := s.Get(ctx, id)
+	if err != nil {
 		return err
 	}
 
 	mem.ID = id
+	if mem.CreatedAt.IsZero() {
+		mem.CreatedAt = existing.CreatedAt
+	}
 	emb := mem.Embedding
 	if len(emb) == 0 {
-		var err error
 		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
@@ -403,7 +406,7 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 	mem.UpdatedAt = time.Now()
 
 	wait := true
-	_, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
+	_, err = s.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
