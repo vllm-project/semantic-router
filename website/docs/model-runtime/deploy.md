@@ -124,7 +124,12 @@ write the same canonical resource shown below; there is no separate DP state.
 For Kubernetes, use allocation ordinals in config instead of host IDs.
 
 Each managed replica has its own process. All replicas of a deployment use the
-same artifact, revision, engine arguments and capabilities. A request's fused question
+same artifact, revision, engine arguments and capabilities, except batch limits
+the deployment leaves unset: each GPU worker calibrates its own token budget at
+startup, so replicas may report different `max_num_batched_tokens`. Set
+`max_num_seqs` and `max_num_batched_tokens` to give every replica the same
+limits; a replica that reports other values than set is kept out of
+dispatch. A request's fused question
 batch is dispatched as one unit after the logical model is selected. The pool
 selects the ready worker with the fewest outstanding request bytes, breaking
 ties by the least recently assigned worker. This is a local load estimate,
