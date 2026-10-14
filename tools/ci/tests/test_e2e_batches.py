@@ -105,7 +105,7 @@ class E2EBatchTests(unittest.TestCase):
             self.assertEqual(receipt["evidence"]["expected_cases"], ["required-case"])
             self.assertEqual(
                 {row["id"] for row in receipt["artifacts"]},
-                {"image:extproc", "image:provider-mocker"},
+                {"image:vllm-sr", "image:provider-mocker"},
             )
             self.assertIn(receipt["id"] + "/test-report.json", result["raw"])
         self.assertEqual(len(result["summaries"]), len(PROFILES))
@@ -160,10 +160,10 @@ class E2EBatchTests(unittest.TestCase):
         self.assertEqual(result["after_retry_clusters"], [])
         self.assertEqual(result["after_retry_states"], [])
 
-    def test_ort_profile_keeps_its_declared_runtime_and_full_baseline(self):
+    def test_model_profile_keeps_its_declared_runtime_and_full_baseline(self):
         result = self.execute(profiles=("vela-omni",), full=True)
         self.assertTrue(result["passed"])
-        self.assertEqual(result["receipts"][0]["runtime"], "ort")
+        self.assertEqual(result["receipts"][0]["runtime"], "model-runtime")
         calls = [row for row in result["calls"] if row["kind"] == "profile"]
         self.assertEqual(calls[0]["baseline"], "full")
 
@@ -176,9 +176,9 @@ class E2EBatchTests(unittest.TestCase):
             elif condition == "profile":
                 changed["verifications"][0]["profile"] = "missing-profile"
             elif condition == "images":
-                changed["images"] = ["extproc"]
+                changed["images"] = ["vllm-sr"]
             else:
-                changed["verifications"][0]["executor"] = "native"
+                changed["verifications"][0]["executor"] = "platform"
             with self.subTest(condition=condition), self.assertRaises(ValueError):
                 validate_execution_batch(changed, "e2e")
 
@@ -306,7 +306,7 @@ class E2EBatchTests(unittest.TestCase):
                     ),
                     "CI_IMAGE_RECEIPTS": str(artifact_file),
                     "CI_NATIVE_RECEIPTS": "",
-                    "E2E_PREBUILT_EXT_PROC_IMAGE": "verified:extproc",
+                    "E2E_PREBUILT_EXT_PROC_IMAGE": "verified:vllm-sr",
                     "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE": (
                         ""
                         if condition == "missing-image"

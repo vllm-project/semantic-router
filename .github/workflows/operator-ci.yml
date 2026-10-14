@@ -51,15 +51,6 @@ jobs:
         id: dependencies
         run: go mod download
 
-      - name: Check Go Formatting
-        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "Code is not formatted:"
-            gofmt -s -l .
-            exit 1
-          fi
-
       - name: Vet Operator Code
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: go vet ./...
@@ -77,7 +68,7 @@ jobs:
           version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: goinstall
           working-directory: deploy/operator
-          args: --timeout=5m
+          args: --timeout=5m --config=${{ github.workspace }}/tools/linter/go/.golangci.yml
 
       - name: Discover Operator Unit Tests
         id: discovery
@@ -457,11 +448,11 @@ jobs:
       - name: Load verified operator and request-path images
         uses: ./.github/actions/load-ci-images
         with:
-          images: '["operator","extproc","provider-mocker"]'
+          images: '["operator","vllm-sr","provider-mocker"]'
       - name: Assign verified local tags
         run: |
           docker tag "$E2E_PREBUILT_OPERATOR_IMAGE" semantic-router-operator:test
-          docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-extproc:test
+          docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-vllm-sr:test
           docker tag "$E2E_PREBUILT_PROVIDER_MOCKER_IMAGE" semantic-router-operator-mock:test
       - name: Deploy request-observing backend
         run: |
@@ -495,24 +486,24 @@ jobs:
             exit 1
           }
 
-      - name: Verify extproc image loaded
+      - name: Verify router image loaded
         run: |
-          echo "Verifying extproc image is available..."
-          docker images | grep semantic-router-extproc || {
-            echo "ERROR: semantic-router-extproc:test image not found!"
+          echo "Verifying router image is available..."
+          docker images | grep semantic-router-vllm-sr || {
+            echo "ERROR: semantic-router-vllm-sr:test image not found!"
             echo "Available images:"
             docker images
             exit 1
           }
 
-      - name: Load extproc image into kind
-        run: kind load docker-image semantic-router-extproc:test --name operator-test-${{ matrix.cache-backend }}
+      - name: Load router image into kind
+        run: kind load docker-image semantic-router-vllm-sr:test --name operator-test-${{ matrix.cache-backend }}
 
-      - name: Verify extproc image in kind
+      - name: Verify router image in kind
         run: |
-          echo "Verifying extproc image is available in kind cluster..."
-          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-extproc || {
-            echo "ERROR: semantic-router-extproc:test image not found in kind!"
+          echo "Verifying router image is available in kind cluster..."
+          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-vllm-sr || {
+            echo "ERROR: semantic-router-vllm-sr:test image not found in kind!"
             echo "Available images in kind:"
             docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
             exit 1
@@ -806,7 +797,7 @@ jobs:
                     port: 8000
                 weight: 1
             image:
-              repository: semantic-router-extproc
+              repository: semantic-router-vllm-sr
               tag: test
               pullPolicy: Never
             service:

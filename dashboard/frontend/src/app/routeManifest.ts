@@ -2,13 +2,15 @@ export type ShellRoutePage =
   | 'builder'
   | 'config-reference'
   | 'dashboard'
+  | 'decision-model'
+  | 'decision-model-playground'
+  | 'decision-model-monitoring'
   | 'evaluation'
   | 'insights'
   | 'insights-record'
   | 'logs'
   | 'models'
   | 'monitoring'
-  | 'openclaw'
   | 'playground'
   | 'status'
   | 'topology'
@@ -22,13 +24,11 @@ export interface ShellRouteDefinition {
   hideAccountControl?: boolean
 }
 
-export interface RedirectRouteDefinition {
-  path: string
-  to: string
-}
-
 export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/dashboard', page: 'dashboard' },
+  { path: '/decision-model', page: 'decision-model' },
+  { path: '/decision-model/playground', page: 'decision-model-playground' },
+  { path: '/decision-model/monitoring', page: 'decision-model-monitoring' },
   { path: '/monitoring', page: 'monitoring' },
   {
     path: '/playground',
@@ -46,13 +46,7 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/models', page: 'models' },
   { path: '/builder', page: 'builder' },
   { path: '/config/reference', page: 'config-reference' },
-  { path: '/openclaw', page: 'openclaw' },
   { path: '/users', page: 'users' },
-]
-
-export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
-  { path: '/knowledge-bases', to: '/knowledge-bases/bases' },
-  { path: '/taxonomy', to: '/knowledge-bases/bases' },
 ]
 
 export const fallbackRouteTarget = (setupMode: boolean): string =>

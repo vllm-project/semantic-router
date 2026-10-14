@@ -82,4 +82,34 @@ describe('decision editor preservation', () => {
       }),
     ).toThrow(/cannot be combined/)
   })
+
+  it('keeps a single root condition instead of saving an unconditional match', () => {
+    expect(decisionRulesForSave({ type: 'jailbreak', name: 'prompt_injection' })).toEqual({
+      type: 'jailbreak',
+      name: 'prompt_injection',
+    })
+    const classifier: DecisionConfig['rules'] = {
+      type: 'classifier',
+      name: 'risk',
+      label: 'RISKY',
+      predicate: { gte: 0.8 },
+      on_unknown: 'no_match',
+    }
+    expect(decisionRulesForSave(classifier)).toEqual(classifier)
+    expect(decisionRulesForSave({})).toEqual({})
+  })
+
+  it('validates a single root condition', () => {
+    expect(() => decisionRulesForSave({ type: 'keyword' })).toThrow(
+      'The root condition needs both type and name.',
+    )
+    expect(() =>
+      decisionRulesForSave({
+        type: 'classifier',
+        name: 'risk',
+        on_error: 'match',
+        on_unknown: 'fail_request',
+      }),
+    ).toThrow(/cannot be combined/)
+  })
 })

@@ -14,27 +14,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
-func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor, error) {
+func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor, routerruntime.MemoryStatus, error) {
 	if err := validateMemoryFilterAlgorithms(cfg); err != nil {
-		return nil, nil, err
+		return nil, nil, routerruntime.MemoryStatus{}, err
+	}
+	backend := cfg.Memory.Backend
+	if backend == "" {
+		backend = "milvus"
 	}
 	if !isMemoryEnabled(cfg) {
-		return nil, nil, nil
+		return nil, nil, routerruntime.MemoryStatus{
+			Reason:  routerruntime.MemoryReasonDisabledByConfig,
+			Backend: backend,
+		}, nil
 	}
 
 	// publishRouterState publishes the store after the candidate commits.
 	memoryStore, err := createMemoryStore(cfg, sets...)
 	if err != nil {
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
-		return nil, nil, nil
+		return nil, nil, routerruntime.MemoryStatus{
+			Reason:  routerruntime.MemoryReasonBackendUnavailable,
+			Backend: backend,
+		}, nil
 	}
 
-	backend := cfg.Memory.Backend
-	if backend == "" {
-		backend = "milvus"
-	}
 	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
 		logging.Infof("Memory enabled with %s backend and Redis hot cache", backend)
 	} else {
@@ -46,7 +53,9 @@ func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memo
 		logging.Infof("Memory chunk store enabled (direct conversation storage)")
 	}
 
-	return memoryStore, memoryExtractor, nil
+	return memoryStore, memoryExtractor, routerruntime.MemoryStatus{
+		Backend: backend,
+	}, nil
 }
 
 // legacyMemoryFilterAlgorithms maps retired algorithm names to the filter they
@@ -328,9 +337,6 @@ func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 
 	switch {
-	case embeddingModels.BertModelPath != "":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
-		return "bert"
 	case embeddingModels.MmBertModelPath != "":
 		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
 		return "mmbert"
@@ -340,11 +346,8 @@ func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 	case embeddingModels.Qwen3ModelPath != "":
 		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
 		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
-		return "gemma"
 	default:
-		logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
-		return "bert"
+		logging.Infof("Memory: No embedding model configured, using the built-in %s", config.DefaultEmbeddingModel)
+		return config.DefaultEmbeddingModel
 	}
 }

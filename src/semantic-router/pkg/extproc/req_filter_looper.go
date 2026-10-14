@@ -23,7 +23,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -54,15 +53,7 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 		return false
 	}
 
-	if !hasLooperModelInputs(decision) {
-		return false
-	}
-
-	if !r.Config.Looper.IsEnabled() {
-		logging.Warnf("Decision %s has algorithm configured but looper endpoint is not set", decision.Name)
-		return false
-	}
-	return true
+	return hasLooperModelInputs(decision)
 }
 
 func hasLooperModelInputs(decision *config.Decision) bool {
@@ -83,32 +74,35 @@ func hasFusionAnalysisModels(decision *config.Decision) bool {
 		len(decision.Algorithm.Fusion.AnalysisModels) > 0
 }
 
-func (r *OpenAIRouter) createLooper(
+// looperConstructionFailed answers a decision whose Looper algorithm cannot
+// be built.
+func (r *OpenAIRouter) looperConstructionFailed(
 	decision *config.Decision,
 	reqCtx *RequestContext,
-) (looper.Looper, error) {
-	l, err := looper.FactoryWithClientAndWorkflowState(
-		&r.Config.Looper,
-		decision.Algorithm.Type,
-		r.looperModelClient(),
-		r.WorkflowStateService,
-	)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"decision":   decision.Name,
-			"algorithm":  decision.Algorithm.Type,
-			"error":      err.Error(),
-		})
-	}
-	return l, err
+	err error,
+) *ext_proc.ProcessingResponse {
+	r.logLooperConstructionFailure(decision, reqCtx, err)
+	return r.createErrorResponse(500, "Looper construction failed.")
 }
 
+func (r *OpenAIRouter) logLooperConstructionFailure(decision *config.Decision, reqCtx *RequestContext, err error) {
+	logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
+		"request_id": reqCtx.RequestID,
+		"decision":   decision.Name,
+		"algorithm":  decision.Algorithm.Type,
+		"error":      err.Error(),
+	})
+}
+
+// looperModelClient is the client for the Router's own model calls outside a
+// request graph, such as a prompt selector's or a context recovery's: hops
+// served in process. It is nil when the router has nothing to send hops with.
 func (r *OpenAIRouter) looperModelClient() *looper.Client {
-	if r.looperClient != nil {
-		return r.looperClient
+	hops := r.looperHops()
+	if hops == nil {
+		return nil
 	}
-	return looper.NewClient(&r.Config.Looper)
+	return looper.NewHopClient(&r.Config.Looper, hops)
 }
 
 // handleLooperExecution executes the looper for multi-model decisions
@@ -119,7 +113,6 @@ func (r *OpenAIRouter) handleLooperExecution(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	ctx = looper.WithExpectedConfigHash(ctx, headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash))
 	if r.WorkflowStateService != nil && decision != nil && decision.Algorithm != nil &&
 		decision.Algorithm.Type == config.DecisionAlgorithmWorkflows {
 		if !r.WorkflowStateService.Acquire() {
@@ -127,16 +120,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 		}
 		defer r.WorkflowStateService.Release()
 	}
-	// Create looper based on algorithm type
-	l, err := r.createLooper(decision, reqCtx)
-	if err != nil {
-		return r.createErrorResponse(500, "Looper construction failed: "+err.Error()), nil
-	}
-	looperReq, errorResponse := r.buildLooperRequest(request, decision, reqCtx)
-	if errorResponse != nil {
-		return errorResponse, nil
-	}
-	resp, errorResponse := r.executeLooperRequest(ctx, l, looperReq, request.Model, decision, reqCtx)
+	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil
 	}
@@ -185,6 +169,33 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// successful looper response omits the header for the record just created.
 	addRouterReplayHeaderToImmediateResponse(response, reqCtx.RouterReplayID)
 	return response, nil
+}
+
+// runLooper executes the decision's Looper algorithm as its built-in request
+// graph, with every hop served in process.
+func (r *OpenAIRouter) runLooper(
+	ctx context.Context,
+	request *llmprotocol.Request,
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) (*looper.Response, *ext_proc.ProcessingResponse) {
+	runtimeConfig := r.Config.Looper
+	for _, entrypoint := range r.Config.EffectiveEntrypoints(config.ChatAPI) {
+		runtimeConfig.EntrypointModels = append(runtimeConfig.EntrypointModels, entrypoint.ModelNames...)
+	}
+	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, r.WorkflowStateService)
+	if err != nil {
+		return nil, r.looperConstructionFailed(decision, reqCtx, err)
+	}
+	hops := r.looperHops()
+	if hops == nil {
+		return nil, r.looperConstructionFailed(decision, reqCtx, errNoLooperHops)
+	}
+	looperReq, errorResponse := r.buildLooperRequest(request, decision, reqCtx)
+	if errorResponse != nil {
+		return nil, errorResponse
+	}
+	return r.executeLooperGraph(ctx, program, hops, looperReq, request.Model, decision, reqCtx)
 }
 
 func (r *OpenAIRouter) buildLooperRequest(
@@ -257,32 +268,6 @@ func (r *OpenAIRouter) buildLooperRequest(
 		reqCtx, request.Model, decision, 400,
 		"Looper cannot represent the request semantics", "looper_request_unsupported",
 	)
-}
-
-func (r *OpenAIRouter) executeLooperRequest(
-	ctx context.Context,
-	l looper.Looper,
-	req *looper.Request,
-	originalModel string,
-	decision *config.Decision,
-	reqCtx *RequestContext,
-) (*looper.Response, *ext_proc.ProcessingResponse) {
-	// Execute looper, recording the wall-clock latency of the full execution
-	// (all model calls plus algorithm overhead) on the response for the
-	// x-vsr-looper-latency-ms debug header (#2694).
-	resp, err := looper.ExecuteWithLatency(ctx, l, req)
-	if err != nil {
-		return nil, r.looperExecutionErrorResponse(err, originalModel, decision, reqCtx)
-	}
-	logging.ComponentEvent("extproc", "looper_execution_completed", map[string]interface{}{
-		"request_id":     reqCtx.RequestID,
-		"decision":       decision.Name,
-		"algorithm":      resp.AlgorithmType,
-		"models_used":    resp.ModelsUsed,
-		"iterations":     resp.Iterations,
-		"selected_model": resp.Model,
-	})
-	return resp, nil
 }
 
 func (r *OpenAIRouter) recordSuccessfulLooperExecution(

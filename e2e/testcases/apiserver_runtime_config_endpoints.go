@@ -8,9 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -117,8 +118,8 @@ func fetchModelIDs(ctx context.Context, httpClient *http.Client, url string) ([]
 	for _, model := range models.Data {
 		modelIDs = append(modelIDs, model.ID)
 	}
-	if !containsString(modelIDs, "MoM") {
-		return nil, fmt.Errorf("expected /v1/models to include MoM, got %v", modelIDs)
+	if !containsString(modelIDs, "vllm-sr/auto") {
+		return nil, fmt.Errorf("expected /v1/models to include vllm-sr/auto, got %v", modelIDs)
 	}
 	return modelIDs, nil
 }

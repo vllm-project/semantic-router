@@ -25,31 +25,8 @@ func validateHallucinationSignalContracts(cfg *RouterConfig) error {
 		}
 		seen[name] = struct{}{}
 	}
-	warnHallucinationPluginNLIIgnored(cfg)
 	warnHallucinationPluginOwnsDetection(cfg)
 	return nil
-}
-
-// warnHallucinationPluginNLIIgnored reports a decision whose hallucination
-// plugin still asks for use_nli once hallucination rules are declared. With
-// rules present the rule decides how the answer is explained and the plugin's
-// use_nli is no longer read. Said at load rather than left to be discovered:
-// a deployment that relied on it would otherwise lose its explanations
-// silently.
-func warnHallucinationPluginNLIIgnored(cfg *RouterConfig) {
-	if len(cfg.HallucinationRules) == 0 {
-		return
-	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		plugin := decision.GetHallucinationConfig()
-		if plugin == nil || !plugin.UseNLI {
-			continue
-		}
-		logging.ComponentWarnEvent("config", "hallucination_plugin_use_nli_ignored", map[string]interface{}{
-			"decision": decision.Name,
-			"reason":   "routing.signals.hallucination rules own detection; set use_nli on the rule",
-		})
-	}
 }
 
 // warnHallucinationPluginOwnsDetection reports a decision whose hallucination

@@ -1,0 +1,157 @@
+# Real models on CPU, served by the Router's managed model runtime. Opt-in: the
+# runtime downloads about 4 GB from the Hugging Face Hub at start-up, so this
+# profile is not part of the CPU CI lanes.
+#
+# - Decision 2.0 Kai-0.6B answers the request_kind decision signal, in its own
+#   "decisions" process;
+# - Vela Domain, PII and Guard are the module defaults, which the Router turns
+#   into the implicit deployments @domain_classifier, @pii_classifier and
+#   @prompt_guard.
+#
+# testcases/model_runtime_real.go asserts what these models decide for clear
+# prompts, and that the Router routes on Kai's own answer.
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      # Both are among the names the shared AIGatewayRoute matches.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: math-expert
+        provider_model_id: math-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: general-expert
+      - name: math-expert
+    signals:
+      domains:
+        - {name: math, description: Mathematics, mmlu_categories: [math]}
+        - {name: computer science, description: Computer science, mmlu_categories: [computer science]}
+        - {name: other, description: Anything else, mmlu_categories: [other]}
+      pii:
+        - name: personal_data
+          threshold: 0.5
+          description: Any personal information.
+      jailbreak:
+        - name: prompt_attack
+          threshold: 0.5
+          description: Prompt injection or jailbreak.
+      decision:
+        - name: request_kind
+          description: Which kind of work the request asks for.
+          deployment: kai
+          question:
+            type: choice
+            instructions: What kind of work does this request ask for?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: chat
+                description: Anything else
+          timeout_ms: 30000
+    decisions:
+      - name: jailbreak_route
+        description: A prompt attack
+        priority: 500
+        rules:
+          operator: AND
+          conditions:
+            - {type: jailbreak, name: prompt_attack}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: pii_route
+        description: The request carries personal data
+        priority: 400
+        rules:
+          operator: AND
+          conditions:
+            - {type: pii, name: personal_data}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: code_route
+        description: Kai says the request asks for code
+        priority: 300
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - {type: decision, name: request_kind, label: code}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: math_route
+        description: Vela Domain says the request is mathematics
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - {type: domain, name: math}
+        modelRefs:
+          - model: math-expert
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      deployments:
+        kai:
+          provider: model_runtime
+          artifact: vllm-sr/Decision-2.0-Kai-0.6B
+          revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+          device: cpu
+      modules:
+        classifier:
+          domain:
+            use_cpu: true
+          pii:
+            use_cpu: true
+            threshold: 0.5
+        prompt_guard:
+          enabled: true
+          use_cpu: true
+          threshold: 0.5
+        hallucination_mitigation:
+          enabled: false
+
+extraEnv:
+  # Where the managed runtimes' sockets live, so the cases can ask Kai directly.
+  - name: VLLM_SRUN_DIR
+    value: /tmp/vsr-runtime
+
+resources:
+  requests:
+    memory: 4Gi
+    cpu: "2"
+  limits:
+    memory: 16Gi
+    cpu: "8"
+
+persistence:
+  enabled: false

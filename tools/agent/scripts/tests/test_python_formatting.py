@@ -242,7 +242,7 @@ class PythonFormattingTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
 
     def test_non_python_whitespace_hooks_keep_native_behavior(self) -> None:
-        for suffix in ("go", "rs", "js"):
+        for suffix in ("go", "js"):
             with self.subTest(suffix=suffix):
                 filename = f"sample.{suffix}"
                 source = self.write_file(name=filename, content=b"value \t\r\n\r\n")

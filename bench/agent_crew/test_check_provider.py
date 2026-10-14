@@ -111,6 +111,7 @@ def test_unknown_fields_bad_tier_and_empty_fingerprint_are_flagged() -> None:
     [
         ("contracts", "openrouter-chat-response-in.json"),
         ("providers", "ollama-chat-tool-call-out.json"),
+        ("providers", "vllm-chat-long-stop-sequence-out.json"),
     ],
 )
 def test_replies_the_codec_decodes_are_not_rejected(fixture: tuple[str, ...]) -> None:
@@ -183,8 +184,9 @@ def reply_with_stop_reason(reason: object) -> dict:
         -9223372036854775808,
         "stop",
         "a" * 128,
-        # 42 CJK characters are 126 UTF-8 bytes, inside the codec's byte bound.
-        "停" * 42,
+        "a" * 129,
+        # 43 CJK characters are 129 UTF-8 bytes, over the 128-byte cap the codec dropped (#4516).
+        "停" * 43,
     ],
 )
 def test_stop_reasons_the_codec_accepts_pass(reason: object) -> None:
@@ -200,16 +202,10 @@ def test_stop_reasons_the_codec_accepts_pass(reason: object) -> None:
         1.5,
         True,
         "",
-        "a" * 129,
-        # 50 CJK characters are 150 UTF-8 bytes: 50 characters, over 128 bytes.
-        "停" * 50,
-        # 43 CJK characters are 129 UTF-8 bytes, one byte over.
-        "停" * 43,
         [],
     ],
 )
 def test_stop_reasons_the_codec_rejects_are_flagged(reason: object) -> None:
     assert problems(reply_with_stop_reason(reason)) == [
-        "choices[0].stop_reason must be a signed 64-bit integer or a string of 1 "
-        "to 128 UTF-8 bytes"
+        "choices[0].stop_reason must be a signed 64-bit integer or a non-empty string"
     ]

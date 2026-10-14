@@ -129,7 +129,7 @@ func testSingleReaskRouting(ctx context.Context, testCase ReaskRoutingCase, loca
 
 	// testCase.Messages is a full multi-turn conversation (the reask signal
 	// needs prior-turn context, unlike the single-query event/language cases).
-	response, err := sendLocalChatConversation(ctx, localPort, "MoM", testCase.Messages, 30*time.Second)
+	response, err := sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", testCase.Messages, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result

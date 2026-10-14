@@ -31,7 +31,7 @@ export interface ProviderModel {
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'openai' | 'responses' | 'anthropic'
+  api_format?: 'openai' | 'responses' | 'anthropic' | 'systemone'
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
@@ -50,6 +50,17 @@ export interface ProviderModel {
     health_check_path?: string
     health_check_interval?: string
     health_check_timeout?: string
+    connect_timeout?: string
+    total_timeout?: string
+    idle_timeout?: string
+    per_try_timeout?: string
+    first_byte_timeout?: string
+    retriable_status_codes?: number[]
+    retry_back_off_base?: string
+    retry_back_off_max?: string
+    retry_after_max?: string
+    retry_budget_percent?: number
+    retry_budget_min_concurrency?: number
   }
 }
 
@@ -114,7 +125,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean // Ask the detector for span-level NLI explanations
   description?: string
 }
 
@@ -220,6 +230,23 @@ export interface InputModalitySignal {
   modality: 'text' | 'image' | 'audio' | 'video'
 }
 
+// TopicContinuitySignal is context-policy evidence, not a decision condition.
+// Every field except name is optional; the Router applies documented defaults.
+export interface TopicContinuitySignal {
+  name: string
+  description?: string
+  include_assistant?: boolean
+  thresholds?: {
+    continuation?: number
+    change?: number
+  }
+  limits?: {
+    max_prior_turns?: number
+    max_turn_bytes?: number
+    max_input_bytes?: number
+  }
+}
+
 export interface DecisionModelChoice {
   key: string
   description?: string
@@ -230,10 +257,13 @@ export interface DecisionModelSignal {
   description?: string
   deployment: string
   question: {
-    type: 'choice' | 'noul' | 'score'
+    type: 'choice' | 'noul' | 'score' | 'set' | 'span'
     instructions: string
     choices?: DecisionModelChoice[]
     levels?: string[]
+    labels?: DecisionModelChoice[]
+    threshold?: number
+    head?: 'router' | 'broad'
   }
   predicate?: NumericPredicate
   timeout_ms?: number
@@ -306,6 +336,7 @@ export interface SafetySignal {
 export interface PIISignal {
   name: string
   threshold: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
   description?: string
@@ -334,6 +365,7 @@ export interface Signals {
   classifiers?: ClassifierSignal[]
   input_modality?: InputModalitySignal[]
   decision?: DecisionModelSignal[]
+  topic_continuity?: TopicContinuitySignal[]
 }
 
 // =============================================================================
@@ -432,11 +464,25 @@ export interface Decision {
 // LISTENERS - Network configuration
 // =============================================================================
 
+export interface ListenerTLS {
+  cert_file: string
+  key_file: string
+}
+
+export interface ListenerIdentity {
+  trust_headers?: boolean
+  trusted_peers?: string[]
+}
+
 export interface Listener {
   name: string
   address: string
   port: number
   timeout?: string
+  api_keys?: string[]
+  models?: string[]
+  tls?: ListenerTLS
+  identity?: ListenerIdentity
 }
 
 // =============================================================================
@@ -465,7 +511,6 @@ export interface LegacyVLLMEndpoint {
 
 export interface LegacyModelConfig {
   model_id: string
-  use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
   category_mapping_path?: string

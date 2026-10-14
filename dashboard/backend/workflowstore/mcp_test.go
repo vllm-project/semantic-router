@@ -15,7 +15,7 @@ func TestMCPServerSurvivesStoreReopen(t *testing.T) {
 		payload  = `{"id":"mcp-test-server","name":"Test MCP","transport":"stdio","connection":{"command":"echo"},"enabled":true}`
 	)
 
-	s1, err := Open(path, Options{})
+	s1, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestMCPServerSurvivesStoreReopen(t *testing.T) {
 	}
 	_ = s1.Close()
 
-	s2, err := Open(path, Options{})
+	s2, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -728,3 +728,219 @@
     verification: imported
     source: https://artificialanalysis.ai/models/mistral-small-3-2
     redistributable: true
+- id: mistral/ministral-3-14b-instruct-model-card-math@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Ministral-3-14B-Instruct-2512
+    source_kind: official_model_card
+    aggregation: maj@1
+  metrics:
+    accuracy: 0.904
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512/blob/29439f81c2be264d8d393273f99e7db9c0961120/README.md
+    redistributable: true
+- id: independent/ministral-3-14b-gpqa-diamond@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.571717171717172
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-humanitys-last-exam@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.046339202965709
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-scicode@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0.238425925925926
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-critpt@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-omniscience@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    index: -66.36666666666666
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-artificial-analysis-long-context-reasoning@1.1.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0.263333333333333
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-terminalbench-v2-1@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    resolved: 0.0973782771535581
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-tau3-banking@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0.065979381443299
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-ifbench@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.320408163265306
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-aime-2025@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.3
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-mmmu-pro@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.498265895953757
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true

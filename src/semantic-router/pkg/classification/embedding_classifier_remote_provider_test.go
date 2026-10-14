@@ -45,6 +45,10 @@ type stubEmbeddingProvider struct {
 	embeddings map[string][]float32
 }
 
+func (p *stubEmbeddingProvider) FitsInput(ctx context.Context, _ string) (bool, error) {
+	return true, ctx.Err()
+}
+
 func (p *stubEmbeddingProvider) Embed(_ context.Context, text string) ([]float32, error) {
 	if embedding, ok := p.embeddings[text]; ok {
 		return embedding, nil

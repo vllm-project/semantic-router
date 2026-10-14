@@ -2,7 +2,7 @@
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
-  source_commit: "7d671e90d6cb1d5540c795158b94ee89fe323e19"
+  source_commit: "49fd62932eb54334c4e4bbc64977733f1c7ed5fa"
   source_file: "docs/installation/support-matrix.md"
   outdated: false
 ---
@@ -39,7 +39,7 @@ translation:
 | 选项 | 分类 | 项目覆盖 |
 | --- | --- | --- |
 | [Helm chart](configuration-workflows#helm) | Maintained reference stack | **Contract。** Router、可选控制面板、ingress、自动扩缩、持久化和可观测性资源。网关和存储仍是外部的。 |
-| [本地部署](docker) | Maintained reference stack | **PR CI。** CLI 管理 Router、Envoy、控制面板和支持服务。你提供自定义模型端点，并加固本地默认值。 |
+| [本地部署](docker) | Maintained reference stack | **PR CI。** CLI 管理 Router、控制面板和支持服务，使用 `--gateway extproc` 时还管理 Envoy。你提供自定义模型端点，并加固本地默认值。 |
 | [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract。** 项目拥有 CRD、协调、Router 工作负载、Service 和路由 API。Kubernetes 调度工作负载；你的网关承载流量。 |
 
 ## 受支持的集成

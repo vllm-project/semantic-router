@@ -621,22 +621,28 @@ func TestFallbackReplayAuditing(t *testing.T) {
 		t.Errorf("expected replay response status %d, got %d", http.StatusOK, rec.ResponseStatus)
 	}
 
-	if len(rec.Outcomes) == 0 {
-		t.Fatal("expected at least 1 outcome recorded in replay")
+	// Asynchronous receipts, such as memory persistence, may land after the
+	// fallback outcome, so it is found by source rather than by position.
+	var fallbackOutcome *routerreplay.Outcome
+	for i := range rec.Outcomes {
+		if rec.Outcomes[i].Source == "fallback" {
+			fallbackOutcome = &rec.Outcomes[i]
+		}
 	}
-
-	lastOutcome := rec.Outcomes[len(rec.Outcomes)-1]
-	if lastOutcome.Source != "fallback" || lastOutcome.Verdict != "completed" {
-		t.Errorf("outcome mismatch: %+v", lastOutcome)
+	if fallbackOutcome == nil {
+		t.Fatalf("expected a fallback outcome in replay, got %+v", rec.Outcomes)
 	}
-	if lastOutcome.Metadata["fallback_model"] != "model-fallback-1" {
-		t.Errorf("expected fallback_model 'model-fallback-1', got %q", lastOutcome.Metadata["fallback_model"])
+	if fallbackOutcome.Verdict != "completed" {
+		t.Errorf("outcome mismatch: %+v", *fallbackOutcome)
 	}
-	if lastOutcome.Metadata["final_status"] != "succeeded" {
-		t.Errorf("expected persisted final_status succeeded, got %q", lastOutcome.Metadata["final_status"])
+	if fallbackOutcome.Metadata["fallback_model"] != "model-fallback-1" {
+		t.Errorf("expected fallback_model 'model-fallback-1', got %q", fallbackOutcome.Metadata["fallback_model"])
+	}
+	if fallbackOutcome.Metadata["final_status"] != "succeeded" {
+		t.Errorf("expected persisted final_status succeeded, got %q", fallbackOutcome.Metadata["final_status"])
 	}
 	var execution fallback.ExecutionRecord
-	if err := json.Unmarshal([]byte(lastOutcome.Metadata["execution_record"]), &execution); err != nil {
+	if err := json.Unmarshal([]byte(fallbackOutcome.Metadata["execution_record"]), &execution); err != nil {
 		t.Fatalf("decode persisted fallback execution: %v", err)
 	}
 	if execution.RequestID != ctx.RequestID || len(execution.Attempts) != 2 {
@@ -1819,6 +1825,7 @@ func TestFallbackRecipeCircuitBreakerConfigApplied(t *testing.T) {
 		},
 	}
 	cfg.Fallback = &globalPolicy
+	cfg.RoutingDefaults.Fallback = &globalPolicy
 
 	components, err := buildRouterComponents(cfg)
 	if err != nil {
@@ -2906,16 +2913,19 @@ func TestFallbackPreservesInflightModelOwnershipDuringSettlement(t *testing.T) {
 	primaryModel := "model-primary"
 	candidateModel := "model-fallback-1"
 
-	// Allocate token 1 on primary model (the active request that fails on primary)
+	// Allocate a process-wide token for the active request that fails on primary.
 	primaryToken := inflight.Begin(primaryModel)
-	if primaryToken != 1 {
-		t.Fatalf("expected primary token 1, got %d", primaryToken)
+	if primaryToken == 0 {
+		t.Fatal("expected non-zero primary token")
 	}
 
-	// Allocate token 1 on candidate model (an independent concurrent in-flight request)
+	// Allocate a distinct token for an independent request already in flight on candidate.
 	candidateToken := inflight.Begin(candidateModel)
-	if candidateToken != 1 {
-		t.Fatalf("expected candidate token 1, got %d", candidateToken)
+	if candidateToken == 0 {
+		t.Fatal("expected non-zero candidate token")
+	}
+	if candidateToken == primaryToken {
+		t.Fatalf("expected distinct tokens for primary and candidate models, got %d", primaryToken)
 	}
 
 	// Verify initial state: both models have in-flight count 1
@@ -2954,9 +2964,9 @@ func TestFallbackPreservesInflightModelOwnershipDuringSettlement(t *testing.T) {
 		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", resp)
 	}
 
-	// Verify token model ownership after fallback settlement:
-	// - Primary model token has been ended: count must be 0
-	// - Candidate model independent concurrent token is preserved: count must be 1 (0/1 distribution)
+	// Verify model ownership after fallback settlement:
+	// - The primary request token has been ended: count must be 0.
+	// - The independent candidate request remains in flight: count must be 1.
 	if count := inflight.Get(primaryModel); count != 0 {
 		t.Errorf("expected primary model %s inflight count to be 0, got %d", primaryModel, count)
 	}
@@ -3580,7 +3590,7 @@ func TestFallbackRecomputesAutomaticOutputAllowanceForCandidate(t *testing.T) {
 		{Model: "narrow"},
 	}
 
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	refs, err := r.decisionEligibleModelRefs(d, ctx)
 	require.NoError(t, err)
 	require.Len(t, refs, 2)

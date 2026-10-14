@@ -1,5 +1,5 @@
 {
-  "schema_version": "semantic-router.training/v1",
+  "schema_version": "semantic-router.training/v2",
   "targets": [
     {
       "id": "target/selector.model-choice@v1",
@@ -33,8 +33,7 @@
         "signal.spans/v1"
       ],
       "supported_architectures": [
-        "architecture/hf-modernbert@v1",
-        "architecture/hf-bert@v1"
+        "architecture/hf-modernbert@v1"
       ],
       "supported_executors": [
         "executor/train@v1"
@@ -83,8 +82,7 @@
         "signal.spans/v1"
       ],
       "supported_architectures": [
-        "architecture/hf-modernbert@v1",
-        "architecture/hf-bert@v1"
+        "architecture/hf-modernbert@v1"
       ],
       "supported_executors": [
         "executor/train@v1"
@@ -254,27 +252,6 @@
   ],
   "architectures": [
     {
-      "id": "architecture/hf-bert@v1",
-      "family": "bert",
-      "display_name": "Hugging Face BERT / RoBERTa",
-      "supported_targets": [
-        "signal.label-scores/v1",
-        "signal.spans/v1"
-      ],
-      "supported_formats": [
-        "format/safetensors@v1",
-        "format/onnx@v1"
-      ],
-      "supported_runtimes": [
-        "runtime/candle@v1",
-        "runtime/onnxruntime@v1"
-      ],
-      "required_model_files": [
-        "config.json",
-        "model.safetensors"
-      ]
-    },
-    {
       "id": "architecture/hf-modernbert@v1",
       "family": "modernbert",
       "display_name": "Hugging Face ModernBERT",
@@ -283,16 +260,17 @@
         "signal.spans/v1"
       ],
       "supported_formats": [
-        "format/safetensors@v1",
-        "format/onnx@v1"
+        "format/safetensors@v1"
       ],
       "supported_runtimes": [
-        "runtime/candle@v1",
-        "runtime/onnxruntime@v1"
+        "runtime/model-runtime@v1"
       ],
       "required_model_files": [
         "config.json",
-        "model.safetensors"
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json"
       ]
     },
     {
@@ -318,19 +296,6 @@
         "version": "1"
       },
       "display_name": "Standard Evaluation Task Executor",
-      "supported_hardware": [
-        "hardware/cpu@v1",
-        "hardware/cuda@v1"
-      ],
-      "isolation_level": "container"
-    },
-    {
-      "id": "executor/onnx-exporter@v1",
-      "component": {
-        "name": "onnx-exporter",
-        "version": "1"
-      },
-      "display_name": "Safetensors to ONNX Exporter",
       "supported_hardware": [
         "hardware/cpu@v1",
         "hardware/cuda@v1"
@@ -369,20 +334,6 @@
   ],
   "formats": [
     {
-      "id": "format/onnx@v1",
-      "component": {
-        "name": "onnx",
-        "version": "1"
-      },
-      "display_name": "Open Neural Network Exchange (ONNX)",
-      "file_extensions": [
-        ".onnx"
-      ],
-      "direct_runtimes": [
-        "runtime/onnxruntime@v1"
-      ]
-    },
-    {
       "id": "format/safetensors@v1",
       "component": {
         "name": "safetensors",
@@ -394,7 +345,7 @@
         ".json"
       ],
       "direct_runtimes": [
-        "runtime/candle@v1"
+        "runtime/model-runtime@v1"
       ]
     },
     {
@@ -414,28 +365,27 @@
   ],
   "runtimes": [
     {
-      "id": "runtime/candle@v1",
+      "id": "runtime/model-runtime@v1",
       "component": {
-        "name": "candle",
+        "name": "model-runtime",
         "version": "1"
       },
-      "display_name": "Embedded Candle CPU/GPU Runtime",
+      "display_name": "vLLM Semantic Router Model Runtime",
       "supported_targets": [
-        "signal.label-scores/v1"
+        "signal.label-scores/v1",
+        "signal.spans/v1"
       ],
       "accepted_formats": [
         "format/safetensors@v1"
       ],
       "supported_hardware": [
         "hardware/cpu@v1",
-        "hardware/cuda@v1",
-        "hardware/metal@v1"
+        "hardware/rocm@v1"
       ],
       "supported_precisions": [
-        "precision/fp32@v1",
-        "precision/fp16@v1"
+        "precision/fp32@v1"
       ],
-      "connector": "sr.candle.embedded.v1"
+      "connector": "sr.model-runtime.openapi.v2"
     },
     {
       "id": "runtime/native@v1",
@@ -457,31 +407,6 @@
         "precision/fp32@v1"
       ],
       "connector": "sr.native.embedded.v1"
-    },
-    {
-      "id": "runtime/onnxruntime@v1",
-      "component": {
-        "name": "onnxruntime",
-        "version": "1"
-      },
-      "display_name": "ONNX Runtime Engine",
-      "supported_targets": [
-        "signal.label-scores/v1",
-        "signal.spans/v1"
-      ],
-      "accepted_formats": [
-        "format/onnx@v1"
-      ],
-      "supported_hardware": [
-        "hardware/cpu@v1",
-        "hardware/cuda@v1",
-        "hardware/rocm@v1"
-      ],
-      "supported_precisions": [
-        "precision/fp32@v1",
-        "precision/fp16@v1"
-      ],
-      "connector": "sr.onnxruntime.embedded.v1"
     }
   ],
   "precisions": [
@@ -547,17 +472,6 @@
         "precision/fp32@v1",
         "precision/fp16@v1",
         "precision/bf16@v1"
-      ]
-    }
-  ],
-  "conversions": [
-    {
-      "source_format": "format/safetensors@v1",
-      "target_format": "format/onnx@v1",
-      "executor": "executor/onnx-exporter@v1",
-      "hardware": [
-        "hardware/cpu@v1",
-        "hardware/cuda@v1"
       ]
     }
   ]

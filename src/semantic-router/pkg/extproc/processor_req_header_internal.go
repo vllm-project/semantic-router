@@ -6,7 +6,6 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 )
 
 var looperInternalContextHeaders = []string{
@@ -18,26 +17,15 @@ var looperInternalContextHeaders = []string{
 	headers.VSRSelectedRecipe,
 }
 
-func authenticateLooperRequestContext(ctx *RequestContext) {
+// markLooperHop makes a request a Looper hop only when the Router serves it
+// in process, with its routing context typed. Internal context headers a
+// request carries are never believed: they are dropped, so they influence
+// neither routing nor plugins, and the request is an ordinary one.
+func markLooperHop(ctx *RequestContext) {
 	if ctx == nil {
 		return
 	}
-
-	markerPresent := strings.EqualFold(
-		strings.TrimSpace(headerValueCI(ctx, headers.VSRLooperRequest)),
-		"true",
-	)
-	ctx.LooperRequest = markerPresent &&
-		internalauth.Authenticate(headerValueCI(ctx, headers.VSRInternalAuth))
-
-	// The credential is only needed while authenticating the captured context.
-	removeHeaderValueCI(ctx, headers.VSRInternalAuth)
-	if ctx.LooperRequest {
-		return
-	}
-
-	// Treat unauthenticated internal context as a normal external request. The
-	// recipe and decision hints must not influence routing or plugin execution.
+	ctx.LooperRequest = ctx.Hop != nil
 	for _, header := range looperInternalContextHeaders {
 		removeHeaderValueCI(ctx, header)
 	}
@@ -62,4 +50,20 @@ func buildLooperInternalHeaderRemovalMutation() *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		RemoveHeaders: looperInternalHeadersForRemoval(),
 	}
+}
+
+// looperHopDecision names the decision whose plugin chain a hop runs.
+func looperHopDecision(ctx *RequestContext) string {
+	if ctx.Hop == nil {
+		return ""
+	}
+	return ctx.Hop.Decision
+}
+
+// looperHopRecipe names the recipe a hop's decision belongs to.
+func looperHopRecipe(ctx *RequestContext) string {
+	if ctx.Hop == nil {
+		return ""
+	}
+	return strings.TrimSpace(ctx.Hop.Recipe)
 }

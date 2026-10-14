@@ -15,6 +15,7 @@ export interface FieldSchema {
     | 'json'
     | 'rule'
   options?: string[]
+  disabledOptions?: Record<string, string>
   required?: boolean
   placeholder?: string
   description?: string

@@ -210,11 +210,10 @@ def test_sync_envoy_config_renders_provider_backend_refs(monkeypatch, tmp_path):
     _, host, dest, rendered = calls[1]
     assert host == "root@example"
     assert dest == "/remote/envoy.yaml"
-    assert "gemini_worker_cluster" in rendered
-    assert "gpt_worker_cluster" in rendered
-    assert "opus_worker_cluster" in rendered
-    assert 'key: "Authorization"' in rendered
-    assert "Bearer sk-unit" in rendered
+    assert "model_gemini_2dworker_cluster" in rendered
+    assert "model_gpt_2dworker_cluster" in rendered
+    assert "model_opus_2dworker_cluster" in rendered
+    assert "sk-unit" not in rendered
 
 
 def test_switch_benchmark_recipe_copies_recipe_syncs_envoy_and_restarts(monkeypatch):

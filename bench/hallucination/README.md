@@ -83,13 +83,11 @@ global:
         enabled: true
         detector:
           model_ref: hallucination_detector
-          model_id: models/mom-halugate-detector
-          threshold: 0.82
-          min_span_length: 2
-          min_span_confidence: 0.6
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
-          nli_entailment_threshold: 0.75
 ```
 
 Each routing decision enables the plugin and chooses how flagged responses are
@@ -99,12 +97,10 @@ handled. See `config-7b.yaml` for the complete, runnable example.
 
 | Setting | Default | Purpose |
 | --- | ---: | --- |
-| `threshold` | `0.82` | Minimum detector score for a candidate hallucination. |
-| `min_span_length` | `2` | Ignore detected spans shorter than this token count. |
-| `min_span_confidence` | `0.6` | Ignore spans whose confidence is below this value. |
+| `threshold` | `0.5` | Minimum detector score for a candidate hallucination. |
+| `min_span_length` | `1` | Ignore detected spans shorter than this token count. |
+| `min_span_confidence` | `0.0` | Ignore spans whose confidence is below this value. |
 | `context_window_size` | `50` | Include this many surrounding characters in diagnostic context. |
-| `enable_nli_filtering` | `true` | Remove candidates that are entailed by the supplied context. |
-| `nli_entailment_threshold` | `0.75` | Treat candidates above this entailment score as supported. |
 
 Raise the span thresholds when false positives are more costly; lower them when
 recall is more important. Any comparison should record the complete

@@ -188,5 +188,3 @@ func (s *cancellationTestMLSelector) Select(_ *modelselection.SelectionContext, 
 }
 
 func (s *cancellationTestMLSelector) Name() string { return "cancellation-test" }
-
-func (s *cancellationTestMLSelector) Train(_ []modelselection.TrainingRecord) error { return nil }

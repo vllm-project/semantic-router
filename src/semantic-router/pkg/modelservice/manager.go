@@ -2,15 +2,13 @@ package modelservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -18,56 +16,37 @@ import (
 
 const (
 	// RuntimeCommandEnv overrides the managed runtime command (space-separated),
-	// for example "python3 -m vllm_sr_runtime".
-	RuntimeCommandEnv = "VLLM_SR_RUNTIME_COMMAND"
+	// for example "python3 -m vllm_srun".
+	RuntimeCommandEnv = "VLLM_SRUN_COMMAND"
 	// RuntimeDirEnv overrides the private directory that holds runtime sockets.
-	RuntimeDirEnv = "VLLM_SR_RUNTIME_DIR"
+	RuntimeDirEnv = "VLLM_SRUN_DIR"
 	// RuntimeCacheEnv sets the Hugging Face cache directory for managed runtimes.
-	RuntimeCacheEnv = "VLLM_SR_RUNTIME_CACHE_DIR"
+	RuntimeCacheEnv = "VLLM_SRUN_CACHE_DIR"
 
-	defaultRuntimeCommand = "vllm-sr-runtime"
-	startingPollInterval  = 500 * time.Millisecond
-	readyPollInterval     = 5 * time.Second
-	healthTimeout         = 2 * time.Second
+	defaultRuntimeCommand = "vllm-srun"
 )
 
-// DeploymentStatus is the observable state of one deployment.
-type DeploymentStatus struct {
-	Name     string `json:"name"`
-	Managed  bool   `json:"managed"`
-	Endpoint string `json:"endpoint"`
-	Ready    bool   `json:"ready"`
-	State    string `json:"state"`
-}
-
-type deployment struct {
-	name       string
-	spec       config.ModelDeployment
-	client     *Client
-	managed    bool
-	ready      atomic.Bool
-	state      atomic.Value
-	cancel     context.CancelFunc
-	done       chan struct{}
-	supervisor *supervisor
-}
-
-func (d *deployment) status() DeploymentStatus {
-	state, _ := d.state.Load().(string)
-	return DeploymentStatus{Name: d.name, Managed: d.managed, Endpoint: d.client.Endpoint(), Ready: d.ready.Load(), State: state}
-}
-
-// Manager owns the model_runtime deployments of the running configuration.
+// Manager owns the runtime processes of every router generation. Each
+// generation holds a Lease; unchanged logical workers keep their identities
+// across modes and generations, and stop after their last reference drains.
 type Manager struct {
-	mu          sync.RWMutex
-	deployments map[string]*deployment
-	runtimeDir  string
-	command     []string
-	cacheDir    string
-	closed      bool
+	mu              sync.Mutex
+	groups          map[string]*group
+	attachedClients map[string]*Client
+	published       *Lease
+	runtimeDir      string
+	command         []string
+	cacheDir        string
+	cores           int
+	closed          bool
+
+	dispatchSequence uint64
+
+	autoOnce sync.Once
+	auto     string
 }
 
-// NewManager prepares a manager; Reconcile starts deployments.
+// NewManager prepares a manager; Acquire and Reconcile start processes.
 func NewManager() *Manager {
 	command := strings.Fields(os.Getenv(RuntimeCommandEnv))
 	if len(command) == 0 {
@@ -75,205 +54,254 @@ func NewManager() *Manager {
 	}
 	runtimeDir := os.Getenv(RuntimeDirEnv)
 	if runtimeDir == "" {
-		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-sr-runtime-%d", os.Getpid()))
+		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-srun-%d", os.Getpid()))
 	}
-	return &Manager{
-		deployments: make(map[string]*deployment),
-		runtimeDir:  runtimeDir,
-		command:     command,
-		cacheDir:    os.Getenv(RuntimeCacheEnv),
-	}
+	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cores: cpuCores()}
 }
 
-// Reconcile starts deployments the configuration uses, restarts the ones whose
-// settings changed, and stops the ones it no longer uses.
-func (m *Manager) Reconcile(cfg *config.RouterConfig) error {
-	desired := config.ModelRuntimeDeploymentsInUse(cfg)
+// Acquire returns a lease on the model_runtime deployments the configuration
+// uses, starting the processes no other generation runs yet. It does not wait
+// for readiness: calls fail open until a deployment is ready, and Card waits.
+func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
+	return m.AcquireDeployments(config.ModelRuntimeDeploymentsInUse(cfg))
+}
+
+// AcquireDeployments returns a lease on an explicit set of deployments.
+func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
+	auto := m.resolveAuto(deployments)
+	if err := refuseGPUOnlyOnCPU(deployments, auto); err != nil {
+		return nil, err
+	}
+	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, auto)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
-		return fmt.Errorf("model runtime manager is shut down")
+		return nil, fmt.Errorf("model runtime manager is shut down")
 	}
-	for name, current := range m.deployments {
-		spec, keep := desired[name]
-		if keep && reflect.DeepEqual(spec, current.spec) {
-			continue
+	lease := &Lease{manager: m, members: make(map[string]member)}
+	for _, plan := range plans {
+		g := m.groups[plan.key]
+		if g == nil {
+			started, err := m.startGroupLocked(plan)
+			if err != nil {
+				stopped := m.releaseLocked(lease.groups)
+				go stopGroups(stopped)
+				return nil, fmt.Errorf("model runtime process %s: %w", plan.name, err)
+			}
+			g = started
+			m.groups[plan.key] = g
 		}
-		current.stop()
-		delete(m.deployments, name)
-	}
-	var errs []string
-	for _, name := range sortedNames(desired) {
-		if _, running := m.deployments[name]; running {
-			continue
+		g.refs++
+		lease.groups = append(lease.groups, g)
+		for deployment, model := range plan.members {
+			lease.members[deployment] = member{group: g, served: g.models[model]}
 		}
-		started, err := m.start(name, desired[name])
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
-			continue
-		}
-		m.deployments[name] = started
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("model runtime deployments: %s", strings.Join(errs, "; "))
+	lease.assemblePools(deployments)
+	return lease, nil
+}
+
+// extend adds one deployment to a lease in a process of its own.
+func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
+	added, err := m.AcquireDeployments(map[string]config.ModelDeployment{name: deployment})
+	if err != nil {
+		return err
 	}
+	lease.mu.Lock()
+	if _, ok := lease.members[name]; ok {
+		lease.mu.Unlock()
+		return added.Close()
+	}
+	if lease.closed {
+		lease.mu.Unlock()
+		_ = added.Close()
+		return ErrUnavailable
+	}
+	lease.groups = append(lease.groups, added.groups...)
+	lease.members[name] = added.members[name]
+	added.groups = nil
+	lease.mu.Unlock()
+	logging.ComponentWarnEvent("model_runtime", "deployment_outside_generation_plan", map[string]interface{}{"deployment": name})
 	return nil
 }
 
-func (m *Manager) start(name string, spec config.ModelDeployment) (*deployment, error) {
-	endpoint := strings.TrimSpace(spec.Endpoint)
-	managed := endpoint == ""
-	var socket string
-	if managed {
-		if err := os.MkdirAll(m.runtimeDir, 0o700); err != nil {
+// resolveAuto returns the device that managed deployments on auto are planned
+// on: the runtime's answer, asked the first time one is planned and kept for
+// the manager's lifetime, so plans stay stable. It is empty when the runtime
+// could not answer; each worker then resolves auto during its own startup.
+func (m *Manager) resolveAuto(deployments map[string]config.ModelDeployment) string {
+	for _, deployment := range deployments {
+		needsAuto := false
+		for _, placement := range deployment.Placements() {
+			if placement.Endpoint == "" && placement.Device == autoDevice {
+				needsAuto = true
+			}
+		}
+		if !deployment.IsModelRuntime() || !needsAuto {
+			continue
+		}
+		m.autoOnce.Do(func() {
+			device, err := queryAutoDevice(m.command)
+			if err != nil {
+				logging.ComponentWarnEvent("model_runtime", "auto_device_unresolved", map[string]interface{}{
+					"error": err.Error(), "fallback": "each auto worker resolves placement at startup",
+				})
+				return
+			}
+			m.auto = device
+			logging.ComponentEvent("model_runtime", "auto_device_resolved", map[string]interface{}{"device": device})
+		})
+		return m.auto
+	}
+	return ""
+}
+
+func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
+	if plan.endpoint != "" {
+		if m.attachedClients == nil {
+			m.attachedClients = make(map[string]*Client)
+		}
+		client := m.attachedClients[plan.endpoint]
+		if client == nil {
+			var err error
+			client, err = NewClient(plan.endpoint)
+			if err != nil {
+				return nil, err
+			}
+			m.attachedClients[plan.endpoint] = client
+		}
+		g := newGroup(plan, client, false)
+		g.start()
+		return g, nil
+	}
+	if err := privateDir(m.runtimeDir); err != nil {
+		return nil, err
+	}
+	socket, modelsFile := plan.files(m.runtimeDir)
+	if len(socket) > maxSocketPath {
+		dir := shortSocketDir(m.runtimeDir)
+		if err := privateDir(dir); err != nil {
 			return nil, err
 		}
-		socket = filepath.Join(m.runtimeDir, name+".sock")
-		endpoint = "unix://" + socket
+		socket, _ = plan.files(dir)
 	}
-	client, err := NewClient(endpoint)
+	if err := plan.writeModelsFile(modelsFile); err != nil {
+		return nil, err
+	}
+	client, err := NewClient("unix://" + socket)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	d := &deployment{name: name, spec: spec, client: client, managed: managed, cancel: cancel, done: make(chan struct{})}
-	d.state.Store("starting")
-	readyGauge.WithLabelValues(name).Set(0)
+	g := newGroup(plan, client, true)
+	g.modelsFile = modelsFile
+	g.supervisor = &supervisor{
+		process: plan.name, deployments: []string{plan.logical}, socket: socket, env: os.Environ(),
+		command: managedCommand(m.command, socket, modelsFile, m.cacheDir, plan.threads), onExit: g.processExited,
+	}
+	g.start()
+	return g, nil
+}
+
+// release drops a lease's references and stops the processes nobody uses.
+func (m *Manager) release(groups []*group) {
+	m.mu.Lock()
+	stopped := m.releaseLocked(groups)
+	m.mu.Unlock()
+	stopGroups(stopped)
+}
+
+func (m *Manager) releaseLocked(groups []*group) []*group {
+	var stopped []*group
+	for _, g := range groups {
+		g.refs--
+		if g.refs == 0 {
+			delete(m.groups, g.plan.key)
+			stopped = append(stopped, g)
+		}
+	}
+	return stopped
+}
+
+func stopGroups(groups []*group) {
 	var wg sync.WaitGroup
-	if managed {
-		d.supervisor = &supervisor{name: name, command: managedCommand(m.command, spec, socket, m.cacheDir), env: os.Environ(), socket: socket}
+	for _, g := range groups {
 		wg.Add(1)
-		go func() {
+		go func(g *group) {
 			defer wg.Done()
-			d.supervisor.run(ctx)
-		}()
+			g.stop()
+		}(g)
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		d.watch(ctx)
-	}()
-	go func() {
-		wg.Wait()
-		close(d.done)
-	}()
-	logging.ComponentEvent("model_runtime", "deployment_started", map[string]interface{}{
-		"deployment": name, "managed": managed, "endpoint": endpoint, "artifact": spec.Artifact, "profile": spec.Profile,
-	})
-	return d, nil
+	wg.Wait()
 }
 
-// watch polls readiness: fast while starting, slower once ready.
-func (d *deployment) watch(ctx context.Context) {
-	for {
-		probe, cancel := context.WithTimeout(ctx, healthTimeout)
-		ready, state, err := d.client.Ready(probe)
-		cancel()
-		if ctx.Err() != nil {
-			return
-		}
-		if err != nil {
-			state = "unreachable"
-		}
-		if ready != d.ready.Load() {
-			logging.ComponentEvent("model_runtime", "deployment_readiness_changed", map[string]interface{}{
-				"deployment": d.name, "ready": ready, "state": state,
-			})
-		}
-		d.ready.Store(ready)
-		d.state.Store(state)
-		if ready {
-			readyGauge.WithLabelValues(d.name).Set(1)
-		} else {
-			readyGauge.WithLabelValues(d.name).Set(0)
-		}
-		interval := startingPollInterval
-		if ready {
-			interval = readyPollInterval
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(interval):
-		}
+// Reconcile keeps a lease on the published configuration's deployments for
+// the process-wide Default and releases the lease of the configuration it replaces.
+func (m *Manager) Reconcile(cfg *config.RouterConfig) error {
+	lease, err := m.Acquire(cfg)
+	if err != nil {
+		return err
 	}
+	m.mu.Lock()
+	previous := m.published
+	m.published = lease
+	m.mu.Unlock()
+	return previous.Close()
 }
 
-func (d *deployment) stop() {
-	d.cancel()
-	<-d.done
-	d.ready.Store(false)
-	readyGauge.WithLabelValues(d.name).Set(0)
-	logging.ComponentEvent("model_runtime", "deployment_stopped", map[string]interface{}{"deployment": d.name})
+// Published returns the lease Reconcile keeps (nil before the first Reconcile).
+func (m *Manager) Published() *Lease {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.published
 }
 
-// Decide answers the request through a deployment. A deployment that is not
-// ready fails at once with ErrUnavailable so callers fail open without waiting.
-func (m *Manager) Decide(ctx context.Context, name string, request Request) (Response, error) {
-	m.mu.RLock()
-	d := m.deployments[name]
-	m.mu.RUnlock()
-	if d == nil {
-		requestsTotal.WithLabelValues(name, ErrorReason(ErrUnknownDeployment)).Inc()
-		return Response{}, ErrUnknownDeployment
-	}
-	if !d.ready.Load() {
-		requestsTotal.WithLabelValues(name, ErrorReason(ErrUnavailable)).Inc()
+// Statuses reports the published configuration's deployments, sorted by name.
+func (m *Manager) Statuses() []DeploymentStatus {
+	return m.Published().Statuses()
+}
+
+// Decide answers through the published configuration's deployments.
+func (m *Manager) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
+	lease := m.Published()
+	if lease == nil {
 		return Response{}, ErrUnavailable
 	}
-	started := time.Now()
-	response, err := d.client.Decide(ctx, request)
-	requestDuration.WithLabelValues(name).Observe(time.Since(started).Seconds())
-	requestsTotal.WithLabelValues(name, ErrorReason(err)).Inc()
-	return response, err
+	return lease.Decide(ctx, deployment, request)
 }
 
-// Statuses reports every deployment, sorted by name.
-func (m *Manager) Statuses() []DeploymentStatus {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	statuses := make([]DeploymentStatus, 0, len(m.deployments))
-	for _, name := range sortedNames(m.deployments) {
-		statuses = append(statuses, m.deployments[name].status())
-	}
-	return statuses
-}
-
-// Shutdown stops every deployment and its managed process.
+// Shutdown stops every process, whatever leases remain.
 func (m *Manager) Shutdown(ctx context.Context) error {
 	m.mu.Lock()
 	m.closed = true
-	deployments := m.deployments
-	m.deployments = map[string]*deployment{}
+	groups := make([]*group, 0, len(m.groups))
+	for _, g := range m.groups {
+		// Leases closed after shutdown must not stop a group again.
+		g.refs = 0
+		groups = append(groups, g)
+	}
+	m.groups = map[string]*group{}
+	m.published = nil
 	m.mu.Unlock()
 	done := make(chan struct{})
 	go func() {
-		for _, d := range deployments {
-			d.stop()
-		}
+		stopGroups(groups)
 		close(done)
 	}()
 	select {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return errors.Join(ctx.Err(), errors.New("model runtime processes are still stopping"))
 	}
-}
-
-func sortedNames[T any](values map[string]T) []string {
-	names := make([]string, 0, len(values))
-	for name := range values {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }
 
 var defaultManager atomic.Pointer[Manager]
 
-// SetDefault installs the process-wide manager used by signals and selectors.
+// SetDefault installs the process-wide manager.
 func SetDefault(manager *Manager) { defaultManager.Store(manager) }
+
+// DefaultManager returns the process-wide manager, or nil before one is installed.
+func DefaultManager() *Manager { return defaultManager.Load() }
 
 // Default returns the process-wide decider. Before a manager is installed it
 // answers ErrUnavailable, so request paths fail open.

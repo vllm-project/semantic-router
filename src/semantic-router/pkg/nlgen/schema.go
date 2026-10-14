@@ -113,7 +113,7 @@ Inside a ROUTE block:
 
 ### Algorithm Types
   confidence, ratings, remom, elo, router_dc, automix, hybrid, rl_driven,
-  gmtrouter, latency_aware, static, knn, kmeans, svm
+  gmtrouter, latency_aware, static, knn, kmeans, svm, random
 
 ### Plugin Types (inline)
   system_prompt, semantic_cache, hallucination, memory, rag, tools,

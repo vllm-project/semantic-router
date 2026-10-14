@@ -53,7 +53,7 @@ class ContractTests(unittest.TestCase):
 
     def test_schema_and_openapi_references(self):
         Draft202012Validator.check_schema(SCHEMA)
-        api = yaml.safe_load((CONTRACT_ROOT / "training-v1.openapi.yaml").read_text())
+        api = yaml.safe_load((CONTRACT_ROOT / "training-v2.openapi.yaml").read_text())
         operation_ids = []
         for path, methods in api["paths"].items():
             for method, operation in methods.items():
@@ -68,7 +68,7 @@ class ContractTests(unittest.TestCase):
             if isinstance(value, dict):
                 if "$ref" in value:
                     ref = value["$ref"]
-                    if ref.startswith("./training-v1.schema.json#/$defs/"):
+                    if ref.startswith("./training-v2.schema.json#/$defs/"):
                         self.assertIn(ref.rsplit("/", 1)[1], SCHEMA["$defs"])
                     else:
                         resolved = api
@@ -137,7 +137,7 @@ class ContractTests(unittest.TestCase):
 
     def test_capability_catalog_schema(self):
         catalog = {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "targets": [
                 {
                     "id": "target/selector.model-choice@v1",
@@ -218,7 +218,7 @@ class ContractTests(unittest.TestCase):
 
     def test_training_plan_request_and_response_schema(self):
         plan_req = {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "target_contract": "selector.model-choice/v1",
             "trainer": "trainer/selector@v1",
             "training_hardware": "hardware/cpu@v1",
@@ -236,7 +236,7 @@ class ContractTests(unittest.TestCase):
         validate(plan_req, "TrainingPlanRequest")
 
         plan_resp = {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "valid": True,
             "plan": {
                 "target_contract": "selector.model-choice/v1",
@@ -282,7 +282,7 @@ class ContractTests(unittest.TestCase):
         validate(plan_resp, "TrainingPlanResponse")
 
         plan_reject = {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "valid": False,
             "diagnostics": [
                 {
@@ -386,7 +386,7 @@ class ClassifierProvenanceTests(unittest.TestCase):
         }
         validate(
             {
-                "schema_version": "semantic-router.training/v1",
+                "schema_version": "semantic-router.training/v2",
                 "status": "succeeded",
                 "artifacts": [{"profile": self.profile, "variants": [self.variant]}],
             },
@@ -397,7 +397,7 @@ class ClassifierProvenanceTests(unittest.TestCase):
 
     def test_variant_file_inventory_must_match(self):
         original = copy.deepcopy(self.variant["files"])
-        for change in ("missing", "extra", "renamed", "size"):
+        for change in ("missing", "extra", "renamed", "digest", "size"):
             with self.subTest(change=change):
                 files = copy.deepcopy(original)
                 if change == "missing":
@@ -406,6 +406,8 @@ class ClassifierProvenanceTests(unittest.TestCase):
                     files["extra.json"] = files["config.json"]
                 elif change == "renamed":
                     files["other.json"] = files.pop("config.json")
+                elif change == "digest":
+                    files["config.json"]["digest"] = "sha256:" + "0" * 64
                 else:
                     files["config.json"]["size_bytes"] += 1
                 self.variant["files"] = files

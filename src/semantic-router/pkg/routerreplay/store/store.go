@@ -98,7 +98,12 @@ type ToolTraceStep struct {
 	Text       string `json:"text,omitempty"`
 	ToolName   string `json:"tool_name,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
-	Arguments  string `json:"arguments,omitempty"`
+	// Status preserves whether a tool result completed successfully after its
+	// payload has been removed from replay storage.
+	Status string `json:"status,omitempty"`
+	// ContentRedacted makes payload removal explicit to replay consumers.
+	ContentRedacted bool   `json:"content_redacted,omitempty"`
+	Arguments       string `json:"arguments,omitempty"`
 	// RawArguments preserves the original arguments JSON.
 	// Currently identical to Arguments because no normalization is performed,
 	// but retained for fidelity in case future processing diverges.
@@ -204,6 +209,7 @@ type RouteDiagnostics struct {
 	SelectionReasoning             string                               `json:"selection_reasoning,omitempty"`
 	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
+	TopicContinuity                []TopicContinuityRecord              `json:"topic_continuity,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
 	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
 	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
@@ -262,19 +268,18 @@ type DecisionRanking struct {
 	DecidedBy  string `json:"decided_by"`
 	Winner     string `json:"winner"`
 	Candidates int    `json:"candidates"`
+	RunnerUp   string `json:"runner_up,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
-// HallucinationSpan is a single unsupported span with its NLI explanation,
-// mirroring extproc.EnhancedHallucinationSpan for replay persistence.
+// HallucinationSpan is a single unsupported span with its details, mirroring
+// extproc.EnhancedHallucinationSpan for replay persistence.
 type HallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"`
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`
 	Explanation             string  `json:"explanation"`
 }
@@ -652,6 +657,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	}
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
+	cloned.TopicContinuity = append([]TopicContinuityRecord(nil), value.TopicContinuity...)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
 	if value.PreparedDispatch != nil {

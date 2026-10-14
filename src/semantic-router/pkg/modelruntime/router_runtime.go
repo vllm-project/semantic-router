@@ -47,14 +47,6 @@ type RouterWarmupTask struct {
 	Load       func() error
 }
 
-type embeddingPaths struct {
-	qwen3      string
-	gemma      string
-	mmBert     string
-	multiModal string
-	bert       string
-}
-
 func WarmupRouter(
 	ctx context.Context,
 	warmups []RouterWarmupTask,
@@ -111,56 +103,6 @@ func WarmupRouter(
 		}
 	}
 	return summary, nil
-}
-
-func resolveEmbeddingPaths(cfg *config.RouterConfig) embeddingPaths {
-	return embeddingPaths{
-		qwen3:      config.ResolveModelPath(cfg.Qwen3ModelPath),
-		gemma:      config.ResolveModelPath(cfg.GemmaModelPath),
-		mmBert:     config.ResolveModelPath(cfg.MmBertModelPath),
-		multiModal: config.ResolveModelPath(cfg.MultiModalModelPath),
-		bert:       config.ResolveModelPath(cfg.BertModelPath),
-	}
-}
-
-func semanticCacheNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return false
-	}
-	return cfg.Enabled && resolveSemanticCacheEmbeddingModel(cfg) == "bert"
-}
-
-func vectorStoreNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return false
-	}
-	return cfg.VectorStore != nil && cfg.VectorStore.Enabled && cfg.VectorStore.EmbeddingModel == "bert" && !cfg.Enabled
-}
-
-func memoryNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return false
-	}
-	if !memoryConfigured(cfg) {
-		return false
-	}
-	return resolveMemoryEmbeddingModel(cfg) == "bert"
-}
-
-func memoryConfigured(cfg *config.RouterConfig) bool { return config.MemoryConfigured(cfg) }
-func resolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	return config.SemanticCacheEmbeddingModel(cfg)
-}
-
-func resolveMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	return config.MemoryEmbeddingModel(cfg)
-}
-
-func resolveBertModelID(modelID string) string {
-	if modelID == "" {
-		modelID = "sentence-transformers/all-MiniLM-L6-v2"
-	}
-	return config.ResolveModelPath(modelID)
 }
 
 func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *EmbeddingProviderRuntimeState {
