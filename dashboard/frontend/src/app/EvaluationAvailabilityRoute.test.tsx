@@ -8,6 +8,7 @@ const renderRoute = (props: {
   isLoading: boolean
   reason?: string
   settingsError?: string
+  featureName?: string
 }) =>
   renderToStaticMarkup(
     <MemoryRouter>
@@ -16,6 +17,7 @@ const renderRoute = (props: {
         isLoading={props.isLoading}
         reason={props.reason ?? ''}
         settingsError={props.settingsError ?? null}
+        featureName={props.featureName}
         onRefreshAccess={() => undefined}
       >
         <main>Evaluation workspace</main>
@@ -42,6 +44,18 @@ describe('EvaluationAvailabilityRoute', () => {
   it('does not expose the workspace while settings are loading', () => {
     const markup = renderRoute({ available: false, isLoading: true })
     expect(markup).toContain('Checking Evaluation')
+    expect(markup).not.toContain('Evaluation workspace')
+  })
+
+  it('names the ML pipeline in its settings-error state', () => {
+    const markup = renderRoute({
+      available: true,
+      isLoading: false,
+      settingsError: 'Dashboard access settings are unavailable.',
+      featureName: 'ML pipeline',
+    })
+    expect(markup).toContain('Unable to check ML pipeline access')
+    expect(markup).not.toContain('Unable to check Evaluation access')
     expect(markup).not.toContain('Evaluation workspace')
   })
 

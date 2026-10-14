@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -83,7 +84,7 @@ func sendTracedRequest(ctx context.Context, client *kubernetes.Clientset, opts p
 
 	// Send request with trace headers
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{
 				"role":    "user",

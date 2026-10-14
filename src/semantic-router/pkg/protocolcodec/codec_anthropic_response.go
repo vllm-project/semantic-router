@@ -172,14 +172,19 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if usageUnavailable(response.Usage) {
-		if err := appendLossy(
+		// The Messages wire requires usage fields, so the encoder emits an
+		// explicit zero-valued usage object. A backend that omitted usage is
+		// an accounting omission, not a lossy translation: rejecting the
+		// response here would turn a successful completion into a 502 for
+		// every non-streaming Anthropic request against such backends. The
+		// streaming encoder already tolerates unavailable usage the same way.
+		appendAccountingOmission(
 			&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1,
-			"usage", "Messages requires usage; emitted an explicit zero-valued usage object",
-		); err != nil {
-			return nil, diagnostics, err
-		}
+			"usage", "backend response omitted usage; emitted an explicit zero-valued usage object",
+		)
 	}
 	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
+	appendAnthropicPartialOutputOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {
 			return nil, diagnostics, err

@@ -115,6 +115,7 @@ export interface StatusWithRouterRuntime {
 
 export interface SystemStatus {
   overall: string
+  serving_mode?: 'router' | 'engine' | 'unknown'
   deployment_type: string
   services: ServiceStatus[]
   version?: string

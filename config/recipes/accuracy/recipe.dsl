@@ -129,3 +129,12 @@ ROUTE accuracy_direct (description = "Default to one frontier worker when orches
   MODEL "gpt55-worker" (reasoning = true, effort = "medium")
   ALGORITHM static
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}

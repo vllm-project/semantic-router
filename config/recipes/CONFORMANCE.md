@@ -58,7 +58,7 @@ authoring mechanics here and release operations in the maintainer guide.
 3. Set `schema_version: v1`, matching `name`, and correct `routing_assets` in
    `probes.yaml`.
 4. Add at least one probe for every decision and every request-facing model
-   entrypoint. Default recipes use `global.router.auto_model_names`; named
+   entrypoint. Default recipes use explicit `entrypoints` or the built-in `vllm-sr/auto`; named
    recipes set `model` and `expected_recipe`.
 5. Declare `expected_algorithm` for every decision and `expected_plugins` when
    the decision configures plugins. A model-free `fast_response` decision has no
@@ -271,7 +271,9 @@ contains exact live results and T3 receipts.
 
 Static checks always include every maintained recipe. Live CPU planning derives
 hardware requirements from explicit `global.model_catalog.deployments.*.device`
-values. Recipes with non-CPU devices stay in the inventory and are listed with
+values and from a `global.model_catalog.system.decision_model` that runs on a
+GPU only (`Vela-2.0-4B`, `Vela-2.0-9B`), listed as `gpu`. Recipes with non-CPU
+devices stay in the inventory and are listed with
 their required devices in `cpu-eligibility.json` and the consolidated report;
 they do not count as CPU runtime passes. The CPU runner rejects an incompatible
 explicit selection before stopping or starting any containers. It never rewrites

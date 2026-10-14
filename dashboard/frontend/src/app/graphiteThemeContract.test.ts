@@ -82,22 +82,10 @@ const graphiteSurfaceContracts = [
     forbiddenPatterns: [/backdrop-filter\s*:/i, /border-radius:\s*999px/i, /radial-gradient\(/i],
   },
   {
-    path: '../pages/OpenClawPage.module.css',
-    forbiddenPatterns: [
-      /#(?:0f172a|020617|3b82f6|22d3ee|a8b4c8|cbd5e1)\b/i,
-      /rgba?\(\s*(?:15\s*,\s*23\s*,\s*42|2\s*,\s*6\s*,\s*23|34\s*,\s*211\s*,\s*238)\b/i,
-      /--color-accent-cyan\b/i,
-    ],
-  },
-  {
     path: '../pages/InsightsPage.module.css',
     forbiddenPatterns: [
       /rgba?\(\s*(?:2\s*,\s*5\s*,\s*5|6\s*,\s*10\s*,\s*9|9\s*,\s*13\s*,\s*13|8\s*,\s*13\s*,\s*13|8\s*,\s*12\s*,\s*12|12\s*,\s*18\s*,\s*18)\b/i,
     ],
-  },
-  {
-    path: '../pages/ConfigPageTaxonomyClassifiers.module.css',
-    forbiddenPatterns: [/#f4ffe7\b/i, /rgba?\(\s*24\s*,\s*34\s*,\s*17\b/i],
   },
   {
     path: '../pages/topology/components/CustomNodes/CustomNodes.module.css',

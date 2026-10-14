@@ -24,8 +24,10 @@ The numbered pairs cover:
 - a minimal pool and route (`01`);
 - keyword, embedding, and domain signals alone and in combination (`02`–`08`);
 - those signal families with route-local plugins (`09`–`15`);
-- a multi-decision route without plugins (`16`); and
-- multimodal embedding conversion (`17`).
+- a multi-decision route without plugins (`16`);
+- multimodal embedding conversion (`17`); and
+- a decision's `reliability` and `fallback` blocks beside a decision without
+  them (`18`).
 
 Keep an input and its output under the same filename. Add a new numbered pair
 when a converter behavior needs independent coverage; update an existing pair

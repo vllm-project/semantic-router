@@ -1,0 +1,15 @@
+routing:
+  signals:
+    actions:
+      - name: generate
+        description: Write new code, configuration, or scripts.
+      - name: explain
+        description: Describe code or answer a question without editing anything.
+      - name: fix
+        description: Repair a bug or a failing behavior.
+      - name: refactor
+        description: Change existing code without changing what it does.
+      - name: test
+        description: Write or extend tests.
+      - name: other
+        description: The latest user message names none of these actions.

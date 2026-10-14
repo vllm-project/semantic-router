@@ -164,21 +164,20 @@ APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 .PHONY: generated-contract-check generated-contract-generate
-generated-contract-check: training-contract-check config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check ## Check all generated public references without rewriting
+generated-contract-check: training-contract-check config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check model-runtime-client-check decision-runtime-catalog-check ## Check all generated public references without rewriting
 
 # OpenAPI embeds the config schema: regenerate it before exporting API docs.
 generated-contract-generate: training-contract-generate config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
 	@$(MAKE) api-docs-generate
 	@$(MAKE) agent-skill-sync
-	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd
+	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd model-runtime-client-generate decision-runtime-catalog-generate
 
 .PHONY: api-docs-openapi
-api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI JSON artifact from the route catalog
+api-docs-openapi: ## Export committed apiserver OpenAPI JSON artifact from the route catalog
 	@$(LOG_TARGET)
 	@mkdir -p $(dir $(APISERVER_OPENAPI_JSON))
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
@@ -187,7 +186,6 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
 	@python3 tools/codegen/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
@@ -196,17 +194,15 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 		--end "$(APISERVER_INDEX_END)"
 
 .PHONY: api-docs-check
-api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts differ from generator output
+api-docs-check: ## Fail if committed api docs artifacts differ from generator output
 	@$(LOG_TARGET)
 	@TMPDIR_CHECK=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMPDIR_CHECK"' EXIT HUP INT TERM && \
 	cp "$(APISERVER_REFERENCE_MD)" "$$TMPDIR_CHECK/apiserver.md" && \
 	cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
 	python3 tools/codegen/embed_generated_index.py \

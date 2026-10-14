@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -39,7 +39,7 @@ func cacheEmbeddingConfig(spec config.ResolvedModelBinding) *config.RouterConfig
 	cfg.EmbeddingConfig.ModelType = cacheEmbeddingModelType
 	cfg.SemanticCache.Enabled = true
 	cfg.SemanticCache.EmbeddingModel = cacheEmbeddingModelType
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1", Adapter: cacheEmbeddingModelType}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1"}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{cacheEmbeddingDeployment: spec.Deployment}
 	return cfg
 }
@@ -49,7 +49,11 @@ func cacheEmbeddingConfig(spec config.ResolvedModelBinding) *config.RouterConfig
 func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 	b.Helper()
 	cacheEmbeddingOnce.Do(func() {
-		spec := benchmarkModel(b, "embedding", "embedding.v1")
+		// benchmarkDeployment stops this benchmark (b.Fatalf) inside Do, and Do
+		// still counts as done, so later benchmarks fail on this error unless
+		// setup ends.
+		cacheEmbeddingErr = errors.New("prepare Vela embedding: an earlier benchmark stopped while preparing it")
+		spec := benchmarkDeployment(b, "embedding", "embedding.v1", cacheEmbeddingDeployment, benchmarkInput)
 		cfg := cacheEmbeddingConfig(spec)
 		set, err := modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, benchmarkRuntime)
 		if err != nil {
@@ -63,11 +67,9 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 		}
 		cacheEmbeddingOwner = set
 		cacheEmbeddingProvider = provider
+		cacheEmbeddingErr = nil
 	})
 	if cacheEmbeddingErr != nil {
-		if missingBenchModels(cacheEmbeddingErr) {
-			b.Skipf("Failed to initialize embedding models: %v", cacheEmbeddingErr)
-		}
 		b.Fatal(cacheEmbeddingErr)
 	}
 	recordModelIdentity(b, "embedding")

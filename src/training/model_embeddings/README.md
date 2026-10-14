@@ -5,11 +5,11 @@ in-tree owners:
 
 | Artifact | Local owner |
 | --- | --- |
-| `llm-semantic-router/mmbert-32k-yarn` | `mmbert_32k/` foundation continuation |
-| `llm-semantic-router/mmbert-embed-32k-2d-matryoshka` | `mmbert_32k/` bi-encoder |
-| `llm-semantic-router/mmbert-rerank-32k-2d-matryoshka` | `mmbert_32k/` cross-encoder |
-| `llm-semantic-router/multi-modal-embed-small` | `multimodal/small/` |
-| `llm-semantic-router/multi-modal-embed-large` | `multimodal/large/` |
+| `vllm-sr/mmbert-32k-yarn` | `mmbert_32k/` foundation continuation |
+| `vllm-sr/mmbert-embed-32k-2d-matryoshka` | `mmbert_32k/` bi-encoder |
+| `vllm-sr/mmbert-rerank-32k-2d-matryoshka` | `mmbert_32k/` cross-encoder |
+| `vllm-sr/multi-modal-embed-small` | `multimodal/small/` |
+| `vllm-sr/multi-modal-embed-large` | `multimodal/large/` |
 
 Each owner contains its public artifact manifest, production configuration,
 training/evaluation entrypoints, dependency contract, and lightweight tests.

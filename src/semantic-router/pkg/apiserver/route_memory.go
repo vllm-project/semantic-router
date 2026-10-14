@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -19,6 +19,7 @@ import (
 // Query parameters:
 //   - type: filter by memory type (semantic, procedural, episodic)
 //   - limit: max results (default 20, max 100)
+//   - offset: rows to skip (default 0). Pages are best-effort under concurrent writes.
 func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *http.Request) {
 	store, release, ok := s.acquireMemoryStore(w)
 	if !ok {
@@ -47,6 +48,12 @@ func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *h
 	}
 	opts.Limit = limit
 
+	offset, ok := s.parseMemoryListOffset(w, r.URL.Query().Get("offset"))
+	if !ok {
+		return
+	}
+	opts.Offset = offset
+
 	ctx := r.Context()
 	result, err := store.List(ctx, opts)
 	if err != nil {
@@ -66,6 +73,7 @@ func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *h
 		Memories: memories,
 		Total:    result.Total,
 		Limit:    result.Limit,
+		Offset:   result.Offset,
 	}
 
 	logging.Debugf("[MemoryAPI] Listed %d/%d memories for user_id=%s", len(memories), result.Total, userID)

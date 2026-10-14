@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -21,11 +22,14 @@ const (
 	productionStackPIIDecision       = "block_pii"
 )
 
+// The request number keeps each prompt distinct. The default PII model reads a
+// number after a history question as a date, which a profile that denies every
+// PII type blocks, so no template asks about history.
 var productionStackPromptTemplates = []string{
-	"In computer science, explain how a hash table handles collisions and give one practical use case. Variation %d.",
-	"In biology, summarize how photosynthesis converts light into stored chemical energy. Variation %d.",
-	"In business, explain the difference between revenue and profit with a short example. Variation %d.",
-	"In history, explain why the printing press accelerated the spread of knowledge. Variation %d.",
+	"In computer science, explain how a hash table handles collisions and give one practical use case. (request %d)",
+	"In biology, summarize how photosynthesis converts light into stored chemical energy. (request %d)",
+	"In business, explain the difference between revenue and profit with a short example. (request %d)",
+	"In physics, explain why a heavy and a light object fall at the same rate in a vacuum. (request %d)",
 }
 
 type productionStackRequestResult struct {
@@ -66,7 +70,7 @@ func sendProductionStackChatRequest(
 	requestID int,
 ) (*productionStackRequestResult, error) {
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: productionStackPrompt(requestID)},
 		},

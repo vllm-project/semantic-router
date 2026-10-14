@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
@@ -148,7 +149,8 @@ func TestRatingsResponsesIngressPreservesCapabilityGate(t *testing.T) {
 				if candidates == 2 {
 					require.EqualValues(t, 502, response.GetImmediateResponse().GetStatus().GetCode())
 					require.Nil(t, ctx.SemanticResponse)
-					runner, runnerErr := router.createLooper(decision, ctx)
+					runner, runnerErr := looper.FactoryWithClientAndWorkflowState(
+						&router.Config.Looper, decision.Algorithm.Type, router.looperModelClient(), nil)
 					require.NoError(t, runnerErr)
 					internal, internalError := router.buildLooperRequest(request, decision, ctx)
 					require.Nil(t, internalError)

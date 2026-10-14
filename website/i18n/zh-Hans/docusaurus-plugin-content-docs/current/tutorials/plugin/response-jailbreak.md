@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be2"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/response-jailbreak.md"
   outdated: false
 ---
@@ -42,3 +42,5 @@ plugins:
 
 该插件使用已配置的 prompt-guard 运行时处理生成的响应文本。它会增加延迟，也可能产生误报，因此应校准阈值，并根据策略选择 `block` 或仅通过请求头处理。完整示例见：
 [`config/fragments/plugin/response-jailbreak/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-jailbreak/strict.yaml)。
+
+流式响应中的已声明响应阶段信号在流结束后记录，标为 `not_enforced_streaming`。客户端此时已经收到文本，插件不能撤回内容；需要拦截时请使用非流式响应。

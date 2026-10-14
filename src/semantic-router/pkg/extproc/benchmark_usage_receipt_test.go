@@ -24,6 +24,7 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 	}{
 		{name: "static", algorithm: "static", known: true},
 		{name: "multi_factor", algorithm: "multi_factor", known: true},
+		{name: "random", algorithm: "random", known: true},
 		{name: "prompt helper", algorithm: "prompt"},
 		{name: "looper", algorithm: "fusion"},
 		{name: "shadow call", algorithm: "static", plugin: "shadow_dispatch"},
@@ -114,7 +115,7 @@ func TestBenchmarkCallLimitStopsBeforePromptSelection(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{headers.SRBenchMaxInferenceCalls: "1"}}
 	selected := &config.Decision{Name: "paid_selector", Algorithm: &config.AlgorithmConfig{Type: "prompt"}}
 	// No selector/client is initialized: reaching model selection would fail.
-	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: selected}, "auto", "query", ctx)
+	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: selected}, "vllm-sr/auto", "query", ctx)
 	if !errors.Is(err, errBenchmarkCallLimit) || model != "" {
 		t.Fatalf("prompt selection was not stopped: model=%q err=%v", model, err)
 	}

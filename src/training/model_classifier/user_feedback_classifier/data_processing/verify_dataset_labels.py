@@ -468,7 +468,7 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        default="llm-semantic-router/feedback-detector-dataset",
+        default="vllm-sr/feedback-detector-dataset",
         help="HuggingFace dataset name",
     )
     parser.add_argument(

@@ -3,7 +3,7 @@
 ML models for model selection.
 
 Implements KNN, KMeans, SVM, and MLP using scikit-learn and PyTorch.
-Models are saved in JSON format compatible with the Rust inference code.
+Models are saved in the JSON format the router's Go selectors (pkg/modelselection) load.
 
 Reference:
 - FusionFactory (arXiv:2507.10540) - Query-level fusion via LLM routers
@@ -44,7 +44,7 @@ class TrainingSample:
 
 
 class KNNModel:
-    """Quality/speed voting on L2-normalized features, shared with Rust.
+    """Quality/speed voting on L2-normalized features, shared with the Go router.
 
     Neighbors sort by squared distance then training index. Equal model vote
     totals select the lexicographically first model name.
@@ -102,7 +102,7 @@ class KNNModel:
         query = self._normalize(query)
         distances, _ = self.nn.kneighbors([query])
         # Include boundary ties before ordering, since tree traversal differs
-        # between sklearn and Linfa and is not part of the routing contract.
+        # between sklearn and the Go router and is not part of the routing contract.
         radius = float(distances[0][-1]) + 1e-12
         indices = self.nn.radius_neighbors(
             [query], radius=radius, return_distance=False
@@ -247,9 +247,8 @@ class KMeansModel:
         return self.cluster_models.get(cluster_id, self.model_names[0])
 
     def save(self, path: str) -> None:
-        """Save model to JSON format compatible with Rust/Linfa."""
-        # Convert cluster_models dict to ordered list (Rust expects Vec<String>)
-        # Rust expects cluster_models[i] = model for cluster i
+        """Save the model in the JSON format the router's Go selector loads."""
+        # The router reads cluster_models as a list indexed by cluster.
         cluster_models_list = []
         for i in range(self.n_clusters):
             cluster_models_list.append(self.cluster_models.get(i, self.model_names[0]))
@@ -286,7 +285,7 @@ class KMeansModel:
         model.model_names = data.get("model_names", [])
         model.feature_dim = data.get("feature_dim", 0)
 
-        # Handle both dict format (old) and list format (new Rust-compatible)
+        # Handle both the old dict format and the list format the router reads
         cluster_models_raw = data.get("cluster_models", {})
         if isinstance(cluster_models_raw, list):
             # New format: list where index is cluster_id
@@ -684,7 +683,7 @@ class MLPModel:
             }
 
     def save(self, path: str) -> None:
-        """Save model to JSON format compatible with Rust/Candle inference."""
+        """Save model to the JSON format the router's Go selectors load."""
         if self.model is None:
             raise ValueError("Model not trained")
 

@@ -19,7 +19,6 @@ class CIStaticChecksTests(unittest.TestCase):
             "run_precommit",
             "run_python_lint",
             "run_go_lint",
-            "run_rust_lint",
             "run_reference_config_lint",
         )
         with contextlib.ExitStack() as stack:
@@ -41,7 +40,7 @@ class CIStaticChecksTests(unittest.TestCase):
         calls["run_precommit"].assert_called_once_with(
             ["README.md"], None, ci_static_only=True
         )
-        for name in ("run_python_lint", "run_go_lint", "run_rust_lint"):
+        for name in ("run_python_lint", "run_go_lint"):
             calls[name].assert_called_once()
 
     def test_local_checks_keep_domain_and_reference_tests(self) -> None:
@@ -59,6 +58,7 @@ class CIStaticChecksTests(unittest.TestCase):
         skips = set(env["SKIP"].split(","))
         self.assertIn("shellcheck", skips)
         self.assertIn("supply-chain-security-scan", skips)
+        self.assertIn("decision-runtime-catalog-generated", skips)
         self.assertNotIn("architecture-check", skips)
 
     def test_local_security_hook_remains_enabled(self) -> None:
