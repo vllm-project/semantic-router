@@ -399,6 +399,57 @@ class TestEngineModeRestartPolicy(EngineStack):
         )
 
 
+class TestEngineModeEngineArgs(EngineStack):
+    """Engine flags set the default deployment's engine arguments in its worker."""
+
+    def serve(self, *, engine):
+        self.cli(
+            "serve",
+            "--config",
+            str(self.config),
+            "--engine" if engine else "--minimal",
+            "--gateway",
+            "standalone",
+            "--image-pull-policy",
+            "ifnotpresent",
+            "--startup-timeout",
+            "300",
+            "--max-num-seqs",
+            "64",
+            "--batch-window-ms",
+            "0.5",
+        )
+
+    def test_engine_flags_reach_the_served_model(self):
+        status, inventory = call(
+            f"http://127.0.0.1:{8080 + self.offset}",
+            "/api/v1/inventory/model-runtime",
+            headers={"Authorization": "Bearer " + MANAGEMENT_KEY},
+        )
+        self.assertEqual(status, HTTP_OK, inventory)
+        (primary,) = [
+            deployment
+            for deployment in inventory["deployments"]
+            if deployment["name"] == "primary"
+        ]
+        # The flags reach the worker; what they leave out keeps its default.
+        self.assertEqual(
+            primary["engine_args"],
+            {
+                "max_num_seqs": 64,
+                "max_num_batched_tokens": 65536,
+                "batch_window_ms": 0.5,
+                "dtype": "auto",
+                "enable_shared_context": True,
+            },
+        )
+        self.assertEqual(primary["numerics"], "approximate")
+        body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
+        body["model"] = PUBLIC_MODEL
+        status, response = self.public("/v1/systemone", body)
+        self.assertEqual(status, HTTP_OK, response)
+
+
 class TestEngineModeImages(EngineStack):
     fixture = ("decision3", "vision")
 

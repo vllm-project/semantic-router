@@ -25,7 +25,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 | `--platform` | `auto` | Execution backend: `auto`, `cpu`, `cuda` or `rocm`. Automatic detection inspects the container host or the selected Kubernetes cluster. |
 | `--data-parallel-size`, `-dp` | existing placement, or one worker | Number of independent managed replicas of the default deployment. Writes the canonical `replicas` list. |
 | `--device-ids` | existing placement, or available GPUs | Docker host GPU indices. With `-dp N`, supply one ID to share that GPU or N IDs to use one per replica. This does not change GPU visibility. |
-| `--runtime-profile` | configured value, or `exact` | Numerical execution profile, independent of replica count and placement. |
+| `--max-num-seqs`, `--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`, `--enable-shared-context` | configured value, or the runtime default | The default deployment's [engine arguments](./engine-args.md), independent of replica count and placement. |
 | `--revision` | configured pin, built-in release pin, or repository default | Optional advanced branch, tag or full commit. Resolved once before startup into the immutable commit stored in the active deployment and shared by all replicas. |
 | `--image` | platform image | Use a specific local or published frontend image. |
 | `--image-pull-policy` | `always` | `always`, `ifnotpresent` or `never`. |
@@ -66,7 +66,6 @@ a frontend attaches to, or for direct runtime development:
 | `--host` | `127.0.0.1` | Address to listen on. |
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
-| `--profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
 | `--engine` | `auto` | Engine plugin: `auto` (the first that runs the model, native first), `native` (PyTorch) or `onnxruntime` (the `onnx` extra). |
 | `--family` | detected | Force a model family plugin. |
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
@@ -74,8 +73,11 @@ a frontend attaches to, or for direct runtime development:
 | `--memory-budget GIB` | | Refuse to load a model estimated above this size. |
 | `--max-queue` | `256` | Queued requests per model before the runtime answers 429. |
 | `--max-queued-tokens` | `4194304` | Queued tokens per model before 429. |
-| `--batch-window-ms` | `2.0` | How long the `batching` profile waits to combine requests. |
-| `--max-batch-tokens` | `65536` | Tokens per forward pass. |
+| `--max-num-seqs` | `8192` | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise. `1` runs every row alone. The default never binds at the default token budget. See [Engine arguments](./engine-args.md). |
+| `--max-num-batched-tokens` | `65536` | Padded tokens one forward may hold: its rows times its longest row, counted so also for models that pack rows. |
+| `--batch-window-ms` | `2.0` | How long the scheduler waits after the first request to collect more, when `--max-num-seqs` is above 1. |
+| `--dtype` | `auto` | `auto` (the precision the model was published in), `float32`, `bfloat16` or `float16` (GPUs only). |
+| `--enable-shared-context`, `--no-enable-shared-context` | the family's | Compute the shared state of a multi-question decision request once. On by default for Decision 2.0 only. |
 | `--max-request-bytes` | `8388608` | Largest request body. |
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
 | `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
@@ -90,7 +92,7 @@ a frontend attaches to, or for direct runtime development:
 
 Other commands: `vllm-srun models` lists the built-in models with their
 pinned revisions, `vllm-srun plugins` lists the installed families,
-engines, accelerators and profiles, and `vllm-srun devices` prints, as
+engines and accelerators, and `vllm-srun devices` prints, as
 JSON, the devices this host offers and the one `--device auto` tries first.
 
 ## Models file
@@ -105,13 +107,16 @@ models:
   - model: vllm-sr/Decision-2.0-Kai-0.6B
     name: decision-kai
     device: auto
-    profile: exact
+    enable_shared_context: false
 ```
 
-Each entry takes `model` (required), `revision`, `name`, `device`, `profile`,
-`engine`, `family`, `memory_budget_gib` and `options` (family options; a
-Vela 2.0 model takes `max_scan_tokens`, its [scan budget](#long-inputs)). The
-router writes this file for the processes it manages.
+Each entry takes `model` (required), `revision`, `name`, `device`, `engine`,
+`family`, `memory_budget_gib`, `options` (family options; a Vela 2.0 model
+takes `max_scan_tokens`, its [scan budget](#long-inputs)) and the
+[engine arguments](./engine-args.md) `max_num_seqs`,
+`max_num_batched_tokens`, `batch_window_ms`, `dtype` and
+`enable_shared_context`; an entry that leaves one out takes the process's
+command-line value. The router writes this file for the processes it manages.
 
 ## HTTP API
 
@@ -140,7 +145,11 @@ several models. The contract is the OpenAPI document served at
 
 A response carries the answers and `usage`. Add
 `"options": {"return_meta": true}` to a request to also get `meta`: the
-revision, model digest, profile, engine, device and timings that answered it.
+revision, model digest, `dtype`, `numerics`, engine, device and timings that
+answered it. `numerics` is `exact` when the model's answers never depend on
+batching (its rows answer the same alone or in any batch, at its published
+precision), and `approximate` when the rows a forward holds can move them by
+rounding. `GET /v1/models` reports a model's `engine_args` and `numerics`.
 
 The responses of `/v1/decisions`, `/v1/systemone`, `/v1/classify`,
 `/v1/embeddings`, `/v1/rerank` and `/v1/bundle`, errors included, carry the
@@ -481,7 +490,8 @@ answers match.
 | --- | --- | --- |
 | `provider: model_runtime` | deployment | The model runs in the model runtime. |
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
-| `device`, `profile` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
+| `device` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
+| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. |
 | `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). |
 | `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
 | `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |
@@ -572,7 +582,8 @@ status, `vllm_srun_request_duration_seconds`,
 `vllm_srun_batch_tokens`, `vllm_srun_bundle_tasks`,
 `vllm_srun_result_cache_total` by model and outcome,
 `vllm_srun_queue_depth`, `vllm_srun_ready`,
-`vllm_srun_model_info` and `vllm_srun_model_memory_bytes` (the
+`vllm_srun_model_info` (by model, revision, family, engine, accelerator,
+device, `dtype` and `numerics`) and `vllm_srun_model_memory_bytes` (the
 bytes a model's loaded weights take, reduced-precision copies included).
 
 ## Security
