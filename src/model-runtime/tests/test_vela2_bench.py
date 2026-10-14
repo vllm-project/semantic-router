@@ -17,7 +17,7 @@ def bench():
     return module
 
 
-def test_fast_path_switches_reach_the_max_speed_load(bench, monkeypatch) -> None:
+def test_fast_path_switches_reach_the_reduced_copy_load(bench, monkeypatch) -> None:
     loads = []
 
     def load_runtime(package, device, engine="native", reduced=None, options=None):
@@ -33,7 +33,7 @@ def test_fast_path_switches_reach_the_max_speed_load(bench, monkeypatch) -> None
         sys,
         "argv",
         ["vela2_bench.py", "--package", "pkg", "--device", "cpu", "--output", "out.json",
-         "--sides", "max_speed:bfloat16", "--no-graphs", "--no-fused"],
+         "--sides", "copy:bfloat16", "--no-graphs", "--no-fused"],
     )  # fmt: skip
     with pytest.raises(StopIteration):
         bench.main()

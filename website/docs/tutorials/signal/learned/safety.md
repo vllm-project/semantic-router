@@ -189,7 +189,7 @@ supplied 2,048-token windows and 32K document policy; configuring a larger
 document budget does not qualify that operating point for a different scan.
 
 Choose thresholds evaluated with the exact model, window size, overlap and
-[profile](../../../model-runtime/profiles.md) you deploy. Window scanning can recover local risks that a whole-input
+[engine arguments](../../../model-runtime/engine-args.md) you deploy. Window scanning can recover local risks that a whole-input
 classifier misses, but it cannot interpret a distant refusal or protective
 purpose outside the same window. Validate quoted material and other long-range
 context in your application. Omit `window` when whole-input semantics are needed.

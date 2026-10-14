@@ -72,11 +72,16 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			d.Device = "CUDA 0"
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "device must be"},
-		{"malformed profile", func(cfg *RouterConfig) {
+		{"no rows per forward", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
-			d.Profile = "max-speed!"
+			d.MaxNumSeqs = intPtr(0)
 			cfg.ModelDeployments["shared-encoder"] = d
-		}, "profile must be"},
+		}, "max_num_seqs must be at least 1"},
+		{"unknown dtype", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.Dtype = "half"
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "dtype must be one of auto, float32, bfloat16 or float16"},
 		{"negative budget", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
 			d.Input.MaxTokens = -1
@@ -99,13 +104,28 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 	}
 }
 
-func TestPluginAcceleratorAndProfileNamesAreTheRuntimes(t *testing.T) {
+func TestPluginAcceleratorNamesAreTheRuntimes(t *testing.T) {
 	cfg := testDeploymentConfig()
 	d := cfg.ModelDeployments["shared-encoder"]
-	d.Device, d.Profile = "npu:1", "vendor_low_latency"
+	d.Device = "npu:1"
 	cfg.ModelDeployments["shared-encoder"] = d
 	if _, err := CompileModelBindings(cfg); err != nil {
-		t.Fatalf("a well-formed plugin accelerator and profile compile; the runtime decides whether it has them: %v", err)
+		t.Fatalf("a well-formed plugin accelerator compiles; the runtime decides whether it has it: %v", err)
+	}
+}
+
+func TestEngineArgumentsCompileOnModelRuntimeDeployments(t *testing.T) {
+	cfg := testDeploymentConfig()
+	d := cfg.ModelDeployments["shared-encoder"]
+	window, shared := 0.5, false
+	d.MaxNumSeqs, d.MaxNumBatchedTokens, d.BatchWindowMS = intPtr(1), intPtr(4096), &window
+	d.Dtype, d.EnableSharedContext = "bfloat16", &shared
+	cfg.ModelDeployments["shared-encoder"] = d
+	if _, err := CompileModelBindings(cfg); err != nil {
+		t.Fatalf("engine arguments within their ranges compile: %v", err)
+	}
+	if !d.HasEngineArgs() || cfg.ModelDeployments["shared-encoder"].WithDefaults().Dtype != "bfloat16" {
+		t.Fatalf("defaults must keep the declared engine arguments: %+v", d)
 	}
 }
 

@@ -42,7 +42,11 @@ SERVE_OPTION_GROUPS = (
             "model",
             "revision",
             "data_parallel_size",
-            "runtime_profile",
+            "max_num_seqs",
+            "max_num_batched_tokens",
+            "batch_window_ms",
+            "dtype",
+            "enable_shared_context",
         ),
     ),
     OptionGroup(
@@ -62,7 +66,7 @@ SERVE_OPTION_GROUPS = (
         "Container options (docker target)",
         frozenset({MODE_DOCKER}),
         "the docker target",
-        ("image_pull_policy", "container_runtime", "runtime"),
+        ("image_pull_policy", "restart_policy", "container_runtime", "runtime"),
     ),
     OptionGroup(
         "Docker target",
