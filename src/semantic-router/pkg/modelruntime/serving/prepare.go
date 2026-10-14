@@ -154,8 +154,9 @@ func (r *Runtime) acquire(ctx context.Context, spec config.ResolvedModelBinding,
 		return nil, fmt.Errorf("%w: the card of deployment %q reports no device or dtype", binding.ErrCapability, spec.Binding.Deployment)
 	}
 	execution, _ := json.Marshal(struct {
-		Deployment, Model, Profile string
-	}{spec.Binding.Deployment, card.ID, card.Profile})
+		Deployment, Model string
+		EngineArgs        modelservice.EngineArgs
+	}{spec.Binding.Deployment, card.ID, card.EngineArgs})
 	identity := binding.ResourceIdentity{
 		Artifact: card.ModelSHA256, Revision: card.Revision, Provider: Provider,
 		Device: card.Device, Precision: card.Dtype, Execution: string(execution),
