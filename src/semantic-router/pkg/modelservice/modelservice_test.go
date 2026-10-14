@@ -186,8 +186,9 @@ func TestManagedCommandAndModelsFile(t *testing.T) {
 	if got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-bundle-tasks 1024 --threads 4") {
 		t.Fatalf("a CPU share passes its thread count: %s", got)
 	}
+	seqs, shared := 4, false
 	plan := planProcesses(map[string]config.ModelDeployment{
-		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", Profile: "batching"},
+		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", MaxNumSeqs: &seqs, EnableSharedContext: &shared},
 	}, nil, "", 0, "")[0]
 	path := filepath.Join(t.TempDir(), "models.json")
 	if err := plan.writeModelsFile(path); err != nil {
@@ -195,8 +196,12 @@ func TestManagedCommandAndModelsFile(t *testing.T) {
 	}
 	info, _ := os.Stat(path)
 	data, _ := os.ReadFile(path)
-	if info.Mode().Perm() != 0o600 || !strings.Contains(string(data), `"profile": "batching"`) || !strings.Contains(string(data), `"name": "kai"`) {
+	file := string(data)
+	if info.Mode().Perm() != 0o600 || !strings.Contains(file, `"max_num_seqs": 4`) || !strings.Contains(file, `"enable_shared_context": false`) || !strings.Contains(file, `"name": "kai"`) {
 		t.Fatalf("models file (%v): %s", info.Mode(), data)
+	}
+	if strings.Contains(file, "profile") || strings.Contains(file, "dtype") || strings.Contains(file, "max_num_batched_tokens") {
+		t.Fatalf("unset engine arguments must keep the runtime's defaults: %s", data)
 	}
 }
 
@@ -422,7 +427,7 @@ func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 }
 
 func TestCardRefusesARuntimeOfAnotherContractMajor(t *testing.T) {
-	for _, version := range []string{"3.0.0", ""} {
+	for _, version := range []string{"2.4.0", "4.0.0", ""} {
 		runtime := fakeModels([]modelEntry{{Name: "decider", Model: "vllm-sr/Decision-2.0-Kai-0.6B"}})
 		runtime.SetAPIVersion(version)
 		server := httptest.NewServer(runtime.Handler())
