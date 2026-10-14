@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -150,7 +151,99 @@ func TestPublicNativeBoundsAndSanitizesFailures(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(strings.Repeat("x", RequestLimit+1))))
-	if response.Code != 400 {
-		t.Fatal("unbounded native request")
+	if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), `"code":"request_too_large"`) {
+		t.Fatalf("over-limit native request: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	rejection := func(code, reason string, limit int) string {
+		body := `{"error":{"code":"` + code + `","message":"videos[0]: model /private/models/test failed"`
+		if reason != "" {
+			body += `,"reason":"` + reason + `"`
+		}
+		if limit != 0 {
+			body += `,"limit":` + strconv.Itoa(limit)
+		}
+		return body + `}}`
+	}
+	for _, test := range []struct {
+		status      int
+		body        string
+		wantStatus  int
+		wantCode    string
+		wantMessage string
+	}{
+		{400, rejection("invalid_request", "video_too_large", 32_000_000), 400, "invalid_request", "video exceeds 32 MB"},
+		{400, rejection("invalid_request", "video_too_long", 300), 400, "invalid_request", "video longer than 300 s"},
+		{400, rejection("invalid_request", "video_malformed", 0), 400, "invalid_request", "malformed video"},
+		{400, rejection("invalid_request", "video_pixels", 8_294_400), 400, "invalid_request", "video frames exceed 8,294,400 pixels"},
+		{400, rejection("invalid_request", "video_tokens", 16_384), 400, "invalid_request", "videos exceed 16,384 input tokens"},
+		{400, rejection("invalid_request", "image_too_large", 8_000_000), 400, "invalid_request", "image exceeds 8 MB"},
+		{400, rejection("invalid_request", "image_too_large", 1_500_000_001), 400, "invalid_request", "image exceeds 1,500,000,001 bytes"},
+		{400, rejection("invalid_request", "image_unsupported", 0), 400, "invalid_request", "model does not read images"},
+		{400, rejection("invalid_request", "video_too_long", 0), 400, "invalid_request", "invalid request"},
+		{400, rejection("invalid_request", "", 0), 400, "invalid_request", "invalid request"},
+		{400, rejection("invalid_request", "/private/reason", 0), 400, "invalid_request", "invalid request"},
+		{404, rejection("model_not_found", "", 0), 404, "model_not_found", "model not found"},
+		{413, rejection("request_too_large", "", 0), 413, "request_too_large", "request too large"},
+		{503, rejection("not_ready", "", 0), 503, "not_ready", "not ready"},
+		{500, rejection("internal_error", "", 0), 500, "systemone_request_failed", "systemone request failed"},
+		{502, `not json /private/models/test`, 502, "systemone_request_failed", "systemone request failed"},
+	} {
+		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+			return test.status, []byte(test.body), nil
+		})
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+		var got struct {
+			Error struct{ Code, Message string } `json:"error"`
+		}
+		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus ||
+			got.Error.Code != test.wantCode || got.Error.Message != test.wantMessage || strings.Contains(response.Body.String(), "private") {
+			t.Fatalf("runtime %d %s => %d %s", test.status, test.body, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestPublicNativeRefusalsTellClientsWhenToRetry(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	for _, test := range []struct {
+		name       string
+		status     int
+		body       string
+		err        error
+		wantStatus int
+		wantCode   string
+		wantRetry  string
+	}{
+		{"worker overloaded", 429, `{"error":{"code":"overloaded","message":"busy"}}`, nil, 429, "overloaded", "1"},
+		{"pool overloaded", 429, `{"error":{"code":"overloaded","message":"busy"}}`, io.ErrUnexpectedEOF, 429, "overloaded", "1"},
+		{"model not ready", 503, `{"error":{"code":"not_ready","message":"loading"}}`, nil, 503, "not_ready", "5"},
+		{"transport failure", 0, ``, io.ErrUnexpectedEOF, 503, "systemone_unavailable", "5"},
+		{"engine deadline", 0, ``, context.DeadlineExceeded, 504, "systemone_deadline_exceeded", ""},
+		{"rejected request", 400, `{"error":{"code":"invalid_request","message":"bad"}}`, nil, 400, "invalid_request", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+				return test.status, []byte(test.body), test.err
+			})
+			response := httptest.NewRecorder()
+			handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+			var got struct {
+				Error struct{ Code string } `json:"error"`
+			}
+			if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus || got.Error.Code != test.wantCode {
+				t.Fatalf("got %d %s", response.Code, response.Body.String())
+			}
+			if retry := response.Header().Get("Retry-After"); retry != test.wantRetry {
+				t.Fatalf("Retry-After %q, want %q", retry, test.wantRetry)
+			}
+		})
 	}
 }

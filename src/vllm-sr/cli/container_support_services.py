@@ -25,6 +25,10 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
+JAEGER_IMAGE = "docker.io/jaegertracing/all-in-one:1.76.0"
+PROMETHEUS_IMAGE = "docker.io/prom/prometheus:v2.53.0"
+GRAFANA_IMAGE = "docker.io/grafana/grafana:11.5.1"
+
 GRAFANA_LIVE_ALLOWED_ORIGINS_ENV = "GF_LIVE_ALLOWED_ORIGINS"
 _GRAFANA_LIVE_ALLOWED_ORIGINS_PLACEHOLDER = "__GF_LIVE_ALLOWED_ORIGINS__"
 
@@ -96,7 +100,7 @@ def container_start_jaeger(
         _published_observability_port(stack_layout.jaeger_otlp_port, 4317),
         "-p",
         _published_observability_port(stack_layout.jaeger_ui_port, 16686),
-        "docker.io/jaegertracing/all-in-one:1.76.0",
+        JAEGER_IMAGE,
     ]
     return _run_service_start(cmd, "Jaeger")
 
@@ -152,7 +156,7 @@ def container_start_prometheus(
         f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
         "-p",
         _published_observability_port(stack_layout.prometheus_port, 9090),
-        "docker.io/prom/prometheus:v2.53.0",
+        PROMETHEUS_IMAGE,
         "--config.file=/etc/prometheus/prometheus.yaml",
         "--storage.tsdb.path=/prometheus/data",
         "--storage.tsdb.retention.time=15d",
@@ -226,6 +230,6 @@ def container_start_grafana(
         f"{container_name}-data:/var/lib/grafana",
         "-p",
         _published_observability_port(stack_layout.grafana_port, 3000),
-        "docker.io/grafana/grafana:11.5.1",
+        GRAFANA_IMAGE,
     ]
     return _run_service_start(cmd, "Grafana")

@@ -302,10 +302,31 @@ class NativeEngineModel(EngineModel):
             tuple(batch.owners),
         )
         owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
-        _, blocks = cast(models.ForestBackbone, self.backbone).forward_forest(
-            prefix_ids, prefix_mask, block_ids, block_mask, owner, shape
-        )
-        return blocks
+        backbone = cast(models.ForestBackbone, self.backbone)
+
+        def blocks_of(
+            prefix_ids: torch.Tensor,
+            prefix_mask: torch.Tensor,
+            block_ids: torch.Tensor,
+            block_mask: torch.Tensor,
+            owner: torch.Tensor,
+        ) -> torch.Tensor:
+            return backbone.forward_forest(
+                prefix_ids, prefix_mask, block_ids, block_mask, owner, shape
+            )[1]
+
+        inputs = (prefix_ids, prefix_mask, block_ids, block_mask, owner)
+        # ROCm keeps forests eager: an eager forward while a forest graph is
+        # alive faults there (docs/records/cuda-vela-forest-graphs.md).
+        if self.graphs is None or torch.version.hip is not None:
+            return blocks_of(*inputs)
+        # A replay writes the graph's one output buffer, so the caller gets a copy.
+        return self.graphs.run(
+            ("forest", prefix_ids.shape, block_ids.shape, shape),
+            inputs,
+            blocks_of,
+            prefix_ids.numel() + block_ids.numel(),
+        ).clone()
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -587,7 +608,7 @@ class NativeEngine(Engine):
         if (
             device.accelerator != "cpu"
             and not device.bf16
-            and spec.dtype.autocast == "bfloat16"
+            and spec.dtype.needs_gpu_bf16
         ):
             return f"{device.label} has no BF16 support"
         return None
