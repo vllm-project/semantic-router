@@ -157,6 +157,30 @@ def outcome_record(
     return record
 
 
+def partition_parity(
+    base_outcomes: list[dict[str, Any]], new_outcomes: list[dict[str, Any]]
+) -> tuple[list[tuple[int, dict[str, Any], dict[str, Any]]], int, int]:
+    """Split paired outcomes into comparable pairs plus failure counts.
+
+    An outcome joins the parity comparison only when its status is 200:
+    non-200 responses are always recorded with a null decision, so
+    comparing the (decision, model) tuples would count a dropped
+    connection, a 500, and an agreeing pair as the same thing.
+    """
+    compared: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+    failed_both = failed_one = 0
+    for i, (a, b) in enumerate(zip(base_outcomes, new_outcomes, strict=True)):
+        ok_a = a.get("status") == http.HTTPStatus.OK
+        ok_b = b.get("status") == http.HTTPStatus.OK
+        if not ok_a and not ok_b:
+            failed_both += 1
+        elif not ok_a or not ok_b:
+            failed_one += 1
+        else:
+            compared.append((i, a, b))
+    return compared, failed_both, failed_one
+
+
 def percentile(values: list[float], q: float) -> float:
     ordered = sorted(values)
     if not ordered:
@@ -274,18 +298,23 @@ def cmd_compare(args: argparse.Namespace) -> None:
             f"p99 {values['p99_ms']:.2f} -> {other['p99_ms']:.2f} ms, "
             f"throughput {values['throughput_rps']:.1f} -> {other['throughput_rps']:.1f} req/s"
         )
+    compared, failed_both, failed_one = partition_parity(
+        base["outcomes"], new["outcomes"]
+    )
     differ = [
         (i, a, b)
-        for i, (a, b) in enumerate(zip(base["outcomes"], new["outcomes"], strict=True))
+        for i, a, b in compared
         if (a["decision"], a["model"]) != (b["decision"], b["model"])
     ]
-    print(f"decisions differing: {len(differ)} / {len(base['outcomes'])}")
-    slow = sorted(
-        range(len(new["outcomes"])), key=lambda i: -new["outcomes"][i].get("ms", 0)
-    )[: args.show]
+    note = (
+        f" ({failed_both} failed on both sides, {failed_one} failed on one side)"
+        if failed_both or failed_one
+        else ""
+    )
+    print(f"decisions differing: {len(differ)} / {len(compared)} compared{note}")
+    slow = sorted(compared, key=lambda t: -(t[2].get("ms") or 0))[: args.show]
     print("slowest inputs (new):")
-    for i in slow:
-        a, b = base["outcomes"][i], new["outcomes"][i]
+    for i, a, b in slow:
         print(
             f"  [{i}] {len(texts[i])} chars: {a.get('ms')} -> {b.get('ms')} ms; new signals {b.get('signal_ms')}"
         )
@@ -314,7 +343,9 @@ def paired_interval(diffs: list[float]) -> list[float]:
     mean = statistics.fmean(diffs)
     if len(diffs) < 2:
         return [mean, float("nan"), float("nan")]
-    half = T975[len(diffs) - 1] * statistics.stdev(diffs) / len(diffs) ** 0.5
+    df = len(diffs) - 1
+    t = T975[max(k for k in T975 if k <= df)]
+    half = t * statistics.stdev(diffs) / len(diffs) ** 0.5
     return [mean, mean - half, mean + half]
 
 
@@ -335,7 +366,14 @@ def cmd_rounds(args: argparse.Namespace) -> None:
         raise SystemExit(
             f"no paired rounds of {args.base} and {args.new} in {directory}"
         )
-    report: dict[str, Any] = {"rounds": rounds, "passes": {}, "decisions_same": []}
+    report: dict[str, Any] = {
+        "rounds": rounds,
+        "passes": {},
+        "decisions_same": [],
+        "decisions_compared": [],
+        "decisions_both_failed": [],
+        "decisions_one_failed": [],
+    }
     print(
         f"| Pass | Metric | {args.base} | {args.new} | {args.new} - {args.base}, mean [95% CI] |"
     )
@@ -358,13 +396,22 @@ def cmd_rounds(args: argparse.Namespace) -> None:
                 f"| {name} | {metric} | {statistics.median(a):.2f} | {statistics.median(b):.2f} | {mean:+.2f} [{low:+.2f}, {high:+.2f}] |"
             )
     for r in rounds:
+        compared, failed_both, failed_one = partition_parity(
+            base[r]["outcomes"], new[r]["outcomes"]
+        )
         same = sum(
-            (x["decision"], x["model"]) == (y["decision"], y["model"])
-            for x, y in zip(base[r]["outcomes"], new[r]["outcomes"], strict=True)
+            (a["decision"], a["model"]) == (b["decision"], b["model"])
+            for _, a, b in compared
         )
         report["decisions_same"].append(same)
+        report["decisions_compared"].append(len(compared))
+        report["decisions_both_failed"].append(failed_both)
+        report["decisions_one_failed"].append(failed_one)
     print(
-        f"same decision and model per round: {report['decisions_same']} of {len(new[rounds[0]]['outcomes'])}"
+        f"same decision and model per round: {report['decisions_same']} of "
+        f"{report['decisions_compared']} compared "
+        f"({report['decisions_both_failed']} failed on both sides, "
+        f"{report['decisions_one_failed']} failed on one side)"
     )
     if args.out:
         Path(args.out).write_text(json.dumps(report, indent=1), encoding="utf-8")

@@ -50,6 +50,10 @@ type Model struct {
 	Joint          bool
 	MaxInputTokens int
 	Device         string
+	// MaxNumSeqs and MaxNumBatchedTokens replace the card's default batch
+	// limits when set.
+	MaxNumSeqs          int
+	MaxNumBatchedTokens int
 }
 
 // Runtime is the fake runtime state; Handler serves it.
@@ -113,7 +117,8 @@ func (r *Runtime) SetFailed(id, reason string) {
 	r.failed[id] = reason
 }
 
-// SetAPIVersion changes the contract version /health and /v1/models report.
+// SetAPIVersion changes the contract version /health and /v1/models report,
+// as a runtime of another release does.
 func (r *Runtime) SetAPIVersion(version string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -291,6 +296,12 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
 	device, dtype, numerics := model.Device, "float32", api.ModelCardNumericsExact
 	args := api.EngineArgs{MaxNumSeqs: 8192, MaxNumBatchedTokens: 65536, BatchWindowMs: 2, Dtype: api.Auto}
+	if model.MaxNumSeqs != 0 {
+		args.MaxNumSeqs = model.MaxNumSeqs
+	}
+	if model.MaxNumBatchedTokens != 0 {
+		args.MaxNumBatchedTokens = model.MaxNumBatchedTokens
+	}
 	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens, MaxInputs: &maxInputs}
 	if model.ModelSHA256 != "" {
 		sha = model.ModelSHA256
@@ -419,11 +430,7 @@ func (r *Runtime) model(id *string, surface string) (Model, int, *api.ErrorBody)
 func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *api.ErrorBody) {
 	r.mu.Lock()
 	r.decisions = append(r.decisions, body)
-	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	if body.States != nil && apiVersion < "2.2" {
-		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "unknown request fields: ['states']"}
-	}
 	status, response, errBody := r.decideState(body)
 	if status != http.StatusOK || body.States == nil {
 		return status, response, errBody
