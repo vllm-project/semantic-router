@@ -9,6 +9,7 @@ from cli import decision_model, execution_platform, runtime_lifecycle
 from cli.bootstrap import build_bootstrap_config
 from cli.commands import runtime
 from cli.commands.runtime_mode_config import (
+    ENGINE_ARGUMENTS,
     apply_instance_options,
     validate_model_options,
 )
@@ -23,10 +24,7 @@ MODEL = "vllm-sr/Decision-2.0-Kai-0.6B"
 
 def options(model=None, **kwargs):
     return validate_model_options(
-        model=model,
-        revision=kwargs.pop("revision", None),
-        runtime_profile=kwargs.pop("runtime_profile", None),
-        **kwargs
+        model=model, revision=kwargs.pop("revision", None), **kwargs
     )
 
 
@@ -127,7 +125,7 @@ def selected(document):
     return document["global"]["model_catalog"]["deployments"]["chosen"]
 
 
-def test_model_only_keeps_placement_profile_identity_and_grants():
+def test_model_only_keeps_placement_engine_args_identity_and_grants():
     replicas = [{"device": "rocm:0"}, {"device": "rocm:1"}]
     document = declaration(
         {
@@ -135,7 +133,8 @@ def test_model_only_keeps_placement_profile_identity_and_grants():
             "artifact": "old/model",
             "revision": "a" * 40,
             "public_name": "judge",
-            "profile": "batching",
+            "max_num_seqs": 64,
+            "dtype": "bfloat16",
             "replicas": replicas,
             "input": {"max_tokens": 4096, "overflow": "window"},
         }
@@ -143,25 +142,26 @@ def test_model_only_keeps_placement_profile_identity_and_grants():
     apply_instance_options(document, model_options=options(MODEL), platform="rocm")
     result = selected(document)
     assert result["artifact"] == MODEL and result["revision"] != "a" * 40
-    assert result["replicas"] == replicas and result["profile"] == "batching"
+    assert result["replicas"] == replicas
+    assert result["max_num_seqs"] == 64 and result["dtype"] == "bfloat16"
     assert result["input"] == {"max_tokens": 4096, "overflow": "window"}
     assert result["public_name"] == "judge"
     assert document["listeners"][0]["systemone"]["models"] == ["judge"]
 
 
-def test_same_artifact_keeps_revision_and_profile_when_unspecified():
+def test_same_artifact_keeps_revision_and_engine_args_when_unspecified():
     document = declaration(
         {
             "provider": "model_runtime",
             "artifact": MODEL,
             "revision": "b" * 40,
-            "profile": "batching",
+            "batch_window_ms": 0.5,
             "device": "cpu",
         }
     )
     apply_instance_options(document, model_options=options(MODEL))
     assert selected(document)["revision"] == "b" * 40
-    assert selected(document)["profile"] == "batching"
+    assert selected(document)["batch_window_ms"] == 0.5
 
 
 def test_new_multi_gpu_workers_use_available_devices():
@@ -175,7 +175,7 @@ def test_new_multi_gpu_workers_use_available_devices():
     result = document["global"]["model_catalog"]["deployments"]["primary"]
     assert result["replicas"] == [{"device": "rocm:2"}, {"device": "rocm:5"}]
     assert "device" not in result
-    assert result["profile"] == "exact"
+    assert not {"profile", *ENGINE_ARGUMENTS} & set(result)
 
 
 def test_new_dp_requires_explicit_colocation_when_capacity_is_short():
@@ -244,7 +244,11 @@ def test_attached_deployment_is_not_silently_replaced():
         ["-dp", "65"],
         ["--device-ids", "0,0"],
         ["--device-ids", "-1"],
-        ["--runtime-profile", "Fast!"],
+        ["--runtime-profile", "exact"],
+        ["--max-num-seqs", "0"],
+        ["--max-num-batched-tokens", "4"],
+        ["--batch-window-ms", "-1"],
+        ["--dtype", "fp16"],
     ],
 )
 def test_removed_or_invalid_options_never_reach_startup(monkeypatch, args):
@@ -257,6 +261,60 @@ def test_removed_or_invalid_options_never_reach_startup(monkeypatch, args):
     assert result.exit_code == 2, result.output
 
 
+def test_engine_flags_set_the_default_deployments_engine_args(monkeypatch):
+    calls = []
+    monkeypatch.setattr(runtime, "_execute_serve", lambda *a, **kw: calls.append(kw))
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            MODEL,
+            "--max-num-seqs",
+            "256",
+            "--max-num-batched-tokens",
+            "16384",
+            "--batch-window-ms",
+            "0",
+            "--dtype",
+            "bfloat16",
+            "--no-enable-shared-context",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert calls[0]["model_options"] == {
+        "artifact": MODEL,
+        "max_num_seqs": 256,
+        "max_num_batched_tokens": 16384,
+        "batch_window_ms": 0.0,
+        "dtype": "bfloat16",
+        "enable_shared_context": False,
+    }
+    document = {"version": "v0.3"}
+    apply_instance_options(document, model_options=calls[0]["model_options"])
+    primary = document["global"]["model_catalog"]["deployments"]["primary"]
+    assert {name: primary[name] for name in ENGINE_ARGUMENTS} == {
+        "max_num_seqs": 256,
+        "max_num_batched_tokens": 16384,
+        "batch_window_ms": 0.0,
+        "dtype": "bfloat16",
+        "enable_shared_context": False,
+    }
+    assert "profile" not in primary
+
+
+def test_removed_runtime_profile_names_its_replacements(monkeypatch):
+    monkeypatch.setattr(
+        runtime,
+        "_execute_serve",
+        lambda *a, **kw: pytest.fail("a removed flag reached startup"),
+    )
+    result = CliRunner().invoke(main, ["serve", "--runtime-profile", "batching"])
+    assert result.exit_code == 2
+    assert "--runtime-profile was removed" in result.output
+    for flag in ("--max-num-seqs", "--max-num-batched-tokens", "--dtype"):
+        assert flag in result.output
+
+
 def test_help_and_instance_commands_have_no_mode_bypass():
     result = CliRunner().invoke(main, ["serve", "--help"])
     assert result.exit_code == 0
@@ -267,6 +325,8 @@ def test_help_and_instance_commands_have_no_mode_bypass():
         and "--mode " not in result.output
     )
     assert "--data-parallel-size" in result.output and "--device-ids" in result.output
+    assert "--max-num-seqs" in result.output and "--dtype" in result.output
+    assert "--runtime-profile" not in result.output
     help_result = CliRunner().invoke(main, ["instance", "--help"])
     assert (
         "deploy" not in help_result.output

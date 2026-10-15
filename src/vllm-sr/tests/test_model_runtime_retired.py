@@ -27,6 +27,7 @@ from cli.model_runtime_retired import (  # noqa: E402
     retired_model_fields,
 )
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
+from cli.validator_decision_model import model_runtime_deployment_error  # noqa: E402
 
 ROUTER_PARSER = REPO_ROOT / "src/semantic-router/pkg/config/loader_model_execution.go"
 
@@ -276,3 +277,41 @@ def test_the_hallucination_endpoint_shorthand_is_retired():
     detector = "global.model_catalog.modules.hallucination_mitigation.detector"
     assert f"{detector}.backend: endpoint" in found
     assert f"{detector}.endpoint" in found
+
+
+def test_parsing_refuses_a_runtime_profile_and_names_the_migration(tmp_path):
+    document = {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {"defaults": {"model": "general"}},
+        "global": {
+            "model_catalog": {
+                "deployments": {
+                    "judge": {
+                        "provider": "model_runtime",
+                        "artifact": "vllm-sr/Vela-2.0-0.3B",
+                        "profile": "exact",
+                    }
+                }
+            }
+        },
+    }
+    path = tmp_path / "profiled.yaml"
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+
+    with pytest.raises(ConfigParseError) as refused:
+        parse_user_config(str(path), log_summary=False)
+
+    message = str(refused.value)
+    assert "global.model_catalog.deployments.judge.profile: profile was removed" in (
+        message
+    )
+    assert "max_num_seqs" in message and "dtype" in message
+    assert f"vllm-sr config migrate --config {path}" in message
+
+    migrated = migrate_config_data(document, MigrationNotes())
+    migrated_path = tmp_path / "migrated.yaml"
+    migrated_path.write_text(yaml.safe_dump(migrated, sort_keys=False))
+    parse_user_config(str(migrated_path), log_summary=False)
+    judge = migrated["global"]["model_catalog"]["deployments"]["judge"]
+    assert model_runtime_deployment_error(judge) is None

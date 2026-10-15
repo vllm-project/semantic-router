@@ -690,14 +690,15 @@ def test_passes_of_one_size_reuse_the_tower_features_of_their_images(
         return tower(name, pixel_values, grids)
 
     monkeypatch.setattr(model.engine_model, "tower_features", counted)
-    status, cached = call(d3_runtime, body)
-    assert status == 200 and calls == [BATCH_SIZE]
+    served = d3_runtime.lookup(None)
+    cached = served.answer_alone("decisions", body)
+    assert calls == [BATCH_SIZE]
     model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
-    status, again = call(d3_runtime, body)
+    again = served.answer_alone("decisions", body)
     assert again == cached and calls == [BATCH_SIZE, BATCH_SIZE]
 
 
-def test_coalesced_batches_mix_requests_and_read_each_image_once(
+def test_coalesced_batches_mix_requests_and_read_their_images_in_one_call(
     d3_runtime, png_url, monkeypatch
 ):
     model = d3_runtime.lookup(None).model
@@ -713,32 +714,51 @@ def test_coalesced_batches_mix_requests_and_read_each_image_once(
     calls = []
     tower = model.engine_model.tower_features
 
-    def counted(name, pixel_values, grids):
-        calls.append(len(grids))
-        return tower(name, pixel_values, grids)
+    def counted(name, pixel_values, grids, packed=False):
+        calls.append((len(grids), packed))
+        return tower(name, pixel_values, grids, packed=packed)
 
     model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
     monkeypatch.setattr(model.engine_model, "tower_features", counted)
     mixed = model.run_approximate(items)
-    assert sorted(calls) == [1, 2]
+    assert calls == [(3, model.packs_merged_rows)]
     assert len(mixed) == len(exact)
     for got, want in zip(mixed, exact, strict=True):
         assert got is not None and want is not None
         assert max(abs(a - b) for a, b in zip(got, want, strict=True)) < 0.05
+    # Features of a merged tower call never stand in for a request's own forwards,
+    # which still read one copy of its images per question.
+    calls.clear()
+    assert [model.run(list(plan.items)) for plan in plans] == [
+        exact[:3],
+        exact[3:6],
+        exact[6:],
+    ]
+    assert sorted(calls) == [(3, False), (6, False)]
 
 
-def test_coalesced_forwards_follow_the_measured_cost_per_token(d3_runtime):
+def test_coalesced_forwards_follow_the_measured_cost_per_token_of_their_lane(
+    d3_runtime, png_url
+):
     from vllm_srun.families.decision3 import family
 
     model = d3_runtime.lookup(None).model
-    saved = model._token_seconds
+    saved = dict(model._token_seconds)
     try:
-        model._token_seconds = family.COALESCED_FORWARD_SECONDS / 10_000
+        model._token_seconds["text"] = family.COALESCED_FORWARD_SECONDS / 10_000
+        model._token_seconds["media"] = 1.0
         limit = model.forward_token_budget()
-        assert model.coalesced_token_budget() == (
+        assert model.coalesced_token_budget("text") == (
             10_000 if limit is None else min(10_000, limit)
         )
-        model._token_seconds = 1.0
-        assert model.coalesced_token_budget() == family.MIN_COALESCED_TOKENS
+        assert model.coalesced_token_budget("media") == family.MIN_COALESCED_TOKENS
+        text = model.plan("Merge two sorted lists.", QUESTIONS).items
+        image = model.plan_images("Shown?", QUESTIONS, [png_url(80, 60, 24)]).items
+        assert {model.lane(item) for item in text} == {"text"}
+        assert {model.lane(item) for item in image} == {"media"}
+        # A media pass moves the media lane's cost only.
+        model.run_approximate(list(image))
+        assert model._token_seconds["text"] == family.COALESCED_FORWARD_SECONDS / 10_000
+        assert model._token_seconds["media"] < 1.0
     finally:
         model._token_seconds = saved

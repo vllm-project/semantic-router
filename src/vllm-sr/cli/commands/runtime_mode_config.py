@@ -9,7 +9,7 @@ import click
 from cli.bootstrap import build_bootstrap_config
 from cli.decision_model import configured_decision_model, decision_model_deployment
 from cli.model_revision import resolve_model_revision
-from cli.validator_decision_model import MODEL_RUNTIME_PROFILE, public_model_name
+from cli.validator_decision_model import engine_args_error, public_model_name
 
 MODE_HELP = """
 \b
@@ -31,23 +31,55 @@ configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
 Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model/placement options override saved settings.
+0.3B). Only explicit model, placement and engine options override saved
+settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
+and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
 """
 
 
+# The deployment's engine arguments that serve flags set.
+ENGINE_ARGUMENTS = (
+    "max_num_seqs",
+    "max_num_batched_tokens",
+    "batch_window_ms",
+    "dtype",
+    "enable_shared_context",
+)
+
+
+def removed_runtime_profile(ctx, param, value):
+    """Refuse the removed --runtime-profile and name the engine options that replace it."""
+    if value is not None:
+        raise click.UsageError(
+            "--runtime-profile was removed; batching is on by default; set "
+            "--max-num-seqs, --max-num-batched-tokens, --batch-window-ms, "
+            "--enable-shared-context or --dtype instead",
+            ctx=ctx,
+        )
+    return value
+
+
 def validate_model_options(
-    *, model, revision, runtime_profile, data_parallel_size=None, device_ids=None
+    *,
+    model,
+    revision,
+    data_parallel_size=None,
+    device_ids=None,
+    engine_args=None,
 ):
     """Keep unspecified values absent so they cannot reset saved resources."""
     if model is not None and (not model or model.strip() != model):
         raise click.UsageError("MODEL must be a non-empty, trimmed artifact")
     if revision is not None and (not revision or revision.strip() != revision):
         raise click.UsageError("--revision must be a non-empty branch, tag or commit")
-    if runtime_profile is not None and not MODEL_RUNTIME_PROFILE.fullmatch(
-        runtime_profile
-    ):
-        raise click.UsageError("--runtime-profile must be a valid profile name")
+    engine_args = {
+        name: value for name, value in (engine_args or {}).items() if value is not None
+    }
+    message = engine_args_error(engine_args)
+    if message:
+        flag, _, rest = message.partition(" ")
+        raise click.UsageError(f"--{flag.replace('_', '-')} {rest}")
     ids = None
     if device_ids is not None:
         parts = device_ids.split(",")
@@ -63,9 +95,9 @@ def validate_model_options(
     values = {
         "artifact": model,
         "revision": revision,
-        "profile": runtime_profile,
         "data_parallel_size": data_parallel_size,
         "device_ids": ids,
+        **engine_args,
     }
     return {key: value for key, value in values.items() if value is not None} or None
 
@@ -144,7 +176,6 @@ def apply_instance_options(
                 "provider": "model_runtime",
                 "artifact": defaults["artifact"],
                 "device": "auto",
-                "profile": "exact",
             }
         )
         options = model_options or {}
@@ -157,7 +188,7 @@ def apply_instance_options(
         artifact = options.get("artifact")
         if artifact is not None and artifact != resource.get("artifact"):
             resource.pop("revision", None)
-        for name in ("artifact", "revision", "profile"):
+        for name in ("artifact", "revision", *ENGINE_ARGUMENTS):
             if name in options:
                 resource[name] = options[name]
         if "data_parallel_size" in options or "device_ids" in options:
@@ -171,7 +202,6 @@ def apply_instance_options(
             for name in ("device", "endpoint", "served_name"):
                 resource.pop(name, None)
         resource.setdefault("provider", "model_runtime")
-        resource.setdefault("profile", "exact")
         revision = resolve_model_revision(
             resource["artifact"], resource.get("revision")
         )

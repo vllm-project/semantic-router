@@ -15,16 +15,15 @@ import time
 import pytest
 import torch
 from torch import nn
-from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, ModelConfig, ServeConfig
 from vllm_srun.families.decision1 import package as pkg
 from vllm_srun.families.decision1 import qwen, vela
 from vllm_srun.families.decision1.questions import KINDS
 from vllm_srun.heads.candidate import load_head, logits
 from vllm_srun.plugins.base import Job
 from vllm_srun.plugins.decisions import RenderedItem
-from vllm_srun.profiles.batching import BatchingProfile
-from vllm_srun.profiles.exact import ExactProfile
 from vllm_srun.runtime import Runtime
+from vllm_srun.scheduler.batching import coalesced, reference
 from vllm_srun.scheduler.planner import padded
 from vllm_srun.testing.decision1 import write_package
 from vllm_srun.text import segments
@@ -105,8 +104,10 @@ def runtimes(packages):
         runtime.stop()
 
 
-def decide(runtime, questions, state=STATE, **options):
+def decide(runtime, questions, state=STATE, model=None, **options):
     body = {"state": state, "questions": questions}
+    if model:
+        body["model"] = model
     if options:
         body["options"] = options
     return asyncio.run(runtime.call("decisions", body))
@@ -190,21 +191,19 @@ def test_vela_physical_batches_sort_by_type(runtimes):
     assert [len(batch) for batch in model.exact_batches(plan.items)] == [8, 3]
 
 
-def test_exact_profile_runs_the_released_physical_batches(runtimes):
+def test_the_golden_reference_runs_the_released_physical_batches(runtimes):
     model = model_of(runtimes["vela"])
     plan = model.plan(STATE, MANY)
-    profile = ExactProfile()
-    profile.bind(model)
-    job = Job(
-        items=plan.items, deadline=None, enqueued=time.monotonic(), profile="exact"
-    )
-    batches = profile.plan([job], model.forward_token_budget())
+    job = Job(items=plan.items, deadline=None, enqueued=time.monotonic())
+    batches = reference(model, [job], model.forward_token_budget())
     assert [
         indices for batch in batches for _, indices in batch.parts
     ] == model.exact_batches(plan.items)
 
 
-def test_vela_coalesces_within_the_cpu_budget_while_exact_keeps_its_batches(runtimes):
+def test_vela_coalesces_within_the_cpu_budget_while_the_reference_keeps_its_batches(
+    runtimes,
+):
     model = model_of(runtimes["vela"])
     budget = model.forward_token_budget()
     assert budget == vela.CPU_BATCH_TOKENS
@@ -213,15 +212,13 @@ def test_vela_coalesces_within_the_cpu_budget_while_exact_keeps_its_batches(runt
     widest = max(len(item.ids) for item in plan.items)
     assert len(released[0]) * padded(widest) > budget
     jobs = [
-        Job(items=plan.items, deadline=None, enqueued=time.monotonic(), profile=name)
-        for name in ("exact", "batching", "batching", "batching")
+        Job(items=plan.items, deadline=None, enqueued=time.monotonic())
+        for _ in range(4)
     ]
-    for batch in BatchingProfile().plan(jobs[1:], budget):
+    for batch in coalesced(jobs[1:], budget, DEFAULT_MAX_NUM_SEQS):
         rows = batch.items()
         assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
-    exact = ExactProfile()
-    exact.bind(model)
-    batches = exact.plan(jobs[:1], budget)
+    batches = reference(model, jobs[:1], budget)
     assert [indices for batch in batches for _, indices in batch.parts] == released
 
 
@@ -543,40 +540,44 @@ def test_coalesced_rows_of_mixed_lengths_answer_like_their_own_requests(runtimes
         assert row == pytest.approx(value, abs=1e-4)
 
 
-def test_batching_profile_serves_the_encoder(packages):
+def test_the_encoder_answers_every_question_alone_or_merged(packages):
+    path = str(packages["vela"])
     runtime = Runtime(
         ServeConfig(
             models=(
-                ModelConfig(
-                    model=str(packages["vela"]), device="cpu", profile="batching"
-                ),
+                ModelConfig(model=path, name="alone", device="cpu", max_num_seqs=1),
+                ModelConfig(model=path, name="merged", device="cpu"),
             )
         )
     )
     runtime.start(background=False)
     try:
-        exact = decide(runtime, MANY, profile="exact")[1]["answers"]
-        batched = decide(runtime, MANY, profile="batching")[1]["answers"]
+        alone = decide(runtime, MANY, model="alone")[1]["answers"]
+        merged = decide(runtime, MANY, model="merged")[1]["answers"]
     finally:
         runtime.stop()
-    assert batched.keys() == exact.keys()
-    assert all(batched[q]["type"] == exact[q]["type"] for q in exact)
+    assert merged.keys() == alone.keys()
+    assert all(merged[q]["type"] == alone[q]["type"] for q in alone)
 
 
-def test_shared_context_profile_serves_the_decoder(packages):
+def test_shared_context_serves_the_decoder(packages):
+    path = str(packages["qwen"])
     runtime = Runtime(
         ServeConfig(
             models=(
+                ModelConfig(model=path, name="batched", device="cpu"),
                 ModelConfig(
-                    model=str(packages["qwen"]), device="cpu", profile="shared_context"
+                    model=path, name="shared", device="cpu", enable_shared_context=True
                 ),
             )
         )
     )
     runtime.start(background=False)
     try:
-        exact = decide(runtime, MANY, profile="exact")[1]["answers"]
-        shared = decide(runtime, MANY, profile="shared_context")[1]["answers"]
+        cards = {served.label: served for served in runtime.served}
+        assert not cards["batched"].shared and cards["shared"].shared
+        exact = decide(runtime, MANY, model="batched")[1]["answers"]
+        shared = decide(runtime, MANY, model="shared")[1]["answers"]
     finally:
         runtime.stop()
     for question, answer in exact.items():

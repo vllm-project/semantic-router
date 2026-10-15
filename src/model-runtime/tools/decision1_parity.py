@@ -3,7 +3,7 @@
     python3 tools/decision1_parity.py reference --package DIR --repo REPO --device cpu|cuda:0 \\
         --panel NAME:REQUESTS.jsonl:COUNT ... --answers REFERENCE.jsonl
     python3 tools/decision1_parity.py native --model REPO --revision REV --cache-dir DIR \\
-        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P] \\
+        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--merged] \\
         [--also REPO ...] [--concurrent N]
     python3 tools/decision1_parity.py compare REFERENCE.jsonl NATIVE.jsonl --output parity.json
 
@@ -12,7 +12,10 @@ runtime the packages ship; it is a separate tool process, so the runtime itself
 never imports package code. On a GPU both sides run the built-in table's FLA
 kernel choices, so they run the same kernels. ``native``
 serves the package through ``vllm_srun`` (verification, readiness, the
-scheduler) on one profile; ``--also`` serves more built-in models in the same
+scheduler) and answers every prompt alone, in its released forwards (the golden
+check's path); ``--merged`` asks through the API's request path with the default
+engine arguments instead, where rows of concurrent prompts share forwards and
+consented copies run. ``--also`` serves more built-in models in the same
 process on the same device, loaded first, as one GPU process of the default
 layout does, and the panel still asks ``--model``; ``--concurrent N`` sends N
 prompts at a time, to ``--model`` and to every ``--also`` model at once, so
@@ -115,21 +118,14 @@ def run_reference(args: argparse.Namespace) -> int:
 
 def run_native(args: argparse.Namespace) -> int:
     from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.errors import RuntimeServiceError
     from vllm_srun.runtime import Runtime
 
-    others = tuple(
-        ModelConfig(model=repo, device=args.device, profile=args.profile)
-        for repo in args.also
-    )
+    others = tuple(ModelConfig(model=repo, device=args.device) for repo in args.also)
     config = ServeConfig(
         models=(
             *others,
-            ModelConfig(
-                model=args.model,
-                revision=args.revision,
-                device=args.device,
-                profile=args.profile,
-            ),
+            ModelConfig(model=args.model, revision=args.revision, device=args.device),
         ),
         cache_dir=args.cache_dir,
         offline=True,
@@ -156,11 +152,18 @@ def run_native(args: argparse.Namespace) -> int:
             "model": model,
             "state": prompt["state"],
             "questions": prompt["questions"],
-            "options": {"return_meta": False, "profile": args.profile},
         }
         started = time.perf_counter()
-        size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
-        status, response = await runtime.call("decisions", body, size)
+        if args.merged:
+            size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+            status, response = await runtime.call("decisions", body, size)
+        else:
+            try:
+                status, response = 200, await asyncio.to_thread(
+                    runtime.lookup(model).answer_alone, "decisions", body
+                )
+            except RuntimeServiceError as exc:
+                status, response = exc.status, exc.body()
         answers = (
             response.get("answers") if status == 200 else {"request_error": status}
         )
@@ -314,7 +317,11 @@ def main() -> int:
     native.add_argument("--model", required=True)
     native.add_argument("--revision")
     native.add_argument("--cache-dir")
-    native.add_argument("--profile", default="exact")
+    native.add_argument(
+        "--merged",
+        action="store_true",
+        help="ask through the API with the default engine arguments, not alone",
+    )
     native.add_argument(
         "--also",
         action="append",
