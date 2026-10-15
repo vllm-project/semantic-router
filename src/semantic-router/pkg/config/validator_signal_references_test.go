@@ -19,22 +19,22 @@ func TestValidateDecisionSignalReferences_WhitespaceRejected(t *testing.T) {
 		{
 			name:      "leading whitespace on keyword name",
 			node:      RuleNode{Type: SignalTypeKeyword, Name: " billing"},
-			wantError: `routing.decisions["test-decision"]: signal keyword reference " billing" has surrounding whitespace; expected "billing" without padding`,
+			wantError: `routing.decisions["test-decision"]: signal keyword name " billing" contains surrounding whitespace; "billing" expected`,
 		},
 		{
 			name:      "trailing whitespace on keyword name",
 			node:      RuleNode{Type: SignalTypeKeyword, Name: "billing "},
-			wantError: `routing.decisions["test-decision"]: signal keyword reference "billing " has surrounding whitespace; expected "billing" without padding`,
+			wantError: `routing.decisions["test-decision"]: signal keyword name "billing " contains surrounding whitespace; "billing" expected`,
 		},
 		{
 			name:      "both sides whitespace on keyword name",
 			node:      RuleNode{Type: SignalTypeKeyword, Name: " billing "},
-			wantError: `routing.decisions["test-decision"]: signal keyword reference " billing " has surrounding whitespace; expected "billing" without padding`,
+			wantError: `routing.decisions["test-decision"]: signal keyword name " billing " contains surrounding whitespace; "billing" expected`,
 		},
 		{
 			name:      "tab character on domain name",
 			node:      RuleNode{Type: SignalTypeDomain, Name: "\tucla"},
-			wantError: `routing.decisions["test-decision"]: signal domain reference "\tucla" has surrounding whitespace; expected "ucla" without padding`,
+			wantError: `routing.decisions["test-decision"]: signal domain name "\tucla" contains surrounding whitespace; "ucla" expected`,
 		},
 	}
 
