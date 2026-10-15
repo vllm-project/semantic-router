@@ -11,6 +11,7 @@ data:
     EXPECTED_AUTH = "Bearer e2e-preference-key"
     TERSE_MARKER = "__PREFERENCE_TERSE__"
     DETAILED_MARKER = "__PREFERENCE_DETAILED__"
+    MALFORMED_MARKER = "__PREFERENCE_MALFORMED__"
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -50,6 +51,10 @@ data:
             # check on the full message text is enough to pick a route
             # deterministically - no actual reasoning needed here.
             text = " ".join(str(message.get("content", "")) for message in messages)
+            if MALFORMED_MARKER in text:
+                content = "I could not decide on a route."
+                self.send_json(200, {"choices": [{"message": {"content": content}}]})
+                return
             if TERSE_MARKER in text:
                 route = "terse_answers"
             elif DETAILED_MARKER in text:

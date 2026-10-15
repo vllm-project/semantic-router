@@ -22,5 +22,13 @@
     "expected_decision": "",
     "expected_matched_signal": "",
     "should_match": false
+  },
+  {
+    "name": "Malformed LLM output falls back to the default route",
+    "description": "The mock LLM replies with text that has no JSON; the failed classification must not match a rule or break routing",
+    "query": "__PREFERENCE_MALFORMED__ Please keep your answer short, no elaboration.",
+    "expected_decision": "default-route",
+    "expected_matched_signal": "",
+    "should_match": false
   }
 ]
