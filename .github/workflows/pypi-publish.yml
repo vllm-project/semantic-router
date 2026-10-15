@@ -71,6 +71,7 @@ jobs:
         run: |
           python tools/ci/prepare_dev_package.py \
             --source-date-epoch "$(git show -s --format=%ct HEAD)" \
+            --source-revision "$(git rev-parse HEAD)" \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Validate package version
@@ -189,7 +190,7 @@ jobs:
 
       - name: Verify installed wheel capabilities
         if: inputs.channel == 'dev'
-        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl
+        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl --image-tag "$(git rev-parse HEAD)"
 
       - uses: actions/upload-artifact@v4
         with:
