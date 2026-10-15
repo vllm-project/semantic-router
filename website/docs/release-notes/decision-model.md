@@ -24,11 +24,11 @@ vllm-sr serve --platform rocm
 
 ## What changes
 
-- The binding contains only `deployment`; model identity, device, profile and
-  endpoint belong to `global.model_catalog.deployments`. Keys are exact and
+- The binding contains only `deployment`; model identity, device, engine
+  arguments and endpoint belong to `global.model_catalog.deployments`. Keys are exact and
   case-sensitive. Scalar model names are rejected.
 - `serve MODEL` changes the configured default deployment's artifact, preserving
-  its placement and profile unless explicit options override them. Select a
+  its placement and engine arguments unless explicit options override them. Select a
   different deployment key in the canonical binding. Status reports that key.
 - Questions and selectors with no deployment use this default. Explicit task
   and question bindings override it without replacing the resource.

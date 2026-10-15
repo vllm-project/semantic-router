@@ -14,6 +14,7 @@ from cli.container_observability import _ensure_hidden_config_dir, _run_service_
 from cli.container_observability import (
     render_observability_template as _render_observability_template,
 )
+from cli.container_run_command import restart_policy_args
 from cli.container_runtime import get_container_runtime
 from cli.recipe_topology_storage import validate_storage_port_isolation
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -334,6 +335,7 @@ def container_start_redis(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--hostname",
         "redis",
         "--network",
@@ -403,6 +405,7 @@ def container_start_postgres(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--hostname",
         "postgres",
         "--network",
@@ -482,6 +485,7 @@ def container_start_milvus(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--hostname",
         "milvus",
         "--network",

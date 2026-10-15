@@ -7,7 +7,8 @@ Placement estimates the device memory a model needs before any weights load
 ## Setup
 
 - **Command:** `vllm-sr serve -e vllm-sr/<model>` on a clean host with one
-  AMD Instinct MI325X (256 GiB), default `exact` profile, published development
+  AMD Instinct MI325X (256 GiB), the default engine arguments of the time
+  (each request alone), published development
   CLI 0.5.0.dev20261011191319 and `vllm-sr-rocm:latest` (digest
   `sha256:0650ff206bbd92528cc510dd9af095d583d736d1ca7d4f89ba541af22ea89f81`).
 - **Reading:** the device's `mem_info_vram_used` (sysfs) about every 10 ms, minus

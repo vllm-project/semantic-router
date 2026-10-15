@@ -4,9 +4,9 @@
 The tiny Decision fixtures run offline in the built Router image. The tests
 check public auth/discovery and native inference after starting both Engine
 and Router modes with the supported serve flags, that images and videos
-reach a Decision 3.0 model through the public System One API, and that Engine
-mode starts only the Router container by default. Each test owns an isolated
-stack.
+reach a Decision 3.0 model through the public System One API, that the Router
+refuses options that API does not define, and that Engine mode starts only the
+Router container by default. Each test owns an isolated stack.
 """
 
 import base64
@@ -19,14 +19,16 @@ import socket
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 import uuid
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
 from cli.runtime_stack import MAX_PORT_OFFSET
-from runtime_http import call, page_requests, write_fixture
+from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
@@ -332,6 +334,138 @@ class TestEngineModeContainers(EngineStack):
         self.assertEqual(self.containers(), set())
 
 
+class TestEngineModeRestartPolicy(EngineStack):
+    """--restart-policy brings the stack back after its process exits."""
+
+    def serve(self, *, engine):
+        self.cli(
+            "serve",
+            "--config",
+            str(self.config),
+            "--engine" if engine else "--minimal",
+            "--gateway",
+            "standalone",
+            "--image-pull-policy",
+            "ifnotpresent",
+            "--startup-timeout",
+            "300",
+            "--restart-policy",
+            "unless-stopped",
+        )
+
+    def runtime(self, *arguments):
+        binary = shutil.which(os.environ.get("CONTAINER_RUNTIME") or "docker") or (
+            shutil.which("podman")
+        )
+        return subprocess.run(
+            [binary, *arguments],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    def inspect(self, template):
+        result = self.runtime("inspect", "-f", template, self.container)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_the_router_comes_back_after_its_process_exits(self):
+        self.assertEqual(
+            self.inspect("{{.HostConfig.RestartPolicy.Name}}"), "unless-stopped"
+        )
+        status, _ = self.public("/v1/systemone/models")
+        self.assertEqual(status, 200)
+        restarts = int(self.inspect("{{.RestartCount}}"))
+        # The Router exits as on a crash; the runtime, not the CLI, restarts it.
+        self.runtime("exec", self.container, "sh", "-c", "kill -TERM 1; kill -TERM -1")
+        deadline = time.monotonic() + 240
+        status = None
+        while time.monotonic() < deadline:
+            if int(self.inspect("{{.RestartCount}}")) > restarts:
+                try:
+                    status, _ = self.public("/v1/systemone/models")
+                except OSError:  # the listener is not back yet
+                    status = None
+                if status == HTTP_OK:
+                    break
+            time.sleep(2)
+        self.assertGreater(int(self.inspect("{{.RestartCount}}")), restarts)
+        self.assertEqual(status, 200)
+        self.stop()
+        self.assertNotEqual(
+            self.runtime("inspect", self.container).returncode,
+            0,
+            "vllm-sr stop must still remove a container with a restart policy",
+        )
+
+
+class TestEngineModeEngineArgs(EngineStack):
+    """Engine flags set the default deployment's engine arguments in its worker."""
+
+    def serve(self, *, engine):
+        self.cli(
+            "serve",
+            "--config",
+            str(self.config),
+            "--engine" if engine else "--minimal",
+            "--gateway",
+            "standalone",
+            "--image-pull-policy",
+            "ifnotpresent",
+            "--startup-timeout",
+            "300",
+            "--max-num-seqs",
+            "64",
+            "--batch-window-ms",
+            "0.5",
+        )
+
+    def test_engine_flags_reach_the_served_model(self):
+        status, inventory = call(
+            f"http://127.0.0.1:{8080 + self.offset}",
+            "/api/v1/inventory/model-runtime",
+            headers={"Authorization": "Bearer " + MANAGEMENT_KEY},
+        )
+        self.assertEqual(status, HTTP_OK, inventory)
+        (primary,) = [
+            deployment
+            for deployment in inventory["deployments"]
+            if deployment["name"] == "primary"
+        ]
+        # The flags reach the worker; what they leave out keeps its default.
+        self.assertEqual(
+            primary["engine_args"],
+            {
+                "max_num_seqs": 64,
+                "max_num_batched_tokens": 65536,
+                "batch_window_ms": 0.5,
+                "dtype": "auto",
+                "enable_shared_context": True,
+            },
+        )
+        self.assertEqual(primary["numerics"], "approximate")
+        body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
+        body["model"] = PUBLIC_MODEL
+        status, response = self.public("/v1/systemone", body)
+        self.assertEqual(status, HTTP_OK, response)
+        body["options"] = {"return_meta": True}
+        status, response = self.public("/v1/systemone", body)
+        self.assertEqual(status, HTTP_OK, response)
+        self.assertEqual(response["meta"]["numerics"], "approximate", response)
+        self.assertNotIn("profile", response["meta"], response)
+        # The Router refuses options the public System One API does not define.
+        for options, message in (
+            ({"profile": "exact"}, "options.profile was removed: "),
+            ({"verbose": True}, "options.verbose is not a System One option; "),
+        ):
+            body["options"] = options
+            status, failure = self.public("/v1/systemone", body)
+            self.assertEqual(status, 400, failure)
+            self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+            self.assertTrue(failure["error"]["message"].startswith(message), failure)
+
+
 class TestEngineModeImages(EngineStack):
     fixture = ("decision3", "vision")
 
@@ -343,6 +477,38 @@ class TestEngineModeImages(EngineStack):
         if videos is not None:
             body["videos"] = videos
         return self.public(path, body)
+
+    def test_unset_limits_resolve_for_the_device_and_lanes_merge_requests(self):
+        status, inventory = call(
+            f"http://127.0.0.1:{8080 + self.offset}",
+            "/api/v1/inventory/model-runtime",
+            headers={"Authorization": "Bearer " + MANAGEMENT_KEY},
+        )
+        self.assertEqual(status, HTTP_OK, inventory)
+        (primary,) = [
+            deployment
+            for deployment in inventory["deployments"]
+            if deployment["name"] == "primary"
+        ]
+        # Batch limits the deployment leaves unset come back as the ones the
+        # worker chose for its device: the CPU's.
+        engine_args = primary["engine_args"]
+        self.assertEqual(
+            (engine_args["max_num_seqs"], engine_args["max_num_batched_tokens"]),
+            (8192, 65536),
+        )
+        # Image and text requests sent together merge in lanes and all answer.
+        _, alone = self.ask("/v1/systemone")
+        with ThreadPoolExecutor(8) as pool:
+            futures = [
+                pool.submit(self.ask, "/v1/systemone", [png_data_url(64, 48, seed=s)])
+                for s in (11, 12, 13)
+            ]
+            futures += [pool.submit(self.ask, "/v1/systemone") for _ in range(6)]
+            replies = [future.result() for future in futures]
+        for status, reply in replies:
+            self.assertEqual(status, 200, reply)
+            self.assertEqual(set(reply["answers"]), set(alone["answers"]))
 
     def test_images_and_videos_reach_the_model_through_the_public_api(self):
         status, text = self.ask("/v1/systemone")
