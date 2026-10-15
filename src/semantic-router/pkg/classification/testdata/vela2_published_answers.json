@@ -5,7 +5,7 @@
       "repo_id": "vllm-sr/Vela-2.0-0.3B",
       "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
       "model_sha256": "7e786f91413961d76a8b85318f70fea1509124fe33709a8c12d6badf8d2ccda4",
-      "profile": "max_speed",
+      "numerics": "approximate",
       "items": {
         "account-organization": {
           "states": {
@@ -2140,7 +2140,7 @@
       "repo_id": "vllm-sr/Vela-2.0-0.8B",
       "revision": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
       "model_sha256": "e231da382b5d3d45f253e9b3ff12afe7044b56d95afa4c2c0ec412c036024949",
-      "profile": "exact",
+      "numerics": "approximate",
       "items": {
         "feedback-three-states": {
           "states": {
@@ -2149,7 +2149,7 @@
               "answer": {
                 "answers": {
                   "pii_classifier:pii": {
-                    "noul": 0.5494358,
+                    "noul": 0.5494346,
                     "type": "noul"
                   },
                   "prompt_guard:attack": {
@@ -2171,21 +2171,21 @@
                     {
                       "end": 2,
                       "label": "STREET_ADDRESS",
-                      "probability": 0.3125517,
+                      "probability": 0.3125536,
                       "start": 0,
                       "text": "17"
                     },
                     {
                       "end": 11,
                       "label": "AGE",
-                      "probability": 0.3558416,
+                      "probability": 0.3558401,
                       "start": 9,
                       "text": "23"
                     },
                     {
                       "end": 18,
                       "label": "AGE",
-                      "probability": 0.5494359,
+                      "probability": 0.5494347,
                       "start": 15,
                       "text": "381"
                     }
@@ -2205,7 +2205,7 @@
               "answer": {
                 "answers": {
                   "pii_classifier:pii": {
-                    "noul": 0.9900926,
+                    "noul": 0.9900927,
                     "type": "noul"
                   },
                   "prompt_guard:attack": {
@@ -2213,8 +2213,8 @@
                     "choice": "benign",
                     "confidence": 0.9601889,
                     "probabilities": {
-                      "benign": 0.9800945,
-                      "jailbreak": 0.0199055
+                      "benign": 0.9800944,
+                      "jailbreak": 0.0199056
                     },
                     "type": "choice"
                   }
@@ -2227,14 +2227,14 @@
                     {
                       "end": 10,
                       "label": "PERSON",
-                      "probability": 0.9682647,
+                      "probability": 0.9682645,
                       "start": 8,
                       "text": "17"
                     },
                     {
                       "end": 19,
                       "label": "PERSON",
-                      "probability": 0.8878047,
+                      "probability": 0.8878039,
                       "start": 17,
                       "text": "23"
                     },
@@ -2277,24 +2277,24 @@
                       "math": 0.8543382,
                       "other": 0.0426374,
                       "philosophy": 0.0227255,
-                      "physics": 0.0039912,
+                      "physics": 0.0039911,
                       "psychology": 0.0067119
                     },
                     "type": "choice"
                   },
                   "effort": {
-                    "confidence": 0.3862166,
+                    "confidence": 0.3862164,
                     "legend": {
                       "0": "A one-line answer",
                       "1": "A short explanation",
                       "2": "A detailed multi-step answer"
                     },
                     "probabilities": {
-                      "0": 0.4195769,
-                      "1": 0.485446,
-                      "2": 0.0949771
+                      "0": 0.4195765,
+                      "1": 0.4854463,
+                      "2": 0.0949772
                     },
-                    "score": 0.6754001,
+                    "score": 0.6754007,
                     "type": "score"
                   },
                   "entities": {
@@ -2302,12 +2302,12 @@
                     "type": "noul"
                   },
                   "fact_check_classifier:factcheck": {
-                    "abstain_probability": 0.0095232,
+                    "abstain_probability": 0.0095233,
                     "choice": "FACT_CHECK_NEEDED",
-                    "confidence": 0.9268749,
+                    "confidence": 0.9268747,
                     "probabilities": {
-                      "FACT_CHECK_NEEDED": 0.9634375,
-                      "NO_FACT_CHECK_NEEDED": 0.0365625
+                      "FACT_CHECK_NEEDED": 0.9634374,
+                      "NO_FACT_CHECK_NEEDED": 0.0365626
                     },
                     "type": "choice"
                   },
@@ -2327,10 +2327,10 @@
                   "modality_detector:modality": {
                     "abstain_probability": 0.3012431,
                     "choice": "AR",
-                    "confidence": 0.9235121,
+                    "confidence": 0.923512,
                     "probabilities": {
                       "AR": 0.9542718,
-                      "BOTH": 0.0307597,
+                      "BOTH": 0.0307598,
                       "DIFFUSION": 0.0149684
                     },
                     "type": "choice"
@@ -2360,13 +2360,13 @@
                     "type": "choice"
                   },
                   "tone": {
-                    "abstain_probability": 0.1006821,
+                    "abstain_probability": 0.1006822,
                     "choice": "upset",
-                    "confidence": 0.192486,
+                    "confidence": 0.1924855,
                     "probabilities": {
-                      "casual": 0.1028757,
-                      "formal": 0.3523191,
-                      "upset": 0.5448052
+                      "casual": 0.1028758,
+                      "formal": 0.3523194,
+                      "upset": 0.5448048
                     },
                     "type": "choice"
                   },
@@ -2387,7 +2387,7 @@
                     "type": "noul"
                   },
                   "urgent": {
-                    "noul": 0.2263081,
+                    "noul": 0.2263084,
                     "type": "noul"
                   }
                 },
@@ -2432,21 +2432,21 @@
                   "domain_classifier:domain": {
                     "abstain_probability": 0.2037078,
                     "choice": "business",
-                    "confidence": 0.0623795,
+                    "confidence": 0.0623794,
                     "probabilities": {
                       "biology": 0.0049867,
-                      "business": 0.3517126,
+                      "business": 0.3517127,
                       "chemistry": 0.0154911,
                       "computer science": 0.1091923,
                       "economics": 0.0164117,
                       "engineering": 0.0133396,
                       "health": 0.0159069,
-                      "history": 0.0346999,
-                      "law": 0.075721,
-                      "math": 0.023815,
-                      "other": 0.2893331,
+                      "history": 0.0346998,
+                      "law": 0.0757209,
+                      "math": 0.0238149,
+                      "other": 0.2893333,
                       "philosophy": 0.0147193,
-                      "physics": 0.0147054,
+                      "physics": 0.0147053,
                       "psychology": 0.0199654
                     },
                     "type": "choice"
@@ -2459,35 +2459,35 @@
                       "2": "A detailed multi-step answer"
                     },
                     "probabilities": {
-                      "0": 0.1831182,
-                      "1": 0.5244284,
-                      "2": 0.2924535
+                      "0": 0.1831184,
+                      "1": 0.5244285,
+                      "2": 0.2924531
                     },
-                    "score": 1.1093353,
+                    "score": 1.1093348,
                     "type": "score"
                   },
                   "entities": {
-                    "noul": 0.9305993,
+                    "noul": 0.9305994,
                     "type": "noul"
                   },
                   "fact_check_classifier:factcheck": {
                     "abstain_probability": 0.0012636,
                     "choice": "FACT_CHECK_NEEDED",
-                    "confidence": 0.7294827,
+                    "confidence": 0.729483,
                     "probabilities": {
-                      "FACT_CHECK_NEEDED": 0.8647414,
-                      "NO_FACT_CHECK_NEEDED": 0.1352586
+                      "FACT_CHECK_NEEDED": 0.8647415,
+                      "NO_FACT_CHECK_NEEDED": 0.1352585
                     },
                     "type": "choice"
                   },
                   "modality_detector:modality": {
-                    "abstain_probability": 0.1403311,
+                    "abstain_probability": 0.140331,
                     "choice": "AR",
-                    "confidence": 0.8913043,
+                    "confidence": 0.8913045,
                     "probabilities": {
-                      "AR": 0.9369554,
-                      "BOTH": 0.0456511,
-                      "DIFFUSION": 0.0173936
+                      "AR": 0.9369555,
+                      "BOTH": 0.045651,
+                      "DIFFUSION": 0.0173935
                     },
                     "type": "choice"
                   },
@@ -2498,7 +2498,7 @@
                   "prompt_guard:attack": {
                     "abstain_probability": 0.0001748,
                     "choice": "benign",
-                    "confidence": 0.9073321,
+                    "confidence": 0.907332,
                     "probabilities": {
                       "benign": 0.953666,
                       "jailbreak": 0.046334
@@ -2508,7 +2508,7 @@
                   "safety.unsafe:p_harm": {
                     "abstain_probability": 0.0001256,
                     "choice": "safe",
-                    "confidence": 0.3595545,
+                    "confidence": 0.3595546,
                     "probabilities": {
                       "safe": 0.6797773,
                       "unsafe": 0.3202227
@@ -2518,11 +2518,11 @@
                   "tone": {
                     "abstain_probability": 0.0546911,
                     "choice": "upset",
-                    "confidence": 0.0818245,
+                    "confidence": 0.0818243,
                     "probabilities": {
-                      "casual": 0.286737,
-                      "formal": 0.3157193,
-                      "upset": 0.3975438
+                      "casual": 0.2867372,
+                      "formal": 0.3157192,
+                      "upset": 0.3975435
                     },
                     "type": "choice"
                   },
@@ -2531,7 +2531,7 @@
                     "type": "noul"
                   },
                   "topics.billing": {
-                    "noul": 0.5324335,
+                    "noul": 0.5324336,
                     "type": "noul"
                   },
                   "topics.medication": {
@@ -2539,11 +2539,11 @@
                     "type": "noul"
                   },
                   "topics.shipping": {
-                    "noul": 0.8915356,
+                    "noul": 0.8915358,
                     "type": "noul"
                   },
                   "urgent": {
-                    "noul": 0.1439698,
+                    "noul": 0.1439696,
                     "type": "noul"
                   }
                 },
@@ -2551,9 +2551,9 @@
                   "topics": {
                     "probabilities": {
                       "account": 0.0028332,
-                      "billing": 0.5324335,
+                      "billing": 0.5324336,
                       "medication": 0.0014263,
-                      "shipping": 0.8915356
+                      "shipping": 0.8915358
                     },
                     "selected": [
                       "billing",
@@ -2570,21 +2570,21 @@
                     {
                       "end": 17,
                       "label": "location",
-                      "probability": 0.761853,
+                      "probability": 0.7618527,
                       "start": 8,
                       "text": "Tom Baker"
                     },
                     {
                       "end": 40,
                       "label": "location",
-                      "probability": 0.7740046,
+                      "probability": 0.774005,
                       "start": 19,
                       "text": "tom.baker@example.com"
                     },
                     {
                       "end": 107,
                       "label": "location",
-                      "probability": 0.9305993,
+                      "probability": 0.9305994,
                       "start": 101,
                       "text": "Berlin"
                     }
@@ -2607,7 +2607,7 @@
                     {
                       "end": 107,
                       "label": "GPE",
-                      "probability": 0.9228897,
+                      "probability": 0.9228896,
                       "start": 101,
                       "text": "Berlin"
                     }
