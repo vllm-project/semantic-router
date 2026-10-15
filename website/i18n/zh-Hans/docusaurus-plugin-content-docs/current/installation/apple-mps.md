@@ -97,5 +97,5 @@ Docker VM 的模型内存限制，但不会移除 Mac 的总内存限制。
 `src/model-runtime/tools/golden_answers.py --device mps --record FILE`
 要求显式提供 `--tolerance`；就绪检查使用该模型的容差，而不是通用 GPU 容差。
 缺少记录时保持 unverified。不要虚构记录、直接把加速器标记为已验证，
-或修改 `exact` profile 来掩盖差异。普通 CI 运行生命周期/HTTP fixture，
+或修改引擎参数来掩盖差异。普通 CI 运行生命周期/HTTP fixture，
 GPU 验收需要 Apple silicon runner。
