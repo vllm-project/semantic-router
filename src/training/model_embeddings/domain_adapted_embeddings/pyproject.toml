@@ -1,0 +1,18 @@
+[project]
+name = "domain-adapted-embeddings"
+version = "0.0.0"
+description = "Environment for the domain-adapted embedding scripts under src/training/model_embeddings/domain_adapted_embeddings"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds come from requirements.txt; upper bounds stop at the next
+    # major of the current release. The train extra supplies SentenceTransformer.fit.
+    "datasets>=2.14.0,<5",
+    "numpy>=1.24.0,<3",
+    "scikit-learn>=1.3.0,<2",
+    "sentence-transformers[train]>=2.2.0,<7",
+    "torch>=2.0.0,<3",
+    "tqdm>=4.65.0,<5",
+]
+
+[tool.uv]
+package = false
