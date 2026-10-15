@@ -220,3 +220,22 @@ def test_the_unscaled_fp8_product_matches_the_scaled_one(device):
     module.unscaled_product = True
     unscaled = module(x).float()
     assert ((unscaled - scaled).abs().max() / scaled.abs().max()).item() < 1e-2
+
+
+def test_fp8_quantizes_rows_past_two_billion_elements(device):
+    from vllm_srun.accel.triton_fp8 import quantize_rows
+    from vllm_srun.engines.native.quantized import float8_format
+
+    dtype = float8_format(device)
+    if dtype is None:
+        pytest.skip("needs FP8 matrix units")
+    columns = 4096
+    rows = 2**31 // columns + 2
+    x = torch.zeros(rows, columns, device=device, dtype=torch.bfloat16)
+    x[-1] = torch.linspace(-3, 3, columns, device=device)
+    q, scale = quantize_rows(x, dtype)
+    expected = x[-1].float().abs().max() / torch.finfo(dtype).max
+    assert scale[-1].item() == pytest.approx(expected.item(), rel=1e-6)
+    torch.testing.assert_close(
+        q[-1].float() * scale[-1], x[-1].float(), atol=0.07, rtol=0.07
+    )
