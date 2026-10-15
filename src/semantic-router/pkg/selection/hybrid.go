@@ -223,8 +223,8 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	combinedScores := h.combineScores(componentScores, selCtx.CandidateModels)
 
 	// Apply cost adjustment
-	if h.config.CostWeight > 0 {
-		h.applyCostAdjustment(combinedScores)
+	if h.config.CostWeight > 0 || selCtx.CostWeight > 0 {
+		h.applyCostAdjustment(selCtx, combinedScores)
 	}
 
 	h.applyCacheAffinity(combinedScores, selCtx)
@@ -380,8 +380,14 @@ func (h *HybridSelector) combineScores(components map[string]CandidateScores, ca
 }
 
 // applyCostAdjustment applies cost-based score adjustment
-func (h *HybridSelector) applyCostAdjustment(scores CandidateScores) {
-	if len(h.modelCosts) == 0 || h.config.CostWeight <= 0 {
+func (h *HybridSelector) applyCostAdjustment(selCtx *SelectionContext, scores CandidateScores) {
+	costWeight := h.config.CostWeight
+	if selCtx.CostWeight > 0 {
+		// A decision-level cost_weight override flows through the selection
+		// context — the same channel Elo consumes — so prefer it here too.
+		costWeight = selCtx.CostWeight
+	}
+	if len(h.modelCosts) == 0 || costWeight <= 0 {
 		return
 	}
 	minCost, maxCost := math.MaxFloat64, 0.0
@@ -395,7 +401,7 @@ func (h *HybridSelector) applyCostAdjustment(scores CandidateScores) {
 	}
 	for i, row := range scores {
 		if cost, ok := h.modelCosts[row.Candidate.Model]; ok {
-			bonus := (1 - (cost-minCost)/(maxCost-minCost)) * h.config.CostWeight
+			bonus := (1 - (cost-minCost)/(maxCost-minCost)) * costWeight
 			scores[i].Score *= 1 + bonus
 		}
 	}
