@@ -572,6 +572,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "openai_compat_gateway": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
