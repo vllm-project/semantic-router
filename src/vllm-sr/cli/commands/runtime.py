@@ -689,6 +689,24 @@ def serve(
 ) -> None:
     ctx = click.get_current_context()
     runtime = resolve_container_runtime(ctx, container_runtime, runtime)
+    engine_args = {
+        name: value
+        for name, value in {
+            "max_num_seqs": max_num_seqs,
+            "max_num_batched_tokens": max_num_batched_tokens,
+            "batch_window_ms": batch_window_ms,
+            "dtype": dtype,
+            "enable_shared_context": enable_shared_context,
+        }.items()
+        if value is not None
+    }
+    model_options = validate_model_options(
+        model=model,
+        revision=revision,
+        data_parallel_size=data_parallel_size,
+        device_ids=device_ids,
+        engine_args=engine_args,
+    )
     if _platform_hint(platform) == "apple" and (model or models_file):
         run_apple_engine(
             ctx,
@@ -699,7 +717,7 @@ def serve(
             host=host,
             port=port,
             uds=uds,
-            profile=None,
+            engine_args=engine_args,
             log_level=log_level,
             target=target,
             runtime=runtime,
@@ -711,19 +729,6 @@ def serve(
         raise click.UsageError(
             "--models/--device/--host/--port/--uds require Apple engine mode"
         )
-    model_options = validate_model_options(
-        model=model,
-        revision=revision,
-        data_parallel_size=data_parallel_size,
-        device_ids=device_ids,
-        engine_args={
-            "max_num_seqs": max_num_seqs,
-            "max_num_batched_tokens": max_num_batched_tokens,
-            "batch_window_ms": batch_window_ms,
-            "dtype": dtype,
-            "enable_shared_context": enable_shared_context,
-        },
-    )
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
     reject_envoy_options(ctx, resolve_gateway(gateway))
