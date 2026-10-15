@@ -99,6 +99,16 @@ harness-bootstrap: harness-venv-install ## Prepare the shared Python environment
 	@$(LOG_TARGET)
 	@echo "Harness Python tooling ready"
 
+# uv 0.13.1 accepts the committed training lockfiles (revision 3) without
+# rewriting them. Keep this pin until a newer uv is shown to do the same.
+TRAINING_LOCK_UV_VERSION ?= 0.13.1
+
+.PHONY: check-training-uv-lock
+check-training-uv-lock: harness-venv-install ## Fail when a training uv.lock is missing or stale
+	@"$(AGENT_PYTHON)" -c "import importlib.metadata as metadata; raise SystemExit(metadata.version('uv') != '$(TRAINING_LOCK_UV_VERSION)')" 2>/dev/null \
+		|| "$(AGENT_PYTHON)" -m pip install --quiet "uv==$(TRAINING_LOCK_UV_VERSION)"
+	@PATH="$(dir $(AGENT_PYTHON)):$$PATH" "$(AGENT_PYTHON)" -m unittest tools.ci.training_lock_contracts
+
 harness-node-bootstrap: $(HARNESS_VENV_DEPS) ## Provide cached Node when the host has none
 	@if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then \
 		if [ ! -x "$(AGENT_NODEENV)/bin/node" ] || [ ! -x "$(AGENT_NODEENV)/bin/npm" ]; then \

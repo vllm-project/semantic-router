@@ -282,6 +282,16 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: test-training-contracts
     inventory: training-contracts-and-tiny-model-cpu-inference
+  training-locks:
+    display_name: Training Lockfiles
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: model
+    workflow: .github/workflows/test-tools.yml
+    target: check-training-uv-lock
+    inventory: training-uv-lock-check
   onnx-artifacts:
     layer: runtime
     execution: approved
