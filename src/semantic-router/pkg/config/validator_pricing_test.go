@@ -18,6 +18,7 @@ func TestValidateModelPricingContracts(t *testing.T) {
 			pricing: ModelPricing{
 				Currency: "USD", PromptPer1M: 0.5, CompletionPer1M: 1.5,
 				CachedInputPer1M: 0.05, CacheWritePer1M: &cacheWrite,
+				CacheWrite1hPer1M: &cacheWrite,
 			},
 		},
 		{name: "currency omitted defaults at lookup", pricing: ModelPricing{PromptPer1M: 0.5}},
@@ -25,6 +26,8 @@ func TestValidateModelPricingContracts(t *testing.T) {
 		{name: "invalid currency", pricing: ModelPricing{Currency: "usd"}, wantErr: "pricing.currency"},
 		{name: "negative input", pricing: ModelPricing{PromptPer1M: -0.1}, wantErr: "pricing.prompt_per_1m"},
 		{name: "infinite output", pricing: ModelPricing{CompletionPer1M: math.Inf(1)}, wantErr: "pricing.completion_per_1m"},
+		{name: "negative cache write 1h", pricing: ModelPricing{CacheWrite1hPer1M: float64Ptr(-0.1)}, wantErr: "pricing.cache_write_1h_per_1m"},
+		{name: "infinite cache write 1h", pricing: ModelPricing{CacheWrite1hPer1M: float64Ptr(math.Inf(1))}, wantErr: "pricing.cache_write_1h_per_1m"},
 	}
 
 	for _, test := range tests {
