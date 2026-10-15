@@ -264,21 +264,26 @@ def test_a_bf16_resident_family_counts_its_bf16_linear_weights_on_gpus():
 
 
 # docs/records/bf16-resident-device-memory.md: parameters, BF16-stored Linear
-# parameters and the peak with short requests on an RTX 4090.
+# parameters and the peak with short requests on an RTX 4090, which had
+# 22.8 GiB free.
 BF16_RESIDENT_PEAKS_GIB = {
     "Decision-2.0-Lux-9B": (7_940_895_744, 6_918_504_448, 19.03),
     "Vela-2.0-9B": (7_949_850_627, 6_918_504_448, 18.48),
 }
+RTX_4090_FREE_GIB = 22.8
 
 
 @pytest.mark.parametrize("model", sorted(BF16_RESIDENT_PEAKS_GIB))
 def test_the_estimate_covers_each_measured_bf16_resident_peak_on_a_24_gb_gpu(model):
     parameters, bf16, peak = BF16_RESIDENT_PEAKS_GIB[model]
     needed = estimate_bytes(SPEC, parameters, "cuda", bf16) / GIB
-    assert peak + 0.6 <= needed < 22
+    assert peak + 0.6 <= needed < RTX_4090_FREE_GIB
 
 
-def test_the_bf16_count_is_what_the_native_engine_holds_on_a_gpu(tmp_path):
+# "all" is a stock checkpoint (the Qwen base under Decision-2.0-Vega-27B): its
+# embeddings, norms and convolutions are BF16 too, but stay FP32 on the GPU.
+@pytest.mark.parametrize("stored", ["linear", "all"])
+def test_the_bf16_count_is_what_the_native_engine_holds_on_a_gpu(tmp_path, stored):
     from vllm_srun.engines.native.engine import (
         bf16_resident_parameters,
         build_on_meta,
@@ -288,6 +293,8 @@ def test_the_bf16_count_is_what_the_native_engine_holds_on_a_gpu(tmp_path):
 
     config = qwen3_5_config(384)
     state = random_backbone("qwen3_5_text", config, seed=3)
+    if stored == "all":
+        state = {name: value.to(torch.bfloat16) for name, value in state.items()}
     save({f"backbone.{n}": v for n, v in state.items()}, tmp_path / "m.safetensors")
     spec = BackboneSpec(
         config["model_type"], config, (tmp_path / "m.safetensors",), "backbone."
