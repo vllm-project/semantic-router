@@ -27,6 +27,33 @@ Start with the public [model training guide](../../website/docs/training/trainin
 to choose a model family. Use the README beside a trainer for its environment,
 data preparation, commands, evaluation, and artifact format.
 
+## Environment setup
+
+Install each area from its own directory. Where a lock exists, run
+`uv sync --locked` there. Areas without a `uv.lock` still use the requirements
+file named in that area's README. Optional dependency groups stay in the area
+README. When an area gains a lock, update its row.
+
+| Area | Locked | Setup |
+| --- | --- | --- |
+| [`kv_mapper`](kv_mapper/) | no | no `uv.lock` yet |
+| [`model_classifier/classifier_model_fine_tuning_lora`](model_classifier/classifier_model_fine_tuning_lora/) | yes | `uv sync --locked` |
+| [`model_classifier/escalation_risk`](model_classifier/escalation_risk/) | yes | `uv sync --locked` |
+| [`model_classifier/fact_check_fine_tuning_lora`](model_classifier/fact_check_fine_tuning_lora/) | yes | `uv sync --locked` |
+| [`model_classifier/hallucination_detection_classifier`](model_classifier/hallucination_detection_classifier/) | no | no `uv.lock` yet |
+| [`model_classifier/modality_routing_classifier`](model_classifier/modality_routing_classifier/) | yes | `uv sync --locked` |
+| [`model_classifier/pii_model_fine_tuning_lora`](model_classifier/pii_model_fine_tuning_lora/) | yes | `uv sync --locked` |
+| [`model_classifier/safety_classifier`](model_classifier/safety_classifier/) | no | no `uv.lock` yet |
+| [`model_classifier/user_feedback_classifier`](model_classifier/user_feedback_classifier/) | no | no `uv.lock` yet |
+| [`model_embeddings/domain_adapted_embeddings`](model_embeddings/domain_adapted_embeddings/) | no | no `uv.lock` yet |
+| [`model_embeddings/mmbert_32k`](model_embeddings/mmbert_32k/) | no | no `uv.lock` yet |
+| [`model_embeddings/multimodal/large`](model_embeddings/multimodal/large/) | no | no `uv.lock` yet |
+| [`model_embeddings/multimodal/small`](model_embeddings/multimodal/small/) | no | no `uv.lock` yet |
+| [`model_eval`](model_eval/) | yes | `uv sync --locked` |
+| [`model_experiment/mmlu_pro_solver_lora`](model_experiment/mmlu_pro_solver_lora/) | yes | `uv sync --locked` |
+| [`model_selection/ml_model_selection`](model_selection/ml_model_selection/) | no | no `uv.lock` yet |
+| [`model_selection/rl_model_selection`](model_selection/rl_model_selection/) | no | no `uv.lock` yet |
+
 ## Training control-plane contract
 
 `semantic-router.training/v2` defines shared resources and messages for selector
