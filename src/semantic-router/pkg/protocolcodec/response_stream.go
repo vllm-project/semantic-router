@@ -82,11 +82,16 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		}
 		return []llmprotocol.Event{failed}, nil
 	}
-	events := []llmprotocol.Event{{
+	startEvent := llmprotocol.Event{
 		Type:       llmprotocol.EventResponseStarted,
 		ResponseID: response.ID,
 		Model:      response.Model,
-	}}
+	}
+	if response.Usage.State != "" {
+		usage := response.Usage
+		startEvent.Usage = &usage
+	}
+	events := []llmprotocol.Event{startEvent}
 	itemIndex := 0
 	for outputIndex, output := range response.Output {
 		groups := groupResponseStreamContent(output.Content)

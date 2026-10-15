@@ -431,6 +431,7 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 			return nil, diagnostics, err
 		}
 	}
+	appendResponsesCacheCreationOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	wire, err := encodeResponsesSuccessResource(response, envelope)
 	if err != nil {
 		return nil, diagnostics, err

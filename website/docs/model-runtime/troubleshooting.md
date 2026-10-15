@@ -175,6 +175,7 @@ replace the recorded configurations.
 | Message mentions | Do this |
 | --- | --- |
 | `removed model execution fields`, `candle`, `ort`, `openvino`, `precision`, `variant`, `use_mmbert_32k`, `use_nli`, `polarity_guard` | Run `vllm-sr config migrate`. See [Migrate](model-runtime/migrate.md). |
+| `profile was removed`, and your `config.yaml` has no `profile` | The CLI wrote it: the router image is newer than the CLI. Reinstall the CLI from the same channel, or pass `--image` with the image built with your CLI; older development CLIs pull `:latest` instead of their own images. |
 | a binding does not match the model | The model has different labels, heads, dimensions or a smaller input limit than the feature needs. Bind a model made for that feature, or change `input`. |
 | `artifact must be a Hub repository ID or an absolute package path` | Use `owner/name` for a Hub model or an absolute path for a local copy. |
 | `revision must be a 40-hex commit` | Use the full commit hash, not a branch or tag. |
@@ -277,8 +278,10 @@ not finish its safety scan within it.
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on
   the same host: give the CPU models cores of their own.
-- Decision models on a GPU can use `shared_context` or `batching`; see
-  [Profiles](./profiles.md).
+- Concurrent requests already share forwards. For many questions about one
+  input, turn on `enable_shared_context` where it is off; to trade throughput
+  for latency, lower `batch_window_ms` or `max_num_seqs`. See
+  [Engine arguments](./engine-args.md).
 
 ## FAQ
 

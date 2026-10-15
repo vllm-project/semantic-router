@@ -2036,6 +2036,10 @@
           {
             "field": "output.status",
             "action": "dropped"
+          },
+          {
+            "field": "usage.cache_creation",
+            "action": "dropped"
           }
         ]
       }

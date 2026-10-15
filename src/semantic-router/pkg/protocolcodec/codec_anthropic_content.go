@@ -109,12 +109,15 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 
 func requireAnthropicContentFields(object map[string]json.RawMessage, typeName string, providerOutput bool) error {
 	requiredByType := map[string][]string{
-		"text":        {"text"},
-		"thinking":    {"thinking"},
-		"image":       {"source"},
-		"document":    {"source"},
-		"tool_use":    {"id", "input", "name"},
-		"tool_result": {"content", "tool_use_id"},
+		"text":     {"text"},
+		"thinking": {"thinking"},
+		"image":    {"source"},
+		"document": {"source"},
+		"tool_use": {"id", "input", "name"},
+		// content is optional for tool_result, matching the official SDK
+		// contract: only type and tool_use_id are required. Omitted content
+		// decodes to an empty tool result.
+		"tool_result": {"tool_use_id"},
 	}
 	for _, name := range requiredByType[typeName] {
 		if _, present := object[name]; present {
@@ -635,8 +638,8 @@ func encodeAnthropicInstructions(wire *anthropicRequestWire, request llmprotocol
 	for _, instruction := range request.Instructions {
 		contents = append(contents, instruction.Content...)
 	}
-	encoded, err := encodeAnthropicContent(contents)
-	if err == nil {
+	encoded, err := encodeAnthropicRequestContent(contents)
+	if err == nil && !bytes.Equal(encoded, []byte("[]")) {
 		wire.System = encoded
 	}
 	return err
@@ -702,15 +705,34 @@ func encodeAnthropicMessage(message llmprotocol.Message) ([]anthropicMessageWire
 	if role != llmprotocol.RoleSystem && role != llmprotocol.RoleUser && role != llmprotocol.RoleAssistant {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_role", "message role cannot be encoded as Anthropic Messages", nil)
 	}
-	content, err := encodeAnthropicContent(message.Content)
+	content, err := encodeAnthropicRequestContent(message.Content)
 	if err != nil {
 		return nil, err
+	}
+	if bytes.Equal(content, []byte("[]")) && message.ReasoningEffort == "" {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "empty_anthropic_message", "Anthropic Messages cannot represent a message containing only empty text", nil)
 	}
 	wire := anthropicMessageWire{Role: string(role), Content: content}
 	if message.ReasoningEffort != "" {
 		wire.OutputConfig = &anthropicOutputConfigWire{Effort: message.ReasoningEffort}
 	}
 	return []anthropicMessageWire{wire}, nil
+}
+
+// Empty text is not a valid Anthropic request block. Keep the neutral request
+// unchanged so other targets and response encoding retain their own semantics.
+func encodeAnthropicRequestContent(contents []llmprotocol.Content) (json.RawMessage, error) {
+	filtered := make([]llmprotocol.Content, 0, len(contents))
+	for _, content := range contents {
+		if content.Kind == llmprotocol.ContentText && content.Text == "" {
+			if content.Cache != nil {
+				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot preserve cache_control on an empty text block", nil)
+			}
+			continue
+		}
+		filtered = append(filtered, content)
+	}
+	return encodeAnthropicContent(filtered)
 }
 
 func encodeAnthropicContent(contents []llmprotocol.Content) (json.RawMessage, error) {
@@ -791,7 +813,7 @@ func encodeAnthropicToolResultBlock(result *llmprotocol.ToolResult) (anthropicCo
 	if result == nil {
 		return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_result", "tool result is invalid", nil)
 	}
-	content, err := encodeAnthropicContent(result.Content)
+	content, err := encodeAnthropicRequestContent(result.Content)
 	if err != nil {
 		return anthropicContentWire{}, err
 	}

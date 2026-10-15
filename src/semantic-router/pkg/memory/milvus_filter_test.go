@@ -121,3 +121,24 @@ func varcharColumnValue(t *testing.T, col entity.Column) string {
 	}
 	return value
 }
+
+// Memory IDs, like user IDs, are interpolated into Milvus quoted literals in
+// Get and Forget. They must go through the same escaping helper so a value
+// containing '"' or '\\' cannot break out and inject filter logic.
+func TestMilvusMemoryIDFilterEscapesInjection(t *testing.T) {
+	if got := milvusEqString("id", "mem-1"); got != `id == "mem-1"` {
+		t.Fatalf("benign id: got %q", got)
+	}
+
+	malicious := `x" || user_id != "y`
+	got := milvusEqString("id", malicious)
+	if strings.Contains(got, `" || user_id != "`) {
+		t.Fatalf("injection not neutralized: %s", got)
+	}
+	if got != `id == "x\" || user_id != \"y"` {
+		t.Fatalf("unexpected escaping: got %q", got)
+	}
+	if !strings.Contains(got, milvusEqString("id", malicious)) {
+		t.Fatalf("did not use the shared milvusEqString helper: %s", got)
+	}
+}
