@@ -98,7 +98,7 @@ Both routers are ready within 8 s (runtime) and 10–11 s (legacy) of start.
   was at 30.6 ms sequential p50 (legacy 51.8), with one slower tail: p99 at
   concurrency 4 was 1,207 ms against candle's 907 ms, because short requests
   queued behind long windowed forwards inside a model's process. The IP1 engine
-  work (the exact profile on oneDNN packed linears and length-grouped packed
+  work (the reference path on oneDNN packed linears and length-grouped packed
   attention) halved the sequential p50 again and removed that tail.
 
 ## The design change behind the result

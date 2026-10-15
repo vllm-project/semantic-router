@@ -214,7 +214,11 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		if err != nil {
 			return nil, err
 		}
-		r.dispatchShadowIfConfigured(ctx, dispatch)
+		// A rejected request (an immediate response) never goes upstream, so it is
+		// not mirrored to the shadow model either.
+		if finalized.GetImmediateResponse() == nil {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
 		return finalized, nil
 	}
 
@@ -261,7 +265,8 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	dispatched = true
+	// An immediate response rejects the request, so there is nothing to mirror.
+	dispatched = response.GetImmediateResponse() == nil
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

@@ -16,7 +16,7 @@ import (
 func TestSystemOneAutoMetadataVisibilityCoversEveryState(t *testing.T) {
 	identity := systemone.InferenceIdentity{
 		ModelID: "kai-native", Revision: "revision-1", ModelSHA256: strings.Repeat("a", 64),
-		Engine: "native", Profile: "exact", Numerics: "exact", Accelerator: "cpu",
+		Engine: "native", Dtype: "float32", Numerics: "exact", Accelerator: "cpu",
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
 listeners:
