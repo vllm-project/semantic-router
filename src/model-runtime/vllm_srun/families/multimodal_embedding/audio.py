@@ -16,11 +16,15 @@ from __future__ import annotations
 import functools
 import math
 import struct
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 WHISPER_RATE = 16_000
 CLAP_RATE = 48_000
@@ -46,9 +50,36 @@ _EXTENSIBLE_MIN_EXTRA = 22
 # Slaney's mel scale: linear below 1 kHz (15 mels), logarithmic above.
 _MIN_LOG_HERTZ = 1000.0
 _MIN_LOG_MEL = 15.0
+
+
+class WhisperSettings(TypedDict):
+    feature_extractor_type: str
+    feature_size: int
+    sampling_rate: int
+    n_fft: int
+    hop_length: int
+    n_samples: int
+    nb_max_frames: int
+    padding_value: float
+
+
+class ClapSettings(TypedDict):
+    feature_extractor_type: str
+    feature_size: int
+    sampling_rate: int
+    fft_window_size: int
+    hop_length: int
+    nb_max_samples: int
+    frequency_min: int
+    frequency_max: int
+    padding: str
+    truncation: str
+    top_db: None
+
+
 # The published feature extractors' settings (Transformers' WhisperFeatureExtractor
 # and ClapFeatureExtractor as Vela 1.0 Omni configures them).
-WHISPER_FEATURES = {
+WHISPER_FEATURES: WhisperSettings = {
     "feature_extractor_type": "WhisperFeatureExtractor",
     "feature_size": 80,
     "sampling_rate": WHISPER_RATE,
@@ -58,7 +89,7 @@ WHISPER_FEATURES = {
     "nb_max_frames": 3000,
     "padding_value": 0.0,
 }
-CLAP_FEATURES = {
+CLAP_FEATURES: ClapSettings = {
     "feature_extractor_type": "ClapFeatureExtractor",
     "feature_size": 64,
     "sampling_rate": CLAP_RATE,
@@ -75,11 +106,14 @@ CLAP_FEATURES = {
 
 def _hertz_to_mel(frequency: float) -> float:
     if frequency >= _MIN_LOG_HERTZ:
-        return _MIN_LOG_MEL + np.log(frequency / _MIN_LOG_HERTZ) * (27.0 / np.log(6.4))
+        mel: float = _MIN_LOG_MEL + np.log(frequency / _MIN_LOG_HERTZ) * (
+            27.0 / np.log(6.4)
+        )
+        return mel
     return 3.0 * frequency / 200.0
 
 
-def _mel_to_hertz(mels: np.ndarray) -> np.ndarray:
+def _mel_to_hertz(mels: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
     frequencies = 200.0 * mels / 3.0
     log = mels >= _MIN_LOG_MEL
     frequencies[log] = _MIN_LOG_HERTZ * np.exp(
@@ -90,7 +124,7 @@ def _mel_to_hertz(mels: np.ndarray) -> np.ndarray:
 
 def slaney_filters(
     bins: int, mels: int, low: float, high: float, rate: int
-) -> np.ndarray:
+) -> NDArray[np.float64]:
     """Area-normalized triangular filters on Slaney's mel scale, ``[bins, mels]`` float64.
 
     The operations of Transformers' ``audio_utils.mel_filter_bank`` with
@@ -106,7 +140,7 @@ def slaney_filters(
     )
     falling = -slopes[:, :-2] / spacing[:-1]
     rising = slopes[:, 2:] / spacing[1:]
-    filters = np.maximum(np.zeros(1), np.minimum(falling, rising))
+    filters: NDArray[np.float64] = np.maximum(np.zeros(1), np.minimum(falling, rising))
     return filters * np.expand_dims(2.0 / (centres[2 : mels + 2] - centres[:mels]), 0)
 
 
@@ -118,12 +152,13 @@ class AudioError(ValueError):
 class PCM:
     """Decoded audio: channels-first float32 samples ``[channels, frames]`` at ``rate`` Hz."""
 
-    samples: np.ndarray
+    samples: NDArray[np.float32]
     rate: int
 
     @property
     def channels(self) -> int:
-        return self.samples.shape[0]
+        channels: int = self.samples.shape[0]
+        return channels
 
 
 @dataclass(frozen=True)
@@ -135,7 +170,7 @@ class Spectrum:
     hop_length: int
     n_samples: int
     n_frames: int
-    mel_filters: np.ndarray  # [n_fft // 2 + 1, mels], float64
+    mel_filters: NDArray[np.float64]  # [n_fft // 2 + 1, mels]
     clap: bool
 
     @classmethod
@@ -212,7 +247,7 @@ class Spectrum:
         )
 
 
-def _expect(config: dict[str, Any], expected: dict[str, Any], name: str) -> None:
+def _expect(config: dict[str, Any], expected: Mapping[str, object], name: str) -> None:
     changed = sorted(key for key, value in expected.items() if config.get(key) != value)
     if changed:
         raise ValueError(f"unsupported {name} feature extractor settings: {changed}")
@@ -300,7 +335,7 @@ def decode_wav(data: bytes) -> PCM:
 
 
 @functools.lru_cache(maxsize=32)
-def _kernel(original: int, new: int) -> tuple[np.ndarray, int]:
+def _kernel(original: int, new: int) -> tuple[NDArray[np.float64], int]:
     """torchaudio's Hann sinc kernel for coprime rates, transposed (``[2 * width + original, new]``, float64).
 
     It depends only on the rates, so each pair is built once (read-only).
@@ -322,7 +357,9 @@ def _kernel(original: int, new: int) -> tuple[np.ndarray, int]:
     return kernel, width
 
 
-def resample(signal: np.ndarray, source: int, target: int) -> np.ndarray:
+def resample(
+    signal: NDArray[np.float32], source: int, target: int
+) -> NDArray[np.float32]:
     """One channel from ``source`` Hz to ``target`` Hz; the output has ``ceil(n * target / source)`` samples."""
     if source == target:
         return signal.astype(np.float32, copy=True)
@@ -335,18 +372,19 @@ def resample(signal: np.ndarray, source: int, target: int) -> np.ndarray:
     right = max((groups - 1) * original + taps - width - len(signal), 0)
     padded = np.pad(signal.astype(np.float64), (width, right))
     frames = sliding_window_view(padded, taps)[::original][:groups]
-    out = frames @ kernel
+    out: NDArray[np.float64] = frames @ kernel
     return out.reshape(-1)[:length].astype(np.float32)
 
 
-def native_rate(pcm: PCM, target: int) -> np.ndarray:
+def native_rate(pcm: PCM, target: int) -> NDArray[np.float32]:
     """Every channel resampled to ``target`` and averaged; at most 30 seconds."""
     length = min(-(-pcm.samples.shape[1] * target // pcm.rate), target * MAX_SECONDS)
     total = np.zeros(length, dtype=np.float32)
     for channel in pcm.samples:
         values = resample(channel, pcm.rate, target)[:length]
         total[: len(values)] += values
-    return total / np.float32(pcm.channels)
+    mean: NDArray[np.float32] = total / np.float32(pcm.channels)
+    return mean
 
 
 def windows(samples: int) -> list[tuple[int, int]]:
@@ -360,7 +398,7 @@ def windows(samples: int) -> list[tuple[int, int]]:
     ]
 
 
-def features(wave: np.ndarray, spec: Spectrum) -> np.ndarray:
+def features(wave: NDArray[np.float32], spec: Spectrum) -> NDArray[np.float32]:
     """Log-mel features: Whisper ``[mels, frames]`` normalized; CLAP ``[frames, mels]`` in dB."""
     padded = np.zeros(spec.n_samples, dtype=np.float32)
     if spec.clap:
@@ -384,11 +422,13 @@ def features(wave: np.ndarray, spec: Spectrum) -> np.ndarray:
     energy = np.full((spec.n_frames, spec.mel_filters.shape[1]), 1e-10)
     energy[:live] = np.maximum(power @ spec.mel_filters, 1e-10)
     if spec.clap:
-        return (10.0 * np.log10(energy)).astype(np.float32)
+        decibels: NDArray[np.float32] = (10.0 * np.log10(energy)).astype(np.float32)
+        return decibels
     log = np.log10(energy).T.astype(np.float32)
-    return (
+    normalized: NDArray[np.float32] = (
         np.maximum(log, log.max() - np.float32(8.0)) + np.float32(4.0)
     ) / np.float32(4.0)
+    return normalized
 
 
 def validate(pcm: PCM, sample_rates: tuple[int, ...], max_sample_rate: int) -> None:

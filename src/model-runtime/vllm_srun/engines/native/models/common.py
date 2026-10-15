@@ -12,7 +12,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
-from .tree import tree_attention
+from .packed import Packed, is_packed, packed_attention
+from .tree import Tree, is_tree, tree_attention
 
 PADDING_MASK_RANK = 2
 # Transformers passes enable_gqa to SDPA only up to this head size.
@@ -76,7 +77,8 @@ class GatedMLP(nn.Module):
         self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+        out: torch.Tensor = self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+        return out
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -87,7 +89,7 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
 
 def apply_rotary(
     q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
-):
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Full rotary embedding over the head dimension (Qwen3)."""
     cos = cos.unsqueeze(1)
     sin = sin.unsqueeze(1)
@@ -96,7 +98,7 @@ def apply_rotary(
 
 def apply_partial_rotary(
     q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
-):
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Rotary embedding over the first ``cos.shape[-1]`` channels (Qwen3.5)."""
     cos = cos.unsqueeze(1)
     sin = sin.unsqueeze(1)
@@ -160,17 +162,22 @@ def attention(
     query: torch.Tensor,
     key: torch.Tensor,
     value: torch.Tensor,
-    mask: torch.Tensor | None,
+    mask: torch.Tensor | Tree | Packed | None,
     *,
     groups: int,
     scaling: float,
 ) -> torch.Tensor:
     """SDPA as Transformers dispatches it: GQA in-kernel only without a mask; returns [B, T, H, D].
 
-    A shared-context ``Tree`` as the mask runs the tree attention instead.
+    A shared-context ``Tree`` as the mask runs the tree attention instead, and
+    a ``Packed`` layout one variable-length attention over its rows.
     """
-    if getattr(mask, "is_tree", False):
+    if is_tree(mask):
         return tree_attention(query, key, value, mask, groups=groups, scaling=scaling)
+    if is_packed(mask):
+        return packed_attention(
+            kernels, query, key, value, mask, groups=groups, scaling=scaling
+        )
     enable_gqa = False
     if groups > 1:
         if mask is None and key.shape[-1] == value.shape[-1] <= SDPA_GQA_MAX_HEAD_DIM:
@@ -179,7 +186,7 @@ def attention(
             key = repeat_kv(key, groups)
             value = repeat_kv(value, groups)
     is_causal = query.shape[2] > 1 and mask is None
-    output = kernels("sdpa")(
+    output: torch.Tensor = kernels("sdpa")(
         query,
         key,
         value,

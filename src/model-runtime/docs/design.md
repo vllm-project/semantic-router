@@ -1,7 +1,7 @@
 # vLLM Semantic Router Model Runtime
 
 Design for the built-in model runtime of vLLM Semantic Router (vllm-sr). The
-runtime serves every model the router runs: Decision 2.0 and 1.0, Vela 1.0 and
+runtime serves every model the router runs: Decision 3.0, 2.0 and 1.0, Vela 1.0 and
 2.0, and third-party models that a family plugin understands. Phase 1 served
 Decision 2.0. Phases 2–4 move Decision 1.0 and Vela 1.0 onto the runtime, add
 Vela 2.0 and the classify, embeddings and rerank surfaces, and delete the
@@ -12,20 +12,29 @@ legacy native bindings.
 | Status | Phase 1 merged ([#4481](https://github.com/vllm-project/semantic-router/pull/4481)); Phases 2–4 in implementation ([#4496](https://github.com/vllm-project/semantic-router/issues/4496)) |
 | Domain | `src/model-runtime/` (Python package `vllm_srun`) |
 | Router side | `src/semantic-router/pkg/modelservice/` (client, bundles, lifecycle) and `pkg/modelruntime/serving/` (typed task bindings) |
-| CLI | `vllm-sr serve <hf-model> [<hf-model> ...]` (engine mode); `vllm-sr serve --config ...` (router mode) |
+| CLI | `vllm-sr serve ARTIFACT --engine` (managed Engine instance); `vllm-srun serve` (direct worker); `vllm-sr serve --config ...` (Router mode) |
+
+This document records the original phased design. For current startup commands,
+replica placement and API publication, use the [deployment guide](../../../website/docs/model-runtime/deploy.md)
+and [managed instance guide](../../vllm-sr/INSTANCE_MODES.md). The managed frontend
+now supervises a separate worker for each replica of a logical deployment.
 
 ## 1. Goals
 
-1. **Out-of-the-box router models.** `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B`
-   or `vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain` downloads the
+1. **Out-of-the-box router models.** `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine`
+   or a direct worker command such as `vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain` downloads the
    pinned package, verifies every byte, loads it with model code built into
    the runtime, and serves typed answers. The router uses the same runtime for
    every signal, cache, store and selector that needs a model.
-2. **Byte-identical by default where a release defines the numerics.** The
-   Decision 2.0 default path reproduces the runtime inside the released
-   packages bit for bit. Migrated models (Decision 1.0, Vela 1.0) carry parity
-   records against the path that served them before. Every faster path that
-   changes numerics is an opt-in profile with a measured accuracy record.
+2. **Throughput first, checked against the release.** Like vLLM, the runtime
+   batches concurrent requests by default. A request's reference forwards
+   (alone, in the released split) reproduce the runtime inside the released
+   Decision 2.0 packages bit for bit, and the golden check compares against
+   them at startup. Migrated models (Decision 1.0, Vela 1.0) carry parity
+   records against the path that served them before. Any other faster path
+   that changes numerics is on by default only where its accuracy record shows
+   no loss; elsewhere it is an engine argument (section 5.4). Engine arguments
+   replaced the original design's opt-in numerics profiles.
 3. **Pluggable.** Model families, execution engines and hardware accelerators
    are separate plugin layers. Third parties add a family, an engine or an
    accelerator through Python entry points without patching the runtime.
@@ -53,7 +62,7 @@ running packaged remote code (`trust_remote_code`).
 | Architecture | A contract-first, standalone-process Python runtime, supervised by the router. Three plugin layers: model family, engine, accelerator. No Go/cgo/Rust core. |
 | Protocol | HTTP/JSON with a checked-in OpenAPI schema; a Unix domain socket (UDS) between router and runtime, TCP in engine mode; a generated Go client. |
 | Naming | Domain `src/model-runtime/`, distribution and command `vllm-srun`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. The distribution ships in the router images and is not published to PyPI. Router mode keeps working and the router manages the runtime's lifecycle. |
-| Numerics | The default path is byte-identical to the released packages' runtime. Shared context, cross-request batching and max speed are opt-in profiles, each with a measured accuracy impact. |
+| Numerics | A request's reference path is byte-identical to the released packages' runtime. Cross-request batching is the default (section 5.4); shared context and faster kernels each have a measured accuracy record and are on by default only where it shows no loss. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
 | Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
 
@@ -64,16 +73,16 @@ running packaged remote code (`trust_remote_code`).
 | Delivery | Phases 2, 3 and 4 in one PR ([#4496](https://github.com/vllm-project/semantic-router/issues/4496)), commits split by module. |
 | Families | `decision1` (Decision 1.0), `task_heads` (Vela 1.0 and compatible HF encoder task models), `vela2` (Vela 2.0), `multimodal_embedding` (Vela 1.0 Omni). `decision2` is unchanged. |
 | Surfaces | `POST /v1/classify`, `/v1/embeddings` (OpenAI-compatible), `/v1/rerank`, and `/v1/bundle`; Set and Span answers on `/v1/decisions` where a model declares them. The Phase 1 surfaces are unchanged. |
-| Processes | One runtime process serves one or more models. Each model keeps its own worker, device and profile. The router groups its managed deployments into processes (by default one per device). |
-| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call. Bundling is transport only: every task keeps the semantics of its own surface. |
+| Processes | One runtime process serves one or more models. Each model keeps its own worker, device and engine arguments. The router groups its managed deployments into processes (by default one per device). |
+| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call, and every question the stage asks one model as one decisions task, about one state or several (`states`). Bundling is transport only: every task keeps the semantics of its own surface. |
 | Engines | The native PyTorch engine first, for encoders and decoders, on every accelerator; every built-in model runs on it by default. An optional `onnxruntime` engine (the `onnx` extra, not in the router images) runs the ONNX graphs packages ship (Vela 1.0, Vela 2.0 0.3B) and prepared Omni bundles, for portability. |
 | Hardware | Accelerators `cpu`, `cuda`, `rocm` (built in) plus `xpu` and `mps` (built-in plugin slots, unvalidated). |
 | Router seam | The router's typed task bindings (`pkg/modelruntime/binding`, contracts `label_distribution.v1`, `label_scores.v1`, `token_spans.v1`, `embedding.v1`, `relevance_scores.v1`) are kept. The provider facade `pkg/modelruntime/native` (candle, ORT, OpenVINO) is replaced by `pkg/modelruntime/serving`, which implements every contract through the runtime. Consumers change their constructor, not their logic. |
 | Algorithms | Keyword matching (BM25, n-gram) and the KNN, KMeans, SVM and MLP model selectors are algorithms, not models: they become pure Go with parity tests against the bindings they replace. |
 | Config | The canonical layout stays. `provider: model_runtime` deployments may serve task bindings. The providers `candle`, `ort` and `openvino` and their execution fields are removed from the parser; `vllm-sr config migrate` rewrites them. |
 | Retirements | The NLI model (hallucination explainer, response-cache polarity guard) and the OpenVINO provider retire, as decided in the runtime proposal. Every other legacy model migrates or has a documented replacement (section 16). |
-| Exactness | Decision 2.0 `exact` stays byte-identical. Decision 1.0 `exact` targets bit-identity with the packages' bundled runtime on the same device class. Vela 1.0 `exact` is FP32 on every device, with parity records against the legacy path. |
-| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. The Rust build stages are deleted. |
+| Reference path | Decision 2.0's stays byte-identical. Decision 1.0's targets bit-identity with the packages' bundled runtime on the same device class. Vela 1.0's is FP32 on every device, with parity records against the legacy path. |
+| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Its other dependencies install at the versions in `requirements-lock.txt`, so every build of a release gets the same set. Model-backed validation of the image runs in development CI: recipe conformance serves the maintained recipes' models through the CI-built image, and Published Models serves the published Vela models through the runtime from source. The release workflow rebuilds the tagged source without running tests (#4273), so the published digest itself is not model-run. The Rust build stages are deleted. |
 
 ## 3. Overview
 
@@ -83,15 +92,15 @@ running packaged remote code (`trust_remote_code`).
                  | caches, memory, vector stores, RAG, tools, hallucination, model selection            |
                  |   pkg/modelruntime/serving: typed task bindings (label distribution, scores, spans,  |
                  |   embeddings, relevance) over pkg/modelservice                                       |
-                 |   pkg/modelservice: generated client, request bundles, managed process groups,       |
+                 |   pkg/modelservice: generated client, request bundles, managed workers,              |
                  |   attached endpoints, per-deployment readiness, fail-open                            |
                  +---------------------------------|---------------------------------------------------+
                                                    | HTTP/JSON over UDS (managed) or TCP (attached)
                                                    v
  +------------------------------ vllm_srun (one Python process, one or more models) ---------------+
  | api: /v1/decisions /v1/systemone /v1/classify /v1/embeddings /v1/rerank /v1/bundle /v1/models /health |
- | per model: scheduler (admission, deadlines, profile hook, micro-batches) and one worker on its device |
- | families: decision2 | decision1 | task_heads | vela2 | multimodal_embedding  (render, readout, answers)|
+ | per model: scheduler (admission, deadlines, batching, micro-batches) and one worker on its device     |
+ | families: decision3 | decision2 | decision1 | task_heads | vela2 | multimodal_embedding (render, readout)|
  | engines: native (PyTorch: Qwen3, Qwen3.5, ModernBERT, BERT, LoRA, Omni towers) | onnxruntime (optional)|
  | accelerators: cpu | cuda | rocm | xpu | mps  (detection, kernels, pure-torch fallbacks)               |
  | registry: pinned Hub revisions, cache, manifest / file-hash verification, licence and access policy  |
@@ -111,12 +120,14 @@ src/model-runtime/
   pyproject.toml            # distribution vllm-srun; entry points for built-in plugins
   AGENTS.md, README.md
   Dockerfile                # CPU image (CI, E2E, Kubernetes)
+  requirements-lock.txt     # dependency versions every image installs, PyTorch's excepted
   docs/
     design.md               # this document
     records/                # parity and performance records
   vllm_srun/
     __main__.py, cli.py     # `vllm-srun serve ...`; `vllm-sr serve <hf-model>` delegates here
-    config.py               # ServeConfig (process options) and ModelConfig (one served model)
+    config.py               # ServeConfig (process options), ModelConfig (one served model), EngineArgs
+    dtypes.py               # --dtype: the published precision, and the policy an explicit dtype runs
     runtime.py              # the process: models by served name, surface dispatch, bundles
     api/
       openapi.yaml          # THE contract (served at /openapi.yaml; the Go client is generated from it)
@@ -126,18 +137,18 @@ src/model-runtime/
     text/                   # shared text handling: the package tokenizer, input policies and windows
     heads/                  # shared readout heads (candidate, sequence, scores, token, pooled, relevance, span)
     plugins/
-      base.py               # ModelFamily, LoadedModel, Engine, EngineModel, Accelerator, Profile, specs
+      base.py               # ModelFamily, LoadedModel, Engine, EngineModel, Accelerator, specs
       decisions.py          # DecisionModel: the decisions surface, golden comparison and outcomes per question
       registry.py           # entry-point discovery and selection
     registry/
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       artifacts.py          # file inventories and hash verification for packages without a manifest
       builtin.py            # the first-party models: the tables the installed families name
-      tables/               # the built-in families' tables: decision2.py, decision1.py, vela1.py, vela2.py, omni.py
+      tables/               # the built-in families' tables: decision3.py, decision2.py, decision1.py, vela1.py, vela2.py, omni.py
       golden_answers*.json  # golden references per family, per device class
-      kernel_choices.json   # pinned autotuned kernel choices (Decision 2.0)
+      kernel_choices.json   # pinned autotuned kernel choices (Qwen3.5 decoders)
       policy.py             # licence and access policy, token handling
-    scheduler/              # planner, scheduler (one per model)
+    scheduler/              # planner, batching (the batcher the engine arguments set), scheduler (one per model)
     placement.py            # device choice and memory budget
     devices.py              # `vllm-srun devices`: the host's devices and the one auto takes
     supervision/            # readiness (golden answers), metrics
@@ -152,11 +163,10 @@ src/model-runtime/
                             #   whisper.py, clap.py, lora.py, tree.py
       onnxruntime/          # ONNX Runtime sessions, execution providers, graph outputs
     accel/                  # cpu, cuda, rocm, xpu, mps; kernels.py
-    profiles/               # exact, shared_context, batching, max_speed
     testing/
       fixtures.py           # tiny random-weight packages through each family's writer, and a tiny tokenizer
       <family>.py           # the built-in families' fixture writers
-  examples/third_party_plugin/  # a documented out-of-tree family, engine, accelerator and profile, installed by the tests
+  examples/third_party_plugin/  # a documented out-of-tree family, engine and accelerator, installed by the tests
   tests/                    # unit, contract, registry, scheduler, server and integration tests
   tools/                    # golden answers, parity drivers (GPU, legacy), benchmarks
 ```
@@ -173,15 +183,14 @@ so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_srun.families` | `ModelFamily` | `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
+| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
 | `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
 | `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
-| `vllm_srun.profiles` | `Profile` | `exact`, `shared_context`, `batching`, `max_speed` |
 
 Every plugin class has a capability descriptor (`descriptor()`): a family's
 surfaces and package formats, an engine's architectures and outputs, an
-accelerator's validation status, a profile's numerics; engines and
-accelerators also list their `auto_priority`. `/v1/models` lists each active
+accelerator's validation status; engines also list the `--dtype` values
+they run, and engines and accelerators their `auto_priority`. `/v1/models` lists each active
 plugin with its distribution, version and descriptor, so a card shows why
 `auto` chose its engine and device.
 
@@ -217,12 +226,13 @@ class ModelFamily(ABC):
 
 A loaded model plans, runs and finishes requests per surface. The scheduler
 only sees work items with token IDs, so every family uses the same admission,
-deadlines and profiles:
+deadlines and batching:
 
 ```python
 class LoadedModel(ABC, Generic[ItemT, ResultT]):  # ItemT satisfies WorkItem
     info: ModelInfo                        # identity, surfaces, heads, limits, licence
-    fuse_bundled_jobs: ClassVar[bool]      # exact may run one bundle's jobs as one batch
+    batch_invariant: bool                  # set at load: each row answers the same alone or in any batch
+    shared_context_default: ClassVar[bool] # shared context when the engine arguments leave it unset
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]: ...  # validate + render
     def run(self, items: list[ItemT]) -> list[ResultT]: ...                         # one forward + readout
     def run_shared(self, items: list[ItemT], shared_prefix: int) -> list[ResultT]: ...  # decoders' shared-context batches
@@ -239,8 +249,9 @@ then answers a repeated item from the model's result cache without a forward.
 `Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
-scheduler, the profiles, the runtime core, the API, the registry, the shared
-heads and supervision in `make model-runtime-test`.
+scheduler and its batcher, the runtime core, the API, the registry, the shared
+heads, supervision, the engines and the model families in
+`make model-runtime-test`.
 
 Decision families subclass `DecisionModel` (`plugins/decisions.py`), the
 decisions mixin: it serves `/v1/decisions` through the family's `plan` (render
@@ -273,7 +284,11 @@ class EngineModel(ABC):
 ```
 
 `ForwardBatch` carries padded token IDs, the attention mask, the gathered
-positions (decision endpoints and query rows) and the shared-context prefix.
+positions (decision endpoints and query rows) and the shared-context prefix;
+with `packed`, an engine that `supports_packed` runs the rows back to back in
+one row instead (`engines/native/models/packed.py`: variable-length attention,
+the chunked gated delta rule over `cu_seqlens`, each causal convolution from a
+zero history), which only merged forwards ask for.
 `EncoderBatch` carries padded token IDs, the mask, the layer exits the readout
 needs and, for engines that run a graph, named graph inputs; `EncoderOutput`
 returns hidden states by layer or named graph outputs. Readouts stay in the
@@ -304,33 +319,75 @@ and metrics name the engine chosen. `--engine NAME` pins one.
 An accelerator describes one device class and supplies kernels: detection,
 devices, capabilities, a kernel registry with pure-torch references, autocast
 and synchronisation. Every accelerated kernel registers the reference it must
-reproduce and whether it is bit-exact; a kernel that is not bit-exact is only
-selectable by an opt-in profile. `xpu` and `mps` detect `torch.xpu` and the
+reproduce and whether it is bit-exact; a kernel that is not bit-exact runs
+only for a family that consents to approximate kernels
+(`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
-### 5.4 Profile
+### 5.4 Engine arguments
 
-| Profile | Numerics | What it does |
+A served model batches and computes as its engine arguments say (`EngineArgs`,
+`config.py`), named after vLLM's:
+
+| Argument | Default | What it does |
 | --- | --- | --- |
-| `exact` (default) | exact | The released numerics: Decision 2.0 as in Phase 1; Decision 1.0 as its bundled runtime; encoders in FP32 on every device, one request's rows per batch, or the requests queued together on a batch-invariant model |
-| `shared_context` | approximate | Runs a multi-question request's shared state once (decision families) |
-| `batching` | approximate | Coalesces rows from concurrent requests into shared padded batches within a bounded window |
-| `max_speed` | approximate | Numerics-changing kernels and dtypes on top of the above |
+| `max_num_seqs` | by device | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone |
+| `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
+| `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
+| `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
+| `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0) |
 
-A request may select `exact` at any time and another profile only if the
-server enabled it for that model.
+Limits left unset take the device's memory class (`scheduler/calibration.py`:
+32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
+8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU and a device that reports no
+memory, such as MPS or a plugin's accelerator, keep 65,536 / 8,192). On a
+GPU the runtime then calibrates the token budget after the golden check, from
+merged forwards of the model's calibration rows (`calibration_items`) at
+doubling budgets: the largest budget whose cost per token is within 2% of
+the cheapest timed (on a flat curve the smallest would follow timing noise),
+but never more than one forward does in 0.3 s (interpolated between the timed
+forwards) nor than 85% of the free device memory holds. It logs the chosen
+values and their source, and `engine_args` reports them.
 
-When `max_speed` is a deployment's configured profile, an encoder also loads
-a reduced-precision copy of its linear layers next to the FP32 weights, which
-`exact` keeps using: BF16 on GPUs, with FP32 norms, softmax and heads (the
-Decision 2.0 GPU policy), and dynamic int8 on CPU where that measures faster
-than FP32. `max_speed` requests run the copy. A family consents to a copy
-(`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records show at
-least 99% label agreement with `exact` (embeddings: cosine of at least
-0.999); faster alone is not enough. Golden readiness always runs `exact`;
-each family records the accuracy (label agreement, max |Δp| or embedding
-cosine against `exact`) and the latency of its reduced path. `vllm-sr config
-migrate` maps the legacy `precision: fp16` to `max_speed`.
+The batcher (`scheduler/batching.py`) plans the rows of every queued request
+together (`coalesced`), one lane at a time (`LoadedModel.lane`; Decision 3.0:
+text rows and rows that read media), with a token budget per lane
+(`coalesced_token_budget(lane)`). Padded forwards take rows longest first; a
+model that packs merged rows fills forwards in arrival order and counts their
+summed length. The n-th batches of the lanes share one turn (`Batch.sub`): the
+scheduler runs each as its own forward, the one expected to take least first,
+and answers its rows as soon as it ran, so a planning round adds as many turns
+as its busiest lane needs. A row's padding, neighbours and GEMM shapes depend
+on the rows beside it, so an answer can move by rounding. A request here is one
+forward, with no later step where it could join others, so the batching window
+is what lets a burst share it. A
+batch-invariant model (`LoadedModel.batch_invariant`, set at load from a test
+that every row answers the same alone or in any batch) merges the requests
+already queued without waiting and keeps forwards within 512 padded tokens
+(`merged`), and its answers never change. The golden check plans its requests
+as references: each alone, in the released split (`reference`), so readiness
+compares like with like. A card and response meta report `numerics`: `exact`
+for a batch-invariant model at `--dtype auto` without shared context or
+approximate kernels, `approximate` otherwise.
+
+At `--dtype auto` an encoder also loads the reduced copy of its linear layers
+its family consents to, next to the weights the reference forwards keep
+using, and batches that merge requests run it (`run_approximate`). A family
+consents (`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records
+show no decision changed; faster alone is not enough. Today that is the
+oneDNN-packed FP32 copy on x86 CPUs (Decision 1.0 Kai, Lex and Route, Vela
+2.0 0.3B), which keeps the published precision; the BF16 and int8 kinds
+(`engines/native/reduced.py`) were measured and refused. Approximate kernels
+follow the same rule per question type (`DtypePolicy.approximate_kernels`):
+Decision 2.0 consents to CUDA's approximate fused kernels, and Vela 2.0 does
+not, because they change 7% of its span answers. Another `--dtype` holds every
+backbone weight in that dtype and runs the reference kernels without copies;
+the golden references apply only to `auto`, so its golden status is
+`unverified` (`dtypes.py`). Each family records the accuracy (label
+agreement, max |Δp| or embedding cosine against the reference path) and the
+latency of its reduced path. `vllm-sr config migrate` drops the legacy
+`precision: fp16` (the model runs in its published precision) and maps a
+former `profile` onto these arguments.
 
 ### 5.5 Third-party plugins
 
@@ -344,15 +401,12 @@ own entry points; run uninstalled from a source tree, it reads them from its
 `auto` priority, come from the same class declarations for built-in and
 third-party plugins; a test installs a temporary distribution whose family,
 table, fixture writer and engine the runtime finds only through its entry
-points. A profile builds itself from the process options
-(`Profile.from_config`), and the CLI accepts any registered profile and
-device. Plugins run in the runtime process; the runtime never executes code
+points. The CLI accepts any registered device. Plugins run in the runtime process; the runtime never executes code
 from a model package. `examples/third_party_plugin` is a complete, documented
-example (a keyword family, a counting engine, a host accelerator and a
-one-by-one profile). The test suite builds its wheel with its own build
+example (a keyword family, a counting engine and a host accelerator). The test suite builds its wheel with its own build
 backend, installs it into a fresh directory, discovers it through the entry
 points its `pyproject.toml` declares, serves it on every surface next to a
-Decision 2.0 model, and serves it on the example accelerator and profile.
+Decision 2.0 model, and serves it on the example accelerator.
 
 ## 6. API
 
@@ -361,8 +415,13 @@ The contract is `vllm_srun/api/openapi.yaml` (OpenAPI 3.0.3), served at
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
 and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
-revision, profile, numerics, engine, device and timings, only when asked;
+revision, dtype, numerics, engine, device and timings, only when asked;
 a family's own fields such as `meta.representation` are always returned).
+Every surface and bundle response, errors included, carries a
+`Server-Timing` header with the request's phases (`parse`, `tokenize`,
+`queue`, `forward`, `post`, `serialize`) and their `total` in milliseconds
+(`vllm_srun/timing.py`); the router subtracts the total from its own time
+for the exchange to record each call's transport.
 A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
@@ -397,6 +456,12 @@ declare them:
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
+- **Further states** (every decision family). `states` names more states, each
+  with its own questions; the runtime runs each as a request of its own in the
+  model's job group, as it runs a bundle's tasks, so a state's answers are
+  those it gets alone, and answers it under the same name in the response's
+  `states`. A typed-part state reads all its parts together, so texts a
+  client wants read apart are states, not parts.
 
 This follows the Vela 2.0 packages' own server, so the runtime is a drop-in
 for it. Decision models without Set or Span answer such a question with
@@ -427,6 +492,23 @@ text-pair inputs.
   or `window` (overlapping windows reduced by the head's declared rule: `max`
   per label for distributions and scores, span union for tokens). Nothing is
   cut silently: every result reports `input` usage.
+- Long inputs are tokenized only as far as the budget decides the answer
+  (`text/bounds.py`), so their cost follows the budget, not their length. A
+  prefix is cut before a word boundary (whitespace, punctuation, a symbol, a
+  CJK, kana or Hangul character) and keeps its words' tokens, except the last
+  word and words starting within the longest added token of the cut; in a run
+  without a boundary it is cut before a character NFC never composes with its
+  predecessor and keeps the tokens ending 1,024 characters before the cut.
+  Those are the whole text's first tokens: a probe checks each kind of cut
+  once per tokenizer, on probe texts joined with every kind of text after the
+  cut, and a tokenizer reads whole texts where a cut fails. One that drops or
+  folds characters (WordPiece) never cuts inside a run, and has no bound on
+  the characters a token covers. With that bound (the longest vocabulary
+  entry, times three under NFC), `reject` and `window` fail a text longer than
+  the budget times the bound without tokenizing it. The usage of an input read
+  in part counts the tokens read and sets `tokens_lower_bound`. `window` reads
+  at most `max_tokens` (the scan budget) and fails a longer input with
+  `scan_budget_exceeded`.
 
 ```json
 {
@@ -498,8 +580,8 @@ deadline applies to every task unless a task's own deadline is earlier.
 
 `/v1/models` lists every served model: ID, family, repository, revision,
 `model_sha256`, `manifest_sha256`, surfaces, question types, heads (with
-labels), embedding and rerank descriptors, limits, licence, profiles, engine,
-accelerator, device, dtype, plugin versions, and per-model readiness and
+labels), embedding and rerank descriptors, limits, licence, engine
+arguments, numerics, engine, accelerator, device, dtype, plugin versions, and per-model readiness and
 golden status, plus the process's `limits` (`max_bundle_tasks`,
 `max_request_bytes`). `/health` is readiness (`Health`): 200 only when every
 model is ready, with the process state (`starting`, `loading`, `warming`,
@@ -507,8 +589,8 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
 HTTP, whatever its models' states. All three report `api_version`, the
-contract version (`info.version`); a client refuses a runtime of another
-major version.
+contract version (`info.version`). A router and its runtime come from one
+release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 
@@ -522,8 +604,8 @@ IDs, one or several. A Hub model is always resolved to a 40-hex commit: with
 without it, a built-in model uses its pinned revision and any other repository
 needs an explicit revision. Downloads go into the HF cache with an allow-list
 derived from the family's inventory. A token comes from the environment or the
-HF token file, never from argv. Private repositories (Vela 2.0 today) need a
-token with access.
+HF token file, never from argv. Gated and private repositories need a token
+with access.
 
 ### 7.2 Verification
 
@@ -548,10 +630,11 @@ Before any model code runs, the family verifies the package:
 
 | Family | Models | Pinned revisions |
 | --- | --- | --- |
+| `decision3` | `vllm-sr/{d3, d3-flash, d3-mini, d3-nano, d3-lite, d3-edge}` | d3 `cbff3a3c`, flash `521525ef`, mini `a475367d`, nano `3aeb1c22`, lite `a8d25a91`, edge `18d61df7` (only the files the family loads are fetched) |
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
-| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` (private preview) | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
+| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in
@@ -606,8 +689,8 @@ Decision 1.0 packages carry the pointer `{"decision_format": "vllm-sr-decision",
 The family reimplements the bundled runtime (`decision1_vela.py`,
 `decision1_qwen.py`, `decision1_system_one.py`) on the native engine's
 ModernBERT and Qwen3.5 backbones: the same prompt rendering, slots, readout,
-calibration and System One answer assembly. `exact` targets bit-identity with
-the bundled runtime on the same device class; the parity record runs both on
+calibration and System One answer assembly. Its reference path targets
+bit-identity with the bundled runtime on the same device class; the parity record runs both on
 the same requests. Route-0.6B also declares its fixed router questions
 (`QUESTIONS.json`) as presets.
 
@@ -637,7 +720,12 @@ model and compatible ModernBERT (mmBERT) classifiers.
 - **Long inputs:** `reject`, `truncate` and `window` exactly as the router
   applies them today (the window size, overlap and reductions of
   `pkg/modelruntime/native/window_contract.go` move into the family), so the
-  router stops tokenizing.
+  router stops tokenizing. The family reads an input only as far as its budget
+  decides (section 6.2). On the CPU, local layers attend in calls of 4,096
+  query tokens (`BAND_CALL_TOKENS`), so the keys, values and masks a call
+  copies stay small on a 32,768-token row; each query block is its own SDPA
+  problem, so the result is the same, bit for bit
+  (`docs/records/input-memory-cpu.md`).
 - **Engines:** native (PyTorch FP32) by default; `onnxruntime` runs the
   packages' ONNX graphs where they exist. Both are parity-checked.
 
@@ -659,6 +747,22 @@ scores with code-point offsets, per-type temperatures, and the thresholds in
 `calibration.json` (constant, per question, the PII length rule and its
 sparse-document gate). It serves `/v1/decisions` with Set and Span, plus the
 packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions.
+
+A question reads a part whole up to a scan budget (`limits.max_scan_tokens`):
+four inputs on a CPU, 32 on a GPU, or the model option `max_scan_tokens`; a
+request's `options.max_tokens` overrides it, never below one input. Each part
+is tokenized only as far as the budgets need (`bounds.read`), so a longer part
+costs its budget, not its length, and fails the questions that read it whole
+with `scan_budget_exceeded`; the other questions read its first tokens, which
+are all any truncation keeps of a part they do not read. A question with
+`overflow: truncate` reads only a part's first `limits.truncate_tokens` (one
+input on a CPU, its row one forward over what fits). The model's answer to a
+question depends on the questions beside it in a sequence, so questions of
+both kinds share their rows as before unless a row has to be read in windows;
+only then does each kind get rows of its own. The router truncates its
+routing questions and reads its safety questions whole. Span windows start at
+word starts found by bisection, so planning a long target costs its windows
+times the logarithm of its words.
 
 ### 8.5 Multimodal embeddings (`multimodal_embedding`, Phase 3)
 
@@ -694,24 +798,93 @@ the exact processors) for the optional `onnxruntime` engine: a deployment
 names the bundle directory and `engine: onnxruntime`, with the `onnx` extra
 installed. The router images ship neither ONNX Runtime nor a bundle.
 
+### 8.6 Decision 3.0 (`decision3`)
+
+Decision 3.0 packages (`d3-package-manifest/1`) are a Transformers
+`Qwen3_5Model` checkpoint with its vision tower, a 255-way answer-code readout
+and `decision_config.json`. The family verifies every file it loads against
+`MODEL_MANIFEST.json` and recomputes the scored identity (the weight, readout,
+tokenizer and chat-template digests plus the inference fields of
+`decision_config.json`); the bundled `d3_*.py` runtime is never fetched for a
+built-in model and never imported.
+
+One question is one prompt: the chat-templated system and user turns, with the
+options listed under single-token answer codes, and the generation prompt with
+thinking off. The family renders the chat format itself for the templates it
+knows by digest, and builds the tokenizer as Transformers 5.17 builds
+`Qwen2Tokenizer` (the Qwen2 pre-tokenizer pattern and every special token of
+`tokenizer_config.json`), which the released runtime tokenized with. The
+backbone holds BF16 parameters on every device and runs without autocast; its
+full-attention layers see the whole left-padded prompt (`attention_mode:
+noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
+layers follow the package's `layer_types`, so a pruned backbone (d3-edge keeps
+12 of d3-lite's 24 layers, whose `full_attention_interval` no longer describes
+them) loads as it is. The FP32 readout scores the question's codes at the last
+position, and the answer is the softmax over them at the package temperature.
+A request's questions run in request order, eight per forward.
+
+A request's `images` (base64 PNG, JPEG or WebP data URLs) are decoded by PIL
+and processed as the Transformers 5.17 torchvision `Qwen2VLImageProcessor`
+processes them: `smart_resize` to 65,536 to 1,638,400 pixels, a uint8 bicubic
+antialiased resize, one FP32 normalization and the patch layout. Its `videos`
+(base64 MP4, WebM, QuickTime or Matroska data URLs) are decoded as the d3
+runtime decodes them, by OpenCV's FFmpeg backend from a temporary file: 2
+frames per second, at least 4 and at most 32 spread evenly over the whole
+video, converted to RGB, an odd count padded with the last frame. The
+Transformers 5.17 `Qwen3VLVideoProcessor` path follows with the d3 runtime's
+budget: at most 200,704 pixels per frame, the same resize and normalization,
+and the patch layout over each pair of frames. The videos of a request take at
+most 16,384 input tokens.
+
+Images and videos go in front of the text of every question, images first. In
+an image request, each question of a forward carries its own copy of the
+images through the native Qwen3.5 vision tower (the matrix-product patch
+embedding, bilinearly resampled learned positions, axial rotary attention per
+image and the patch merger). In a request with videos, the tower reads the
+request's images in one call and its videos in another, once per request, and
+every question reuses those features, as the d3 runtime does. Each video's
+placeholder expands to its frame pairs, each after its timestamp (`<0.2
+seconds>`); a frame pair is an image of one temporal patch for the
+multimodal rotary positions, and image features replace the image placeholders
+before video features replace the video placeholders. On gfx942 the depthwise
+convolution is the `fp64_naive` variant (MIOpen's naive kernel, which the
+released runtime ran) and the fused decoder layers run on the BF16 stream.
+Each model pins the FLA kernel choices of its release
+(`registry/kernel_choices.json`, from the autotune cache its release runs
+used), so every process rounds as the release did (§11).
+
+Repeated media are read once, whatever the engine arguments, and without
+changing an answer: image and video data URLs are keyed by the SHA-256 of their text,
+and a hit reuses the processed patch rows; the tower's features of a
+request's images are kept by the images' digests and the number of copies
+one tower call holds, which is what a pass of that many rows runs, so later
+passes of that size reuse them. Batched, text rows and media rows of
+concurrent requests are planned in lanes of their own, each sized to about 0.3
+seconds of device time at its own measured cost per token
+([record](records/decision3-batching.md)). Where the engine packs rows, the
+tower reads the images of every request of a media forward in one call with
+one variable-length attention per block (features cached apart from the exact
+path's), and a merged pass runs its rows packed when left-padding them would
+add more than 10% to its tokens ([record](records/decision3-lanes-packing.md)).
+Request images and videos are decoded in the process's media worker processes
+(`vllm_srun/media.py`, `--media-workers`).
+
 ## 9. Scheduler and planner
 
 ```text
 request -> validate (400) -> route to its model (404 / 422) -> admission (429)
         -> plan: render every item (per-item errors) -> that model's queue
-        -> its worker: the profile forms batches -> shortest expected finish first -> readout -> response
+        -> its worker: the batcher forms batches -> shortest expected finish first -> readout -> response
 bundle  -> plan every task -> submit all at once -> await each -> results in task order
 ```
 
 Each model has its own scheduler and worker thread. Validation and rendering
 happen on the request thread, so malformed requests never take queue
-capacity. In `exact`, one request's rows form one padded batch, split only by
-the forward token budget. A bundle's tasks for one model and profile are
-queued at once as one job group, whatever their deadlines (each job keeps its
-own, measured from when the HTTP request arrived). Decision models still run
-each task as its own batch (their released numerics), and a family that sets
-`fuse_bundled_jobs` (encoders) runs the group as one batch, so one forward
-serves every head and consumer that reads the same input. On a batch-invariant model, `exact` runs the queued jobs
+capacity. The batcher plans the rows of every queued job together (section
+5.4). A bundle's tasks for one model are queued at once as one job group,
+whatever their deadlines (each job keeps its own, measured from when the HTTP
+request arrived), so one forward serves every head and consumer that reads
+the same input. On a batch-invariant model the batcher runs the queued jobs
 of concurrent requests in shared batches of at most 512 padded tokens, rows
 with the same token IDs always together so the family computes them once. A
 model that pads its rows (an Omni ONNX bundle) keeps one length class
@@ -722,14 +895,14 @@ texts of different lengths then still share forwards. Either way each row's
 answer is the one it gets alone, which the load-time probe checks on a batch
 that spans several length classes. Repeated cacheable
 items are answered from the model's result cache (`--result-cache-entries`,
-keyed by profile and content).
+keyed by content).
 
 The worker runs planned batches in order of their jobs' expected finish: the
-time a job was queued plus its tokens at the measured cost per token (a running
-average of recent forwards). Short work goes first, and a long job still runs
+time a job was queued plus its tokens at the measured cost per token of their
+lane (a running average of that lane's recent forwards). Short work goes first, and a long job still runs
 once the work queued before its expected finish is done, so nothing starves.
-Between two forwards the worker takes the jobs that arrived meanwhile (jobs of
-coalescing profiles once they have waited one batching window), so a short request
+Between two forwards the worker takes the jobs that arrived meanwhile (on a
+model whose batcher coalesces, once they have waited one batching window), so a short request
 waits for the forward in flight, not for the remaining windows of a long one;
 each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
@@ -770,9 +943,14 @@ downloaded.
 `auto` tries the accelerators in the order of their `auto_priority` (ROCm,
 CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
-available device with enough free memory. The memory estimate is the weight
-bytes under the dtype policy plus the activation bound; `--memory-budget`
-caps it per model. A model names the device capabilities it requires per
+available device with enough free memory. The memory estimate is the weights
+in the dtype the accelerator holds them in (FP32 as an upper bound, or BF16
+plus 10% for a family whose `gpu_weights` / `cpu_weights` name it) plus a
+2 GiB activation reserve, matched to the peaks in
+[the Decision 3.0 device memory record](records/decision3-device-memory.md);
+`--memory-budget` caps it per model. A refusal names, per device, what the
+model needs and how much is free; on a host with a GPU the GPU's reasons come
+first and the CPU's last. A model names the device capabilities it requires per
 accelerator (`ModelSpec.requires`; a backbone architecture declares its own
 once, in `BackboneSpec.requires`, and the families pass it on), and placement
 refuses a device whose accelerator does not report one, before any weights
@@ -828,7 +1006,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; fused kernels only after a bit-exactness record |
+| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs, at `--dtype auto` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -875,14 +1053,15 @@ MIOpen's databases live in the model volume, since the charts run the router
 on a read-only root without a home directory.
 
 The oneDNN linear is a kernel variant a family opts into
-(`ModelSpec.kernel_variants`): Vela 1.0 task heads use it on `exact`, since
-their reference is the legacy path's recorded agreement, not a bit pattern;
+(`ModelSpec.kernel_variants`): Vela 1.0 task heads use it on their reference
+path, since their reference is the legacy path's recorded agreement, not a bit pattern;
 Decision 1.0 keeps `F.linear` to stay byte-identical to its bundled runtime.
 Tests that compare against Transformers bit for bit run the reference
 kernels. A model whose whole CPU forward is batch-invariant (each row the
 same alone or in any batch, shown by a test) sets
-`LoadedModel.batch_invariant`, and `exact` then batches the requests queued
-together, which lifts throughput under load without changing an answer.
+`LoadedModel.batch_invariant`, and the batcher then merges the requests
+queued together without a window, which lifts throughput under load without
+changing an answer.
 
 ## 12. CLI
 
@@ -890,17 +1069,19 @@ Engine mode runs a runtime process in the current Python environment:
 
 ```bash
 pip install ./src/vllm-sr ./src/model-runtime   # after PyTorch; or the vllm-sr image, or src/model-runtime/Dockerfile
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
+vllm-srun serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
+vllm-srun serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --max-num-seqs 256
 vllm-srun serve --models models.yaml --uds /run/vllm-sr/runtime.sock
 ```
 
 Several `MODEL` arguments share the process options; `MODEL@REVISION` pins a
 revision per model; `--models FILE` lists models with their own name,
-revision, device, profile, engine and family options (the router writes this
-file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
-without `MODEL` keeps its router-mode behaviour. Every serve option's default
+revision, device, engine arguments, engine and family options (the router writes this
+file in managed mode). These are worker-level `vllm-srun` options. The managed
+`vllm-sr serve ARTIFACT --engine` command instead exposes the frontend and
+Dashboard, with named models and listeners configured in YAML. Every invocation
+of `vllm-sr serve` without `--engine` starts Router mode. Every serve option's default
 is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
 embedding host start alike. `vllm-srun fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any installed family
@@ -960,15 +1141,18 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: auto
-        process: decisions           # optional: deployments with the same name share a process
         # endpoint: http://runtime:8100   # attach to a runtime the router does not manage
     bindings:
       domain_classifier: {deployment: vela-domain, contract: label_distribution.v1, adapter: modernbert}
 ```
 
 - `artifact` is a Hub repository (pinned by the built-in table, or with
-  `revision`) or an absolute package path. `revision`, `device`, `profile`,
-  `input` and `endpoint` keep their Phase 1 meaning; `process` is new.
+  `revision`) or an absolute package path. `revision`, `device`, `input` and
+  `endpoint` keep their Phase 1 meaning; the engine arguments (`max_num_seqs`,
+  `max_num_batched_tokens`, `batch_window_ms`, `dtype`,
+  `enable_shared_context`) replace the former `profile`, which the parser
+  refuses with a pointer to `vllm-sr config migrate`. `replicas` declares
+  independent worker placements for one logical deployment.
 - Built-in module defaults (`global.model_catalog.system.*`, the embedding
   models) resolve to implicit `model_runtime` deployments of the same
   artifacts, on CPU unless `use_cpu: false` (then `auto`).
@@ -1025,69 +1209,80 @@ until `/v1/models` has been read); the router starts managed runtimes with
 `--max-bundle-tasks 1024` and `--max-request-bytes` 64 MiB, so a stage
 normally stays one call.
 
-A bundle is per runtime process, not per request. The default process groups
-(section 13.4) give each CPU model its own process, up to the process cap, and
-one process to each GPU device. So a request whose signals read several CPU
-models makes one bundle call per model process, and those calls run in
-parallel. One CPU process runs one forward at a time, so a single shared
-process would serialize the stage: on 16 cores it served 11.1 requests/s
-against 20.3 for the split (`router-latency-cpu.md`). Deployments that name
-the same `process` share one process and one bundle.
+A request stage bundles calls by runtime process. Each managed deployment or
+replica owns a separate worker (section 13.4), so calls to different workers
+can run in parallel. Attached runtimes may serve several models in one process;
+calls to that shared endpoint can use one bundle. Adding or removing a routing
+consumer does not regroup workers.
 
-### 13.4 Lifecycle: process groups and attached endpoints
+### 13.4 Lifecycle: managed workers and attached endpoints
 
-- **Managed (default).** The router groups its `model_runtime` deployments
-  without an `endpoint` into processes: by `process` when set; else each GPU
-  device gets one process, and each CPU model its own process (`cpu-0`,
-  `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SRUN_CPU_PROCESSES`; `1` folds them into one). A deployment on
-  `device: auto` is grouped by the device `auto` takes on the host, which the
-  router asks the runtime once (`vllm-srun devices`, section 12) and
-  keeps: on the CPU it is planned as a `cpu` deployment, so on a host without
-  a GPU each `auto` model gets a CPU process and thread share of its own; on a
-  GPU it joins that device's process (`rocm:0`, ...), and the runtime still
-  places it by free memory; one it then places on the CPU runs in that
-  process without a thread share. If the runtime cannot answer, the `auto`
-  deployments share one process, `auto`, until the router restarts, and the
-  router logs why: a later reload does not ask again, so a slow query (bounded
-  at two minutes) holds up only the first plan, and plans do not change under
-  a running router. A
-  CPU process runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
-  the cores an idle one leaves: on 16 cores and five task models, one shared
-  process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
-  shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
-  writes a models file and starts `vllm-srun serve --models <file>
-  --uds <path>` when the configuration loads, and stops it when the group
-  disappears or the router exits (SIGTERM, then SIGKILL after a 10 s grace
+- **Managed (default).** Every logical `model_runtime` deployment without an
+  `endpoint` owns a worker; an explicit `replicas` list creates one worker per
+  placement. Workers remain separate even when they use the same GPU. Their
+  identity includes the logical deployment, placement, artifact, runtime command,
+  cache directory and CPU thread setting, so unchanged workers survive Router
+  mode changes and configuration generations. A new generation leases compatible
+  workers; retired workers stop after their last reference drains.
+
+  For `device: auto`, the router asks `vllm-srun devices` once and keeps the
+  answer for the manager's lifetime. An `auto` placement resolved to CPU is
+  planned as `cpu` and receives the managed CPU thread budget. If detection
+  fails, the router logs it and each independent worker resolves its own
+  placement at startup. The query is bounded at two minutes and is not repeated
+  during later reloads.
+
+  Each managed CPU worker receives `--threads max(1, min(16, cores / 2))` by
+  default, using integer division.
+  `cores` is the router's `GOMAXPROCS`, normally based on affinity and the
+  container's CPU quota. `VLLM_SRUN_CPU_THREADS` overrides this with a positive
+  integer capped at the full `cores` budget; invalid or nonpositive values use
+  the default. This leaves room for peers in the default thread count but does
+  not cap the total threads of several concurrent workers.
+  This setting controls threads per worker, never worker count, and is
+  independent of the number of models or active consumers. GPU workers and
+  attached endpoints do not receive this CPU setting. The historical process
+  grouping and thread-share measurements remain in
+  [`router-latency-cpu.md`](records/router-latency-cpu.md).
+
+  For each worker the router writes a models file and starts
+  `vllm-srun serve --models <file> --uds <path>`. It stops the worker after its
+  leases drain or the router exits (SIGTERM, then SIGKILL after a 10 s grace
   period, logged as `runtime_process_killed`). Preparing a binding waits for the deployment's card while its model
-  is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes). The supervisor
+  is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes), and building a
+  router generation waits the same way for every managed deployment it leases, so the
+  decision models of decision signals and of the decision selector are ready before
+  the generation serves; `/ready` and `/startup-status` name the ones startup waits
+  for, and a reload keeps the previous generation serving meanwhile. The supervisor
   polls `/health` and `/v1/models`, restarts a dead or failed process with
   exponential back-off (1 s to 60 s), and marks only the affected deployments
   unavailable. Sockets live in a private 0700 directory.
 - **Attached.** With an `endpoint` (`unix:///path` or `http(s)://host:port`)
   the router uses a runtime it does not manage, such as a Kubernetes sidecar or
-  a shared GPU runtime started with `vllm-sr serve <hf-model> ...`; the
-  deployment name or `served_name` selects the model on it.
+  a shared GPU runtime started with `vllm-srun serve <hf-model> ...`; the
+  deployment name or `served_name` selects the model on it. The attached owner
+  controls process layout and `--threads`; the router does not start or regroup
+  that runtime.
 - `VLLM_SRUN_COMMAND`, `VLLM_SRUN_DIR` and
   `VLLM_SRUN_CACHE_DIR` keep their Phase 1 meaning. Every router image
   ships the runtime, so managed deployments work out of the box on CPU, and on
   GPUs with the GPU images.
-- **Fail-open** is unchanged: while a deployment is not ready its calls fail
-  at once, late answers are unknown at the consumer's timeout, and every
-  consumer follows its existing `on_error` / `on_unknown` policy.
+- **Fail-open** is unchanged once a generation serves: while a deployment is
+  not ready (a restarting process, an attached runtime that is not up) its
+  calls fail at once, late answers are unknown at the consumer's timeout, and
+  every consumer follows its existing `on_error` / `on_unknown` policy.
 
 ### 13.5 Client, supervisor, metrics
 
 `pkg/modelservice` owns the generated client, transports for UDS and TCP with
-keep-alive pools, request bundles, process groups, per-deployment state
+keep-alive pools, request bundles, worker leases, per-deployment state
 (`starting`, `ready`, `unavailable`), the supervisor and metrics
 (`vsr_model_runtime_*`: requests and latency per deployment and surface,
 result-cache outcomes, bundle sizes and waits, unknown answers by reason,
-readiness and restarts). A per-deployment LRU of classify and decision
-results (`VLLM_SRUN_RESULT_CACHE` entries, default 4,096, cleared when
-readiness changes) answers repeated requests without a round trip; the
-runtime's own item cache serves every router and deduplicates items inside a
-bundle.
+readiness and restarts). A single-worker deployment uses a frontend LRU of
+classify and decision results (`VLLM_SRUN_RESULT_CACHE` entries, default 4,096,
+cleared when readiness changes). Multi-worker pools bypass that cache; each
+worker keeps its own item cache and deduplicates items inside a bundle.
 
 `pkg/modelruntime/serving` is the facade the router's consumers use: typed
 readouts (`Sequence`, `Scores`, `Tokens`, `Grounded` and their windowed
@@ -1104,7 +1299,7 @@ layout and refuse every path below with a pointer to `config migrate`.
 | Legacy | Migrated to |
 | --- | --- |
 | `provider: candle \| ort \| openvino` | `provider: model_runtime`; device `cpu` → `cpu`, `cuda:N` → `cuda:N`, `rocm:N` / `migraphx:N` → `rocm:N`, `metal:0` → `mps`, OpenVINO devices → `cpu` |
-| `precision: fp16` | `profile: max_speed`; `native` and `fp32` are dropped (exact is FP32) |
+| `precision: fp16` | removed: the model runs in its published precision (`dtype: float16` asks for half precision on a GPU); `native` and `fp32` are dropped too |
 | `custom_ops_profile`, `compilation_cache_dir`, ONNX graph `head` paths | removed (the runtime selects graphs) |
 | `embedding_config.backend: candle \| openvino` | `backend: model_runtime`, the default (local embeddings are served by the runtime) |
 | Module `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k`; `detector.backend: candle` | removed (the served package defines its architecture and windows) |
@@ -1129,11 +1324,11 @@ layout and refuse every path below with a pointer to `config migrate`.
 
 | Layer | Where | What |
 | --- | --- | --- |
-| Unit (CPU, tiny fixtures) | `src/model-runtime/tests` | every family's renderer, readout and answers; ModernBERT, Qwen3 and Qwen3.5 backbones against the Transformers reference; heads, windows, spans; engines and fallbacks; scheduler, profiles, placement, plugins |
+| Unit (CPU, tiny fixtures) | `src/model-runtime/tests` | every family's renderer, readout and answers; ModernBERT, Qwen3 and Qwen3.5 backbones against the Transformers reference; heads, windows, spans; engines and fallbacks; scheduler, batching and engine arguments, placement, plugins |
 | Registry | same | manifests and file digests, tampered, extra, missing and linked files, identity, offline cache |
 | API contract | same | every response validated against `openapi.yaml`; System One cases; bundles; error codes; UDS and TCP; multi-model processes |
 | Integration | same | `vllm-srun serve` on generated fixture packages of every family, readiness gating, deadlines, overload |
-| Router | `pkg/modelservice`, `pkg/modelruntime/serving`, consumers | generated client against an httptest runtime, bundles, process groups with a fake runtime binary, every contract, fail-open, config validation and migration |
+| Router | `pkg/modelservice`, `pkg/modelruntime/serving`, consumers | generated client against an httptest runtime, bundles, worker leases and replicas with a fake runtime binary, every contract, fail-open, config validation and migration |
 | Ports | `pkg/classification`, `pkg/modelselection` | BM25, n-gram, KNN, KMeans, SVM and MLP against fixtures recorded from the bindings they replace |
 | E2E (CPU, Kind) | `e2e/profiles/*` | managed and attached runtimes, every migrated signal and feature, decision signals and the selector, fail-open; tiny fixtures |
 | Real models (opt-in) | `e2e/profiles/model-runtime-real` | real Kai-0.6B and Vela models on CPU with explicit inputs |
@@ -1246,6 +1441,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Model group | Reference | Device classes | Pass thresholds |
 | --- | --- | --- | --- |
 | Decision 2.0 | released package runtime | CPU, ROCm | Bit-identical answers (unchanged) |
+| Decision 3.0 | the packages' own server (`d3_server.py`), same requests, text, images and videos | CPU, ROCm | Bit-identical answers ([`decision3-parity.md`](records/decision3-parity.md)) |
 | Decision 1.0 | the packages' bundled runtime, same requests | CPU, ROCm | Bit-identical on the same device class, else every answer within 1e-6 and recorded |
 | Vela 1.0 sequence and scores heads | the legacy router path (candle CPU; ORT on the AMD recipe), same inputs | CPU (CI fixtures and real models), ROCm | CPU: label agreement 100% outside near ties (top-two margin under 1e-3), max \|Δp\| ≤ 1e-3; ROCm: label agreement ≥ 99.5%, max \|Δp\| ≤ 0.02 |
 | Vela 1.0 token and grounded heads | the legacy router path | CPU, ROCm | CPU: identical span sets on ≥ 99.5% of inputs, max \|Δp\| ≤ 1e-3; ROCm: identical span sets on ≥ 98% |
@@ -1268,10 +1464,11 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 
 | Where | Technique | Records |
 | --- | --- | --- |
-| Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
-| Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
-| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md`, `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
+| Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on the CPU reference path, batch-invariant as probed at load, so concurrent requests merge without a window; dynamic cross-request batching (the default); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced copies in merged forwards only where the records show no decision changed (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; independent deployment/replica workers with a stable CPU thread budget; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md` (historical process layout), `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
+| Router to runtime | HTTP/JSON on a Unix socket, timed per call from the runtime's `Server-Timing`: on CPU the transport is 0.6–2.2% of a call, so there is no binary fast path | `runtime-transport-cpu.md` |
 
 ## 19. Phase 1 follow-ups and later work
 
@@ -1280,8 +1477,9 @@ models on gfx942, and the graph-cap and batch-shape bucket measurements
 (`docs/records/rocm-mi325x-repeatability.md`).
 
 Later: a serving option for the graph cap (1,024 is 1–5% faster under
-Index-like traffic); kernel choices for other device classes; more `max_speed`
-kernels; a `vllm` engine (pooling runner plus the family readouts) and a
+Index-like traffic); kernel choices for other device classes; more
+approximate kernels with their accuracy records; an opt-in deterministic mode
+(every row the same answer in any batch); a `vllm` engine (pooling runner plus the family readouts) and a
 `llamacpp` engine; CUDA validation on CUDA hardware.
 
 Router `decision` signals ask Choice, Noul and Score questions, which every
@@ -1297,7 +1495,7 @@ drop-in task bindings (`pii`, `halu`, `relevance`).
 | A ported backbone or head drifts from the scored numerics | Fixtures against the Transformers reference in CI; parity records against the legacy path and the bundled runtimes on real models |
 | CPU latency of the encoders regresses against candle | Measured per model; the `onnxruntime` engine runs the packages' graphs where it is faster; intra-op threads and inter-model parallelism are tunable |
 | Bundles add latency when one task is slow | Tasks run in parallel per model; a bundle waits only for its own tasks; consumers keep their own timeouts |
-| A shared process couples fault domains | `process` groups isolate deployments; a crash restarts one group; fail-open |
+| A worker crash interrupts inference | Independent deployment/replica workers isolate failures; a crash restarts that worker and affected consumers follow their error policy |
 | Removing the bindings breaks unmigrated configs | The parser points to `vllm-sr config migrate`; the migration guide lists every change |
 | Re-embedding after an embedding-model change | Representation identity in every cache and store key; old vectors are never silently reused |
 | Image size grows with PyTorch | CPU wheels in CPU images; GPU wheels only in GPU images; the Rust toolchain stages go away |

@@ -12,6 +12,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import click
 import pytest
 from cli import container_cli, container_start, core, runtime_lifecycle, runtime_stack
 from cli.consts import (
@@ -64,11 +65,6 @@ def _option_values(command, option):
 def _stub_valid_container_cli(monkeypatch, tmp_path):
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(docker_bin),
-    )
     return docker_bin
 
 
@@ -165,8 +161,8 @@ def test_start_rejects_overflowing_offset_before_runtime_mutations(monkeypatch):
         mutations.append(mutation)
 
     with pytest.raises(
-        ValueError,
-        match=r"VLLM_SR_PORT_OFFSET=15500 produces invalid router_port 65551",
+        click.ClickException,
+        match=r"VLLM_SR_PORT_OFFSET must be between 0 and 15484",
     ):
         core.start_vllm_sr("/tmp/config.yaml", env_vars={})
 
@@ -273,22 +269,14 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
         runtime_lifecycle, "container_exec", lambda *args, **kwargs: (0, "ok", "")
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
-    )
-    monkeypatch.setattr(
         runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
-    )
-    monkeypatch.setattr(
-        core, "recover_openclaw_containers", record("recover_openclaw_containers")
     )
 
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
     start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]
-    recover_calls = [c for c in calls if c[0] == "recover_openclaw_containers"]
 
     assert start_calls[0][2]["state_root_dir"] == str(state_root)
-    assert recover_calls[0][1][0] == str(state_root)
 
 
 def test_resolve_runtime_stack_supports_default_role_container_names():
@@ -334,14 +322,12 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     _stub_valid_container_cli(monkeypatch, tmp_path)
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "audit-a")
     monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "200")
-    monkeypatch.setenv("OPENCLAW_ENABLED", "true")
 
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name=None,
-        openclaw_network_name=None,
         minimal=False,
     )
 
@@ -351,7 +337,6 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     dashboard_cmd = _find_container_run_cmd(
         captured, "audit-a-vllm-sr-dashboard-container"
     )
-    assert "OPENCLAW_DEFAULT_NETWORK_MODE=audit-a-vllm-sr-network" in dashboard_cmd
     assert "VLLM_SR_PORT_OFFSET=200" in dashboard_cmd
     assert "0.0.0.0:9099:8899" in envoy_cmd
     assert "127.0.0.1:50251:50051" in router_cmd
@@ -393,7 +378,6 @@ def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name=None,
-        openclaw_network_name=None,
         minimal=False,
     )
 
@@ -444,7 +428,6 @@ def test_container_start_vllm_sr_omits_stack_name_env_for_default_stack(
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=False,
     )
 

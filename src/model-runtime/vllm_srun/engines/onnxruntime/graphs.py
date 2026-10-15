@@ -15,10 +15,14 @@ import math
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from ...errors import PackageError
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # ModelProto, GraphProto, TensorProto and StringStringEntryProto field numbers (onnx.proto).
 _MODEL_GRAPH = 7
@@ -100,6 +104,7 @@ def _fields(data: memoryview) -> Iterator[tuple[int, int, int | memoryview]]:
     while offset < len(data):
         key, offset = _varint(data, offset)
         number, wire = key >> 3, key & 7
+        value: int | memoryview
         if wire == _VARINT:
             value, offset = _varint(data, offset)
         elif wire in (_FIXED64, _FIXED32):
@@ -167,26 +172,27 @@ def _initializer(
     for number, wire, value in _fields(tensor):
         if number == _TENSOR_DIMS:
             if wire == _VARINT:
-                dims.append(value)
+                dims.append(cast(int, value))
             else:
+                packed = cast(memoryview, value)
                 offset = 0
-                while offset < len(value):
-                    dim, offset = _varint(value, offset)
+                while offset < len(packed):
+                    dim, offset = _varint(packed, offset)
                     dims.append(dim)
         elif number == _TENSOR_DATA_TYPE and wire == _VARINT:
-            data_type = value
+            data_type = cast(int, value)
         elif number == _TENSOR_NAME and wire == _BYTES:
             name = bytes(value).decode()
         elif number == _TENSOR_EXTERNAL_DATA and wire == _BYTES:
-            key, item = _entry(value)
+            key, item = _entry(cast(memoryview, value))
             external[key] = item
         elif number == _TENSOR_DATA_LOCATION and wire == _VARINT:
-            location = value
+            location = cast(int, value)
     if location != _EXTERNAL:
         return ("embedded", str(graph.resolve()), name), math.prod(dims), None
     tensor_info = _external(graph, name, data_type, dims, external)
-    key = ("external", str(tensor_info.file.resolve()), str(tensor_info.offset))
-    return key, math.prod(dims), tensor_info
+    storage = ("external", str(tensor_info.file.resolve()), str(tensor_info.offset))
+    return storage, math.prod(dims), tensor_info
 
 
 def read_graph(path: Path) -> GraphFacts:
@@ -202,13 +208,17 @@ def read_graph(path: Path) -> GraphFacts:
         if wire != _BYTES:
             continue
         if number == _MODEL_METADATA:
-            key, item = _entry(value)
+            key, item = _entry(cast(memoryview, value))
             metadata[key] = item
         elif number == _MODEL_GRAPH:
-            for graph_field, graph_wire, item in _fields(value):
+            for graph_field, graph_wire, initializer in _fields(
+                cast(memoryview, value)
+            ):
                 if graph_field == _GRAPH_INITIALIZER and graph_wire == _BYTES:
-                    key, elements, tensor = _initializer(item, path)
-                    initializers[key] = elements
+                    storage, elements, tensor = _initializer(
+                        cast(memoryview, initializer), path
+                    )
+                    initializers[storage] = elements
                     if tensor is not None:
                         externals.append(tensor)
     return GraphFacts(
@@ -220,9 +230,9 @@ class WeightFiles:
     """Read-only maps of a model's external weight files, each mapped once and shared by its graphs."""
 
     def __init__(self) -> None:
-        self._maps: dict[Path, np.memmap] = {}
+        self._maps: dict[Path, np.memmap[Any, np.dtype[np.uint8]]] = {}
 
-    def tensor(self, external: ExternalTensor) -> np.ndarray:
+    def tensor(self, external: ExternalTensor) -> NDArray[Any]:
         path = external.file.resolve()
         mapped = self._maps.get(path)
         if mapped is None:

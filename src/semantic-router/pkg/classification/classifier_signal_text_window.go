@@ -69,6 +69,134 @@ func piiSignalChunks(text string) []string {
 	)
 }
 
+// forEachUniquePIISignalChunk streams unique PII chunks to visit in scan order.
+// It is used for tool results, where the caller may stop after a request-scoped
+// inference budget is exhausted. Unlike piiSignalChunks, it does not build a
+// slice containing every chunk before the first inference call.
+//
+// The returned boolean is true only when the complete input was visited. A
+// false result means the visitor intentionally stopped early and the caller
+// must treat the scan as incomplete.
+func forEachUniquePIISignalChunk(text string, visit func(string) bool) bool {
+	seen := make(map[string]struct{})
+	return forEachSecuritySignalChunk(text, piiSignalChunkBudget, piiSignalChunkOverlapRunes, func(chunk string) bool {
+		if _, duplicate := seen[chunk]; duplicate {
+			return true
+		}
+		seen[chunk] = struct{}{}
+		return visit(chunk)
+	})
+}
+
+// forEachSecuritySignalChunk walks security chunks without materializing the
+// complete chunk list. Chunk boundaries intentionally use the same unit and
+// overlap budgets as securitySignalChunkSpans, but calculate only the next
+// chunk needed by the caller.
+func forEachSecuritySignalChunk(text string, budget, overlapRunes int, visit func(string) bool) bool {
+	if text == "" {
+		return true
+	}
+
+	startByte := 0
+	for startByte < len(text) {
+		endByte := nextSecuritySignalChunkEnd(text, startByte, budget)
+		if endByte <= startByte {
+			endByte = advanceOneRune(text, startByte)
+		}
+
+		if !visit(text[startByte:endByte]) {
+			return false
+		}
+		if endByte >= len(text) {
+			return true
+		}
+
+		nextStartByte := rewindRunes(text, endByte, overlapRunes)
+		if nextStartByte <= startByte {
+			nextStartByte = advanceOneRune(text, startByte)
+		}
+		startByte = nextStartByte
+	}
+	return true
+}
+
+// nextSecuritySignalChunkEnd returns the byte boundary of the next chunk.
+// It intentionally keeps the scan local to one chunk, which bounds temporary
+// allocation for very large tool-result strings.
+func nextSecuritySignalChunkEnd(text string, startByte, budget int) int {
+	if startByte >= len(text) {
+		return len(text)
+	}
+
+	const backtrackRunes = 64
+	endByte := startByte
+	units := 0
+	inWord, wordHasDigit := false, false
+	boundaries := make([]int, 0, backtrackRunes+1)
+	boundaries = append(boundaries, startByte)
+
+	for endByte < len(text) {
+		r, size := utf8.DecodeRuneInString(text[endByte:])
+		runeUnits, nextInWord, nextWordHasDigit := signalRuneUnits(r, inWord, wordHasDigit)
+		if endByte > startByte && units+runeUnits > budget-1 {
+			break
+		}
+		if endByte == startByte && units+runeUnits > budget-1 {
+			endByte += size
+			break
+		}
+
+		units += runeUnits
+		inWord, wordHasDigit = nextInWord, nextWordHasDigit
+		endByte += size
+		boundaries = append(boundaries, endByte)
+		if len(boundaries) > backtrackRunes+1 {
+			boundaries = boundaries[1:]
+		}
+	}
+
+	if endByte >= len(text) {
+		return len(text)
+	}
+	if unicode.IsSpace(firstRuneAt(text, endByte)) {
+		return endByte
+	}
+
+	for i := len(boundaries) - 1; i > 0; i-- {
+		boundary := boundaries[i]
+		if unicode.IsSpace(lastRuneBefore(text, boundary)) {
+			return boundary
+		}
+	}
+	return endByte
+}
+
+func advanceOneRune(text string, byteOffset int) int {
+	_, size := utf8.DecodeRuneInString(text[byteOffset:])
+	return byteOffset + size
+}
+
+func rewindRunes(text string, byteOffset, count int) int {
+	for range count {
+		if byteOffset <= 0 {
+			return 0
+		}
+		_, size := utf8.DecodeLastRuneInString(text[:byteOffset])
+		byteOffset -= size
+	}
+	return byteOffset
+}
+
+func firstRuneAt(text string, byteOffset int) rune {
+	r, _ := utf8.DecodeRuneInString(text[byteOffset:])
+	return r
+}
+
+func lastRuneBefore(text string, byteOffset int) rune {
+	r, _ := utf8.DecodeLastRuneInString(text[:byteOffset])
+	return r
+}
+
 // piiSignalChunkSpans is piiSignalChunks with offsets, for callers that report
 // entity positions. It does not de-duplicate: two identical chunks are at
 // different offsets, and both of those positions are real.
@@ -264,18 +392,77 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 	return false
 }
 
+// signalReadsWholeText reports whether a signal's prepared model asks a Vela
+// 2.0 model the signal's question. That model reads a whole text up to its own
+// input budget, so the signal asks about the request as it is, in the same
+// call as the request's other questions about it.
+// decisionModelQuestionText is the text a decision question that names no
+// deployment reads: the decision model reads the request as it came.
+const decisionModelQuestionText = "decision_model"
+
+func (c *Classifier) signalReadsWholeText(signalType string) bool {
+	if c == nil {
+		return false
+	}
+	var consumer interface{}
+	switch signalType {
+	case decisionModelQuestionText:
+		return true
+	case config.SignalTypeDomain:
+		consumer = c.categoryInference
+	case config.SignalTypeJailbreak:
+		consumer = c.jailbreakInference
+	case config.SignalTypeFactCheck:
+		if c.factCheckClassifier != nil {
+			consumer = c.factCheckClassifier.backend
+		}
+	case config.SignalTypeUserFeedback:
+		if c.feedbackDetector != nil {
+			consumer = c.feedbackDetector.backend
+		}
+	case config.SignalTypeModality:
+		consumer = c.modalityInference
+	case config.SignalTypePII:
+		consumer = c.piiInference
+	case config.SignalTypeSafety:
+		for _, detector := range c.safetyClassifiers {
+			if detector == nil {
+				continue
+			}
+			if reader, ok := detector.binary.(interface{ readsWholeText() bool }); ok && reader.readsWholeText() {
+				return true
+			}
+		}
+	}
+	reader, ok := consumer.(interface{ readsWholeText() bool })
+	return ok && reader.readsWholeText()
+}
+
 func (c *Classifier) piiInputSpans(text string) []signalChunkSpan {
-	if ((c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII)) && text != "" {
+	if c.piiReadsWholeText() && text != "" {
 		return []signalChunkSpan{{Text: text}}
 	}
 	return piiSignalChunkSpans(text)
 }
 
 func (c *Classifier) piiInputs(text string) []string {
-	if (c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII) {
+	if c.piiReadsWholeText() {
 		return []string{text}
 	}
 	return piiSignalChunks(text)
+}
+
+// piiReadsWholeText reports whether the PII model reads a whole text: through
+// token windows, a long-context budget, or a decision model's ready-made PII
+// question, which then shares the call of the deployment's other questions.
+func (c *Classifier) piiReadsWholeText() bool {
+	if c == nil || c.Config == nil {
+		return false
+	}
+	if reader, ok := c.piiInference.(interface{ readsWholeText() bool }); ok && reader.readsWholeText() {
+		return true
+	}
+	return c.Config.PIIModel.Window != nil || c.hasLongContextClassifier(config.SignalTypePII)
 }
 
 func (c *Classifier) jailbreakInputs(text string) []string {
@@ -296,7 +483,7 @@ func (c *Classifier) jailbreakModelInputs(text string) []string {
 	if text == "" {
 		return nil
 	}
-	if c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil {
+	if (c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil) || c.signalReadsWholeText(config.SignalTypeJailbreak) {
 		return []string{text}
 	}
 	return c.jailbreakInputs(text)

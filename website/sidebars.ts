@@ -15,7 +15,6 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
-    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -23,6 +22,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
+        'overview/component-architecture',
         'overview/use-cases',
         'overview/signal-driven-decisions',
         'overview/mom-model-family',
@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/gateway-modes',
             'installation/support-matrix',
           ],
         },
@@ -82,6 +83,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/action',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
@@ -91,6 +93,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
+                'tutorials/signal/heuristic/topic-continuity',
               ],
             },
             {
@@ -157,6 +160,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
                 'tutorials/algorithm/selection/decision',
+                'tutorials/algorithm/selection/random',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -171,6 +175,13 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
                 'tutorials/algorithm/looper/workflows',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'System One',
+              items: [
+                'tutorials/algorithm/native/cascade',
               ],
             },
           ],
@@ -267,7 +278,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'model-runtime/deploy',
-        'model-runtime/profiles',
+        'model-runtime/engine-args',
         'installation/runtime/external',
         'model-runtime/migrate',
         'model-runtime/troubleshooting',
@@ -290,6 +301,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/configuration-management',
             'installation/recipe-lifecycle',
             {
               type: 'category',
@@ -449,6 +461,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/open-intelligence-index-and-model-arena',
             'proposals/unified-model-catalog-and-evaluation-index',
+            'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -512,6 +525,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
+        'benchmarking/agent-routing-protection',
         {
           type: 'category',
           label: 'sr-bench 1.0',
@@ -546,19 +560,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Troubleshooting',
       collapsed: false,
       items: [
@@ -581,6 +582,7 @@ const sidebars: SidebarsConfig = {
         'community/code-style',
       ],
     },
+    'faq',
   ],
 }
 

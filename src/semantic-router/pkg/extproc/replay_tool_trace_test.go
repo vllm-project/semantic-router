@@ -10,12 +10,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
-func TestBuildReplayRoutingRecordUsesNeutralRequestToolTrace(t *testing.T) {
+func TestBuildReplayRoutingRecordSanitizesNeutralRequestToolTrace(t *testing.T) {
+	toolResultPIICanary := "customer@example.com"
+	isError := false
 	ctx := &RequestContext{
 		RequestID:    "req-tool-1",
 		SourceFormat: llmprotocol.OpenAIResponsesV1,
 		SemanticRequest: &llmprotocol.Request{
-			Model: "auto",
+			Model: "vllm-sr/auto",
 			Messages: []llmprotocol.Message{
 				{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Find the weather in San Francisco."}}},
 				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
@@ -23,14 +25,15 @@ func TestBuildReplayRoutingRecordUsesNeutralRequestToolTrace(t *testing.T) {
 				}}}},
 				{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
 					CallID:  "call_weather",
-					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: `{"temperature":"18C","condition":"sunny"}`}},
+					IsError: &isError,
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: toolResultPIICanary}},
 				}}}},
 			},
 			Tools: []llmprotocol.Tool{{Name: "get_weather", InputSchema: []byte(`{"type":"object"}`)}},
 		},
 	}
 
-	record := buildReplayRoutingRecord(ctx, "MoM", "model-a", "default_route")
+	record := buildReplayRoutingRecord(ctx, "vllm-sr/auto", "model-a", "default_route")
 	require.NotNil(t, record.ToolTrace)
 	require.Equal(t, "User Query -> LLM Tool Call -> Client Tool Result", record.ToolTrace.Flow)
 	require.Equal(t, "Client Tool Result", record.ToolTrace.Stage)
@@ -40,7 +43,12 @@ func TestBuildReplayRoutingRecordUsesNeutralRequestToolTrace(t *testing.T) {
 	require.Equal(t, replayToolStepAssistantToolCall, record.ToolTrace.Steps[1].Type)
 	require.JSONEq(t, `{"location":"San Francisco"}`, record.ToolTrace.Steps[1].RawArguments)
 	require.Equal(t, replayToolStepClientToolResult, record.ToolTrace.Steps[2].Type)
-	require.Contains(t, record.ToolTrace.Steps[2].RawOutput, "temperature")
+	require.Equal(t, "succeeded", record.ToolTrace.Steps[2].Status)
+	require.True(t, record.ToolTrace.Steps[2].ContentRedacted)
+	require.Empty(t, record.ToolTrace.Steps[2].Text)
+	require.Empty(t, record.ToolTrace.Steps[2].Output)
+	require.Empty(t, record.ToolTrace.Steps[2].RawOutput)
+	require.NotContains(t, record.RequestBody, toolResultPIICanary)
 	require.Equal(t, "Find the weather in San Francisco.", record.Prompt)
 	require.Contains(t, record.ToolDefinitions, "get_weather")
 }

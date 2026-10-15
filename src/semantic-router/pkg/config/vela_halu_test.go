@@ -4,10 +4,10 @@ import "testing"
 
 func TestVelaHaluDefaultAndLegacyIdentity(t *testing.T) {
 	cfg := DefaultGlobalConfig()
-	if got := cfg.HallucinationMitigation.HallucinationModel.ModelID; got != "models/Vela-1.0-Encoder-307M-Halu" {
+	if got := cfg.HallucinationMitigation.HallucinationModel.ModelID; got != Vela2SignalModel {
 		t.Fatalf("Halu default = %q", got)
 	}
-	model := GetModelByPath(cfg.HallucinationMitigation.HallucinationModel.ModelID)
+	model := GetModelByPath(Vela1SystemModels().HallucinationDetector)
 	if model == nil || model.DefaultAdapter != "vela_halu" || model.MaxContextLength != 8192 || len(model.Revision) != 40 {
 		t.Fatalf("invalid Halu task identity: %+v", model)
 	}

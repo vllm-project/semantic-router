@@ -1,17 +1,23 @@
 """Error codes shared by the API, the scheduler and model families.
 
 Request-level errors become an HTTP status with ``{"error": {"code",
-"message"}}``. Item-level errors (a question, an input, a document) are
-reported in place, for example ``{"type": ..., "error": <code>}``, and never
-fail sibling items.
+"message"}}``; a rejected image or video adds its ``reason`` and, for a
+broken limit, the ``limit``. Item-level errors (a question, an input, a
+document) are reported in place, for example ``{"type": ..., "error":
+<code>}``, and never fail sibling items.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 # Item-level codes (inside a 200 response).
 INVALID_QUESTION = "invalid_question"
 INVALID_INPUT = "invalid_input"
 MAX_LENGTH_EXCEEDED = "max_length_exceeded"
+# An input a model reads whole (windows) has more tokens than its scan budget;
+# none of it was scanned.
+SCAN_BUDGET_EXCEEDED = "scan_budget_exceeded"
 INVALID_MODEL_OUTPUT = "invalid_model_output"
 DEADLINE_EXCEEDED = "deadline_exceeded"
 UNAVAILABLE = "unavailable"
@@ -20,6 +26,7 @@ QUESTION_ERROR_CODES = (
     INVALID_QUESTION,
     INVALID_INPUT,
     MAX_LENGTH_EXCEEDED,
+    SCAN_BUDGET_EXCEEDED,
     INVALID_MODEL_OUTPUT,
     DEADLINE_EXCEEDED,
     UNAVAILABLE,
@@ -37,22 +44,81 @@ REQUEST_ERROR_STATUS = {
 }
 
 
+# Why an image or video was rejected. Clients read these words instead of the
+# message, which may name a model or a path.
+MEDIA_REASONS = (
+    "image_format",
+    "image_too_large",
+    "image_pixels",
+    "image_aspect_ratio",
+    "image_malformed",
+    "image_unsupported",
+    "video_format",
+    "video_too_large",
+    "video_too_long",
+    "video_pixels",
+    "video_aspect_ratio",
+    "video_malformed",
+    "video_tokens",
+    "video_unsupported",
+)
+
+
+class MediaError(ValueError):
+    """A rejected image or video: its reason and, when it broke one, the limit."""
+
+    def __init__(self, reason: str, message: str, limit: int | None = None):
+        if reason not in MEDIA_REASONS:
+            raise ValueError(f"unknown media reason {reason!r}")
+        super().__init__(message)
+        self.reason = reason
+        self.limit = limit
+
+    def at(self, where: str) -> MediaError:
+        """The same rejection, its message prefixed with where it happened (``videos[1]``)."""
+        return MediaError(self.reason, f"{where}: {self}", self.limit)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickle by reason, message and limit, so a rejection crosses from a media worker process."""
+        return (MediaError, (self.reason, str(self), self.limit))
+
+
 class RuntimeServiceError(Exception):
     """A request-level failure with a stable code and HTTP status."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        reason: str | None = None,
+        limit: int | None = None,
+    ):
         if code not in REQUEST_ERROR_STATUS:
             raise ValueError(f"unknown request error code {code!r}")
         super().__init__(message)
         self.code = code
         self.message = message
+        self.reason = reason
+        self.limit = limit
+
+    @classmethod
+    def invalid(cls, exc: ValueError) -> RuntimeServiceError:
+        """400 invalid_request for a request that cannot be served; a rejected image or video keeps its reason."""
+        if isinstance(exc, MediaError):
+            return cls("invalid_request", str(exc), exc.reason, exc.limit)
+        return cls("invalid_request", str(exc))
 
     @property
     def status(self) -> int:
         return REQUEST_ERROR_STATUS[self.code]
 
     def body(self) -> dict:
-        return {"error": {"code": self.code, "message": self.message}}
+        error: dict = {"code": self.code, "message": self.message}
+        if self.reason is not None:
+            error["reason"] = self.reason
+        if self.limit is not None:
+            error["limit"] = self.limit
+        return {"error": error}
 
 
 class QuestionError(ValueError):
@@ -63,6 +129,17 @@ class QuestionError(ValueError):
             raise ValueError(f"unknown question error code {code!r}")
         super().__init__(message or code)
         self.code = code
+
+
+def question_error(
+    kind: str | None, error: QuestionError, code: str | None = None
+) -> dict:
+    """A failed question's answer: its type, error code and, if known, why."""
+    answer: dict = {"type": kind, "error": code or error.code}
+    reason = str(error)
+    if reason and reason != error.code:
+        answer["message"] = reason
+    return answer
 
 
 class PackageError(ValueError):

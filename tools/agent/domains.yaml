@@ -133,6 +133,18 @@ domains:
       - tools/codegen/embed_generated_index.py
       - tools/make/docs.mk
       - tools/make/golang.mk
+      - tools/make/dashboard.mk
+      - src/model-runtime/vllm_srun/registry/tables/*.py
+      - src/model-runtime/vllm_srun/registry/releases.generated.json
+      - src/model-runtime/vllm_srun/families/vela2/request.py
+      - src/semantic-router/pkg/modelservice/decision_catalog.generated.json
+      - src/model-runtime/vllm_srun/systemone.py
+      - src/model-runtime/vllm_srun/families/decision1/family.py
+      - src/model-runtime/vllm_srun/families/decision1/questions.py
+      - src/model-runtime/vllm_srun/families/decision2/family.py
+      - src/model-runtime/vllm_srun/families/decision3/family.py
+      - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
+      - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - website/docs/api/apiserver.md
       - website/static/openapi/apiserver/**
@@ -235,6 +247,7 @@ domains:
       - tools/dev/dsl/**
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
+      - tools/calibration/shadow-dataset/**
       - bench/grounded_fusion/fusioneval/**
       - bench/memory_coldstart/**
       - tools/make/go-tools.mk
@@ -246,6 +259,7 @@ domains:
     paths:
       - tools/calibration/recipe/**
       - tools/calibration/tuning/**
+      - tools/calibration/systemone_auto/**
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-metadata-v1.contract.yaml
       - config/schemas/recipe-probes-v1.schema.json
@@ -288,13 +302,40 @@ domains:
       - src/semantic-router/pkg/classification/generic_classifier_local_test.go
       - src/semantic-router/pkg/classification/unified_classifier_integration_test.go
       - src/semantic-router/pkg/classification/embedding_classifier_integration_test.go
+      - src/semantic-router/pkg/classification/vela2_systemone_parity_test.go
+      - src/semantic-router/pkg/classification/testdata/vela2_published_answers.json
       - src/semantic-router/pkg/cache/negation_regression_test.go
       - src/semantic-router/pkg/cache/omni_storage_integration_test.go
       - tools/ci/prepare_model_test_assets.py
       - src/semantic-router/pkg/modelruntime/serving/servingtest/managed.go
       - src/model-runtime/vllm_srun/registry/tables/vela1.py
+      # The Vela 2.0 sizes the contract serves: their pins, golden answers and
+      # family, and the decisions surface that answers a call's states.
+      - src/model-runtime/vllm_srun/registry/tables/vela2.py
+      - src/model-runtime/vllm_srun/registry/golden_answers_vela2.json
+      - src/model-runtime/vllm_srun/families/vela2/**
+      - src/model-runtime/vllm_srun/plugins/decisions.py
       - tools/ci/run_model_tests.py
       - tools/make/models.mk
+      # The contract resolves each package's registry entry, threshold and
+      # document window from the Router's model resolution.
+      - src/semantic-router/pkg/config/registry.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/canonical_operating_points.go
+      - src/semantic-router/pkg/config/decision_model.go
+      - src/semantic-router/pkg/config/model_runtime_implicit.go
+      - src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go
+      - src/semantic-router/pkg/classification/classifier_pii_window_default.go
+      # How the Router asks a Vela 2.0 deployment: the built-in signals'
+      # questions and span presets, the decision questions, and the bundle
+      # that sends a request stage's questions in one decisions call.
+      - src/semantic-router/pkg/modelruntime/serving/signal_question.go
+      - src/semantic-router/pkg/modelruntime/serving/span_question.go
+      - src/semantic-router/pkg/classification/classifier_signal_decision_model.go
+      - src/semantic-router/pkg/modelservice/bundle.go
+      - src/semantic-router/pkg/modelservice/client.go
+      - src/semantic-router/pkg/modelservice/fusion.go
+      - src/semantic-router/pkg/modelservice/fusion_decisions.go
     checks: []
     verify: [make test-models]
     verifications: [platform.models-cpu]
@@ -336,6 +377,7 @@ domains:
         - tools/docker/Dockerfile.extproc
         - src/vllm-sr/cli/core.py
         - src/vllm-sr/cli/commands/runtime*.py
+        - src/vllm-sr/cli/commands/serve_options.py
         - src/vllm-sr/cli/container_*.py
         - src/vllm-sr/cli/runtime_*.py
         - src/vllm-sr/cli/config_generator.py
@@ -343,9 +385,46 @@ domains:
         - src/vllm-sr/cli/catalog_provider_projection.py
         - src/vllm-sr/cli/envoy_backend_pool.py
         - src/vllm-sr/cli/deployment_backend.py
+        - src/vllm-sr/cli/gateway_mode.py
         - src/vllm-sr/cli/templates/envoy*.yaml
+        - src/vllm-sr/start-router.sh
+        # The live suite serves standalone mode from the Router image.
+        - src/semantic-router/cmd/native_gateway.go
+        - src/semantic-router/pkg/gateway/**
         - e2e/testing/vllm-sr-cli/**
         - tools/make/docker.mk
+
+  # The CLI unit suite parses these Router configs against the schema the CLI
+  # bundles. Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-reference-configs:
+    owner: vllm-sr-cli
+    paths:
+      - config/config.yaml
+      - config/recipes/balance/config.yaml
+      - config/recipes/vela-amd/config.yaml
+      - config/recipes/built-in/**
+      - e2e/config/config.memory-user.yaml
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
+  # The CLI unit suite checks the snippets of these pages, and that their
+  # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py).
+  # Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-docs:
+    owner: vllm-sr-cli
+    documentation_check: true
+    paths:
+      - website/docs/model-runtime/**
+      - website/docs/tutorials/global/model-runtime.md
+      - website/docs/tutorials/signal/learned/decision.md
+      - website/docs/tutorials/algorithm/selection/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/decision.md
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
 
   model-runtime:
     owner: model-runtime
@@ -355,16 +434,12 @@ domains:
     checks: [make model-runtime-test, make model-runtime-client-check]
     verifications: [model-runtime, generated-contracts, cli-package]
 
-  fleet-sim:
-    owner: fleet-sim
-    paths: [src/fleet-sim/**]
-    checks: [make vllm-sr-sim-test]
-    verifications: [fleet-sim]
-
   dashboard:
     owner: dashboard
     paths:
       - dashboard/**
+      # Dashboard backend tests load the maintained recipes and pin the mom-v1 probes.
+      - config/recipes/**
       - src/semantic-router/pkg/config/**
       - src/semantic-router/pkg/dsl/**
       - src/semantic-router/pkg/modelinventory/**
@@ -387,9 +462,34 @@ domains:
     checks: [make generate-api-check]
     verifications: [operator]
 
+  # The release version contract reads these files. The harness tests check
+  # the development-cycle contract on the real tree, so a change to any of them
+  # runs that check; the release commit is checked with --version.
+  release-contract:
+    owner: maintainers
+    paths:
+      - tools/release/check_version_contract.py
+      - tools/release/release_contract_markers.py
+      - tools/make/release.mk
+      - src/vllm-sr/scripts/release.sh
+      - src/vllm-sr/pyproject.toml
+      - deploy/helm/semantic-router/Chart.yaml
+      - deploy/helm/semantic-router/values.yaml
+      - deploy/helm/semantic-router/templates/**
+      - website/docs/installation/upgrade-rollback.md
+    checks: [make release-check]
+    verifications: [harness-tools]
+
   helm:
     owner: deployment
-    paths: [deploy/helm/**]
+    paths:
+      - deploy/helm/**
+      # These Grafana deployments share the offline render tests in the Helm gate.
+      - deploy/kubernetes/observability/grafana/**
+      - deploy/kubernetes/observability/README.md
+      - deploy/openshift/observability/grafana/**
+      - deploy/openshift/deploy-to-openshift.sh
+      - deploy/openshift/README.md
     checks: [make helm-lint]
     verify:
       - make helm-ci-validate HELM_REPO_UPDATE=false
@@ -499,6 +599,49 @@ domains:
     checks: [make test-learning-tools]
     verifications: [learning-tools]
 
+  grounded-fusion-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/grounded_fusion/*
+      - bench/grounded_fusion/testdata/**
+      - tools/make/tooling.mk
+    checks: [make test-grounded-fusion-bench]
+    verifications: [bench-tools]
+
+  hallucination-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/hallucination/**
+      - tools/make/tooling.mk
+    checks: [make test-hallucination-bench]
+    verifications: [bench-tools]
+
+  reasoning-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/reasoning/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-reasoning-bench]
+    verifications: [bench-tools]
+
+  router-flow-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/router_flow/**
+      - tools/make/tooling.mk
+    checks: [make test-router-flow-bench]
+    verifications: [bench-tools]
+
+  agent-crew-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_crew/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-agent-crew]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
@@ -509,6 +652,7 @@ domains:
     owner: training
     paths:
       - bench/redteam/**
+      - src/kv_connector/**
       - src/training/**
       - tools/make/models.mk
       - tools/ci/training-test-requirements.txt
@@ -573,7 +717,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, fleet-sim, training, learning-tools, harness-tools, onnx-artifacts]
+    verifications: [cli-unit, training, learning-tools, harness-tools, onnx-artifacts]
 
   runtime-evidence:
     owner: maintainers
@@ -611,29 +755,14 @@ images:
       - dashboard/**/Dockerfile*
       - tools/docker/Dockerfile.dashboard
     publish_paths: [dashboard/**]
-  # The router images are targets of tools/docker/Dockerfile.extproc.
-  extproc:
-    pr_paths: [tools/docker/Dockerfile.extproc]
-    publish_paths:
-      - src/semantic-router/**
-      - src/model-runtime/**
-      - config/**
-      - tools/docker/Dockerfile.extproc
-      - .dockerignore
-  extproc-rocm:
-    pr_paths: [tools/docker/Dockerfile.extproc]
-    publish_paths:
-      - src/semantic-router/**
-      - src/model-runtime/**
-      - config/**
-      - tools/docker/Dockerfile.extproc
-      - .dockerignore
   operator:
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
   operator-bundle:
     pr_paths: [deploy/operator/bundle.Dockerfile]
     publish_paths: [deploy/operator/**]
+  # The router images, one target of tools/docker/Dockerfile.extproc per
+  # accelerator. They serve the CLI stack, the Helm chart and the Operator.
   vllm-sr:
     pr_paths:
       - tools/docker/Dockerfile.extproc
@@ -676,9 +805,6 @@ images:
       - tools/test/services/provider-mocker/Dockerfile
       - tools/test/services/provider-mocker/requirements.txt
       - tools/test/services/provider-mocker/provider_mocker/**
-  vllm-sr-sim:
-    pr_paths: [src/fleet-sim/Dockerfile]
-    publish_paths: [src/fleet-sim/**]
   model-runtime:
     verification_paths:
       - src/model-runtime/**
@@ -688,6 +814,20 @@ images:
     publish_paths: []
 
 profiles:
+  standalone:
+    display_name: Standalone Router
+    owner: e2e
+    coverage_role: helm-default-standalone-chat-models-fallback-rollout
+    selection: pr
+    paths:
+      - e2e/profiles/standalone/**
+      - e2e/testcases/standalone_gateway.go
+      - e2e/testcases/routing_error_codes.go
+      - deploy/helm/semantic-router/Chart.yaml
+      - deploy/helm/semantic-router/templates/**
+      - deploy/helm/semantic-router/values.yaml
+      - src/semantic-router/pkg/gateway/**
+      - src/semantic-router/cmd/native_gateway*.go
   istio:
     display_name: Istio Gateway
     owner: e2e
@@ -780,6 +920,7 @@ profiles:
       - e2e/profiles/pii-remote-backend/**
       - deploy/kubernetes/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+      - e2e/testcases/pii_repeated_value_masking.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e
@@ -800,6 +941,32 @@ profiles:
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  complexity-routing:
+    display_name: Complexity Routing
+    owner: e2e
+    coverage_role: complexity-routing
+    selection: pr
+    paths:
+      - e2e/profiles/complexity-routing/**
+      - e2e/testcases/complexity_routing.go
+      - e2e/testcases/testdata/complexity_routing_cases.json
+      - src/semantic-router/pkg/classification/complexity_classifier.go
+      - src/semantic-router/pkg/classification/complexity_rule_scoring.go
+      - src/semantic-router/pkg/classification/complexity_candidate_embeddings.go
+      - src/semantic-router/pkg/classification/complexity_query_embeddings.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity_publish.go
+  routing-errors:
+    display_name: Routing Error Contracts
+    owner: e2e
+    coverage_role: gateway-router-error-codes-without-provider-fallback
+    selection: pr
+    paths:
+      - e2e/profiles/routing-errors/**
+      - e2e/testcases/routing_error_codes*.go
+      - src/semantic-router/pkg/extproc/routing_failure*.go
+      - src/semantic-router/pkg/extproc/processor_req_body.go
+      - src/semantic-router/pkg/extproc/req_filter_classification_runtime.go
   long-context-routing:
     display_name: Long Context Routing
     owner: e2e
@@ -1084,6 +1251,10 @@ profiles:
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
       - dashboard/backend/router/router_replay*.go
+      - e2e/testcases/topic_continuity_replay.go
+      - src/semantic-router/pkg/topiccontinuity/**
+      - src/semantic-router/pkg/extproc/req_filter_topic_continuity*.go
+      - src/semantic-router/pkg/extproc/request_original_history.go
   dynamo:
     display_name: Dynamo Gateway
     owner: e2e

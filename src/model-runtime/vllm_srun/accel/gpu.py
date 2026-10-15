@@ -40,6 +40,12 @@ def device_lock(index: int) -> Any:
         return lock
 
 
+def _current_device(target: torch.device) -> AbstractContextManager[Any]:
+    if target.type != "cuda" or not torch.cuda.is_available():
+        return nullcontext()
+    return torch.cuda.device(target)
+
+
 def _optional(module: str, attribute: str) -> Any:
     try:
         return getattr(importlib.import_module(module), attribute)
@@ -99,6 +105,16 @@ class GPUAccelerator(Accelerator):
             kernels.register(
                 Kernel("chunk_gated_delta_rule", _wrap_delta(delta), "fla", exact=True)
             )
+        varlen = _optional("torch.nn.attention.varlen", "varlen_attn")
+        if varlen is not None:
+            kernels.register(
+                Kernel(
+                    "varlen_attention",
+                    _wrap_varlen(varlen),
+                    "torch-varlen-attention",
+                    exact=False,
+                )
+            )
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
@@ -122,13 +138,16 @@ class GPUAccelerator(Accelerator):
         torch.cuda.synchronize(device.index or 0)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
-        """Run device work holding the device's lock, so the process's models never launch on it at once.
+        """Run device work on its device, holding the device's lock, so the process's models never launch on it at once.
 
         A model captures a HIP / CUDA graph the second time it sees a shape,
         and the capture fails when another thread launches work on the device,
         whatever the capture mode; every capture also synchronizes the device.
+        Triton kernels (FLA's among them) launch on the thread's current
+        device, so the work makes the model's GPU current: otherwise a model on
+        any GPU but the first faults reading its own memory from GPU 0.
         """
-        with device_lock(device.index or 0):
+        with device_lock(device.index or 0), _current_device(self.torch_device(device)):
             return work()
 
     def device_fault(self, error: BaseException) -> bool:
@@ -147,6 +166,26 @@ def _wrap_conv(fn: Any) -> Any:
         return fn(hidden_states, weight, bias=bias, activation=activation)
 
     return conv
+
+
+def _wrap_varlen(fn: Any) -> Any:
+    """PyTorch's variable-length flash attention over packed rows, non-causal, keys with fewer heads in-kernel."""
+
+    def attend(query, key, value, packed, *, scale, groups):
+        cu = packed.cu_seqlens_int32
+        return fn(
+            query,
+            key,
+            value,
+            cu,
+            cu,
+            packed.max_length,
+            packed.max_length,
+            scale=scale,
+            enable_gqa=groups > 1,
+        )
+
+    return attend
 
 
 def _wrap_delta(fn: Any) -> Any:

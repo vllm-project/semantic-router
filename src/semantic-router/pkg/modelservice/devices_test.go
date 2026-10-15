@@ -48,6 +48,7 @@ func processes(t *testing.T, lease *Lease) map[string]string {
 }
 
 func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *testing.T) {
+	t.Setenv(CPUThreadsEnv, "")
 	manager, queries := fakeAutoManager(t, "cpu", 8)
 	cfg := runtimeConfig(autoEncoders())
 	if err := manager.Reconcile(cfg); err != nil {
@@ -56,7 +57,7 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 	lease := manager.Published()
 	waitReady(t, lease, "domain")
 	waitReady(t, lease, "guard")
-	if got := processes(t, lease); got["domain"] != "cpu-0" || got["guard"] != "cpu-1" {
+	if got := processes(t, lease); got["domain"] == got["guard"] || got["domain"] == "" {
 		t.Fatalf("each auto model gets a CPU process of its own: %v", got)
 	}
 	for _, name := range []string{"domain", "guard"} {
@@ -66,7 +67,7 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(data), `"device": "cpu"`) || group.plan.threads != 4 {
-			t.Fatalf("%s runs on the CPU with a thread share of 8 cores (threads %d): %s", name, group.plan.threads, data)
+			t.Fatalf("%s runs on the CPU with a 4-thread budget (threads %d): %s", name, group.plan.threads, data)
 		}
 	}
 	// A reload plans with the answer it already has.
@@ -78,7 +79,7 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 	}
 }
 
-func TestManagerKeepsOneAutoProcessWhenTheDeviceQueryFails(t *testing.T) {
+func TestManagerKeepsIndependentAutoProcessesWhenTheDeviceQueryFails(t *testing.T) {
 	manager, queries := fakeAutoManager(t, "", 8)
 	lease, err := manager.Acquire(runtimeConfig(autoEncoders()))
 	if err != nil {
@@ -87,8 +88,8 @@ func TestManagerKeepsOneAutoProcessWhenTheDeviceQueryFails(t *testing.T) {
 	waitReady(t, lease, "domain")
 	waitReady(t, lease, "guard")
 	got := processes(t, lease)
-	if got["domain"] != autoDevice || got["guard"] != autoDevice || lease.members["domain"].group.plan.threads != 0 {
-		t.Fatalf("an unresolved auto keeps one process for every auto deployment: %v", got)
+	if got["domain"] == got["guard"] || got["domain"] == "" || lease.members["domain"].group.plan.threads != 0 {
+		t.Fatalf("an unresolved auto keeps independent processes: %v", got)
 	}
 	extra := map[string]config.ModelDeployment{"pii": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII"}}
 	if _, err := manager.AcquireDeployments(extra); err != nil {
@@ -118,5 +119,29 @@ func TestQueryAutoDeviceRefusesAnswersThatAreNotADevice(t *testing.T) {
 	}
 	if _, err := queryAutoDevice(nil); err == nil {
 		t.Fatal("no command, no answer")
+	}
+}
+
+func TestManagerRefusesAGPUOnlyImplicitDeploymentOnTheCPU(t *testing.T) {
+	nine := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-9B", Revision: strings.Repeat("b", 40), Device: autoDevice}
+	cpuHost, _ := fakeAutoManager(t, "cpu", 8)
+	_, err := cpuHost.AcquireDeployments(map[string]config.ModelDeployment{"@Vela-2.0-9B/auto": nine})
+	if err == nil || !strings.Contains(err.Error(), `"@Vela-2.0-9B/auto": vllm-sr/Vela-2.0-9B runs on a GPU only, and the model runtime finds no GPU on this host`) {
+		t.Fatalf("a host without a GPU must refuse the 9B, got %v", err)
+	}
+	onCPU := nine
+	onCPU.Device = "cpu"
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"@Vela-2.0-9B": onCPU}, "rocm:0"); err == nil {
+		t.Fatal("a GPU-only implicit deployment on cpu is refused on any host")
+	}
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"@Vela-2.0-9B/auto": nine}, "rocm:0"); err != nil {
+		t.Fatalf("a GPU host serves the 9B: %v", err)
+	}
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"vela-9b": onCPU}, "cpu"); err != nil {
+		t.Fatalf("a declared deployment is the operator's choice: %v", err)
+	}
+	eight := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.8B", Device: autoDevice}
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"@Vela-2.0-0.8B/auto": eight}, "cpu"); err != nil {
+		t.Fatalf("the 0.8B runs on a CPU: %v", err)
 	}
 }

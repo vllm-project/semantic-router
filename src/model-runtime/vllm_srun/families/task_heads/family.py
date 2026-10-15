@@ -19,16 +19,16 @@ keys, so repeated inputs are answered from the runtime's result cache.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from itertools import chain
-from typing import Any
+from typing import Any, cast
 
 import torch
 
 from ...accel import onednn
 from ...accel.kernels import CONTIGUOUS
-from ...errors import INVALID_INPUT, MAX_LENGTH_EXCEEDED, PackageError
+from ...errors import INVALID_INPUT, PackageError
 from ...heads.grounded import GroundedHead, GroundingPolicy, PairEnvelope
 from ...heads.pooled import EmbeddingSurface, PooledLayout
 from ...heads.relevance import LOGITS, RelevanceHead, RelevanceLayout, RerankSurface
@@ -140,7 +140,8 @@ def batch_invariant(model: TaskHeadsModel, vocab: int) -> bool:
 
     Kernels are invariant by construction only on some PyTorch builds (a
     narrow classifier through oneDNN 3.11 is not at small batch sizes), so
-    the loaded model is probed on its own host before ``exact`` may batch.
+    the loaded model is probed on its own host before its requests merge
+    without changing an answer.
     """
     generator = torch.Generator().manual_seed(0)
     items = [
@@ -173,7 +174,7 @@ def classify_inputs(value: Any) -> list[Any]:
     return inputs
 
 
-class TaskHeadsModel(LoadedModel):
+class TaskHeadsModel(LoadedModel[Item, Any]):
     """A task checkpoint's heads over one shared forward.
 
     ``heads`` are every readout of the forward (classify heads, or one
@@ -182,13 +183,11 @@ class TaskHeadsModel(LoadedModel):
     package's representation contract for intermediate exits.
     """
 
-    fuse_bundled_jobs = True
-
     def __init__(
         self,
         info: ModelInfo,
         engine_model: EngineModel,
-        heads: dict[str, Head],
+        heads: Mapping[str, Head],
         limit: int,
         defaults: dict[str, Any],
         planners: dict[str, EmbeddingSurface | RerankSurface] | None = None,
@@ -250,7 +249,7 @@ class TaskHeadsModel(LoadedModel):
             return_tokens=bool(raw.get("return_tokens", False)),
         )
 
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[Item]:
         if surface in self.planners:
             return self.planners[surface].plan(
                 request, self.info.model_sha256, self.limit
@@ -259,7 +258,7 @@ class TaskHeadsModel(LoadedModel):
             raise UnsupportedSurfaceError(surface, self.info.id)
         body = request.body
         name = body.get("head") or self.primary
-        head = self.heads.get(name)
+        head = cast(TaskHead | None, self.heads.get(name))
         if head is None:
             raise ValueError(
                 f"unknown head {name!r}; this model has {sorted(self.heads)}"
@@ -267,6 +266,7 @@ class TaskHeadsModel(LoadedModel):
         options = self.options(head, request.options)
         if options.overflow == "window":
             # A window that cannot hold the envelope and one content token is a request error.
+            assert options.window is not None
             size, overlap = options.window
             if size > options.max_tokens:
                 raise ValueError("window tokens exceed max_tokens")
@@ -279,7 +279,7 @@ class TaskHeadsModel(LoadedModel):
             try:
                 prepared = head.prepare(value, options, self.info.model_sha256)
             except InputTooLongError as exc:
-                entries.append((index, MAX_LENGTH_EXCEEDED))
+                entries.append((index, exc.code))
                 input_tokens += exc.tokens
                 continue
             except ValueError:
@@ -298,7 +298,7 @@ class TaskHeadsModel(LoadedModel):
         return 0
 
     def run_approximate(self, items: list[Item]) -> list[Any]:
-        """``run`` on the engine's reduced copy of the backbone, where it loaded one (``max_speed``)."""
+        """``run`` on the engine's reduced copy of the backbone, where it loaded one (``DtypePolicy.reduced_cpu``)."""
         return self.run(items, reduced=True)
 
     def run(self, items: list[Item], reduced: bool = False) -> list[Any]:
@@ -383,7 +383,7 @@ class TaskHeadsModel(LoadedModel):
 
     # -- answers ----------------------------------------------------------
 
-    def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
+    def finish_surface(self, plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
         if plan.surface in self.planners:
             return self.planners[plan.surface].finish(plan, results)
         head, options, entries = plan.state
@@ -464,6 +464,12 @@ class TaskHeadsFamily(ModelFamily):
         return exits
 
     def verify(self, package: PackageRef) -> VerifiedPackage:
+        """Check the package and return its identity.
+
+        A missing file raises ``PackageError`` before the backbone is built.
+        mmBERT-shaped ModernBERT classifiers, including Vela 1.0, load through
+        this family. Verification returns before any backbone is constructed.
+        """
         selection = self._option_exits("pair_scorer")
         task = pkg.read(package.root, selection[0] if selection else None)
         files = named_files(package.root, task.files)
@@ -511,6 +517,7 @@ class TaskHeadsFamily(ModelFamily):
     def _limit(task: pkg.TaskPackage) -> int:
         limit = task.max_positions
         if task.kind == "grounded":
+            assert task.operating_point is not None
             limit = min(limit, int(task.operating_point["max_input_tokens"]))
         return limit
 
@@ -541,7 +548,8 @@ class TaskHeadsFamily(ModelFamily):
             if isinstance(task.layout, PooledLayout):
                 graphs[f"layer:{exit}"] = task.layout.graphs[exit]
             else:
-                graphs[f"layer:{exit[0]}/dim:{exit[1]}"] = task.layout.graphs[exit]
+                relevance = cast(RelevanceLayout, task.layout)
+                graphs[f"layer:{exit[0]}/dim:{exit[1]}"] = relevance.graphs[exit]
         return ModelSpec(
             name=package.model_name,
             backbone=BackboneSpec(
@@ -559,7 +567,7 @@ class TaskHeadsFamily(ModelFamily):
 
     def load(
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
-    ) -> LoadedModel:
+    ) -> TaskHeadsModel:
         from tokenizers import Tokenizer
 
         task: pkg.TaskPackage = package.details["package"]
@@ -663,7 +671,7 @@ class TaskHeadsFamily(ModelFamily):
                     (
                         None
                         if scorers[exit] is None
-                        else engine_model.place(scorers[exit])
+                        else engine_model.place(cast(torch.nn.Module, scorers[exit]))
                     ),
                 )
                 for exit in exits
@@ -693,6 +701,7 @@ class TaskHeadsFamily(ModelFamily):
     ) -> tuple[TaskHead, dict[str, Any]]:
         args = (HEAD_NAME, task.labels, layer, tokenizer)
         if task.kind == "grounded":
+            assert task.operating_point is not None
             policy = GroundingPolicy.parse(task.operating_point, task.labels)
             return (
                 GroundedHead(*args, PairEnvelope.of(tokenizer), classifier, policy),

@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
@@ -13,30 +14,52 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
+
+// MemoryUnavailableReason identifies why the memory store cannot currently serve traffic.
+type MemoryUnavailableReason string
+
+const (
+	MemoryReasonStarting           MemoryUnavailableReason = "starting"
+	MemoryReasonDisabledByConfig   MemoryUnavailableReason = "disabled_by_config"
+	MemoryReasonBackendUnavailable MemoryUnavailableReason = "backend_unavailable"
+)
+
+// MemoryStatus records the operational status and diagnosis of the memory store.
+type MemoryStatus struct {
+	Reason  MemoryUnavailableReason
+	Backend string
+}
 
 // Registry is the narrow runtime-owned dependency seam shared by startup,
 // reload, extproc, and the API server.
 type Registry struct {
-	modelPool             *binding.Pool
-	configPublicationMu   sync.Mutex
-	mu                    sync.RWMutex
-	config                *config.RouterConfig
-	classificationService *services.ClassificationService
-	acquireGeneration     AcquireClassification
-	memoryStore           memory.Store
-	vectorStore           *VectorStoreRuntime
-	modelSelector         *selection.Registry
-	learningRuntime       LearningRuntime
-	replayRuntime         ReplayRuntime
-	responseCache         *cache.ResponseCacheService
-	contextCompression    *contextcompression.Service
-	compressionRecovery   contextcompression.RecoveryStore
-	plugins               pluginruntime.Capabilities
-	configActivation      ConfigActivation
-	instanceID            string
-	startupStatus         *localStartupSnapshot
-	configListeners       []func(*config.RouterConfig)
+	modelPool              *binding.Pool
+	configPublicationMu    sync.Mutex
+	mu                     sync.RWMutex
+	config                 *config.RouterConfig
+	classificationService  *services.ClassificationService
+	acquireGeneration      AcquireClassification
+	memoryStore            memory.Store
+	memoryStatus           MemoryStatus
+	vectorStore            *VectorStoreRuntime
+	modelSelector          *selection.Registry
+	learningRuntime        LearningRuntime
+	replayRuntime          ReplayRuntime
+	responseCache          *cache.ResponseCacheService
+	contextCompression     *contextcompression.Service
+	compressionRecovery    contextcompression.RecoveryStore
+	plugins                pluginruntime.Capabilities
+	nativeRouter           systemone.Router
+	configActivation       ConfigActivation
+	configRejection        *ConfigActivation
+	configSnapshot         *configsnapshot.Snapshot
+	configLifecycle        *configsnapshot.Manager
+	configAttemptListeners []func(configsnapshot.Attempt)
+	instanceID             string
+	startupStatus          *localStartupSnapshot
+	configListeners        []func(*config.RouterConfig)
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -49,10 +72,13 @@ type Registry struct {
 type AcquireClassification func() (release func(), ok bool)
 
 type RouterRuntimeSnapshot struct {
-	Config                *config.RouterConfig
+	Config *config.RouterConfig
+	// ConfigSnapshot is the configuration snapshot Config was compiled into.
+	ConfigSnapshot        *configsnapshot.Snapshot
 	ClassificationService *services.ClassificationService
 	AcquireClassification AcquireClassification
 	MemoryStore           memory.Store
+	MemoryStatus          MemoryStatus
 	ModelSelector         *selection.Registry
 	LearningRuntime       LearningRuntime
 	ReplayRuntime         ReplayRuntime
@@ -60,6 +86,7 @@ type RouterRuntimeSnapshot struct {
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
 	Plugins               pluginruntime.Capabilities
+	NativeRouter          systemone.Router
 }
 
 func (r *Registry) ContextCompression() (
@@ -130,15 +157,6 @@ func (r *Registry) AcquireResponseCache() (*cache.ResponseCacheService, func()) 
 	return service, release
 }
 
-func (r *Registry) SetResponseCache(service *cache.ResponseCacheService) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	r.responseCache = service
-	r.mu.Unlock()
-}
-
 // LearningRuntime is the narrow API-server seam for Router Learning state.
 // The implementation lives with the router runtime; the API server only needs
 // to forward typed outcomes without depending on extproc internals.
@@ -147,7 +165,38 @@ type LearningRuntime interface {
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
-	return &Registry{config: cfg, modelPool: binding.NewPool(), instanceID: rand.Text()}
+	r := &Registry{config: cfg, modelPool: binding.NewPool(), instanceID: rand.Text()}
+	r.memoryStatus = defaultInitialMemoryStatus(cfg)
+	return r
+}
+
+func defaultInitialMemoryStatus(cfg *config.RouterConfig) MemoryStatus {
+	if cfg == nil {
+		return MemoryStatus{Reason: MemoryReasonStarting}
+	}
+	backend := cfg.Memory.Backend
+	if backend == "" {
+		backend = "milvus"
+	}
+	if !isMemoryConfigEnabled(cfg) {
+		return MemoryStatus{Reason: MemoryReasonDisabledByConfig, Backend: backend}
+	}
+	return MemoryStatus{Reason: MemoryReasonStarting, Backend: backend}
+}
+
+func isMemoryConfigEnabled(cfg *config.RouterConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.Memory.Enabled {
+		return true
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		if memoryConfig := decision.GetMemoryConfig(); memoryConfig != nil && memoryConfig.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {
@@ -290,6 +339,33 @@ func (r *Registry) SetMemoryStore(store memory.Store) {
 	}
 	r.mu.Lock()
 	r.memoryStore = store
+	if store != nil {
+		r.memoryStatus = MemoryStatus{}
+	}
+	r.mu.Unlock()
+}
+
+func (r *Registry) MemoryStatus() MemoryStatus {
+	if r == nil {
+		return MemoryStatus{Reason: MemoryReasonStarting}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.memoryStatus.Reason == "" {
+		if r.memoryStore != nil {
+			return MemoryStatus{}
+		}
+		return MemoryStatus{Reason: MemoryReasonStarting}
+	}
+	return r.memoryStatus
+}
+
+func (r *Registry) SetMemoryStatus(status MemoryStatus) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.memoryStatus = status
 	r.mu.Unlock()
 }
 
@@ -438,9 +514,11 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	if snapshot.Config != nil {
 		r.config = snapshot.Config
 	}
+	r.configSnapshot = snapshot.ConfigSnapshot
 	r.classificationService = snapshot.ClassificationService
 	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
+	r.memoryStatus = snapshot.MemoryStatus
 	r.modelSelector = snapshot.ModelSelector
 	r.learningRuntime = snapshot.LearningRuntime
 	r.replayRuntime = snapshot.ReplayRuntime
@@ -448,6 +526,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.contextCompression = snapshot.ContextCompression
 	r.compressionRecovery = snapshot.CompressionRecovery
 	r.plugins = snapshot.Plugins
+	r.nativeRouter = snapshot.NativeRouter
 	r.mu.Unlock()
 	r.notifyConfig(snapshot.Config)
 }

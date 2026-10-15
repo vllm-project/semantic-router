@@ -97,8 +97,12 @@ audio, layer views or windows of long text need a local model.
 
 ## Check it
 
+These worker-level examples run inside an environment containing `vllm-srun`
+(such as the Router image). Classify, embeddings, rerank and bundle are worker
+APIs; the instance frontend publishes System One and decision requests.
+
 ```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Embedding --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Embedding --device cpu --port 8100
 curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
   -d '{"input": ["How do I reset my password?", "I forgot my login password."], "dimensions": 256}'
 ```

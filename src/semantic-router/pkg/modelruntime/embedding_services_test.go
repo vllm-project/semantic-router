@@ -27,7 +27,7 @@ func newEmbeddingRuntime(deployments ...string) *embeddingRuntime {
 	for i, deployment := range deployments {
 		runtime.cards[deployment] = modelservice.ModelCard{
 			ID: deployment, ModelSHA256: strings.Repeat(string(rune('a'+i)), 64), Surfaces: []string{"embeddings"},
-			MaxInputTokens: 512, Device: "cpu", Dtype: "float32", Profile: "exact",
+			MaxInputTokens: 512, Device: "cpu", Dtype: "float32",
 			Embedding: &modelservice.EmbeddingCard{Dimensions: []int{8, 4, 3}, Layers: []int{2, 6}, Modalities: []string{"text"}, Normalized: true, Pooling: "mean"},
 		}
 	}
@@ -40,6 +40,11 @@ func (r *embeddingRuntime) Card(_ context.Context, deployment string) (modelserv
 		return modelservice.ModelCard{}, modelservice.ErrUnknownDeployment
 	}
 	return card, nil
+}
+
+func (r *embeddingRuntime) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
+	card, ok := r.cards[deployment]
+	return card, ok
 }
 
 func (r *embeddingRuntime) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
@@ -120,12 +125,12 @@ func TestImplicitEmbeddingSpecResolvesRegistryPackages(t *testing.T) {
 	}
 	if spec.Binding.Deployment != "@embedding.mmbert" || spec.Deployment.Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
 		len(spec.Deployment.Revision) != 40 || spec.Deployment.Device != "cpu" || spec.Deployment.Input.Overflow != "truncate" ||
-		spec.Deployment.Profile != "exact" {
+		spec.Deployment.HasEngineArgs() {
 		t.Fatalf("mmbert spec %+v", spec)
 	}
 	cfg.EmbeddingModels.UseCPU = false
 	if spec, err = implicitEmbeddingSpec(cfg, config.DefaultRecipeName, "multimodal"); err != nil || spec.Deployment.Artifact != omni || spec.Deployment.Device != "auto" ||
-		spec.Deployment.Profile != "exact" {
+		spec.Deployment.HasEngineArgs() {
 		t.Fatalf("multimodal spec %+v, %v", spec, err)
 	}
 	cfg.Qwen3ModelPath = "models/mom-embedding-light"

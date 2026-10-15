@@ -64,7 +64,7 @@ func loadMCPTestCases(filepath string) ([]MCPTestCase, error) {
 func executeMCPRequest(ctx context.Context, localPort, query string, verbose bool) (*http.Response, error) {
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": query},
 		},

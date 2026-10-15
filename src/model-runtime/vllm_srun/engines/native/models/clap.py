@@ -14,7 +14,7 @@ statistics load as buffers, and the relative-position index is computed.
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 import torch.nn.functional as F
@@ -22,6 +22,9 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from .modernbert import ACTIVATIONS
+
+if TYPE_CHECKING:
+    from . import ComputedBuffers
 
 MODEL_TYPE = "clap_audio_model"
 SHIFT_MASK = -100.0
@@ -81,6 +84,9 @@ def shift_mask(size: int, window: int, shift: int) -> torch.Tensor:
 
 class BatchNorm(nn.Module):
     """Inference BatchNorm over channel dim 1, with the checkpoint's running statistics."""
+
+    running_mean: torch.Tensor
+    running_var: torch.Tensor
 
     def __init__(self, channels: int, eps: float = 1e-5):
         super().__init__()
@@ -219,7 +225,8 @@ class ClapLayer(nn.Module):
         layer_output = self.act(
             self.intermediate.dense(self.layernorm_after(hidden_states))
         )
-        return hidden_states + self.output.dense(layer_output)
+        out: torch.Tensor = hidden_states + self.output.dense(layer_output)
+        return out
 
 
 class ClapPatchMerging(nn.Module):
@@ -240,7 +247,8 @@ class ClapPatchMerging(nn.Module):
             ],
             -1,
         ).view(batch, -1, 4 * channels)
-        return self.reduction(self.norm(merged))
+        reduced: torch.Tensor = self.reduction(self.norm(merged))
+        return reduced
 
 
 class ClapStage(nn.Module):
@@ -293,7 +301,8 @@ class ClapPatchEmbed(nn.Module):
         )
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        return self.norm(self.proj(images).flatten(2).transpose(1, 2))
+        patches: torch.Tensor = self.norm(self.proj(images).flatten(2).transpose(1, 2))
+        return patches
 
 
 class ClapAudioBackbone(nn.Module):
@@ -340,11 +349,13 @@ class ClapAudioBackbone(nn.Module):
         """Rebuild every computed buffer (relative-position indices, shift masks) after a meta build."""
         for module in self.modules():
             if module is not self and hasattr(module, "computed_buffers"):
-                module.computed_buffers()
+                cast("ComputedBuffers", module).computed_buffers()
 
     def images(self, input_features: torch.Tensor) -> torch.Tensor:
         """Normalized features as the Swin input image ``[B, 1, spec, spec]``."""
-        normalized = self.batch_norm(input_features.transpose(1, 3)).transpose(1, 3)
+        normalized: torch.Tensor = self.batch_norm(
+            input_features.transpose(1, 3)
+        ).transpose(1, 3)
         _, _, frames, mels = normalized.shape
         width, height = (
             self.spec_size * self.freq_ratio,

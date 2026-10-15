@@ -70,11 +70,19 @@ def parse(
 ) -> Row:
     """One question (or a preset, alone) as a ``Row``; raises ``QuestionError(invalid_question)``."""
     if isinstance(question, dict) and "preset" in question:
-        if set(question) != {"preset"} or question["preset"] not in (presets or {}):
+        if set(question) - {"preset", "require_full_input"} or question[
+            "preset"
+        ] not in (presets or {}):
             raise QuestionError(
                 INVALID_QUESTION, "preset must name one of the model's presets, alone"
             )
-        question = presets[question["preset"]]  # type: ignore[index]
+        assert presets is not None
+        question = {
+            **presets[question["preset"]],
+            **{
+                key: question[key] for key in ("require_full_input",) if key in question
+            },
+        }
     parsed = read_question(question)
     if parsed.kind == "score":
         candidates = tuple(

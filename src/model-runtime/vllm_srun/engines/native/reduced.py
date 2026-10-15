@@ -1,9 +1,9 @@
-"""Reduced copies of an encoder backbone's linear layers (the ``max_speed`` profile).
+"""Reduced copies of an encoder backbone's linear layers, which batches that merge requests run.
 
 ``reduced_view`` returns a view of a backbone that shares every parameter
 (embeddings, norms, rotary tables) except its ``nn.Linear`` layers, which the
 view holds in a reduced form; the backbone keeps its FP32 weights, so
-``exact`` batches never see the copy. Kinds (``DtypePolicy.reduced_gpu`` /
+reference batches (the golden check's) never see the copy. Kinds (``DtypePolicy.reduced_gpu`` /
 ``reduced_cpu``):
 
 - ``bfloat16``: BF16 weights, run under BF16 autocast (norms, softmax and the
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Protocol, cast
 
 import torch
 from torch import nn
@@ -25,7 +26,24 @@ from torch import nn
 from ...accel import onednn
 from ...accel.onednn import PackedLinear
 
+if TYPE_CHECKING:
+    from torch.ao.quantization import QConfig
+
 REDUCED_AUTOCAST = {"bfloat16": torch.bfloat16}
+
+
+class Quantizable(Protocol):
+    """A float module that ``from_float`` quantizes with the ``qconfig`` set on it."""
+
+    qconfig: QConfig
+
+
+class QuantizedLinear(Protocol):
+    """A dynamic int8 linear layer, whose weight and bias are methods over its packed parameters."""
+
+    def weight(self) -> torch.Tensor: ...
+
+    def bias(self) -> torch.Tensor | None: ...
 
 
 def bf16_linear(linear: nn.Linear) -> nn.Module:
@@ -48,8 +66,9 @@ def int8_linear(linear: nn.Linear) -> nn.Module:
     from torch.ao.quantization import per_channel_dynamic_qconfig
 
     source = copy.copy(linear)
-    source.qconfig = per_channel_dynamic_qconfig
-    return DynamicLinear.from_float(source)
+    cast(Quantizable, source).qconfig = per_channel_dynamic_qconfig
+    quantized: nn.Module = DynamicLinear.from_float(source)  # type: ignore[no-untyped-call]  # torch leaves from_float unannotated
+    return quantized
 
 
 COPIES: dict[str, Callable[[nn.Linear], nn.Module]] = {
@@ -108,11 +127,12 @@ def linear_bytes(module: nn.Module) -> int:
     total = 0
     for layer in module.modules():
         if isinstance(layer, PackedLinear):
-            tensors = [layer.packed, layer.bias]
+            tensors: list[torch.Tensor | None] = [layer.packed, layer.bias]
         elif isinstance(layer, nn.Linear):
             tensors = [layer.weight, layer.bias]
         elif callable(getattr(layer, "weight", None)):
-            tensors = [layer.weight(), layer.bias()]
+            quantized = cast(QuantizedLinear, layer)
+            tensors = [quantized.weight(), quantized.bias()]
         else:
             continue
         total += sum(t.numel() * t.element_size() for t in tensors if t is not None)

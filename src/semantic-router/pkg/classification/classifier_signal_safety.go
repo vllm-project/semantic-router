@@ -43,6 +43,19 @@ func (b *classifierOptionBuilder) buildSafetyClassifiersOption() (option, error)
 		}
 	}
 	prepare := func(consumer, model string, labels []string, multiLabel bool) (labelClassifier, string, error) {
+		window := b.cfg.SafetyModels.Safety.Window
+		if multiLabel {
+			window = b.cfg.SafetyModels.Hazard.Window
+		}
+		if model == "" && window == nil {
+			judgment, err := prepareDecisionSafety(runtime, consumer, labels, multiLabel)
+			if err != nil {
+				return nil, "", err
+			}
+			if judgment != nil {
+				return judgment, consumer, nil
+			}
+		}
 		spec, window, err := b.safetySpec(runtime, consumer, model, multiLabel)
 		if err != nil {
 			return nil, "", err
@@ -167,7 +180,7 @@ func (c *Classifier) evaluateSafetySignals(ctx context.Context, results *SignalR
 		if classifier == nil {
 			return labelClassification{}, fmt.Errorf("safety head is unavailable")
 		}
-		result, err := classifier.Classify(ctx, text)
+		result, err := classifySafetyWindows(ctx, classifier, text)
 		cache[key] = safetyCachedResult{result, err}
 		return result, err
 	}
@@ -292,7 +305,7 @@ func (c *Classifier) prefetchSafetyHeads(ctx context.Context, text string, used 
 	}
 	results := make([]safetyCachedResult, len(keys))
 	modelservice.Fan(ctx, len(keys), func(i int) {
-		results[i].result, results[i].err = heads[keys[i]].Classify(ctx, text)
+		results[i].result, results[i].err = classifySafetyWindows(ctx, heads[keys[i]], text)
 	})
 	cache := make(map[string]safetyCachedResult, len(keys))
 	for i, key := range keys {

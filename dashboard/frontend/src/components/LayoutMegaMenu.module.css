@@ -137,6 +137,14 @@
   background: #f4f4f1;
 }
 
+.menu[data-category='system-one'] .content {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.menu[data-category='system-one'] .item {
+  white-space: normal;
+}
+
 .section {
   min-width: 0;
 }

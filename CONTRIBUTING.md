@@ -44,6 +44,9 @@ needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 - `accepted` work may remain in the backlog until it is sufficiently specified
   and has review capacity.
 - `ready-for-dev` marks accepted, unassigned work that contributors may claim.
+- To claim `ready-for-dev` work, comment `/assign` on the issue. The claim
+  counts once your name appears under Assignees; comment `/unassign` to
+  release it. Assignments on issues that are not yet accepted are removed.
 - Assignment moves accepted work to `in-progress`.
 - `help wanted` and `good first issue` are curated subsets of
   `ready-for-dev`; they are not intake or acceptance labels.
@@ -133,7 +136,7 @@ domains' smallest unit or static checks. Common direct targets include:
 | Go router | `make test-semantic-router` |
 | Model runtime | `make model-runtime-test` |
 | Python CLI | `make vllm-sr-test` |
-| Published models (domain, PII, jailbreak and the other classifiers) | `make test-models` |
+| Published models (the Vela 1.0 classifiers and the Vela 2.0 decision models) | `make test-models` |
 | Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
 Integration and E2E are explicit because a path classifier cannot infer all
@@ -174,7 +177,7 @@ rerun `make check`.
 
 Follow the language's standard formatter and keep modules focused:
 
-- Go: `gofmt`, meaningful exported API comments, and `make check-go-mod-tidy`.
+- Go: `golangci-lint fmt` (gofumpt and gci, applied by the `go-fmt` pre-commit hook), meaningful exported API comments, and `make check-go-mod-tidy`.
 - Python: Black formatting, type hints where they improve the
   interface, and tests for behavior changes.
 
@@ -198,13 +201,70 @@ of truth for schemas, test selection, or public documentation.
 6. Open a PR using the module prefixes and sections in
    [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
-Mergify places a pull request in the merge queue only after at least two
-reviewers with `write`, `maintain`, or `admin` repository permission approve
-it and all required checks pass.
-
 Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
 the change is needed, which modules it affects, and how its user-visible
 behavior was verified.
+
+Mergify places a pull request in the merge queue only after at least two
+reviewers with `write`, `maintain`, or `admin` repository permission approve
+it, all required checks pass, and all review conversations are resolved.
+
+### Troubleshoot the merge queue
+
+Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
+comment on the PR. The **Reason** and **Hint** explain whether the PR is
+waiting or was dequeued because its branch could not be updated.
+
+If the PR is approved and PR Gate is green but no **Merge Queue Status**
+comment appears, open Mergify's **Summary** check and inspect the unmet
+conditions under **queue approved pull requests**. The Summary check can
+succeed while that rule's conditions remain unmet. Items marked
+**🛡 GitHub branch protection** are inherited from branch protection.
+[.mergify.yml](.mergify.yml) defines the repository's queue rules, while the
+Summary check shows the effective conditions, including inherited requirements.
+
+- **Waiting in the queue:** the queue processes PRs serially, so a long wait
+  can be normal.
+  Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
+- **Unresolved review conversation:** every review thread must be resolved,
+  including threads marked **Outdated** after a push or branch update. Use
+  the **Conversations** menu on **Files changed** to find them. The PR author
+  can resolve a thread once it is addressed, including on a fork PR; reviewers
+  should resolve their own addressed threads when approving. See
+  [GitHub's conversation-resolution guidance][review-conversations].
+  `@mergifyio queue` does not bypass this requirement.
+- **Workflow permission refusal:** until
+  [#3902](https://github.com/vllm-project/semantic-router/issues/3902) is resolved,
+  Mergify cannot update a branch when the update includes workflow changes
+  requiring its pending `workflows` permission. An organization owner must
+  accept that permission in the Mergify dashboard. Contributors can use the
+  manual branch update below; requeueing without updating repeats the failure.
+- **Fork cannot be queued:** on a personal-account fork containing workflows,
+  GitHub offers **Allow edits and access to secrets by maintainers**. Enabling
+  it lets maintainers update the branch, including workflows, which can expose
+  fork secrets and allow access to other branches. This is optional; if you
+  leave it off, update the branch yourself after a dequeue. See
+  [GitHub's explanation of fork permissions][fork-permissions].
+
+To recover from a branch-update failure, merge upstream `main` into your PR
+branch and push it, or use GitHub's **Update branch** button when available.
+
+If that merge includes workflow changes, an HTTPS push using an OAuth token
+or personal access token (classic) without the `workflow` scope can also be
+refused. Use **Update branch**, push over SSH, or use GitHub's **Sync fork**
+to update your fork's `main` before retrying the push. GitHub permits workflow
+files without that scope when the same paths and contents already exist on
+another branch in the fork. See [GitHub's scope documentation][oauth-scopes].
+
+Once PR Gate passes on the new head, the required approvals still hold, and
+all review conversations are resolved, the rule requeues the PR automatically.
+The `@mergifyio queue` command and
+**Requeue** checkbox require write permission by default; contributors do not
+need them for this recovery.
+
+[fork-permissions]: https://docs.github.com/en/pull-requests/how-tos/work-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork
+[oauth-scopes]: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
+[review-conversations]: https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/commenting-on-a-pull-request#resolving-conversations
 
 ## Repository map
 

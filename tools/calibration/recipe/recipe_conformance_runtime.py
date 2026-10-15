@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import re
 import sys
 from dataclasses import replace
@@ -10,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from router_calibration_manifest import load_probe_manifest
+from router_calibration_support import resolve_evaluation_settings
 
 RUNTIME_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 DEFAULT_READY_ROLES = frozenset({"viewer", "operator", "admin"})
@@ -32,12 +35,39 @@ def bind_runtime_entrypoints(config: dict[str, Any], probes: list) -> list:
     ]
 
 
-def prepare_builtin_runtime(recipe_path: Path, output: Path, repo_root: Path) -> dict:
+def with_runtime_preview_budget(config: dict, manifest: dict) -> dict:
+    """Apply a declared probe budget only to an omitted disposable Preview limit."""
+    settings = resolve_evaluation_settings(manifest)
+    prepared = copy.deepcopy(config)
+    if "request_timeout_seconds" not in manifest.get("evaluation", {}):
+        return prepared
+    preview = (
+        prepared.setdefault("global", {})
+        .setdefault("services", {})
+        .setdefault("api", {})
+        .setdefault("routing_preview", {})
+    )
+    # The API takes integer seconds. Never extend the manifest's client budget.
+    preview.setdefault(
+        "request_timeout_seconds", math.floor(settings.request_timeout_seconds)
+    )
+    return prepared
+
+
+def prepare_builtin_runtime(
+    recipe_path: Path, output: Path, repo_root: Path, manifest: dict | None = None
+) -> dict:
     """Compose the source bundle through the public CLI binding implementation.
 
     Backend fixtures provide selector metadata only. Preview never sends these
     providers a request; all routing signals still use the real router models.
     """
+    if manifest is None:
+        manifest, _probes = load_probe_manifest(recipe_path / "probes.yaml")
+    authored = yaml.safe_load((recipe_path / "config.yaml").read_text())
+    fixture = builtin_provider_fixture()
+    fixture["global"] = _builtin_runtime_global(authored)
+    fixture = with_runtime_preview_budget(fixture, manifest)
     sys.path.insert(0, str(repo_root / "src" / "vllm-sr"))
     # Only live composition requires the installed source CLI.
     from cli.builtin_recipes import (  # noqa: PLC0415
@@ -64,7 +94,7 @@ def prepare_builtin_runtime(recipe_path: Path, output: Path, repo_root: Path) ->
         raise ValueError("every built-in recipe must have a catalog entrypoint")
     output.parent.mkdir(parents=True, exist_ok=True)
     source = output.parent / "providers.yaml"
-    source.write_text(yaml.safe_dump(builtin_provider_fixture(), sort_keys=False))
+    source.write_text(yaml.safe_dump(fixture, sort_keys=False))
     for index, recipe in enumerate(bundle["recipes"]):
         bindings = {
             decision["name"]: [
@@ -160,7 +190,6 @@ def builtin_provider_fixture() -> dict[str, Any]:
             ]
         },
         "global": {
-            "router": {"auto_model_names": []},
             "services": {
                 "management_api": {
                     "bind_address": "0.0.0.0",
@@ -176,7 +205,7 @@ def builtin_provider_fixture() -> dict[str, Any]:
     }
 
 
-def verify_composed_policy(authored: dict, composed: dict) -> None:
+def verify_composed_policy(authored: dict, composed: dict, manifest: dict) -> None:
     """Preserve authored policy except for the fixture's explicit deployment data."""
     actual = copy.deepcopy(composed.get("recipes", []))
     for recipe in actual:
@@ -185,12 +214,19 @@ def verify_composed_policy(authored: dict, composed: dict) -> None:
     if actual != authored.get("recipes", []):
         raise ValueError("runtime composition changed authored routing policy")
 
+    expected_global = with_runtime_preview_budget(
+        {"global": _builtin_runtime_global(authored)}, manifest
+    )["global"]
+    if composed.get("global") != expected_global:
+        raise ValueError("runtime composition changed authored global policy")
+
+
+def _builtin_runtime_global(authored: dict) -> dict:
     expected_global = copy.deepcopy(authored.get("global", {}))
     fixture_global = builtin_provider_fixture()["global"]
     # Keep the allowlist at owned leaves: sharing the management_api mapping
     # does not permit dropping unrelated authored settings such as its port.
     for path in (
-        ("router", "auto_model_names"),
         ("services", "management_api", "bind_address"),
         ("services", "management_api", "auth"),
     ):
@@ -199,8 +235,7 @@ def verify_composed_policy(authored: dict, composed: dict) -> None:
             expected = expected.setdefault(key, {})
             override = override[key]
         expected[path[-1]] = override[path[-1]]
-    if composed.get("global") != expected_global:
-        raise ValueError("runtime composition changed authored global policy")
+    return expected_global
 
 
 def management_auth_bindings(config: dict[str, Any]) -> list[tuple[str, bool]]:

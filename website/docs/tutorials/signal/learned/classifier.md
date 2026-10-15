@@ -72,8 +72,8 @@ The flag does not apply to `local` or `sequence_classifier` rules.
 The model must report a score for every declared
 label; each score must be between `0` and `1`, and the complete distribution
 must sum to approximately `1.0`. These are model-reported confidence scores,
-not calibrated classifier probabilities. Classifier leaves are the only
-decision predicates that accept `on_error`; failures expose the bounded
+not calibrated classifier probabilities. Classifier and decision-model leaves
+accept condition-level `on_error`; classifier failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
 An LLM classifier can also attach a reasoning preference to its external model:
@@ -211,7 +211,8 @@ may match. An explicit predicate queries the raw independent score instead.
 Scores do not sum to one. Categorical and unbound classifiers still require
 their existing predicates.
 
-The model runtime applies the policy in its exact FP32 profile. The sidecar
+The model runtime applies the policy at the model's published FP32 precision
+(`dtype: auto`). The sidecar
 binds the weights, tokenizer and window geometry by SHA256; a changed artifact
 is rejected. The document budget remains separate from each window's execution
 budget.
@@ -230,7 +231,8 @@ describes calibration provenance. Execution errors remain `Unknown`,
 including under `NOT`, and follow the existing `on_unknown` policy.
 
 Version 3 policies that bound the retired ONNX Runtime CK Flash Attention path
-are no longer accepted; re-qualify the policy on the runtime's exact profile.
+are no longer accepted; re-qualify the policy on the model runtime at
+`dtype: auto`.
 
 To bind an already selected runtime-only score policy to final native files,
 run the packaging tool from `src/semantic-router`:
@@ -249,7 +251,7 @@ The tool neither selects thresholds nor qualifies a
 model, and refuses to overwrite an existing file. Publish this sidecar with the
 exact native files; do not copy thresholds between checkpoints.
 
-The local path processes request text inside the Router. Both `llm` and
+The local path processes request text within the local model deployment. Both `llm` and
 `sequence_classifier` send that text to their configured external model, so
 choose the provider and retention policy accordingly. Labels and thresholds
 must be evaluated as one versioned contract. See complete examples for

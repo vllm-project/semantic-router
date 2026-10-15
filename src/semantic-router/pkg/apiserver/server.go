@@ -50,6 +50,8 @@ type InitOptions struct {
 	RemoteExposure  *bool
 	AuthMode        string
 	RuntimeRegistry *routerruntime.Registry
+	// GatewayMode decides which config changes need a restart.
+	GatewayMode config.GatewayMode
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
@@ -145,10 +147,13 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry), buildConfigUpdater(opts.RuntimeRegistry, liveClassificationSvc)),
 		runtimeRegistry:       opts.RuntimeRegistry,
 		configPath:            opts.ConfigPath,
+		gatewayMode:           opts.GatewayMode,
 		memoryStore:           memoryStore,
 		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 		startupStatusConfig:   &cfg.StartupStatus,
 	}
+
+	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
 
 	// Create HTTP server with routes
 	apiServer.initRoutingPreviewAdmission(cfg)
@@ -425,7 +430,14 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 // handleHealth handles health check requests
 func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api"})
+	mode := "unknown"
+	if snapshot := s.activeConfigSnapshot(); snapshot != nil {
+		mode = "engine"
+		if snapshot.Config().RoutingEnabled() {
+			mode = "router"
+		}
+	}
+	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api", ServingMode: mode})
 }
 
 // handleReady reports whether router startup has completed enough for traffic.

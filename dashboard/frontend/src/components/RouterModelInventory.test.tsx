@@ -15,6 +15,7 @@ import {
   getRouterModelDevice,
   getRouterModelDisplayName,
   getRouterModelInputLimits,
+  getRouterModelKind,
   getRouterModelPreviewName,
 } from './routerModelPresentation'
 import { filterAndSortRouterModels } from './routerModelInventorySupport'
@@ -109,6 +110,44 @@ describe('router model presentation', () => {
     expect(detail).not.toContain('Open model card')
     const resolved = { ...model, resolved_model_path: '/models/derived/current' }
     expect(getRouterModelArtifactPath(resolved)).toBe('/models/derived/current')
+  })
+
+  it('identifies a shared decision runtime from its reported implicit deployment', () => {
+    const consumers = ['pii_classifier', 'jailbreak_classifier', 'safety.unsafe_request'].map(
+      (name): RouterModelInfo => ({
+        ...models[5],
+        name,
+        registry: undefined,
+        model_path: 'opaque-artifact-fingerprint',
+        metadata: {
+          ...models[5].metadata,
+          binding: name,
+          deployment: '@Vela-2.0-4B/auto',
+          resource_id: 'shared-decision-runtime',
+        },
+      }),
+    )
+    const markup = render(consumers)
+    expect(headings(markup)).toEqual(['Vela-2.0-4B'])
+    expect(markup).toContain('Shared decision model runtime')
+    expect(markup).toContain('Shared by 3 consumers')
+    expect(markup).not.toContain('opaque-artifact-fingerprint')
+    expect(getRouterModelKind(consumers[0])).toBe('Decision model')
+    expect(getRouterModelDisplayName(consumers[0])).toBe('Vela-2.0-4B')
+    expect(filterAndSortRouterModels(consumers, 'Vela-2.0-4B', 'all', 'name')).toHaveLength(3)
+    expect(render(consumers, 'detail')).toContain('opaque-artifact-fingerprint')
+  })
+
+  it('does not infer a decision model from arbitrary deployment labels or binding names', () => {
+    for (const deployment of ['Vela-2.0-4B', '@Vela-2.0-4B-other/auto', '@other/auto']) {
+      const model = {
+        ...models[5],
+        registry: undefined,
+        metadata: { ...models[5].metadata, deployment },
+      }
+      expect(getRouterModelDisplayName(model)).toBe(model.name)
+      expect(getRouterModelKind(model)).not.toBe('Decision model')
+    }
   })
 
   it('separates a 262K document budget from the actual 32K physical window', () => {

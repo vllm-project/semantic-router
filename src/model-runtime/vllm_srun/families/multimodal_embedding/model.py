@@ -9,7 +9,7 @@ runs the published model's towers on the native engine and its readouts here;
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor, wait
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -28,13 +28,16 @@ from .bundle import CLAP_DIMENSION
 from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProcessor
 from .readout import OmniReadout
 
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
 UNIT_NORM_TOLERANCE = 0.005
 CONCURRENT_INPUTS = 4
 # Token counts of the texts that probe a loaded model's batch invariance.
 INVARIANCE_PROBE = (3, 9, 9, 17, 40, 130)
 
 
-class OmniModel(LoadedModel):
+class OmniModel(LoadedModel[embedding.EmbedItem, list[float] | None]):
     """``/v1/embeddings`` over text, image and audio inputs; subclasses run the items."""
 
     def __init__(
@@ -55,7 +58,9 @@ class OmniModel(LoadedModel):
         assert info.embedding is not None
         self.dimension = info.embedding.dimensions[0]
 
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
+    def plan_surface(
+        self, surface: str, request: SurfaceRequest
+    ) -> SurfacePlan[embedding.EmbedItem]:
         if surface != "embeddings":
             raise UnsupportedSurfaceError(surface, self.info.id)
         assert self.info.embedding is not None
@@ -100,7 +105,9 @@ class OmniModel(LoadedModel):
         cost = self.media_cost["audio"]
         return embedding.EmbedItem(entry.index, "audio", [], key, by_graph, cost), None
 
-    def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
+    def finish_surface(
+        self, plan: SurfacePlan[embedding.EmbedItem], results: Any
+    ) -> dict[str, Any]:
         return embedding.finish(plan, results)
 
     def close(self) -> None:
@@ -116,8 +123,8 @@ class NativeOmniModel(OmniModel):
     (``batch_invariant``, probed at load), else one at a time. Each image runs
     the vision tower alone; each audio input runs CLAP over its windows
     together and Whisper over its features. An input's answer never depends
-    on the other inputs of its batch, so the ``exact`` profile may run
-    queued requests together.
+    on the other inputs of its batch, so queued requests may run together
+    without changing an answer.
     """
 
     packs_rows = True
@@ -177,7 +184,7 @@ class NativeOmniModel(OmniModel):
                 start += length
         return [vectors[tuple(ids)] for ids in sequences]
 
-    def _tower(self, name: str, **inputs: np.ndarray) -> torch.Tensor:
+    def _tower(self, name: str, **inputs: NDArray[np.float32]) -> torch.Tensor:
         output = self.engine_model.encode(
             EncoderBatch(
                 torch.zeros(0, dtype=torch.long),
@@ -214,7 +221,7 @@ class GraphOmniModel(OmniModel):
     """A prepared bundle on the onnxruntime engine; each input runs its modality's graphs.
 
     Every input runs its graphs alone, so its vector is the same in any batch:
-    the ``exact`` profile hands every queued request to one ``run``, which runs
+    the scheduler hands every queued request to one ``run``, which runs
     up to ``CONCURRENT_INPUTS`` text and audio inputs at once on their graphs'
     ONNX Runtime pools (one short input's run leaves most of a pool idle).
     Images run one after another beside them: one image's run keeps every
@@ -269,8 +276,13 @@ class GraphOmniModel(OmniModel):
         super().close()
 
     def _graph(
-        self, name: str, size: int, ids: list[int] | None = None, **inputs: np.ndarray
-    ) -> np.ndarray | None:
+        self,
+        name: str,
+        size: int,
+        ids: list[int] | None = None,
+        /,
+        **inputs: NDArray[np.float32],
+    ) -> NDArray[np.float32] | None:
         """One graph's embedding, or None unless it is a finite unit vector of ``size``."""
         tokens = torch.tensor([ids or [0]], dtype=torch.long)
         batch = EncoderBatch(
@@ -302,14 +314,14 @@ class GraphOmniModel(OmniModel):
             )
         return None if vector is None else vector.astype(np.float32).tolist()
 
-    def _audio(self, features: AudioFeatures) -> np.ndarray | None:
+    def _audio(self, features: AudioFeatures) -> NDArray[np.float32] | None:
         windows = []
         for window in features.clap:
             vector = self._graph("clap", CLAP_DIMENSION, input_features=window)
             if vector is None:
                 return None
             windows.append(vector)
-        clap = np.sum(windows, axis=0, dtype=np.float32)
+        clap = cast("NDArray[np.float32]", np.sum(windows, axis=0, dtype=np.float32))
         if len(windows) > 1:
             clap = clap / np.float32(len(windows))
             norm = np.sqrt(np.sum(clap * clap, dtype=np.float32))

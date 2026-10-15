@@ -21,15 +21,26 @@ the packages do.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from ...systemone import canonical
 from .dispatch import Dispatcher, SpanHead
-from .layout import Row, SchemaTooLongError, Tokens, fit, window_words, word_windows
+from .layout import (
+    Row,
+    SchemaTooLongError,
+    Tokens,
+    fit,
+    require_window_coverage,
+    window_words,
+    word_windows,
+)
 from .raw import RawRow, RawSpan
 from .request import Question
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 SUFFIX = {
     "choice": "\n\nSelect the single option best supported by the context and instructions.\nDecision:",
@@ -84,9 +95,11 @@ class Block:
     ends: list[int]
     head: str = "router"
     starts: list[int] = field(default_factory=list)
-    words: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))
-    word_offsets: np.ndarray = field(default_factory=lambda: np.zeros((0, 2), np.int32))
-    word_index: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))
+    words: NDArray[np.int64] = field(default_factory=lambda: np.zeros(0, np.int64))
+    word_offsets: NDArray[np.int32] = field(
+        default_factory=lambda: np.zeros((0, 2), np.int32)
+    )
+    word_index: NDArray[np.intp] = field(default_factory=lambda: np.zeros(0, np.int64))
     alias: dict[str, str] | None = None
     read: bool = True
 
@@ -154,14 +167,16 @@ class DecoderLayout:
         trees: list[DecoderTree] = []
         plans: list[RowTrees | None] = []
         for row in rows:
+            start = len(trees)
             try:
                 plans.append(self._row(row, tokens, trees))
             except SchemaTooLongError:
+                del trees[start:]
                 plans.append(None)
         return trees, plans
 
     @staticmethod
-    def combine(plan: RowTrees, outputs: dict[int, np.ndarray]) -> RawRow:
+    def combine(plan: RowTrees, outputs: dict[int, NDArray[np.float32]]) -> RawRow:
         """A row's raw outputs from its blocks' readouts (keyed by ``id(block)``)."""
         raw = RawRow(
             tokens={part.role: len(part.ids) for part in plan.row.parts},
@@ -176,7 +191,8 @@ class DecoderLayout:
             logits = np.asarray(outputs[id(span)], np.float64)
             offsets = np.asarray(span.word_offsets)
         else:
-            words = plan.row.part(span.question.over).words
+            words = plan.row.part(cast(str, span.question.over)).words
+            assert words is not None
             accumulated = np.zeros((len(words), len(span.question.names)), np.float64)
             counts = np.zeros(len(words), np.float64)
             for window in plan.windows:
@@ -198,22 +214,28 @@ class DecoderLayout:
     # -- internals -----------------------------------------------------------
 
     def _row(self, row: Row, tokens: Tokens, trees: list[DecoderTree]) -> RowTrees:
+        row.require_complete_parts()
         span = row.span
         routed = self.dispatcher.route(span) if span is not None else None
-        questions = [routed.question if q is span else q for q in row.questions]
+        questions = [
+            cast(SpanHead, routed).question if q is span else q for q in row.questions
+        ]
         prefix, blocks, span_block, rendered = self._render(
             row, questions, tokens, routed
         )
         plan = RowTrees(
             row, rendered, blocks=[b for b in blocks if not b.is_span], span=span_block
         )
-        target = row.part(span.over) if span is not None else None
+        target = row.part(cast(str, span.over)) if span is not None else None
         if target is None or len(target.ids) <= self.repeat_limit:
             trees.append(DecoderTree(prefix, blocks))
             return plan
+        assert routed is not None and span_block is not None
+        assert target.words is not None
         span_block.read = False
         trees.append(DecoderTree(prefix, [*plan.blocks, span_block]))
         position = row.parts.index(target)
+        intervals = []
         for start, end in word_windows(
             target.words.first, len(target.ids), self.window, self.stride
         ):
@@ -223,10 +245,21 @@ class DecoderLayout:
             window_prefix, window_blocks, window_span, window_tokens = self._render(
                 Row([routed.question], parts), [routed.question], tokens, routed
             )
+            assert window_span is not None
             window_span.word_index = selected[: len(window_span.words)]
             plan.windows.append(window_span)
             plan.tokens += window_tokens
             trees.append(DecoderTree(window_prefix, window_blocks, window=True))
+            intervals.append((start, end))
+        require_window_coverage(row, target, intervals)
+        if row.requires_full_input:
+            covered = {
+                int(index) for block in plan.windows for index in block.word_index
+            }
+            if covered != set(range(len(target.words))):
+                raise SchemaTooLongError(
+                    "full input has words outside the decoder windows"
+                )
         return plan
 
     def _render(
@@ -267,12 +300,11 @@ class DecoderLayout:
             )
             span_suffix = ids(SUFFIX["span"])
             overhead += len(span_head) + len(span_suffix)
-            target = len(row.part(span_question.over).ids)
+            span_role = cast(str, span_question.over)
+            target = len(row.part(span_role).ids)
             repeat = target <= self.repeat_limit
             if repeat:
-                overhead += len(ids(TEXT_HEAD)) + len(
-                    ids(segment_open(span_question.over))
-                )
+                overhead += len(ids(TEXT_HEAD)) + len(ids(segment_open(span_role)))
                 overhead += len(ids(SEGMENT_CLOSE))
                 overhead += min(target, max(0, self.max_len - overhead) // 2)
         budget = fit(
@@ -283,6 +315,16 @@ class DecoderLayout:
             row.read_roles(),
             row.shrink_role(),
         )
+        # Only a span's own windows prove its target coverage. A scalar block
+        # in the same row never inherits that proof from the span.
+        window_role = None
+        if (
+            span_question is not None
+            and not repeat
+            and all(q.type == "span" for q in row.questions)
+        ):
+            window_role = cast(str, span_question.over)
+        row.require_budget(budget, window_role=window_role)
         prefix = list(ids(PARTS_HEAD))
         for part in row.parts:
             prefix += ids(segment_open(part.role))
@@ -303,12 +345,15 @@ class DecoderLayout:
             starts.append(len(block_ids))
             block_ids += label
             ends.append(len(block_ids) - 1)
-        part = row.part(span_question.over)
-        kept = budget.lengths[span_question.over]
+        assert routed is not None
+        span_role = cast(str, span_question.over)
+        part = row.part(span_role)
+        assert part.words is not None
+        kept = budget.lengths[span_role]
         keep = part.words.first < kept
-        words = np.zeros(0, np.int64)
+        words: NDArray[np.int64] = np.zeros(0, np.int64)
         if repeat:
-            block_ids += ids(TEXT_HEAD) + ids(segment_open(span_question.over))
+            block_ids += ids(TEXT_HEAD) + ids(segment_open(span_role))
             words = (len(block_ids) + part.words.first[keep]).astype(np.int64)
             block_ids += [int(token) for token in part.ids[:kept]] + ids(SEGMENT_CLOSE)
         span_block = Block(
