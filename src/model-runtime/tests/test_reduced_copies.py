@@ -1,4 +1,4 @@
-"""Reduced copies of an encoder's linear layers (the max_speed profile)."""
+"""Reduced copies of an encoder's linear layers, which batches that merge requests run."""
 
 import pytest
 import torch
@@ -87,8 +87,8 @@ def test_copies_that_cannot_run_on_a_device_say_why():
     assert unavailable("bfloat16", torch.device("cuda")) is None
 
 
-@pytest.mark.parametrize("profile_asks", [True, False])
-def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks):
+@pytest.mark.parametrize("asked", [True, False])
+def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, asked):
     runnable("int8")
     from vllm_srun.accel.cpu import CPUAccelerator
     from vllm_srun.engines.native.engine import NativeEngine
@@ -116,9 +116,7 @@ def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks
         spec,
         accelerator,
         accelerator.devices()[0],
-        EngineOptions(
-            reduced_precision=profile_asks, exact_kernels_only=not profile_asks
-        ),
+        EngineOptions(reduced_precision=asked, exact_kernels_only=not asked),
     )
     lengths = [9, 3]
     ids, mask = batch(lengths, seed=4)
@@ -129,6 +127,6 @@ def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks
     ).hidden[4]
     again = model.encode(EncoderBatch(flat, None, lengths=lengths)).hidden[4]
     assert torch.equal(again, exact)
-    assert (model.receipt().get("reduced", {}).get("kind") == "int8") is profile_asks
-    assert torch.equal(reduced, exact) is not profile_asks
+    assert (model.receipt().get("reduced", {}).get("kind") == "int8") is asked
+    assert torch.equal(reduced, exact) is not asked
     torch.testing.assert_close(reduced, exact, rtol=0, atol=0.1)

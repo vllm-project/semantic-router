@@ -37,6 +37,28 @@ REMOVED_MODULE_FIELDS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
 )
 
 
+# The model runtime's numerics profiles became engine arguments; `vllm-sr
+# config migrate` maps a deployment's profile onto them.
+ENGINE_ARGUMENTS = (
+    "max_num_seqs",
+    "max_num_batched_tokens",
+    "batch_window_ms",
+    "enable_shared_context",
+    "dtype",
+)
+
+
+def removed_deployment_profiles(data: dict[str, Any]) -> list[str]:
+    """The deployments of a raw configuration that still set a runtime profile."""
+    root = _mapping(data.get("global"))
+    deployments = _mapping(_mapping(root.get("model_catalog")).get("deployments"))
+    return [
+        f"global.model_catalog.deployments.{name}.profile"
+        for name in sorted(deployments)
+        if "profile" in _mapping(deployments[name])
+    ]
+
+
 def retired_model_fields(data: dict[str, Any]) -> list[str]:
     """The retired model execution settings a raw configuration still sets."""
     removed: list[str] = []

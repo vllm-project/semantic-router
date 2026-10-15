@@ -638,7 +638,7 @@ def serve_runtime(
             model=paths.get(repo, repo),
             name=name,
             device=args.device,
-            profile=args.profile,
+            max_num_seqs=args.max_num_seqs,
             engine="onnxruntime" if repo in paths else "auto",
         )
         for repo, name in names.items()
@@ -785,7 +785,9 @@ def baseline_command(args: argparse.Namespace) -> list[str]:
     command = [sys.executable, str(Path(__file__).resolve()), "serve"]
     command += ["--omni-engine", args.baseline_engine, "--cache", args.cache]
     command += ["--prepared", args.prepared, "--jobs", args.jobs, "--out", os.devnull]
-    command += ["--device", args.device, "--profile", args.profile]
+    command += ["--device", args.device]
+    if args.max_num_seqs:
+        command += ["--max-num-seqs", str(args.max_num_seqs)]
     if args.threads:
         command += ["--threads", str(args.threads)]
     if args.baseline_runtime:
@@ -1134,7 +1136,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     for sub in (runtime, serve, ab):
         sub.add_argument("--device", default="cpu")
-        sub.add_argument("--profile", default="exact")
+        sub.add_argument(
+            "--max-num-seqs",
+            type=int,
+            help="the models' engine argument (default: the runtime's)",
+        )
         sub.add_argument("--threads", type=int, default=None)
         sub.add_argument(
             "--omni-engine",

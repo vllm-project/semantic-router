@@ -50,8 +50,8 @@ def collection_fixture(tmp_path, monkeypatch):
                     "revision": "a" * 40,
                     "model_sha256": "b" * 64,
                     "engine": "native",
-                    "profile": "exact",
-                    "numerics": "exact",
+                    "dtype": "bfloat16",
+                    "numerics": "approximate",
                     "accelerator": "cpu",
                     "compute_ms": (
                         10.0 if payload["model"].endswith("Kai-0.6B") else 20.0
