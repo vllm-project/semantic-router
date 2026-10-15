@@ -272,16 +272,16 @@ func materializedProviderProfile(
 		}
 	}
 	return ProviderProfile{
-			Type: provider.Definition.ID, Protocol: effective.Binding.Protocol, BaseURL: baseURL,
-			ReasoningTransport: reasoningTransport,
-			ReasoningModes:     reasoningModes,
-			ReasoningEfforts:   reasoningEfforts,
-			ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
-			APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
-			AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-			ChatPath:            provider.Instance.ChatPath,
-			OpenAICompatGateway: provider.Instance.OpenAICompatGateway,
-		}
+		Type: provider.Definition.ID, Protocol: effective.Binding.Protocol, BaseURL: baseURL,
+		ReasoningTransport: reasoningTransport,
+		ReasoningModes:     reasoningModes,
+		ReasoningEfforts:   reasoningEfforts,
+		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
+		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
+		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
+		ChatPath:            provider.Instance.ChatPath,
+		OpenAICompatGateway: provider.Instance.OpenAICompatGateway,
+	}
 }
 
 func mergeProviderHeaders(defaults, overrides map[string]string) map[string]string {
