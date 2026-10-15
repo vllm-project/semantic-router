@@ -7760,6 +7760,85 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/tools/web-search/stats": {
+      "get": {
+        "operationId": "getWebSearchRateLimitStats",
+        "summary": "WebSearch rate-limit snapshot",
+        "tags": [
+          "tools"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Limiter counts for the current window and the fixed limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "global_limit": {
+                      "type": "integer"
+                    },
+                    "global_requests": {
+                      "type": "integer"
+                    },
+                    "per_client_limit": {
+                      "type": "integer"
+                    },
+                    "tracked_clients": {
+                      "type": "integer"
+                    },
+                    "window_seconds": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "tracked_clients",
+                    "global_requests",
+                    "window_seconds",
+                    "per_client_limit",
+                    "global_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "tools.use",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "tools",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/topology/test-query": {
       "post": {
         "operationId": "postApiTopologyTestQuery",
