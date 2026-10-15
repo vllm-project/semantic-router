@@ -300,8 +300,9 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
 
 
 @pytest.mark.parametrize("models_file", [False, True])
-def test_engine_resolves_relative_model_paths_before_host_handoff(
-    monkeypatch, tmp_path, models_file
+@pytest.mark.parametrize("engine_options", [False, True])
+def test_engine_preserves_local_paths_and_engine_arguments_at_host_handoff(
+    monkeypatch, tmp_path, models_file, engine_options
 ):
     monkeypatch.chdir(tmp_path)
     directory = tmp_path / "my-model"
@@ -329,6 +330,31 @@ def test_engine_resolves_relative_model_paths_before_host_handoff(
         args += ["--models", str(inventory)]
     else:
         args.append("./my-model")
+    if engine_options:
+        args += [
+            "--dtype",
+            "float32",
+            "--max-num-seqs",
+            "1",
+            "--max-num-batched-tokens",
+            "128",
+            "--batch-window-ms",
+            "0",
+            "--no-enable-shared-context",
+        ]
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 0, result.output
-    assert received[0]["models"][0]["model"] == str(directory.resolve())
+    entry = received[0]["models"][0]
+    assert entry["model"] == str(directory.resolve())
+    assert "profile" not in entry
+    expected = {
+        "dtype": "float32",
+        "max_num_seqs": 1,
+        "max_num_batched_tokens": 128,
+        "batch_window_ms": 0,
+        "enable_shared_context": False,
+    }
+    if engine_options:
+        assert {name: entry[name] for name in expected} == expected
+    else:
+        assert not expected.keys() & entry.keys()
