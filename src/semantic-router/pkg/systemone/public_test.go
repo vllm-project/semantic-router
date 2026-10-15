@@ -27,14 +27,14 @@ func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 		if json.Unmarshal(body, &native) != nil || string(native["questions"]) != `{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}` {
 			t.Fatalf("native question order/types changed: %s", body)
 		}
-		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"profile":"exact"}}`), nil
+		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"dtype":"float32"}}`), nil
 	})
 	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
 		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"vllm-sr/test","state":"input","questions":{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}}`))
 		request.Header.Set("Authorization", "Bearer test-key")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if response.Code != 200 || strings.Contains(response.Body.String(), "private-") || !strings.Contains(response.Body.String(), `"profile":"exact"`) {
+		if response.Code != 200 || strings.Contains(response.Body.String(), "private-") || !strings.Contains(response.Body.String(), `"dtype":"float32"`) {
 			t.Fatalf("native response %d %s", response.Code, response.Body.String())
 		}
 	}
@@ -206,5 +206,44 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 			got.Error.Code != test.wantCode || got.Error.Message != test.wantMessage || strings.Contains(response.Body.String(), "private") {
 			t.Fatalf("runtime %d %s => %d %s", test.status, test.body, response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestPublicNativeRefusalsTellClientsWhenToRetry(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	for _, test := range []struct {
+		name       string
+		status     int
+		body       string
+		err        error
+		wantStatus int
+		wantCode   string
+		wantRetry  string
+	}{
+		{"worker overloaded", 429, `{"error":{"code":"overloaded","message":"busy"}}`, nil, 429, "overloaded", "1"},
+		{"pool overloaded", 429, `{"error":{"code":"overloaded","message":"busy"}}`, io.ErrUnexpectedEOF, 429, "overloaded", "1"},
+		{"model not ready", 503, `{"error":{"code":"not_ready","message":"loading"}}`, nil, 503, "not_ready", "5"},
+		{"transport failure", 0, ``, io.ErrUnexpectedEOF, 503, "systemone_unavailable", "5"},
+		{"engine deadline", 0, ``, context.DeadlineExceeded, 504, "systemone_deadline_exceeded", ""},
+		{"rejected request", 400, `{"error":{"code":"invalid_request","message":"bad"}}`, nil, 400, "invalid_request", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+				return test.status, []byte(test.body), test.err
+			})
+			response := httptest.NewRecorder()
+			handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+			var got struct {
+				Error struct{ Code string } `json:"error"`
+			}
+			if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus || got.Error.Code != test.wantCode {
+				t.Fatalf("got %d %s", response.Code, response.Body.String())
+			}
+			if retry := response.Header().Get("Retry-After"); retry != test.wantRetry {
+				t.Fatalf("Retry-After %q, want %q", retry, test.wantRetry)
+			}
+		})
 	}
 }
