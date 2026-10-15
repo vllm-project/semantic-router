@@ -402,6 +402,17 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, evalResult, translateErr
 	}
 
+	// Response-phase fallback bypasses decodeClientResponse. Authorize metadata
+	// using this attempt's endpoint, never the primary response's identity.
+	backendCtx := &RequestContext{RequestModel: candidateModel}
+	r.captureNativeBackendIdentity(dispatch.backendName, backendCtx)
+	if err := validateDynamoResponseBackend(backendCtx, translated.Envelope); err != nil {
+		attemptOutcome.Error = err
+		attemptOutcome.Discarded = true
+		evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
+		return nil, evalResult, err
+	}
+
 	if translated.Response.Usage.InputTotal.Value != nil {
 		attemptOutcome.PromptTokens = int(*translated.Response.Usage.InputTotal.Value)
 	}
@@ -703,6 +714,20 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
+	}
+	// Every fallback candidate must accept the request's Dynamo state before
+	// it is encoded. Native dispatch also checks its final mutated headers.
+	if err := validateDynamoBackendPool(r.Config, dispatch.effectiveBackendModel(), ctx, ctx.ProtocolEnvelope); err != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, err
+	}
+	if dispatch.profile != nil {
+		profileCtx := &RequestContext{Headers: dispatch.profile.ExtraHeaders}
+		if err := validateDynamoRoutingHeaders(profileCtx); err != nil {
+			return nil, fallback.EvaluationResult{CanFallback: true}, err
+		}
+		if err := validateDynamoBackendPool(r.Config, dispatch.effectiveBackendModel(), profileCtx, ctx.ProtocolEnvelope); err != nil {
+			return nil, fallback.EvaluationResult{CanFallback: true}, err
+		}
 	}
 	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
