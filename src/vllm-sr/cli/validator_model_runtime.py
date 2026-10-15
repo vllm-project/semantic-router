@@ -5,6 +5,7 @@ from cli.model_runtime_defaults import (
     global_model_bindings,
     iter_effective_routing_profiles,
 )
+from cli.model_runtime_retired import ENGINE_ARGUMENTS
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_decision_model import (
@@ -259,12 +260,12 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
-    if any(
+    if any(deployment.get(field) is not None for field in ENGINE_ARGUMENTS) or any(
         deployment.get(field)
-        for field in ("profile", "endpoint", "process", "served_name", "replicas")
+        for field in ("endpoint", "process", "served_name", "replicas")
     ):
         return (
-            "profile, endpoint, replicas and served_name apply only to "
+            "engine arguments, endpoint, replicas and served_name apply only to "
             "model_runtime deployments"
         )
     if provider != "http":

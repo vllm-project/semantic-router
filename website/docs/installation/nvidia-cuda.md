@@ -123,12 +123,15 @@ untrusted network.
 
 ## Run the Router on NVIDIA
 
-If vLLM should own all GPU memory, keep the Router on CPU:
+If vLLM should own all GPU memory, explicitly keep Router-side inference on CPU:
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --platform cpu --config config.yaml
 ```
+
+Without `--platform cpu`, automatic platform detection can select CUDA on a
+GPU host.
 
 The Router's own models (classifiers, embeddings, decision models) run in the
 [model runtime](model-runtime/overview.md). To run them on CUDA, use

@@ -17,10 +17,10 @@ vllm-sr serve --gateway extproc
 `--gateway extproc` starts the Envoy container in front of the Router exactly
 as earlier releases did, with the same Envoy configuration. Choose it for Envoy
 features the standalone Router does not have yet, such as token-bucket rate
-limiting, mTLS, JWT or OIDC, or advanced route matching. Throughput is not a
-reason to: from 1 to 64 concurrent clients standalone mode answers faster and
-serves as many or more requests per second (see the design doc's
-[results](../proposals/standalone-mode#results)).
+limiting, mTLS, JWT or OIDC, or advanced route matching. The published [comparison](../proposals/standalone-mode#results) measured a
+specific synthetic workload and CPU allocation. It does not establish a
+throughput advantage for every model, plugin or concurrency level; validate
+the gateway choice with your own workload.
 
 ## What changes for a standalone stack
 
@@ -68,8 +68,8 @@ serves as many or more requests per second (see the design doc's
   retry budgets. A decision's `reliability` and `fallback` blocks override them
   for the requests it routes, in both gateway modes; `first_byte_timeout` is
   standalone only. See
-  [Tune timeouts, retries, and endpoint health](../installation/model-configuration#tune-timeouts-retries-and-endpoint-health)
-  and [Fall back to another model](../installation/model-configuration#fall-back-to-another-model).
+  [Tune timeouts, retries, and endpoint health](https://vllm-sr.ai/docs/installation/model-configuration#tune-timeouts-retries-and-endpoint-health)
+  and [Fall back to another model](https://vllm-sr.ai/docs/installation/model-configuration#fall-back-to-another-model).
 - **Configuration versions and rollback.** Every accepted change activates a
   numbered version, and each response names it in `x-vsr-config-version`. A
   rejected change leaves the active version serving and reports why. The last
@@ -159,8 +159,9 @@ saved routing configuration. Mode is selected at startup, not in Dashboard.
   and the listener's API keys. Chat model permissions stay separate.
 - Configure listener addresses and ports, multiple logical deployments and
   replicas in the canonical `--config` document.
-- Positional MODEL, `--revision`, `--runtime-profile`, `-dp` and `--device-ids`
-  configure the default judgment deployment without changing listener grants.
+- Positional MODEL, `--revision`, the engine flags (such as `--max-num-seqs`
+  and `--dtype`), `-dp` and `--device-ids` configure the default judgment
+  deployment without changing listener grants.
 - Worker-level APIs such as classify, embeddings and rerank remain on
   `vllm-srun`; they are not automatically public frontend endpoints.
 
@@ -179,7 +180,7 @@ responses are the same, with one exception below.
 - **A model the Router calls needs `backend_refs`.** A decision whose Looper
   algorithm, prompt helper or context recovery calls a model without
   `providers.models[].backend_refs` fails to load, and the error names the
-  decision and the model. `vllm-sr validate` reports the same error. If an
+  decision and the model. `vllm-sr config validate` reports the same error. If an
   external gateway owns the backends (`listeners: []`), point that model's
   `backend_refs` at the gateway's OpenAI-compatible address.
 - **`global.integrations.looper.endpoint` is deprecated.** The Router ignores

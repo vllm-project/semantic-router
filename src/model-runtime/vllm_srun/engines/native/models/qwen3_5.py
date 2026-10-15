@@ -2,10 +2,15 @@
 
 Decision-2.0 Eos, Sol, Nox and Lux are full checkpoints of this backbone;
 Vega-27B is a LoRA over the Qwen3.8-27B text model with the same layout.
+Decision 3.0 configs set ``attention_mode: noncausal_full_attention``: the
+full-attention layers then see the whole (left-padded) prompt while the Gated
+DeltaNet layers stay causal, and image prompts take the multimodal rotary
+positions of ``rope_index``.
 """
 
 from __future__ import annotations
 
+import itertools
 from typing import Any, cast
 
 import torch
@@ -23,6 +28,7 @@ from .common import (
     recurrent_mask,
 )
 from .forest import Forest, ForestShape, forest_attention, forest_gated_delta
+from .packed import Packed, is_packed, packed_gated_delta
 from .tree import Tree, is_tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
@@ -63,11 +69,13 @@ class GatedDeltaNet(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        mask: torch.Tensor | Tree | None,
+        mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         if is_tree(mask):
             return tree_gated_delta(self, hidden_states, mask, kernels)
+        if is_packed(mask):
+            return packed_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
             hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
@@ -143,7 +151,7 @@ class GatedAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        mask: torch.Tensor | Tree | None,
+        mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
@@ -190,8 +198,8 @@ class Qwen3_5Layer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        full_mask: torch.Tensor | Tree | None,
-        linear_mask: torch.Tensor | Tree | None,
+        full_mask: torch.Tensor | Tree | Packed | None,
+        linear_mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         residual = hidden_states
@@ -283,6 +291,81 @@ class Qwen3_5Rotary(nn.Module):
         return torch.cat((freqs_thw, freqs_thw), dim=-1)
 
 
+NONCAUSAL = "noncausal_full_attention"
+
+
+def rope_index(
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    grids: list[tuple[int, int, int]],
+    image_token_id: int,
+    merge: int,
+    video_grids: list[tuple[int, int, int]] | None = None,
+    video_token_id: int | None = None,
+) -> torch.Tensor:
+    """``Qwen3_5Model.get_rope_index`` for image and video prompts: rotary positions ``[3, B, L]``, 0 on padding.
+
+    Over each row's real tokens, text runs count on from the position reached and
+    each image's tokens take (t, row, column) positions offset by it; the image
+    then advances the position by its longer merged side. A video is split into
+    its frame pairs, each an image of one temporal patch (timestamps separate
+    them). Images and videos are consumed in row order.
+    """
+    positions = torch.zeros(
+        3, *input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+    )
+    types = (input_ids == image_token_id).to(torch.int32)
+    pending = {1: iter(grids)}
+    if video_token_id is not None:
+        types[input_ids == video_token_id] = 2
+        pending[2] = iter(
+            [(1, h, w) for t, h, w in video_grids or [] for _ in range(t)]
+        )
+    device = input_ids.device
+    for row in range(input_ids.shape[0]):
+        keep = attention_mask[row].bool()
+        kinds = types[row][keep].tolist()
+        parts = []
+        current = 0
+        for kind, group in itertools.groupby(enumerate(kinds), lambda item: item[1]):
+            members = list(group)
+            span = members[-1][0] + 1 - members[0][0]
+            if kind == 0:
+                parts.append(
+                    torch.arange(span, device=device).view(1, -1).expand(3, -1)
+                    + current
+                )
+                current += span
+                continue
+            t, h, w = next(pending[kind])
+            grid_t, grid_h, grid_w = t, h // merge, w // merge
+            temporal = torch.arange(grid_t, device=device) * 1
+            rows = torch.arange(grid_h, device=device) + current
+            cols = torch.arange(grid_w, device=device) + current
+            t_grid, h_grid, w_grid = torch.meshgrid(temporal, rows, cols, indexing="ij")
+            vision = torch.stack([t_grid, h_grid, w_grid], dim=0).reshape(3, -1)
+            vision[0] += current
+            parts.append(vision)
+            current += max(h, w) // merge
+        positions[:, row, keep] = (
+            torch.cat(parts, dim=1).reshape(3, -1).to(positions.device)
+        )
+    return positions
+
+
+def noncausal_masks(
+    attention_mask: torch.Tensor, padded: bool | None = None
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """The full-attention padding mask ``[B, 1, 1, L]`` (always given) and the gated-delta padding mask.
+
+    ``padded`` (host-known) skips reading the mask back; None derives it from the mask.
+    """
+    full = attention_mask.bool()[:, None, None, :]
+    if padded is None:
+        return full, recurrent_mask(attention_mask, attention_mask.shape[1])
+    return full, attention_mask if padded and attention_mask.shape[1] > 1 else None
+
+
 class Qwen3_5Backbone(nn.Module):
     model_type = MODEL_TYPE
 
@@ -292,6 +375,7 @@ class Qwen3_5Backbone(nn.Module):
         kinds = config["layer_types"]
         if len(kinds) != config["num_hidden_layers"]:
             raise ValueError("layer_types must name every layer")
+        self.noncausal = config.get("attention_mode", "causal") == NONCAUSAL
         self.embed_tokens = nn.Embedding(config["vocab_size"], config["hidden_size"])
         self.layers = nn.ModuleList([Qwen3_5Layer(config, kind) for kind in kinds])
         self.norm = ZeroCenteredRMSNorm(config["hidden_size"], config["rms_norm_eps"])
@@ -306,7 +390,6 @@ class Qwen3_5Backbone(nn.Module):
     ) -> torch.Tensor:
         """``masks`` (``{"full", "linear"}``, built from host-known padding) replaces the masks derived
         from ``attention_mask``, which read the mask back to the host."""
-        assert self.kernels is not None, "bind kernels before running the backbone"
         hidden_states = self.embed_tokens(input_ids)
         batch, length = hidden_states.shape[:2]
         position_ids = (
@@ -314,12 +397,29 @@ class Qwen3_5Backbone(nn.Module):
             .view(1, 1, -1)
             .expand(4, batch, -1)
         )
-        rope_positions = position_ids[1:]
-        if masks is None:
+        if masks is not None:
+            full_mask, linear_mask = masks["full"], masks["linear"]
+        elif self.noncausal:
+            assert (
+                attention_mask is not None
+            ), "noncausal attention needs the padding mask"
+            full_mask, linear_mask = noncausal_masks(attention_mask)
+        else:
             full_mask = causal_mask(attention_mask, length)
             linear_mask = recurrent_mask(attention_mask, length)
-        else:
-            full_mask, linear_mask = masks["full"], masks["linear"]
+        return self.forward_embeds(
+            hidden_states, position_ids[1:], full_mask, linear_mask
+        )
+
+    def forward_embeds(
+        self,
+        hidden_states: torch.Tensor,
+        rope_positions: torch.Tensor,
+        full_mask: torch.Tensor | Tree | Packed | None,
+        linear_mask: torch.Tensor | Tree | Packed | None,
+    ) -> torch.Tensor:
+        """Every layer and the final norm over input embeddings, with rotary positions ``[3, B, L]``."""
+        assert self.kernels is not None, "bind kernels before running the backbone"
         rotary = self.rotary_emb(hidden_states, rope_positions)
         for layer in self.layers:
             hidden_states = layer(
@@ -327,6 +427,61 @@ class Qwen3_5Backbone(nn.Module):
             )
         normed: torch.Tensor = self.norm(hidden_states)
         return normed
+
+    def forward_images(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        features: torch.Tensor,
+        image_token_id: int,
+        positions: torch.Tensor,
+        padded: bool,
+        videos: tuple[torch.Tensor, int] | None = None,
+    ) -> torch.Tensor:
+        """A noncausal image prompt: image (then video) features in place of their placeholder tokens, rotary
+        ``positions`` (``rope_index``)."""
+        embeds = self.embed_tokens(input_ids)
+        embeds = embeds.masked_scatter(
+            (input_ids == image_token_id).unsqueeze(-1),
+            features.to(embeds.device, embeds.dtype),
+        )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
+        full_mask, linear_mask = noncausal_masks(attention_mask, padded)
+        return self.forward_embeds(embeds, positions, full_mask, linear_mask)
+
+    def forward_packed(self, input_ids: torch.Tensor, packed: Packed) -> torch.Tensor:
+        """Packed text rows (``[1, T]`` ids, ``packed.py``) through every layer; ``[1, T, hidden]``."""
+        embeds = self.embed_tokens(input_ids)
+        positions = packed.positions[None, None].expand(3, 1, -1)
+        return self.forward_embeds(embeds, positions, packed, packed)
+
+    def forward_images_packed(
+        self,
+        input_ids: torch.Tensor,
+        packed: Packed,
+        features: torch.Tensor,
+        image_token_id: int,
+        positions: torch.Tensor,
+        videos: tuple[torch.Tensor, int] | None = None,
+    ) -> torch.Tensor:
+        """``forward_images`` over packed rows: ``[1, T]`` ids, rotary ``positions`` ``[3, 1, T]`` (each row's ``rope_index``)."""
+        embeds = self.embed_tokens(input_ids)
+        embeds = embeds.masked_scatter(
+            (input_ids == image_token_id).unsqueeze(-1),
+            features.to(embeds.device, embeds.dtype),
+        )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
+        return self.forward_embeds(embeds, positions, packed, packed)
 
     def forward_forest(
         self,

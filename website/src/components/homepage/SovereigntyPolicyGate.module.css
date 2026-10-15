@@ -37,76 +37,27 @@
 }
 
 .core {
+  display: grid;
   width: 4.75rem;
   height: 4.75rem;
-  color: var(--gate-active);
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--gate-active) 24%, var(--site-border));
+  border-radius: 1rem;
+  background: var(--site-surface-raised);
+  box-shadow: 0 0 0 5px var(--gate-active-soft);
 }
 
-.core svg {
+.brandMark {
+  display: block;
+  width: 2.95rem;
+  height: 3.15rem;
+}
+
+.brandMark img {
   display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
-}
-
-.contacts {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.35;
-}
-
-.board {
-  fill: var(--site-surface-raised);
-  stroke: currentColor;
-  stroke-width: 1;
-  stroke-opacity: 0.4;
-}
-
-.innerBoard {
-  fill: var(--gate-active-soft);
-  stroke: currentColor;
-  stroke-width: 0.65;
-  stroke-opacity: 0.2;
-}
-
-.scanTrack,
-.scan {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-}
-
-.scanTrack {
-  stroke-opacity: 0.1;
-}
-
-.scan {
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 25 176;
-  transform-origin: 48px 48px;
-  animation: policyScan 9s linear infinite;
-}
-
-.shield {
-  fill: var(--site-surface-raised);
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-}
-
-.check {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.contactDot {
-  fill: currentColor;
+  object-fit: contain;
 }
 
 .readout {
@@ -205,12 +156,6 @@
   color: var(--gate-active);
 }
 
-@keyframes policyScan {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (max-width: 480px) {
   .gate {
     grid-template-columns: 4.15rem minmax(0, 1fr);
@@ -255,8 +200,4 @@
     transition: none;
   }
 
-  .scan {
-    animation: none;
-    transform: rotate(-35deg);
-  }
 }

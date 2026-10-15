@@ -16,19 +16,14 @@ import (
 // its own questions. Calls about one state share it, and the model reads
 // their questions together, as one request with all of them. Calls about
 // other states go in the same call as further states (DecisionRequest.states),
-// each read exactly as a request of its own, when the runtime's contract has
-// them (statesMinor); an older runtime gets one task per state. Calls about
-// one state whose question IDs could share an answer key (an equal ID, or an
-// ID under a Set question's "<id>." labels) stay apart.
+// each read exactly as a request of its own. Calls about one state whose
+// question IDs could share an answer key (an equal ID, or an ID under a Set
+// question's "<id>." labels) stay apart.
 //
 // The result cache applies to the call the runtime answers: a fused call is
 // looked up and stored under the key of all its states and questions, so an
 // answer a model gave alongside other questions never serves a call that
 // asked alone.
-
-// statesMinor is the minor version of the runtime contract from which a
-// decisions call carries further states.
-const statesMinor = 2
 
 // fusedDecision is a decisions task's states, the request's own state first,
 // and its cache key.
@@ -146,7 +141,6 @@ func fuseDecisions(client *Client, calls []*bundleCall) []*bundleTask {
 		}
 		return a.first < b.first
 	})
-	multiple := client.takesStates()
 	limit := max(1, int(client.bundleTasks.Load()))
 	open := make(map[string][]*bundleTask)
 	var tasks []*bundleTask
@@ -154,7 +148,7 @@ func fuseDecisions(client *Client, calls []*bundleCall) []*bundleTask {
 		var target *bundleTask
 		if entry.group != "" {
 			for _, task := range open[entry.group] {
-				if task.decision.fits(entry.call, entry.text, multiple, limit) {
+				if task.decision.fits(entry.call, entry.text, limit) {
 					target = task
 					break
 				}
@@ -178,16 +172,15 @@ func fuseDecisions(client *Client, calls []*bundleCall) []*bundleTask {
 
 // fits reports whether a call can join the task: about one of its states
 // with answer keys none of that state's questions has, or about another
-// state while the runtime takes further states and the task has fewer than
-// limit of them: as many states as the runtime takes tasks in one bundle,
-// each of which it runs as a job of its own.
-func (d *fusedDecision) fits(call *bundleCall, text string, multiple bool, limit int) bool {
+// state while the task has fewer than limit of them: as many states as the
+// runtime takes tasks in one bundle, each of which it runs as a job of its own.
+func (d *fusedDecision) fits(call *bundleCall, text string, limit int) bool {
 	for _, state := range d.states {
 		if state.text == text {
 			return disjointAnswers(questionIDs(call), state.taken)
 		}
 	}
-	return multiple && len(d.states) < limit
+	return len(d.states) < limit
 }
 
 func (d *fusedDecision) add(call *bundleCall, text string) {

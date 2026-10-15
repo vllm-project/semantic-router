@@ -50,23 +50,12 @@ export default function EcosystemSection(): React.JSX.Element {
         style={{ backgroundImage: `url(${assetPath}atmosphere.webp)` }}
         aria-hidden="true"
       />
-      <div className={styles.content}>
-        <header className={styles.heading}>
-          <ThemedImage
-            className={styles.wordmark}
-            sources={{
-              light: `${assetPath}vllm-sr-wordmark-light.png`,
-              dark: `${assetPath}vllm-sr-wordmark-dark.png`,
-            }}
-            alt="vLLM Semantic Router"
-            width={2160}
-            height={690}
-            loading="lazy"
-          />
-          <h2 id="ecosystem-title">
+      <div className="site-shell-container">
+        <header className={styles.header}>
+          <h2 className={styles.title} id="ecosystem-title">
             <Translate id="homepage.ecosystem.title">Ecosystem & partnerships</Translate>
           </h2>
-          <p>
+          <p className={styles.subtitle}>
             <Translate
               id="homepage.ecosystem.description"
               values={{

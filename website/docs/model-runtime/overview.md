@@ -6,22 +6,30 @@ description: The models that classify, protect, embed and route your requests ru
 
 # Model runtime
 
-Every model the router uses runs in the **built-in model runtime**: the
-classifiers behind signals such as domain, PII and jailbreak, the embedding
-models behind the semantic cache, memory and RAG, the reranker, the
-hallucination detector, and decision models that answer routing questions.
+The **built-in model runtime** serves the decision, classifier, embedding,
+reranking, and hallucination models used by routing features. It can run them
+as managed workers or attach to independently operated workers. Features with
+an explicit [external service](../installation/runtime/external) use that
+service instead.
 
 The runtime is not where your chat models run. The models that answer your
 users stay behind your providers (vLLM, Ollama, a hosted API); the runtime
-serves the small models the router consults about each request. It runs as
-`vllm-srun` processes inside the router container, or in a container of its
-own with `vllm-sr serve <artifact> --engine`. The same frontend
-and model pool stay available when routing is enabled in Router mode.
+serves the models the router consults about each request. Managed workers run
+as `vllm-srun` processes inside the Router container. Starting
+`vllm-sr serve ARTIFACT --engine` keeps the same instance frontend and model
+management, with Chat routing disabled. Router mode can serve native System
+One requests at the same time as routed Chat requests.
 
-You usually do not have to do anything for this to work. When a feature needs
-a model, the router downloads it, checks every file, starts the runtime and
-sends it the request text. It starts serving once the models its routes need
-have loaded. If a runtime is slow or crashes later, the signal deadline bounds
+![Frontend, optional decision engine, and on-demand model runtime](/img/architecture/system-one/01-component-composition.svg)
+
+See [Component Architecture](../overview/component-architecture) for the
+request paths and the distinction between model selection and replica dispatch.
+
+Built-in features resolve their model defaults automatically. During
+configuration preparation, the Router starts managed workers only for actual
+model consumers and explicitly published native models. An unused deployment
+does not load weights. Startup waits for required managed models; attached
+model readiness follows the [deployment rules](./deploy.md#when-a-model-is-not-ready). If a runtime is slow or crashes later, the signal deadline bounds
 how long a request waits. Unfinished signals follow their configured error or
 unscanned policy.
 
@@ -29,7 +37,7 @@ unscanned policy.
 
 | You want to | Do this | Read |
 | --- | --- | --- |
-| Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you; `vllm-sr serve --platform rocm` or `--platform cuda` puts its models on the GPU. | [Run it with the router](./deploy.md) |
+| Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you; `--platform rocm` or `--platform cuda` selects a GPU-capable image; deployment placement controls each worker. | [Run it with the router](./deploy.md) |
 | Share the models between routers, or run them on another machine | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
 | Call the models from your own code | Run `vllm-sr serve ARTIFACT --engine` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
 
@@ -53,9 +61,12 @@ unscanned policy.
 - **Pinned and verified.** Built-in models are pinned to an exact Hugging Face
   revision. Every file is checked against its recorded SHA-256 before it is
   loaded, and code shipped inside a model repository is never run.
-- **Same answers as the released models.** The default `exact` profile gives
-  the answers the model publishers measured. Faster settings are opt-in and say
-  that they may change results. See [Profiles](./profiles.md).
+- **Throughput first, at the published precision.** Like vLLM, the runtime
+  batches concurrent requests by default and runs each model in the precision
+  it was published in. A batched answer can move by rounding, which the
+  records measure per model; a faster setting whose records don't show
+  unchanged accuracy is an explicit switch. See
+  [Engine arguments](./engine-args.md).
 - **Bounded waits.** Slow or unavailable models resolve through the signals'
   deadline and error policies. A model forward already running may continue
   after the caller times out and delay queued work. The router restarts a

@@ -153,6 +153,10 @@ func serveRouterAPIProxy(
 		http.Error(w, "dashboard is read-only", http.StatusForbidden)
 		return
 	}
+	if (cfg.ReadonlyMode || !cfg.RuntimeConfigWritable) && r.URL.Path == classifierInventoryGatewayPath {
+		http.Error(w, "dashboard is read-only", http.StatusForbidden)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
 		http.NotFound(w, r)
 		return
@@ -186,6 +190,8 @@ func serveRouterAPIProxy(
 	}
 	routerAPIProxy.ServeHTTP(w, r)
 }
+
+const classifierInventoryGatewayPath = routercontract.GatewayPrefix + "/api/v1/inventory/classifier"
 
 func isReadonlyRouterMutation(r *http.Request) bool {
 	policy, ok := routercontract.LookupManagement(r.Method, r.URL.Path)
@@ -392,9 +398,19 @@ func registerSmartAPIRouter(mux routeRegistrar, proxies dashboardProxySet) {
 }
 
 func registerMetricsRoutes(mux routeRegistrar, cfg *config.Config) {
-	registerRouteFunc(mux, auth.PublicRoute("/metrics/router", http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
+	registerRouteFunc(mux,
+		auth.ProtectedRoute("/metrics/router", auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet),
+		routerMetricsHandler(cfg),
+	)
+}
+
+func routerMetricsHandler(cfg *config.Config) http.HandlerFunc {
+	if cfg.RouterMetrics == "" {
+		return serviceUnavailableHTMLHandler("Router metrics", "TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics")
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, cfg.RouterMetrics, http.StatusTemporaryRedirect)
-	})
+	}
 }
 
 func registerPrometheusRoutes(mux routeRegistrar, cfg *config.Config) {

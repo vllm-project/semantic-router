@@ -17,6 +17,11 @@ image. Routes match on those labels.
 | [`modality`](tutorials/signal/learned/modality.md) | Vela 1.0 Modality | `AR` (text), `DIFFUSION` (image), `BOTH` |
 | [`classifier`](tutorials/signal/learned/classifier.md) | your own model | your labels |
 
+The table lists specialist models. With no task override, the built-in domain,
+fact-check, feedback, and modality signals use the default Vela 2.0 judgment
+deployment. The specialist bindings below select Vela 1.0 explicitly. See
+[Choose a model](../choose-a-model#by-task).
+
 ## Turn it on
 
 Add the signal and use it in a route. The router runs the right model for you
@@ -47,9 +52,9 @@ routing:
 ## Choose where it runs
 
 To pick the device, the input limit or another model, describe a deployment
-and bind the feature to it. The binding names are `domain_classifier`,
-`fact_check_classifier`, `feedback_detector` and `modality_detector`; all of
-them read label probabilities (`label_distribution.v1`):
+and bind the feature to it. The specialist binding names are `domain_classifier`,
+`fact_check_classifier`, `feedback_detector` and `modality_detector`; their
+native classifier contract reads label probabilities (`label_distribution.v1`):
 
 ```yaml
 global:

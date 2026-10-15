@@ -13,7 +13,9 @@ Expose `fusion` through an ordinary `entrypoints` mapping to a recipe. The publi
 
 - Runs analysis models concurrently instead of choosing only one model.
 - Supports explicit `separate`, `one_call`, and `none` judge execution modes.
-- Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
+- Keeps Fusion policy inside its recipe. A dedicated `vllm-sr/fusion` entrypoint
+  can expose a recipe containing only Fusion decisions; its name alone does not
+  filter algorithms.
 - Keeps judge, panel, budget, prompt, trace, fallback, and grounding policy
   under recipe ownership.
 - Continues after partial panel failures only when the remaining usable
@@ -50,15 +52,11 @@ content, reasoning, prompt data, raw response bodies, or error text.
 
 ```mermaid
 flowchart TD
-    A[Request arrives] --> B{Request model}
-    B -- vllm-sr/auto --> C[Evaluate all decisions]
-    B -- vllm-sr/fusion --> D[Evaluate Fusion decisions only]
+    A[Request arrives] --> B[Resolve entrypoint to its recipe]
+    B --> C[Evaluate that recipe's signals and decisions]
     C --> E{Matched decision uses algorithm.type=fusion?}
-    D --> F{Matched Fusion decision?}
-    E -- No --> G[Use normal selected route]
+    E -- No --> G[Use the matched route or recipe fallback]
     E -- Yes --> H[Resolve recipe-owned Fusion config]
-    F -- Yes --> H
-    F -- No --> J[Return no eligible Fusion decision error]
     H --> M[Run analysis panel concurrently]
     M --> N{Usable responses meet quorum?}
     N -- No --> O{quorum_failure_policy}
@@ -81,7 +79,7 @@ flowchart TD
 
 ## What Problem Does It Solve?
 
-Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
+Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. An entrypoint such as `vllm-sr/fusion` selects its configured recipe; that recipe's signals and decisions determine whether Fusion runs.
 
 ## When to Use
 
@@ -323,7 +321,7 @@ carry the outcome, one per layer:
 | Disposition | Meaning |
 | --- | --- |
 | `quorum_failed` | Policy was `fail`; a typed quorum error was returned |
-| `fallback_served` | Fallback answered and protocol encoding succeeded, so the response was returned to Envoy. The Router sees no delivery acknowledgement, so this does not assert what the client received |
+| `fallback_served` | Fallback answered and protocol encoding succeeded, so the response was handed to the serving frontend. This records successful encoding, not a client delivery acknowledgement, so this does not assert what the client received |
 | `fallback_failed` | Fallback was attempted and failed |
 | `fallback_response_failed` | Fallback answered but its response could not be built |
 | `response_encode_failed` | The response was built but protocol translation rejected it, so an error was returned instead |
@@ -402,7 +400,7 @@ Public mode-trace transport remains deferred to
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses the hallucination detector (Vela Halu by default), which runs in the [model runtime](../../../model-runtime/guides/hallucination.md).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses the configured hallucination detector (the default decision deployment, or a specialist such as Vela Halu), which runs in the [model runtime](../../../model-runtime/guides/hallucination.md).
 
 Reference selection (what each answer is scored against):
 

@@ -95,7 +95,7 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	if err != nil {
 		return fmt.Errorf("failed to generate PVC: %w", err)
 	}
-	if err := controllerutil.SetControllerReference(sr, pvc, r.Scheme); err != nil {
+	if err = controllerutil.SetControllerReference(sr, pvc, r.Scheme); err != nil {
 		return err
 	}
 

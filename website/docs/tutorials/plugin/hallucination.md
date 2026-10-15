@@ -48,12 +48,13 @@ compatibility path and is reported at load as such.
 
 The plugin depends on
 `global.model_catalog.modules.hallucination_mitigation`, whose detector (Vela
-Halu by default) runs in the [model runtime](../../model-runtime/guides/hallucination.md).
+2.0 0.3B by default, with Vela Halu available as a specialist) runs in the [model runtime](../../model-runtime/guides/hallucination.md).
 Model responses and supplied grounding context are processed by that module.
 NLI explanations (`use_nli`) are retired; `vllm-sr config migrate` removes the
-setting. Grounding context longer than the
-detector's token window is trimmed from the end so the answer always reaches
-the model. Detection can identify unsupported text, but it cannot establish
+setting. Input handling depends on the selected detector and deployment budget;
+a general decision task requires complete admitted context and reports an
+unavailable result if it cannot cover it. See the runtime guide before
+choosing a truncation or window policy. Detection can identify unsupported text, but it cannot establish
 truth without authoritative evidence.
 
 See a complete example:

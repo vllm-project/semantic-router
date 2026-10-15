@@ -777,6 +777,10 @@ prometheus:
 grafana:
   image:
     tag: "11.5.1"
+  grafana.ini:
+    live:
+      # -- Comma-separated trusted Dashboard origins (scheme://host[:port], no path). Empty preserves Grafana's default origin checks; do not use "*" to bypass validation.
+      allowed_origins: ""
   sidecar:
     datasources:
       enabled: true

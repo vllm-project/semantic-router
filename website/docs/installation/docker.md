@@ -106,6 +106,23 @@ without allowing configuration changes. Pin images and review
 [Security Hardening](security-hardening) before exposing a listener beyond a
 trusted host.
 
+### Keep the stack running across crashes and reboots
+
+The containers that `vllm-sr serve` creates have no restart policy by default: a
+crashed container stays down, and the stack does not come back after a host
+reboot. On a server, start it with a policy:
+
+```bash
+vllm-sr serve --config config.yaml --restart-policy unless-stopped
+```
+
+`unless-stopped` and `always` restart a container that exits and start the
+stack again when the Docker daemon starts; `on-failure` restarts only containers
+that fail. `vllm-sr stop` still stops the stack. The policy applies to the
+containers that start creates, so pass it on every `serve`. With Podman, enable
+its restart service as well (`systemctl enable --now podman-restart.service`) so
+that containers with a policy come back after a reboot.
+
 With `--gateway extproc`, Envoy uses the safe `info` log level by default. To
 troubleshoot temporarily, set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting
 the stack, then unset it when finished: debug logging can expose forwarded
@@ -131,7 +148,7 @@ public deployments. `vllm-sr serve` writes the value into the generated
 ## When to move to Kubernetes
 
 Docker does not provide multi-node scheduling, rolling deployment control, or
-cluster-level recovery. Move to a Kubernetes path when you need replicas,
+cluster-level recovery. Move to a Kubernetes path when you need multi-node Router replicas,
 declarative rollout, gateway integration, or platform-managed model discovery.
 The same canonical configuration can be deployed with the CLI and Helm or
 managed through the Semantic Router Operator.

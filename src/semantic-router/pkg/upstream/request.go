@@ -27,6 +27,9 @@ type Request struct {
 	// RouteKey selects the cluster (the x-selected-model value). An empty key,
 	// or one no cluster serves, takes the default route.
 	RouteKey string
+	// ExactRoute rejects an unknown route key instead of using the default
+	// Chat cluster. Native inference candidates always require an exact alias.
+	ExactRoute bool
 	// Listener names the frontend listener whose route defaults apply.
 	Listener string
 	// Reliability are the call's overrides, lowest first (the matched

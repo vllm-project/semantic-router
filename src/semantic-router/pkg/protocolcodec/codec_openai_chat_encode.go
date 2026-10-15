@@ -61,6 +61,9 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIChatV1); err != nil {
+		return diagnostics, err
+	}
 	for _, message := range request.Messages {
 		if message.ReasoningEffort != "" {
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
