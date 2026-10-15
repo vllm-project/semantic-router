@@ -286,6 +286,19 @@ class SelectionTests(unittest.TestCase):
             ).selected_jobs,
         )
 
+    def test_training_lockfiles_are_path_selected_and_omitted_from_full_cpu(self):
+        self.assertIn(
+            "training-locks",
+            classify(["src/training/model_eval/pyproject.toml"]).selected_jobs,
+        )
+        self.assertNotIn(
+            "training-locks",
+            classify(["src/training/tests/test_export.py"]).selected_jobs,
+        )
+        self.assertNotIn("training-locks", classify([]).selected_jobs)
+        full = make_plan([], source_sha=SHA, full=True)
+        self.assertNotIn("training-locks", full["expected_verification_ids"])
+
     def test_shared_mock_changes_select_declared_pr_consumers(self):
         for path in (
             "tools/test/services/provider-mocker/provider_mocker/app.py",

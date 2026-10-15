@@ -189,6 +189,12 @@ class ComponentBatchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.commands("arbitrary-target", Path("output"))
 
+    def test_training_uv_lock_check_is_an_allowed_component_command(self):
+        self.assertEqual(
+            runner.commands("check-training-uv-lock", Path("output")),
+            [["make", "check-training-uv-lock"]],
+        )
+
     def test_workflow_uploads_individual_results_after_failure_and_gate_is_unchanged(
         self,
     ):
