@@ -393,4 +393,3 @@ func TestAnthropicEncodeResponseStreamRoundTripPreservesTiers(t *testing.T) {
 		t.Fatalf("expected 1h cache write 10, got: %v", decoded.Usage.InputCacheWrite1h)
 	}
 }
-
