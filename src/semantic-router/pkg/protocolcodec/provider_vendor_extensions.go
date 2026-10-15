@@ -18,7 +18,8 @@ const vendorExtensionReason = "provider vendor extension field is not part of th
 // value keeps strict decoding instead of silently accepting decorations.
 func providerVendorExtensionsAllowed(policy llmprotocol.Policy) bool {
 	switch policy.ResponseVendor {
-	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare:
+	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare,
+		llmprotocol.ResponseVendorOpenAICompatGateway:
 		return true
 	}
 	return false

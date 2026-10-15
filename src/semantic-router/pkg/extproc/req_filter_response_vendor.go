@@ -59,6 +59,12 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	if strings.EqualFold(strings.TrimSpace(profile.Type), snowflakeCortexProviderType) {
 		return llmprotocol.ResponseVendorSnowflake
 	}
+	// Generic OpenAI-compatible remote backends (the documented vLLM entry
+	// users point at gateways) tolerate gateway-injected usage metering
+	// fields; a plain vLLM response carries none, so stripping is a no-op.
+	if strings.EqualFold(strings.TrimSpace(profile.Type), "vllm") {
+		return llmprotocol.ResponseVendorOpenAICompatGateway
+	}
 	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
 		return llmprotocol.ResponseVendorAzure
 	}
