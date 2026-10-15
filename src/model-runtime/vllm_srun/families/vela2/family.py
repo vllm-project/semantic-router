@@ -42,8 +42,8 @@ from .request import QUESTION_TYPES, Plan, Question, QuestionReader
 TOKEN_CACHE = 8192
 # On CPU, sequences packed into one 0.3B forward cost more per token together
 # than one by one once the forward holds more than about this many tokens, so
-# coalescing profiles pack short sequences of several requests and run long
-# ones alone.
+# forwards that merge requests pack short sequences of several requests and
+# run long ones alone.
 CPU_PACKED_TOKENS = 2048
 # A question reads a part whole up to this many inputs' worth of tokens by
 # default (``max_scan_tokens``): a few forwards on a CPU, many on a GPU; a
@@ -352,8 +352,8 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
     def forward_token_budget(self) -> int | None:
         """``CPU_PACKED_TOKENS`` for the 0.3B on CPU, else None (nothing limits a forward).
 
-        Only the coalescing profiles plan with it: ``exact_batches`` keeps the
-        packages' own batching of each request.
+        Only forwards that merge requests plan with it: ``exact_batches`` keeps
+        the packages' own batching of a request that runs alone.
         """
         if (
             isinstance(self.member, EncoderMember)
@@ -455,8 +455,9 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         return self.member.run(items, packed=True)
 
     def run_approximate(self, items: list[Any]) -> list[Any]:
-        """Approximate batches run packed: decoder trees, and 0.3B sequences on the engine's
-        reduced copy where it loaded one (``max_speed`` and the package's consent)."""
+        """Batches that merge requests run packed: decoder trees, and 0.3B sequences on the
+        engine's reduced copy where it loaded one (the package's consent, ``BuiltinModel.reduced``).
+        """
         if isinstance(self.member, EncoderMember):
             return self.member.run(items, packed=True, reduced=True)
         return self.member.run(items, packed=True)

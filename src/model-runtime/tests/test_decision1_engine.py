@@ -203,7 +203,7 @@ PACKED_LENGTHS = [6, 3]
 
 
 def vela_engine(tmp_path, reduced_cpu, device=None):
-    """The tiny Vela-encoder package on CPU under ``max_speed``, consenting to ``reduced_cpu``."""
+    """The tiny Vela-encoder package on CPU with reduced copies allowed, consenting to ``reduced_cpu``."""
     family = Decision1Family()
     spec = family.describe(
         family.verify(PackageRef(write_package(tmp_path / "v", runtime=pkg.VELA)))
