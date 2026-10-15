@@ -50,6 +50,7 @@ static_resources:
               - "x-vsr-looper-iteration"
               - "x-authz-user-id"
               - "x-authz-user-groups"
+              - "x-vsr-gateway-credential"
               response_headers_to_add:
               - header:
                   key: "x-vsr-upstream-host"

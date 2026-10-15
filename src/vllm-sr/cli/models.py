@@ -2650,6 +2650,9 @@ class BackendRef(BaseModel):
     # fields, so the router decoder tolerates them. Mirrors the Go
     # CanonicalBackendRef field of the same name.
     openai_compat_gateway: bool = False
+    # The backend receives the request's deployment-injected gateway credential
+    # (global.services.authz.gateway_credential) instead of a static key.
+    trusted_gateway: bool = False
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

@@ -518,6 +518,12 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
+	// No upstream receives the authenticator's gateway credential header; a
+	// trusted gateway receives its value under the provider auth header.
+	state.removeHeaders = append(state.removeHeaders, r.gatewayCredentialHeadersForRemoval()...)
+	if state.profile != nil && state.profile.TrustedGateway {
+		return r.appendTrustedGatewayCredential(state, providerAuth, model, backendName, ctx)
+	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
@@ -541,6 +547,46 @@ func (r *OpenAIRouter) appendProviderCredential(
 	value := accessKey
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + accessKey
+	}
+	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
+	return nil
+}
+
+// appendTrustedGatewayCredential presents the request's trusted gateway
+// credential to a trusted gateway, replacing whatever the client sent under
+// the auth header. Static and per-user provider keys are not consulted: a
+// request without the credential fails before dispatch.
+func (r *OpenAIRouter) appendTrustedGatewayCredential(
+	state *routeHeaderState,
+	providerAuth modelcatalog.ProviderAuth,
+	model string,
+	backendName string,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if r.CredentialResolver != nil {
+		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	}
+	if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+		logging.ComponentErrorEvent("extproc", "trusted_gateway_auth_header_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	credential, ok := trustedGatewayCredential(ctx)
+	if !ok {
+		logging.ComponentWarnEvent("extproc", "trusted_gateway_credential_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		// The protocol contract replaces a bare 401 with a generic message;
+		// the typed error keeps the client-visible reason.
+		ctx.ImmediateProtocolError = llmprotocol.NewError(
+			llmprotocol.ErrorAuthentication, trustedGatewayCredentialCode, trustedGatewayCredentialMessage, nil,
+		)
+		return r.createErrorResponse(401, trustedGatewayCredentialMessage)
+	}
+	value := credential
+	if providerAuth.Prefix != "" {
+		value = providerAuth.Prefix + " " + credential
 	}
 	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil

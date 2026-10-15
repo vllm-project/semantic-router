@@ -583,6 +583,8 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 		ChatPath:            profile.ChatPath,
 		OpenAICompatGateway: profile.OpenAICompatGateway,
 		APIKey:              endpoint.APIKey,
+		// A trusted gateway has no static key to export; the request supplies it.
+		TrustedGateway: profile.TrustedGateway,
 	}
 	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
 		prefix := profile.AuthPrefix
@@ -597,7 +599,7 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 			ref.Endpoint = fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port)
 		}
 	}
-	if ref.APIKey == "" {
+	if ref.APIKey == "" && !ref.TrustedGateway {
 		ref.APIKey = fallbackAPIKey
 	}
 	if len(profile.ExtraHeaders) > 0 {

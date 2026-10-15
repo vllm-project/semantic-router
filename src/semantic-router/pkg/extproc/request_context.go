@@ -201,11 +201,17 @@ type RequestContext struct {
 	// authentication; this field must only ever be populated from the
 	// configured auth gateway header, never from request-body content.
 	AuthenticatedPrincipal string
-	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
+	// gatewayCredential is the dedicated credential the deployment
+	// authenticator attached for a trusted upstream gateway, taken off the
+	// headers at capture (see captureGatewayCredential). Unexported so no
+	// serialization or dump of the context carries it; read it through
+	// trustedGatewayCredential.
+	gatewayCredential   string
+	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation

@@ -103,6 +103,17 @@ providers:
           provider: vllm
           openai_compat_gateway: true
           api_key: static-demo-key
+    - name: gateway-routed-reference
+      provider_model_id: gateway-routed-reference
+      api_format: openai
+      backend_refs:
+        # A trusted upstream gateway: it receives the request's
+        # deployment-injected gateway credential as its Bearer token instead
+        # of a static api_key, and requests without one are rejected.
+        - name: trusted-gateway
+          base_url: https://gateway.example.com/v1
+          provider: openai-compatible
+          trusted_gateway: true
           weight: 100
     - name: qwen3-32b
       reasoning:
@@ -2233,6 +2244,12 @@ global:
           headers:
             X-Plan: premium
             X-Role: admin
+      # The deployment authenticator attaches a dedicated credential for
+      # trusted upstream gateways under this header; only backend_refs marked
+      # trusted_gateway receive it.
+      gateway_credential:
+        enabled: true
+        header: x-vsr-gateway-credential
     ratelimit:
       fail_open: false
       providers:
