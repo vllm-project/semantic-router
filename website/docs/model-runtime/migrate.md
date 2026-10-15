@@ -276,6 +276,12 @@ options changed with them; a removed flag fails with the one that replaces it:
 | `"options": {"profile": "exact"}` on a request | refused (`invalid_request`): a request runs with its deployment's engine arguments |
 | `profile` in `GET /v1/models` and in a response's `meta` | `engine_args`, `dtype` and `numerics` (`exact` or `approximate`) |
 
+Clients of the public System One API see two of these changes. A request that
+sets `options.profile` returns `400` (`invalid_request`) from the Router, and
+the `meta` of a `return_meta` answer reports `dtype` and `numerics` instead of
+`profile`. Drop the option, and read `numerics` where you read `profile`. See
+[System One API stability](../api/router.md#system-one-api-stability).
+
 ## Re-embed when the embedding model changes
 
 Changing the embedding model changes the vector space. The router keeps
