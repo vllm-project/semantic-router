@@ -201,7 +201,7 @@ func startFakeQdrant(t *testing.T, fake *fakePointsServer) *qdrant.Client {
 // with the deterministic storage fixture as its embedding provider.
 func newReinforcementTestStore(t *testing.T, fake *fakePointsServer) *QdrantStore {
 	t.Helper()
-	return &QdrantStore{
+	store := &QdrantStore{
 		client:         startFakeQdrant(t, fake),
 		collectionName: "reinforcement_test",
 		enabled:        true,
@@ -211,6 +211,11 @@ func newReinforcementTestStore(t *testing.T, fake *fakePointsServer) *QdrantStor
 			Dimension: 384,
 		},
 	}
+	// Registered after startFakeQdrant's client cleanup, so LIFO order drains
+	// the reinforcement wait group before the client pool is released; a
+	// direct client.Close here raced the queued claim removal under -race.
+	t.Cleanup(func() { _ = store.Close() })
+	return store
 }
 
 // waitForSetPayloadCalls polls until the background reinforcement lands.
