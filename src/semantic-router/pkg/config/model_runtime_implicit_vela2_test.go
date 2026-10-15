@@ -53,7 +53,10 @@ func deploymentsByArtifact(t *testing.T, raw string) map[string][]string {
 	}
 	byArtifact := map[string][]string{}
 	for name, deployment := range ModelRuntimeDeploymentsInUse(cfg) {
-		byArtifact[deployment.Artifact+" "+deployment.Device+" "+deployment.Profile] = append(byArtifact[deployment.Artifact+" "+deployment.Device+" "+deployment.Profile], name)
+		if deployment.HasEngineArgs() {
+			t.Fatalf("implicit deployment %s must keep the runtime's default engine arguments: %+v", name, deployment)
+		}
+		byArtifact[deployment.Artifact+" "+deployment.Device] = append(byArtifact[deployment.Artifact+" "+deployment.Device], name)
 	}
 	for _, names := range byArtifact {
 		sort.Strings(names)
@@ -63,12 +66,12 @@ func deploymentsByArtifact(t *testing.T, raw string) map[string][]string {
 
 func TestBuiltInSignalsShareOneVela2DeploymentOnCPU(t *testing.T) {
 	got := deploymentsByArtifact(t, builtInSignalsYAML(""))
-	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B cpu max_speed"]) != 1 || got["vllm-sr/Vela-2.0-0.3B cpu max_speed"][0] != DefaultDecisionDeployment {
-		t.Fatalf("every built-in signal must run on one Vela 2.0 0.3B CPU deployment under max_speed, got %v", got)
+	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B cpu"]) != 1 || got["vllm-sr/Vela-2.0-0.3B cpu"][0] != DefaultDecisionDeployment {
+		t.Fatalf("every built-in signal must run on one Vela 2.0 0.3B CPU deployment, got %v", got)
 	}
 }
 
-func TestBuiltInSignalsOnAnAcceleratorShareOneExactDeployment(t *testing.T) {
+func TestBuiltInSignalsOnAnAcceleratorShareOneDeployment(t *testing.T) {
 	global := `      prompt_guard: {use_cpu: false}
       classifier:
         domain: {use_cpu: false}
@@ -80,12 +83,12 @@ func TestBuiltInSignalsOnAnAcceleratorShareOneExactDeployment(t *testing.T) {
         safety: {use_cpu: false}
 `
 	raw := strings.Replace(builtInSignalsYAML(global+`    deployments:
-      primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-0.3B, device: auto, profile: exact}
+      primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-0.3B, device: auto}
 `), "      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51}\n",
 		"      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51, classifier: {use_cpu: false}}\n", 1)
 	got := deploymentsByArtifact(t, raw)
-	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B auto exact"]) != 1 || got["vllm-sr/Vela-2.0-0.3B auto exact"][0] != DefaultDecisionDeployment {
-		t.Fatalf("an accelerator default runs one exact Vela 2.0 deployment, got %v", got)
+	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B auto"]) != 1 || got["vllm-sr/Vela-2.0-0.3B auto"][0] != DefaultDecisionDeployment {
+		t.Fatalf("an accelerator default runs one Vela 2.0 deployment, got %v", got)
 	}
 }
 
@@ -100,8 +103,8 @@ func TestVela1SystemModelsRestoreOneDeploymentPerSpecialist(t *testing.T) {
       feedback_detector: `+vela1.FeedbackDetector+`
 `), "method: classifier, confidence_threshold: 0.51}", "method: classifier, confidence_threshold: 0.51, classifier: {model_path: models/Vela-1.0-Encoder-307M-Modality, use_cpu: true}}", 1))
 	for artifact := range got {
-		if !strings.HasPrefix(artifact, "vllm-sr/Vela-1.0-") || !strings.HasSuffix(artifact, " cpu exact") {
-			t.Fatalf("the restored defaults run only Vela 1.0 specialists on exact CPU deployments, got %v", got)
+		if !strings.HasPrefix(artifact, "vllm-sr/Vela-1.0-") || !strings.HasSuffix(artifact, " cpu") {
+			t.Fatalf("the restored defaults run only Vela 1.0 specialists on CPU deployments, got %v", got)
 		}
 	}
 	if len(got) != 7 {
