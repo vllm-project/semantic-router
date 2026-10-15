@@ -46,15 +46,11 @@ func TestRAGRunsWhenRequestAndBackendCoverIt(t *testing.T) {
 	}
 }
 
-func TestRAGSkipsWithTypedReasonWhenBackendLacksText(t *testing.T) {
+func TestRAGRunsWhenBackendCardOmitsText(t *testing.T) {
 	router, decision := gatingRouter(config.DecisionPluginRAG)
 	ctx := &RequestContext{VSRSelectedDecision: decision, SemanticRequest: gatingRequest(gatingText), PluginBackendModel: "image-model"}
-	if _, runs := router.resolveRAGPluginConfig(ctx, "gated"); runs {
-		t.Fatal("RAG ran on a backend that declares no text")
-	}
-	want := []pluginSkip{{Plugin: config.DecisionPluginRAG, Reason: pluginruntime.SkipBackendLacksCapability}}
-	if !reflect.DeepEqual(ctx.PluginSkips, want) {
-		t.Fatalf("skips=%v want %v", ctx.PluginSkips, want)
+	if _, runs := router.resolveRAGPluginConfig(ctx, "gated"); !runs || len(ctx.PluginSkips) != 0 {
+		t.Fatalf("runs=%v skips=%v: text is assumed for every model", runs, ctx.PluginSkips)
 	}
 }
 
@@ -69,12 +65,12 @@ func TestRAGSkipsWhenRequestHasNoText(t *testing.T) {
 	}
 }
 
-func TestBackendWithoutRecognizedDeclarationIsNotGated(t *testing.T) {
+func TestBackendCardNeverGatesTextPlugins(t *testing.T) {
 	router, decision := gatingRouter(config.DecisionPluginRAG)
-	for _, model := range []string{"labeled-model", "unlisted-model", ""} {
+	for _, model := range []string{"text-model", "image-model", "labeled-model", "unlisted-model", ""} {
 		ctx := &RequestContext{VSRSelectedDecision: decision, SemanticRequest: gatingRequest(gatingText), PluginBackendModel: model}
 		if _, runs := router.resolveRAGPluginConfig(ctx, "gated"); !runs {
-			t.Fatalf("model %q was gated without a recognized declaration", model)
+			t.Fatalf("model %q was gated although the request has text", model)
 		}
 	}
 }
@@ -82,13 +78,13 @@ func TestBackendWithoutRecognizedDeclarationIsNotGated(t *testing.T) {
 func TestMemoryReportsSkipThroughItsOutcome(t *testing.T) {
 	router, decision := gatingRouter(config.DecisionPluginMemory)
 	ctx := &RequestContext{
-		VSRSelectedDecision: decision, SemanticRequest: gatingRequest(gatingText),
-		PluginBackendModel: "image-model", Headers: map[string]string{},
+		VSRSelectedDecision: decision, SemanticRequest: gatingRequest(gatingImage),
+		PluginBackendModel: "text-model", Headers: map[string]string{},
 	}
 	if err := router.handleMemoryRetrieval(ctx, "describe this", ctx.SemanticRequest); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.MemoryStatus != "skipped" || ctx.MemoryReason != string(pluginruntime.SkipBackendLacksCapability) {
+	if ctx.MemoryStatus != "skipped" || ctx.MemoryReason != string(pluginruntime.SkipRequestDoesNotRequire) {
 		t.Fatalf("status=%q reason=%q", ctx.MemoryStatus, ctx.MemoryReason)
 	}
 }
