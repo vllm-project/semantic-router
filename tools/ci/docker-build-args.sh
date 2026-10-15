@@ -4,7 +4,8 @@ set -euo pipefail
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 
 image_name="${MATRIX_IMAGE:?MATRIX_IMAGE is required}"
-cargo_build_jobs="${CARGO_BUILD_JOBS:?CARGO_BUILD_JOBS is required}"
+# The router images' runtime PyTorch build, from tools/ci/image_artifacts.py.
+accelerator="${ACCELERATOR:-}"
 dashboard_version_mode="${DASHBOARD_VERSION_MODE:-main}"
 project_version_file="${PROJECT_VERSION_FILE:-src/vllm-sr/pyproject.toml}"
 
@@ -51,15 +52,9 @@ fi
 {
   echo 'args<<EOF'
   echo 'BUILDKIT_INLINE_CACHE=1'
-  echo "CARGO_BUILD_JOBS=${cargo_build_jobs}"
-  echo 'CARGO_INCREMENTAL=1'
-  # The immutable E2E candidate includes both Omni variants. Production CLI
-  # images keep their smaller default unless explicitly built with both.
-  if [[ "${image_name}" == "extproc" ]]; then
-    echo 'VELA_OMNI_VARIANTS=nano mini'
+  if [[ -n "${accelerator}" ]]; then
+    echo "ACCELERATOR=${accelerator}"
   fi
-  echo 'RUSTC_WRAPPER=""'
-  echo 'CARGO_NET_GIT_FETCH_WITH_CLI=true'
   if [[ -n "${dashboard_version}" ]]; then
     echo "DASHBOARD_VERSION=${dashboard_version}"
     echo "VLLM_SR_SOURCE_REVISION=${source_revision}"

@@ -9,20 +9,20 @@ export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
 export const loadConfigSchemaReferencePage = () => import('../pages/ConfigSchemaReferencePage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
+export const loadDecisionMonitoringPage = () => import('../pages/DecisionMonitoringPage')
+export const loadDecisionModelPage = () => import('../pages/DecisionModelPage')
+export const loadSystemOnePlaygroundPage = () => import('../pages/SystemOnePlaygroundPage')
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
 export const loadInsightsRecordPage = () => import('../pages/InsightsRecordPage')
-export const loadKnowledgeMapPage = () => import('../pages/KnowledgeMapPage')
 export const loadLogsPage = () => import('../pages/LogsPage')
 export const loadMLSetupPage = () => import('../pages/MLSetupPage')
 export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadModelHubPage = () => import('../pages/ModelHubPage')
-export const loadOpenClawPage = () => import('../pages/OpenClawPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
 export const loadStatusPage = () => import('../pages/StatusPage')
-export const loadTaxonomyPage = () => import('../pages/TaxonomyPage')
 export const loadTopologyPage = () => import('../pages/TopologyPage')
 export const loadTracingPage = () => import('../pages/TracingPage')
 export const loadUsersPage = () => import('../pages/UsersPage')
@@ -33,6 +33,15 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/invite/'), load: loadInviteAcceptPage },
   { matches: (pathname) => pathname.startsWith('/setup'), load: loadSetupWizardPage },
   { matches: (pathname) => pathname.startsWith('/dashboard'), load: loadDashboardPage },
+  {
+    matches: (pathname) => pathname.startsWith('/decision-model/playground'),
+    load: loadSystemOnePlaygroundPage,
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/decision-model/monitoring'),
+    load: loadDecisionMonitoringPage,
+  },
+  { matches: (pathname) => pathname.startsWith('/decision-model'), load: loadDecisionModelPage },
   {
     matches: (pathname) => pathname.startsWith('/playground/fullscreen'),
     load: loadPlaygroundFullscreenPage,
@@ -45,13 +54,7 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
     load: loadConfigSchemaReferencePage,
   },
   { matches: (pathname) => pathname.startsWith('/config'), load: loadConfigPage },
-  {
-    matches: (pathname) => /^\/knowledge-bases\/[^/]+\/map\/?$/.test(pathname),
-    load: loadKnowledgeMapPage,
-  },
-  { matches: (pathname) => pathname.startsWith('/knowledge-bases'), load: loadTaxonomyPage },
   { matches: (pathname) => pathname.startsWith('/topology'), load: loadTopologyPage },
-  { matches: (pathname) => pathname.startsWith('/openclaw'), load: loadOpenClawPage },
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },
   { matches: (pathname) => pathname.startsWith('/evaluation'), load: loadEvaluationPage },

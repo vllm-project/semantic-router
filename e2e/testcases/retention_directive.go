@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -45,7 +46,7 @@ func testRetentionDirective(ctx context.Context, client *kubernetes.Clientset, o
 
 	query := "Diagnostics request " + retentionProbeKeyword + " please run."
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", query, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", query, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("retention directive request failed: %w", err)
 	}

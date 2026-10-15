@@ -4,8 +4,9 @@
 
 `rag` retrieves external context for a matched route before generation. Choose
 Milvus or Qdrant for direct vector-store retrieval, or use an external HTTP
-API, MCP tools, OpenAI file search, the Router's vector-store service, or a
-primary/fallback hybrid.
+API, OpenAI file search, the Router's vector-store service, or a
+primary/fallback hybrid. `mcp` is rejected at startup until the router has an
+MCP tool invoker.
 
 ## Key Advantages
 
@@ -32,10 +33,12 @@ Choose one backend:
 | `milvus` | Direct retrieval from a Milvus collection | `collection`; optionally reuse the response-cache connection |
 | `qdrant` | Direct retrieval from a Qdrant collection | `collection`; optionally reuse the response-cache connection |
 | `external_api` | A service with a custom HTTP request contract | `endpoint`, `request_format` |
-| `mcp` | Retrieval exposed as an MCP tool | `server_name`, `tool_name` |
+| `mcp` | Rejected at startup until an MCP tool invoker exists | `server_name`, `tool_name` |
 | `openai` | OpenAI file search | `vector_store_id`, `api_key` |
 | `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
+
+`hybrid.strategy` defaults to `sequential`: the fallback runs only after the primary fails or returns no context. `parallel` starts both lookups and returns as soon as the primary has context. It does not rank the two results. The fallback is used only when the primary fails or is empty.
 
 For `external_api`, `max_response_bytes` caps each response body; omitted or
 `0` uses 4 MiB.
@@ -103,10 +106,9 @@ global:
   model_catalog:
     deployments:
       document-ranker:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         device: cpu
-        precision: native
         input:
           max_tokens: 4096
           overflow: reject
@@ -115,7 +117,6 @@ routing:
     rag.reranker:
       deployment: document-ranker
       contract: relevance_scores.v1
-      adapter: vela_reranker
       pair_scorer:
         layer: 22
         dimension: 768
@@ -149,11 +150,9 @@ either text. Loading validates the selected trained layer and dimension; zero
 selects the artifact's actual full depth or width. CPU cost grows with candidate
 count and pair length, so choose an explicit deployment budget.
 
-Candle artifacts must include encoder weights, `config.json`, `tokenizer.json`,
-`matryoshka_config.json` and `classification_heads.safetensors`. An ORT deployment
-selects a complete graph through the binding's `head` field. Its embedded
-`semantic_router.pair_scorer` metadata must declare the actual exit and
-`relevance_logit` contract; the graph filename is not proof of its semantics.
+The reranker runs in the [model runtime](../../model-runtime/guides/rerank.md).
+At startup the router checks that the model declares the selected exit, so a
+`pair_scorer` the model was not trained for is refused before traffic arrives.
 
 Only reachable recipes with an enabled `rerank` plugin load a scorer. Missing
 models, invalid scores and input-limit failures follow the existing RAG

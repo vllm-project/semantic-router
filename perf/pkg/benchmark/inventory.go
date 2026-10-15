@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -35,7 +36,11 @@ func ValidateInventory(path string, current, baseline *Baseline) error {
 		expected.Benchmarks[name] = BenchmarkMetric{}
 	}
 	for label, actual := range map[string]*Baseline{"current": current, "baseline": baseline} {
-		if missing := MissingBenchmarks(actual, expected); len(missing) > 0 {
+		missing := MissingBenchmarks(actual, expected)
+		if label == "baseline" && baseline.ModelBaselineReset != "" {
+			missing = slices.DeleteFunc(missing, IsModelBenchmark)
+		}
+		if len(missing) > 0 {
 			return fmt.Errorf("%s missing required benchmarks: %s", label, strings.Join(missing, ", "))
 		}
 		if extra := UngatedBenchmarks(actual, expected); len(extra) > 0 {

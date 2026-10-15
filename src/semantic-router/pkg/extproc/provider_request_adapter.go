@@ -103,7 +103,7 @@ func (r *OpenAIRouter) projectProviderRequest(
 		return body, nil, nil
 	}
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 && !explicitDisable {
-		family := r.getModelReasoningFamily(dispatch.logicalModel)
+		family := r.getModelReasoningFamily(dispatch.effectiveBackendModel())
 		transport := resolveProviderReasoningTransport(dispatch.profile)
 		if dispatch.targetFormat != llmprotocol.OpenAIResponsesV1 || family == nil ||
 			transport != modelcatalog.ReasoningTransportChatTemplate {
@@ -112,9 +112,9 @@ func (r *OpenAIRouter) projectProviderRequest(
 	}
 	return r.projectReasoningRequest(
 		body,
-		dispatch.logicalModel,
+		dispatch.effectiveBackendModel(),
 		dispatch.useReasoning && !explicitDisable,
-		ctx.decisionForCandidate(dispatch.logicalModel),
+		ctx.decisionForBackend(dispatch.logicalModel),
 		dispatch.profile,
 	)
 }

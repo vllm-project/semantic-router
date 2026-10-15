@@ -7,6 +7,12 @@ status: Proposal
 
 > **Status:** Proposal · **Created:** 2025-10-08
 
+The named-signal, projection and decision pipeline described here is implemented.
+This page preserves the original design motivation and open refinements; use the
+[current signal guide](../tutorials/signal/overview.md) for the supported schema.
+Regex matching is available within keyword rules, and unknown observations have
+explicit decision policies.
+
 ## Problem
 
 No single classifier is ideal for every routing condition. Operators sometimes need an

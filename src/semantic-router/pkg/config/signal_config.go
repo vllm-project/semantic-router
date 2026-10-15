@@ -32,6 +32,11 @@ type Signals struct {
 	MetadataRules      []MetadataRule         `yaml:"metadata,omitempty"`
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
+	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
+	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	// TopicContinuityRules are context-policy evidence sources; they are not
+	// decision-referenceable.
+	TopicContinuityRules []TopicContinuityRule `yaml:"topic_continuity,omitempty"`
 }
 
 // HallucinationRule declares the response-stage hallucination observation:
@@ -44,10 +49,6 @@ type Signals struct {
 type HallucinationRule struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
-	// UseNLI asks the detector for span-level NLI explanations. It decides how
-	// the observation is produced, so it lives on the rule; the plugin's
-	// use_nli is ignored once a rule is declared.
-	UseNLI bool `yaml:"use_nli,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.
@@ -213,6 +214,7 @@ type PIIRule struct {
 	Threshold       float32  `yaml:"threshold"`
 	PIITypesAllowed []string `yaml:"pii_types_allowed,omitempty"`
 	IncludeHistory  bool     `yaml:"include_history,omitempty"`
+	Source          string   `yaml:"source,omitempty"`
 	Description     string   `yaml:"description,omitempty"`
 }
 

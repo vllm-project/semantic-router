@@ -26,7 +26,7 @@ that split, and the report records where the threshold came from.
 
 Usage:
     python jailbreak_guard_eval.py \
-        --model llm-semantic-router/Vela-1.0-Encoder-307M-Guard \
+        --model vllm-sr/Vela-1.0-Encoder-307M-Guard \
         --dataset local:guard-eval-v1.json --dataset-version v1 \
         --label-col attack --slice-col source --slice-col language \
         --dev-dataset local:guard-dev-v1.json --budget 0.01 \

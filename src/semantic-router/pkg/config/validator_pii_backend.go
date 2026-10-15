@@ -17,11 +17,11 @@ func validatePIIModelBackendContracts(cfg *RouterConfig) error {
 	if err := model.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
 		return fmt.Errorf("classifier.pii.%w", err)
 	}
+	if err := model.ValidateOnUnscanned(); err != nil {
+		return fmt.Errorf("classifier.pii.%w", err)
+	}
 	if model.Backend == nil {
 		return nil
-	}
-	if model.UseMmBERT32K {
-		return fmt.Errorf("classifier.pii: backend is mutually exclusive with use_mmbert_32k")
 	}
 	if model.Backend.Protocol != RemoteClassifierProtocolHTTPClassify {
 		return fmt.Errorf("classifier.pii.backend.protocol %q is not supported by the PII consumer", model.Backend.Protocol)

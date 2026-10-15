@@ -22,7 +22,6 @@ def test_dashboard_open_bootstrap_defaults_true_without_admin(monkeypatch):
     )
 
     assert dashboard_env["DASHBOARD_ALLOW_OPEN_BOOTSTRAP"] == "true"
-    assert dashboard_env["OPENCLAW_ENABLED"] == "false"
     assert dashboard_env["ML_PIPELINE_ENABLED"] == "false"
 
 
@@ -116,7 +115,7 @@ def test_dashboard_docker_published_address(monkeypatch, host_bind, expected):
     monkeypatch.setattr(
         container_start,
         "_build_dashboard_runtime_env",
-        lambda **kw: {"OPENCLAW_ENABLED": "false"},
+        lambda **kw: {},
     )
     monkeypatch.setattr(container_start, "_build_service_run_command", lambda **kw: kw)
     stack = resolve_runtime_stack(stack_name="dashboard-bind-test", port_offset=100)
@@ -126,16 +125,16 @@ def test_dashboard_docker_published_address(monkeypatch, host_bind, expected):
         nofile_limit=1024,
         runtime_network_name="test-network",
         common_env={},
-        config_dir="/tmp/test-config",
         listener_port=8899,
-        openclaw_network_name=None,
         runtime_paths={
+            "instance_socket_dir": "/tmp/instance/socket",
             "log_spool_dashboard_mount": "/tmp/dashboard-log:/app/logs",
             "log_spool_root": "/tmp/logs",
             "active_recipe_root": "",
             "runtime_container_config": "/app/config.yaml",
             "container_recipe_store_dir": "/app/recipes",
             "log_spool_gid": "1000",
+            "recipe_store_gid": "1000",
         },
         stack_layout=stack,
         inherited_sensitive_env=set(),

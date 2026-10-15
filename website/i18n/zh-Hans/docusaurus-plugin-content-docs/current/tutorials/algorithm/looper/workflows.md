@@ -11,11 +11,15 @@ translation:
 
 `workflows` 在一个 OpenAI 兼容模型名背后，运行有界的多步 Router Flow。
 
-运行时也支持通过 `global.integrations.looper.flow.model_names` 使用直接 Flow 模型 slug。内置默认值是 `vllm-sr/flow`。直接 Flow 调用只评估 `algorithm.type=workflows` 的决策；它们不会静默回退到普通单模型路由。
+Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness 负责外层 Agent
+循环、任务状态和工具执行权限。当 Flow 返回工具调用时，Harness 执行工具并回传
+结果，让 Flow 恢复待处理的工作流。
+
+通过 `entrypoints` 将公开模型名映射到 recipe 来暴露 flow。公开名字没有内置分发逻辑：所选 recipe 评估自己的 signals 和 decisions，由 `algorithm.type=workflows` 启动算法。若入口只应运行 flow 策略，请将这些策略放在独立 recipe 中。
 
 ## 主要优势
 
-- 把多步智能体工作流暴露为一个模型名：`vllm-sr/flow`。
+- 把有界的多模型工作流暴露为一个模型名：`vllm-sr/flow`。
 - 保持 worker 边界显式：动态规划器只能使用决策的 `modelRefs`。
 - 同时支持静态角色计划和动态规划器生成的工作流。
 - 记录包含计划、worker 步骤、响应、失败模型和用量的 Flow 追踪。
@@ -26,24 +30,24 @@ translation:
 
 ## 何时使用
 
-- 路由应暴露单个模型名，但运行有界的微型智能体流程。
+- 路由应暴露单个模型名，但运行有界的多模型工作流。
 - worker 池应来自决策的 `modelRefs`。
 - 希望为可预测任务使用静态低延迟模板。
 - 希望为更难的推理、编码或验证任务使用动态规划器生成的工作流。
 
 ## 配置
 
-注册直接模型 slug：
+将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
 
 ```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: default
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
+      max_response_bytes_mb: 32
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -83,7 +87,7 @@ routing:
 规划器模型生成控制计划。省略 `planner.model` 时，路由器按声明顺序选择首个满足完整规划请求要求的已分配 worker，
 包括 JSON 输出能力和实际输出、上下文预算。扫描过程不调用模型。
 显式指定的规划器保持原目标并接受相同阶段检查，失败时不会替换为其他模型；没有合格规划器时请求直接失败。
-显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须有运营者分配的后端。
+显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须在 `providers.models[].backend_refs` 中有运营者分配的后端；否则配置无法加载。
 worker 调用始终限制在 `modelRefs` 内，执行器会拒绝包含范围外 worker 的计划。
 规划器选择不会降低已配置的不同成功 worker 最小数量。
 
@@ -121,7 +125,6 @@ routing:
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | 触发 Flow 执行的直接请求模型 slug |
 | `state.store_backend` | string | `file` | 待处理工具调用工作流状态后端：`memory`、`file` 或 `redis` |
 | `state.ttl_seconds` | int | `1800` | 待处理工具调用工作流状态的 TTL |
 | `mode` | string | `static` | `static` 角色执行或 `dynamic` 规划器生成执行 |

@@ -140,9 +140,9 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 	var response *localChatCompletionResponse
 	var err error
 	if len(testCase.Messages) > 0 {
-		response, err = sendLocalChatConversation(ctx, localPort, "MoM", testCase.Messages, 30*time.Second)
+		response, err = sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", testCase.Messages, 30*time.Second)
 	} else {
-		response, err = sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
+		response, err = sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
 	}
 	if err != nil {
 		result.Error = err.Error()
@@ -158,14 +158,18 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 	}
 
 	decision := response.Headers.Get("x-vsr-selected-decision")
-	result.ActualDecision = strings.TrimSuffix(decision, "_decision")
+	result.ActualDecision = decision
 	result.ActualMatchedSignal = response.Headers.Get(cfg.MatchedHeader)
 
 	if testCase.ShouldMatch {
 		result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
 		result.MatchCorrect = result.ActualMatchedSignal == testCase.ExpectedMatchedSignal
 	} else {
-		result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		if testCase.ExpectedDecision != "" {
+			result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
+		} else {
+			result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		}
 		result.MatchCorrect = result.ActualMatchedSignal == ""
 	}
 
