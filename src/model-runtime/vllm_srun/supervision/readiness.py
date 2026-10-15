@@ -94,6 +94,38 @@ def compare_numbers(
     return checked, matched
 
 
+def drift(a: Any, b: Any) -> float | None:
+    """Largest abs diff between matching float leaves of two golden values, or None when their shapes differ or a value is not finite.
+
+    The run-to-run stability check for the npu device class: golden values of a
+    decisions response nest answers per question, so the comparison walks the
+    structure instead of assuming a flat number map. A non-finite leaf (a NaN
+    or infinite probability) fails the check instead of slipping through the
+    comparison.
+    """
+    if isinstance(a, dict):
+        if not isinstance(b, dict) or set(a) != set(b):
+            return None
+        diffs = [drift(a[key], b[key]) for key in a]
+    elif isinstance(a, list):
+        if not isinstance(b, list) or len(a) != len(b):
+            return None
+        diffs = [drift(x, y) for x, y in zip(a, b, strict=True)]
+    elif isinstance(a, bool) or isinstance(b, bool):
+        return 0.0 if a is b else None
+    elif isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        diff = abs(float(a) - float(b))
+        return diff if math.isfinite(diff) else None
+    else:
+        return 0.0 if a == b else None
+    numbers: list[float] = []
+    for leaf in diffs:
+        if leaf is None:
+            return None
+        numbers.append(leaf)
+    return max(numbers, default=0.0)
+
+
 def golden_check(
     run: Callable[[str, dict[str, Any]], dict[str, Any]],
     compare: Callable[
@@ -108,8 +140,11 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    References are keyed by device class (``cpu``, ``rocm``, ``cuda``); answers
-    must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
+    References are keyed by device class (``cpu``, ``rocm``, ``cuda``, ``npu``);
+    answers must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on
+    GPUs. Both runs are validated: each response is checked against the
+    reference when one is recorded, so neither run can drift past the
+    reference by leaning on the other.
     """
     result = GoldenResult(status="unverified")
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
@@ -117,28 +152,46 @@ def golden_check(
         surface, body = golden["surface"], golden["body"]
         first = run(surface, body)
         second = run(surface, body)
-        if first != second:
+        if device_class == "npu":
+            # NPU GDN decoders drift across runs when the host carries
+            # third-party NPU traffic (record: npu-parity-ascend910b1); the
+            # run-to-run check compares within the tolerance instead of bitwise.
+            unstable = drift(first, second)
+            if unstable is None or unstable > tolerance:
+                return GoldenResult(
+                    status="failed",
+                    detail="golden answers are not deterministic within tolerance",
+                )
+        elif first != second:
             return GoldenResult(
                 status="failed", detail="golden answers are not deterministic"
             )
         reference = (golden.get("expected") or {}).get(device_class)
-        counts = compare(surface, first, reference or {}, tolerance)
-        if counts is None:
-            return GoldenResult(status="failed", detail="golden answers are malformed")
-        if not reference:
-            continue
-        checked, matched = counts
-        result.checked += checked
-        result.matched += matched
-        result.reference = device_class
-        if matched != checked:
-            return GoldenResult(
-                status="failed",
-                checked=result.checked,
-                matched=result.matched,
-                reference=device_class,
-                detail="golden answers differ from the reference",
-            )
+        # The npu class's two runs drift independently, so both are checked
+        # against the reference; on the other classes the second run equals
+        # the first bitwise and checking it again would only double the
+        # counts.
+        runs = (first, second) if device_class == "npu" else (first,)
+        for values in runs:
+            counts = compare(surface, values, reference or {}, tolerance)
+            if counts is None:
+                return GoldenResult(
+                    status="failed", detail="golden answers are malformed"
+                )
+            if not reference:
+                continue
+            checked, matched = counts
+            result.checked += checked
+            result.matched += matched
+            result.reference = device_class
+            if matched != checked:
+                return GoldenResult(
+                    status="failed",
+                    checked=result.checked,
+                    matched=result.matched,
+                    reference=device_class,
+                    detail="golden answers differ from the reference",
+                )
     if result.reference is not None:
         result.status = "matched"
     return result

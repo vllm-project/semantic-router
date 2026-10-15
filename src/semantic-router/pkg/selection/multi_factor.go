@@ -535,7 +535,8 @@ func effectiveCostPer1M(pricing config.ModelPricing, selCtx *SelectionContext) (
 
 func modelPricingConfigured(pricing config.ModelPricing) bool {
 	return strings.TrimSpace(pricing.Currency) != "" || pricing.PromptPer1M != 0 ||
-		pricing.CompletionPer1M != 0 || pricing.CachedInputPer1M != 0 || pricing.CacheWritePer1M != nil
+		pricing.CompletionPer1M != 0 || pricing.CachedInputPer1M != 0 || pricing.CacheWritePer1M != nil ||
+		pricing.CacheWrite1hPer1M != nil
 }
 
 func selectionTokenCounts(selCtx *SelectionContext) (int, int) {

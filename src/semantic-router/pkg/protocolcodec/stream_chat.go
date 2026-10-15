@@ -241,7 +241,9 @@ func (decoder *chatStreamDecoder) decodeOrHoldChunk(chunk chatChunkWire) ([]llmp
 }
 
 func (decoder *chatStreamDecoder) opensWithoutOrder(chunk chatChunkWire) bool {
-	if len(chunk.Choices) != 1 || decoder.lastWasReasoning {
+	// A Chat target carries reasoning and answer in separate fields, so there is
+	// no block order to choose.
+	if len(chunk.Choices) != 1 || decoder.lastWasReasoning || decoder.context.Target == llmprotocol.OpenAIChatV1 {
 		return false
 	}
 	choice := chunk.Choices[0]
@@ -444,8 +446,8 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 	return llmprotocol.Event{
 		Type: llmprotocol.EventResponseFailed,
 		Error: &llmprotocol.ProtocolError{
-			Category: decodeProviderErrorCategory(wire.Type, wire.Code),
-			Code:     wire.Code, Message: wire.Message, Parameter: wire.Param,
+			Category: decodeProviderErrorCategory(wire.Type, string(wire.Code)),
+			Code:     string(wire.Code), Message: wire.Message, Parameter: wire.Param,
 		},
 		StopReason: llmprotocol.StopError,
 		Failure:    llmprotocol.FailureTransport,

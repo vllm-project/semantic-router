@@ -325,15 +325,17 @@ type TokenCount struct {
 }
 
 type Usage struct {
-	State           UsageState
-	InputUncached   TokenCount
-	InputCacheRead  TokenCount
-	InputCacheWrite TokenCount
-	OutputReasoning TokenCount
-	OutputOther     TokenCount
-	InputTotal      TokenCount
-	OutputTotal     TokenCount
-	Total           TokenCount
+	State             UsageState
+	InputUncached     TokenCount
+	InputCacheRead    TokenCount
+	InputCacheWrite   TokenCount
+	InputCacheWrite5m TokenCount
+	InputCacheWrite1h TokenCount
+	OutputReasoning   TokenCount
+	OutputOther       TokenCount
+	InputTotal        TokenCount
+	OutputTotal       TokenCount
+	Total             TokenCount
 }
 
 type UsageState string
