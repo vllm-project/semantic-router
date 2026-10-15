@@ -2,7 +2,7 @@
 title: 模型性能评测
 sidebar_label: 模型评测
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "13bd272651ff0ac75e7be8d739f4d7f71bc2b793"
   source_file: "docs/training/model-performance-eval.md"
   outdated: false
 ---
