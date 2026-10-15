@@ -38,6 +38,7 @@ var (
 	operationIDPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 	pathWildcard       = regexp.MustCompile(`\{([^}]*)\}`)
 	nonIdentifier      = regexp.MustCompile(`[^A-Za-z0-9]+`)
+	apiVersionSegment  = regexp.MustCompile(`^v[0-9]+$`)
 )
 
 // Build renders routes as an OpenAPI document. sessionCookie names the cookie
@@ -185,11 +186,15 @@ func defaultOperationID(method, path string) string {
 	return id.String()
 }
 
-// tagFor groups an operation by its first segment below /api/, or by its
-// first path segment elsewhere: /api/mcp/tools is mcp, /healthz is healthz.
+// tagFor groups an operation by its first segment below /api/ and an optional
+// version, or by its first path segment elsewhere: /api/mcp/tools is mcp,
+// /api/v1/capabilities is capabilities, /healthz is healthz.
 func tagFor(path string) string {
-	trimmed := strings.TrimPrefix(strings.TrimPrefix(path, "/api"), "/")
-	tag := strings.TrimSuffix(strings.Split(trimmed, "/")[0], ".json")
+	segments := strings.Split(strings.TrimPrefix(strings.TrimPrefix(path, "/api"), "/"), "/")
+	if len(segments) > 1 && apiVersionSegment.MatchString(segments[0]) {
+		segments = segments[1:]
+	}
+	tag := strings.TrimSuffix(segments[0], ".json")
 	if tag == "" {
 		return "root"
 	}

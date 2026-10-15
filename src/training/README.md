@@ -30,11 +30,15 @@ data preparation, commands, evaluation, and artifact format.
 ## Training control-plane contract
 
 `semantic-router.training/v2` defines shared resources and messages for selector
-training and neural fine-tuning. This is a contract for future management and
-worker implementations; HTTP routes, persistence, scheduling and Console training
-flows are not implemented by this package. v2 replaced v1 when the Router's
-embedded Candle and ONNX Runtime runtimes were removed: classifiers qualify on the
-model runtime, and v1 documents are refused.
+training and neural fine-tuning. The contract package defines shared types;
+[Go management](../../dashboard/backend/training/README.md) implements durable
+resources, run/attempt state, events and the first management HTTP operations.
+New runs remain `pending` until a coordinator dispatches work. Worker scheduling,
+capability integration, qualification publication and Console training flows
+remain follow-up work.
+
+v2 replaced v1 when the Router's embedded Candle and ONNX Runtime runtimes were
+removed. Classifiers qualify on the model runtime, and v1 documents are refused.
 
 The canonical [Go contract](../semantic-router/pkg/trainingcontract/) generates
 [JSON Schema](../semantic-router/pkg/trainingcontract/training-v2.schema.json) and
@@ -49,12 +53,11 @@ contract-version bump; existing codes retain their meanings. Clients must accept
 unknown codes and handle them as generic errors using HTTP status and `message`.
 The OpenAPI error response lists the well-known codes and their HTTP statuses.
 
-Starting from a run ID, clients follow `RunGraph.outputs` to artifacts, evaluations
-and qualifications. Artifact variants map logical relative file names to owned
-file handles, so clients can reconstruct a model's file layout. Qualification
-evidence supplies the variant and qualification IDs for a binding proposal.
-The OpenAPI operation descriptions specify this flow; clients need no fixture IDs
-or worker messages to discover outputs.
+Starting from a run ID, clients follow `RunGraph.outputs` to artifacts and
+evaluations. Artifact variants map logical relative file names to owned handles,
+so clients can reconstruct a model's file layout. The contract also defines
+qualification evidence and binding proposals; their management routes remain
+planned. The OpenAPI operation descriptions specify output discovery.
 
 ### Profiles and provenance
 
@@ -62,6 +65,8 @@ Profiles describe the dataset and output shape; `target_contract` selects the
 selector, label-scores or spans profile. These shapes are distinct, and declaring
 one does not imply that a worker supports it. The optional pinned `base_model`
 belongs to the frozen run spec, allowing different base models to use one snapshot.
+Classifier label indices must be non-null integers forming a unique, contiguous
+sequence starting at zero; Go and Python both reject `null` indices.
 Trainer-specific parameter validation belongs to the capability planner.
 
 Go management owns resource identity, ownership, profile compatibility and state
@@ -81,7 +86,9 @@ Structural acceptance of a worker result alone does not qualify an artifact.
 ### Worker lifecycle
 
 Workers receive frozen inputs, resolved input variants and run/task/attempt IDs.
-They execute tasks; Go management schedules dependencies and derives run status.
+They execute tasks; Go management checks dependencies and derives run status.
+The [worker integration boundary](../../dashboard/backend/training/README.md#connecting-a-worker)
+defines dispatch, dependency-output resolution and restart recovery.
 The allowed run transitions are:
 
 ```text
@@ -132,4 +139,6 @@ The shared [selector and neural fixtures](../semantic-router/pkg/trainingcontrac
 exercise management/worker exchanges and output discovery across Go, Python and
 TypeScript. Their IDs and digests are examples, not downloadable model artifacts.
 These checks need no trainer, GPU or running management service; they do not
-replace HTTP integration tests when handlers are implemented.
+replace the [management HTTP tests](../../dashboard/backend/router/training_routes_test.go),
+which exercise authenticated API requests, restart recovery and mock-worker
+publication. See the management README for their commands.

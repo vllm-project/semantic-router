@@ -306,6 +306,9 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule.PrototypeScoring = prototypeScoring
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
+		// Presence is recorded as it is for YAML, so a written `threshold: 0`
+		// next to a boundary pair is refused on this path too.
+		rule.ThresholdSet = true
 	}
 	rule.HardAbove = complexityBoundaryField(s.Fields, "hard_above")
 	rule.EasyBelow = complexityBoundaryField(s.Fields, "easy_below")
@@ -403,6 +406,9 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	}
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
+	}
+	if v, ok := getStringField(s.Fields, "source"); ok {
+		rule.Source = v
 	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v

@@ -496,12 +496,18 @@ class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
     name: str
+    source: Optional[Literal["tool_result"]] = None
     # Omitted, the rule takes every span the PII model reports; a Vela 2.0
     # model reports only spans above its size's calibrated threshold.
     threshold: Optional[float] = None
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
     description: Optional[str] = None
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def normalize_source(cls, value: object) -> object:
+        return None if value == "" else value
 
 
 class ModalityRule(BaseModel):
@@ -2135,6 +2141,9 @@ class ModelPricing(BaseModel):
     prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    cache_write_1h_per_1m: Optional[float] = Field(
+        default=None, ge=0, allow_inf_nan=False
+    )
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
