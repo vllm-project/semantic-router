@@ -229,3 +229,19 @@ def test_unknown_scenario_rejected(monkeypatch):
     monkeypatch.setenv("PROVIDER_MOCKER_SCENARIO", "typo")
     with pytest.raises(ValueError, match="unknown PROVIDER_MOCKER_SCENARIO"):
         create_app()
+
+
+async def test_forbidden_headers_fail_the_request_before_the_fixture_answers():
+    async with client_for(
+        "default", forbidden_headers=("x-vsr-gateway-credential",)
+    ) as client:
+        request = body("hello")
+        leaked = await client.post(
+            "/v1/chat/completions",
+            json=request,
+            headers={"x-vsr-gateway-credential": "gw-key"},
+        )
+        assert leaked.status_code == 400
+        assert "x-vsr-gateway-credential" in leaked.json()["error"]["message"]
+        clean = await client.post("/v1/chat/completions", json=request)
+        assert clean.status_code == 200

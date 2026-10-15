@@ -771,6 +771,25 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
+	if profile != nil && profile.TrustedGateway {
+		// The same contract as primary dispatch: only the request's trusted
+		// gateway credential, and the attempt fails without it.
+		credential, ok := trustedGatewayCredential(reqCtx)
+		if !ok {
+			return nil, errTrustedGatewayCredentialMissing
+		}
+		if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+			return nil, fmt.Errorf("trusted gateway backend has no auth header to carry the credential")
+		}
+		return func(_ context.Context, request *http.Request) error {
+			value := credential
+			if providerAuth.Prefix != "" {
+				value = providerAuth.Prefix + " " + credential
+			}
+			request.Header.Set(providerAuth.Header, value)
+			return nil
+		}, nil
+	}
 	if providerAuth.Strategy == "none" {
 		return nil, nil
 	}

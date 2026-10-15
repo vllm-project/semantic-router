@@ -4,7 +4,7 @@ description: 选择客户端流量从哪里进入 Router：standalone 直接服�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/gateway-modes.md"
-  outdated: false
+  outdated: true
 ---
 
 # Gateway 模式

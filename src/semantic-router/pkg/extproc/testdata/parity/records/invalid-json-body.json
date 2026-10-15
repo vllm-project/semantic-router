@@ -47,6 +47,7 @@
           ],
           "remove": [
             "x-vsr-fusion-depth",
+            "x-vsr-gateway-credential",
             "x-vsr-internal-auth",
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",

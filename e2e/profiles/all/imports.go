@@ -45,6 +45,7 @@ import (
 	standalone "github.com/vllm-project/semantic-router/e2e/profiles/standalone"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
+	trustedgateway "github.com/vllm-project/semantic-router/e2e/profiles/trusted-gateway"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
 	velahalu "github.com/vllm-project/semantic-router/e2e/profiles/vela-halu"
 	velaomni "github.com/vllm-project/semantic-router/e2e/profiles/vela-omni"
@@ -59,6 +60,8 @@ var providerMockerLocalImages = []framework.LocalImageBuild{
 		RolloutRestarts: []framework.RolloutRestartTarget{
 			{Namespace: "default", Deployment: "provider-mocker"},
 			{Namespace: "provider-protocols-system", Deployment: "provider-mocker"},
+			{Namespace: "trusted-gateway-system", Deployment: "trusted-gateway"},
+			{Namespace: "trusted-gateway-system", Deployment: "static-backend"},
 			{Namespace: "default", Deployment: "looper-provider-mocker"},
 			{Namespace: "default", Deployment: "mock-llm"},
 		},
@@ -103,6 +106,11 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"trusted-gateway",
+		func() framework.Profile { return trustedgateway.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
+	)
 	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("complexity-remote-backend", func() framework.Profile { return complexityremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})

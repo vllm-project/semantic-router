@@ -145,8 +145,9 @@ listeners:
       trusted_peers: ["10.0.0.0/8"]
 ```
 
-- `trust_headers` keeps the `x-authz-*` headers and the names
-  `global.services.authz.identity` sets.
+- `trust_headers` keeps the `x-authz-*` headers, the names
+  `global.services.authz.identity` sets, and the
+  `global.services.authz.gateway_credential` header.
 - `trusted_peers` (CIDRs) keeps them only when the connection's peer address is
   in one of the networks; the Router never reads `X-Forwarded-For` for this.
   Empty, every peer of a trusting listener is trusted.
