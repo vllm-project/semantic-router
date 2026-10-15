@@ -236,17 +236,13 @@ func projectMatchedStopSequence(
 	source, target llmprotocol.WireFormat,
 	response *llmprotocol.Response,
 ) llmprotocol.Diagnostics {
-	if response.StopReason != llmprotocol.StopSequence || response.MatchedStopSequence == "" {
+	stopReason, diagnostics := projectedMatchedStop(source, target, response.StopReason, response.MatchedStopSequence)
+	if len(diagnostics) == 0 {
 		return nil
 	}
-	response.StopReason = llmprotocol.StopEndTurn
+	response.StopReason = stopReason
 	response.MatchedStopSequence = ""
-	return llmprotocol.Diagnostics{{
-		Source: source, Target: target,
-		Field:  "matched_stop_sequence",
-		Action: llmprotocol.DiagnosticDropped,
-		Reason: "matched stop sequence has no representation in the client format; the terminal projects to the generic stop",
-	}}
+	return diagnostics
 }
 
 // projectMatchedStopSequenceEvent is the streaming counterpart of
@@ -257,12 +253,29 @@ func projectMatchedStopSequenceEvent(
 	source, target llmprotocol.WireFormat,
 	event *llmprotocol.Event,
 ) llmprotocol.Diagnostics {
-	if event.StopReason != llmprotocol.StopSequence || event.MatchedStopSequence == "" {
+	stopReason, diagnostics := projectedMatchedStop(source, target, event.StopReason, event.MatchedStopSequence)
+	if len(diagnostics) == 0 {
 		return nil
 	}
-	event.StopReason = llmprotocol.StopEndTurn
+	event.StopReason = stopReason
 	event.MatchedStopSequence = ""
-	return llmprotocol.Diagnostics{{
+	return diagnostics
+}
+
+// projectedMatchedStop is the shared projection core for the buffered and
+// streaming matched-stop rewrites: a terminal that ends on a matched stop
+// sequence projects to the generic stop with a drop diagnostic, and anything
+// else comes back untouched. Keeping the condition and the diagnostic in one
+// place is what stops the buffered and stream paths from drifting apart.
+func projectedMatchedStop(
+	source, target llmprotocol.WireFormat,
+	stopReason llmprotocol.StopReason,
+	matched string,
+) (llmprotocol.StopReason, llmprotocol.Diagnostics) {
+	if stopReason != llmprotocol.StopSequence || matched == "" {
+		return stopReason, nil
+	}
+	return llmprotocol.StopEndTurn, llmprotocol.Diagnostics{{
 		Source: source, Target: target,
 		Field:  "matched_stop_sequence",
 		Action: llmprotocol.DiagnosticDropped,

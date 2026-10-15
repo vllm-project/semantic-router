@@ -141,7 +141,7 @@ func TestAnthropicMatchedStopSequenceStreamProjectsToGenericStop(t *testing.T) {
 		t.Fatalf("anthropic stream lost the matched stop sequence: %s", anthropicOutput)
 	}
 	for _, diagnostic := range anthropicDiagnostics {
-		if diagnostic.Field == "stream.matched_stop_sequence" {
+		if diagnostic.Field == "matched_stop_sequence" {
 			t.Fatalf("same-format stream must not project: %+v", diagnostic)
 		}
 	}
