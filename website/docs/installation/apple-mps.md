@@ -113,6 +113,6 @@ silicon, with its dependency/hardware record and a measured error bound.
 `src/model-runtime/tools/golden_answers.py --device mps --record FILE` requires
 an explicit `--tolerance`; readiness uses that per-model tolerance rather than
 the generic GPU tolerance. Missing MPS records remain unverified. Do not invent
-records, mark the accelerator validated, or change the `exact` profile to hide
+records, mark the accelerator validated, or change engine arguments to hide
 differences. Lifecycle/HTTP fixtures run in ordinary CI; GPU acceptance requires
 an Apple-silicon runner.
