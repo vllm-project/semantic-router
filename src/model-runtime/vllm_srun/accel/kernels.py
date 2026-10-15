@@ -9,12 +9,16 @@ bit-exact is used only for a model whose family consents to it
 A variant is an alternative a model's released runtime ran for a slot (for
 example a different convolution); it runs only for models that name it
 (``ModelSpec.kernel_variants``) and is that model's reference.
+A slot that only forwards merging requests run (``varlen_attention``: packed
+rows, which no released runtime ran) takes its preferred kernel, exact or
+not (``KernelSet.preferred``), since those forwards approximate anyway.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -57,6 +61,23 @@ class KernelSet:
 
     def __call__(self, name: str) -> Callable:
         return self.select(name).fn
+
+    def preferred(self, name: str) -> Callable:
+        """The last registered kernel of a slot, exact or not: for slots only approximate forwards run."""
+        return self._preferred(name).fn
+
+    def preferred_source(self, name: str) -> str | None:
+        """Where ``preferred`` comes from, or None when the slot has no kernel."""
+        try:
+            return self._preferred(name).source
+        except KeyError:
+            return None
+
+    def _preferred(self, name: str) -> Kernel:
+        candidates = self.available.get(name, [])
+        if not candidates:
+            raise KeyError(f"no kernel registered for {name!r} on {self.device}")
+        return candidates[0]
 
     def has(self, name: str) -> bool:
         try:
@@ -186,6 +207,34 @@ def chunk_gated_delta_rule_ref(
         initial_dtype, memory_format=torch.contiguous_format
     )
     return core_attn_out, last_recurrent_state
+
+
+def varlen_attention_ref(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    packed: Any,
+    *,
+    scale: float,
+    groups: int,
+) -> torch.Tensor:
+    """Non-causal attention of each packed row over itself: ``[T, H, D]`` inputs (keys with ``H / groups`` heads), ``[T, H, D]`` out.
+
+    ``packed`` holds the rows' ``lengths`` (``models.packed.Packed``); each row
+    runs SDPA alone, as an unpadded batch of one would.
+    """
+    outputs = []
+    for row in zip(
+        *(torch.split(t, packed.lengths, dim=0) for t in (query, key, value)),
+        strict=True,
+    ):
+        q, k, v = (x.transpose(0, 1)[None] for x in row)
+        if groups > 1:
+            k = k.repeat_interleave(groups, dim=1)
+            v = v.repeat_interleave(groups, dim=1)
+        out = F.scaled_dot_product_attention(q, k, v, scale=scale)
+        outputs.append(out[0].transpose(0, 1))
+    return torch.cat(outputs)
 
 
 def rotary_half_ref(
@@ -366,6 +415,7 @@ def reference_kernels(device: str) -> KernelSet:
         ("linear", linear_ref),
         ("rotary_half", rotary_half_ref),
         ("sdpa", sdpa_ref),
+        ("varlen_attention", varlen_attention_ref),
     ):
         kernels.register(Kernel(name=name, fn=fn, source="torch-reference", exact=True))
     kernels.register(

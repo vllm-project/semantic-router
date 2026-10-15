@@ -14,6 +14,8 @@ from dataclasses import fields
 
 from .accel.autotune import AUTOTUNE_ENV
 from .config import (
+    DEFAULT_MAX_NUM_BATCHED_TOKENS,
+    DEFAULT_MAX_NUM_SEQS,
     DTYPES,
     EngineArgs,
     ModelConfig,
@@ -127,8 +129,9 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "most rows one forward holds, across requests: one per question of a "
             "decision request, one per input or window otherwise; 1 runs every row "
-            "alone. The default never binds at the default --max-num-batched-tokens, "
-            "since a row costs at least 8 padded tokens (default: %(default)s)"
+            "alone (default: by the device's class, 256 on GPUs with 160 GB or more "
+            "and fewer on smaller ones, adjusted by a short startup calibration; "
+            f"{DEFAULT_MAX_NUM_SEQS} on the CPU)"
         ),
     )
     parser.add_argument(
@@ -136,9 +139,11 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=ENGINE_DEFAULTS.max_num_batched_tokens,
         help=(
-            "padded tokens one forward may hold: its rows times its longest row, "
-            "counted so also for models that pack rows without padding "
-            "(default: %(default)s)"
+            "tokens one forward may hold: the sum of its rows, each rounded up to 8, "
+            "for models that pack merged rows into one sequence, else its rows times "
+            "its longest row (default: by the device's class, 32768 on GPUs with "
+            "160 GB or more and less on smaller ones, adjusted by a short startup "
+            f"calibration; {DEFAULT_MAX_NUM_BATCHED_TOKENS} on the CPU)"
         ),
     )
     parser.add_argument(
@@ -167,6 +172,16 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
             "compute the shared state of a multi-question decision request once "
             "(default: on where the model family's records show no accuracy loss, "
             "Decision 2.0; off for the others)"
+        ),
+    )
+    parser.add_argument(
+        "--media-workers",
+        type=int,
+        default=SERVE_DEFAULTS.media_workers,
+        help=(
+            "worker processes that decode and resize request images and videos; "
+            "0 decodes them in the request threads (default: one per 16 CPUs the "
+            "process may use, at most 4, when a served model reads media)"
         ),
     )
     parser.add_argument(
@@ -289,6 +304,8 @@ def _models(
 def config_from_args(args: argparse.Namespace) -> ServeConfig:
     engine_args = _engine_args(args)
     models = _models(args, engine_args)
+    if args.media_workers is not None and args.media_workers < 0:
+        raise SystemExit("--media-workers must be a non-negative integer")
     return ServeConfig(
         models=models,
         host=args.host,
@@ -310,6 +327,7 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         accept_licences=tuple(args.accept_licence),
         log_level=args.log_level,
         autotune_cache=args.autotune_cache,
+        media_workers=args.media_workers,
     )
 
 
