@@ -21,7 +21,6 @@ from cli.deployment_backend import resolve_target
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import echo
-from cli.validator_decision_model import MODEL_RUNTIME_PROFILE
 
 MAX_TCP_PORT = 65535
 
@@ -73,7 +72,7 @@ def run_apple_engine(
     host: str | None,
     port: int | None,
     uds: str | None,
-    profile: str | None,
+    engine_args: dict,
     log_level: str | None,
     target: str | None,
     runtime: str | None,
@@ -113,8 +112,6 @@ def run_apple_engine(
         raise click.UsageError("give MODEL arguments or --models, not both", ctx=ctx)
     if revision and (models_file or len(models) != 1):
         raise click.UsageError("--revision applies to one MODEL", ctx=ctx)
-    if profile and not MODEL_RUNTIME_PROFILE.fullmatch(profile):
-        raise click.UsageError("invalid runtime profile name", ctx=ctx)
     entries = []
     if models_file:
         document = yaml.safe_load(Path(models_file).expanduser().read_text())
@@ -129,7 +126,7 @@ def run_apple_engine(
             raise click.UsageError(
                 "Apple --models entries must select mps or auto", ctx=ctx
             )
-        entries = [{**entry, "device": "mps"} for entry in entries]
+        entries = [{**engine_args, **entry, "device": "mps"} for entry in entries]
     else:
         for value in models:
             artifact, separator, pinned = value.partition("@")
@@ -137,7 +134,7 @@ def run_apple_engine(
                 raise click.UsageError(
                     "MODEL@REVISION conflicts with --revision", ctx=ctx
                 )
-            entry = {"model": artifact, "device": "mps", "profile": profile or "exact"}
+            entry = {"model": artifact, "device": "mps", **engine_args}
             if pinned or revision:
                 entry["revision"] = pinned or revision
             entries.append(entry)
