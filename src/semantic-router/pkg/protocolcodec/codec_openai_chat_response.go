@@ -158,8 +158,8 @@ func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
 	}
 	if wire.Error != nil {
 		response.Error = &llmprotocol.ProtocolError{
-			Category: decodeProviderErrorCategory(wire.Error.Type, wire.Error.Code),
-			Code:     wire.Error.Code, Message: wire.Error.Message, Parameter: wire.Error.Param,
+			Category: decodeProviderErrorCategory(wire.Error.Type, string(wire.Error.Code)),
+			Code:     string(wire.Error.Code), Message: wire.Error.Message, Parameter: wire.Error.Param,
 		}
 		response.StopReason = llmprotocol.StopError
 	}
