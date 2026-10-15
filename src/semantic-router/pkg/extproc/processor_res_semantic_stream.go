@@ -420,6 +420,7 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
 		return
 	}
 	totalTokens := responseUsageTotal(usage)

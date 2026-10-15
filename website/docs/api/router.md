@@ -439,6 +439,45 @@ Existing records keep their captured prices and baseline. **Price not recorded**
 means the historical record has no price; configuring rates today does not
 backfill it.
 
+### Provider prompt-cache breakdown
+
+New Replay records expose `provider_cache` in both the list and detail APIs.
+Dashboard Insights shows it under **Provider Prompt Cache**, separately from
+Router response-cache hits and model-routing savings.
+
+Each of `uncached_input`, `cache_read`, `cache_write`, and `output` contains
+`tokens`, `provenance`, and an optional `cost` in the record's currency.
+`cache_write_5m` and `cache_write_1h` retain available retention-tier evidence;
+their costs are already included in `cache_write.cost` and must not be added
+again. The four main component costs sum to `actual_cost` for complete usage.
+
+`state` is `complete`, `partial`, `unavailable`, or `invalid`. Provenance preserves
+`authoritative`, `derived`, `estimated`, and `unknown` evidence. Missing tokens
+and costs stay absent; an explicitly reported or priced zero remains zero.
+Estimated usage is not used to calculate cache savings. Missing prices do not
+erase token evidence, and historical records are not repriced.
+
+With complete usage and configured prices:
+
+- `no_cache_cost` prices all input at the **selected model's standard input
+  rate**, plus the recorded output at that model's output rate.
+- `cache_savings = no_cache_cost - actual_cost`. It can be negative when
+  cache-write premiums exceed cache-read savings.
+- Existing `baseline_cost` and `cost_savings` continue comparing model choices
+  using observed cache usage. They are distinct counterfactuals, not additional
+  provider cache savings.
+
+For example, 10 uncached input, 10 cache-read, 30 five-minute writes, 50 one-hour
+writes, and 2 output tokens at rates of 2, 1, 4, 8, and 10 per million cost
+`0.00057`. The same-model no-cache cost is `0.00022`, so provider cache savings
+are `-0.00035`. The input total remains 100; the tier counts partition the
+80 cache-write tokens.
+
+Partial, unavailable, or invalid usage does not produce a no-cache estimate or
+cache savings. A Router response-cache hit makes no new provider request;
+Insights identifies it separately instead of showing replayed provider usage
+as new provider savings.
+
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
 `total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each
 currency. With one currency, the flat summary fields mirror that group. With
