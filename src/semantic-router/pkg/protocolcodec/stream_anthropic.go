@@ -51,13 +51,14 @@ type anthropicEventWire struct {
 }
 
 type anthropicMessageDeltaUsageWire struct {
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
-	InputTokens              int64                           `json:"input_tokens"`
-	OutputTokens             int64                           `json:"output_tokens"`
-	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
-	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
-	Iterations               []json.RawMessage               `json:"iterations,omitempty"`
+	CacheCreationInputTokens int64                            `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                            `json:"cache_read_input_tokens"`
+	InputTokens              int64                            `json:"input_tokens"`
+	OutputTokens             int64                            `json:"output_tokens"`
+	CacheCreation            *anthropicCacheCreationUsageWire `json:"cache_creation,omitempty"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire  `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire     `json:"server_tool_use"`
+	Iterations               []json.RawMessage                `json:"iterations,omitempty"`
 }
 
 type anthropicDeltaWire struct {
@@ -392,7 +393,7 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 
 func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
 	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 {
+	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 || wire.CacheCreation != nil {
 		cacheWrite := wire.CacheCreationInputTokens
 		cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(
 			wire.CacheCreation, cacheWrite, policy, diagnostics,
@@ -422,9 +423,11 @@ func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool, policy ll
 
 func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmprotocol.Usage {
 	return decodeAnthropicStreamUsage(anthropicUsageWire{
-		InputTokens: wire.InputTokens, OutputTokens: wire.OutputTokens,
+		InputTokens:              wire.InputTokens,
+		OutputTokens:             wire.OutputTokens,
 		CacheCreationInputTokens: wire.CacheCreationInputTokens,
 		CacheReadInputTokens:     wire.CacheReadInputTokens,
+		CacheCreation:            wire.CacheCreation,
 		OutputTokensDetails:      wire.OutputTokensDetails,
 		ServerToolUse:            wire.ServerToolUse,
 	}, false, llmprotocol.Policy{}, nil)
@@ -432,11 +435,16 @@ func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmpr
 
 func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessageDeltaUsageWire {
 	full := encodeAnthropicUsage(usage)
+	var creation *anthropicCacheCreationUsageWire
+	if usage.InputCacheWrite5m.Value != nil || usage.InputCacheWrite1h.Value != nil {
+		creation = full.CacheCreation
+	}
 	return &anthropicMessageDeltaUsageWire{
 		CacheCreationInputTokens: full.CacheCreationInputTokens,
 		CacheReadInputTokens:     full.CacheReadInputTokens,
 		InputTokens:              full.InputTokens,
 		OutputTokens:             full.OutputTokens,
+		CacheCreation:            creation,
 		OutputTokensDetails:      full.OutputTokensDetails,
 		ServerToolUse:            full.ServerToolUse,
 	}

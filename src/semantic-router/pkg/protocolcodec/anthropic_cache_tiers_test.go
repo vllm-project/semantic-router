@@ -262,3 +262,135 @@ func TestTargetEncodingEmitsOmissionForChatAndResponses(t *testing.T) {
 	}
 	assertDiagnosticFields(t, respResult.Diagnostics, "usage.cache_creation")
 }
+
+func TestAnthropicPartialTier1hRoundTripPreservesKnownTier(t *testing.T) {
+	engine := NewBuiltinEngine()
+	// aggregate=30, only 1h=20 reported (5m is unknown/nil)
+	wire := []byte(`{
+		"id": "msg_tiers_partial_1h",
+		"type": "message",
+		"role": "assistant",
+		"model": "claude-3-haiku",
+		"content": [{"type": "text", "text": "hello"}],
+		"stop_reason": "end_turn",
+		"usage": {
+			"input_tokens": 50,
+			"output_tokens": 10,
+			"cache_creation_input_tokens": 30,
+			"cache_creation": {
+				"ephemeral_1h_input_tokens": 20
+			}
+		}
+	}`)
+
+	resp, _, diagnostics, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, wire)
+	if err != nil {
+		t.Fatalf("DecodeResponse error: %v", err)
+	}
+	for _, d := range diagnostics {
+		if d.Field == "usage.cache_creation" {
+			t.Fatalf("unexpected diagnostic for valid partial 1h tier: %v", d)
+		}
+	}
+	if resp.Usage.InputCacheWrite.Value == nil || *resp.Usage.InputCacheWrite.Value != 30 {
+		t.Fatalf("expected aggregate cache write 30, got: %v", resp.Usage.InputCacheWrite)
+	}
+	if resp.Usage.InputCacheWrite1h.Value == nil || *resp.Usage.InputCacheWrite1h.Value != 20 {
+		t.Fatalf("expected 1h cache write 20, got: %v", resp.Usage.InputCacheWrite1h)
+	}
+	if resp.Usage.InputCacheWrite5m.Value != nil {
+		t.Fatalf("expected 5m cache write to remain unknown/nil, got: %v", resp.Usage.InputCacheWrite5m)
+	}
+
+	result, err := engine.EncodeResponse(llmprotocol.AnthropicMessagesV1, resp, llmprotocol.Envelope{})
+	if err != nil {
+		t.Fatalf("EncodeResponse error: %v", err)
+	}
+	if !bytes.Contains(result.Body, []byte(`"ephemeral_1h_input_tokens":20`)) {
+		t.Fatalf("re-encoded wire lost 1h tier: %s", result.Body)
+	}
+	if bytes.Contains(result.Body, []byte(`ephemeral_5m_input_tokens`)) {
+		t.Fatalf("re-encoded wire should omit unknown 5m tier: %s", result.Body)
+	}
+
+	// Re-decoding must preserve 1h tier and not treat it as an inconsistent split
+	roundTripResp, _, rtDiagnostics, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, result.Body)
+	if err != nil {
+		t.Fatalf("round-trip DecodeResponse error: %v", err)
+	}
+	for _, d := range rtDiagnostics {
+		if d.Field == "usage.cache_creation" {
+			t.Fatalf("unexpected diagnostic on round trip: %v", d)
+		}
+	}
+	if roundTripResp.Usage.InputCacheWrite1h.Value == nil || *roundTripResp.Usage.InputCacheWrite1h.Value != 20 {
+		t.Fatalf("expected round trip 1h cache write 20, got: %v", roundTripResp.Usage.InputCacheWrite1h)
+	}
+	if roundTripResp.Usage.InputCacheWrite5m.Value != nil {
+		t.Fatalf("expected round trip 5m cache write to remain nil, got: %v", roundTripResp.Usage.InputCacheWrite5m)
+	}
+}
+
+func TestAnthropicEncodeResponseStreamRoundTripPreservesTiers(t *testing.T) {
+	engine := NewBuiltinEngine()
+	resp := llmprotocol.Response{
+		Generation: 1,
+		ID:         "resp_stream_tiers",
+		Model:      "claude-3-haiku",
+		StopReason: llmprotocol.StopEndTurn,
+		Usage: llmprotocol.Usage{
+			State:             llmprotocol.UsageAvailable,
+			InputTotal:        authoritative(100),
+			InputCacheRead:    authoritative(20),
+			InputCacheWrite:   authoritative(30),
+			InputCacheWrite5m: authoritative(20),
+			InputCacheWrite1h: authoritative(10),
+			InputUncached:     authoritative(50),
+			OutputTotal:       authoritative(15),
+			OutputOther:       authoritative(15),
+			Total:             authoritative(115),
+		},
+		Output: []llmprotocol.OutputItem{
+			{
+				ID:   "out_1",
+				Role: llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{
+					{Kind: llmprotocol.ContentText, Text: "hello world"},
+				},
+			},
+		},
+	}
+
+	streamBytes, _, err := engine.EncodeResponseStream(llmprotocol.AnthropicMessagesV1, resp, llmprotocol.StreamContext{
+		PublicModel: resp.Model,
+	})
+	if err != nil {
+		t.Fatalf("EncodeResponseStream error: %v", err)
+	}
+
+	if !bytes.Contains(streamBytes, []byte(`"ephemeral_5m_input_tokens":20`)) {
+		t.Fatalf("stream output missing 5m tier: %s", streamBytes)
+	}
+	if !bytes.Contains(streamBytes, []byte(`"ephemeral_1h_input_tokens":10`)) {
+		t.Fatalf("stream output missing 1h tier: %s", streamBytes)
+	}
+
+	decoded, _, err := engine.DecodeResponseStream(llmprotocol.AnthropicMessagesV1, streamBytes, llmprotocol.StreamContext{
+		Context:     context.Background(),
+		PublicModel: resp.Model,
+	})
+	if err != nil {
+		t.Fatalf("DecodeResponseStream error: %v", err)
+	}
+
+	if decoded.Usage.InputCacheWrite.Value == nil || *decoded.Usage.InputCacheWrite.Value != 30 {
+		t.Fatalf("expected aggregate cache write 30, got: %v", decoded.Usage.InputCacheWrite)
+	}
+	if decoded.Usage.InputCacheWrite5m.Value == nil || *decoded.Usage.InputCacheWrite5m.Value != 20 {
+		t.Fatalf("expected 5m cache write 20, got: %v", decoded.Usage.InputCacheWrite5m)
+	}
+	if decoded.Usage.InputCacheWrite1h.Value == nil || *decoded.Usage.InputCacheWrite1h.Value != 10 {
+		t.Fatalf("expected 1h cache write 10, got: %v", decoded.Usage.InputCacheWrite1h)
+	}
+}
+

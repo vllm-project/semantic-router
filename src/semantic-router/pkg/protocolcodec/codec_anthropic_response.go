@@ -37,8 +37,8 @@ type anthropicUsageWire struct {
 }
 
 type anthropicCacheCreationUsageWire struct {
-	Ephemeral1hInputTokens *int64 `json:"ephemeral_1h_input_tokens"`
-	Ephemeral5mInputTokens *int64 `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1hInputTokens *int64 `json:"ephemeral_1h_input_tokens,omitempty"`
+	Ephemeral5mInputTokens *int64 `json:"ephemeral_5m_input_tokens,omitempty"`
 }
 
 type anthropicOutputUsageDetailsWire struct {
@@ -236,27 +236,39 @@ func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
 		inputTokens = max(0, tokenValue(usage.InputTotal)-tokenValue(usage.InputCacheRead)-tokenValue(usage.InputCacheWrite))
 	}
 	cacheWrite := tokenValue(usage.InputCacheWrite)
-	ephemeral5m := int64(0)
-	ephemeral1h := int64(0)
-	if usage.InputCacheWrite5m.Value != nil || usage.InputCacheWrite1h.Value != nil {
-		ephemeral5m = tokenValue(usage.InputCacheWrite5m)
-		ephemeral1h = tokenValue(usage.InputCacheWrite1h)
+	var creation anthropicCacheCreationUsageWire
+	has5m := usage.InputCacheWrite5m.Value != nil
+	has1h := usage.InputCacheWrite1h.Value != nil
+	if has5m || has1h {
+		if has5m {
+			v5m := *usage.InputCacheWrite5m.Value
+			creation.Ephemeral5mInputTokens = &v5m
+		}
+		if has1h {
+			v1h := *usage.InputCacheWrite1h.Value
+			creation.Ephemeral1hInputTokens = &v1h
+		}
 	} else if cacheWrite > 0 {
-		ephemeral5m = cacheWrite
+		ephemeral5m := cacheWrite
+		ephemeral1h := int64(0)
+		creation.Ephemeral5mInputTokens = &ephemeral5m
+		creation.Ephemeral1hInputTokens = &ephemeral1h
+	} else {
+		ephemeral5m := int64(0)
+		ephemeral1h := int64(0)
+		creation.Ephemeral5mInputTokens = &ephemeral5m
+		creation.Ephemeral1hInputTokens = &ephemeral1h
 	}
 	*wire = anthropicUsageWire{
 		InputTokens:              inputTokens,
 		OutputTokens:             tokenValue(usage.OutputTotal),
 		CacheCreationInputTokens: cacheWrite,
 		CacheReadInputTokens:     tokenValue(usage.InputCacheRead),
-		CacheCreation: &anthropicCacheCreationUsageWire{
-			Ephemeral1hInputTokens: &ephemeral1h,
-			Ephemeral5mInputTokens: &ephemeral5m,
-		},
-		InferenceGeo:        "global",
-		OutputTokensDetails: anthropicOutputUsageDetailsWire{ThinkingTokens: tokenValue(usage.OutputReasoning)},
-		ServerToolUse:       anthropicServerToolUsageWire{},
-		ServiceTier:         "standard",
+		CacheCreation:            &creation,
+		InferenceGeo:             "global",
+		OutputTokensDetails:      anthropicOutputUsageDetailsWire{ThinkingTokens: tokenValue(usage.OutputReasoning)},
+		ServerToolUse:            anthropicServerToolUsageWire{},
+		ServiceTier:              "standard",
 	}
 	return wire
 }
