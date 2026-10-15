@@ -36,10 +36,12 @@ export interface RouterConfig {
     [key: string]: unknown
   }
   routing?: {
+    model_bindings?: Record<string, unknown>
     signals?: Record<string, SignalConfig[]>
     decisions?: DecisionRule[]
   }
   entrypoints?: Array<{
+    api?: 'chat' | 'systemone'
     model_names: string[]
     recipe: string
   }>
@@ -47,6 +49,7 @@ export interface RouterConfig {
     name: string
     description?: string
     routing: {
+      model_bindings?: Record<string, unknown>
       signals?: Record<string, SignalConfig[]>
       projections?: Record<string, unknown>
       decisions?: DecisionRule[]

@@ -355,7 +355,7 @@ func TestCSRFEnforcement(t *testing.T) {
 		{name: "query token fails even with a valid CSRF token", method: http.MethodPost, authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
 
 		{name: "query token does not authenticate a safe read", method: http.MethodGet, authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
-		{name: "query token does not authenticate an embedded route", method: http.MethodGet, path: "/embedded/wizmap/", authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
+		{name: "query token does not authenticate an embedded route", method: http.MethodGet, path: "/embedded/grafana/", authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
 		{name: "query token does not authenticate an admin write", method: http.MethodPost, path: "/api/admin/users", authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
 
 		// A stale bookmark still carries the parameter; the cookie is what authenticates.

@@ -46,7 +46,6 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"preview_timeout", `services: {api: {routing_preview: {request_timeout_seconds: 0}}}`, "routing_preview.request_timeout_seconds"},
 		{"preview_concurrency", `services: {api: {routing_preview: {max_concurrency: 0}}}`, "routing_preview.max_concurrency"},
 		{"cache_similarity", `stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}`, "similarity_threshold"},
-		{"cache_guard", `stores: {response_cache: {enabled: true, polarity_guard: {mode: nli_typo}}}`, "polarity_guard mode"},
 		{"memory_similarity", `stores: {memory: {default_similarity_threshold: 1.5}}`, "default_similarity_threshold"},
 		{"learning_backend", `router: {learning: {state_store: {backend: redis_typo}}}`, "state_store.backend"},
 		{"learning_ttl", `router: {learning: {state_store: {ttl_seconds: -1}}}`, "state_store.ttl_seconds"},
@@ -62,15 +61,14 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"prompt_profile", `model_catalog: {modules: {prompt_compression: {profile: unknown}}}`, "prompt_compression.profile"},
 		{"modality_method", `model_catalog: {modules: {modality_detector: {enabled: true, method: unknown}}}`, "modality_detection.method"},
 		{"hallucination_backend", `model_catalog: {modules: {hallucination_mitigation: {detector: {backend: unknown}}}}`, "hallucination detector backend"},
-		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "remom: model_names"},
-		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "fusion: model_names"},
+		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "remom.model_names was removed"},
+		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "fusion.model_names was removed"},
 		{"flow_backend", `integrations: {looper: {flow: {state: {store_backend: unknown}}}}`, "state.store_backend"},
 		{"category_backend", `model_catalog: {modules: {classifier: {domain: {backend: {protocol: unknown, model: classifier}}}}}`, "classifier.domain.backend.protocol"},
 		{"complexity_backend", `model_catalog: {modules: {complexity: {backend: {protocol: unknown, model: classifier}}}}`, "complexity.backend.protocol"},
 		{"pii_error_policy", `model_catalog: {modules: {classifier: {pii: {on_error: unknown}}}}`, "classifier.pii.on_error"},
 		{"pii_window_size", `model_catalog: {modules: {classifier: {pii: {window: {size: 0}}}}}`, "classifier.pii.window.size"},
 		{"pii_window_overlap", `model_catalog: {modules: {classifier: {pii: {window: {size: 128, overlap: 128}}}}}`, "classifier.pii.window.overlap"},
-		{"prompt_guard_variant", `model_catalog: {modules: {prompt_guard: {variant: unknown}}}`, "prompt_guard.variant"},
 		{"prompt_guard_window_size", `model_catalog: {modules: {prompt_guard: {window: {size: 0}}}}`, "prompt_guard.window.size"},
 		{"prompt_guard_window_overlap", `model_catalog: {modules: {prompt_guard: {window: {size: 128, overlap: -1}}}}`, "prompt_guard.window.overlap"},
 		{"prompt_guard_window_labels", `model_catalog: {modules: {prompt_guard: {window: {size: 128}, positive_labels: [unsafe, unsafe]}}}`, "prompt_guard.positive_labels"},
@@ -115,7 +113,7 @@ router:
   learning:
     state_store: {backend: local, ttl_seconds: 0}
 stores:
-  response_cache: {enabled: true, similarity_threshold: 1, polarity_guard: {mode: lexical}}
+  response_cache: {enabled: true, similarity_threshold: 1}
   memory: {default_similarity_threshold: 0}
 model_catalog:
   admission:
@@ -225,14 +223,14 @@ func TestConfigValidationDefersWindowBindingBudgets(t *testing.T) {
 	}{
 		{"prompt_guard", RemoteClassifierContractLabelDistribution, func(cfg *RouterConfig) {
 			cfg.PromptGuard = PromptGuardConfig{
-				Variant: PromptGuardVariantMmBERT32K, MaxSequenceLength: 64,
-				Window: &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
+				MaxSequenceLength: 64,
+				Window:            &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
 			}
 		}},
 		{"pii_classifier", RemoteClassifierContractTokenSpans, func(cfg *RouterConfig) {
 			cfg.PIIModel = PIIModel{
-				UseMmBERT32K: true, MaxSequenceLength: 64,
-				Window: &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
+				MaxSequenceLength: 64,
+				Window:            &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
 			}
 		}},
 	} {
@@ -240,8 +238,8 @@ func TestConfigValidationDefersWindowBindingBudgets(t *testing.T) {
 			cfg := &RouterConfig{ConfigSource: ConfigSourceKubernetes}
 			tc.configure(cfg)
 			cfg.ModelDeployments = map[string]ModelDeployment{
-				"large": {Provider: "candle", Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 256, Overflow: "window"}},
-				"small": {Provider: "candle", Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 64, Overflow: "window"}},
+				"large": {Provider: ModelRuntimeProvider, Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 256, Overflow: "window"}},
+				"small": {Provider: ModelRuntimeProvider, Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 64, Overflow: "window"}},
 			}
 			for _, name := range []RecipeName{DefaultRecipeName, "private"} {
 				cfg.Recipes = append(cfg.Recipes, RoutingRecipe{Name: name, Profile: RoutingProfile{

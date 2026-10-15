@@ -12,7 +12,7 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
   const { platform } = useReadonly()
   const [isImageLoaded, setIsImageLoaded] = useState(false)
 
-  const isAmd = platform?.toLowerCase() === 'amd'
+  const isAmd = platform?.toLowerCase() === 'rocm'
   const imageSrc = '/amd-logo.png'
 
   // Preload image when platform is AMD

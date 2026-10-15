@@ -7,6 +7,57 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+func TestDSLMergePreservesDecisionReliabilityAndFallback(t *testing.T) {
+	base := []byte(`version: v0.3
+routing:
+  decisions:
+    - name: shared
+      priority: 1
+      reliability: {total_timeout: 90s, retry_on: reset}
+      fallback: {enabled: true, max_attempts: 2}
+recipes:
+  - name: alpha
+    routing:
+      decisions:
+        - name: shared
+          priority: 1
+          reliability: {per_try_timeout: 5s}
+          fallback: {enabled: false}
+`)
+	original, err := config.ParseYAMLBytes(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := Decompile(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, errs := Compile(text)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	mergedBytes, err := MergeRoutingIntoBase(compiled, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := config.ParseYAMLBytes(mergedBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []config.RecipeName{config.DefaultRecipeName, "alpha"} {
+		want, _ := original.RecipeByName(name)
+		got, _ := merged.RecipeByName(name)
+		if len(got.Profile.Decisions) != 1 || got.Profile.Decisions[0].Reliability == nil ||
+			!reflect.DeepEqual(want.Profile.Decisions[0].Reliability, got.Profile.Decisions[0].Reliability) {
+			t.Fatalf("recipe %s: reliability lost or crossed in the DSL merge", name)
+		}
+		if got.Profile.Decisions[0].Fallback == nil ||
+			!reflect.DeepEqual(want.Profile.Decisions[0].Fallback, got.Profile.Decisions[0].Fallback) {
+			t.Fatalf("recipe %s: fallback lost or crossed in the DSL merge", name)
+		}
+	}
+}
+
 func TestNamedRecipeMergePreservesAdaptationsWithinScope(t *testing.T) {
 	base := []byte(`version: v0.3
 routing:

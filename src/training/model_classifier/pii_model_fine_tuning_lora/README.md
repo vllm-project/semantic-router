@@ -1,7 +1,7 @@
 # Train a Vela PII token classifier
 
 Derive a new PII model from the qualified
-`llm-semantic-router/Vela-1.0-Encoder-307M` Base at revision
+`vllm-sr/Vela-1.0-Encoder-307M` Base at revision
 `fe9ccc074b781bc0e2e13c2c8d26f2640410636a`. This workflow initializes a fresh
 complete token-classification head and trains the full encoder, preserving 17
 entity types and 35 BIO labels. It validates character spans, supervises every
@@ -16,22 +16,28 @@ whitespace without joining different entity types.
 
 ## Prepare fixed source revisions
 
-Use an isolated environment with a platform-compatible PyTorch build,
-Transformers, and the Hugging Face CLI. The full training path has been exercised
-with PyTorch 2.10 and Transformers 4.57.6. PEFT is only needed for historical
-adapter continuation. Data-contract tests use Python's standard library; the
-tokenizer-measured long-data generator additionally requires Transformers.
+Create the environment from this folder with Python 3.11 or newer.
+`pyproject.toml` bounds the dependencies and `uv.lock` pins them:
+
+```bash
+uv sync --locked
+```
+
+Run the Python commands below with `uv run`. The Hugging Face CLI (`hf`) is
+installed separately. PEFT is only needed for historical adapter continuation.
+Data-contract tests use Python's standard library; the tokenizer-measured
+long-data generator additionally requires Transformers.
 
 From the repository root:
 
 ```bash
 SCRIPT=src/training/model_classifier/pii_model_fine_tuning_lora
 WORK=work/vela-pii
-BASE_MODEL_ID=llm-semantic-router/Vela-1.0-Encoder-307M
+BASE_MODEL_ID=vllm-sr/Vela-1.0-Encoder-307M
 BASE_REVISION=fe9ccc074b781bc0e2e13c2c8d26f2640410636a
 mkdir -p "$WORK/sources"
 hf download "$BASE_MODEL_ID" --revision "$BASE_REVISION" --local-dir "$WORK/base"
-hf download llm-semantic-router/Vela-1.0-Encoder-307M-PII config.json \
+hf download vllm-sr/Vela-1.0-Encoder-307M-PII config.json \
   --revision 6d3300c4bd7975f30a664503f6c725cf1fbbad48 --local-dir "$WORK/reference"
 curl --fail --location \
   https://raw.githubusercontent.com/microsoft/presidio-research/f3ff907eba57b8d380711ce7ca82a42696cd0490/data/synth_dataset_v2.json \

@@ -21,19 +21,19 @@ func TestPIITokenWindowAdmission(t *testing.T) {
 	}{
 		{"omitted", `{}`, false},
 		{"nullable", `{"window":null}`, false},
-		{"legacy nonwindow", `{"use_modernbert":true}`, false},
-		{"whole input", `{"use_mmbert_32k":true,"max_sequence_length":32768}`, false},
-		{"explicit window", `{"use_mmbert_32k":true,"max_sequence_length":32768,"window":{"size":512,"overlap":64}}`, false},
-		{"zero limit", `{"use_mmbert_32k":true,"max_sequence_length":0,"window":{"size":512}}`, false},
-		{"missing selector", `{"window":{"size":128}}`, true},
-		{"remote", `{"use_mmbert_32k":true,"backend":{},"window":{"size":128}}`, true},
-		{"remote with local selector", `{"use_mmbert_32k":true,"backend":{}}`, true},
+		{"whole input", `{"max_sequence_length":32768}`, false},
+		{"explicit window", `{"max_sequence_length":32768,"window":{"size":512,"overlap":64}}`, false},
+		{"zero limit", `{"max_sequence_length":0,"window":{"size":512}}`, false},
+		{"local window", `{"window":{"size":128}}`, false},
+		{"remote", `{"backend":{}}`, false},
+		{"remote window", `{"backend":{},"window":{"size":128}}`, true},
+		{"remote budget", `{"backend":{},"max_sequence_length":32768}`, true},
 		{"negative limit", `{"max_sequence_length":-1}`, true},
-		{"empty", `{"use_mmbert_32k":true,"window":{}}`, true},
-		{"large implicit", `{"use_mmbert_32k":true,"window":{"size":513}}`, true},
-		{"large explicit", `{"use_mmbert_32k":true,"max_sequence_length":64,"window":{"size":128}}`, true},
-		{"negative overlap", `{"use_mmbert_32k":true,"window":{"size":128,"overlap":-1}}`, true},
-		{"overlap equals size", `{"use_mmbert_32k":true,"window":{"size":128,"overlap":128}}`, true},
+		{"empty", `{"window":{}}`, true},
+		{"large implicit", `{"window":{"size":513}}`, true},
+		{"large explicit", `{"max_sequence_length":64,"window":{"size":128}}`, true},
+		{"negative overlap", `{"window":{"size":128,"overlap":-1}}`, true},
+		{"overlap equals size", `{"window":{"size":128,"overlap":128}}`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,13 +60,13 @@ func TestPIITokenWindowCELAndPruning(t *testing.T) {
 		refuse bool
 	}{
 		{`{window: null}`, false},
-		{`{use_mmbert_32k: true, max_sequence_length: 32768, window: {size: 512, overlap: 64}}`, false},
-		{`{use_mmbert_32k: true, window: {size: 512}}`, false},
-		{`{window: {size: 128}}`, true},
-		{`{use_mmbert_32k: true, backend: {model: remote, protocol: http_classify}}`, true},
-		{`{use_mmbert_32k: true, backend: {name: remote, protocol: http_classify}, window: {size: 128}}`, true},
-		{`{use_mmbert_32k: true, max_sequence_length: 64, window: {size: 128}}`, true},
-		{`{use_mmbert_32k: true, window: {size: 128, overlap: 128}}`, true},
+		{`{max_sequence_length: 32768, window: {size: 512, overlap: 64}}`, false},
+		{`{window: {size: 512}}`, false},
+		{`{backend: {name: remote, protocol: http_classify}}`, false},
+		{`{backend: {name: remote, protocol: http_classify}, window: {size: 128}}`, true},
+		{`{backend: {name: remote, protocol: http_classify}, max_sequence_length: 1024}`, true},
+		{`{max_sequence_length: 64, window: {size: 128}}`, true},
+		{`{window: {size: 128, overlap: 128}}`, true},
 	}
 	for _, tc := range cases {
 		cr := "apiVersion: vllm.ai/v1alpha1\nkind: SemanticRouter\nmetadata: {name: synthetic}\nspec:\n  config:\n    classifier:\n      pii_model: " + tc.config
@@ -83,15 +83,18 @@ func TestPIITokenWindowCELAndPruning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, token := range []string{`"use_mmbert_32k":true`, `"max_sequence_length":32768`, `"size":512`, `"overlap":64`} {
+	for _, token := range []string{`"max_sequence_length":32768`, `"size":512`, `"overlap":64`} {
 		if !strings.Contains(string(data), token) {
 			t.Fatalf("CRD pruned %s: %s", token, data)
 		}
 	}
+	if strings.Contains(string(data), "use_mmbert_32k") {
+		t.Fatalf("CRD kept the retired use_mmbert_32k selector: %s", data)
+	}
 }
 
 func TestPIITokenWindowDeepCopy(t *testing.T) {
-	original := &PIIModelConfig{UseMmBERT32K: true, Window: &PromptGuardWindowConfig{Size: 512, Overlap: 64}}
+	original := &PIIModelConfig{Window: &PromptGuardWindowConfig{Size: 512, Overlap: 64}}
 	copy := original.DeepCopy()
 	copy.Window.Overlap = 32
 	if original.Window.Overlap != 64 || copy.Window == original.Window {
@@ -115,10 +118,15 @@ func TestPIITokenWindowCRDMirrors(t *testing.T) {
 		}
 		pii := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["classifier"].Properties["pii_model"]
 		schemas = append(schemas, pii)
-		for _, field := range []string{"window", "max_sequence_length", "use_mmbert_32k"} {
+		for _, field := range []string{"window", "max_sequence_length"} {
 			property, exists := pii.Properties[field]
 			if !exists || property.Default != nil {
 				t.Fatalf("%s lost %s or injected its default", directory, field)
+			}
+		}
+		for _, field := range []string{"use_mmbert_32k", "use_modernbert"} {
+			if _, exists := pii.Properties[field]; exists {
+				t.Fatalf("%s still declares the retired %s selector", directory, field)
 			}
 		}
 		window := pii.Properties["window"]

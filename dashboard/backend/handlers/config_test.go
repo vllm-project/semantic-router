@@ -38,7 +38,7 @@ func TestConfigHandler(t *testing.T) {
 			req := httptest.NewRequest(tt.method, "/api/router/config/all", nil)
 			w := httptest.NewRecorder()
 
-			handler := ConfigHandler(configPath)
+			handler := ConfigHandler(configPath, false)
 			handler(w, req)
 
 			if w.Code != tt.expectedStatus {

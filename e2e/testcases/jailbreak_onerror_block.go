@@ -41,7 +41,7 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 	// requests that bypass every recipe-local signal, decision, and plugin
 	// (see performDecisionEvaluation), so they'd never reach the jailbreak
 	// signal or on_error: block being tested here.
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", benignPrompt, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", benignPrompt, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}

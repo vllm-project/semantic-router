@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -65,10 +64,6 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 		b.Skipf(format, args...)
 	}
 
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		unavailable("failed to initialize BERT model: %v", err)
-	}
-
 	host, port := redisBenchmarkAddr()
 
 	redisConfig := &config.RedisConfig{}
@@ -98,7 +93,7 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              redisConfig,
-		EmbeddingModel:      "bert",
+		EmbeddingModel:      "qwen3",
 	})
 	if err != nil {
 		unavailable("redis server not available: %v", err)
@@ -115,7 +110,7 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 // silently passed because `go test -bench=<nonexistent>` exits 0).
 func BenchmarkRedisCache(b *testing.B) {
 	const model = "bench-model"
-	// Populate cost is O(size): each entry runs one BERT embedding plus a Redis
+	// Populate cost is O(size): each entry runs one embedding plus a Redis
 	// vector-index insert (~100-200ms combined on a loaded CPU host), so it
 	// dominates wall-clock setup. The reported ns/op measures only FindSimilar
 	// (the timer is reset after populate), and HNSW search latency grows ~log(N),

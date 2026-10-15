@@ -3,8 +3,9 @@ package config
 import "testing"
 
 func TestDormantDefaultKeepsSharedConsumersWithoutRoutingEmbeddings(t *testing.T) {
-	cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{}}}
+	cfg := &RouterConfig{}
 	cfg.EmbeddingRules = []EmbeddingRule{{Name: "unused"}}
+	moveTestRoutingToUnmappedRecipe(cfg)
 	if needed := EmbeddingModelsNeeded(cfg, "mmbert", true); len(needed) != 0 {
 		t.Fatalf("unreachable default owns routing embeddings: %v", needed)
 	}

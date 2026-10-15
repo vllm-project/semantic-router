@@ -114,7 +114,7 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 
 func sendResponseJailbreakStreamingRequest(ctx context.Context, localPort, prompt string) (*http.Response, error) {
 	requestBody := map[string]interface{}{
-		"model":  "MoM",
+		"model":  "vllm-sr/auto",
 		"stream": true,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},

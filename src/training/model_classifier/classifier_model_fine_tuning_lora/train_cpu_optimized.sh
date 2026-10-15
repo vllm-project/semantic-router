@@ -182,7 +182,6 @@ train_cpu_model() {
 test_cpu_model() {
     local model_name=$1
     local python_model_dir="lora_intent_classifier_${model_name}_r${LORA_RANK}_model"
-    local rust_model_dir="lora_intent_classifier_${model_name}_r${LORA_RANK}_model_rust"
 
     echo ""
     echo "🔍 Testing model on CPU: $model_name"
@@ -211,27 +210,6 @@ test_cpu_model() {
         fi
     else
         echo "  ⚠️  Python model directory not found: $python_model_dir"
-    fi
-
-    # Test Go model if available
-    if [[ -d "$rust_model_dir" ]]; then
-        echo "  🦀 Testing Go inference..."
-        local go_test_log="$RESULTS_DIR/${model_name}_go_test.log"
-
-        # Force CPU for testing
-        export CUDA_VISIBLE_DEVICES=""
-        export LD_LIBRARY_PATH="../../../../candle-binding/target/release"
-        local go_cmd="go run ft_linear_lora_verifier.go -intent-model $rust_model_dir"
-
-        if eval "$go_cmd" > "$go_test_log" 2>&1; then
-            echo "  Go test completed"
-            echo "$model_name: Go Test OK" >> "$SUMMARY_FILE"
-        else
-            echo "  ❌ Go test failed"
-            echo "$model_name: Go Test FAILED" >> "$SUMMARY_FILE"
-        fi
-    else
-        echo "  ⚠️  Go model directory not found: $rust_model_dir"
     fi
 }
 

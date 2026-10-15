@@ -55,7 +55,7 @@ Two baselines are reported. The reason is in §4.
 
 ### Published baseline
 
-- **Model:** `llm-semantic-router/mmbert32k-modality-router-merged`
+- **Model:** `vllm-sr/mmbert32k-modality-router-merged`
   (mmBERT-32K plus LoRA, 307M parameters).
 - **Where it is used:** it is the checkpoint wired into `registry.go` and
   served today.
@@ -125,7 +125,7 @@ Two baselines are reported. The reason is in §4.
   with the same hard-label Focal Loss used elsewhere in this pipeline.
 - **Command:** `modality_routing_fixed_split_trainer.py --model
   distilbert-base-uncased --teacher-model-path
-  llm-semantic-router/mmbert32k-modality-router-merged`.
+  vllm-sr/mmbert32k-modality-router-merged`.
 
 ### Options considered
 
@@ -340,7 +340,7 @@ python modality_routing_fixed_split_trainer.py \
 # Candidate (DistilBERT student, distilled from the published production baseline)
 python modality_routing_fixed_split_trainer.py \
   --model distilbert-base-uncased \
-  --teacher-model-path llm-semantic-router/mmbert32k-modality-router-merged \
+  --teacher-model-path vllm-sr/mmbert32k-modality-router-merged \
   --train-file exported_modality_routing_dataset/train.jsonl \
   --val-file exported_modality_routing_dataset/validation.jsonl \
   --epochs 10 --batch-size 32 --temperature 3.0 --kd-alpha 0.5 \
@@ -352,7 +352,7 @@ python evaluate_modality_candidate.py \
   --test-file exported_modality_routing_dataset/test.jsonl \
   --train-file exported_modality_routing_dataset/train.jsonl \
   --val-file exported_modality_routing_dataset/validation.jsonl \
-  --published-baseline-model-path llm-semantic-router/mmbert32k-modality-router-merged \
+  --published-baseline-model-path vllm-sr/mmbert32k-modality-router-merged \
   --clean-baseline-model-path models/mmbert32k-modality-router-clean-merged \
   --candidate-model-path models/distilbert-modality-router-candidate-merged \
   --output-report modality_candidate_eval_report.json

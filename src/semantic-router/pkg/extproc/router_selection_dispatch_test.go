@@ -12,7 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 func TestSelectionUsesPreparedProviderForEveryLocalBackend(t *testing.T) {
@@ -71,7 +70,9 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	}
 	cfg.ModelSelection.Enabled = true
 	cfg.ModelSelection.ML.ModelsPath = "test-model-selection"
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	cfg.ModelSelection.ML.ModelType = config.EmbeddingModelTypeRemote
+	cfg.Decisions = []config.Decision{{Name: "nearest", Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
+	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,9 +222,8 @@ func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
 
 // TestSelectionEmbeddingModelTypeNormalizesCase guards against a configured
 // modelType (e.g. "Qwen3") passing validation case-insensitively but then
-// reaching candle_binding.SupportsBatchedEmbedding and GetEmbeddingBatched
-// unnormalized -- the former is case/whitespace-tolerant, the latter is not,
-// so a mismatch there routes a "batchable" model into a call that fails.
+// reaching the embedding provider lookup unnormalized: the prepared providers
+// are keyed by the normalized name, so the lookup would miss.
 func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -240,7 +240,7 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 			models := config.EmbeddingModels{
 				EmbeddingConfig: config.HNSWConfig{ModelType: tc.modelType},
 			}
-			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendCandle); got != tc.want {
+			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendModelRuntime); got != tc.want {
 				t.Errorf("selectionEmbeddingModelType(%q) = %q, want %q", tc.modelType, got, tc.want)
 			}
 		})
@@ -250,9 +250,8 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 // TestBuildMLSelectionConfigNormalizesModelTypeCase guards the same
 // unnormalized-modelType bug as TestSelectionEmbeddingModelTypeNormalizesCase,
 // but on the sibling ml.model_type path: nothing validates or rewrites it, so
-// it reaches factory.go's mlEmbeddingConfig -- and the same
-// SupportsBatchedEmbedding/FFI dispatch -- independently of the default
-// embedding model type.
+// it reaches factory.go's mlEmbeddingConfig -- and the same provider lookup --
+// independently of the default embedding model type.
 func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{

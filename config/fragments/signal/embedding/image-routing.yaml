@@ -2,7 +2,7 @@
 # routing.signals.embeddings to demo image-routing patterns. Requires
 # the multimodal embedding model.
 #
-# Thresholds are calibrated for llm-semantic-router/Vela-1.0-Omni-Nano
+# Thresholds are calibrated for vllm-sr/Vela-1.0-Omni-Nano
 # snapshot 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e with all candidates
 # retained and max-positive minus max-negative scoring when negatives exist.
 # Code prototypes contain development images only; see the frozen protocol.

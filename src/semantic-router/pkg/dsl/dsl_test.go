@@ -303,7 +303,7 @@ func TestParseMultiModel(t *testing.T) {
 func TestParsePluginTemplate(t *testing.T) {
 	input := `PLUGIN my_hallu hallucination {
   enabled: true
-  use_nli: true
+  hallucination_action: "warn"
 }
 
 ROUTE test {
@@ -434,7 +434,7 @@ ROUTE math_route {
 func TestCompilePluginTemplate(t *testing.T) {
 	input := `PLUGIN my_hallu hallucination {
   enabled: true
-  use_nli: true
+  hallucination_action: "warn"
 }
 
 ROUTE test {
@@ -1699,7 +1699,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "hallucination",
 			pluginType: "hallucination",
-			body:       `enabled: true use_nli: true hallucination_action: "warn"`,
+			body:       `enabled: true hallucination_action: "warn"`,
 			verifyType: "hallucination",
 		},
 		{

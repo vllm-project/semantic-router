@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -23,7 +23,7 @@ var _ = Describe("Hybrid cache cross-model fallback", func() {
 		milvus := &MilvusCache{
 			enabled:           true,
 			config:            cfg,
-			embeddingModel:    "bert",
+			embeddingModel:    "qwen3",
 			embeddingProvider: cacheTestEmbeddingProvider(),
 			queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
 				return queryResult, queryErr

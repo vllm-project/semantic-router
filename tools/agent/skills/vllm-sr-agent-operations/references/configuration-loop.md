@@ -13,8 +13,13 @@ help and the Router's advertised API define the supported contract.
 
 ## Activate a change
 
-For a new stack, use `config init`, replace placeholders, validate locally and
-launch. There is no remote revision to plan against before startup.
+For a new stack, write the configuration as the [main skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
+does, or start from `config init` and replace its placeholders (its listener
+address, `0.0.0.0`, publishes the API on every interface). Validate locally and
+launch; there is no remote revision to plan against before startup.
+
+On the Docker target the Router serves `.vllm-sr/runtime-config.yaml`, not
+`config.yaml`: editing the source file changes nothing until it is applied.
 
 For a running stack, derive the candidate from its fresh canonical config:
 
@@ -34,10 +39,17 @@ separate earlier `plan` does not pin that later call. Use the discovered API's
 `If-Match` contract when the reviewed revision must be fixed; there is no CLI
 `--etag` option.
 
-For `RESTART_REQUIRED`, use the authorized deployment replacement workflow.
-Local Docker supports `serve --config candidate.yaml --replace-active-config`;
-ordinary `serve` preserves active edits. Verify readiness, active revision and
-representative routed requests after activation. Discover `config versions` and
+`apply` waits up to 120 s (`--timeout`). A timeout doesn't mean the change
+failed: it can activate a moment later, so read `config versions` before
+retrying.
+
+A change the running Router can't take (in standalone mode a listener change;
+with `--gateway extproc`, also the provider topology) is `restart_required`.
+On a local Docker stack, `config apply` saves it and prints `Restart required:
+run vllm-sr serve to apply.`; `status` reports it until `serve` applies it.
+Elsewhere, use the authorized deployment replacement workflow, such as
+`helm upgrade` on Kubernetes. Verify readiness, active revision and representative
+routed requests after activation. Discover `config versions` and
 `config rollback` when recovery is needed.
 
 ## Packaged recipes

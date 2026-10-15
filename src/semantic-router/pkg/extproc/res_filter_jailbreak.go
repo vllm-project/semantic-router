@@ -104,6 +104,9 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 	if err != nil {
 		logging.Errorf("Response jailbreak detection failed: %v", err)
 		metrics.RecordPluginError("response_jailbreak", "detection_error")
+		if classification.UnscannedInput(err) {
+			return r.responseJailbreakOnUnscanned(ctx, decisionName, latency)
+		}
 		return r.responseJailbreakOnClassifyError(ctx, responseJailbreakFailsClosed(classifierConfig(classifier)), decisionName, latency)
 	}
 
@@ -177,6 +180,25 @@ func (r *OpenAIRouter) responseJailbreakOnClassifyError(ctx *RequestContext, fai
 		// telling a caller the guardrail itself is down hands an attacker a
 		// probe for when the safety backend is offline. The cause is already in
 		// the log line and the replay record.
+		return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
+	}
+	return nil
+}
+
+// responseJailbreakOnUnscanned treats a response the guard did not read in
+// full (longer than its model's input or scan budget) as a detection, whatever
+// on_error says: padding a response must not carry content past the guard.
+func (r *OpenAIRouter) responseJailbreakOnUnscanned(ctx *RequestContext, decisionName string, latency float64) *ext_proc.ProcessingResponse {
+	ctx.ResponseJailbreakDetected = true
+	ctx.ResponseJailbreakType = classification.JailbreakUnscannedType
+	ctx.ResponseJailbreakConfidence = 0
+	ctx.ResponseJailbreakScoreAvailable = false
+	ctx.ResponseJailbreakDecision = nil
+
+	metrics.RecordPluginExecution("response_jailbreak", decisionName, "unscanned", latency)
+	logging.Warnf("Response jailbreak classifier did not read the whole response; treating it as unverified")
+
+	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
 		return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
 	}
 	return nil
