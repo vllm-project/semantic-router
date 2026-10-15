@@ -59,6 +59,8 @@ async def speech(request: Request):
     if not isinstance(body["input"], str) or not body["input"].strip():
         return invalid_request_response("input must be a non-empty string", "input")
     session = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session, body, request.headers, raw_body)
+    request.app.state.request_store.record(
+        session, body, request.headers, raw_body, request.url.path
+    )
     await apply_fixture_delay()
     return Response(content=FIXTURE_WAV, media_type="audio/wav")
