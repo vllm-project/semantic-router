@@ -31,9 +31,9 @@ Optional groups: `audit` for the Claude API judge in `label_audit/`, and
 `exploration` for the SCX Router scripts in `exploration_lfm25_scx/`.
 
 On Linux the default `torch` wheel is a CUDA build, so no extra index is needed
-for a GPU host. `requirements.txt` and `requirements-lock.txt` are kept for the
-existing docs. Note that `run_training.sh` below still runs its own unpinned
-`pip install` and does not use this lock yet.
+for a GPU host. `requirements.txt` stays because published docs link to it.
+`run_training.sh` below still runs its own unpinned `pip install` and does not
+use this lock yet.
 
 ## Train
 
