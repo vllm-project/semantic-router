@@ -476,6 +476,7 @@ func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 // UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
 func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
+		record.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 		record.PromptTokens = cloneIntPtr(usage.PromptTokens)
 		record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 		record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)

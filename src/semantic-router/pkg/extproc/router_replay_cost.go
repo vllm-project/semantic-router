@@ -9,12 +9,24 @@ import (
 )
 
 func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseUsageMetrics) routerreplay.UsageCost {
+	var selectedPricing *config.ModelPricing
+	if r != nil && r.Config != nil && ctx != nil && ctx.RequestModel != "" {
+		if pricing, ok := r.Config.GetFullModelPricing(ctx.RequestModel); ok {
+			selectedPricing = &pricing
+		}
+	}
+	providerCache := buildProviderCacheAccounting(ctx, selectedPricing)
 	totalTokens := usage.promptTokens + usage.completionTokens
-	if totalTokens == 0 {
-		return routerreplay.UsageCost{}
+	if totalTokens == 0 && !responseUsageHasPricableBreakdown(usage) {
+		snapshot := routerreplay.UsageCost{ProviderCache: providerCache}
+		if selectedPricing != nil {
+			snapshot.Currency = replayStringPtr(normalizeReplayCurrency(selectedPricing.Currency))
+		}
+		return snapshot
 	}
 
 	snapshot := routerreplay.UsageCost{
+		ProviderCache:      providerCache,
 		PromptTokens:       replayIntPtr(usage.promptTokens),
 		CachedPromptTokens: replayIntPtr(usage.cachedPromptTokens),
 		CacheWriteTokens:   replayIntPtr(usage.cacheWriteTokens),
@@ -22,16 +34,11 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 		TotalTokens:        replayIntPtr(totalTokens),
 	}
 
-	if r == nil || r.Config == nil || ctx == nil || ctx.RequestModel == "" {
+	if selectedPricing == nil {
 		return snapshot
 	}
 
-	selectedPricing, ok := r.Config.GetFullModelPricing(ctx.RequestModel)
-	if !ok {
-		return snapshot
-	}
-
-	actualCost := costForResponseUsage(usage, selectedPricing)
+	actualCost := costForResponseUsage(usage, *selectedPricing)
 	currency := normalizeReplayCurrency(selectedPricing.Currency)
 	snapshot.ActualCost = replayFloat64Ptr(actualCost)
 	snapshot.Currency = replayStringPtr(currency)
