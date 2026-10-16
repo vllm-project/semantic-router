@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,13 +29,13 @@ type servingHealthProbe struct {
 // probeServingHealth reads identity from the same response that establishes
 // process health. Only the configured upstream identifies the serving mode;
 // a Router's managed model engines do not turn it into an engine-only service.
-func probeServingHealth(upstream string, providers ...routerauth.CredentialProvider) servingHealthProbe {
+func probeServingHealth(ctx context.Context, upstream string, providers ...routerauth.CredentialProvider) servingHealthProbe {
 	probe := servingHealthProbe{mode: servingModeUnknown}
 	if strings.TrimSpace(upstream) == "" {
 		return probe
 	}
 	upstream = strings.TrimRight(upstream, "/")
-	response, err := routerManagementGET(upstream+"/health", servingProbeTimeout, providers...)
+	response, err := routerManagementGET(ctx, upstream+"/health", servingProbeTimeout, providers...)
 	if err != nil {
 		return probe
 	}
