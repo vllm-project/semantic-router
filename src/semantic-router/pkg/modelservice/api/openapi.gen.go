@@ -16,6 +16,11 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AnswerInputCoverage.
+const (
+	AnswerInputCoverageComplete AnswerInputCoverage = "complete"
+)
+
 // Defines values for ClassifyOptionsOverflow.
 const (
 	ClassifyOptionsOverflowReject   ClassifyOptionsOverflow = "reject"
@@ -55,6 +60,14 @@ const (
 	Query    EmbeddingsRequestInputType = "query"
 )
 
+// Defines values for EngineArgsDtype.
+const (
+	Auto     EngineArgsDtype = "auto"
+	Bfloat16 EngineArgsDtype = "bfloat16"
+	Float16  EngineArgsDtype = "float16"
+	Float32  EngineArgsDtype = "float32"
+)
+
 // Defines values for ErrorBodyCode.
 const (
 	InternalError      ErrorBodyCode = "internal_error"
@@ -64,6 +77,24 @@ const (
 	Overloaded         ErrorBodyCode = "overloaded"
 	RequestTooLarge    ErrorBodyCode = "request_too_large"
 	UnsupportedSurface ErrorBodyCode = "unsupported_surface"
+)
+
+// Defines values for ErrorBodyReason.
+const (
+	ImageAspectRatio ErrorBodyReason = "image_aspect_ratio"
+	ImageFormat      ErrorBodyReason = "image_format"
+	ImageMalformed   ErrorBodyReason = "image_malformed"
+	ImagePixels      ErrorBodyReason = "image_pixels"
+	ImageTooLarge    ErrorBodyReason = "image_too_large"
+	ImageUnsupported ErrorBodyReason = "image_unsupported"
+	VideoAspectRatio ErrorBodyReason = "video_aspect_ratio"
+	VideoFormat      ErrorBodyReason = "video_format"
+	VideoMalformed   ErrorBodyReason = "video_malformed"
+	VideoPixels      ErrorBodyReason = "video_pixels"
+	VideoTokens      ErrorBodyReason = "video_tokens"
+	VideoTooLarge    ErrorBodyReason = "video_too_large"
+	VideoTooLong     ErrorBodyReason = "video_too_long"
+	VideoUnsupported ErrorBodyReason = "video_unsupported"
 )
 
 // Defines values for GoldenStatusStatus.
@@ -111,12 +142,19 @@ const (
 	InvalidModelOutput ItemError = "invalid_model_output"
 	InvalidQuestion    ItemError = "invalid_question"
 	MaxLengthExceeded  ItemError = "max_length_exceeded"
+	ScanBudgetExceeded ItemError = "scan_budget_exceeded"
 	Unavailable        ItemError = "unavailable"
 )
 
 // Defines values for LivenessStatus.
 const (
 	Alive LivenessStatus = "alive"
+)
+
+// Defines values for ModelCardNumerics.
+const (
+	ModelCardNumericsApproximate ModelCardNumerics = "approximate"
+	ModelCardNumericsExact       ModelCardNumerics = "exact"
 )
 
 // Defines values for ModelCardStatus.
@@ -139,38 +177,64 @@ const (
 	ModelHealthStatusWarming  ModelHealthStatus = "warming"
 )
 
-// Defines values for ProfileInfoNumerics.
-const (
-	Approximate ProfileInfoNumerics = "approximate"
-	Exact       ProfileInfoNumerics = "exact"
-)
-
 // Defines values for QuestionHead.
 const (
 	Broad  QuestionHead = "broad"
 	Router QuestionHead = "router"
 )
 
+// Defines values for QuestionOverflow.
+const (
+	QuestionOverflowTruncate QuestionOverflow = "truncate"
+	QuestionOverflowWindow   QuestionOverflow = "window"
+)
+
 // Defines values for RerankOptionsOverflow.
 const (
-	RerankOptionsOverflowReject   RerankOptionsOverflow = "reject"
-	RerankOptionsOverflowTruncate RerankOptionsOverflow = "truncate"
+	Reject   RerankOptionsOverflow = "reject"
+	Truncate RerankOptionsOverflow = "truncate"
+)
+
+// Defines values for ResponseMetaNumerics.
+const (
+	ResponseMetaNumericsApproximate ResponseMetaNumerics = "approximate"
+	ResponseMetaNumericsExact       ResponseMetaNumerics = "exact"
+)
+
+// Defines values for SetAnswerInputCoverage.
+const (
+	SetAnswerInputCoverageComplete SetAnswerInputCoverage = "complete"
 )
 
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-// level), probabilities, confidence, legend. A failed question has only type and error.
+// level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
+// knows why, message.
 type Answer struct {
 	// AbstainProbability Probability of the model's abstain option, where it has one (not calibrated).
-	AbstainProbability *float64            `json:"abstain_probability,omitempty"`
-	Choice             *string             `json:"choice,omitempty"`
-	Confidence         *float64            `json:"confidence,omitempty"`
-	Error              *ItemError          `json:"error,omitempty"`
-	Legend             *map[string]string  `json:"legend,omitempty"`
-	Noul               *float64            `json:"noul,omitempty"`
-	Probabilities      *map[string]float64 `json:"probabilities,omitempty"`
-	Score              *float64            `json:"score,omitempty"`
-	Type               *string             `json:"type"`
+	AbstainProbability *float64 `json:"abstain_probability,omitempty"`
+	Choice             *string  `json:"choice,omitempty"`
+	Confidence         *float64 `json:"confidence,omitempty"`
+
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+
+	// InputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+	InputCoverage *AnswerInputCoverage `json:"input_coverage,omitempty"`
+	Legend        *map[string]string   `json:"legend,omitempty"`
+
+	// Message Why the question failed, naming the field, such as "set questions do not take ['colour']".
+	Message       *string             `json:"message,omitempty"`
+	Noul          *float64            `json:"noul,omitempty"`
+	Probabilities *map[string]float64 `json:"probabilities,omitempty"`
+	Score         *float64            `json:"score,omitempty"`
+	Type          *string             `json:"type"`
 }
+
+// AnswerInputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+type AnswerInputCoverage string
 
 // AudioPart defines model for AudioPart.
 type AudioPart struct {
@@ -252,9 +316,6 @@ type ClassifyOptions struct {
 	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
 	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
 
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
-
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 
@@ -301,10 +362,16 @@ type ClassifyResponseKind string
 // selected. token: spans. A windowed input also lists every window. A failed input has only index and
 // error.
 type ClassifyResult struct {
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
 	Error *ItemError `json:"error,omitempty"`
 	Index int        `json:"index"`
 
-	// Input Tokenizer facts of one input, including special tokens.
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
 	Input         *InputUsage `json:"input,omitempty"`
 	Label         *string     `json:"label,omitempty"`
 	Probabilities *[]float64  `json:"probabilities,omitempty"`
@@ -341,8 +408,22 @@ type ContentPartType string
 // ContentPartList defines model for ContentPartList.
 type ContentPartList = []ContentPart
 
+// DecisionImages Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+// pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+// invalid_request, as it does a malformed image.
+type DecisionImages = []string
+
 // DecisionRequest defines model for DecisionRequest.
 type DecisionRequest struct {
+	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+	// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+	// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+	// pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed image.
+	Images *DecisionImages `json:"images,omitempty"`
+
 	// Model Served model ID. Optional while a runtime serves one model.
 	Model   *string         `json:"model,omitempty"`
 	Options *RequestOptions `json:"options,omitempty"`
@@ -354,10 +435,77 @@ type DecisionRequest struct {
 	// parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
 	// answer part and every other field as context.
 	State interface{} `json:"state"`
+
+	// States Further states, each with its own questions, answered in the same call: a client asks every question it
+	// has for one model in one request. Each entry is read exactly as a request with its state, its questions
+	// and this request's model and options would be, and its answers come back under the same name in the
+	// response's `states`. Question IDs are unique within an entry.
+	States *map[string]DecisionState `json:"states,omitempty"`
+
+	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
+	// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+	// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+	// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+	// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+	// every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+	// at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed or over-limit video.
+	Videos *DecisionVideos `json:"videos,omitempty"`
 }
 
 // DecisionResponse defines model for DecisionResponse.
 type DecisionResponse struct {
+	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+	Answers map[string]Answer `json:"answers"`
+	Meta    *ResponseMeta     `json:"meta,omitempty"`
+	Model   string            `json:"model"`
+
+	// Sets Set answers by question ID.
+	Sets *map[string]SetAnswer `json:"sets,omitempty"`
+
+	// SpanHeads The span head (router or broad) that answered each Span question, on models with a broad span head.
+	SpanHeads *map[string]string `json:"span_heads,omitempty"`
+
+	// Spans Span answers by question ID.
+	Spans *map[string][]Span `json:"spans,omitempty"`
+
+	// States The answers about each entry of the request's `states`, as that entry's own request would get them. The
+	// response's own fields answer the request's `state`, and its `usage` counts that state alone.
+	States *map[string]DecisionStateResponse `json:"states,omitempty"`
+
+	// Thresholds The threshold applied to each Set or Span question.
+	Thresholds *map[string]float64 `json:"thresholds,omitempty"`
+	Usage      Usage               `json:"usage"`
+}
+
+// DecisionState defines model for DecisionState.
+type DecisionState struct {
+	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+	// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+	// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+	// pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed image.
+	Images *DecisionImages `json:"images,omitempty"`
+
+	// Questions Named questions about this state; answers keep this order.
+	Questions map[string]Question `json:"questions"`
+
+	// State The context this entry's questions are about, as a request's `state`.
+	State interface{} `json:"state"`
+
+	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
+	// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+	// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+	// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+	// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+	// every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+	// at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed or over-limit video.
+	Videos *DecisionVideos `json:"videos,omitempty"`
+}
+
+// DecisionStateResponse The answers about one entry of a request's `states`, with the fields of a response of its own.
+type DecisionStateResponse struct {
 	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
 	Answers map[string]Answer `json:"answers"`
 	Meta    *ResponseMeta     `json:"meta,omitempty"`
@@ -377,14 +525,31 @@ type DecisionResponse struct {
 	Usage      Usage               `json:"usage"`
 }
 
+// DecisionVideos Videos every question of the state sees, after its images, for models whose card lists the `video`
+// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+// every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+// at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+// invalid_request, as it does a malformed or over-limit video.
+type DecisionVideos = []string
+
 // Embedding defines model for Embedding.
 type Embedding struct {
 	// Embedding A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
 	Embedding *EmbeddingVector `json:"embedding,omitempty"`
-	Error     *ItemError       `json:"error,omitempty"`
-	Index     int              `json:"index"`
 
-	// Input Tokenizer facts of one input, including special tokens.
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
 	Input  *InputUsage `json:"input,omitempty"`
 	Object string      `json:"object"`
 }
@@ -414,9 +579,6 @@ type EmbeddingsOptions struct {
 	DeadlineMs *float64                   `json:"deadline_ms,omitempty"`
 	MaxTokens  *int                       `json:"max_tokens,omitempty"`
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -465,14 +627,53 @@ type EmbeddingsUsage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
+// EngineArgs How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+type EngineArgs struct {
+	// BatchWindowMs How long the scheduler waits after the first request to collect more (when `max_num_seqs` is above 1).
+	BatchWindowMs float64 `json:"batch_window_ms"`
+
+	// Dtype The configured precision; auto is the precision the model was published in.
+	Dtype EngineArgsDtype `json:"dtype"`
+
+	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
+	EnableSharedContext bool `json:"enable_shared_context"`
+
+	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
+	MaxNumBatchedTokens int `json:"max_num_batched_tokens"`
+
+	// MaxNumSeqs The most rows one forward holds, across requests: one per question of a decision request, one per
+	// input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+	// one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+	// budget, since a row costs at least 8 padded tokens).
+	MaxNumSeqs int `json:"max_num_seqs"`
+}
+
+// EngineArgsDtype The configured precision; auto is the precision the model was published in.
+type EngineArgsDtype string
+
 // ErrorBody defines model for ErrorBody.
 type ErrorBody struct {
-	Code    ErrorBodyCode `json:"code"`
-	Message string        `json:"message"`
+	Code ErrorBodyCode `json:"code"`
+
+	// Limit The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
+	// for `video_too_long`, input tokens for `video_tokens` and the longer side over the shorter for
+	// `*_aspect_ratio`.
+	Limit   *int   `json:"limit,omitempty"`
+	Message string `json:"message"`
+
+	// Reason Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+	// data, so a gateway may show them where it must not show `message`.
+	Reason *ErrorBodyReason `json:"reason,omitempty"`
 }
 
 // ErrorBodyCode defines model for ErrorBody.Code.
 type ErrorBodyCode string
+
+// ErrorBodyReason Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+// data, so a gateway may show them where it must not show `message`.
+type ErrorBodyReason string
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
@@ -556,20 +757,28 @@ type ImagePart struct {
 // InputText defines model for InputText.
 type InputText = string
 
-// InputUsage Tokenizer facts of one input, including special tokens.
+// InputUsage Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+// `tokens_lower_bound` is true.
 type InputUsage struct {
 	// ProcessedTokens Tokens the model read (windows counted once per content token).
 	ProcessedTokens int `json:"processed_tokens"`
 
-	// Tokens Tokens of the complete input.
-	Tokens    int  `json:"tokens"`
-	Truncated bool `json:"truncated"`
+	// Tokens Tokens of the complete input, or a lower bound when `tokens_lower_bound` is true.
+	Tokens int `json:"tokens"`
+
+	// TokensLowerBound The input was read in part, so `tokens` is a lower bound of its tokens.
+	TokensLowerBound *bool `json:"tokens_lower_bound,omitempty"`
+	Truncated        bool  `json:"truncated"`
 
 	// Windows Windows the input was read in.
 	Windows *int `json:"windows,omitempty"`
 }
 
-// ItemError defines model for ItemError.
+// ItemError Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+// scanned.
 type ItemError string
 
 // Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
@@ -590,34 +799,50 @@ type ModelCard struct {
 	Dtype                *string        `json:"dtype,omitempty"`
 	Embedding            *EmbeddingCard `json:"embedding,omitempty"`
 	Engine               *string        `json:"engine,omitempty"`
-	Family               string         `json:"family"`
-	Golden               *GoldenStatus  `json:"golden,omitempty"`
-	Heads                *[]HeadCard    `json:"heads,omitempty"`
-	Id                   string         `json:"id"`
-	Licence              *string        `json:"licence"`
-	Limits               *ModelLimits   `json:"limits,omitempty"`
-	ManifestSha256       *string        `json:"manifest_sha256,omitempty"`
-	ModelSha256          *string        `json:"model_sha256,omitempty"`
-	Object               string         `json:"object"`
-	OwnedBy              *string        `json:"owned_by,omitempty"`
-	Parameters           *int           `json:"parameters,omitempty"`
-	Plugins              *[]PluginInfo  `json:"plugins,omitempty"`
+
+	// EngineArgs How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+	EngineArgs     *EngineArgs   `json:"engine_args,omitempty"`
+	Family         string        `json:"family"`
+	Golden         *GoldenStatus `json:"golden,omitempty"`
+	Heads          *[]HeadCard   `json:"heads,omitempty"`
+	Id             string        `json:"id"`
+	Licence        *string       `json:"licence"`
+	Limits         *ModelLimits  `json:"limits,omitempty"`
+	ManifestSha256 *string       `json:"manifest_sha256,omitempty"`
+
+	// Modalities Decision models only; the inputs a decisions request may carry (`text`, `image` for `images`, `video` for `videos`).
+	Modalities  *[]string `json:"modalities,omitempty"`
+	ModelSha256 *string   `json:"model_sha256,omitempty"`
+
+	// Numerics exact when the model's answers never depend on batching: its rows answer the same alone or in
+	// any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+	// their references. approximate when the rows a forward holds, shared-context trees, another dtype
+	// or approximate kernels can move answers by rounding.
+	Numerics   *ModelCardNumerics `json:"numerics,omitempty"`
+	Object     string             `json:"object"`
+	OwnedBy    *string            `json:"owned_by,omitempty"`
+	Parameters *int               `json:"parameters,omitempty"`
+	Plugins    *[]PluginInfo      `json:"plugins,omitempty"`
 
 	// Presets Questions the model defines (Question.preset).
-	Presets       *[]string      `json:"presets,omitempty"`
-	Profile       *string        `json:"profile,omitempty"`
-	Profiles      *[]ProfileInfo `json:"profiles,omitempty"`
-	QuestionTypes *[]string      `json:"question_types,omitempty"`
-	Ready         bool           `json:"ready"`
-	Reason        *string        `json:"reason"`
-	Repo          *string        `json:"repo"`
-	Rerank        *RerankCard    `json:"rerank,omitempty"`
-	Revision      *string        `json:"revision"`
+	Presets       *[]string   `json:"presets,omitempty"`
+	QuestionTypes *[]string   `json:"question_types,omitempty"`
+	Ready         bool        `json:"ready"`
+	Reason        *string     `json:"reason"`
+	Repo          *string     `json:"repo"`
+	Rerank        *RerankCard `json:"rerank,omitempty"`
+	Revision      *string     `json:"revision"`
 
 	// Status This model's state.
 	Status   *ModelCardStatus `json:"status,omitempty"`
 	Surfaces []string         `json:"surfaces"`
 }
+
+// ModelCardNumerics exact when the model's answers never depend on batching: its rows answer the same alone or in
+// any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+// their references. approximate when the rows a forward holds, shared-context trees, another dtype
+// or approximate kernels can move answers by rounding.
+type ModelCardNumerics string
 
 // ModelCardStatus This model's state.
 type ModelCardStatus string
@@ -633,14 +858,52 @@ type ModelHealthStatus string
 
 // ModelLimits defines model for ModelLimits.
 type ModelLimits struct {
-	MaxInputTokens *int `json:"max_input_tokens,omitempty"`
+	// ImageMaxBytes Models that read images; the most bytes one supplied image may have.
+	ImageMaxBytes *int `json:"image_max_bytes,omitempty"`
+
+	// ImageMaxPixels Models that read images; the most pixels the model reads of one image (larger images are resized).
+	ImageMaxPixels *int `json:"image_max_pixels,omitempty"`
+
+	// ImageSourceMaxPixels Models that read images; the most pixels one supplied image may have.
+	ImageSourceMaxPixels *int `json:"image_source_max_pixels,omitempty"`
+	MaxInputTokens       *int `json:"max_input_tokens,omitempty"`
 
 	// MaxInputs Most inputs or documents one classify, embeddings or rerank request may carry.
 	MaxInputs  *int `json:"max_inputs,omitempty"`
 	MaxLevels  *int `json:"max_levels,omitempty"`
 	MaxOptions *int `json:"max_options,omitempty"`
-	MinLevels  *int `json:"min_levels,omitempty"`
-	MinOptions *int `json:"min_options,omitempty"`
+
+	// MaxScanTokens Decision models that read a long state part in windows (Vela 2.0): the most tokens of one part a question
+	// reads whole, by default four inputs on a CPU and 32 on a GPU. A longer part fails its questions with
+	// `scan_budget_exceeded`.
+	MaxScanTokens *int `json:"max_scan_tokens,omitempty"`
+	MinLevels     *int `json:"min_levels,omitempty"`
+	MinOptions    *int `json:"min_options,omitempty"`
+
+	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
+	// CPU (one forward) and the scan budget on a GPU.
+	TruncateTokens *int `json:"truncate_tokens,omitempty"`
+
+	// VideoFps Models that read videos; the frames per second the model samples.
+	VideoFps *float32 `json:"video_fps,omitempty"`
+
+	// VideoMaxBytes Models that read videos; the most bytes one supplied video may have.
+	VideoMaxBytes *int `json:"video_max_bytes,omitempty"`
+
+	// VideoMaxFrames Models that read videos; the most frames the model reads of one video.
+	VideoMaxFrames *int `json:"video_max_frames,omitempty"`
+
+	// VideoMaxPixels Models that read videos; the most pixels the model reads of one frame (larger frames are resized).
+	VideoMaxPixels *int `json:"video_max_pixels,omitempty"`
+
+	// VideoMaxSeconds Models that read videos; the longest supplied video, in seconds.
+	VideoMaxSeconds *int `json:"video_max_seconds,omitempty"`
+
+	// VideoMaxTokens Models that read videos; the most input tokens the videos of one request may take.
+	VideoMaxTokens *int `json:"video_max_tokens,omitempty"`
+
+	// VideoSourceMaxPixels Models that read videos; the most pixels one frame of a supplied video may have.
+	VideoSourceMaxPixels *int `json:"video_source_max_pixels,omitempty"`
 }
 
 // ModelList defines model for ModelList.
@@ -657,8 +920,9 @@ type ModelList struct {
 
 // PluginInfo defines model for PluginInfo.
 type PluginInfo struct {
-	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
-	// and outputs, an accelerator's validation status, a profile's numerics.
+	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures,
+	// outputs and the `--dtype` values it runs (`dtypes`), an accelerator's validation status. Engines and
+	// accelerators also list `auto_priority`, where `auto` tries them (lowest first; null: only when named).
 	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
 	Distribution *string                 `json:"distribution"`
 	Group        string                  `json:"group"`
@@ -676,23 +940,12 @@ type ProcessLimits struct {
 	MaxRequestBytes int `json:"max_request_bytes"`
 }
 
-// ProfileInfo defines model for ProfileInfo.
-type ProfileInfo struct {
-	Description *string             `json:"description,omitempty"`
-	Name        string              `json:"name"`
-	Numerics    ProfileInfoNumerics `json:"numerics"`
-}
-
-// ProfileInfoNumerics defines model for ProfileInfo.Numerics.
-type ProfileInfoNumerics string
-
-// ProfileName exact, or a profile the server enabled for this model (its card's `profiles`).
-type ProfileName = string
-
 // Question One question. `instructions` is required unless `preset` names a question the model defines (see
 // `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
-// its type's fields (`choices` for Choice and Noul, `levels` for Score, `over`, `head` and `threshold`
-// where the model reads them), and any other field is answered with invalid_question.
+// its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
+// `head` and `threshold` where the model reads them), and any other field is answered with
+// invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
+// a question takes one or the other.
 type Question struct {
 	// Choices Ordered Choice or Noul options, an alternative to a criteria object.
 	Choices *[]ChoiceOption `json:"choices,omitempty"`
@@ -710,6 +963,9 @@ type Question struct {
 	// Instructions The question; non-blank text, an object or an array.
 	Instructions *interface{} `json:"instructions,omitempty"`
 
+	// Labels Ordered Set or Span labels, an alternative to a criteria object.
+	Labels *[]ChoiceOption `json:"labels,omitempty"`
+
 	// Levels Ordered Score level descriptions, an alternative to a criteria list.
 	Levels *[]interface{} `json:"levels,omitempty"`
 
@@ -718,8 +974,21 @@ type Question struct {
 	// request. A span reads one field.
 	Over *interface{} `json:"over,omitempty"`
 
+	// Overflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+	// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+	// both kinds share their model inputs unless one has to be read in windows.
+	Overflow *QuestionOverflow `json:"overflow,omitempty"`
+
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
 	Preset *string `json:"preset,omitempty"`
+
+	// RequireFullInput Require every supplied state part to be read completely, including context outside `over`.
+	// Clipping fails this question with max_length_exceeded unless complete window coverage is
+	// guaranteed. Cannot be combined with overflow truncate. Success includes input_coverage complete;
+	// absence of that proof must not be treated as full coverage by clients. Omitted or false retains
+	// the model's ordinary input-fitting behavior.
+	RequireFullInput *bool `json:"require_full_input,omitempty"`
 
 	// Threshold Set or Span decision threshold; the applied threshold is reported in `thresholds`.
 	Threshold *float64 `json:"threshold,omitempty"`
@@ -732,6 +1001,12 @@ type Question struct {
 // QuestionHead Span questions on models with a broad span head: the head that answers (default: the model's routing,
 // reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 type QuestionHead string
+
+// QuestionOverflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+// both kinds share their model inputs unless one has to be read in windows.
+type QuestionOverflow string
 
 // Representation The identity of an embedding space; vectors with different representations never mix.
 type Representation struct {
@@ -747,8 +1022,11 @@ type RequestOptions struct {
 	// DeadlineMs Work not started by the deadline is not run; its items return deadline_exceeded.
 	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
 
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
+	// MaxTokens Scan budget: the most tokens of one state part a question reads whole (default its card's
+	// `limits.max_scan_tokens`; a part that fits one model input is always read). A longer part fails the
+	// questions that read it whole with `scan_budget_exceeded`. Only a model whose card has `max_scan_tokens`
+	// takes it.
+	MaxTokens *int `json:"max_tokens,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -773,9 +1051,6 @@ type RerankOptions struct {
 
 	// Overflow What happens to a query-document pair longer than max_tokens (default reject).
 	Overflow *RerankOptionsOverflow `json:"overflow,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -809,11 +1084,18 @@ type RerankResponse struct {
 
 // RerankResult defines model for RerankResult.
 type RerankResult struct {
-	Document *string    `json:"document,omitempty"`
-	Error    *ItemError `json:"error,omitempty"`
-	Index    int        `json:"index"`
+	Document *string `json:"document,omitempty"`
 
-	// Input Tokenizer facts of one input, including special tokens.
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
 	Input *InputUsage `json:"input,omitempty"`
 
 	// Logit The raw pair-scorer logit.
@@ -828,14 +1110,21 @@ type ResponseMeta struct {
 	Accelerator *string  `json:"accelerator,omitempty"`
 	ComputeMs   *float64 `json:"compute_ms,omitempty"`
 	Device      *string  `json:"device,omitempty"`
-	Engine      *string  `json:"engine,omitempty"`
+
+	// Dtype The precision the backbone computed in (float32, bfloat16 or float16).
+	Dtype  *string `json:"dtype,omitempty"`
+	Engine *string `json:"engine,omitempty"`
 
 	// Head The head that produced a classify result.
-	Head        *string  `json:"head,omitempty"`
-	ModelSha256 *string  `json:"model_sha256,omitempty"`
-	Numerics    *string  `json:"numerics,omitempty"`
-	Profile     *string  `json:"profile,omitempty"`
-	QueueMs     *float64 `json:"queue_ms,omitempty"`
+	Head *string `json:"head,omitempty"`
+
+	// ModelId The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
+	ModelId     *string `json:"model_id,omitempty"`
+	ModelSha256 *string `json:"model_sha256,omitempty"`
+
+	// Numerics exact when the model's answers never depend on batching; see ModelCard.numerics.
+	Numerics *ResponseMetaNumerics `json:"numerics,omitempty"`
+	QueueMs  *float64              `json:"queue_ms,omitempty"`
 
 	// Representation The identity of an embedding space; vectors with different representations never mix.
 	Representation *Representation `json:"representation,omitempty"`
@@ -844,11 +1133,19 @@ type ResponseMeta struct {
 	Revision *string `json:"revision"`
 }
 
+// ResponseMetaNumerics exact when the model's answers never depend on batching; see ModelCard.numerics.
+type ResponseMetaNumerics string
+
 // SetAnswer defines model for SetAnswer.
 type SetAnswer struct {
-	Probabilities map[string]float64 `json:"probabilities"`
-	Selected      []string           `json:"selected"`
+	// InputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+	InputCoverage *SetAnswerInputCoverage `json:"input_coverage,omitempty"`
+	Probabilities map[string]float64      `json:"probabilities"`
+	Selected      []string                `json:"selected"`
 }
+
+// SetAnswerInputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+type SetAnswerInputCoverage string
 
 // Span A labelled span; offsets are Unicode code points into the text the question read, end exclusive.
 type Span struct {

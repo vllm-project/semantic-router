@@ -1,10 +1,13 @@
-# Vela Omni runtime artifacts
+# Vela Omni ONNX bundles
 
-The published Nano and Mini repositories contain native Python models and
-weights. They do not publish the four ONNX graphs used by the router. This
-directory produces those graphs during an explicit build or model preparation
-step, verifies them against the pinned public implementation, and packages only
-data for the native runtime. Serving never imports the published Python code.
+The model runtime serves the published Nano and Mini repositories on its
+native engine, from their weights, by default. This directory produces the
+optional alternative: four ONNX graphs and the exact processors for the
+runtime's `onnxruntime` engine (the `onnx` extra of `vllm-srun`), verified
+against the pinned public implementation and packaged as data only. Serving
+never imports the published Python code. The reference inputs and outputs it
+keeps (`VELA_OMNI_KEEP_GOLDEN=1`) are also the evidence the native towers are
+checked against.
 
 ## Prepare artifacts
 
@@ -24,12 +27,11 @@ outputs. Both variants are exported sequentially, with each modality in a fresh
 process to release its temporary memory. The builder runs offline unit tests
 before downloading models and requires all three modalities to pass parity.
 
-The router Dockerfiles share this producer stage. They place immutable bundles
-in `/opt/router-model-artifacts`, outside the mounted model cache; the router's
-model preparation copies and validates the selected bundle into its configured
-cache. Producer Python, native source weights, and temporary files are absent
-from the final serving image. Source and export scratch files are removed in the
-same build layer. Keep the Docker build cache to reuse unchanged artifacts.
+Router images ship neither ONNX Runtime nor a bundle. To serve one, install
+`vllm-srun[multimodal,onnx]` and name the bundle directory with
+`--engine onnxruntime` (or `engine: onnxruntime` on a router deployment).
+Source and export scratch files are removed in the same build layer. Keep the
+Docker build cache to reuse unchanged artifacts.
 
 For a pre-provisioned source snapshot, use the pinned dependencies in
 `requirements.txt` and export without network access:
@@ -128,8 +130,8 @@ python3 src/model-runtime/tools/embed_parity.py omni \
 
 Mini 32K qualification needs a Mini bundle exported with `--full-context`, or
 `VELA_OMNI_FULL_CONTEXT_REFERENCE` naming a separately generated matching source
-reference; routine CI does not claim it. The image-calibration CI lane prepares
-Nano once, checks export parity, and uses that same immutable bundle for image
+reference; routine CI does not claim it. The image-calibration CI lane serves
+the pinned Nano release on the native engine instead, for image
 classification, cache and memory integration, and the complete frozen routing
 calibration.
 

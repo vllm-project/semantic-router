@@ -45,14 +45,14 @@ func requireOmniProvider(t *testing.T) embedding.Provider {
 	artifact := os.Getenv("VELA_OMNI_ARTIFACT")
 	if artifact == "" {
 		if os.Getenv("REQUIRE_OMNI_TESTS") == "1" {
-			t.Fatal("VELA_OMNI_ARTIFACT must select a prepared artifact")
+			t.Fatal("VELA_OMNI_ARTIFACT must select a Vela Omni snapshot")
 		}
 		t.Skip("set VELA_OMNI_ARTIFACT to select owned Omni integration")
 	}
 	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
 		Recipe: "image-test", Name: "embedding",
 		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1"},
-		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "reject"}},
+		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Input: config.ModelInputBudget{Overflow: "reject"}},
 	}, 0, 0)
 	if err != nil {
 		t.Fatalf("prepare selected Omni artifact: %v", err)

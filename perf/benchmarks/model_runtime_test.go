@@ -26,7 +26,7 @@ var benchmarkInput = config.ModelInputBudget{MaxTokens: 512, Overflow: "truncate
 
 // Benchmarks reach every model the way the router does: through one runtime
 // manager and the serving facade, each deployment in a runtime process of its
-// own (VLLM_SR_RUNTIME_COMMAND, else vllm-sr-runtime on PATH).
+// own (VLLM_SRUN_COMMAND, else vllm-srun on PATH).
 var (
 	benchmarkManager    = modelservice.NewManager()
 	benchmarkLease      = acquireBenchmarkLease()

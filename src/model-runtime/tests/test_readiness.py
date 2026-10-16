@@ -1,17 +1,17 @@
 import os
 
-from vllm_sr_runtime.accel.autotune import freeze_autotune
-from vllm_sr_runtime.cli import build_parser, config_from_args
-from vllm_sr_runtime.families.decision2.family import Decision2Family
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.accel.autotune import freeze_autotune
+from vllm_srun.cli import build_parser, config_from_args
+from vllm_srun.families.decision2.family import Decision2Family
+from vllm_srun.plugins.base import (
     DeviceInfo,
     PackageRef,
     RegistryOptions,
     VerifiedPackage,
 )
-from vllm_sr_runtime.plugins.decisions import compare_answers
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.supervision.readiness import (
+from vllm_srun.plugins.decisions import compare_answers
+from vllm_srun.registry import builtin
+from vllm_srun.supervision.readiness import (
     CPU_TOLERANCE,
     GPU_TOLERANCE,
     compare_numbers,
@@ -78,6 +78,71 @@ def test_gpu_references_use_the_gpu_tolerance():
     )
 
 
+def test_npu_run_to_run_drift_within_tolerance_passes():
+    """V2.0 GDN decoders drift bitwise across runs on shared hosts (record:
+    npu-parity-ascend910b1); the npu gate compares within the tolerance."""
+    runs = iter(
+        [
+            {"q": {"type": "noul", "noul": 0.3008507118}},
+            {"q": {"type": "noul", "noul": 0.3008507119}},
+        ]
+    )
+    golden = decisions_golden({"npu": answers(0.3008507)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "matched"
+
+
+def test_npu_run_to_run_drift_beyond_tolerance_fails():
+    runs = iter(
+        [
+            {"q": {"type": "noul", "noul": 0.30}},
+            {"q": {"type": "noul", "noul": 0.30 + 2 * GPU_TOLERANCE}},
+        ]
+    )
+    golden = decisions_golden({"npu": answers(0.30)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+    assert result.detail is not None and "not deterministic" in result.detail
+
+
+def test_npu_run_to_run_shape_change_fails():
+    runs = iter(
+        [
+            {"q": {"type": "noul", "noul": 0.3}},
+            {"q": {"other": {"type": "noul", "noul": 0.3}}},
+        ]
+    )
+    golden = decisions_golden({"npu": answers(0.3)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+
+
+def test_npu_second_run_is_validated_against_the_reference():
+    """Each run is checked against the reference, not just the first one.
+
+    A second response can stay within the run-to-run tolerance of the first
+    and still drift past the recorded reference (0.30 -> 0.319 -> 0.338
+    exceeds the 0.02 tolerance); readiness fails rather than letting the
+    second run lean on the first.
+    """
+    runs = iter([answers(0.319), answers(0.338)])
+    golden = decisions_golden({"npu": answers(0.30)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+
+
+def test_npu_second_run_non_finite_values_fail():
+    """A NaN leaf in the second response fails instead of slipping through the comparison.
+
+    NaN compares False against every bound, so the drift check has to reject
+    non-finite leaves explicitly.
+    """
+    runs = iter([answers(0.3), {"q": {"type": "noul", "noul": float("nan")}}])
+    golden = decisions_golden({"npu": answers(0.30)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+
+
 def test_a_device_class_without_a_reference_is_unverified():
     other_class_only = decisions_golden({"rocm": answers(0.9)})
     result = golden_check(
@@ -124,7 +189,7 @@ def test_built_in_models_pin_their_released_kernel_choices_on_gfx942(tmp_path):
 
 
 def test_autotune_cache_comes_from_the_flag_or_the_environment(monkeypatch):
-    monkeypatch.setenv("VLLM_SR_RUNTIME_AUTOTUNE_CACHE", "/cache/from-env")
+    monkeypatch.setenv("VLLM_SRUN_AUTOTUNE_CACHE", "/cache/from-env")
     parsed = build_parser().parse_args(["serve", "/models/kai"])
     assert config_from_args(parsed).autotune_cache == "/cache/from-env"
     parsed = build_parser().parse_args(
@@ -134,7 +199,7 @@ def test_autotune_cache_comes_from_the_flag_or_the_environment(monkeypatch):
 
 
 def test_surface_goldens_compare_flattened_values():
-    from vllm_sr_runtime.supervision.readiness import flatten
+    from vllm_srun.supervision.readiness import flatten
 
     response = {
         "results": [

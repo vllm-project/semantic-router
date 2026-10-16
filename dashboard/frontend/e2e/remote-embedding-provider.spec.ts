@@ -14,6 +14,7 @@ const globalConfig = {
           model_type: 'mmbert',
           target_dimension: 768,
           preload_embeddings: true,
+          top_k: 0,
         },
       },
     },
@@ -54,9 +55,6 @@ async function mockRemoteEmbeddingDashboard(page: Page) {
   })
   await page.route('**/api/router/config/global/raw', async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: 'router: {}\n' })
-  })
-  await page.route('**/api/router/api/v1/storage/knowledge-bases', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' })
   })
   await page.route('**/api/tools-db', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
@@ -117,14 +115,17 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await expect(modal.getByLabel('mmBERT Model Path')).toBeVisible()
     await expect(modal.getByLabel('Base URL')).toHaveCount(0)
 
-    await expect(modal.getByLabel('Local Backend')).toBeVisible()
+    await expect(modal.getByLabel('Provider Type')).toHaveValue('local')
+    await expect(modal.getByLabel('Local Model Type')).toHaveValue('mmbert')
+    await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
     await expect(modal.getByLabel('API Protocol')).toHaveCount(0)
     await modal.getByLabel('Provider Type').selectOption('remote')
     await expect(modal.getByLabel('mmBERT Model Path')).toHaveCount(0)
+    await expect(modal.getByLabel('Local Model Type')).toHaveCount(0)
     await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
     await modal.getByLabel('API Protocol').selectOption('openai_compatible')
     await modal.getByLabel('Base URL').fill('https://embedding.example.com/v1')
-    await modal.getByLabel('Model').fill('text-embedding-3-small')
+    await modal.getByLabel('Model', { exact: true }).fill('text-embedding-3-small')
     await modal.getByLabel('API Key Environment Variable').fill('OPENAI_API_KEY')
     await modal.getByLabel('Dimensions').fill('1536')
     await modal.getByLabel('Target Dimension').fill('1536')
@@ -151,6 +152,37 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
         },
       },
     })
+  })
+
+  test('saves the default local provider without edits', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockRemoteEmbeddingDashboard(page)
+
+    let updateBody: Record<string, unknown> | null = null
+    await page.route('**/api/router/config/global/update', async (route) => {
+      updateBody = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' })
+    })
+
+    await page.goto('/config/global-config')
+    await page.getByRole('button', { name: /Model Catalog/ }).click()
+    const card = page.locator('article').filter({
+      has: page.getByRole('heading', { name: 'Embedding Models' }),
+    })
+    await card.getByRole('button', { name: 'Edit' }).click()
+
+    const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
+    await expect(modal.getByLabel(/^Top K/)).toHaveValue('0')
+    await modal.getByRole('button', { name: 'Save' }).click()
+
+    await expect(modal).toBeHidden()
+    await expect.poll(() => updateBody).not.toBeNull()
+    expect(updateBody).toMatchObject({
+      model_catalog: {
+        embeddings: { semantic: { embedding_config: { backend: 'model_runtime', top_k: 0 } } },
+      },
+    })
+    expect(updateBody).not.toHaveProperty('model_catalog.embeddings.bert')
   })
 
   test('keeps service availability inside desktop and mobile layouts', async ({ page }) => {

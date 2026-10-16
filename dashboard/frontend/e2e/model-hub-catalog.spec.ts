@@ -68,3 +68,85 @@ test('Model Hub retains bundled results when the server returns an invalid catal
     page.getByText(bundledCatalog.models[0].display_name, { exact: true }).first(),
   ).toBeVisible()
 })
+
+test('Model Hub exposes model search before evaluations finish and shares the response with model config', async ({
+  page,
+}) => {
+  await mockAuthenticatedAppShell(page)
+  await page.route('**/api/router/config/all', (route) =>
+    route.fulfill({
+      json: {
+        version: 'v0.3',
+        providers: { models: [] },
+        routing: { signals: {}, decisions: [] },
+        global: {},
+      },
+    }),
+  )
+  await page.route('**/api/router/config/global', (route) => route.fulfill({ json: {} }))
+  await page.route('**/api/router/config/global/raw', (route) =>
+    route.fulfill({ contentType: 'text/yaml', body: '{}\n' }),
+  )
+  let requests = 0
+  let release!: () => void
+  const responseReady = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/models/catalog', async (route) => {
+    requests += 1
+    await responseReady
+    await route.fulfill({ json: bundledCatalog })
+  })
+  await page.goto('/models')
+  const search = page.getByRole('searchbox', { name: 'Search models' })
+  await expect(search).toBeEnabled()
+  await search.fill(bundledCatalog.models[0].display_name)
+  await expect(
+    page.getByText(bundledCatalog.models[0].display_name, { exact: true }).first(),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Loading model evaluations' }),
+  ).toBeVisible()
+  release()
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Loading model evaluations' }),
+  ).toHaveCount(0)
+  const beforeNavigation = requests
+  await page.getByRole('link', { name: 'Add model', exact: false }).click()
+  await expect(page).toHaveURL(/\/config\/models/)
+  await expect(page.getByRole('heading', { name: 'Models', exact: true, level: 1 })).toBeVisible()
+  expect(requests).toBe(beforeNavigation)
+})
+
+test('Global Config does not load unrelated manager sections or the full model catalog', async ({
+  page,
+}) => {
+  await mockAuthenticatedAppShell(page)
+  await page.route('**/api/router/config/all', (route) =>
+    route.fulfill({
+      json: {
+        version: 'v0.3',
+        providers: { models: [] },
+        routing: { signals: {}, decisions: [] },
+        global: {},
+      },
+    }),
+  )
+  await page.route('**/api/router/config/global', (route) => route.fulfill({ json: {} }))
+  await page.route('**/api/router/config/global/raw', (route) =>
+    route.fulfill({ contentType: 'text/yaml', body: '{}\n' }),
+  )
+  const unrelated: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (
+      path.endsWith('/ConfigPageModelsSection.tsx') ||
+      path.endsWith('/ConfigPageMCPSection.tsx') ||
+      path.endsWith('/api/models/catalog')
+    )
+      unrelated.push(path)
+  })
+  await page.goto('/config/global-config')
+  await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible()
+  expect(unrelated).toEqual([])
+})

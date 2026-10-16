@@ -17,10 +17,11 @@ Four phases, each its own reviewable commit series:
 1. State/config/trust contract (config types, `pkg/sessiontools` state model,
    fingerprint helpers, in-memory store, session provenance/trust resolver —
    sticky stays disabled, no runtime manager constructed).
-2. Deterministic local sticky selection (refactor add/filter to a shared
-   finalizer, local-store-backed reuse/growth/pin/rehydrate).
-3. Current-turn authorization/capability/invalidation (consumes issue #2361's
-   eligibility contract or lands the minimal seam; full invalidation matrix).
+2. Disabled deterministic planner (#4517): identity-only merge, bounded
+   manager/CAS, store conformance, and deterministic catalog inputs.
+3. Complete local runtime (#4519): shared add/filter finalizer, trusted facts
+   from #3476, reauthorization, capability checks, invalidation, recovery,
+   and fallback together. Starts after Phase 2 lands.
 4. Redis CAS store, restart/reload/partial-deployment recovery, maintained
    E2E.
 
@@ -331,23 +332,35 @@ it. Kept in sync by hand if the issue's completion signal changes.
       `nlp-binding` built) should confirm `make test-semantic-router`
       before this is taken as a substitute for that signal.
 
-### Phase 2 — Deterministic local sticky selection
+### Phase 2 — Disabled deterministic planner (#4517)
 
-- [ ] `TASK-07` Refactor `runSemanticToolSelection` /
-      `runToolSelectionPluginAdd` / `runToolSelectionPluginFilter` to return
-      `toolSelectionResult`; one shared finalizer.
-- [ ] `TASK-08` `extproc/sticky_tool_selection.go` (new): catalog snapshot,
-      deterministic merge (blueprint 5.3), rehydration, `applySelectedTools`
-      + `Generation` bump only on change, receipt emission.
-- [ ] `TASK-09` Fix `ToolsDatabase` nondeterminism found while touching this
-      surface (load-order/sort, tie-break by name, duplicate-name rejection).
+The [accepted split](https://github.com/vllm-project/semantic-router/issues/4517#issuecomment-5977745095)
+keeps this phase independently implementable as library work. It must not
+construct a sticky manager/store in ExtProc or lift either enablement gate.
 
-### Phase 3 — Authorization/capability/invalidation
+- [ ] `TASK-07` Pure `sessiontools.Merge`: current eligible identities,
+      deterministic retention, bounded growth, pin replacement/overflow,
+      explicit requirements, and typed content-free receipts.
+- [ ] `TASK-08` `sessiontools.Manager.Update`: frozen request evidence,
+      conditional invalidation, at most three CAS attempts under one timeout,
+      independent logical-turn metadata, and guarded revision exhaustion.
+- [ ] `TASK-09` Stabilize `ToolsDatabase`: normalized unique names, catalog
+      enumeration, equal-score name ordering, finite ranking inputs, isolated
+      snapshots, and lossless schema numbers on file/incremental admission.
 
-- [ ] `TASK-10` Consume #2361's `ToolEligibilityEvaluator` or land the minimal
-      seam; wire model/target-codec capability checks; implement every row of
-      the invalidation matrix (blueprint 5.4).
-- [ ] `TASK-11` Content-minimized Router Replay receipt.
+### Phase 3 — Complete local runtime integration (#4519)
+
+Starts only after Phase 2 lands. The trusted-facts dependency
+[#3476](https://github.com/vllm-project/semantic-router/issues/3476) needs an
+owner or an explicit missing-facts contract before runtime work is accepted.
+
+- [ ] `TASK-10` Refactor add/filter selection into one ExtProc finalizer;
+      consume trusted identity/eligibility and model/wire capabilities;
+      rehydrate current definitions; implement the full invalidation,
+      recovery, and stateless fallback matrix before lifting either gate.
+- [ ] `TASK-11` Generation-owned store lifetime, bounded Router Replay
+      receipt, and request-path integration assertions covering trusted and
+      missing facts, explicit requirements, and disabled configurations.
 
 ### Phase 4 — Redis CAS + recovery + E2E
 
@@ -367,16 +380,13 @@ Docker sandbox has no Rust toolchain to build — not a regression from this
 branch, and confirmed the packages this branch actually touches that
 *could* execute their tests did pass).
 
-Phase 2 begins with **TASK-07**: refactor `runSemanticToolSelection` /
-`runToolSelectionPluginAdd` / `runToolSelectionPluginFilter` to return
-`toolSelectionResult` and share one finalizer. That finalizer is the first
-real caller of `ResolveStickyToolIdentity` (TASK-04) and
-`sessiontools.NewMemoryStore` (TASK-03's constructor, not yet invoked
-anywhere) — construct the store once at router-generation build time,
-gated on at least one normalized recipe decision enabling
-`tool_selection.sticky` (construct no store at all otherwise, per this
-plan's Operating Rules), and call `ResolveStickyToolIdentity` per request
-to get the `QuotaKey`/`StorageKey` before touching the store.
+Implement the accepted disabled planner in [#4517](https://github.com/vllm-project/semantic-router/issues/4517)
+(TASK-07 through TASK-09). `pkg/sessiontools` owns selection and bounded CAS;
+ExtProc runtime adaptation stays in [#4519](https://github.com/vllm-project/semantic-router/issues/4519).
+Both public admission and pre-parsed construction continue rejecting
+`sticky.enabled: true`, and disabled configurations construct no manager or
+store. Preserve the historical Phase 1 evidence below; validate Phase 2
+against the current repository checks and deterministic race regressions.
 
 Verification depth across Phase 1 varied by what this sandbox can actually
 execute for each package: `pkg/config` (TASK-01/02) and

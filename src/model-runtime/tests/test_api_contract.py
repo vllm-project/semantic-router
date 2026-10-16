@@ -9,9 +9,10 @@ import jsonschema
 import pytest
 import yaml
 from starlette.testclient import TestClient
-from vllm_sr_runtime.api.app import API_VERSION, OPENAPI_PATH, create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.api.app import API_VERSION, OPENAPI_PATH, create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.plugins.base import PackageRef
+from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
 
@@ -71,7 +72,118 @@ def test_decisions_response_matches_the_contract(client):
         client,
         {"state": STATE, "questions": QUESTIONS, "options": {"return_meta": True}},
     ).json()["meta"]
-    assert meta["profile"] == "exact" and meta["numerics"] == "exact"
+    check("ResponseMeta", meta)
+    assert meta["dtype"] == "float32" and meta["numerics"] == "approximate"
+
+
+def test_the_card_reports_the_configured_engine_arguments(qwen3_package):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(qwen3_package),
+                    device="cpu",
+                    max_num_seqs=1,
+                    enable_shared_context=False,
+                ),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        alone = TestClient(create_app(runtime))
+        card = alone.get("/v1/models").json()["data"][0]
+        assert card["numerics"] == "approximate"
+        assert card["engine_args"] == {
+            "max_num_seqs": 1,
+            "max_num_batched_tokens": 65_536,
+            "batch_window_ms": 2.0,
+            "dtype": "auto",
+            "enable_shared_context": False,
+        }
+        body = {
+            "state": STATE,
+            "questions": QUESTIONS,
+            "options": {"return_meta": True},
+        }
+        response = post(alone, body).json()
+        assert response["meta"]["numerics"] == "approximate"
+        assert list(response["answers"]) == list(QUESTIONS)
+    finally:
+        runtime.stop()
+
+
+def test_a_removed_request_option_names_its_replacement(client):
+    response = post(
+        client,
+        {"state": STATE, "questions": QUESTIONS, "options": {"profile": "exact"}},
+    )
+    error = response.json()["error"]
+    assert response.status_code == 400 and error["code"] == "invalid_request"
+    assert error["message"].startswith(
+        "options.profile was removed: batching and numerics are the deployment's "
+        "engine arguments"
+    )
+
+
+@pytest.mark.parametrize("repo_id", [None, "fixture-owner/Decision-2.0-Tiny-Qwen3"])
+def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(
+    qwen3_package, monkeypatch, repo_id
+):
+    revision = "a" * 40 if repo_id else None
+    if repo_id:
+        # Resolve the repository to tiny local weights; package verification and
+        # the family's ModelInfo construction still use the real loading path.
+        def resolve_fixture(model, **options):
+            assert model == repo_id and options["revision"] == revision
+            return PackageRef(qwen3_package, repo_id, revision)
+
+        monkeypatch.setattr("vllm_srun.runtime.resolve", resolve_fixture)
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=repo_id or str(qwen3_package),
+                    name="public-alias",
+                    revision=revision,
+                    device="cpu",
+                ),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        request = {
+            "model": "public-alias",
+            "state": STATE,
+            "questions": QUESTIONS,
+            "states": {"second": {"state": STATE, "questions": QUESTIONS}},
+            "options": {"return_meta": True},
+        }
+        client = TestClient(create_app(runtime))
+        response = post(client, request, "/v1/systemone")
+        assert response.status_code == 200
+        body = response.json()
+        check("DecisionResponse", body)
+        info = runtime.lookup("public-alias").model.info
+        assert info.id == "Decision-2.0-Tiny-Qwen3" and info.repo == repo_id
+        expected_id = repo_id or info.id
+        for envelope in (body, body["states"]["second"]):
+            assert envelope["model"] == "public-alias"
+            assert envelope["meta"]["model_id"] == expected_id
+            assert envelope["meta"]["revision"] == revision
+            assert envelope["meta"]["model_sha256"] == info.model_sha256
+        request["options"] = {"return_meta": False}
+        response = post(client, request, "/v1/systemone")
+        hidden = response.json()
+        assert response.status_code == 200 and "meta" not in hidden
+        assert "meta" not in hidden["states"]["second"]
+        assert hidden["answers"] == body["answers"]
+        assert (
+            hidden["states"]["second"]["answers"] == body["states"]["second"]["answers"]
+        )
+    finally:
+        runtime.stop()
 
 
 def test_systemone_alias_answers_identically(client):
@@ -100,9 +212,30 @@ def test_per_question_errors_do_not_fail_siblings(client):
     )
     body = post(client, {"state": STATE, "questions": questions}).json()
     check("DecisionResponse", body)
-    assert body["answers"]["bad"] == {"type": "set", "error": "invalid_question"}
-    assert body["answers"]["tiny"] == {"type": "choice", "error": "invalid_question"}
+    bad, tiny = body["answers"]["bad"], body["answers"]["tiny"]
+    assert (bad["type"], bad["error"]) == ("set", "invalid_question")
+    assert (tiny["type"], tiny["error"]) == ("choice", "invalid_question")
+    # Each failed question says why, naming the field.
+    assert bad["message"] and "criteria" in tiny["message"]
     assert "error" not in body["answers"]["domain"]
+
+
+def test_a_request_without_a_valid_question_is_refused(client):
+    response = post(
+        client,
+        {
+            "state": STATE,
+            "questions": {
+                "bad": {"type": "noul", "instructions": "x", "colour": "blue"},
+                "worse": {"type": "rank", "instructions": "x"},
+            },
+        },
+    )
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "invalid_request"
+    assert "bad: noul questions do not take ['colour']" in error["message"]
+    assert "worse: type must be one of" in error["message"]
 
 
 CHOICES = [{"key": "a"}, {"key": "b"}]
@@ -162,8 +295,8 @@ SYSTEM_ONE_CASES = {
 
 @pytest.fixture(scope="module")
 def decision_runtimes(tmp_path_factory, qwen3_runtime):
-    from vllm_sr_runtime.testing import decision1
-    from vllm_sr_runtime.testing.vela2 import write_encoder_package
+    from vllm_srun.testing import decision1
+    from vllm_srun.testing.vela2 import write_encoder_package
 
     root = tmp_path_factory.mktemp("systemone")
     packages = {
@@ -222,7 +355,9 @@ def test_overlong_question_is_rejected_not_truncated(client):
     body = post(
         client, {"state": "word " * 5000, "questions": {"q": QUESTIONS["reasoning"]}}
     ).json()
-    assert body["answers"]["q"] == {"type": "noul", "error": "max_length_exceeded"}
+    answer = body["answers"]["q"]
+    assert (answer["type"], answer["error"]) == ("noul", "max_length_exceeded")
+    assert "exceeds max_length" in answer["message"]
 
 
 def test_deadline_exceeded_is_reported_per_question(client):
@@ -252,7 +387,7 @@ def test_deadline_exceeded_is_reported_per_question(client):
             {
                 "state": STATE,
                 "questions": QUESTIONS,
-                "options": {"profile": "max_speed"},
+                "options": {"return_meta": "yes"},
             },
             400,
             "invalid_request",
@@ -378,7 +513,7 @@ def test_surface_payloads_match_the_contract(name, body):
         ("Embedding", {"object": "embedding", "index": 0, "embedding": ["a"]}),
         (
             "RerankRequest",
-            {"query": "q", "documents": ["d"], "options": {"profile": "Fast!"}},
+            {"query": "q", "documents": ["d"], "options": {"stream": True}},
         ),
     ],
 )
@@ -394,10 +529,18 @@ def test_models_health_metrics_and_openapi(client):
     assert (
         card["ready"] and card["family"] == "decision2" and card["accelerator"] == "cpu"
     )
+    assert card["engine_args"] == {
+        "max_num_seqs": 8_192,
+        "max_num_batched_tokens": 65_536,
+        "batch_window_ms": 2.0,
+        "dtype": "auto",
+        "enable_shared_context": True,
+    }
+    assert card["numerics"] == "approximate" and "profile" not in card
     assert card["limits"]["max_options"] == 255 and card["limits"]["max_levels"] == 10
     assert {p["group"] for p in card["plugins"]} >= {
-        "vllm_sr_runtime.families",
-        "vllm_sr_runtime.engines",
+        "vllm_srun.families",
+        "vllm_srun.engines",
     }
     health = client.get("/health")
     assert health.status_code == 200
@@ -413,14 +556,11 @@ def test_models_health_metrics_and_openapi(client):
         == live["api_version"]
     )
     metrics = client.get("/metrics").text
-    assert (
-        "vllm_sr_runtime_requests_total" in metrics
-        and "vllm_sr_runtime_ready 1.0" in metrics
-    )
+    assert "vllm_srun_requests_total" in metrics and "vllm_srun_ready 1.0" in metrics
     memory = [
         line
         for line in metrics.splitlines()
-        if line.startswith("vllm_sr_runtime_model_memory_bytes{")
+        if line.startswith("vllm_srun_model_memory_bytes{")
     ]
     assert len(memory) == 1 and float(memory[0].rsplit(" ", 1)[1]) > 0
     assert client.get("/openapi.yaml").text == Path(OPENAPI_PATH).read_text()

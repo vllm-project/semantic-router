@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import os
 import secrets
 import stat
@@ -52,31 +53,37 @@ def secure_gid(path: str) -> int:
         os.close(descriptor)
 
 
-def secure_socket_gid(path: str) -> int:
-    absolute = os.path.abspath(path)
-    # Debian keeps /var/run as a distribution-owned compatibility symlink to
-    # /run.  Resolve only that fixed system alias; never follow an arbitrary
-    # mutable parent or final-component symlink supplied by a bind mount.
-    if absolute == "/var/run":
-        absolute = "/run"
-    elif absolute.startswith("/var/run/"):
-        absolute = "/run/" + absolute[len("/var/run/") :]
+def remove_stale_file(path: str) -> None:
+    """Remove one regular file and then its directory, if that is left empty.
 
-    descriptor = open_path(absolute)
+    Neither name is resolved through a symlink, and a missing file is fine.
+    """
+
+    parent_path, name = os.path.split(os.path.abspath(path))
     try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISSOCK(info.st_mode):
-            raise OSError("container runtime path must be a Unix socket")
-        if info.st_gid == 0:
-            raise OSError("container runtime socket must not grant the root group")
-        required_group_access = stat.S_IRGRP | stat.S_IWGRP
-        if info.st_mode & required_group_access != required_group_access:
-            raise OSError("container runtime socket must grant group read/write access")
-        if info.st_mode & (stat.S_IROTH | stat.S_IWOTH):
-            raise OSError("container runtime socket must not grant other access")
-        return info.st_gid
+        parent = open_directory(parent_path)
+    except FileNotFoundError:
+        return
+    try:
+        try:
+            info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(info.st_mode):
+                raise OSError(f"stale Dashboard file is not a regular file: {name}")
+            os.unlink(name, dir_fd=parent)
     finally:
-        os.close(descriptor)
+        os.close(parent)
+    grandparent_path, parent_name = os.path.split(parent_path)
+    grandparent = open_directory(grandparent_path)
+    try:
+        os.rmdir(parent_name, dir_fd=grandparent)
+    except OSError as error:
+        if error.errno not in (errno.ENOTEMPTY, errno.EEXIST):
+            raise
+    finally:
+        os.close(grandparent)
 
 
 def probe_runtime_config(state_dir: str, config_path: str) -> None:
@@ -253,15 +260,7 @@ def _reject_shared_symlinks(
             raise OSError(f"shared Dashboard tree contains symlink: {name}")
 
 
-def _prepare_shared_file(
-    directory_fd: int,
-    relative_dir: str,
-    name: str,
-    gid: int,
-    credential_relative_path: str | None,
-    credential_uid: int,
-    credential_gid: int,
-) -> None:
+def _prepare_shared_file(directory_fd: int, name: str, gid: int) -> None:
     descriptor = os.open(
         name,
         os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW,
@@ -271,18 +270,11 @@ def _prepare_shared_file(
         info = os.fstat(descriptor)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise OSError(f"shared Dashboard tree contains unsafe file: {name}")
-        relative_file = os.path.normpath(os.path.join(relative_dir, name)).removeprefix(
-            "./"
+        os.fchown(descriptor, -1, gid)
+        os.fchmod(
+            descriptor,
+            stat.S_IMODE(info.st_mode) | stat.S_IRGRP | stat.S_IWGRP,
         )
-        if credential_relative_path == relative_file:
-            os.fchown(descriptor, credential_uid, credential_gid)
-            os.fchmod(descriptor, 0o600)
-        else:
-            os.fchown(descriptor, -1, gid)
-            os.fchmod(
-                descriptor,
-                stat.S_IMODE(info.st_mode) | stat.S_IRGRP | stat.S_IWGRP,
-            )
     finally:
         os.close(descriptor)
 
@@ -291,9 +283,6 @@ def prepare_shared_tree(
     path: str,
     gid: int,
     *,
-    credential_relative_path: str | None = None,
-    credential_uid: int = 65532,
-    credential_gid: int = 65532,
     exclude_paths: tuple[str, ...] = (),
 ) -> None:
     root_path = os.path.abspath(path)
@@ -312,15 +301,7 @@ def prepare_shared_tree(
             _prepare_shared_directory(directory_fd, gid)
             _reject_shared_symlinks(directory_fd, directories, files)
             for name in files:
-                _prepare_shared_file(
-                    directory_fd,
-                    relative_dir,
-                    name,
-                    gid,
-                    credential_relative_path,
-                    credential_uid,
-                    credential_gid,
-                )
+                _prepare_shared_file(directory_fd, name, gid)
     finally:
         os.close(root)
 
@@ -330,8 +311,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     gid = commands.add_parser("gid")
     gid.add_argument("path")
-    socket_gid = commands.add_parser("socket-gid")
-    socket_gid.add_argument("path")
+    stale = commands.add_parser("remove-stale-file")
+    stale.add_argument("path")
     probe = commands.add_parser("probe-config")
     probe.add_argument("state_dir")
     probe.add_argument("config_path")
@@ -348,9 +329,6 @@ def build_parser() -> argparse.ArgumentParser:
     tree = commands.add_parser("prepare-tree")
     tree.add_argument("path")
     tree.add_argument("gid", type=int)
-    tree.add_argument("--credential-relative-path")
-    tree.add_argument("--credential-uid", type=int, default=65532)
-    tree.add_argument("--credential-gid", type=int, default=65532)
     tree.add_argument("--exclude-path", action="append", default=[])
     return parser
 
@@ -359,8 +337,8 @@ def main() -> None:
     args = build_parser().parse_args()
     if args.command == "gid":
         print(secure_gid(args.path))
-    elif args.command == "socket-gid":
-        print(secure_socket_gid(args.path))
+    elif args.command == "remove-stale-file":
+        remove_stale_file(args.path)
     elif args.command == "probe-config":
         probe_runtime_config(args.state_dir, args.config_path)
     elif args.command == "probe-directory":
@@ -375,9 +353,6 @@ def main() -> None:
         prepare_shared_tree(
             args.path,
             args.gid,
-            credential_relative_path=args.credential_relative_path,
-            credential_uid=args.credential_uid,
-            credential_gid=args.credential_gid,
             exclude_paths=tuple(args.exclude_path),
         )
 

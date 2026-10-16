@@ -126,7 +126,6 @@ config:
           artifact: vllm-sr/Decision-2.0-Kai-0.6B
           revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
           device: cpu
-          process: decisions
       modules:
         classifier:
           domain:
@@ -143,7 +142,7 @@ config:
 
 extraEnv:
   # Where the managed runtimes' sockets live, so the cases can ask Kai directly.
-  - name: VLLM_SR_RUNTIME_DIR
+  - name: VLLM_SRUN_DIR
     value: /tmp/vsr-runtime
 
 resources:

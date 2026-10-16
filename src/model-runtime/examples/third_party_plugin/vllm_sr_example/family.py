@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.errors import PackageError
+from vllm_srun.plugins.base import (
     DEADLINE,
     BackboneSpec,
     DtypePolicy,
@@ -155,8 +155,6 @@ class KeywordFamily(ModelFamily):
 
 
 class KeywordModel(LoadedModel):
-    fuse_bundled_jobs = True
-
     def __init__(
         self,
         info: ModelInfo,

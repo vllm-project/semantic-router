@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -15,7 +16,11 @@ from ci_plan import (  # noqa: E402
     performance_base,
     previous_release,
 )
-from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
+from classify_pr_changes import (  # noqa: E402
+    CLI_RUNTIME_IMAGES,
+    classify,
+    full_e2e_profiles,
+)
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
@@ -30,6 +35,22 @@ MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+        for path in (
+            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/testcases/routing_error_codes.go",
+            "src/semantic-router/pkg/extproc/routing_failure.go",
+            "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
+        self.assertIn("e2e.routing-errors", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+            "verifications"
+        ][0]
+        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
+
     def test_image_calibration_inputs_select_the_platform_verification(self):
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",
@@ -38,8 +59,8 @@ class SelectionTests(unittest.TestCase):
             "e2e/testcases/testdata/image-fixtures/office.jpg",
             "website/static/img/example.png",
             "dashboard/frontend/public/example.png",
-            "src/model-runtime/vllm_sr_runtime/families/multimodal_embedding/family.py",
-            "src/model-runtime/vllm_sr_runtime/registry/tables/omni.py",
+            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
+            "src/model-runtime/vllm_srun/registry/tables/omni.py",
             "src/semantic-router/pkg/classification/embedding.go",
             "src/semantic-router/pkg/config/registry.go",
             "src/semantic-router/pkg/modeldownload/revision_receipt_test.go",
@@ -64,8 +85,7 @@ class SelectionTests(unittest.TestCase):
             "config/assets/image-routing/manifest.json",
             "tools/calibration/image-routing/prepare_assets.py",
             "tools/calibration/image-routing/testdata/prototype-protocol.json",
-            "tools/models/vela_omni/export.py",
-            "src/model-runtime/vllm_sr_runtime/families/multimodal_embedding/family.py",
+            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
             "src/semantic-router/pkg/embedding/embedding.go",
             "src/semantic-router/pkg/modelruntime/embedding_owned.go",
         ):
@@ -125,7 +145,6 @@ class SelectionTests(unittest.TestCase):
         )
         for job in (
             "image-router",
-            "image-local",
             "image-fixtures",
             "image-distribution",
             "package",
@@ -231,7 +250,7 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([path], source_sha=SHA)
         self.assertIn("operator", plan["expected_verification_ids"])
         self.assertTrue(
-            {"operator", "operator-bundle", "extproc", "provider-mocker"}
+            {"operator", "operator-bundle", "vllm-sr", "provider-mocker"}
             <= set(plan["images"])
         )
         self.assertNotIn(
@@ -254,7 +273,6 @@ class SelectionTests(unittest.TestCase):
     def test_component_tools_have_execution_owners_after_quality_split(self):
         cases = {
             "src/vllm-sr/cli/core.py": "cli-unit",
-            "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
             "src/training/tests/test_export.py": "training",
             "tools/ci/training-test-requirements.txt": "training",
             "bench/redteam/test_datasets.py": "training",
@@ -300,9 +318,9 @@ class SelectionTests(unittest.TestCase):
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))
                 self.assertEqual(plan["expected_verification_ids"], [identifier])
                 self.assertEqual(
-                    plan["verifications"][0]["images"], ["extproc", "provider-mocker"]
+                    plan["verifications"][0]["images"], ["vllm-sr", "provider-mocker"]
                 )
-                self.assertEqual(set(plan["images"]), {"extproc", "provider-mocker"})
+                self.assertEqual(set(plan["images"]), {"vllm-sr", "provider-mocker"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
@@ -355,7 +373,7 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(record["runtime"], "model-runtime")
                 self.assertEqual(record["device"], "cpu")
                 self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["extproc", "provider-mocker"])
+                self.assertEqual(record["images"], ["vllm-sr", "provider-mocker"])
         for path in (
             "e2e/profiles/local-classifier-backend/profile.go",
             "e2e/testcases/local_classifier_routing.go",
@@ -386,6 +404,39 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(cli["publish_python"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
 
+    def test_main_publishes_every_image_its_dev_cli_defaults_to(self):
+        # The second path is outside every image's own publication paths.
+        for path in (
+            "src/vllm-sr/cli/core.py",
+            "e2e/testing/vllm-sr-cli/test_unit_serve.py",
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertTrue(plan["publish_python"])
+                self.assertLessEqual(
+                    set(CLI_RUNTIME_IMAGES), set(plan["publish_images"])
+                )
+                self.assertLessEqual(set(plan["publish_images"]), set(plan["images"]))
+                self.assertTrue(plan["multiarch"])
+        router = make_plan(
+            ["src/semantic-router/pkg/config/loader.go"], source_sha=SHA, profile="main"
+        )
+        self.assertFalse(router["publish_python"])
+        self.assertNotIn("dashboard", router["publish_images"])
+        pr = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA)
+        self.assertEqual(pr["publish_images"], [])
+
+    def test_cli_runtime_images_are_the_first_party_images_the_cli_pulls(self):
+        consts = (ROOT / "src/vllm-sr/cli/consts.py").read_text(encoding="utf-8")
+        self.assertEqual(
+            set(
+                re.findall(
+                    r'"ghcr\.io/vllm-project/semantic-router/([a-z0-9-]+):', consts
+                )
+            ),
+            set(CLI_RUNTIME_IMAGES),
+        )
+
     def test_previous_release_is_explicit_compatible_and_not_head_parent(self):
         self.assertEqual(
             previous_release(
@@ -401,7 +452,20 @@ class SelectionTests(unittest.TestCase):
             performance_base("0.4.0", ["v0.3.0"]),
             "12597be5ffae2319d856f230d61ca26248eb9b3b",
         )
-        self.assertEqual(performance_base("0.5.0", ["v0.4.0"]), "v0.4.0")
+        # v0.4.0 predates the model runtime; #4707 runs the current harness.
+        self.assertEqual(
+            performance_base("0.5.0", ["v0.3.0", "v0.4.0"]),
+            "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+        )
+
+    def test_later_cycles_compare_with_a_release_that_has_the_model_runtime(self):
+        tags = ["v0.3.0", "v0.4.0", "v0.5.0", "v0.5.1"]
+        self.assertEqual(performance_base("0.6.0", tags), "v0.5.1")
+        self.assertEqual(performance_base("0.5.2", tags), "v0.5.1")
+        with self.assertRaisesRegex(ValueError, "declare the 0.4.1 base"):
+            performance_base("0.4.1", tags)
+        with self.assertRaisesRegex(ValueError, "predates the model runtime"):
+            performance_base("0.6.0", ["v0.3.0", "v0.4.0"])
 
     def test_shared_artifact_loaders_select_their_runtime_consumers(self):
         for path in (

@@ -1,6 +1,7 @@
 """Reject incomplete or relabeled evidence from the real image calibration tool."""
 
 import copy
+import hashlib
 import json
 import sys
 import tempfile
@@ -28,6 +29,18 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
             "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
         )
 
+    def test_file_digest_fallback_without_hashlib_file_digest(self):
+        path = self.root / "known_fallback.txt"
+        path.write_bytes(b"abc")
+        original = getattr(hashlib, "file_digest", None)
+        if original is not None:
+            self.addCleanup(setattr, hashlib, "file_digest", original)
+            del hashlib.file_digest
+        self.assertEqual(
+            image_calibration.file_sha(path),
+            "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        )
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -36,18 +49,7 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.output.mkdir()
         self.model = self.root / "models"
         self.model.mkdir()
-        (self.model / "image.onnx").write_text("pinned graph")
-        artifact = {
-            "format_version": 1,
-            "adapter": "vela_omni",
-            "source": {"repo_id": "fixture/model", "revision": REVISION},
-            "files": {
-                "image.onnx": image_calibration.file_sha(
-                    self.model / "image.onnx"
-                ).removeprefix("sha256:")
-            },
-        }
-        (self.model / image_calibration.OMNI_MANIFEST).write_text(json.dumps(artifact))
+        (self.model / "model.safetensors").write_text("pinned weights")
         manifest = {
             "provider": "model_runtime",
             "models": [
@@ -57,6 +59,11 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
                     "path": str(self.model),
                     "repo_id": "fixture/model",
                     "revision": REVISION,
+                    "files": {
+                        "model.safetensors": image_calibration.file_sha(
+                            self.model / "model.safetensors"
+                        ).removeprefix("sha256:")
+                    },
                 }
             ],
         }
@@ -251,8 +258,32 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.evaluate()
 
-    def test_every_model_file_requires_manifest_checksum(self):
-        (self.model / "image.onnx").write_text("replaced graph")
+    def test_a_snapshot_is_identified_by_the_pinned_release_it_matches(self):
+        pinned = SimpleNamespace(
+            repo_id="fixture/model",
+            revision=REVISION,
+            files={
+                "model.safetensors": image_calibration.file_sha(
+                    self.model / "model.safetensors"
+                ).removeprefix("sha256:")
+            },
+        )
+        table = SimpleNamespace(lookup=lambda repo_id: pinned)
+        destination = self.output / "prepared.json"
+        with patch.object(image_calibration, "pins", return_value=table):
+            image_calibration.prepare_manifest(self.model, destination)
+            model, _ = image_calibration.model_identity(
+                image_calibration.read(destination)
+            )
+            self.assertEqual(
+                (model["repo_id"], model["revision"]), ("fixture/model", REVISION)
+            )
+            (self.model / "model.safetensors").write_text("another release")
+            with self.assertRaisesRegex(ValueError, "not a pinned"):
+                image_calibration.prepare_manifest(self.model, destination)
+
+    def test_every_model_file_requires_its_pinned_checksum(self):
+        (self.model / "model.safetensors").write_text("replaced weights")
         with self.assertRaisesRegex(ValueError, "checksum"):
             image_calibration.model_identity(
                 image_calibration.read(self.output / "models.json")

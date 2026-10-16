@@ -41,7 +41,12 @@ func applyOperatorModelDeployments(canonical *routerconfig.CanonicalConfig, spec
 		if err != nil {
 			return fmt.Errorf("config.model_deployments: %w", err)
 		}
-		canonical.Global.ModelCatalog.Deployments = deployments
+		if canonical.Global.ModelCatalog.Deployments == nil {
+			canonical.Global.ModelCatalog.Deployments = make(map[string]routerconfig.ModelDeployment)
+		}
+		for name, deployment := range deployments {
+			canonical.Global.ModelCatalog.Deployments[name] = deployment
+		}
 	}
 	if spec.ModelAdmission != nil {
 		admission, err := decodeCanonicalModelObject[map[string]routerconfig.AdmissionConfig](spec.ModelAdmission)

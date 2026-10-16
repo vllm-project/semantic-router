@@ -89326,5 +89326,628 @@
    ],
    "note": "the THP default (129be34ea): node C 16-31 (Kai router, alone), then 32-47 (Lex router) and 48-63 (Kai typed-final) side by side, then 16-31 (Route router, alone); the bundled side with THP_MEM_ALLOC_ENABLE=0"
   }
+ },
+ "spin_count_4611": {
+  "date": "2026-10-06",
+  "commit": "8b92b620fd52e79ea387ee6359aa1fad075b3f1c",
+  "issue": 4611,
+  "method": "tools/decision1_bench.py reference / native --profile exact, router231 (first 30 public231 prompts, Route's six signals), warm-up 32, C = 1; each side a fresh process in a docker cpuset with memory on NUMA node 0, 16 threads; per round both spin counts, side and condition order alternating; the bundled side with THP_MEM_ALLOC_ENABLE=0",
+  "conditions": {
+   "after": "no GOMP_SPINCOUNT on either side (libgomp's default)",
+   "before": "GOMP_SPINCOUNT=10000 on both sides"
+  },
+  "lanes": {
+   "Kai-0.6B": "32-47",
+   "Lex-0.6B": "48-63",
+   "Route-0.6B": "0-15"
+  },
+  "rows": {
+   "Kai-0.6B": {
+    "rounds": 10,
+    "after runtime-bundled p50": {
+     "bundled": 780.4985,
+     "runtime": 796.9224,
+     "diff": 16.424,
+     "low": 9.6474,
+     "high": 23.2006
+    },
+    "after runtime-bundled p95": {
+     "bundled": 944.0372,
+     "runtime": 994.555,
+     "diff": 50.5178,
+     "low": -17.2987,
+     "high": 118.3342
+    },
+    "after runtime-bundled rps": {
+     "bundled": 1.2703,
+     "runtime": 1.2227,
+     "diff": -0.0476,
+     "low": -0.0684,
+     "high": -0.0267
+    },
+    "after runtime-bundled c1": {
+     "bundled": 1.2703,
+     "runtime": 1.2169,
+     "diff": -0.0534,
+     "low": -0.0794,
+     "high": -0.0274
+    },
+    "before runtime-bundled p50": {
+     "bundled": 789.6025,
+     "runtime": 815.5207,
+     "diff": 25.9182,
+     "low": 13.845,
+     "high": 37.9914
+    },
+    "before runtime-bundled p95": {
+     "bundled": 939.4588,
+     "runtime": 993.4482,
+     "diff": 53.9894,
+     "low": -21.4223,
+     "high": 129.4011
+    },
+    "before runtime-bundled rps": {
+     "bundled": 1.2462,
+     "runtime": 1.1911,
+     "diff": -0.0551,
+     "low": -0.0711,
+     "high": -0.039
+    },
+    "before runtime-bundled c1": {
+     "bundled": 1.2462,
+     "runtime": 1.2142,
+     "diff": -0.032,
+     "low": -0.0469,
+     "high": -0.017
+    },
+    "runtime after-before p50": {
+     "before": 815.5207,
+     "after": 796.9224,
+     "diff": -18.5983,
+     "low": -32.5043,
+     "high": -4.6924
+    },
+    "runtime after-before p95": {
+     "before": 993.4482,
+     "after": 994.555,
+     "diff": 1.1068,
+     "low": -85.5237,
+     "high": 87.7373
+    },
+    "runtime after-before rps": {
+     "before": 1.1911,
+     "after": 1.2227,
+     "diff": 0.0315,
+     "low": 0.0086,
+     "high": 0.0544
+    },
+    "bundled after-before p50": {
+     "before": 789.6025,
+     "after": 780.4985,
+     "diff": -9.1041,
+     "low": -14.4926,
+     "high": -3.7156
+    },
+    "bundled after-before p95": {
+     "before": 939.4588,
+     "after": 944.0372,
+     "diff": 4.5784,
+     "low": -74.0827,
+     "high": 83.2395
+    },
+    "bundled after-before rps": {
+     "before": 1.2462,
+     "after": 1.2703,
+     "diff": 0.0241,
+     "low": 0.0046,
+     "high": 0.0435
+    }
+   },
+   "Lex-0.6B": {
+    "rounds": 10,
+    "after runtime-bundled p50": {
+     "bundled": 775.5809,
+     "runtime": 802.8488,
+     "diff": 27.2679,
+     "low": 15.6165,
+     "high": 38.9194
+    },
+    "after runtime-bundled p95": {
+     "bundled": 945.925,
+     "runtime": 1009.9881,
+     "diff": 64.0632,
+     "low": 21.3012,
+     "high": 106.8252
+    },
+    "after runtime-bundled rps": {
+     "bundled": 1.2728,
+     "runtime": 1.2125,
+     "diff": -0.0603,
+     "low": -0.082,
+     "high": -0.0386
+    },
+    "after runtime-bundled c1": {
+     "bundled": 1.2728,
+     "runtime": 1.2195,
+     "diff": -0.0533,
+     "low": -0.0755,
+     "high": -0.0311
+    },
+    "before runtime-bundled p50": {
+     "bundled": 787.312,
+     "runtime": 817.1636,
+     "diff": 29.8516,
+     "low": 15.0063,
+     "high": 44.6969
+    },
+    "before runtime-bundled p95": {
+     "bundled": 939.1474,
+     "runtime": 997.7227,
+     "diff": 58.5753,
+     "low": 14.9389,
+     "high": 102.2117
+    },
+    "before runtime-bundled rps": {
+     "bundled": 1.2465,
+     "runtime": 1.1945,
+     "diff": -0.0519,
+     "low": -0.0683,
+     "high": -0.0356
+    },
+    "before runtime-bundled c1": {
+     "bundled": 1.2465,
+     "runtime": 1.2072,
+     "diff": -0.0393,
+     "low": -0.0604,
+     "high": -0.0181
+    },
+    "runtime after-before p50": {
+     "before": 817.1636,
+     "after": 802.8488,
+     "diff": -14.3148,
+     "low": -29.7317,
+     "high": 1.102
+    },
+    "runtime after-before p95": {
+     "before": 997.7227,
+     "after": 1009.9881,
+     "diff": 12.2655,
+     "low": -55.8552,
+     "high": 80.3862
+    },
+    "runtime after-before rps": {
+     "before": 1.1945,
+     "after": 1.2125,
+     "diff": 0.0179,
+     "low": -0.0043,
+     "high": 0.0401
+    },
+    "bundled after-before p50": {
+     "before": 787.312,
+     "after": 775.5809,
+     "diff": -11.7312,
+     "low": -20.3362,
+     "high": -3.1261
+    },
+    "bundled after-before p95": {
+     "before": 939.1474,
+     "after": 945.925,
+     "diff": 6.7776,
+     "low": -29.4158,
+     "high": 42.971
+    },
+    "bundled after-before rps": {
+     "before": 1.2465,
+     "after": 1.2728,
+     "diff": 0.0263,
+     "low": 0.0126,
+     "high": 0.04
+    }
+   },
+   "Route-0.6B": {
+    "rounds": 10,
+    "after runtime-bundled p50": {
+     "bundled": 765.978,
+     "runtime": 816.5634,
+     "diff": 50.5853,
+     "low": 12.6275,
+     "high": 88.5431
+    },
+    "after runtime-bundled p95": {
+     "bundled": 890.6936,
+     "runtime": 1003.2622,
+     "diff": 112.5687,
+     "low": -6.3531,
+     "high": 231.4904
+    },
+    "after runtime-bundled rps": {
+     "bundled": 1.302,
+     "runtime": 1.195,
+     "diff": -0.107,
+     "low": -0.1818,
+     "high": -0.0323
+    },
+    "after runtime-bundled c1": {
+     "bundled": 1.302,
+     "runtime": 1.221,
+     "diff": -0.081,
+     "low": -0.1679,
+     "high": 0.0059
+    },
+    "before runtime-bundled p50": {
+     "bundled": 792.6409,
+     "runtime": 817.3027,
+     "diff": 24.6618,
+     "low": 11.0764,
+     "high": 38.2471
+    },
+    "before runtime-bundled p95": {
+     "bundled": 963.5062,
+     "runtime": 991.5207,
+     "diff": 28.0145,
+     "low": -16.9491,
+     "high": 72.9782
+    },
+    "before runtime-bundled rps": {
+     "bundled": 1.2426,
+     "runtime": 1.1891,
+     "diff": -0.0535,
+     "low": -0.0773,
+     "high": -0.0297
+    },
+    "before runtime-bundled c1": {
+     "bundled": 1.2426,
+     "runtime": 1.2113,
+     "diff": -0.0313,
+     "low": -0.0478,
+     "high": -0.0148
+    },
+    "runtime after-before p50": {
+     "before": 817.3027,
+     "after": 816.5634,
+     "diff": -0.7394,
+     "low": -11.6927,
+     "high": 10.214
+    },
+    "runtime after-before p95": {
+     "before": 991.5207,
+     "after": 1003.2622,
+     "diff": 11.7415,
+     "low": -62.5986,
+     "high": 86.0816
+    },
+    "runtime after-before rps": {
+     "before": 1.1891,
+     "after": 1.195,
+     "diff": 0.0058,
+     "low": -0.0195,
+     "high": 0.0311
+    },
+    "bundled after-before p50": {
+     "before": 792.6409,
+     "after": 765.978,
+     "diff": -26.6629,
+     "low": -59.9607,
+     "high": 6.6348
+    },
+    "bundled after-before p95": {
+     "before": 963.5062,
+     "after": 890.6936,
+     "diff": -72.8127,
+     "low": -165.4335,
+     "high": 19.8081
+    },
+    "bundled after-before rps": {
+     "before": 1.2426,
+     "after": 1.302,
+     "diff": 0.0594,
+     "low": -0.016,
+     "high": 0.1347
+    }
+   }
+  },
+  "onnxruntime_rows": {
+   "models": "Vela-1.0-Encoder-307M-Embedding on onnxruntime, Vela-1.0-Encoder-307M-Domain on native",
+   "one": {
+    "cores": "16-31",
+    "rounds": 10,
+    "intervals_after_minus_before_ms": {
+     "ort_alone@16:p50": {
+      "before": 16.647,
+      "diff": -0.005,
+      "low": -0.403,
+      "high": 0.393
+     },
+     "ort_alone@16:p95": {
+      "before": 18.352,
+      "diff": -0.01,
+      "low": -0.804,
+      "high": 0.785
+     },
+     "ort_after_native@16:p50": {
+      "before": 16.391,
+      "diff": 0.004,
+      "low": -0.302,
+      "high": 0.31
+     },
+     "ort_after_native@16:p95": {
+      "before": 17.717,
+      "diff": 0.228,
+      "low": -0.546,
+      "high": 1.003
+     },
+     "native_alone@16:p50": {
+      "before": 10.851,
+      "diff": 0.148,
+      "low": -0.101,
+      "high": 0.398
+     },
+     "native_alone@16:p95": {
+      "before": 12.368,
+      "diff": 0.731,
+      "low": -0.806,
+      "high": 2.267
+     },
+     "native_after_ort@16:p50": {
+      "before": 10.656,
+      "diff": -0.048,
+      "low": -0.245,
+      "high": 0.149
+     },
+     "native_after_ort@16:p95": {
+      "before": 11.968,
+      "diff": 0.026,
+      "low": -0.56,
+      "high": 0.613
+     },
+     "ort_alone@64:p50": {
+      "before": 25.519,
+      "diff": -0.232,
+      "low": -0.646,
+      "high": 0.183
+     },
+     "ort_alone@64:p95": {
+      "before": 27.33,
+      "diff": 0.576,
+      "low": -0.37,
+      "high": 1.523
+     },
+     "ort_after_native@64:p50": {
+      "before": 25.383,
+      "diff": -0.206,
+      "low": -0.568,
+      "high": 0.155
+     },
+     "ort_after_native@64:p95": {
+      "before": 27.42,
+      "diff": -0.405,
+      "low": -1.493,
+      "high": 0.683
+     },
+     "native_alone@64:p50": {
+      "before": 17.634,
+      "diff": -0.032,
+      "low": -0.361,
+      "high": 0.298
+     },
+     "native_alone@64:p95": {
+      "before": 20.032,
+      "diff": -0.048,
+      "low": -1.781,
+      "high": 1.685
+     },
+     "native_after_ort@64:p50": {
+      "before": 17.674,
+      "diff": -0.206,
+      "low": -0.472,
+      "high": 0.06
+     },
+     "native_after_ort@64:p95": {
+      "before": 20.798,
+      "diff": 0.126,
+      "low": -2.91,
+      "high": 3.163
+     },
+     "ort_alone@256:p50": {
+      "before": 60.309,
+      "diff": 0.317,
+      "low": -0.176,
+      "high": 0.81
+     },
+     "ort_alone@256:p95": {
+      "before": 64.91,
+      "diff": 0.917,
+      "low": -1.371,
+      "high": 3.205
+     },
+     "ort_after_native@256:p50": {
+      "before": 60.206,
+      "diff": 0.509,
+      "low": 0.009,
+      "high": 1.009
+     },
+     "ort_after_native@256:p95": {
+      "before": 64.643,
+      "diff": 0.652,
+      "low": -2.579,
+      "high": 3.882
+     },
+     "native_alone@256:p50": {
+      "before": 38.062,
+      "diff": 0.199,
+      "low": -0.126,
+      "high": 0.523
+     },
+     "native_alone@256:p95": {
+      "before": 47.987,
+      "diff": -5.526,
+      "low": -12.594,
+      "high": 1.542
+     },
+     "native_after_ort@256:p50": {
+      "before": 38.248,
+      "diff": 0.254,
+      "low": -0.028,
+      "high": 0.536
+     },
+     "native_after_ort@256:p95": {
+      "before": 42.128,
+      "diff": -0.418,
+      "low": -2.947,
+      "high": 2.11
+     }
+    }
+   },
+   "two": {
+    "cores": "48-63",
+    "rounds": 10,
+    "intervals_after_minus_before_ms": {
+     "ort_alone@16:p50": {
+      "before": 15.27,
+      "diff": 0.298,
+      "low": -0.095,
+      "high": 0.691
+     },
+     "ort_alone@16:p95": {
+      "before": 17.169,
+      "diff": -0.016,
+      "low": -1.133,
+      "high": 1.101
+     },
+     "ort_after_native@16:p50": {
+      "before": 15.191,
+      "diff": 0.395,
+      "low": 0.017,
+      "high": 0.772
+     },
+     "ort_after_native@16:p95": {
+      "before": 16.604,
+      "diff": 0.778,
+      "low": 0.16,
+      "high": 1.397
+     },
+     "native_alone@16:p50": {
+      "before": 11.789,
+      "diff": -0.089,
+      "low": -0.655,
+      "high": 0.476
+     },
+     "native_alone@16:p95": {
+      "before": 13.55,
+      "diff": -0.159,
+      "low": -1.18,
+      "high": 0.862
+     },
+     "native_after_ort@16:p50": {
+      "before": 11.77,
+      "diff": -0.059,
+      "low": -0.573,
+      "high": 0.456
+     },
+     "native_after_ort@16:p95": {
+      "before": 13.418,
+      "diff": 0.106,
+      "low": -0.901,
+      "high": 1.112
+     },
+     "ort_alone@64:p50": {
+      "before": 27.261,
+      "diff": 0.21,
+      "low": -0.473,
+      "high": 0.892
+     },
+     "ort_alone@64:p95": {
+      "before": 30.708,
+      "diff": 1.832,
+      "low": -0.13,
+      "high": 3.793
+     },
+     "ort_after_native@64:p50": {
+      "before": 27.113,
+      "diff": 0.482,
+      "low": -0.366,
+      "high": 1.329
+     },
+     "ort_after_native@64:p95": {
+      "before": 30.713,
+      "diff": 1.627,
+      "low": -0.402,
+      "high": 3.656
+     },
+     "native_alone@64:p50": {
+      "before": 21.048,
+      "diff": -0.378,
+      "low": -1.474,
+      "high": 0.717
+     },
+     "native_alone@64:p95": {
+      "before": 25.71,
+      "diff": -0.134,
+      "low": -2.341,
+      "high": 2.073
+     },
+     "native_after_ort@64:p50": {
+      "before": 21.37,
+      "diff": -0.5,
+      "low": -1.642,
+      "high": 0.642
+     },
+     "native_after_ort@64:p95": {
+      "before": 24.969,
+      "diff": 0.327,
+      "low": -1.719,
+      "high": 2.374
+     },
+     "ort_alone@256:p50": {
+      "before": 72.193,
+      "diff": -0.499,
+      "low": -1.284,
+      "high": 0.287
+     },
+     "ort_alone@256:p95": {
+      "before": 76.683,
+      "diff": -0.759,
+      "low": -1.75,
+      "high": 0.233
+     },
+     "ort_after_native@256:p50": {
+      "before": 71.991,
+      "diff": -0.136,
+      "low": -1.173,
+      "high": 0.9
+     },
+     "ort_after_native@256:p95": {
+      "before": 75.772,
+      "diff": 1.787,
+      "low": -0.904,
+      "high": 4.479
+     },
+     "native_alone@256:p50": {
+      "before": 52.813,
+      "diff": -0.026,
+      "low": -0.673,
+      "high": 0.622
+     },
+     "native_alone@256:p95": {
+      "before": 57.537,
+      "diff": 0.531,
+      "low": -3.374,
+      "high": 4.436
+     },
+     "native_after_ort@256:p50": {
+      "before": 53.028,
+      "diff": -0.072,
+      "low": -0.733,
+      "high": 0.589
+     },
+     "native_after_ort@256:p95": {
+      "before": 60.392,
+      "diff": -2.868,
+      "low": -7.67,
+      "high": 1.935
+     }
+    }
+   }
+  }
  }
 }

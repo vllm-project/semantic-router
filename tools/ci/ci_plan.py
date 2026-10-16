@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from classify_pr_changes import (
+    CLI_RUNTIME_IMAGES,
     NIGHTLY_IMAGES,
     PRODUCTION_RELEASE_IMAGES,
     classify,
@@ -175,9 +176,16 @@ def make_plan(
         record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
+    publish_python = profile == "release" or (
+        profile == "main"
+        and bool({"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains))
+    )
     publish_images = []
     if profile == "main":
         publish_images = list(selection.publish_images)
+        if publish_python:
+            # The development CLI defaults to the images of its own commit.
+            publish_images = sorted({*publish_images, *CLI_RUNTIME_IMAGES})
     elif profile == "nightly":
         publish_images = list(NIGHTLY_IMAGES)
     elif profile == "release":
@@ -217,13 +225,7 @@ def make_plan(
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
-        "publish_python": profile == "release"
-        or (
-            profile == "main"
-            and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
-            )
-        ),
+        "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
         "quality_context": dict(selection.signals),
@@ -384,14 +386,43 @@ def previous_release(version: str, tags: list[str]) -> str:
     return max(candidates)[1]
 
 
+# Reviewed paired-performance bases for development cycles whose previous
+# release can't run the current harness. Each is a main commit whose
+# Production Benchmarks job passed with the harness that cycle measures.
+PERFORMANCE_BASES = {
+    # v0.3.0 predates the Vela benchmark contract and pkg/embedding, so the
+    # current harness cannot compile there. #3852 introduced the paired Vela
+    # CPU benchmarks.
+    "0.4.0": "12597be5ffae2319d856f230d61ca26248eb9b3b",
+    # v0.4.0 predates the model runtime, so compare-model-baseline.sh could
+    # only record a reset. #4707 pinned the classify benchmarks to the Vela 1.0
+    # specialists, and its own Production Benchmarks job passed with them.
+    "0.5.0": "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+}
+# The first release that serves the model benchmarks through the model
+# runtime. An older previous release can't be measured, only reset.
+MODEL_RUNTIME_RELEASE = (0, 5, 0)
+
+
 def performance_base(version: str, tags: list[str]) -> str:
-    """Choose an implementation that can run the current paired model harness."""
-    # v0.3.0 predates the Vela benchmark contract and pkg/embedding; copying
-    # the current perf harness into that tree cannot compile. This reviewed
-    # v0.4 development anchor introduced the paired Vela CPU benchmarks.
-    if version == "0.4.0":
-        return "12597be5ffae2319d856f230d61ca26248eb9b3b"
-    return previous_release(version, tags)
+    """Choose an implementation that can run the current paired model harness.
+
+    A cycle with a declared base uses it. Every other cycle compares with its
+    previous release, which must include the model runtime; one that doesn't
+    must declare a base instead of resetting the comparison.
+    """
+    if version in PERFORMANCE_BASES:
+        return PERFORMANCE_BASES[version]
+    base = previous_release(version, tags)
+    released = tuple(map(int, base.removeprefix("v").split(".")))
+    if released < MODEL_RUNTIME_RELEASE:
+        raise ValueError(
+            f"{base} predates the model runtime, so the paired model benchmarks "
+            f"could only record a reset; declare the {version} base in "
+            "PERFORMANCE_BASES: a main commit whose Production Benchmarks job "
+            "passed with the current harness"
+        )
+    return base
 
 
 def main() -> int:
@@ -401,7 +432,9 @@ def main() -> int:
             description="Resolve an ancestor stable release in the same major version"
         )
         parser.add_argument("--version", required=True)
-        parser.add_argument("--github-output", type=Path, required=True)
+        parser.add_argument(
+            "--github-output", type=Path, help="Append ref=... here; else print it"
+        )
         args = parser.parse_args(sys.argv[2:])
         tags = subprocess.check_output(
             ["git", "tag", "--merged", "HEAD"], text=True
@@ -414,6 +447,9 @@ def main() -> int:
             )
         except ValueError as exc:
             parser.exit(1, str(exc) + "\n")
+        if args.github_output is None:
+            print(ref)
+            return 0
         with args.github_output.open("a") as stream:
             stream.write(f"ref={ref}\n")
         return 0

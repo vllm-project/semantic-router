@@ -7,17 +7,17 @@ import json
 import re
 
 import pytest
-from vllm_sr_runtime.families.vela2.family import GOLDEN_QUESTIONS
-from vllm_sr_runtime.families.vela2.package import (
+from vllm_srun.families.vela2.family import GOLDEN_QUESTIONS
+from vllm_srun.families.vela2.package import (
     BROAD_HEAD_FILE,
     COMMON_FILES,
     MANIFEST_FILE,
 )
-from vllm_sr_runtime.plugins.decisions import compare_answers, well_formed
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.registry.artifacts import sha256_json
-from vllm_sr_runtime.registry.tables.common import REGISTRY_DIR
-from vllm_sr_runtime.supervision.readiness import GPU_TOLERANCE
+from vllm_srun.plugins.decisions import compare_answers, well_formed
+from vllm_srun.registry import builtin
+from vllm_srun.registry.artifacts import sha256_json
+from vllm_srun.registry.tables.common import REGISTRY_DIR
+from vllm_srun.supervision.readiness import GPU_TOLERANCE
 
 MODELS = builtin.all_models("vela2")
 DECODERS = [model for model in MODELS if model.backbone == "qwen3_5_text"]
@@ -54,7 +54,7 @@ def test_the_table_pins_every_size() -> None:
     assert [model.backbone for model in MODELS] == ["modernbert"] + ["qwen3_5_text"] * 3
     for model in MODELS:
         assert re.fullmatch(r"[0-9a-f]{40}", model.revision), model.repo_id
-        assert model.access == "private"
+        assert model.access == "public"
         assert builtin.lookup(model.repo_id.split("/", 1)[1]) is model
         assert builtin.by_identity(model.model_sha256) is model
     for smaller, larger in itertools.pairwise(MODELS):
@@ -94,8 +94,8 @@ def test_recorded_references_are_for_the_pinned_revisions(file_name) -> None:
 
 
 @pytest.mark.parametrize("model", MODELS, ids=size)
-def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+def test_every_size_has_well_formed_reference_answers(model) -> None:
+    assert set(model.golden_answers) - {"npu"} == {"cpu", "rocm"}
     levels = GOLDEN_QUESTIONS["urgency"]["criteria"]
     for answers in model.golden_answers.values():
         assert set(answers) == GOLDEN_IDS

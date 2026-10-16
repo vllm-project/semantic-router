@@ -7,20 +7,20 @@ import hashlib
 import pytest
 import torch
 from starlette.testclient import TestClient
-from vllm_sr_runtime.accel import onednn
-from vllm_sr_runtime.api.app import create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.task_heads.family import (
+from vllm_srun.accel import onednn
+from vllm_srun.api.app import create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.errors import PackageError
+from vllm_srun.families.task_heads.family import (
     TaskHeadsFamily,
     batch_invariant,
 )
-from vllm_sr_runtime.heads.task import identical
-from vllm_sr_runtime.plugins.base import PackageRef, SurfaceRequest
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.registry.tables.common import BuiltinModel
-from vllm_sr_runtime.runtime import Runtime
-from vllm_sr_runtime.testing.fixtures import write_fixture
+from vllm_srun.heads.task import identical
+from vllm_srun.plugins.base import PackageRef, SurfaceRequest
+from vllm_srun.registry import builtin
+from vllm_srun.registry.tables.common import BuiltinModel
+from vllm_srun.runtime import Runtime
+from vllm_srun.testing.fixtures import write_fixture
 
 from .test_api_contract import check
 
@@ -311,13 +311,13 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
 def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
     packages, monkeypatch, device
 ):
-    import vllm_sr_runtime.runtime as runtime_module
+    import vllm_srun.runtime as runtime_module
 
     seen = []
     choose = runtime_module.choose_engine
 
-    def recording(name, spec, device, preferred=None):
-        chosen, engine = choose(name, spec, device, preferred)
+    def recording(name, spec, device, preferred=None, dtype="auto"):
+        chosen, engine = choose(name, spec, device, preferred, dtype)
         load = engine.load
 
         def load_and_record(spec, accelerator, device, options):
@@ -345,26 +345,32 @@ def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
 
 
 def test_planned_engines_need_nothing_loaded():
-    from vllm_sr_runtime.runtime import planned_engine
+    from vllm_srun.runtime import planned_engine
 
     assert (
         planned_engine(ModelConfig(model="/x", engine="onnxruntime")) == "onnxruntime"
     )
     assert planned_engine(ModelConfig(model="/no/such/package")) == "auto"
-    assert (
-        planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "onnxruntime"
-    )
+    assert planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "native"
     assert (
         planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Encoder-307M-Domain"))
         == "auto"
     )
 
 
-@pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
-def test_approximate_profiles_serve_every_head(packages, profile):
+@pytest.mark.parametrize("shared", [None, True])
+def test_merged_forwards_serve_every_head(packages, shared):
     models = tuple(
-        ModelConfig(model=str(path), name=name, device="cpu", profile=profile)
+        config
         for name, path in packages.items()
+        for config in (
+            ModelConfig(
+                model=str(path), name=name, device="cpu", enable_shared_context=shared
+            ),
+            ModelConfig(
+                model=str(path), name=f"{name}-alone", device="cpu", max_num_seqs=1
+            ),
+        )
     )
     runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
     runtime.start(background=False)
@@ -372,7 +378,7 @@ def test_approximate_profiles_serve_every_head(packages, profile):
         client = TestClient(create_app(runtime))
         for name in packages:
             inputs = [GROUNDED] if name == "grounded" else [TEXT, LONG[:200]]
-            exact = classify(client, name, inputs, profile="exact")["results"]
+            exact = classify(client, f"{name}-alone", inputs)["results"]
             approximate = classify(client, name, inputs)["results"]
             for left, right in zip(exact, approximate, strict=True):
                 values = "scores" if name == "scores" else "probabilities"
@@ -411,7 +417,6 @@ def test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches(runt
                     "classify",
                     {"model": name, "input": [value]},
                     None,
-                    "exact",
                     False,
                     0.0,
                 ),

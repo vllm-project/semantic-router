@@ -20,6 +20,10 @@ type CategoryMapping struct {
 type PIIMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	// spanNamed marks the empty mapping of a model that lists no labels
+	// because its spans name their PII types (a decision model's ready-made
+	// PII question).
+	spanNamed bool
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
@@ -120,8 +124,8 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 	// cannot make a genuine detection indistinguishable from a failure.
 	if mapping.hasReservedLabel() {
 		return nil, fmt.Errorf(
-			"PII mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
-			path, PIIClassificationErrorType)
+			"PII mapping %s: labels %q and %q are reserved for the on_error and on_unscanned sentinels and cannot be configured labels",
+			path, PIIClassificationErrorType, PIIUnscannedType)
 	}
 
 	return &mapping, nil
@@ -154,7 +158,7 @@ func isReservedPIILabel(label string) bool {
 	for {
 		normalized := stripBIOPrefix(label)
 		if normalized == label {
-			return label == PIIClassificationErrorType
+			return label == PIIClassificationErrorType || label == PIIUnscannedType
 		}
 		label = normalized
 	}
@@ -196,6 +200,11 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf(
 			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
 			path, JailbreakClassificationErrorType)
+	}
+	if _, collides := mapping.GetIndexForJailbreakType(JailbreakUnscannedType); collides {
+		return nil, fmt.Errorf(
+			"jailbreak mapping %s: label %q is reserved for content the model did not read and cannot be a configured label",
+			path, JailbreakUnscannedType)
 	}
 
 	return &mapping, nil

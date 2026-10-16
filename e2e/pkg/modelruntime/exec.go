@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -66,7 +67,7 @@ def runtime(socket_path):
                 argv = stream.read().split(b"\0")
         except OSError:
             continue
-        if socket_path.encode() in argv and any(b"vllm-sr-runtime" in arg or b"vllm_sr_runtime" in arg for arg in argv):
+        if socket_path.encode() in argv and any(b"vllm-srun" in arg or b"vllm_srun" in arg for arg in argv):
             return pid, [arg.decode() for arg in argv if arg]
     raise SystemExit("no runtime process serves " + socket_path)
 `
@@ -96,8 +97,14 @@ type PodTarget struct {
 	Container  string
 }
 
+// execTimeout bounds one exec. The in-pod HTTP client gives up after 120 s, so
+// a stream still open after this is stuck, and the case fails instead of hanging.
+const execTimeout = 3 * time.Minute
+
 // Exec runs argv in the target container with stdin and returns stdout.
 func (t PodTarget) Exec(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, execTimeout)
+	defer cancel()
 	request := t.Client.CoreV1().RESTClient().Post().
 		Resource("pods").Namespace(t.Namespace).Name(t.Pod).SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{

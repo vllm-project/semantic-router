@@ -21,14 +21,14 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from vllm_sr_runtime.cli import main
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.families.decision2.family import Decision2Family
-from vllm_sr_runtime.plugins import registry
-from vllm_sr_runtime.plugins.base import DeviceInfo, PackageRef
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.runtime import Runtime, choose_engine
-from vllm_sr_runtime.testing.fixtures import write_fixture, write_package
+from vllm_srun.cli import main
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.families.decision2.family import Decision2Family
+from vllm_srun.plugins import registry
+from vllm_srun.plugins.base import DeviceInfo, PackageRef
+from vllm_srun.registry import builtin
+from vllm_srun.runtime import Runtime, choose_engine
+from vllm_srun.testing.fixtures import write_fixture, write_package
 
 BUILD_WHEEL = (
     "import setuptools.build_meta as backend, sys; backend.build_wheel(sys.argv[1])"
@@ -45,15 +45,15 @@ SOURCES = {
         build-backend = "setuptools.build_meta"
 
         [project]
-        name = "vllm-sr-runtime-tiny-decisions"
+        name = "vllm-srun-tiny-decisions"
         version = "0.1.0"
         requires-python = ">=3.10"
-        dependencies = ["vllm-sr-runtime"]
+        dependencies = ["vllm-srun"]
 
-        [project.entry-points."vllm_sr_runtime.families"]
+        [project.entry-points."vllm_srun.families"]
         {FAMILY} = "tiny_decisions.family:TinyDecisionsFamily"
 
-        [project.entry-points."vllm_sr_runtime.engines"]
+        [project.entry-points."vllm_srun.engines"]
         {ENGINE} = "tiny_decisions.engine:TinyNativeEngine"
 
         [tool.setuptools.packages.find]
@@ -66,7 +66,7 @@ SOURCES = {
     "tiny_decisions/family.py": f'''
         """Decision 2.0 packages as a family of their own, with its own table and fixture writer."""
 
-        from vllm_sr_runtime.families.decision2.family import Decision2Family
+        from vllm_srun.families.decision2.family import Decision2Family
 
 
         class TinyDecisionsFamily(Decision2Family):
@@ -77,7 +77,7 @@ SOURCES = {
     "tiny_decisions/engine.py": f'''
         """The native engine under another name, which ``--engine auto`` tries first."""
 
-        from vllm_sr_runtime.engines.native.engine import NativeEngine
+        from vllm_srun.engines.native.engine import NativeEngine
 
 
         class TinyNativeEngine(NativeEngine):
@@ -87,7 +87,7 @@ SOURCES = {
     "tiny_decisions/fixtures.py": '''
         """The family's tiny packages: Decision 2.0 fixtures on a Qwen3 backbone."""
 
-        from vllm_sr_runtime.testing.fixtures import write_package
+        from vllm_srun.testing.fixtures import write_package
 
         VARIANTS = ("qwen3",)
 
@@ -101,7 +101,7 @@ SOURCES = {
         import json
         from pathlib import Path
 
-        from vllm_sr_runtime.registry.tables.common import BuiltinModel
+        from vllm_srun.registry.tables.common import BuiltinModel
 
         PINNED = json.loads((Path(__file__).parent / "pinned.json").read_text())
         MODELS = (BuiltinModel(**PINNED),)
@@ -236,7 +236,7 @@ def test_uninstalled_its_models_are_no_longer_built_in(tiny_family, monkeypatch)
 
 class StrayFamily(Decision2Family):
     name = "stray"
-    builtin_table = "vllm_sr_runtime.registry.tables.decision2"
+    builtin_table = "vllm_srun.registry.tables.decision2"
 
 
 class TwinFamily(Decision2Family):
@@ -272,7 +272,7 @@ def test_a_table_that_fails_to_import_pins_nothing_and_spares_the_others(caplog)
     broken = registry.PluginEntry(
         "families", "broken", f"{__name__}:BrokenTableFamily", None, None
     )
-    with caplog.at_level(logging.WARNING, logger="vllm_sr_runtime"):
+    with caplog.at_level(logging.WARNING, logger="vllm_srun"):
         table = builtin._read({"broken": broken, "decision2": decision2})
     assert table.models == builtin.all_models("decision2")
     assert "a_table_that_does_not_import" in caplog.text
@@ -296,7 +296,7 @@ def test_a_bare_name_two_organisations_pin_resolves_to_neither(monkeypatch, capl
     entry = registry.PluginEntry(
         "families", "namesake", f"{__name__}:NamesakeFamily", None, None
     )
-    with caplog.at_level(logging.WARNING, logger="vllm_sr_runtime"):
+    with caplog.at_level(logging.WARNING, logger="vllm_srun"):
         table = builtin._read({"decision2": decision2, "namesake": entry})
     assert "decision-2.0-kai-0.6b" not in table.by_name
     assert table.by_name["decision-2.0-lux-9b"].family == "decision2"

@@ -52,7 +52,7 @@ func testLooperRatingsHappyPath(ctx context.Context, client *kubernetes.Clientse
 	}
 	defer stopPortForward()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperRatingsProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperRatingsProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("ratings request failed: %w", err)
 	}

@@ -9,23 +9,30 @@ import (
 )
 
 func TestCanonicalRoutingPolicyOverrides(t *testing.T) {
-	raw := &apiextensionsv1.JSON{Raw: []byte(`{"candidate_requirements":{"capabilities":"declared","context":"known_limits"},"data_policy":{"replay":false}}`)}
+	raw := &apiextensionsv1.JSON{Raw: []byte(`{"candidate_requirements":{"capabilities":"declared","context":"known_limits"}}`)}
 	routing, fields, err := canonicalRoutingFromKubernetesJSON(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	canonical := &routerconfig.CanonicalConfig{}
+	global := routerconfig.DefaultCanonicalGlobal()
+	canonical := &routerconfig.CanonicalConfig{Global: &global}
+	canonical.Global.Services.RouterReplay.Enabled = true
 	applyCanonicalRoutingOverrides(canonical, routing, fields)
-	if canonical.Routing.CandidateRequirements == nil || canonical.Routing.CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits || canonical.Routing.DataPolicy.ReplayAllowed() {
+	if canonical.Routing.CandidateRequirements == nil || canonical.Routing.CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits {
 		t.Fatal("operator lost routing policy")
 	}
-	*routing.DataPolicy.Replay = true
-	if canonical.Routing.DataPolicy.ReplayAllowed() {
+	routing.CandidateRequirements.Context = ""
+	if canonical.Routing.CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits {
 		t.Fatal("operator policy shares mutable input")
+	}
+	if !canonical.Global.Services.RouterReplay.Enabled {
+		t.Fatal("routing override changed global replay settings")
 	}
 	for _, invalid := range []string{
 		`{"candidate_requirements":{"context":"bounded"}}`,
-		`{"data_policy":{"replay":false,"unknown":true}}`,
+		`{"candidate_requirements":{"unknown":true}}`,
+		`{"data_policy":{"replay":false}}`,
+		`{"data_policy":{"replay":true}}`,
 	} {
 		if _, _, err := canonicalRoutingFromKubernetesJSON(&apiextensionsv1.JSON{Raw: []byte(invalid)}); err == nil {
 			t.Fatalf("accepted %s", invalid)

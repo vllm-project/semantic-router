@@ -16,11 +16,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native import fast, models  # noqa: E402
-from vllm_sr_runtime.engines.native.models.forest import ForestShape  # noqa: E402
-from vllm_sr_runtime.engines.native.models.lora import attach  # noqa: E402
-from vllm_sr_runtime.engines.native.weights import keep_linear_bf16  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.engines.native import fast, models  # noqa: E402
+from vllm_srun.engines.native.models.forest import ForestShape  # noqa: E402
+from vllm_srun.engines.native.models.lora import attach  # noqa: E402
+from vllm_srun.engines.native.weights import keep_linear_bf16  # noqa: E402
 
 pytestmark = pytest.mark.gpu
 
@@ -195,6 +195,47 @@ def test_full_graph_cache_runs_eager():
                 assert torch.equal(want, graphs(ids, mask, lengths)), lengths
     stats = graphs.receipt()
     assert stats["cached"] == 2 and stats["full"] > 0 and stats["replays"] > 0
+
+
+def test_captures_share_one_stream(monkeypatch):
+    """Every warm-up and capture runs on one stream: BLAS keeps a workspace per stream (about 75 MiB on
+    MI300X), and torch hands out up to 32 pooled streams, so a stream per capture held up to
+    32 workspaces."""
+    accelerator, device = _device()
+    fused = build(qwen3_5(4, 1024, 16, 8), 7, False, accelerator, device)
+    fast.install_fused(fused)
+    graphs = fast.Graphs(fused, fast.Masks())
+    created = []
+    stream_class = torch.cuda.Stream
+
+    def counted(*args, **kwargs):
+        created.append(stream_class(*args, **kwargs))
+        return created[-1]
+
+    # torch.cuda.graph makes its own default capture stream on first use, made here so
+    # that only the runtime's streams are counted, whatever ran before this test.
+    monkeypatch.setattr(torch.cuda.graph, "default_capture_stream", stream_class())
+    monkeypatch.setattr(torch.cuda, "Stream", counted)
+    captured = []
+    begin = torch.cuda.CUDAGraph.capture_begin
+
+    def recorded(self, *args, **kwargs):
+        captured.append(torch.cuda.current_stream().cuda_stream)
+        return begin(self, *args, **kwargs)
+
+    monkeypatch.setattr(torch.cuda.CUDAGraph, "capture_begin", recorded)
+    torch_device = accelerator.torch_device(device)
+    shapes = [[8], [24], [40], [56]]
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        for seed, lengths in enumerate(shapes):
+            ids, mask = batch(
+                lengths, torch.Generator().manual_seed(seed), torch_device
+            )
+            for _ in range(3):
+                graphs(ids, mask, lengths)
+    assert graphs.receipt()["captures"] == len(shapes)
+    assert len({stream.cuda_stream for stream in created} - {0}) == 1
+    assert set(captured) == {graphs.stream.cuda_stream}
 
 
 def test_attention_prep_above_2gib():

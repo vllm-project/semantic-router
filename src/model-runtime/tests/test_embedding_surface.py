@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import torch
 from tokenizers import Tokenizer, models, pre_tokenizers, processors
-from vllm_sr_runtime.heads import embedding
-from vllm_sr_runtime.plugins.base import DEADLINE, EmbeddingInfo, SurfaceRequest
+from vllm_srun.heads import embedding
+from vllm_srun.plugins.base import DEADLINE, EmbeddingInfo, SurfaceRequest
 
 INFO = EmbeddingInfo(
     dimensions=(8, 4, 2), layers=(1, 3), input_types=("query", "document")
@@ -23,7 +23,7 @@ MEDIA = EmbeddingInfo(
 def request(body, **options):
     if options:
         body = {**body, "options": options}
-    return SurfaceRequest("embeddings", body, None, "exact", True, time.monotonic())
+    return SurfaceRequest("embeddings", body, None, True, time.monotonic())
 
 
 def templated_tokenizer() -> Tokenizer:

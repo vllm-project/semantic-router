@@ -50,7 +50,6 @@ Thumbs.db
 # Project specific
 bin/
 tools/bin/
-.vllm-sr-sim/
 
 # Model files (too large for git)
 *.pt
@@ -76,15 +75,12 @@ tools/bin/
 !*/trained_model/README.md
 !*/models/README.md
 models
-!src/model-runtime/vllm_sr_runtime/engines/native/models/
+!src/model-runtime/vllm_srun/engines/native/models/
 !tools/models/
 !config/catalog/resources/models/
 !config/catalog/resources/models/*.yaml
 # Exception for Go models package in dashboard backend
 !dashboard/backend/models/
-# Exception for the fleet-sim Python model catalog package
-!src/fleet-sim/fleet_sim/models/
-!src/fleet-sim/fleet_sim/models/**
 !src/training/model_embeddings/multimodal/small/models/
 src/training/model_embeddings/multimodal/small/models/*
 !src/training/model_embeddings/multimodal/small/models/*.py

@@ -3,12 +3,11 @@ package metrics
 import (
 	"net/http"
 	"net/http/httptest"
-	"testing"
-
 	// Imported for its side effect: net/http/pprof registers the debug
 	// endpoints on http.DefaultServeMux, which is exactly the leak the metrics
 	// mux must not inherit.
 	_ "net/http/pprof"
+	"testing"
 )
 
 func TestMetricsServeMuxDoesNotExposeProfiling(t *testing.T) {

@@ -1,14 +1,23 @@
+from dataclasses import replace
+
 import pytest
 import torch
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator
-from vllm_sr_runtime.errors import PlacementError, UnsupportedDeviceError
-from vllm_sr_runtime.placement import auto_order, device_kind, parse_device, place
-from vllm_sr_runtime.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.accel.cuda import CUDAAccelerator
+from vllm_srun.accel.rocm import ROCmAccelerator
+from vllm_srun.errors import PlacementError, UnsupportedDeviceError
+from vllm_srun.placement import (
+    auto_order,
+    device_kind,
+    estimate_bytes,
+    parse_device,
+    place,
+)
+from vllm_srun.plugins.base import BackboneSpec, DeviceInfo, DtypePolicy, ModelSpec
 
 SPEC = ModelSpec("tiny", BackboneSpec("qwen3", {}, ()), DtypePolicy(), 1024)
 GPU = torch.cuda.is_available()
+GIB = 1 << 30
 
 
 def test_parse_device():
@@ -60,9 +69,9 @@ def test_auto_falls_back_to_cpu_without_gpus():
 def test_an_unusable_device_fails_before_the_model_is_resolved(
     monkeypatch, device, reason
 ):
-    import vllm_sr_runtime.runtime as runtime_module
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     def resolve(*args, **kwargs):
         raise AssertionError("the model was resolved before the device was checked")
@@ -86,28 +95,36 @@ def test_gpu_devices_report_memory_and_bf16():
     assert devices and devices[0].total_memory and devices[0].index == 0
 
 
-def test_xpu_and_mps_devices_parse():
+def test_unvalidated_devices_parse():
     assert parse_device("xpu:1") == ("xpu", 1)
     assert parse_device("mps") == ("mps", None)
+    assert parse_device("npu:1") == ("npu", 1)
 
 
 def test_device_names_and_the_auto_order_come_from_the_accelerators():
     assert auto_order() == ["rocm", "cuda", "cpu"]
     assert CPUAccelerator.descriptor()["auto_priority"] == 100
-    with pytest.raises(PlacementError, match="one of cpu, cuda, mps, rocm, xpu"):
+    with pytest.raises(PlacementError, match="one of cpu, cuda, mps, npu, rocm, xpu"):
         parse_device("tpu:0")
     assert device_kind("rocm:1") == "rocm"
     if not GPU:
         assert device_kind("auto") == "cpu"
 
 
+GATED_DELTA_BACKBONE = BackboneSpec("qwen3_5_text", {}, ())
 GATED_DELTA = ModelSpec(
     "Decision-2.0-Eos-0.8B",
-    BackboneSpec("qwen3_5_text", {}, ()),
+    GATED_DELTA_BACKBONE,
     DtypePolicy(),
     1024,
-    requires={"cpu": ("lapack",)},
+    requires=GATED_DELTA_BACKBONE.requires,
 )
+
+
+def test_only_the_qwen3_5_backbone_requires_lapack_on_the_cpu():
+    assert GATED_DELTA_BACKBONE.requires == {"cpu": ("lapack",)}
+    for model_type in ("qwen3", "modernbert"):
+        assert BackboneSpec(model_type, {}, ()).requires == {}
 
 
 @pytest.mark.parametrize("lapack", [True, False])
@@ -139,10 +156,10 @@ def test_a_pytorch_without_the_private_lapack_flag_still_places_on_the_cpu(
 def test_the_refusal_comes_before_any_weights_load_and_is_final(
     monkeypatch, qwen3_package, qwen35_package
 ):
-    import vllm_sr_runtime.runtime as runtime_module
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.engines.native.engine import NativeEngine
-    from vllm_sr_runtime.runtime import Runtime
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.engines.native.engine import NativeEngine
+    from vllm_srun.runtime import Runtime
 
     monkeypatch.setattr(torch._C, "has_lapack", False)
     loads, placements = [], []
@@ -191,10 +208,101 @@ def test_the_refusal_comes_before_any_weights_load_and_is_final(
 def test_the_qwen3_5_families_require_lapack_on_the_cpu(
     tmp_path, family, variant, requires
 ):
-    from vllm_sr_runtime.plugins import registry
-    from vllm_sr_runtime.plugins.base import PackageRef
-    from vllm_sr_runtime.testing.fixtures import write_fixture
+    from vllm_srun.plugins import registry
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.testing.fixtures import write_fixture
 
     package = write_fixture(tmp_path / "package", family=family, variant=variant)
     plugin = registry.plugin("families", family).load()()
     assert plugin.describe(plugin.verify(PackageRef(package))).requires == requires
+
+
+D3_PARAMETERS = 26_086_635_760
+D3 = ModelSpec(
+    "d3",
+    GATED_DELTA_BACKBONE,
+    DtypePolicy(
+        autocast=None,
+        bf16_resident=False,
+        gpu_weights="bfloat16",
+        cpu_weights="bfloat16",
+    ),
+    262_144,
+    requires=GATED_DELTA_BACKBONE.requires,
+)
+# Loaded parameters, and the device memory above the idle baseline that
+# loading plus the model card's text, image and video requests reached in
+# Engine mode on MI325X (docs/records/decision3-device-memory.md).
+DECISION3_PEAKS_GIB = {
+    "d3": (D3_PARAMETERS, 50.28),
+    "d3-flash": (8_393_739_504, 17.21),
+    "d3-mini": (4_539_918_336, 10.09),
+    "d3-nano": (2_213_763_904, 5.74),
+    "d3-lite": (853_247_040, 3.13),
+    "d3-edge": (594_582_720, 2.61),
+}
+
+
+def test_the_estimate_counts_weights_in_the_dtype_the_device_holds():
+    billion = 1_000_000_000
+    assert estimate_bytes(SPEC, billion, "rocm") == 4 * billion + 2 * GIB
+    assert estimate_bytes(SPEC, billion, "cpu") == 4 * billion + 2 * GIB
+    assert estimate_bytes(D3, billion, "rocm") == 2_200_000_000 + 2 * GIB
+    assert estimate_bytes(D3, billion, "cpu") == 2_200_000_000 + 2 * GIB
+    fp32_on_cpu = replace(D3, dtype=replace(D3.dtype, cpu_weights=None))
+    assert estimate_bytes(fp32_on_cpu, billion, "cpu") == 4 * billion + 2 * GIB
+
+
+@pytest.mark.parametrize("model", sorted(DECISION3_PEAKS_GIB))
+def test_the_estimate_covers_each_measured_decision3_peak_with_margin(model):
+    parameters, peak = DECISION3_PEAKS_GIB[model]
+    needed = estimate_bytes(D3, parameters, "rocm") / GIB
+    assert needed >= 1.1 * peak and needed >= peak + 0.6
+    assert needed < (4 * parameters + 2 * GIB) / GIB
+
+
+def _one_rocm_device(monkeypatch, free_gib):
+    device = DeviceInfo(
+        accelerator="rocm",
+        index=0,
+        name="AMD Instinct MI300X",
+        total_memory=192 * GIB,
+        free_memory=int(free_gib * GIB),
+        bf16=True,
+    )
+    monkeypatch.setattr(ROCmAccelerator, "available", lambda self: True)
+    monkeypatch.setattr(ROCmAccelerator, "devices", lambda self: [device])
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(torch._C, "has_lapack", False)
+
+
+def test_d3_fits_the_free_memory_of_a_shared_gpu(monkeypatch):
+    _one_rocm_device(monkeypatch, 70.2)
+    placement = place(D3, "auto", D3_PARAMETERS)
+    assert placement.device.label == "rocm:0"
+    assert placement.estimated_bytes / GIB == pytest.approx(55.45, abs=0.01)
+
+
+def test_a_full_gpu_states_need_and_free_memory_before_the_cpu(monkeypatch):
+    _one_rocm_device(monkeypatch, 40.0)
+    with pytest.raises(PlacementError) as refused:
+        place(D3, "auto", D3_PARAMETERS)
+    assert type(refused.value) is PlacementError
+    message = str(refused.value)
+    assert message.startswith(
+        "no device can serve d3: rocm:0: d3 needs about 55.4 GiB, 40.0 GiB free; cpu: "
+    )
+    assert "built without LAPACK" in message
+    assert "cuda" not in message
+
+
+def test_a_host_without_gpus_still_names_the_accelerators_it_lacks(monkeypatch):
+    monkeypatch.setattr(ROCmAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(torch._C, "has_lapack", False)
+    with pytest.raises(PlacementError) as refused:
+        place(D3, "auto", D3_PARAMETERS)
+    assert str(refused.value).startswith(
+        "no device can serve d3: rocm: not available on this host; "
+        "cuda: not available on this host; cpu: this PyTorch is built without LAPACK"
+    )

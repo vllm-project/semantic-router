@@ -1,20 +1,25 @@
 ---
 title: Migrate from the native bindings
 sidebar_label: Migrate from the native bindings
-description: Update a configuration that used the candle, ONNX Runtime or OpenVINO back ends, legacy model names or the NLI explainer.
+description: Update a configuration that used the candle, ONNX Runtime or OpenVINO back ends, legacy model names, the NLI explainer or the model runtime's former profiles.
 ---
 
 # Migrate from the native bindings
 
 Earlier releases ran models inside the router with three back ends: candle,
-ONNX Runtime (`ort`) and OpenVINO. Those back ends are gone. Every model now
-runs in the [model runtime](model-runtime/overview.md), on CPU by default and on GPUs when
-you ask for them.
+ONNX Runtime (`ort`) and OpenVINO. Those in-process back ends are gone. Local
+routing models now run in the [model runtime](model-runtime/overview.md);
+external classifier and embedding services retain their separate adapters.
+`vllm-sr serve --platform auto` detects the host or target; use `--platform cpu`
+to select the CPU image explicitly. The [release note](release-notes/built-in-model-runtime.md)
+lists every breaking change of that release.
 
-**Most configurations need no change.** If you only turn features on (a
-`domain` signal, the semantic cache, PII detection) and never named a back
-end, the router picks the same Vela models as before and runs them in the
-runtime.
+**Review defaults as well as field migrations.** Features without an explicit
+model override use current defaults, including Vela 2.0 0.3B for common judgment
+tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
+change answers even when its YAML still parses. Review
+[model and threshold choices](./choose-a-model.md#vela-20) and test representative
+requests before rollout; explicit specialist assignments remain available.
 
 You need to migrate if your configuration contains any of these:
 
@@ -27,7 +32,9 @@ You need to migrate if your configuration contains any of these:
 - the NLI explainer (`hallucination_explainer`, `nli_model`,
   `enable_nli_filtering`, `use_nli`) or the response cache's `polarity_guard`
   setting;
-- a hallucination detector with `backend: endpoint`.
+- a hallucination detector with `backend: endpoint`;
+- `profile` on a model runtime deployment (see
+  [Engine arguments](#engine-arguments)).
 
 The router refuses these settings at startup and tells you to run the
 migration command.
@@ -46,7 +53,7 @@ Changes to review
   global.model_catalog.deployments.vela-domain
       provider candle -> model_runtime, device cuda:0
   global.model_catalog.deployments.vela-domain.precision
-      fp16 -> profile max_speed (the default exact profile runs FP32)
+      removed fp16: the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
 ```
 
 It prints a **Warning** for anything you still have to do yourself: a
@@ -65,8 +72,8 @@ or stored vectors to re-embed because their embedding model changed (see
 | `device: rocm:N` or `migraphx:N` | `device: rocm:N` |
 | `device: metal:0` | `device: mps` |
 | an OpenVINO device (`CPU`, `GPU`, `NPU`, ...) | `device: cpu`; Intel GPUs can use `device: xpu:0` (not yet validated) |
-| `precision: fp16` | `profile: max_speed` (approximate; see [Profiles](./profiles.md)) |
-| `precision: native` or `fp32` | removed: the default `exact` profile already runs FP32 |
+| `precision: fp16` | removed: the model runs in its published precision; `dtype: float16` runs it in half precision on a GPU (see [Engine arguments](./engine-args.md#precision)) |
+| `precision: native` or `fp32` | removed: the default `dtype: auto` already runs the published precision, FP32 for these models |
 | `custom_ops_profile`, `compilation_cache_dir` | removed: the runtime picks its own kernels |
 | a graph `head` such as `onnx/model_fa.onnx` | removed: the runtime picks the model's graphs |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`, the Hub repository |
@@ -121,6 +128,12 @@ conditions keep matching what they matched before.
 vllm-sr config validate --config legacy.migrated.yaml
 vllm-sr serve --config legacy.migrated.yaml
 ```
+
+For an existing local Docker stack, the CLI may report that it preserved the
+saved active configuration. Review and merge any Dashboard edits you need into
+`legacy.migrated.yaml`, then rerun with `--replace-active-config` to apply that
+file. If a Recipe package is active, change or deactivate it through the Recipe
+workflow first.
 
 On the first start the runtime downloads the models it does not have yet.
 [Run it with the router](./deploy.md#check-what-is-running) shows how to see
@@ -217,7 +230,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
         device: cuda:0
-        profile: max_speed
     modules:
       prompt_guard:
         enabled: true
@@ -236,6 +248,39 @@ global:
 The response cache had no `embedding_model`, so it used MiniLM, the former
 default; it now names Vela Embedding. Running the command again on the
 migrated file changes nothing.
+
+## Engine arguments
+
+The model runtime used to choose its batching and numerics with a profile:
+`exact` (the default), `batching`, `shared_context` or `max_speed`. It now
+batches concurrent requests by default, as vLLM does, and takes vLLM-style
+[engine arguments](./engine-args.md) instead. The router refuses a deployment
+that still sets `profile`, and `vllm-sr config migrate` rewrites it:
+
+| Before | After |
+| --- | --- |
+| `profile: exact` | removed. Concurrent requests now share forwards, so an answer can move by rounding; no engine argument restores one request per forward |
+| `profile: batching` | removed: batching is the default |
+| `profile: shared_context` | `enable_shared_context: true`; rows of other requests now also share forwards |
+| `profile: max_speed` | `enable_shared_context: true`; its batching and faster kernels are the defaults |
+| any other `profile` | removed, with a warning: set the engine arguments it stood for |
+
+An engine argument the deployment already sets is kept. The flags and request
+options changed with them; a removed flag fails with the one that replaces it:
+
+| Before | After |
+| --- | --- |
+| `vllm-sr serve --runtime-profile P` | engine flags such as `--max-num-seqs` and `--dtype` |
+| `vllm-srun serve --profile P` | the same engine flags |
+| `vllm-srun serve --max-batch-tokens N` | `--max-num-batched-tokens N` |
+| `"options": {"profile": "exact"}` on a request | refused (`invalid_request`): a request runs with its deployment's engine arguments |
+| `profile` in `GET /v1/models` and in a response's `meta` | `engine_args`, `dtype` and `numerics` (`exact` or `approximate`) |
+
+Clients of the public System One API see two of these changes. A request that
+sets `options.profile` returns `400` (`invalid_request`) from the Router, and
+the `meta` of a `return_meta` answer reports `dtype` and `numerics` instead of
+`profile`. Drop the option, and read `numerics` where you read `profile`. See
+[System One API stability](../api/router.md#system-one-api-stability).
 
 ## Re-embed when the embedding model changes
 

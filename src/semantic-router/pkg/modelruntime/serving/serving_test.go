@@ -32,6 +32,11 @@ func (f *fakeServices) Card(_ context.Context, deployment string) (modelservice.
 	return card, nil
 }
 
+func (f *fakeServices) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
+	card, ok := f.cards[deployment]
+	return card, ok
+}
+
 func (f *fakeServices) Classify(_ context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
 	f.mu.Lock()
 	f.requests = append(f.requests, request)
@@ -102,7 +107,7 @@ func spec(deployment, contract string, input config.ModelInputBudget) config.Res
 	return config.ResolvedModelBinding{
 		Recipe: "default", Name: deployment + "_consumer",
 		Binding:    config.ModelBinding{Deployment: deployment, Contract: contract},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cpu", Profile: "exact", Input: input},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cpu", Input: input},
 	}
 }
 
@@ -219,12 +224,14 @@ func TestCallsRejectResultsThatDisagreeWithThePreparedHead(t *testing.T) {
 			return modelservice.ClassifyResponse{Labels: []string{"law", "math", "other"}, Results: []modelservice.ClassifyResult{{Probabilities: []float64{0.2, 0.7, 0.1}}}}, true
 		case "too long":
 			return modelservice.ClassifyResponse{Labels: []string{"math", "law", "other"}, Results: []modelservice.ClassifyResult{{Error: "max_length_exceeded"}}}, true
+		case "over the scan budget":
+			return modelservice.ClassifyResponse{Labels: []string{"math", "law", "other"}, Results: []modelservice.ClassifyResult{{Error: "scan_budget_exceeded"}}}, true
 		case "not a distribution":
 			return modelservice.ClassifyResponse{Labels: []string{"math", "law", "other"}, Results: []modelservice.ClassifyResult{{Probabilities: []float64{0.9, 0.9, 0.9}}}}, true
 		}
 		return modelservice.ClassifyResponse{}, false
 	}
-	for text, want := range map[string]error{"reordered": binding.ErrInvalidResult, "too long": binding.ErrInputLimit, "not a distribution": binding.ErrInvalidResult} {
+	for text, want := range map[string]error{"reordered": binding.ErrInvalidResult, "too long": binding.ErrInputLimit, "over the scan budget": binding.ErrScanBudget, "not a distribution": binding.ErrInvalidResult} {
 		if _, err := handle.Call(context.Background(), "default", text); !errors.Is(err, want) {
 			t.Fatalf("%s: error = %v, want %v", text, err, want)
 		}

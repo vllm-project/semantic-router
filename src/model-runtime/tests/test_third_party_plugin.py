@@ -18,12 +18,12 @@ from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
-from vllm_sr_runtime.api.app import create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.errors import PlacementError, VerificationError
-from vllm_sr_runtime.placement import auto_order
-from vllm_sr_runtime.plugins import registry
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.api.app import create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.errors import PlacementError, VerificationError
+from vllm_srun.placement import auto_order
+from vllm_srun.plugins import registry
+from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
 from .test_api_contract import check
@@ -122,21 +122,27 @@ def test_models_describe_both_models_and_the_plugins(client):
     assert keywords["embedding"]["dimensions"] == [3]
     assert keywords["rerank"]["default"] == {"layer": 1, "dimension": 3}
     plugins = {(p["group"], p["name"]): p for p in keywords["plugins"]}
-    assert plugins[("vllm_sr_runtime.families", "example_keywords")][
-        "capabilities"
-    ] == {
+    assert plugins[("vllm_srun.families", "example_keywords")]["capabilities"] == {
         "surfaces": ["classify", "embeddings", "rerank"],
         "formats": ["vllm-sr-example/1"],
     }
-    assert plugins[("vllm_sr_runtime.engines", "example_counts")]["capabilities"][
-        "outputs"
-    ] == ["hidden"]
+    engines = {
+        name: entry["capabilities"]
+        for (group, name), entry in plugins.items()
+        if group == "vllm_srun.engines"
+    }
+    assert engines["example_counts"]["outputs"] == ["hidden"]
+    assert {name: card["auto_priority"] for name, card in engines.items()} == {
+        "example_counts": None,
+        "native": 0,
+        "onnxruntime": None,
+    }
     health = client.get("/health").json()
     check("Health", health)
     assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}
 
 
-def test_a_third_party_accelerator_and_profile_serve_a_model(
+def test_a_third_party_accelerator_serves_a_model_with_its_engine_arguments(
     example_plugin, keyword_package
 ):
     assert "example_host" in registry.names("accelerators")
@@ -146,7 +152,7 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         name="keywords",
         device="example_host",
         engine="example_counts",
-        profile="example_one_by_one",
+        max_num_seqs=1,
     )
     runtime = Runtime(ServeConfig(models=(config,)))
     runtime.start(background=False)
@@ -156,32 +162,66 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         assert (
             card["accelerator"] == "example_host" and card["device"] == "example_host"
         )
-        assert card["profile"] == "example_one_by_one"
+        assert card["engine_args"]["max_num_seqs"] == 1
+        assert card["engine_args"]["dtype"] == "auto"
         plugins = {(p["group"], p["name"]): p for p in card["plugins"]}
-        assert plugins[("vllm_sr_runtime.accelerators", "example_host")][
-            "capabilities"
-        ] == {"validated": False, "auto_priority": None}
-        assert (
-            plugins[("vllm_sr_runtime.profiles", "example_one_by_one")]["capabilities"][
-                "numerics"
-            ]
-            == "exact"
-        )
+        assert plugins[("vllm_srun.accelerators", "example_host")]["capabilities"] == {
+            "validated": False,
+            "auto_priority": None,
+        }
+        assert plugins[("vllm_srun.engines", "example_counts")]["capabilities"][
+            "dtypes"
+        ] == ["auto"]
         body = client.post(
             "/v1/classify",
             json={
                 "input": ["Please refund the invoice", "Where is my parcel?"],
-                "options": {"profile": "example_one_by_one", "return_meta": True},
+                "options": {"return_meta": True},
             },
         ).json()
         assert [result["label"] for result in body["results"]] == [
             "billing",
             "shipping",
         ]
-        assert body["meta"]["profile"] == "example_one_by_one"
         assert body["meta"]["accelerator"] == "example_host"
+        assert body["meta"]["dtype"] == "float32"
     finally:
         runtime.stop()
+
+
+def test_an_engine_that_runs_only_the_published_precision_refuses_another_dtype(
+    example_plugin, keyword_package
+):
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        dtype="bfloat16",
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    with pytest.raises(RuntimeError, match="example_counts: runs --dtype auto only"):
+        runtime.start(background=False)
+    runtime.stop()
+
+
+def test_shared_context_is_refused_on_an_engine_without_a_shared_forward(
+    example_plugin, keyword_package
+):
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        enable_shared_context=True,
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    with pytest.raises(
+        RuntimeError,
+        match="enable_shared_context: the loaded engine model has no shared-context forward",
+    ):
+        runtime.start(background=False)
+    runtime.stop()
 
 
 @pytest.mark.parametrize("device_thread", [True, False])
@@ -423,7 +463,7 @@ def test_repeated_items_are_answered_from_the_result_cache(client, runtime):
     assert model.forwards == forwards
     assert second["results"] == first["results"]
     assert (
-        'vllm_sr_runtime_result_cache_total{model="keywords",outcome="hit"}'
+        'vllm_srun_result_cache_total{model="keywords",outcome="hit"}'
         in client.get("/metrics").text
     )
 
@@ -543,7 +583,7 @@ def test_a_model_that_fails_to_load_leaves_the_others_serving(
 def test_a_failed_load_is_retried_unless_the_answers_are_wrong(
     example_plugin, keyword_package, monkeypatch, failure, loads, state
 ):
-    import vllm_sr_runtime.runtime as runtime_module
+    import vllm_srun.runtime as runtime_module
 
     load = runtime_module.ServedModel.load
     seen = []

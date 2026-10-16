@@ -152,7 +152,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	r.hydrateLooperRoutingContext(ctx)
-	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
+	decisionName := looperHopDecision(ctx)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil
@@ -245,7 +245,8 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.effectiveReplayConfigForRequest(ctx, decision); replayCfg != nil {
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, decision)
+	if replayCfg := ctx.RouterReplayPluginConfig; replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{

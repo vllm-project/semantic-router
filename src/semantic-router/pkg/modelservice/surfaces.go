@@ -130,112 +130,142 @@ type RerankResponse struct {
 
 // Classify runs a classify request on model, inside the context's bundle when there is one.
 func (c *Client) Classify(ctx context.Context, model string, request ClassifyRequest) (ClassifyResponse, error) {
+	response, _, err := c.classify(ctx, model, request)
+	return response, err
+}
+
+func (c *Client) classify(ctx context.Context, model string, request ClassifyRequest) (ClassifyResponse, exchangeTiming, error) {
 	body, err := encodeClassify(ctx, model, request)
 	if err != nil {
-		return ClassifyResponse{}, err
+		return ClassifyResponse{}, exchangeTiming{}, err
 	}
-	result, err := c.exchange(ctx, api.BundleTask{Classify: &body})
+	result, timing, err := c.exchange(ctx, api.BundleTask{Classify: &body})
 	if err != nil {
-		return ClassifyResponse{}, err
+		return ClassifyResponse{}, timing, err
 	}
 	if result.Classify == nil {
-		return ClassifyResponse{}, fmt.Errorf("%w: missing classify response body", ErrFailed)
+		return ClassifyResponse{}, timing, fmt.Errorf("%w: missing classify response body", ErrFailed)
 	}
-	return decodeClassify(*result.Classify), nil
+	return decodeClassify(*result.Classify), timing, nil
 }
 
 // Embed runs an embeddings request on model, inside the context's bundle when there is one.
 func (c *Client) Embed(ctx context.Context, model string, request EmbedRequest) (EmbedResponse, error) {
+	response, _, err := c.embed(ctx, model, request)
+	return response, err
+}
+
+func (c *Client) embed(ctx context.Context, model string, request EmbedRequest) (EmbedResponse, exchangeTiming, error) {
 	body, err := encodeEmbed(ctx, model, request)
 	if err != nil {
-		return EmbedResponse{}, err
+		return EmbedResponse{}, exchangeTiming{}, err
 	}
-	result, err := c.exchange(ctx, api.BundleTask{Embeddings: &body})
+	result, timing, err := c.exchange(ctx, api.BundleTask{Embeddings: &body})
 	if err != nil {
-		return EmbedResponse{}, err
+		return EmbedResponse{}, timing, err
 	}
 	if result.Embeddings == nil {
-		return EmbedResponse{}, fmt.Errorf("%w: missing embeddings response body", ErrFailed)
+		return EmbedResponse{}, timing, fmt.Errorf("%w: missing embeddings response body", ErrFailed)
 	}
-	return decodeEmbed(*result.Embeddings)
+	response, err := decodeEmbed(*result.Embeddings)
+	return response, timing, err
 }
 
 // Rerank runs a rerank request on model, inside the context's bundle when there is one.
 func (c *Client) Rerank(ctx context.Context, model string, request RerankRequest) (RerankResponse, error) {
+	response, _, err := c.rerank(ctx, model, request)
+	return response, err
+}
+
+func (c *Client) rerank(ctx context.Context, model string, request RerankRequest) (RerankResponse, exchangeTiming, error) {
 	body, err := encodeRerank(ctx, model, request)
 	if err != nil {
-		return RerankResponse{}, err
+		return RerankResponse{}, exchangeTiming{}, err
 	}
-	result, err := c.exchange(ctx, api.BundleTask{Rerank: &body})
+	result, timing, err := c.exchange(ctx, api.BundleTask{Rerank: &body})
 	if err != nil {
-		return RerankResponse{}, err
+		return RerankResponse{}, timing, err
 	}
 	if result.Rerank == nil {
-		return RerankResponse{}, fmt.Errorf("%w: missing rerank response body", ErrFailed)
+		return RerankResponse{}, timing, fmt.Errorf("%w: missing rerank response body", ErrFailed)
 	}
-	return decodeRerank(*result.Rerank, len(request.Documents))
+	response, err := decodeRerank(*result.Rerank, len(request.Documents))
+	return response, timing, err
 }
 
 // exchange sends one surface task, through the context's bundle when there is
-// one; a non-200 status becomes the package error for it.
-func (c *Client) exchange(ctx context.Context, task api.BundleTask) (api.BundleResult, error) {
-	result, err := c.send(ctx, task)
+// one; a non-200 status becomes the package error for it. The timing is that
+// of the exchange that carried the task.
+func (c *Client) exchange(ctx context.Context, task api.BundleTask) (api.BundleResult, exchangeTiming, error) {
+	result, timing, err := c.send(ctx, task)
 	if err != nil {
-		return api.BundleResult{}, err
+		return api.BundleResult{}, timing, err
 	}
 	if statusErr := statusError(result.Status, result.Error); statusErr != nil {
-		return api.BundleResult{}, statusErr
+		return api.BundleResult{}, timing, statusErr
 	}
-	return result, nil
+	return result, timing, nil
 }
 
-func (c *Client) send(ctx context.Context, task api.BundleTask) (api.BundleResult, error) {
+func (c *Client) send(ctx context.Context, task api.BundleTask) (api.BundleResult, exchangeTiming, error) {
 	if bundle := bundleFrom(ctx); bundle != nil {
 		return bundle.submit(ctx, c, task)
 	}
+	started := time.Now()
 	switch {
 	case task.Decisions != nil:
 		response, err := c.api.CreateDecisionsWithResponse(ctx, *task.Decisions)
 		if err != nil {
-			return api.BundleResult{}, transportError(ctx, err)
+			return api.BundleResult{}, exchangeTiming{}, transportError(ctx, err)
 		}
-		return api.BundleResult{Status: response.StatusCode(), Decisions: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+		timing := timedExchange(started, response.HTTPResponse)
+		return api.BundleResult{Status: response.StatusCode(), Decisions: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, timing, nil
 	case task.Classify != nil:
 		response, err := c.api.CreateClassificationWithResponse(ctx, *task.Classify)
 		if err != nil {
-			return api.BundleResult{}, transportError(ctx, err)
+			return api.BundleResult{}, exchangeTiming{}, transportError(ctx, err)
 		}
-		return api.BundleResult{Status: response.StatusCode(), Classify: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+		timing := timedExchange(started, response.HTTPResponse)
+		return api.BundleResult{Status: response.StatusCode(), Classify: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, timing, nil
 	case task.Embeddings != nil:
 		response, err := c.api.CreateEmbeddingsWithResponse(ctx, *task.Embeddings)
 		if err != nil {
-			return api.BundleResult{}, transportError(ctx, err)
+			return api.BundleResult{}, exchangeTiming{}, transportError(ctx, err)
 		}
-		return api.BundleResult{Status: response.StatusCode(), Embeddings: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+		timing := timedExchange(started, response.HTTPResponse)
+		return api.BundleResult{Status: response.StatusCode(), Embeddings: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, timing, nil
 	case task.Rerank != nil:
 		response, err := c.api.CreateRerankWithResponse(ctx, *task.Rerank)
 		if err != nil {
-			return api.BundleResult{}, transportError(ctx, err)
+			return api.BundleResult{}, exchangeTiming{}, transportError(ctx, err)
 		}
-		return api.BundleResult{Status: response.StatusCode(), Rerank: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+		timing := timedExchange(started, response.HTTPResponse)
+		return api.BundleResult{Status: response.StatusCode(), Rerank: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, timing, nil
 	default:
-		return api.BundleResult{}, fmt.Errorf("%w: a task names no surface", ErrRejected)
+		return api.BundleResult{}, exchangeTiming{}, fmt.Errorf("%w: a task names no surface", ErrRejected)
 	}
 }
 
 // Bundle sends tasks in one /v1/bundle call and returns their results in task order.
 func (c *Client) Bundle(ctx context.Context, tasks []api.BundleTask) ([]api.BundleResult, error) {
+	results, _, err := c.sendBundle(ctx, tasks)
+	return results, err
+}
+
+func (c *Client) sendBundle(ctx context.Context, tasks []api.BundleTask) ([]api.BundleResult, exchangeTiming, error) {
+	started := time.Now()
 	response, err := c.api.CreateBundleWithResponse(ctx, api.BundleRequest{Tasks: tasks})
 	if err != nil {
-		return nil, transportError(ctx, err)
+		return nil, exchangeTiming{}, transportError(ctx, err)
 	}
+	timing := timedExchange(started, response.HTTPResponse)
 	if err := statusError(response.StatusCode(), errorBody(response.JSON400, response.JSON413, response.JSON500)); err != nil {
-		return nil, err
+		return nil, timing, err
 	}
 	if response.JSON200 == nil || len(response.JSON200.Results) != len(tasks) {
-		return nil, fmt.Errorf("%w: bundle response does not match its tasks", ErrFailed)
+		return nil, timing, fmt.Errorf("%w: bundle response does not match its tasks", ErrFailed)
 	}
-	return response.JSON200.Results, nil
+	return response.JSON200.Results, timing, nil
 }
 
 func remainingMillis(ctx context.Context) (*float64, error) {

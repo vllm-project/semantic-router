@@ -36,8 +36,8 @@ legacy router is in [`router-latency-cpu.md`](router-latency-cpu.md).
     record's file. The router runs one CPU process per model (five), each with
     its share of the 12 cores.
   - ROCm side: the same file with `use_cpu: false` on the five models. The
-    router places them in one runtime process on `rocm:0` (`exact` profile,
-    native engine). That process runs one model's device work at a time (the
+    router places them in one runtime process on `rocm:0` (each request alone,
+    the default of the time; native engine). That process runs one model's device work at a time (the
     per-device lock). Each model replays a HIP graph per length bucket,
     captured in thread-local mode on the bucket's second use; long rows run
     eagerly.
@@ -154,8 +154,9 @@ model gets in the ROCm image when its deployment sets `use_cpu: true`. It is
 not the CPU image, and two things set it apart from `router-latency-cpu.md`,
 which stays the reference for CPU deployments:
 
-- **Cross-request batching.** On CPU, `exact` batches concurrent requests only
-  for a model whose rows the load-time probe finds identical alone and inside
+- **Cross-request batching.** On CPU, the default of the time batched
+  concurrent requests only for a model whose rows the load-time probe finds
+  identical alone and inside
   a mixed batch (design §9 and §11). With either ROCm image's PyTorch, Domain,
   Guard, FactCheck and Feedback fail the probe and PII passes, so four of the
   five models answer one request at a time under load. With the CPU image
@@ -191,6 +192,6 @@ taskset -c 140-143 python3 tools/router_latency.py run --url http://127.0.0.1:18
 python3 tools/router_latency.py rounds --dir rounds --base cpu --new rocm
 ```
 
-As in the CPU record, set `VLLM_SR_RUNTIME_RESULT_CACHE=0` and start the
-runtime with `--result-cache-entries 0` (through `VLLM_SR_RUNTIME_COMMAND`) to
+As in the CPU record, set `VLLM_SRUN_RESULT_CACHE=0` and start the
+runtime with `--result-cache-entries 0` (through `VLLM_SRUN_COMMAND`) to
 measure without caches.

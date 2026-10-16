@@ -13,7 +13,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"response_cache":      pluginFieldsResponseCache,
 	"context_compression": pluginFieldsStructuredConfiguration,
 	"prompt_cache":        pluginFieldsStructuredConfiguration,
-	"router_replay":       pluginFieldsRouterReplay,
+	"router_replay":       pluginFieldsStructuredConfiguration,
 	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
 	"memory":              pluginFieldsMemory,
 	"hallucination":       pluginFieldsHallucination,
@@ -61,36 +61,6 @@ func pluginFieldsStructuredConfiguration(p *config.DecisionPlugin) map[string]Va
 		return map[string]Value{}
 	}
 	return object.Fields
-}
-
-func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.MaxRecords != 0 {
-		fields["max_records"] = IntValue{V: cfg.MaxRecords}
-	}
-	if cfg.CaptureRequestBody {
-		fields["capture_request_body"] = BoolValue{V: true}
-	}
-	if cfg.CaptureResponseBody {
-		fields["capture_response_body"] = BoolValue{V: true}
-	}
-	if cfg.MaxBodyBytes != 0 {
-		fields["max_body_bytes"] = IntValue{V: cfg.MaxBodyBytes}
-	}
-	if cfg.MaxToolTraceBytes != 0 {
-		fields["max_tool_trace_bytes"] = IntValue{V: cfg.MaxToolTraceBytes}
-	}
-	if cfg.MaxToolTraceSteps != 0 {
-		fields["max_tool_trace_steps"] = IntValue{V: cfg.MaxToolTraceSteps}
-	}
-	return fields
 }
 
 func pluginFieldsMemory(p *config.DecisionPlugin) map[string]Value {

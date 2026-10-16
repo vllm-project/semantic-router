@@ -39,5 +39,5 @@ global:
 	if len(specs) != 0 {
 		t.Fatalf("router downloads models for a runtime-served detector: %+v", specs)
 	}
-	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Halu")
+	assertRuntimeServed(t, cfg, specs, config.DefaultSystemModels().HallucinationDetector)
 }

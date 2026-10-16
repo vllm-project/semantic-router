@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -354,6 +356,53 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	}
 }
 
+func TestBuildCanonicalConfigCarriesDecisionReliabilityAndFallback(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Decisions: []vllmv1alpha1.DecisionConfig{{
+					Name: "long_report",
+					Rules: vllmv1alpha1.RuleCombinationConfig{
+						Operator:   "AND",
+						Conditions: []vllmv1alpha1.RuleConditionConfig{{Type: "keyword", Name: "long_report"}},
+					},
+					ModelRefs: []vllmv1alpha1.ModelRefConfig{{Model: "small"}, {Model: "large"}},
+					Reliability: &vllmv1alpha1.DecisionReliabilityConfig{
+						TotalTimeout: "600s", PerTryTimeout: "300s", RetryCount: ptr.To[int32](1),
+						RetryOn: "reset", RetriableStatusCodes: []int32{429},
+					},
+					Fallback: &vllmv1alpha1.DecisionFallbackConfig{
+						Enabled: ptr.To(true), MaxAttempts: 2, TotalTimeout: "900s", PerAttemptTimeout: "450s",
+						RetryableStatusCodes: []int32{502, 503},
+					},
+				}},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+	if len(canonical.Routing.Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	}
+	decision := canonical.Routing.Decisions[0]
+	reliability := decision.Reliability
+	if reliability == nil || reliability.TotalTimeout != "600s" || reliability.PerTryTimeout != "300s" ||
+		reliability.RetryCount == nil || *reliability.RetryCount != 1 || reliability.RetryOn != "reset" ||
+		len(reliability.RetriableStatusCodes) != 1 || reliability.RetriableStatusCodes[0] != 429 {
+		t.Fatalf("decision reliability = %#v, want the CR's block", reliability)
+	}
+	fallback := decision.Fallback
+	if fallback == nil || fallback.Enabled == nil || !*fallback.Enabled || fallback.MaxAttempts != 2 ||
+		fallback.TotalTimeout != 900*time.Second || fallback.PerAttemptTimeout != 450*time.Second ||
+		len(fallback.RetryableStatusCodes) != 2 {
+		t.Fatalf("decision fallback = %#v, want the CR's block", fallback)
+	}
+}
+
 func rawCanonicalRoutingJSON(t *testing.T, raw string) *apiextensionsv1.JSON {
 	t.Helper()
 
@@ -515,6 +564,11 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	if rule.Name != "code" || rule.Threshold < 0.549 || rule.Threshold > 0.551 {
 		t.Fatalf("unexpected complexity rule: %#v", rule)
 	}
+	// The operator decodes through yaml.v3, so presence has to be recorded
+	// there as it is on the Router's own yaml.v2 loader.
+	if !rule.ThresholdSet {
+		t.Fatalf("a threshold written on the CRD must be recorded as present: %#v", rule)
+	}
 	if rule.Composer == nil || rule.Composer.Operator != "AND" || len(rule.Composer.Conditions) != 1 {
 		t.Fatalf("unexpected complexity composer: %#v", rule.Composer)
 	}
@@ -527,6 +581,21 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	if remote.Name != "remote" || remote.Threshold != 0 {
 		t.Fatalf("unexpected remote rule: %#v", remote)
 	}
+	// A pair rule with no threshold on the CRD must not arrive at the Router
+	// with one recorded as written, or the Router would refuse it for stating
+	// both. The Router's own marshal test guards the ConfigMap document.
+	if remote.ThresholdSet {
+		t.Fatalf("threshold must stay unwritten for a pair rule: %#v", remote)
+	}
+	// The same rule is marshalled into the ConfigMap through yaml.v3, and
+	// must not grow a threshold: 0 there that the Router would then refuse.
+	out, err := yaml.Marshal(remote)
+	if err != nil {
+		t.Fatalf("marshal remote rule: %v", err)
+	}
+	if strings.Contains(string(out), "threshold") {
+		t.Fatalf("a pair rule must not be written back with a threshold:\n%s", out)
+	}
 	if remote.HardAbove == nil || *remote.HardAbove != 0.85 {
 		t.Fatalf("hard_above did not survive conversion: %#v", remote.HardAbove)
 	}
@@ -538,5 +607,36 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	}
 	if len(remote.Hard.Candidates) != 0 || len(remote.Easy.Candidates) != 0 {
 		t.Fatalf("a remote rule must not grow candidates: %#v", remote)
+	}
+}
+
+// The ConfigMap is written through yaml.v3. A written zero has to come out
+// there too, or the Router would accept a pair the CRD refused.
+func TestOperatorComplexityRuleWrittenZeroThresholdIsSerialised(t *testing.T) {
+	hardAbove, easyBelow := 0.85, 0.60
+	rule := routerconfig.ComplexityRule{
+		Name:         "r",
+		ThresholdSet: true,
+		HardAbove:    &hardAbove,
+		EasyBelow:    &easyBelow,
+	}
+
+	out, err := yaml.Marshal(rule)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "threshold: 0") {
+		t.Fatalf("a written zero must be serialised through yaml.v3, got:\n%s", out)
+	}
+
+	var reloaded routerconfig.ComplexityRule
+	if err := yaml.Unmarshal(out, &reloaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !reloaded.ThresholdSet {
+		t.Fatal("presence must survive a yaml.v3 round trip")
+	}
+	if _, err := reloaded.EffectiveBoundaries(); err == nil {
+		t.Fatal("expected the reloaded rule to be refused for stating both")
 	}
 }

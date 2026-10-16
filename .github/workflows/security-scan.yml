@@ -66,6 +66,9 @@ jobs:
       - name: Test Trusted AST Scanner
         run: python3 base/tools/security/test_ast_security_scanner.py
 
+      - name: Test Trusted Scanner Self-Exclusion
+        run: python3 base/tools/security/test_self_exclusion.py
+
       - name: Scan Codebase with Trusted AST Scanner
         run: |
           python3 base/tools/security/ast_security_scanner.py \

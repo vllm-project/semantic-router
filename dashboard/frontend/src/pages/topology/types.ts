@@ -111,6 +111,7 @@ export interface AuthzSignalConfig {
 
 export interface PIISignalConfig {
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
 }
@@ -171,6 +172,8 @@ export interface RawRuleNode {
 }
 
 export interface RawRuleCombination {
+  type?: string
+  name?: string
   operator?: string
   conditions?: RawRuleNode[]
 }
@@ -268,6 +271,7 @@ export interface PricingConfig {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -496,6 +500,7 @@ export interface ConfigData {
   pii?: Array<{
     name: string
     threshold?: number
+    source?: 'tool_result'
     pii_types_allowed?: string[]
     include_history?: boolean
     description?: string
@@ -652,6 +657,7 @@ export interface ConfigData {
     pii?: Array<{
       name: string
       threshold?: number
+      source?: 'tool_result'
       pii_types_allowed?: string[]
       include_history?: boolean
       description?: string

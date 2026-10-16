@@ -16,6 +16,7 @@ const (
 // state belong in the routing groups; each family still owns its own rules.
 var (
 	globalConfigContractValidators = []configContractValidator{
+		validateListenerContracts,
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
@@ -29,13 +30,12 @@ var (
 		validateComplexityModelBackendContracts,
 		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
-		validateReMoMContracts,
-		validateFusionContracts,
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
 		validateModelAdmissionContracts,
+		validateModelSignalTimeoutContracts,
 		validateModelDeploymentContracts,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
@@ -43,17 +43,21 @@ var (
 
 	// These contracts need the complete routing graph, including all recipes.
 	routingConfigContractValidators = []configContractValidator{
+		validateKVTransferConfig,
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
+		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
 		validatePromptGuardBackend,
+		validatePIIContracts,
 		ValidatePIIWindow,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateActionContracts,
 		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
@@ -72,6 +76,7 @@ var (
 		validateJailbreakContracts,
 		validateSignalStageContracts,
 		validateHallucinationSignalContracts,
+		validateTopicContinuityContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

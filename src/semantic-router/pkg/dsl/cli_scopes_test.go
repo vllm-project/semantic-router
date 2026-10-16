@@ -20,7 +20,6 @@ func TestCLIDecompileUnboundRecipeOnlyDocument(t *testing.T) {
 		fmt.Fprintf(&source, `  - name: %s
     routing:
       candidate_requirements: {capabilities: declared, context: known_limits}
-      data_policy: {replay: false}
       decisions:
         - name: primary
           priority: 1
@@ -35,6 +34,8 @@ func TestCLIDecompileUnboundRecipeOnlyDocument(t *testing.T) {
               latency_metric: ttft
               quality: {index: "vllm-sr/general@1.0.0", on_missing: exclude, min_coverage: 0.8, min_score: 0}
           plugins:
+            - type: router_replay
+              configuration: {enabled: false}
             - type: request_params
               configuration: {default_max_tokens: 4096}
 `, name)

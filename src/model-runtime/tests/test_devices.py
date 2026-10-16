@@ -2,12 +2,12 @@ import json
 
 import pytest
 import torch
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator
-from vllm_sr_runtime.accel.mps import MPSAccelerator
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator
-from vllm_sr_runtime.cli import main
-from vllm_sr_runtime.devices import report
-from vllm_sr_runtime.plugins.base import DeviceInfo
+from vllm_srun.accel.cuda import CUDAAccelerator
+from vllm_srun.accel.mps import MPSAccelerator
+from vllm_srun.accel.rocm import ROCmAccelerator
+from vllm_srun.cli import main
+from vllm_srun.devices import report
+from vllm_srun.plugins.base import DeviceInfo
 
 GPU = torch.cuda.is_available()
 

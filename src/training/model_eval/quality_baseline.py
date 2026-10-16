@@ -170,7 +170,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
     spec = TASK_SPECS[args.task]
     measured = resolve_measured_artifact(args, served, spec.validate_artifact)
-    dataset_revision = resolve_hf_revision(spec.dataset_repo, repo_type="dataset")
+    # A split without a pin is read at the revision resolved here, which is also the
+    # one the result and the manifests record.
+    dataset_revision = spec.revision or resolve_hf_revision(
+        spec.dataset_repo, repo_type="dataset"
+    )
 
     mapping = (
         dict(measured.referenced["label_mapping"])
@@ -193,7 +197,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     for finding in findings:
         logger.warning("gap: %s", finding)
 
-    texts, labels, split_rows = load_rows(spec, mapping, args.limit)
+    texts, labels, split_rows, matched, dropped_rows = load_rows(
+        spec, mapping, args.limit, dataset_revision
+    )
     summary, model_config = _measure(args, measured, served, texts, labels, mapping)
     result = _build_result(
         args=args,
@@ -203,6 +209,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         spec=spec,
         dataset_revision=dataset_revision,
         split_rows=split_rows,
+        matched=matched,
+        dropped_rows=dropped_rows,
         mapping=mapping,
         findings=findings,
         summary=summary,
@@ -300,6 +308,8 @@ def _build_result(
     spec: Any,
     dataset_revision: str,
     split_rows: int,
+    matched: dict[str, Any] | None,
+    dropped_rows: dict[str, int],
     mapping: dict[str, int],
     findings: list[str],
     summary: dict[str, Any],
@@ -324,6 +334,8 @@ def _build_result(
             "revision": dataset_revision,
             "rows_available": split_rows,
             "rows_scored": summary["metrics"]["rows"],
+            "stratum_matched": matched,
+            "dropped_rows": dict(dropped_rows),
         },
         "label_mapping": mapping,
         "gaps": findings,

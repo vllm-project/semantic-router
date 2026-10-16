@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from vllm_sr_runtime.engines.native.encoder import (
+from vllm_srun.engines.native.encoder import (
     ROW_BUCKETS,
     WIDTH_BUCKETS,
     EncoderGraphs,
