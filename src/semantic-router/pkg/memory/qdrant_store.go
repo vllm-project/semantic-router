@@ -241,21 +241,33 @@ func memoryToPayload(mem *Memory) map[string]any {
 }
 
 func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
+	startTime := time.Now()
+	operation := "store"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if err := ctx.Err(); err != nil {
+		status = "error"
 		return err
 	}
 	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
+		status = "error"
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
 	defer release()
 	if mem.ID == "" {
+		status = "error"
 		return fmt.Errorf("memory ID is required")
 	}
 	if mem.Content == "" {
+		status = "error"
 		return fmt.Errorf("memory content is required")
 	}
 	if mem.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user ID is required")
 	}
 
@@ -264,6 +276,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		var err error
 		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
@@ -288,10 +301,9 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		}},
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant upsert failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "store", "success", 0)
 	return nil
 }
 
@@ -390,29 +402,43 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error {
+	startTime := time.Now()
+	operation := "update"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
+		status = "error"
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
 	defer release()
 
-	if _, err := s.Get(ctx, id); err != nil {
+	existing, err := s.Get(ctx, id)
+	if err != nil {
+		status = "error"
 		return err
 	}
 
 	mem.ID = id
+	if mem.CreatedAt.IsZero() {
+		mem.CreatedAt = existing.CreatedAt
+	}
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
 		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
 	mem.UpdatedAt = time.Now()
 
 	wait := true
-	_, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
+	_, err = s.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -422,10 +448,9 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		}},
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant update failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "update", "success", 0)
 	return nil
 }
 
@@ -538,13 +563,22 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 }
 
 func (s *QdrantStore) Forget(ctx context.Context, id string) error {
+	startTime := time.Now()
+	operation := "forget"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
+		status = "error"
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
 	defer release()
 
 	if _, err := s.Get(ctx, id); err != nil {
+		status = "error"
 		return err
 	}
 
@@ -555,20 +589,28 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 		Points:         qdrant.NewPointsSelectorIDs([]*qdrant.PointId{arbitraryIDToUUID(id)}),
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant delete failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "forget", "success", 0)
 	return nil
 }
 
 func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
+	startTime := time.Now()
+	operation := "forget_by_scope"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
+		status = "error"
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
 	defer release()
 	if scope.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user_id is required for ForgetByScope")
 	}
 
@@ -595,10 +637,9 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		}),
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant ForgetByScope failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "forget_by_scope", "success", 0)
 	return nil
 }
 
