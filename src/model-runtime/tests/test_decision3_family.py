@@ -7,6 +7,7 @@ import shutil
 
 import pytest
 import torch
+from vllm_srun import media
 from vllm_srun.accel import cpu
 from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3 import images as img
@@ -660,6 +661,15 @@ def test_repeated_media_are_processed_once_and_answer_alike(
 
     monkeypatch.setattr(img, "decode", count_image)
     monkeypatch.setattr(vid, "decode", count_video)
+    # with media workers (16 CPUs or more) the decoding is a load in a worker process
+    submit = media.submit
+
+    def count_submit(fn, *args):
+        decoded["images"] += fn is img.load
+        decoded["videos"] += fn is vid.load
+        return submit(fn, *args)
+
+    monkeypatch.setattr(media, "submit", count_submit)
     body = {"state": "What is shown?", "questions": QUESTIONS, "images": [image]}
     first, second = call(d3_runtime, body), call(d3_runtime, body)
     assert first == second and first[0] == 200
