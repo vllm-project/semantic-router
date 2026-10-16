@@ -8,18 +8,20 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
-from cli import apple_runtime
-from cli import apple_runtime_engine as engine
+from cli import apple_runtime, container_start_paths
 from cli import apple_runtime_environment as environment
 from cli.apple_runtime_environment import validate_apple_host
-from cli.apple_runtime_server import BridgeServer
+from cli.apple_runtime_server import BridgeServer, Processes
+from cli.commands import runtime as runtime_commands
 from cli.container_backend import ContainerBackend
 from cli.container_gpu_isolation import router_runtime_env
 from cli.container_run_command import append_env_vars
 from cli.container_start import _sensitive_runtime_env_names
 from cli.main import main
+from cli.runtime_stack import resolve_runtime_stack
 from click.testing import CliRunner
 
 
@@ -32,6 +34,13 @@ def test_unsupported_apple_host_fails_before_workspace_creation(
     monkeypatch.setattr("cli.apple_runtime_environment.platform.system", lambda: system)
     monkeypatch.setattr(
         "cli.apple_runtime_environment.platform.machine", lambda: machine
+    )
+
+    def docker_unavailable():
+        raise AssertionError("Docker was checked before rejecting the unsupported host")
+
+    monkeypatch.setattr(
+        "cli.commands.runtime.get_container_runtime", docker_unavailable
     )
     path = tmp_path / "missing.yaml"
     result = CliRunner().invoke(
@@ -122,26 +131,31 @@ def test_host_proxy_keeps_json_contract_and_reaps_process_leases(
     # A real subprocess provides the runtime HTTP boundary. No torch, models,
     # native dependencies, or Docker installation are involved in this test.
     fixture = """
-import json,sys
-from http.server import BaseHTTPRequestHandler,HTTPServer
+import sys
+from http.server import BaseHTTPRequestHandler
+from socketserver import UnixStreamServer
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
     def do_POST(self):
         data=self.rfile.read(int(self.headers['Content-Length']))
         self.send_response(200); self.send_header('Content-Type','application/json')
         self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data)
-HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
+UnixStreamServer(sys.argv[1],Handler).serve_forever()
 """
     original = subprocess.Popen
     children = []
 
     def launch(command, **kwargs):
-        port = command[command.index("--port") + 1]
-        process = original([sys.executable, "-c", fixture, port], **kwargs)
+        worker_socket = command[command.index("--uds") + 1]
+        assert "--port" not in command and "--host" not in command
+        assert len(worker_socket.encode()) < 104
+        assert not Path(worker_socket).parent.stat().st_mode & 0o077
+        process = original([sys.executable, "-c", fixture, worker_socket], **kwargs)
         children.append(process)
         return process
 
     monkeypatch.setattr("cli.apple_runtime_server.subprocess.Popen", launch)
+    monkeypatch.setattr(Processes, "_check_models", lambda self, path: None)
     monkeypatch.chdir(tmp_path)
     local_directory = tmp_path / "my-model"
     local_directory.mkdir()
@@ -153,12 +167,12 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
             "directory": str(tmp_path),
             "cache": str(tmp_path),
             "python": sys.executable,
-            "engine_mode": local_model,
+            "models_directory": str(tmp_path),
         }
     )
     # Drive reap explicitly so the expiry/renewal ordering below is deterministic;
     # the HTTP accept loop must not start a second reaper during the barrier.
-    monkeypatch.setattr(server, "service_actions", lambda: None)
+    server._reaper_stop.set()
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
 
@@ -177,7 +191,7 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
             connection.close()
 
     key = hashlib.sha256(b"model-plan").hexdigest()
-    artifact = "./my-model" if local_model else "vllm-sr/fixture"
+    artifact = "/app/models/my-model" if local_model else "vllm-sr/fixture"
     models = [{"model": artifact, "name": "fixture", "device": "mps"}]
     owner = hashlib.sha256(b"original-group").hexdigest()
     inventory_request = {"models": models, "lease": owner}
@@ -192,7 +206,10 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
         assert call("POST", "/processes/" + key, inventory_request)[0] == 200
         assert call("POST", "/processes/" + key, inventory_request)[0] == 200
         assert len(children) == 1
-        inventory = json.loads((tmp_path / f"{key}.models.json").read_text())
+        assert call("POST", "/engine", {})[0] == 404
+        inventory = json.loads(
+            server.processes.children[key]["models_path"].read_text()
+        )
         expected_artifact = str(local_directory.resolve()) if local_model else artifact
         assert inventory["models"][0]["model"] == expected_artifact
         payload = {"tasks": [{"id": "one", "decisions": {"state": "unchanged"}}]}
@@ -292,69 +309,215 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
         server.processes.reap()
         assert children[0].poll() is not None
         assert not server.processes.children
+
+        # A slow retirement must not serialize unrelated HTTP traffic or
+        # prevent the same plan from starting a new, independently owned child.
+        assert call("POST", "/processes/" + key, inventory_request)[0] == 200
+        slow = children[-1]
+        old_directory = server.processes.children[key]["directory"]
+        other = hashlib.sha256(b"other-plan").hexdigest()
+        assert call("POST", "/processes/" + other, inventory_request)[0] == 200
+        for _ in range(50):
+            if (
+                call("POST", f"/processes/{other}/v1/classify", {"inputs": ["ready"]})[
+                    0
+                ]
+                == 200
+            ):
+                break
+            time.sleep(0.05)
+        waiting, finish = threading.Event(), threading.Event()
+        original_wait = slow.wait
+
+        def slow_wait(timeout=None):
+            waiting.set()
+            if not finish.wait(timeout=10):
+                raise TimeoutError("slow-retirement regression was not resumed")
+            return original_wait(timeout=timeout)
+
+        replies = []
+
+        def stop_slow():
+            try:
+                replies.append(call("DELETE", "/processes/" + key, {"lease": owner}))
+            except BaseException as error:
+                errors.append(error)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(slow, "wait", slow_wait)
+            retiring = threading.Thread(target=stop_slow, daemon=True)
+            retiring.start()
+            try:
+                assert waiting.wait(timeout=5)
+                body = {"inputs": ["unrelated model remains available"]}
+                assert call("POST", f"/processes/{other}/v1/classify", body) == (
+                    200,
+                    body,
+                )
+                assert call("POST", "/processes/" + other, inventory_request)[0] == 200
+                assert (
+                    call(
+                        "POST",
+                        "/processes/" + key,
+                        {"models": models, "lease": next_owner},
+                    )[0]
+                    == 200
+                )
+                replacement = server.processes.children[key]
+                assert replacement["directory"] != old_directory
+            finally:
+                finish.set()
+                retiring.join(timeout=5)
+            assert not retiring.is_alive()
+        assert not errors
+        assert replies == [(200, {"stopped": True})]
+        assert replacement["process"].poll() is None
+        assert replacement["directory"].is_dir()
+        assert not old_directory.exists()
     finally:
         server.shutdown()
-        server.processes.close()
         server.server_close()
         worker.join(timeout=5)
 
 
-@pytest.mark.parametrize("models_file", [False, True])
-@pytest.mark.parametrize("engine_options", [False, True])
-def test_engine_preserves_local_paths_and_engine_arguments_at_host_handoff(
-    monkeypatch, tmp_path, models_file, engine_options
+@pytest.mark.parametrize("engine_mode", [False, True])
+@pytest.mark.parametrize("model", [None, "vllm-sr/Vela-2.0-0.3B"])
+def test_apple_preserves_the_common_instance_mode_contract(
+    monkeypatch, tmp_path, engine_mode, model
 ):
     monkeypatch.chdir(tmp_path)
-    directory = tmp_path / "my-model"
-    directory.mkdir()
-    monkeypatch.setattr(engine, "validate_apple_host", lambda *args: None)
-    monkeypatch.setattr(engine, "validate_local_docker", lambda: None)
-    monkeypatch.setattr(engine, "apply_container_runtime_override", lambda *args: None)
-    monkeypatch.setattr(engine, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(engine, "get_container_image", lambda *args, **kwargs: "image")
-    monkeypatch.setattr(
-        engine, "acquire_runtime_lifecycle_lock", lambda **kwargs: _noop()
-    )
-    monkeypatch.setattr(apple_runtime, "start_bridge", lambda *args, **kwargs: {})
     received = []
-
-    def request(state, path, *, method, body):
-        received.append(body)
-        return {"port": 8000}
-
-    monkeypatch.setattr(apple_runtime, "request", request)
+    monkeypatch.setattr(
+        runtime_commands,
+        "_execute_serve",
+        lambda *args, **kwargs: received.append(kwargs),
+    )
     args = ["serve", "--platform", "apple"]
-    if models_file:
-        inventory = tmp_path / "models.yaml"
-        inventory.write_text("models:\n  - model: ./my-model\n")
-        args += ["--models", str(inventory)]
-    else:
-        args.append("./my-model")
-    if engine_options:
-        args += [
-            "--dtype",
-            "float32",
-            "--max-num-seqs",
-            "1",
-            "--max-num-batched-tokens",
-            "128",
-            "--batch-window-ms",
-            "0",
-            "--no-enable-shared-context",
-        ]
+    if model:
+        args.append(model)
+    if engine_mode:
+        args.append("--engine")
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 0, result.output
-    entry = received[0]["models"][0]
-    assert entry["model"] == str(directory.resolve())
-    assert "profile" not in entry
-    expected = {
-        "dtype": "float32",
-        "max_num_seqs": 1,
-        "max_num_batched_tokens": 128,
-        "batch_window_ms": 0,
-        "enable_shared_context": False,
-    }
-    if engine_options:
-        assert {name: entry[name] for name in expected} == expected
-    else:
-        assert not expected.keys() & entry.keys()
+    assert len(received) == 1
+    assert received[0]["engine"] is engine_mode
+    assert (received[0]["model_options"] or {}).get("artifact") == model
+
+
+@pytest.mark.parametrize("flag", ["--models", "--device", "--host", "--port", "--uds"])
+def test_serve_does_not_reintroduce_removed_bare_runtime_options(flag):
+    result = CliRunner().invoke(main, ["serve", flag, "value"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+
+
+@pytest.mark.parametrize("option", [["-dp", "2"], ["--device-ids", "0"]])
+def test_apple_rejects_replica_flags_before_docker_and_workspace(
+    monkeypatch, tmp_path, option
+):
+    monkeypatch.setattr(environment.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(environment.platform, "machine", lambda: "arm64")
+
+    def forbidden():
+        raise AssertionError(
+            "Docker must not be consulted for rejected placement flags"
+        )
+
+    monkeypatch.setattr(runtime_commands, "get_container_runtime", forbidden)
+    config = tmp_path / "missing.yaml"
+    result = CliRunner().invoke(
+        main, ["serve", "--platform", "apple", "--config", str(config), *option]
+    )
+    assert result.exit_code == 2, result.output
+    assert "does not support" in result.output
+    assert not config.exists()
+
+
+def test_background_reaping_never_blocks_the_http_accept_loop(monkeypatch, tmp_path):
+    server = BridgeServer({"port": 0, "token": "private", "identity": "fixture"})
+    entered, resume = threading.Event(), threading.Event()
+
+    def slow_reap():
+        entered.set()
+        if not resume.wait(timeout=10):
+            raise TimeoutError("reaper regression was not resumed")
+
+    monkeypatch.setattr(server.processes, "reap", slow_reap)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    connection = http.client.HTTPConnection(*server.server_address, timeout=5)
+    try:
+        assert entered.wait(timeout=5)
+        connection.request(
+            "GET", "/status", headers={"Authorization": "Bearer private"}
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        assert json.loads(response.read())["identity"] == "fixture"
+    finally:
+        resume.set()
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_host_model_mapping_uses_the_actual_container_mount_source(
+    monkeypatch, tmp_path, managed
+):
+    source = tmp_path / "config.yaml"
+    monkeypatch.setattr(
+        container_start_paths,
+        "resolve_active_recipe_directory",
+        lambda path: object() if managed else None,
+    )
+    expected = container_start_paths.models_mount_source(str(source), str(tmp_path))
+    actual, _, _ = container_start_paths._prepare_runtime_directories(
+        str(tmp_path),
+        str(tmp_path / ".vllm-sr"),
+        resolve_runtime_stack(),
+        managed_recipe=managed,
+    )
+    assert expected == Path(actual)
+    assert expected.is_dir()
+
+
+@pytest.mark.parametrize("kind", ["traversal", "symlink", "absolute"])
+def test_local_host_models_cannot_escape_the_stack_mount(monkeypatch, tmp_path, kind):
+    root = tmp_path / "models"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (root / "linked").symlink_to(outside, target_is_directory=True)
+    artifact = {
+        "traversal": "/app/models/../outside",
+        "symlink": "/app/models/linked",
+        "absolute": str(outside),
+    }[kind]
+    processes = Processes({"models_directory": str(root)})
+    try:
+        with pytest.raises(ValueError, match="mounted models directory"):
+            processes.launch("a" * 64, [{"model": artifact}], lease="b" * 64)
+        assert not processes.children
+    finally:
+        processes.close()
+
+
+def test_placement_rejection_never_spawns_a_worker(monkeypatch, tmp_path):
+    processes = Processes({"directory": str(tmp_path)})
+
+    def reject(path):
+        raise ValueError("decision-kai: no BF16 support; set dtype: float32")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("a worker started before its placement was accepted")
+
+    monkeypatch.setattr(processes, "_check_models", reject)
+    monkeypatch.setattr("cli.apple_runtime_server.subprocess.Popen", forbidden)
+    try:
+        with pytest.raises(ValueError, match=r"decision-kai.*dtype: float32"):
+            processes.launch("a" * 64, [{"model": "vllm-sr/fixture"}], lease="b" * 64)
+        assert not processes.children
+    finally:
+        processes.close()

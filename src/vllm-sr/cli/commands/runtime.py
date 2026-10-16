@@ -8,7 +8,6 @@ from pathlib import Path
 
 import click
 
-from cli.apple_runtime_engine import run_apple_engine
 from cli.apple_runtime_environment import validate_apple_host, validate_local_docker
 from cli.bootstrap import (
     ensure_bootstrap_workspace,
@@ -276,6 +275,14 @@ def _execute_serve(
             )
     apply_container_runtime_override(runtime)
     if _platform_hint(platform) == "apple":
+        validate_apple_host(resolved_target, runtime or "docker")
+        if model_options and any(
+            key in model_options for key in ("data_parallel_size", "device_ids")
+        ):
+            raise click.UsageError(
+                "--platform apple does not support --data-parallel-size or --device-ids; "
+                "author deployment placement in --config"
+            )
         validate_apple_host(resolved_target, get_container_runtime())
         validate_local_docker()
         platform = "apple"
@@ -637,13 +644,6 @@ def _execute_serve(
     is_eager=True,
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
-@click.option(
-    "--models", "models_file", default=None, help="Apple engine model-list file."
-)
-@click.option("--device", default=None, help="Apple engine device (mps only).")
-@click.option("--host", default=None, help="Apple engine loopback bind address.")
-@click.option("--port", type=int, default=None, help="Apple engine TCP port.")
-@click.option("--uds", default=None, help="Unsupported for Apple engine mode.")
 def serve(
     model: str | None,
     engine: bool,
@@ -681,11 +681,6 @@ def serve(
     batch_window_ms: float | None,
     dtype: str | None,
     enable_shared_context: bool | None,
-    models_file: str | None,
-    device: str | None,
-    host: str | None,
-    port: int | None,
-    uds: str | None,
 ) -> None:
     ctx = click.get_current_context()
     runtime = resolve_container_runtime(ctx, container_runtime, runtime)
@@ -707,28 +702,6 @@ def serve(
         device_ids=device_ids,
         engine_args=engine_args,
     )
-    if _platform_hint(platform) == "apple" and (model or models_file):
-        run_apple_engine(
-            ctx,
-            (model,) if model else (),
-            models_file=models_file,
-            revision=revision,
-            device=device,
-            host=host,
-            port=port,
-            uds=uds,
-            engine_args=engine_args,
-            log_level=log_level,
-            target=target,
-            runtime=runtime,
-            image=router_image or image,
-            pull_policy=image_pull_policy,
-        )
-        return
-    if any(value is not None for value in (models_file, device, host, port, uds)):
-        raise click.UsageError(
-            "--models/--device/--host/--port/--uds require Apple engine mode"
-        )
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
     reject_envoy_options(ctx, resolve_gateway(gateway))
