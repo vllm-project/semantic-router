@@ -367,14 +367,15 @@ class NVFP4Linear(nn.Module):
         self.weight_fp4 = self.weight_packed.view(torch.float4_e2m1fn_x2).t()
         self.scaling = [ScalingType.BlockWise1x16, ScalingType.TensorWise]
         self.swizzling = [SwizzleType.SWIZZLE_32_4_4, SwizzleType.NO_SWIZZLE]
-        self.quantize, self.swizzle = quantize, swizzle
+        self.quantize = quantize
 
     def _product(self, rows: torch.Tensor) -> torch.Tensor:
+        # the kernel writes the activation scales in cuBLAS's layout already
         q, scale = self.quantize(rows, self.input_global)
         return nn.functional.scaled_mm(
             q.view(torch.float4_e2m1fn_x2),
             self.weight_fp4,
-            [self.swizzle(scale), self.input_decode],
+            [scale, self.input_decode],
             self.scaling,
             [self.weight_scale, self.weight_decode],
             self.scaling,
@@ -385,13 +386,18 @@ class NVFP4Linear(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.shape
-        rows = x.reshape(-1, shape[-1]).to(torch.bfloat16).contiguous()
+        rows = x.reshape(-1, shape[-1])
+        if rows.dtype != torch.bfloat16:
+            rows = rows.to(torch.bfloat16)
+        if not rows.is_contiguous():
+            rows = rows.contiguous()
         if rows.shape[0] > NVFP4_ROWS:
             parts = torch.split(rows, NVFP4_ROWS)
             out = torch.cat([self._product(part) for part in parts])
         else:
             out = self._product(rows)
-        out = out.to(x.dtype)
+        if out.dtype != x.dtype:
+            out = out.to(x.dtype)
         if self.bias is not None:
             out = out + self.bias
         return out.reshape(*shape[:-1], self.out_features)

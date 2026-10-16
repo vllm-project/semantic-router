@@ -384,7 +384,34 @@ def test_nvfp4_activations_quantize_as_the_reference_does(blackwell, shape):
     codes, scales = triton_nvfp4.quantize(x, float(global_))
     want_codes, want_scales = nvfp4.quantize(x, global_)
     assert codes.equal(want_codes)
-    assert scales.view(torch.uint8).equal(want_scales.view(torch.uint8))
+    # the kernel writes cuBLAS's padded 32x4x4 layout, zero where it pads
+    assert scales.view(torch.uint8).equal(nvfp4.swizzle(want_scales).view(torch.uint8))
+
+
+def test_later_nvfp4_calls_launch_the_compiled_kernel_and_write_the_same_bytes(
+    blackwell,
+):
+    from vllm_srun.accel import triton_nvfp4
+
+    from vllm_srun.accel import nvfp4
+
+    torch.manual_seed(0)
+    x = torch.randn(300, 2048, device=blackwell, dtype=torch.bfloat16)
+    first = triton_nvfp4.quantize(x, 100.0)
+    assert [v for k, v in triton_nvfp4._launches.items() if k[2] == 2048 and v]
+    again = triton_nvfp4.quantize(x, 100.0)  # the direct launch
+    assert again[0].equal(first[0])
+    assert again[1].view(torch.uint8).equal(first[1].view(torch.uint8))
+    for rows in (1, 37, 129):  # every row count takes the same compiled kernel
+        codes, scales = triton_nvfp4.quantize(x[:rows].contiguous(), 100.0)
+        want_codes, want_scales = nvfp4.quantize(
+            x[:rows], torch.tensor([100.0], device=blackwell)
+        )
+        assert codes.equal(want_codes)
+        assert scales.view(torch.uint8).equal(
+            nvfp4.swizzle(want_scales).view(torch.uint8)
+        )
+    assert len([k for k in triton_nvfp4._launches if k[2] == 2048]) == 1
 
 
 @pytest.mark.parametrize(
