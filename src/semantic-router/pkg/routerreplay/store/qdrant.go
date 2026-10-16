@@ -269,8 +269,8 @@ func (q *QdrantStore) waitForWrites(ctx context.Context) error {
 	return runAsyncOp(ctx, q.asyncChan, func() error { return nil })
 }
 
-// Timestamps are whole seconds, so each second is sorted by ID before its
-// bodies are read.
+// The timestamp payload holds whole seconds, so each second is loaded whole
+// and ordered by its full timestamps.
 func (q *QdrantStore) scan(ctx context.Context) recordScan {
 	return func(from int, visit func(Record) bool) error {
 		var group []string
@@ -282,10 +282,15 @@ func (q *QdrantStore) scan(ctx context.Context) recordScan {
 				group = group[:0]
 				return true, nil
 			}
-			ids := sortedDesc(group)[from:]
+			var records []Record
+			_, err := q.visitIDs(ctx, group, func(record Record) bool {
+				records = append(records, record)
+				return true
+			})
+			skip := from
 			from = 0
 			group = group[:0]
-			return q.visitIDs(ctx, ids, visit)
+			return err == nil && visitGroup(records, skip, visit), err
 		}
 		for {
 			filter := q.liveFilter()

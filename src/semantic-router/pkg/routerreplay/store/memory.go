@@ -1,7 +1,6 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -123,12 +122,7 @@ func (m *MemoryStore) scan(from int, visit func(Record) bool) error {
 			live = append(live, rec)
 		}
 	}
-	slices.SortFunc(live, func(a, b *Record) int {
-		if c := b.Timestamp.Compare(a.Timestamp); c != 0 {
-			return c
-		}
-		return cmp.Compare(b.ID, a.ID)
-	})
+	slices.SortFunc(live, func(a, b *Record) int { return newestFirst(*a, *b) })
 	for _, rec := range live[min(from, len(live)):] {
 		if !visit(cloneRecord(*rec)) {
 			break

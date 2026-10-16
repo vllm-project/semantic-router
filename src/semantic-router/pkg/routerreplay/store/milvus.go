@@ -426,7 +426,8 @@ type milvusRow struct {
 }
 
 // Milvus queries cannot sort, so scan walks timestamp ranges newest first,
-// reading IDs before bodies.
+// reading IDs before bodies. The timestamp column holds whole seconds, so each
+// second is loaded whole and ordered by its full timestamps.
 func (m *MilvusStore) scan(ctx context.Context) recordScan {
 	return func(from int, visit func(Record) bool) error {
 		floor := int64(math.MinInt64)
@@ -449,20 +450,10 @@ func (m *MilvusStore) scan(ctx context.Context) recordScan {
 				width = (min(hi, top) - lo) / 2
 				continue
 			}
-			slices.SortFunc(rows, func(a, b milvusRow) int {
-				if a.timestamp != b.timestamp {
-					return cmp.Compare(b.timestamp, a.timestamp)
-				}
-				return strings.Compare(b.id, a.id)
-			})
-			if from >= len(rows) {
-				from -= len(rows)
-			} else {
-				more, visitErr := m.visitIDs(ctx, rows[from:], visit)
-				if visitErr != nil || !more {
-					return visitErr
-				}
-				from = 0
+			var more bool
+			from, more, err = m.visitSeconds(ctx, rows, from, visit)
+			if err != nil || !more {
+				return err
 			}
 			if lo <= floor {
 				return nil
@@ -477,6 +468,36 @@ func (m *MilvusStore) scan(ctx context.Context) recordScan {
 			}
 		}
 	}
+}
+
+// visitSeconds visits rows from position from, one whole second at a time, and
+// returns what is left of from.
+func (m *MilvusStore) visitSeconds(ctx context.Context, rows []milvusRow, from int, visit func(Record) bool) (int, bool, error) {
+	slices.SortFunc(rows, func(a, b milvusRow) int { return cmp.Compare(b.timestamp, a.timestamp) })
+	for start := 0; start < len(rows); {
+		end := start + 1
+		for end < len(rows) && rows[end].timestamp == rows[start].timestamp {
+			end++
+		}
+		second := rows[start:end]
+		start = end
+		if from >= len(second) {
+			from -= len(second)
+			continue
+		}
+		var records []Record
+		if _, err := m.visitIDs(ctx, second, func(record Record) bool {
+			records = append(records, record)
+			return true
+		}); err != nil {
+			return 0, false, err
+		}
+		if !visitGroup(records, from, visit) {
+			return 0, false, nil
+		}
+		from = 0
+	}
+	return from, true, nil
 }
 
 func (m *MilvusStore) queryRows(ctx context.Context, lo, hi int64) ([]milvusRow, error) {

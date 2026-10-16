@@ -375,8 +375,9 @@ func redisIndexKey(prefix string) string {
 	return strings.TrimSuffix(prefix, ":") + "_index"
 }
 
+// Microseconds match PostgreSQL and stay exact in a float64 score.
 func redisIndexScore(t time.Time) float64 {
-	return float64(t.UnixMilli())
+	return float64(t.UnixMicro())
 }
 
 // UpdateStatus updates the response status and flags for a record.

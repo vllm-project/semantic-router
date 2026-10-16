@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -120,9 +121,21 @@ func listAll(scan recordScan) ([]Record, error) {
 	return records, err
 }
 
-func sortedDesc(ids []string) []string {
-	sorted := slices.Clone(ids)
-	slices.Sort(sorted)
-	slices.Reverse(sorted)
-	return sorted
+// newestFirst is the order every store pages in.
+func newestFirst(a, b Record) int {
+	if c := b.Timestamp.Compare(a.Timestamp); c != 0 {
+		return c
+	}
+	return cmp.Compare(b.ID, a.ID)
+}
+
+// visitGroup sorts records into page order and visits them from position from.
+func visitGroup(records []Record, from int, visit func(Record) bool) bool {
+	slices.SortFunc(records, newestFirst)
+	for _, record := range records[min(from, len(records)):] {
+		if !visit(record) {
+			return false
+		}
+	}
+	return true
 }
