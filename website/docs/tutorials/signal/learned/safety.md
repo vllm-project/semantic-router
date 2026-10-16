@@ -89,7 +89,7 @@ returns HTTP 503 when the decision remains unknown. A scored unsafe request
 selects the configured handling route. Diagnostics expose matched rule names in
 `x-vsr-matched-safety`, the classification result, dashboard and replay record.
 
-See [shared model configuration](/docs/model-runtime/guides/safety)
+See [shared model configuration](../../../model-runtime/guides/safety)
 for native context budgets, external endpoints and failure policies, and the
 [complete HTTP example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 for a category-specific policy.
@@ -189,7 +189,7 @@ supplied 2,048-token windows and 32K document policy; configuring a larger
 document budget does not qualify that operating point for a different scan.
 
 Choose thresholds evaluated with the exact model, window size, overlap and
-[profile](../../../model-runtime/profiles.md) you deploy. Window scanning can recover local risks that a whole-input
+[engine arguments](../../../model-runtime/engine-args.md) you deploy. Window scanning can recover local risks that a whole-input
 classifier misses, but it cannot interpret a distant refusal or protective
 purpose outside the same window. Validate quoted material and other long-range
 context in your application. Omit `window` when whole-input semantics are needed.

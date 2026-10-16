@@ -44,10 +44,12 @@ Yes. Publish the native model through the listener's `systemone.models`
 grant and call `/v1/systemone`. `/v1/decisions` is an alias. Native model discovery
 uses `/v1/systemone/models`; Chat model discovery uses `/v1/models`.
 
-Current System One requests name a concrete served model. Automatic native
-routing through `vllm-sr/auto` is a roadmap item; the default Chat entrypoint
-already uses that name. See the [System One guide](model-runtime/guides/decisions)
-and [Quickstart](model-runtime/quickstart) for complete requests and access rules.
+Use a concrete model ID for direct inference in either mode. In Router mode,
+you can also publish an explicit `api: systemone` entrypoint and grant its
+`vllm-sr/auto` name on the listener to run a native cascade. The Chat default
+entrypoint does not implicitly enable native routing. See the
+[System One cascade guide](tutorials/algorithm/native/cascade) and
+[Quickstart](model-runtime/quickstart) for configuration and requests.
 
 ## How does it work with an agent harness?
 

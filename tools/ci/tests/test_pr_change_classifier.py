@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -15,7 +16,11 @@ from ci_plan import (  # noqa: E402
     performance_base,
     previous_release,
 )
-from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
+from classify_pr_changes import (  # noqa: E402
+    CLI_RUNTIME_IMAGES,
+    classify,
+    full_e2e_profiles,
+)
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
@@ -398,6 +403,39 @@ class SelectionTests(unittest.TestCase):
         cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
         self.assertTrue(cli["publish_python"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
+
+    def test_main_publishes_every_image_its_dev_cli_defaults_to(self):
+        # The second path is outside every image's own publication paths.
+        for path in (
+            "src/vllm-sr/cli/core.py",
+            "e2e/testing/vllm-sr-cli/test_unit_serve.py",
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertTrue(plan["publish_python"])
+                self.assertLessEqual(
+                    set(CLI_RUNTIME_IMAGES), set(plan["publish_images"])
+                )
+                self.assertLessEqual(set(plan["publish_images"]), set(plan["images"]))
+                self.assertTrue(plan["multiarch"])
+        router = make_plan(
+            ["src/semantic-router/pkg/config/loader.go"], source_sha=SHA, profile="main"
+        )
+        self.assertFalse(router["publish_python"])
+        self.assertNotIn("dashboard", router["publish_images"])
+        pr = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA)
+        self.assertEqual(pr["publish_images"], [])
+
+    def test_cli_runtime_images_are_the_first_party_images_the_cli_pulls(self):
+        consts = (ROOT / "src/vllm-sr/cli/consts.py").read_text(encoding="utf-8")
+        self.assertEqual(
+            set(
+                re.findall(
+                    r'"ghcr\.io/vllm-project/semantic-router/([a-z0-9-]+):', consts
+                )
+            ),
+            set(CLI_RUNTIME_IMAGES),
+        )
 
     def test_previous_release_is_explicit_compatible_and_not_head_parent(self):
         self.assertEqual(

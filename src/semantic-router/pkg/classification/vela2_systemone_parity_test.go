@@ -261,7 +261,7 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := map[string]interface{}{"model": card.ID, "revision": card.Revision, "model_sha256": card.ModelSHA256, "device": card.Device, "profile": card.Profile}
+	report := map[string]interface{}{"model": card.ID, "revision": card.Revision, "model_sha256": card.ModelSHA256, "device": card.Device, "numerics": card.Numerics}
 	var rows []map[string]interface{}
 	for _, text := range vela2ParityTexts {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

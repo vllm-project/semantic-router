@@ -49,3 +49,10 @@ func TestManagementPolicyMatchesOnlyCompleteDeclaredMethodPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifierInventoryRequiresConfigWrite(t *testing.T) {
+	policy, ok := LookupManagement(http.MethodGet, GatewayPrefix+"/api/v1/inventory/classifier")
+	if !ok || !reflect.DeepEqual(policy.Permissions, []string{configWrite}) || policy.Mutation {
+		t.Fatalf("classifier inventory policy = %+v, found = %v", policy, ok)
+	}
+}

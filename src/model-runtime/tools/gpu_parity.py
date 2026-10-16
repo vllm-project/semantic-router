@@ -2,14 +2,15 @@
 
     python3 tools/gpu_parity.py --package DIR --released ANSWERS.jsonl --panel NAME:PROMPTS:COUNT ...
         --output OUT.json [--answers NATIVE.jsonl] [--device rocm:0] [--base-path DIR]
-        [--profile exact|shared_context] [--no-graphs] [--no-fused]
+        [--shared-context] [--no-graphs] [--no-fused]
 
 ``--panel NAME:REQUESTS.jsonl:COUNT`` takes any JSONL of ``{"id", "state", "questions"}`` requests; with
-``--profile shared_context`` the released answers are the released runtime's with ``share_context=True``.
+``--shared-context`` the released answers are the released runtime's with ``share_context=True``.
 
 The package is verified and loaded through the decision2 family and the native engine; no package code runs.
-Every prompt is answered as one request with the profile's batching (``exact``: the request's questions in one
-padded batch, split only by the forward token budget) and compared with the released runtime's answers for the
+Every prompt is answered as one request in the released forwards (the golden check's reference: the request's
+questions in one padded batch, split only by the forward token budget), or as one shared-context tree where the
+shared-context policy shares it, and compared with the released runtime's answers for the
 same panel and prompt ID (the ``--answers`` file of ``v2/release/examples.py parity``, produced on the same device
 class with the same autotune cache; a built-in model runs with its pinned kernel choices, the released runtime's).
 Per panel: prompts, identical prompts (canonical JSON equality), category changes, missing answers and the largest
@@ -31,24 +32,30 @@ sys.path.insert(0, str(ROOT))
 from vllm_srun.accel.autotune import KernelChoices  # noqa: E402
 from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.accel.npu import NPUAccelerator  # noqa: E402
 from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
 from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_srun.families.decision2.family import Decision2Family  # noqa: E402
 from vllm_srun.plugins.base import (  # noqa: E402
+    Batch,
     EngineOptions,
     Job,
     PackageRef,
     RegistryOptions,
 )
-from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
-from vllm_srun.profiles.shared_context import (  # noqa: E402
-    SharedContextProfile,
-    SharePolicy,
-)
 from vllm_srun.registry import builtin  # noqa: E402
+from vllm_srun.scheduler.batching import (  # noqa: E402
+    SharedContext,
+    SharePolicy,
+    reference,
+)
 
-ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
-PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}
+ACCELERATORS = {
+    "cpu": CPUAccelerator,
+    "cuda": CUDAAccelerator,
+    "npu": NPUAccelerator,
+    "rocm": ROCmAccelerator,
+}
 
 
 def canonical(value: Any) -> str:
@@ -104,15 +111,22 @@ def load(args: argparse.Namespace):
     return family.load(package, spec, engine_model)
 
 
+def batches(model: Any, sharing: SharedContext | None, job: Job) -> list[Batch]:
+    """One request's forwards: a shared-context tree where the policy shares it, else its released forwards."""
+    budget = model.forward_token_budget()
+    prefix = sharing.share(job.items, budget) if sharing else 0
+    if prefix:
+        return [Batch(parts=[(job, list(range(len(job.items))))], shared_prefix=prefix)]
+    return reference(model, [job], budget)
+
+
 def system_one(
-    model: Any, profile: Any, state: Any, questions: dict[str, Any]
+    model: Any, sharing: SharedContext | None, state: Any, questions: dict[str, Any]
 ) -> dict[str, Any]:
     plan = model.plan(state, questions)
-    job = Job(
-        items=plan.items, deadline=None, enqueued=time.monotonic(), profile=profile.name
-    )
+    job = Job(items=plan.items, deadline=None, enqueued=time.monotonic())
     logits: dict[int, list[float] | None] = {}
-    for batch in profile.plan([job], model.forward_token_budget()):
+    for batch in batches(model, sharing, job):
         indices = [index for _, part in batch.parts for index in part]
         items = [plan.items[i] for i in indices]
         if batch.shared_prefix:
@@ -141,9 +155,11 @@ def main() -> int:
     parser.add_argument("--answers", type=Path)
     parser.add_argument("--device", default="rocm:0")
     parser.add_argument("--base-path")
-    parser.add_argument("--profile", default="exact", choices=sorted(PROFILES))
+    parser.add_argument("--shared-context", action="store_true")
     parser.add_argument(
-        "--share-policy", default="{}", help="shared_context SharePolicy fields as JSON"
+        "--share-policy",
+        default="{}",
+        help="SharePolicy fields as JSON (--shared-context)",
     )
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--no-fused", action="store_true")
@@ -155,14 +171,13 @@ def main() -> int:
             released[(row["panel"], row["id"])] = row["answers"]
     started = time.perf_counter()
     model = load(args)
-    if args.profile == "shared_context":
-        profile = SharedContextProfile(SharePolicy(**json.loads(args.share_policy)))
-    else:
-        profile = PROFILES[args.profile]()
-    unavailable = profile.available(model)
-    if unavailable:
-        raise SystemExit(f"profile {args.profile} is unavailable: {unavailable}")
-    profile.bind(model)
+    sharing = None
+    if args.shared_context:
+        sharing = SharedContext(SharePolicy(**json.loads(args.share_policy)))
+        unavailable = sharing.unavailable(model)
+        if unavailable:
+            raise SystemExit(f"shared context is unavailable: {unavailable}")
+        sharing.bind(model)
     load_seconds = time.perf_counter() - started
     sink = args.answers.open("x", encoding="utf-8") if args.answers else None
     panels = {}
@@ -179,7 +194,7 @@ def main() -> int:
             "max_abs_drift": 0.0,
         }
         for prompt in prompts:
-            response = system_one(model, profile, prompt["state"], prompt["questions"])
+            response = system_one(model, sharing, prompt["state"], prompt["questions"])
             answers = response["answers"]
             if sink is not None:
                 sink.write(

@@ -35,6 +35,13 @@ kubectl logs -n semantic-router-operator-system \
   deployment/semantic-router-operator-controller-manager
 ```
 
+Enabled startup and readiness probes use HTTP `/ready` in standalone mode and
+gRPC health on port `50051` in plaintext `extproc` mode. The gRPC check waits
+for an active serving configuration; extproc liveness remains a TCP check. When
+`spec.args` enables `--secure`, the Operator retains TCP probes because the
+supported Kubernetes probe API cannot check TLS gRPC listeners. Those TCP
+checks confirm connectivity only, not serving readiness.
+
 ## Update safely
 
 1. Export the current custom resource and record the deployed image reference.

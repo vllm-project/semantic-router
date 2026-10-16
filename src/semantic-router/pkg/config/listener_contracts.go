@@ -72,11 +72,25 @@ func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
 			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
 		}
 		seen[model] = true
+		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed || cfg.IsSystemOneBackend(model) {
+			continue
+		}
 		if _, _, err := cfg.ResolveSystemOneDeployment(model); err != nil {
 			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
 		}
 	}
 	return nil
+}
+
+// IsSystemOneBackend reports whether model is an exact provider alias for the
+// native System One contract. Chat aliases and upstream-only identities do not
+// become native public names.
+func (c *RouterConfig) IsSystemOneBackend(model string) bool {
+	if c == nil {
+		return false
+	}
+	backend, ok := c.ModelConfig[model]
+	return ok && backend.APIFormat == APIFormatSystemOne
 }
 
 // ResolveSystemOneDeployment maps a public inference identity to exactly one

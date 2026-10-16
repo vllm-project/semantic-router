@@ -58,6 +58,16 @@ smallest one that is accurate enough for your questions.
 | `vllm-sr/Decision-2.0-Lux-9B` | 9B | GPU (24 GB or more) | The most accurate at moderate cost |
 | `vllm-sr/Decision-2.0-Vega-27B` | 27B | One GPU with 64 GB or more | The most accurate overall |
 
+Decision 3.0 models also read images and videos: a request may carry `images`
+and `videos` that every question sees. They are built in as `vllm-sr/d3`
+(27B), `vllm-sr/d3-flash` (9B), `vllm-sr/d3-mini` (4B), `vllm-sr/d3-nano`
+(2B), `vllm-sr/d3-lite` (0.8B) and `vllm-sr/d3-edge` (0.6B, a pruned
+d3-lite), and run on a GPU. Start one with, for example,
+`vllm-sr serve vllm-sr/d3-lite --engine --platform rocm` on an AMD Instinct
+MI325X. They answer `choice`, `noul` and `score` questions, and their answers
+match the packages' own runtime bit for bit
+([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).
+
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
@@ -86,9 +96,10 @@ routing stages can make additional calls.
   with the labels of its Vela 1.0 model, so rules and policies read the answer
   as before. PII and hallucination use the model's span head, so their spans
   keep exact character offsets.
-- **CPU profile:** on a CPU the deployment runs `max_speed`, a packed copy of
-  the model's weights. It gives the same answers to within about 0.00001 and
-  is about 1.6 times faster than `exact`.
+- **On a CPU:** by default the deployment batches requests on a packed FP32
+  copy of the model's weights. It gives the same answers to within about
+  0.00001 and is about 1.6 times faster than answering each request alone on
+  the unpacked weights.
 - **Input:** ordinary routing judgments may truncate to the model's input
   limit. Prompt guard, safety, PII and hallucination require complete input;
   supported window scans can extend coverage up to the scan budget. Incomplete
@@ -227,7 +238,7 @@ The CLI saves this deployment choice in the active configuration as a new versio
 starts keep it, and `vllm-sr status` shows it. The Helm chart's
 `decisionModel` value and the operator's `spec.config.decision_model` set the
 same binding. Deployment keys are exact and case-sensitive. Model identity,
-device and profile belong to the deployment, not the binding.
+device and engine arguments belong to the deployment, not the binding.
 
 Measured through the Router on the router signal suite, against the Vela 1.0
 specialists, and for the latency record's five request signals
@@ -283,6 +294,7 @@ the record maps each to every size (for example `mom-v1`'s `prompt_attack`
 | AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform rocm` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
 | NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform cuda` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
+| Ascend NPUs (910B, 950) | Works, not yet validated | `device: npu:0`, with the runtime installed next to torch_npu and the host CANN toolkit. See [Ascend NPU](../installation/ascend-npu.md). |
 | Apple silicon | CPU only in this release | On macOS the docker target runs the CPU image, because Docker's Linux VM gets no GPU. Host GPU support is tracked in [#4636](https://github.com/vllm-project/semantic-router/issues/4636). |
 
 On AMD GPUs the router images ship the stack the runtime is validated on:
@@ -300,10 +312,13 @@ says so and gives how often it agrees with the released answers.
 `device: auto` (the default) picks the first validated GPU with enough free
 memory and otherwise the CPU. A GPU you name explicitly must exist, or the
 model fails to load with a clear reason instead of quietly running on the CPU.
+Accelerators that are not yet validated (`xpu`, `npu`) are never picked by
+`auto` — on a host that has one, `auto` still selects the CPU; name the device
+explicitly to use it.
 
 ### How much memory
 
-Memory depends on the model family and profile, not just the device. FP32
+Memory depends on the model family and its precision (`dtype`), not just the device. FP32
 weights use about 4 bytes per parameter; a lower-precision model may use about
 2, with additional memory needed for inputs, activations, and concurrency. A
 307M FP32 task model therefore needs roughly 1.3 GB for its weights alone.

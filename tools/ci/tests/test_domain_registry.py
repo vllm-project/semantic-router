@@ -156,6 +156,7 @@ class DomainRegistryTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/families/decision1/family.py",
             "src/model-runtime/vllm_srun/families/decision1/questions.py",
             "src/model-runtime/vllm_srun/families/decision2/family.py",
+            "src/model-runtime/vllm_srun/families/decision3/family.py",
             "tools/codegen/configschema/main.go",
             "tools/codegen/openapi/main.go",
             "tools/codegen/embed_generated_index.py",
@@ -192,6 +193,29 @@ class DomainRegistryTests(unittest.TestCase):
                 )
                 self.assertIn("cli-unit", result.selected_jobs)
                 self.assertNotIn("vllm-sr-cli", result.domains)
+
+    def test_docs_whose_snippets_the_cli_suite_checks_select_it(self) -> None:
+        translated = "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current"
+        for path in (
+            "website/docs/model-runtime/reference.md",
+            "website/docs/model-runtime/guides/pii.md",
+            "website/docs/tutorials/signal/learned/decision.md",
+            f"{translated}/model-runtime/deploy.md",
+            f"{translated}/model-runtime/guides/decisions.md",
+            f"{translated}/tutorials/algorithm/selection/decision.md",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn(
+                    "make vllm-sr-test", commands_for_domains(result.domains, "checks")
+                )
+                self.assertIn("cli-unit", result.selected_jobs)
+                self.assertIn("documentation", result.domains)
+                self.assertNotIn("vllm-sr-cli", result.domains)
+        self.assertNotIn(
+            "cli-unit",
+            classify([f"{translated}/tutorials/global/overview.md"]).selected_jobs,
+        )
 
     def test_model_resolution_selects_the_published_model_contract(self) -> None:
         for path in (

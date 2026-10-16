@@ -24,6 +24,7 @@ func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results
 	)...)
 	return append(dispatchers, c.buildPolicySignalDispatchers(
 		results, mu, textForSignal, input.PriorUserMessages, input.NonUserMessages,
+		input.ToolResultTexts, input.ToolResultScanIncomplete,
 		input.ConversationFacts, input.RequestFacts, usedSignals,
 	)...)
 }
@@ -32,7 +33,10 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
-			func(context.Context) { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
+			func(context.Context) {
+				c.evaluateKeywordSignalWithHistory(results, mu,
+					textForSignal(config.SignalTypeKeyword), input.PriorUserMessages)
+			},
 		},
 		{
 			config.SignalTypeEmbedding, "Embedding",
@@ -79,6 +83,10 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 		{
 			config.SignalTypeLanguage, "Language",
 			func(context.Context) { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
+		},
+		{
+			config.SignalTypeAction, "Action",
+			func(context.Context) { c.evaluateActionSignal(results, mu, input.CurrentUserText) },
 		},
 	}
 }
