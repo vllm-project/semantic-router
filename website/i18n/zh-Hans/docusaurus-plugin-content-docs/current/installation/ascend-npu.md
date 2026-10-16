@@ -49,6 +49,16 @@ readiness 会执行模型的 golden 自检：两次参考前向，各自与发�
 （见[放置和扩展副本](../model-runtime/deploy.md#place-and-scale-replicas)），
 前提是运行时旁装好了 torch_npu。
 
+### 精度：bf16 作为 opt-in
+
+`--dtype bfloat16` 让模型在 NPU 上走 BF16 autocast；它是显式引擎参数，
+`--dtype auto` 保持各模型发布的（fp32）精度。在 Ascend 950DT 上的实测
+（见 [bf16 record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/npu-bf16-ascend950dt.md)）：
+Vela 2.0 解码器 2.5×（并发 8 时 84.8 → 214.1 请求/秒），encoder 家族无变化，
+四信号语料上标签零翻转。confidence 叶子可能漂过 0.02 容差（两模型分别为
+0.8% / 4.3%），阈值卡在 confidence 边界上的路由规则在 bf16 下可能翻转——
+这类部署建议保持 fp32。
+
 ## 在容器中运行 NPU 运行时
 
 没有专门的 NPU 镜像（[#4827](https://github.com/vllm-project/semantic-router/pull/4827) 中的结论）。
