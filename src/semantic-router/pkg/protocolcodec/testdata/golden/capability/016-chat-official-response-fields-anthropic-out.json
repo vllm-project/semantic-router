@@ -1045,7 +1045,13 @@
             },
             "service_tier": "standard"
           }
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "usage.cache_creation",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
