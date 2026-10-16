@@ -51,13 +51,14 @@ type anthropicEventWire struct {
 }
 
 type anthropicMessageDeltaUsageWire struct {
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
-	InputTokens              int64                           `json:"input_tokens"`
-	OutputTokens             int64                           `json:"output_tokens"`
-	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
-	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
-	Iterations               []json.RawMessage               `json:"iterations,omitempty"`
+	CacheCreationInputTokens int64                            `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                            `json:"cache_read_input_tokens"`
+	InputTokens              int64                            `json:"input_tokens"`
+	OutputTokens             int64                            `json:"output_tokens"`
+	CacheCreation            *anthropicCacheCreationUsageWire `json:"cache_creation,omitempty"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire  `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire     `json:"server_tool_use"`
+	Iterations               []json.RawMessage                `json:"iterations,omitempty"`
 }
 
 type anthropicDeltaWire struct {
@@ -178,7 +179,10 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	switch wire.Type {
 	case "message_start":
-		events, diagnostics, err := decoder.emitAnthropicEvent(decodeAnthropicMessageStart(wire))
+		var startDiagnostics llmprotocol.Diagnostics
+		event := decoder.decodeAnthropicMessageStart(wire, &startDiagnostics)
+		events, diagnostics, err := decoder.emitAnthropicEvent(event)
+		diagnostics = appendDiagnostics(startDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
 		if wire.Message != nil && len(wire.Message.Diagnostics) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Message.Diagnostics), []byte("null")) {
 			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
 				"stream.message.diagnostics", "prompt-cache miss diagnostics have no neutral representation")
@@ -227,14 +231,14 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicMessageStop() ([]llmprotoc
 	})
 }
 
-func decodeAnthropicMessageStart(wire anthropicEventWire) llmprotocol.Event {
+func (decoder *anthropicStreamDecoder) decodeAnthropicMessageStart(wire anthropicEventWire, diagnostics *llmprotocol.Diagnostics) llmprotocol.Event {
 	event := llmprotocol.Event{Type: llmprotocol.EventResponseStarted}
 	if wire.Message == nil {
 		return event
 	}
 	event.ResponseID, event.Model = wire.Message.ID, wire.Message.Model
 	if wire.Message.Usage != nil {
-		usage := decodeAnthropicStreamUsage(*wire.Message.Usage, true)
+		usage := decodeAnthropicStreamUsage(*wire.Message.Usage, true, decoder.policy, diagnostics)
 		event.Usage = &usage
 	}
 	return event
@@ -387,13 +391,22 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 	return event, nil
 }
 
-func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotocol.Usage {
+func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
 	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 {
+	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 || wire.CacheCreation != nil {
+		cacheWrite := wire.CacheCreationInputTokens
+		cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(
+			wire.CacheCreation, cacheWrite, policy, diagnostics,
+		)
+		if derivedAggregate != nil {
+			cacheWrite = *derivedAggregate
+		}
 		usage.InputUncached = authoritative(wire.InputTokens)
 		usage.InputCacheRead = authoritative(wire.CacheReadInputTokens)
-		usage.InputCacheWrite = authoritative(wire.CacheCreationInputTokens)
-		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens)
+		usage.InputCacheWrite = authoritative(cacheWrite)
+		usage.InputCacheWrite5m = cacheWrite5m
+		usage.InputCacheWrite1h = cacheWrite1h
+		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + cacheWrite)
 	}
 	if wire.OutputTokens > 0 || !initial {
 		reasoning := wire.OutputTokensDetails.ThinkingTokens
@@ -410,21 +423,28 @@ func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotoc
 
 func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmprotocol.Usage {
 	return decodeAnthropicStreamUsage(anthropicUsageWire{
-		InputTokens: wire.InputTokens, OutputTokens: wire.OutputTokens,
+		InputTokens:              wire.InputTokens,
+		OutputTokens:             wire.OutputTokens,
 		CacheCreationInputTokens: wire.CacheCreationInputTokens,
 		CacheReadInputTokens:     wire.CacheReadInputTokens,
+		CacheCreation:            wire.CacheCreation,
 		OutputTokensDetails:      wire.OutputTokensDetails,
 		ServerToolUse:            wire.ServerToolUse,
-	}, false)
+	}, false, llmprotocol.Policy{}, nil)
 }
 
 func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessageDeltaUsageWire {
 	full := encodeAnthropicUsage(usage)
+	var creation *anthropicCacheCreationUsageWire
+	if usage.InputCacheWrite5m.Value != nil || usage.InputCacheWrite1h.Value != nil {
+		creation = full.CacheCreation
+	}
 	return &anthropicMessageDeltaUsageWire{
 		CacheCreationInputTokens: full.CacheCreationInputTokens,
 		CacheReadInputTokens:     full.CacheReadInputTokens,
 		InputTokens:              full.InputTokens,
 		OutputTokens:             full.OutputTokens,
+		CacheCreation:            creation,
 		OutputTokensDetails:      full.OutputTokensDetails,
 		ServerToolUse:            full.ServerToolUse,
 	}
