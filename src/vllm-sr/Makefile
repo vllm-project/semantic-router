@@ -3,7 +3,7 @@
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
 ROUTER_IMAGE_NAME ?= $(IMAGE_NAME)
-ENVOY_IMAGE ?= envoyproxy/envoy:v1.35.3
+ENVOY_IMAGE ?= docker.io/envoyproxy/envoy:v1.35.3
 DASHBOARD_IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/dashboard
 IMAGE_TAG ?= latest
 FULL_IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)

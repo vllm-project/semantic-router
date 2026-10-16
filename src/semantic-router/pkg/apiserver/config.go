@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -94,7 +95,7 @@ type (
 type BatchClassificationRequest struct {
 	Recipe   string                 `json:"recipe,omitempty"`
 	Texts    []string               `json:"texts"`
-	TaskType string                 `json:"task_type,omitempty"` // "intent", "pii", "security", or "all"
+	TaskType string                 `json:"task_type,omitempty"` // "intent" (default), "pii", "security", or "all" (intent fields plus pii and security objects)
 	Options  *ClassificationOptions `json:"options,omitempty"`
 }
 
@@ -104,6 +105,32 @@ type BatchClassificationResult struct {
 	Confidence       float64            `json:"confidence"`
 	ProcessingTimeMs int64              `json:"processing_time_ms"`
 	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
+	// PII and Security are only set for task_type "all".
+	PII      *BatchPIIResult      `json:"pii,omitempty"`
+	Security *BatchSecurityResult `json:"security,omitempty"`
+}
+
+// BatchPIIResult is the PII detection outcome for one text in an "all" batch.
+// Confidence is null when the model did not report scores, mirroring the
+// encoding of classification.PIIResult.
+type BatchPIIResult struct {
+	HasPII          bool     `json:"has_pii"`
+	PIITypes        []string `json:"pii_types,omitempty"`
+	Confidence      *float32 `json:"confidence"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
+}
+
+// BatchSecurityResult is the jailbreak detection outcome for one text in an
+// "all" batch. Confidence is null when the model did not report scores,
+// mirroring the encoding of classification.SecurityResult.
+type BatchSecurityResult struct {
+	IsJailbreak     bool     `json:"is_jailbreak"`
+	ThreatType      string   `json:"threat_type"`
+	Confidence      *float32 `json:"confidence"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
+	// Decision carries the categorical guard detail (source label, categories,
+	// optional score) when the backend produced one.
+	Decision *tasks.LabelDecision `json:"decision,omitempty"`
 }
 
 // BatchClassificationResponse represents the response from batch classification

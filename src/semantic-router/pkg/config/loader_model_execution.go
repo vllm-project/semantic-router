@@ -37,6 +37,23 @@ var (
 	}
 )
 
+// rejectRemovedDeploymentProfile refuses the model runtime's former numerics
+// profiles; `vllm-sr config migrate` maps them onto engine arguments.
+func rejectRemovedDeploymentProfile(raw map[string]interface{}) error {
+	deployments := nestedStringMap(nestedStringMap(nestedStringMap(raw["global"])["model_catalog"])["deployments"])
+	var removed []string
+	for _, name := range sortedMapKeys(deployments) {
+		removed = appendPresent(removed, "global.model_catalog.deployments."+name, nestedStringMap(deployments[name]), "profile")
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"%s: profile was removed; batching is on by default and set by the deployment's engine arguments (max_num_seqs, max_num_batched_tokens, batch_window_ms, enable_shared_context, dtype); run `vllm-sr config migrate --config old-config.yaml`",
+		strings.Join(removed, ", "),
+	)
+}
+
 func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 	var removed []string
 	catalog := nestedStringMap(nestedStringMap(raw["global"])["model_catalog"])
