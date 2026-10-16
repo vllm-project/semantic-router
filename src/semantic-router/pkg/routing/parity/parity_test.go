@@ -151,7 +151,7 @@ func (s *echoSession) RequestBody(body []byte, _ bool) (*routing.Effect, error) 
 	}, nil
 }
 
-func (s *echoSession) ResponseHeaders(routing.Header, bool) (*routing.Effect, error) {
+func (s *echoSession) ResponseHeaders(routing.Header, bool, routing.BackendIdentity) (*routing.Effect, error) {
 	return &routing.Effect{Header: &routing.HeaderMutation{Set: []routing.HeaderOption{{Name: "x-vsr-routing-latency-ms", Value: "3.1"}}}}, nil
 }
 

@@ -77,8 +77,8 @@ func (s *tapedSession) RequestBody(body []byte, endOfStream bool) (*routing.Effe
 	return s.record(PhaseRecord{Phase: routing.PhaseRequestBody, EndOfStream: endOfStream, Body: append(Text(nil), body...)}, effect, err)
 }
 
-func (s *tapedSession) ResponseHeaders(header routing.Header, endOfStream bool) (*routing.Effect, error) {
-	effect, err := s.next.ResponseHeaders(header, endOfStream)
+func (s *tapedSession) ResponseHeaders(header routing.Header, endOfStream bool, backend routing.BackendIdentity) (*routing.Effect, error) {
+	effect, err := s.next.ResponseHeaders(header, endOfStream, backend)
 	return s.record(PhaseRecord{Phase: routing.PhaseResponseHeaders, EndOfStream: endOfStream, Header: header.Clone()}, effect, err)
 }
 

@@ -15,6 +15,20 @@ func (engine *Engine) EncodeResponseStream(
 	response llmprotocol.Response,
 	context llmprotocol.StreamContext,
 ) ([]byte, llmprotocol.Diagnostics, error) {
+	return engine.EncodeResponseStreamWithEnvelope(format, response, llmprotocol.Envelope{}, context)
+}
+
+// EncodeResponseStreamWithEnvelope preserves validated provider metadata when a
+// buffered response is rendered as SSE. Backend authorization belongs to the caller.
+func (engine *Engine) EncodeResponseStreamWithEnvelope(
+	format llmprotocol.WireFormat,
+	response llmprotocol.Response,
+	envelope llmprotocol.Envelope,
+	context llmprotocol.StreamContext,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoResponseEnvelope(envelope, format, engine.policy); err != nil {
+		return nil, nil, err
+	}
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return nil, nil, err
 	}
@@ -46,6 +60,21 @@ func (engine *Engine) EncodeResponseStream(
 	events, encodeResponseStreamErr := neutralResponseEvents(response)
 	if encodeResponseStreamErr != nil {
 		return nil, nil, encodeResponseStreamErr
+	}
+	if envelope.Dynamo != nil && envelope.Dynamo.ResponseNVExt != nil {
+		last := len(events) - 1
+		if format == llmprotocol.OpenAIChatV1 {
+			// Chat carries nvext in a standalone chunk before the terminal event.
+			terminal := events[last]
+			events[last] = llmprotocol.Event{
+				Type: llmprotocol.EventProviderOpaque, ResponseID: response.ID,
+				Model: response.Model, DynamoNVExt: envelope.Dynamo.ResponseNVExt,
+			}
+			events = append(events, terminal)
+		} else {
+			// Responses carries nvext on the final response resource.
+			events[last].DynamoNVExt = envelope.Dynamo.ResponseNVExt
+		}
 	}
 	var body bytes.Buffer
 	var diagnostics llmprotocol.Diagnostics

@@ -258,6 +258,30 @@
       }
     },
     {
+      "name": "nvext",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "nvext": {
+            "greed_sampling": true
+          }
+        }
+      }
+    },
+    {
       "name": "parallel_tool_calls",
       "outcome": {
         "status": "ok",

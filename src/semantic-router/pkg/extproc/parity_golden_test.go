@@ -174,7 +174,7 @@ func (s *extprocStreamSession) RequestBody(body []byte, endOfStream bool) (*rout
 	}})
 }
 
-func (s *extprocStreamSession) ResponseHeaders(header routing.Header, endOfStream bool) (*routing.Effect, error) {
+func (s *extprocStreamSession) ResponseHeaders(header routing.Header, endOfStream bool, backend routing.BackendIdentity) (*routing.Effect, error) {
 	return s.exchange(&ext_proc.ProcessingRequest{Request: &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{Headers: extprocHeaderMap(header), EndOfStream: endOfStream},
 	}})
