@@ -151,12 +151,21 @@ def freeze_heap() -> None:
     gc.freeze()
 
 
+def release_device_cache() -> None:
+    """Hand a failed attempt's cached GPU blocks back to the driver, whose free memory the next placement reads."""
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 __all__ = [
     "DEADLINE",
     "Runtime",
     "ServedModel",
     "freeze_heap",
     "planned_engine",
+    "release_device_cache",
     "with_overrides",
 ]
 
@@ -891,6 +900,7 @@ class Runtime:
             freeze_heap()
             if not retry:
                 return
+            release_device_cache()
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
             if self._stopping.wait(delay):
                 return
