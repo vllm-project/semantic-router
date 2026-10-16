@@ -263,6 +263,9 @@ func TestHistoryResetReplayDiagnosticsCarryNoContent(t *testing.T) {
 	if record.Signal != "topic_boundary" || record.TriggerClass != "change" || record.Version != "v1" {
 		t.Fatalf("unexpected trigger identity %+v", record)
 	}
+	if record.RecoveryStatus != historyreset.RecoveryNotRequired || record.RecoveryEntries != 0 {
+		t.Fatalf("a removal without recovery must say so: %+v", record)
+	}
 
 	encoded, err := json.Marshal(record)
 	if err != nil {

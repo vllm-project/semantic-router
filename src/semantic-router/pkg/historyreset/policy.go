@@ -123,17 +123,27 @@ type Diagnostics struct {
 	ProtectedMessages int
 	RemovedMessages   int
 	RemovedTurns      int
-	RecoveryStatus    string
+	RecoveryStatus    RecoveryStatus
 	RecoveryEntries   int
 }
 
-// Recovery status values. They describe what the action did about
-// recoverability, never where the payload went or under which key.
+// RecoveryStatus describes what the action did about recoverability, never
+// where the payload went or under which key. It is empty when recovery was
+// never considered.
+type RecoveryStatus string
+
 const (
-	RecoveryStored      = "stored"
-	RecoveryNotRequired = "not_required"
-	RecoveryFailed      = "failed"
+	RecoveryStored      RecoveryStatus = "stored"
+	RecoveryNotRequired RecoveryStatus = "not_required"
+	RecoveryFailed      RecoveryStatus = "failed"
 )
+
+// JSONEnumValues lists every value a recorded status can take on the wire,
+// for generated API schemas. The empty status is not one of them: it is
+// omitted rather than encoded.
+func (RecoveryStatus) JSONEnumValues() []string {
+	return []string{string(RecoveryNotRequired), string(RecoveryStored), string(RecoveryFailed)}
+}
 
 // evaluationFailure separates a failed evaluation from a normal negative.
 // A continuation, an inherited follow-up, and history with nothing eligible

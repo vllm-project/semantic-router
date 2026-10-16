@@ -25102,6 +25102,17 @@
                                   "reason": {
                                     "type": "string"
                                   },
+                                  "recovery_entries": {
+                                    "type": "integer"
+                                  },
+                                  "recovery_status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "not_required",
+                                      "stored",
+                                      "failed"
+                                    ]
+                                  },
                                   "removed_messages": {
                                     "type": "integer"
                                   },
@@ -29891,6 +29902,17 @@
                             },
                             "reason": {
                               "type": "string"
+                            },
+                            "recovery_entries": {
+                              "type": "integer"
+                            },
+                            "recovery_status": {
+                              "type": "string",
+                              "enum": [
+                                "not_required",
+                                "stored",
+                                "failed"
+                              ]
                             },
                             "removed_messages": {
                               "type": "integer"

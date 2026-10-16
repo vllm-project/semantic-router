@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -107,6 +108,22 @@ func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 	}
 	if envelope.Messages != 2 || envelope.Removed[0].Message.Content[0].Text != "old question" {
 		t.Fatalf("unexpected stored envelope %+v", envelope)
+	}
+
+	// Replay reports that recovery happened, but never the key or the
+	// removed content it protects.
+	record := historyResetReplayDiagnostics(ctx)
+	if record.RecoveryStatus != historyreset.RecoveryStored || record.RecoveryEntries != 1 {
+		t.Fatalf("unexpected replay recovery fields %+v", record)
+	}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("failed to encode the replay record: %v", err)
+	}
+	for _, forbidden := range []string{ctx.ContextCompressionRecoveryKeys[0], "old question", "old answer"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("replay record leaked %q: %s", forbidden, encoded)
+		}
 	}
 }
 

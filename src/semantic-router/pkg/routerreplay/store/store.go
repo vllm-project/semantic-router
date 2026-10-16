@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -288,6 +289,11 @@ type HistoryResetDiagnostics struct {
 	ProtectedMessages int    `json:"protected_messages,omitempty"`
 	RemovedMessages   int    `json:"removed_messages,omitempty"`
 	RemovedTurns      int    `json:"removed_turns,omitempty"`
+	// RecoveryStatus and RecoveryEntries say whether the removed turns were
+	// stored recoverably and how many entries were written. They carry no
+	// key, scope, or payload.
+	RecoveryStatus  historyreset.RecoveryStatus `json:"recovery_status,omitempty"`
+	RecoveryEntries int                         `json:"recovery_entries,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its details, mirroring
@@ -689,6 +695,10 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	if value.DecisionRanking != nil {
 		ranking := *value.DecisionRanking
 		cloned.DecisionRanking = &ranking
+	}
+	if value.HistoryReset != nil {
+		reset := *value.HistoryReset
+		cloned.HistoryReset = &reset
 	}
 	return &cloned
 }

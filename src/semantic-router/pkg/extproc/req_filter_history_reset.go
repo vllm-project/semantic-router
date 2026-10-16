@@ -151,7 +151,7 @@ func finalizeHistoryResetDiagnostics(ctx *RequestContext, ir *contextcompression
 		diagnostics.RemovedTurns,
 		diagnostics.RemovedMessages,
 	)
-	metrics.RecordHistoryResetRecovery(diagnostics.RecoveryStatus)
+	metrics.RecordHistoryResetRecovery(string(diagnostics.RecoveryStatus))
 	logging.ComponentEvent("extproc", "history_reset_evaluated", map[string]interface{}{
 		"request_id":         ctx.RequestID,
 		"signal":             diagnostics.Signal,
@@ -186,6 +186,8 @@ func historyResetReplayDiagnostics(ctx *RequestContext) *store.HistoryResetDiagn
 		ProtectedMessages: diagnostics.ProtectedMessages,
 		RemovedMessages:   diagnostics.RemovedMessages,
 		RemovedTurns:      diagnostics.RemovedTurns,
+		RecoveryStatus:    diagnostics.RecoveryStatus,
+		RecoveryEntries:   diagnostics.RecoveryEntries,
 	}
 }
 
