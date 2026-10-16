@@ -85,6 +85,8 @@ var DashboardContract = []string{
 	"dashboard-status",
 	// Issue #2794: OpenAPI rendered from the route registration.
 	"dashboard-openapi",
+	// Issue #2794: per-caller capability states with cached dependency probes.
+	"dashboard-capabilities",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints
@@ -122,6 +124,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-chat-cache-control",
 	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
+	// A stop_sequence terminal must project to the generic Chat stop for
+	// clients that cannot carry the matched string (issue #4892)
+	"anthropic-chat-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
 	"anthropic-response-api-buffered",
