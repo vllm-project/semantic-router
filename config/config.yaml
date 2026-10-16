@@ -301,6 +301,14 @@ routing:
         case_sensitive: false
         fuzzy_match: true
         fuzzy_threshold: 82
+      # include_history also matches earlier user messages in the conversation,
+      # so a constraint such as "local model only" stated in an earlier turn
+      # still applies. Omitted (false) evaluates only the current user message.
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        case_sensitive: false
+        include_history: true
 
     embeddings:
       - name: technical_support
