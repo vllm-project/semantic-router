@@ -145,6 +145,16 @@ func checkContractSize(t *testing.T, s Storage) {
 	if len(step.RawOutput) >= MaxRecordBytes || !step.Truncated || step.Output != "output" || large.RequestBody != "request" {
 		t.Fatalf("large record kept %d raw bytes, truncated=%v, output=%q, request=%q", len(step.RawOutput), step.Truncated, step.Output, large.RequestBody)
 	}
+
+	// Each '<' serializes to six bytes, so cutting the raw body by the JSON
+	// excess removes all of it before the record fits.
+	if _, err := s.Add(ctx, Record{ID: "escaped", Timestamp: now, RequestBody: strings.Repeat("<", MaxRecordBytes)}); err != nil {
+		t.Fatalf("escaped record: %v", err)
+	}
+	escaped, found, err := s.Get(ctx, "escaped")
+	if err != nil || !found || !escaped.RequestBodyTruncated {
+		t.Fatalf("escaped record found=%v err=%v truncated=%v", found, err, escaped.RequestBodyTruncated)
+	}
 }
 
 func TestMemoryStoreContract(t *testing.T) {

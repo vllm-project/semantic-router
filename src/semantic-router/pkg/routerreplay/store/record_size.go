@@ -34,26 +34,28 @@ func encodeRecord(record *Record, limit int) ([]byte, error) {
 			record.ToolTrace = cloneToolTrace(record.ToolTrace)
 			cloned = true
 		}
-		// Truncation flags add a few bytes, so measure again.
+		// Escaped text can save more than the bytes cut, and truncation flags
+		// add a few, so measure again.
 		if !cutRecord(record, excess) {
 			return nil, fmt.Errorf("%w: %d bytes over %d", ErrRecordTooLarge, excess, limit)
 		}
 	}
 }
 
-// JSON escaping never shortens a string, so cutting n bytes of text saves at
-// least n bytes.
+// cutRecord cuts up to excess bytes of text and reports whether it cut any.
 func cutRecord(record *Record, excess int) bool {
-	for _, cut := range recordSizeCuts(record) {
-		if removed := cutText(cut.text, excess); removed > 0 {
+	cut := false
+	for _, c := range recordSizeCuts(record) {
+		if removed := cutText(c.text, excess); removed > 0 {
 			excess -= removed
-			cut.mark()
+			c.mark()
+			cut = true
 		}
 		if excess <= 0 {
-			return true
+			break
 		}
 	}
-	return false
+	return cut
 }
 
 func recordSizeCuts(r *Record) []sizeCut {
