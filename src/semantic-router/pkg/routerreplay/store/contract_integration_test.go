@@ -69,11 +69,49 @@ func TestRedisStoreContractIntegration(t *testing.T) {
 		t.Cleanup(func() {
 			ctx := context.Background()
 			keys, _ := s.client.Keys(ctx, s.keyPrefix+"*").Result()
-			_ = s.client.Del(ctx, append(keys, s.indexKey)...).Err()
+			_ = s.client.Del(ctx, append(keys, s.indexKey, s.readyKey)...).Err()
 			_ = s.Close()
 		})
 		return s
 	}, 2500)
+}
+
+func TestRedisStoreFinishesAnInterruptedIndexPass(t *testing.T) {
+	storagetest.Require(t, "redis")
+	host, port := contractEndpoint(t, "REDIS_HOST", "REDIS_PORT", 6379)
+	cfg := &RedisConfig{Address: fmt.Sprintf("%s:%d", host, port), KeyPrefix: contractName() + ":"}
+	s, err := NewRedisStore(cfg, 0, false)
+	if err != nil {
+		storagetest.Unavailable(t, "redis", err)
+	}
+	ctx := context.Background()
+	t.Cleanup(func() {
+		keys, _ := s.client.Keys(ctx, s.keyPrefix+"*").Result()
+		_ = s.client.Del(ctx, append(keys, s.indexKey, s.readyKey)...).Err()
+		_ = s.client.Close()
+	})
+	for i := range 3 {
+		if _, err := s.Add(ctx, Record{ID: fmt.Sprintf("rec-%d", i), Timestamp: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Simulate a pass that stopped partway.
+	if err := s.client.ZRem(ctx, s.indexKey, "rec-1", "rec-2").Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.client.Del(ctx, s.readyKey).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := NewRedisStore(cfg, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	page, err := reopened.QueryPage(ctx, QueryFilters{}, 10, 0, false)
+	if err != nil || page.Total != 3 {
+		t.Fatalf("reopened store lists %d records (err %v), want 3", page.Total, err)
+	}
 }
 
 // StorageIntegration: qdrant
