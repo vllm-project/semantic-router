@@ -91,6 +91,19 @@ providers:
           chat_path: /chat/completions
           api_key: static-demo-key
           weight: 100
+    # A vLLM-type entry pointed at a relay opts in to the OpenAI-compatible
+    # gateway response contract; the plain vLLM backends above keep the
+    # strict one.
+    - name: remote-vllm-gateway-reference
+      provider_model_id: remote-vllm-gateway-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-gateway-primary
+          base_url: https://gateway.example.com/v1
+          provider: vllm
+          openai_compat_gateway: true
+          api_key: static-demo-key
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
