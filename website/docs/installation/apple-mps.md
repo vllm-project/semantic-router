@@ -24,31 +24,39 @@ vllm-sr logs model-runtime -f
 vllm-sr stop
 ```
 
-The Router and Dashboard remain in containers; the existing gateway stack is
-preserved. The CLI manages a native host supervisor. The Router sends it the
+The Router remains in its container in both instance modes; the existing
+Dashboard/minimal and gateway controls are preserved. The CLI manages a native
+host supervisor. The Router sends it the
 model groups needed by active recipes, and reaches the existing model HTTP/JSON
 API through an authenticated TCP proxy. Reloaded generations share unchanged
 groups; their last consumer releases the host model process. Each group lifetime
 has its own lease identity, so a retiring group's release cannot stop a process
 owned by a concurrently acquired group. Abandoned leases expire independently.
 Declaring an unused model does not load it. Explicit external runtime endpoints
-remain external.
+remain external. Only managed `device: auto` placements move to MPS. Authored
+`device: cpu` placements continue in the container on private Unix sockets;
+mixed CPU/auto replica pools retain those placements. Apple does not support
+`-dp` or `--device-ids`; author placement in the configuration instead.
 
-Engine mode serves models directly on host loopback, without starting a Router:
+MODEL overrides the judgment deployment; it does not select a separate runtime
+server. `--engine` keeps the Router frontend and disables recipe routing, exactly
+as on the other platforms:
 
 ```bash
-vllm-sr serve vllm-sr/Decision-1.0-Kai-0.6B --platform apple --port 8000
-curl http://127.0.0.1:8000/health
+vllm-sr serve vllm-sr/Vela-2.0-0.3B --platform apple --engine --dtype float32
 vllm-sr stop
 ```
 
-Loading continues in the background in engine mode. Check `/health` before
-calling the model. Engine mode supports MODEL names, pinned `MODEL@REVISION`,
-and `--models` files; it uses MPS and accepts loopback TCP rather than `--uds`.
-Local host model directories are supported in engine mode. Relative paths such
-as `./my-model`, including entries in `--models` files, are resolved against the
-directory where you run the CLI, not the model-list file's directory.
-Router-mode models must name Hub artifacts; paths inside images are not host model paths.
+The deployment's authored device still applies: choose `device: auto` to place
+it on MPS. There is no bare runtime listener on port 8000, no `/engine` control
+route, and no Apple-specific `--models`, `--device`, `--host`, `--port` or `--uds`
+serve flags. Host workers listen on Unix sockets inside private, short-path
+directories; only the authenticated supervisor proxy is exposed over TCP.
+
+Local packages must live in the stack's mounted models directory. An artifact
+such as `/app/models/my-model` is mapped to that mount's host source. Other
+image paths and paths escaping the mount (including through symlinks) are
+rejected. This mapping is identical in Router and Engine modes.
 Use separate `VLLM_SR_STACK_NAME` values for independent Router or engine stacks.
 
 ## Installation and cache
@@ -60,6 +68,10 @@ wheels matching the runtime image's direct dependency versions. It does not
 copy Linux torch libraries or install into the user's Python. No separate
 runtime installation is required, but first use needs network access for the
 managed interpreter, dependencies, and uncached models.
+The image records its enabled runtime extras, including `multimodal` in the
+default build. Markers are evaluated for the managed macOS arm64 interpreter,
+not Linux. Rebuild older images lacking this extras manifest; do not reuse a
+partial native environment. A missing macOS wheel fails installation explicitly.
 
 State, native environments, models, and bounded logs live under
 `~/Library/Caches/vllm-sr/apple`. Stop retains these downloads and logs. Changing
@@ -88,6 +100,40 @@ operators or model families fail rather than silently becoming CPU inference.
 Prepared image-only assets and arbitrary accelerator plugins are not qualified
 for this bridge. Accelerating Router models does not relocate configured
 answer-generating backend LLMs onto the Mac.
+
+The runtime currently advertises `bf16=False` even on Macs where PyTorch BF16
+operations work. BF16 detection and qualification are separate runtime work;
+this bridge does not change that capability or silently change model precision.
+
+- Vela 1.0 encoder-family FP32 models have an MPS smoke result reported by a
+  reviewer, not complete per-model golden qualification. FP32 encoder members
+  can pass placement without BF16; operator support and goldens still apply.
+- BF16-published decoder models, including Decision 2.0 Kai, cannot use MPS at
+  their default precision today. The shipped config binds Kai, so it needs an
+  explicit configuration change before it can start with Apple placement.
+- Set `dtype: float32` on each affected deployment (or use `--dtype float32`
+  for the judgment deployment), or keep it on `device: cpu`. FP32 removes the
+  BF16 placement requirement, not other model/operator restrictions. Its
+  answers must be qualified separately. Unbound declarations are not loaded.
+
+For example, in an existing canonical configuration, the Kai deployment can
+explicitly select host FP32:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: auto
+        dtype: float32
+```
+
+The host verifies the bound package and its actual runtime placement before
+starting its worker. This may download and verify uncached files, but does not
+load an engine or allocate model weights on the GPU. A rejected placement names
+the deployment and the remedy rather than entering worker load retries.
 
 The host GPU shares system memory with macOS, applications, and the Docker VM.
 FP32 weights alone are roughly 16 GB for a 4B model and 36 GB for a 9B model,

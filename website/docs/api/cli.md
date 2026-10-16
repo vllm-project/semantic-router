@@ -1530,11 +1530,6 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--batch-window-ms FLOAT RANGE` | How long the model runtime waits after the first request to collect more (runtime default 2.0).  [0&lt;=x&lt;=1000] |
 | `--dtype CHOICE` | Precision the model computes in; auto (the runtime default) is the one it was published in. Choices: auto, float32, bfloat16, float16. |
 | `--enable-shared-context / --no-enable-shared-context` | Compute the shared state of a multi-question decision request once (runtime default: on where the model family's records show no accuracy loss, Decision 2.0). |
-| `--models TEXT` | Apple engine model-list file. |
-| `--device TEXT` | Apple engine device (mps only). |
-| `--host TEXT` | Apple engine loopback bind address. |
-| `--port INTEGER` | Apple engine TCP port. |
-| `--uds TEXT` | Unsupported for Apple engine mode. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}
