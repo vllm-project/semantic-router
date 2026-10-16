@@ -176,7 +176,7 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 		g.start()
 		return g, nil
 	}
-	if m.host != nil {
+	if m.host != nil && len(plan.models) > 0 && plan.models[0].Device == "mps" {
 		return m.host.start(plan)
 	}
 	if err := privateDir(m.runtimeDir); err != nil {
