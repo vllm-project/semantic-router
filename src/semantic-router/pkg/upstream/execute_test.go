@@ -6,9 +6,11 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // scriptedFallback answers each Next from its steps, then ends the chain, and
@@ -100,6 +102,23 @@ func TestExecuteSendsTheCandidateTheFallbackPrepares(t *testing.T) {
 	if outcome.Route != "primary" || outcome.Status != http.StatusServiceUnavailable ||
 		string(outcome.Body) != "primary down" || outcome.Local || outcome.Header.Get("content-length") == "" {
 		t.Fatalf("outcome = %+v, want the primary's 503 with its body and headers", outcome)
+	}
+}
+
+func TestExecuteDoesNotHideFallbackBudgetExhaustion(t *testing.T) {
+	var candidateCalls atomic.Int64
+	set := fallbackSet(t, answering(http.StatusServiceUnavailable, "primary down"), func(w http.ResponseWriter, _ *http.Request) {
+		candidateCalls.Add(1)
+		w.WriteHeader(http.StatusOK)
+	})
+	ctx, ledger := budget.WithLimit(context.Background(), 1)
+	fallback := &scriptedFallback{steps: []routing.FallbackStep{{Call: plannedCall("candidate", nil)}}}
+	result, err := set.Execute(ctx, plannedCall("primary", fallback), "")
+	if result != nil || !errors.Is(err, budget.ErrExhausted) {
+		t.Fatalf("result=%v error=%v, want budget exhaustion", result, err)
+	}
+	if candidateCalls.Load() != 0 || ledger.Used() != 1 {
+		t.Fatalf("candidate calls=%d ledger=%d, want 0 and 1", candidateCalls.Load(), ledger.Used())
 	}
 }
 

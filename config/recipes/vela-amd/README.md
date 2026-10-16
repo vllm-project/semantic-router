@@ -14,9 +14,9 @@ revision. The shared Encoder is a training parent and is not loaded separately.
 
 | Models | Execution | Input policy |
 | --- | --- | --- |
-| Embedding, Reranker | Built-in model runtime on `rocm:0`, `exact` profile | 32,768 tokens, including special tokens; reject overflow |
-| Guard, Domain, Safety, PII, FactCheck, Feedback, Modality | Built-in model runtime on `rocm:0`, `exact` profile | 8,192 tokens, including special tokens; reject overflow |
-| Hazard | Built-in model runtime on `rocm:0`, `exact` profile | The package's operating point: 2,048-token overlapping windows within a 32,768-token logical budget |
+| Embedding, Reranker | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 32,768 tokens, including special tokens; reject overflow |
+| Guard, Domain, Safety, PII, FactCheck, Feedback, Modality | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 8,192 tokens, including special tokens; reject overflow |
+| Hazard | Built-in model runtime on `rocm:0`, FP32, default engine arguments | The package's operating point: 2,048-token overlapping windows within a 32,768-token logical budget |
 
 Every deployment is a `model_runtime` deployment: the Router starts the runtime
 and the runtime loads each pinned package on the GPU and chooses its kernels.

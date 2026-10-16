@@ -203,8 +203,8 @@ A supported input length is a capacity limit, not a latency guarantee. Long
 inputs can exceed request deadlines on a CPU with few cores; measure the
 actual input lengths and concurrency on the hardware you plan to serve.
 Select suitable CPU capacity or a GPU deployment rather than assuming a longer
-timeout will solve a capacity problem. [Profiles](../../model-runtime/profiles.md) trade exactness
-for speed, and [Choose a model](../../model-runtime/choose-a-model.md) lists
+timeout will solve a capacity problem. [Engine arguments](../../model-runtime/engine-args.md) tune
+batching and precision, and [Choose a model](../../model-runtime/choose-a-model.md) lists
 what each model costs.
 
 The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)

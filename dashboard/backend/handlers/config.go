@@ -115,7 +115,8 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		// Read existing config so runtime rollback can restore the previous file if needed.
 		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read existing config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read existing config: %v", err)
+			http.Error(w, "Failed to read existing config", http.StatusInternalServerError)
 			return
 		}
 
@@ -241,7 +242,8 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 
 		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read config: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
 

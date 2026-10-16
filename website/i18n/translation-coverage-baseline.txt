@@ -71,6 +71,7 @@ zh-Hans	installation/valkey-memory.md
 zh-Hans	intro.md
 zh-Hans	model-runtime/choose-a-model.md
 zh-Hans	model-runtime/deploy.md
+zh-Hans	model-runtime/engine-args.md
 zh-Hans	model-runtime/guides/classify.md
 zh-Hans	model-runtime/guides/decisions.md
 zh-Hans	model-runtime/guides/embeddings.md
@@ -82,7 +83,6 @@ zh-Hans	model-runtime/guides/safety.md
 zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
 zh-Hans	model-runtime/plugins.md
-zh-Hans	model-runtime/profiles.md
 zh-Hans	model-runtime/quickstart.md
 zh-Hans	model-runtime/reference.md
 zh-Hans	model-runtime/troubleshooting.md
