@@ -34,6 +34,19 @@ log = get_logger(__name__)
 RECIPE_STORE_GID_ENV = "VLLM_SR_RECIPE_STORE_GID"
 
 
+def models_mount_source(config_file: str, state_root_dir: str | None = None) -> Path:
+    """The host directory mounted at /app/models, also used by the Apple bridge."""
+    root = Path(state_root_dir or Path(config_file).absolute().parent)
+    managed = (
+        resolve_active_recipe_directory(str(Path(config_file).absolute())) is not None
+    )
+    return Path(_models_directory(str(root), str(root / ".vllm-sr"), managed))
+
+
+def _models_directory(config_dir: str, vllm_sr_dir: str, managed_recipe: bool) -> str:
+    return os.path.join(vllm_sr_dir if managed_recipe else config_dir, "models")
+
+
 def _prepare_runtime_directories(
     config_dir: str,
     vllm_sr_dir: str,
@@ -43,11 +56,7 @@ def _prepare_runtime_directories(
 ) -> tuple[str, str, str]:
     """Create mutable runtime roots and return their resolved host paths."""
 
-    models_dir = (
-        os.path.join(vllm_sr_dir, "models")
-        if managed_recipe
-        else os.path.join(config_dir, "models")
-    )
+    models_dir = _models_directory(config_dir, vllm_sr_dir, managed_recipe)
     dashboard_data_dir = os.path.join(vllm_sr_dir, "dashboard-data")
     recipe_store_dir = os.path.join(
         vllm_sr_dir, "recipe-store", stack_layout.stack_name

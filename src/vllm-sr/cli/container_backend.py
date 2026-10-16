@@ -6,10 +6,12 @@ import os
 from typing import Any
 
 from cli import apple_runtime
+from cli.commands.runtime_paths import resolve_state_root_dir
 from cli.consts import HEALTH_CHECK_TIMEOUT
 from cli.container_cli import container_status
 from cli.container_images import get_runtime_images
 from cli.container_runtime import get_container_runtime
+from cli.container_start_paths import models_mount_source
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.gateway_mode import GATEWAY_EXTPROC, runs_envoy
 from cli.instance_setup import (
@@ -70,7 +72,13 @@ class ContainerBackend:
                     include_dashboard=(env_vars or {}).get("DISABLE_DASHBOARD")
                     != "true",
                 )
-                state = apple_runtime.start_bridge(images["router"])
+                source = source_config_file or config_file
+                state = apple_runtime.start_bridge(
+                    images["router"],
+                    models_directory=models_mount_source(
+                        source, str(resolve_state_root_dir(source, env_vars))
+                    ),
+                )
                 router_image = state["image"]
                 envoy_image = images.get("envoy")
                 dashboard_image = images.get("dashboard")

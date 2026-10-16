@@ -117,10 +117,13 @@ def _owned_workers(state: dict) -> bool:
     prefix = "--models " + state["directory"] + "/"
     for line in result.stdout.splitlines():
         group, _, command = line.strip().partition(" ")
-        if (
-            group == str(state["pid"])
-            and "-m vllm_srun serve" in command
-            and prefix in command
+        if group == str(state["pid"]) and (
+            ("-m vllm_srun serve" in command and prefix in command)
+            or (
+                state.get("probe_script")
+                and state["probe_script"] in command
+                and " " + state["directory"] + "/" in command
+            )
         ):
             return True
     return False
@@ -129,8 +132,7 @@ def _owned_workers(state: dict) -> bool:
 def start_bridge(
     image: str,
     *,
-    engine_port: int | None = None,
-    engine_mode: bool = False,
+    models_directory: Path,
     log_level: str = "info",
 ) -> dict:
     """Called under the existing Docker stack lifecycle lock."""
@@ -153,11 +155,11 @@ def start_bridge(
         "image": image_id,
         "identity": identity,
         "python": str(python),
+        "probe_script": str(Path(__file__).with_name("apple_runtime_probe.py")),
         "directory": str(directory),
         "cache": str(cache),
         "log": str(stack_directory / "runtime.log"),
-        "engine_port": engine_port,
-        "engine_mode": engine_mode,
+        "models_directory": str(models_directory.resolve()),
         "log_level": log_level,
     }
     write_state(state)
