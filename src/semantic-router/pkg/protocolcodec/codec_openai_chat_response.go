@@ -23,17 +23,17 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	var diagnostics llmprotocol.Diagnostics
 	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
-		"choices.message.tool_calls.function.TokenizedArguments":  chatChoicesHaveTokenizedArguments(wire.Choices),
-		"choices.message.tool_calls.index":                        chatChoicesHaveToolCallIndex(wire.Choices),
-		"choices.message.provider_specific_fields":                chatChoicesHaveMessageProviderSpecificFields(wire.Choices),
-		"choices.provider_specific_fields":                        chatChoicesHaveProviderSpecificFields(wire.Choices),
-		"provider":                                                wire.Provider != nil,
-		"choices.native_finish_reason":                            chatChoicesHaveNativeFinishReason(wire.Choices),
-		"kv_transfer":                                             wire.hasLegacyKVTransferMetadata(),
-		"metadata":                                                len(wire.Metadata) > 0,
-		"moderation":                                              len(wire.Moderation) > 0,
-		"x_groq":                                                  len(wire.XGroq) > 0,
-		"usage_breakdown":                                         wire.hasUsageBreakdown(),
+		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
+		"choices.message.tool_calls.index":                       chatChoicesHaveToolCallIndex(wire.Choices),
+		"choices.message.provider_specific_fields":               chatChoicesHaveMessageProviderSpecificFields(wire.Choices),
+		"choices.provider_specific_fields":                       chatChoicesHaveProviderSpecificFields(wire.Choices),
+		"provider":                                               wire.Provider != nil,
+		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
+		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
+		"metadata":                                               len(wire.Metadata) > 0,
+		"moderation":                                             len(wire.Moderation) > 0,
+		"x_groq":                                                 len(wire.XGroq) > 0,
+		"usage_breakdown":                                        wire.hasUsageBreakdown(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err

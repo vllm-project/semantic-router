@@ -139,6 +139,12 @@ func TestOpenAIChatResponseTranslatesLiteLLMReply(t *testing.T) {
 	}
 }
 
+func TestOpenAIChatRequestRejectsLiteLLMProviderSpecificFields(t *testing.T) {
+	raw := []byte(`{"model":"client-model","messages":[{"role":"user","content":"ok","provider_specific_fields":{"reasoning":"x"}}]}`)
+	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, raw)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_messages_provider_specific_fields")
+}
+
 func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {
 	body := strings.Replace(groqChatResponseFixture, `"x_groq"`, `"x_unknown":1,"x_groq"`, 1)
 	_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
