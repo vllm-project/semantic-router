@@ -19,6 +19,7 @@ type chatStreamDecoder struct {
 	toolKinds            map[int]llmprotocol.ToolKind
 	providerReported     bool
 	nativeReasonReported bool
+	reportedOmissions    map[string]bool
 	stopSequence         string
 }
 
@@ -290,6 +291,44 @@ func chatChunkIsQuiet(chunk chatChunkWire) bool {
 	return true
 }
 
+// appendStreamOmission records a provider-field omission once per stream.
+// A field that rides every chunk (Mistral's p, Groq's x_groq) would
+// otherwise append one diagnostic per chunk: each Push starts its list
+// empty, so the repeats survive into the caller's accumulation, inflating
+// llm_translation_lossy_total and the structured debug events per chunk and
+// spending the diagnostics budget so a distinct late loss - the usage
+// omissions on the final chunk - is truncated away.
+func (decoder *chatStreamDecoder) appendStreamOmission(
+	diagnostics *llmprotocol.Diagnostics, field, reason string,
+) {
+	key := field + "\x00" + reason
+	if decoder.reportedOmissions[key] {
+		return
+	}
+	if decoder.reportedOmissions == nil {
+		decoder.reportedOmissions = make(map[string]bool, 8)
+	}
+	decoder.reportedOmissions[key] = true
+	appendProviderFieldOmission(diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, field, reason)
+}
+
+// appendStreamFieldOmissions is the plural form: the same once-per-stream
+// guarantee for a computed omission set, in the map's sorted order.
+func (decoder *chatStreamDecoder) appendStreamFieldOmissions(
+	diagnostics *llmprotocol.Diagnostics, fields map[string]bool, reason string,
+) {
+	names := make([]string, 0, len(fields))
+	for name, present := range fields {
+		if present {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		decoder.appendStreamOmission(diagnostics, name, reason)
+	}
+}
+
 func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 	chunk chatChunkWire,
 	diagnostics llmprotocol.Diagnostics,
@@ -310,52 +349,57 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		}
 	}
 	if chunk.hasTokenizedToolArguments() {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+		decoder.appendStreamOmission(
+			&diagnostics,
 			"choices.delta.tool_calls.function.TokenizedArguments",
 			"provider tokenization metadata is not model output",
 		)
 	}
 	if chunk.hasLegacyKVTransferMetadata() {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			"stream.kv_transfer", "provider KV-transfer metadata is not model output",
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.kv_transfer",
+			"provider KV-transfer metadata is not model output",
 		)
 	}
 	if len(chunk.XGroq) > 0 {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			"stream.x_groq", "provider request metadata is not model output",
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.x_groq",
+			"provider request metadata is not model output",
 		)
 	}
 	if len(chunk.Timings) > 0 {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			"stream.timings", "provider generation timings are not model output",
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.timings",
+			"provider generation timings are not model output",
 		)
 	}
 	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			"stream.agent", "gateway agent metadata is not model output",
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.agent",
+			"gateway agent metadata is not model output",
 		)
 	}
 	if chunk.P != nil {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			"stream.p", "provider stream metadata is not model output",
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.p",
+			"provider stream metadata is not model output",
 		)
 	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			"stream.moderation", "moderation metadata has no protocol-neutral representation",
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.moderation",
+			"moderation metadata has no protocol-neutral representation",
 		)
 	}
 	if chunk.Usage != nil {
-		appendProviderFieldOmissions(
-			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
-			chatUsageFieldOmissions(*chunk.Usage, "stream.usage."), chatUsageOmissionReason,
+		decoder.appendStreamFieldOmissions(
+			&diagnostics, chatUsageFieldOmissions(*chunk.Usage, "stream.usage."), chatUsageOmissionReason,
 		)
 	}
 	return diagnostics
@@ -425,8 +469,8 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 	return llmprotocol.Event{
 		Type: llmprotocol.EventResponseFailed,
 		Error: &llmprotocol.ProtocolError{
-			Category: decodeProviderErrorCategory(wire.Type, wire.Code),
-			Code:     wire.Code, Message: wire.Message, Parameter: wire.Param,
+			Category: decodeProviderErrorCategory(wire.Type, string(wire.Code)),
+			Code:     string(wire.Code), Message: wire.Message, Parameter: wire.Param,
 		},
 		StopReason: llmprotocol.StopError,
 		Failure:    llmprotocol.FailureTransport,

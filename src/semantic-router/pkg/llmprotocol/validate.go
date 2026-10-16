@@ -105,7 +105,7 @@ func validateRequestIdentity(request Request, limits Limits) error {
 			nil,
 		)
 	}
-	if request.Truncation != "" && request.Truncation != "disabled" && request.Truncation != "auto" {
+	if request.Truncation != "" && request.Truncation != TruncationDisabled && request.Truncation != TruncationAuto {
 		return NewError(ErrorInvalidRequest, "invalid_truncation", "truncation mode is invalid", nil)
 	}
 	return nil

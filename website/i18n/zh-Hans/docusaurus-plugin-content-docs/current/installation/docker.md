@@ -23,6 +23,8 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
+稳定版 CLI 拉取以自身发布版本为 tag 的 Router 和控制面板镜像；开发版本的 CLI 拉取从它自己的 `main` commit 发布、以该 commit SHA 为 tag 的镜像。源码检出使用 `:latest`。需要其他构建时，用 `--image` 和文档中的镜像环境变量覆盖。
+
 未指定 `--config` 时，`vllm-sr serve` 使用当前目录中的 `config.yaml`，或在控制面板中打开首次运行设置。设置期间该命令保持运行：你在控制面板中激活配置后，它用这份配置启动 Router 并等待其就绪。如果你提前停止它，下一次 `vllm-sr serve` 会启动 Router，`vllm-sr status` 会提示设置是否已完成。控制面板不会拿到容器运行时的 socket。默认本地端点为：
 
 | 端点 | 默认值 | 用途 |
