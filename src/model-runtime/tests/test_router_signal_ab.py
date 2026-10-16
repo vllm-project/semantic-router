@@ -1,5 +1,6 @@
-"""The router signal A/B tool's join, scoring and verdict rules (``tools/router_signal_ab.py``)."""
+﻿"""The router signal A/B tool's join, scoring and verdict rules (``tools/router_signal_ab.py``)."""
 
+import argparse
 import importlib.util
 import json
 from pathlib import Path
@@ -169,3 +170,102 @@ def test_a_threshold_keeps_the_decimals_its_operating_point_needs(ab) -> None:
     ]
     assert ab.shipped_threshold(0.9984, piled, above=True) == 0.9984
     assert ab.shipped_threshold(0.9987, piled, above=True) == 0.999
+
+
+def test_vela1_scores_drop_shape_shifted_responses(ab) -> None:
+    labels = ["domain_a", "domain_b"]
+    assert (
+        ab.vela1_scores(
+            "domain", {"@domain_classifier": {"labels": labels, "probabilities": [0.9]}}
+        )
+        is None
+    )
+    assert (
+        ab.vela1_scores(
+            "domain", {"@domain_classifier": {"labels": [], "probabilities": [0.9]}}
+        )
+        is None
+    )
+    assert ab.vela1_scores(
+        "domain",
+        {"@domain_classifier": {"labels": labels, "probabilities": [0.9, 0.1]}},
+    ) == {"domain_a": 0.9, "domain_b": 0.1}
+
+
+def test_vela1_scores_ignore_windows_shorter_than_the_label_list(ab) -> None:
+    outputs = {
+        "@prompt_guard": {
+            "labels": ["safe", "jailbreak"],
+            "windows": [{"probabilities": [0.8]}, {"probabilities": [0.6, 0.9]}],
+        }
+    }
+    # The first window cannot index the jailbreak label; the second decides.
+    assert ab.vela1_scores("jailbreak", outputs) == {"safe": 0.6, "jailbreak": 0.9}
+    short_only = {
+        "@prompt_guard": {
+            "labels": ["safe", "jailbreak"],
+            "windows": [{"probabilities": [0.8]}],
+        }
+    }
+    assert ab.vela1_scores("jailbreak", short_only) is None
+
+
+def test_a_matched_threshold_without_values_is_none(ab) -> None:
+    assert ab.matched_threshold(0.5, [], above=False) is None
+    assert ab.matched_threshold(0.5, [0.2, 0.8], above=False) == pytest.approx(0.5)
+
+
+def test_join_skips_rows_missing_from_the_rows_file(
+    ab, tmp_path, capsys, monkeypatch
+) -> None:
+    rows = tmp_path / "rows.jsonl"
+    rows.write_text(
+        json.dumps(
+            {
+                "id": "panel/1",
+                "task": "domain",
+                "file": "suite-a",
+                "body": {"text": "hello"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    run = tmp_path / "run.jsonl"
+    run.write_text(
+        json.dumps({"id": "panel/1", "status": 200, "ms": 1.0, "response": {}})
+        + "\n"
+        + json.dumps({"id": "ghost", "status": 200, "ms": 1.0, "response": {}})
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "logs").mkdir()
+    out = tmp_path / "out"
+
+    class FakeAnswers:
+        def __init__(self, log_dirs):
+            pass
+
+        def outputs(self, text, kind):
+            return {
+                "@domain_classifier": {
+                    "labels": ["domain_a", "domain_b"],
+                    "probabilities": [0.7, 0.3],
+                }
+            }
+
+    monkeypatch.setattr(ab, "Answers", FakeAnswers)
+    args = argparse.Namespace(
+        rows=str(rows),
+        run=[str(run)],
+        log_dir=[str(tmp_path / "logs")],
+        arm="vela1",
+        out=str(out),
+    )
+    ab.cmd_join(args)
+    pred = out / "domain" / "suite-a.pred.jsonl"
+    entries = [
+        json.loads(line) for line in pred.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [entry["id"] for entry in entries] == ["panel/1"]
+    assert "rows without a matching row: 1" in capsys.readouterr().out
