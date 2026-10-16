@@ -510,7 +510,7 @@ func appendAnthropicStateDiagnostics(
 	request llmprotocol.Request,
 	policy llmprotocol.Policy,
 ) error {
-	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation != "" {
+	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation == llmprotocol.TruncationAuto {
 		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "conversation_state", "Messages has no stateful response reference")
 	}
 	return nil

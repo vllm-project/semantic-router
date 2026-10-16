@@ -496,6 +496,11 @@ type RequestContext struct {
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
 
+	// PluginBackendModel is the model selected before plugins run, and
+	// PluginSkips lists the plugins that capability gating kept from running.
+	PluginBackendModel string
+	PluginSkips        []pluginSkip
+
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.
 	RequestAutoStore *bool

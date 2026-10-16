@@ -94,6 +94,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
+	ctx.PluginBackendModel = selectedModel
 	if response := r.runPostDecisionImmediateStages(originalModel, selectedModel, decisionName, ctx); response != nil {
 		return requestDecisionState{}, response
 	}
