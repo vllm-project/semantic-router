@@ -208,7 +208,7 @@ class BackboneSpec:
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
     batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
-    layers the checkpoint holds as int4 or FP8 weights (``quantization.py``).
+    layers the checkpoint holds as int4, FP8 or NVFP4 weights (``quantization.py``).
     """
 
     model_type: str
@@ -224,12 +224,17 @@ class BackboneSpec:
         """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
 
         Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
-        FP8 weights need FP8 matrix units, which every accelerator must report.
+        FP8 weights need FP8 matrix units and NVFP4 weights FP4 matrix units,
+        which every accelerator must report.
         """
+        from ..quantization import NVFP4, NVFP4_CAPABILITY
+
         requires = {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
-        if self.quantized is not None and self.quantized.scheme == FLOAT8:
+        scheme = self.quantized.scheme if self.quantized is not None else None
+        capability = {FLOAT8: "float8", NVFP4: NVFP4_CAPABILITY}.get(scheme or "")
+        if capability is not None:
             for name in names("accelerators"):
-                requires[name] = (*requires.get(name, ()), "float8")
+                requires[name] = (*requires.get(name, ()), capability)
         return requires
 
 
@@ -250,7 +255,8 @@ class ModelSpec:
     run; the engine may shorten it beside other engines' CPU models. ``requires``
     names, per accelerator, the capabilities its devices must report
     (``Accelerator.capabilities``) to serve the model; placement refuses a
-    device that lacks one. ``towers`` are a multimodal model's other
+    device that lacks one, and ``"*"`` names those of every accelerator
+    without an entry of its own. ``towers`` are a multimodal model's other
     backbones by name (an image or audio encoder next to the text backbone),
     each its own architecture and weights; an encoder batch runs one with
     ``EncoderBatch.tower``.

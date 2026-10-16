@@ -1,4 +1,4 @@
-"""The quantized layers on a GPU: int4 unpacking against the CPU, FP8 on its matrix units, and packages' answers."""
+"""The quantized layers on a GPU: int4 unpacking against the CPU, FP8 and NVFP4 on their matrix units, and packages' answers."""
 
 import asyncio
 
@@ -342,3 +342,143 @@ def test_a_triton_without_knobs_launches_through_the_jit(device, monkeypatch):
     later = triton_fp8.quantize_rows(x, dtype)
     assert torch.equal(later[0].view(torch.uint8), first[0].view(torch.uint8))
     assert torch.equal(later[1], first[1])
+
+
+@pytest.fixture
+def blackwell(device):
+    from vllm_srun.accel.gpu import nvfp4_unavailable
+
+    reason = nvfp4_unavailable(device.index)
+    if reason:
+        pytest.skip(reason)
+    return device
+
+
+def nvfp4_layer(rows, columns, device, seed=0):
+    """An NVFP4Linear holding a random weight quantized by the reference, its input global scale for N(0, 1) inputs."""
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    torch.manual_seed(seed)
+    weight = torch.randn(rows, columns) * 0.05
+    module = NVFP4Linear(nn.Linear(columns, rows, bias=False))
+    global_ = nvfp4.global_scale(weight)
+    packed, scale = nvfp4.quantize(weight, global_)
+    module.weight_packed.copy_(packed)
+    module.weight_scale.copy_(scale)
+    module.weight_global_scale.copy_(global_)
+    module.input_global_scale.fill_(448 * 6 / 5.0)  # N(0, 1) blocks rarely pass 5
+    module.to(device).prepare()
+    return module, nvfp4.dequantize(packed, scale, global_).to(device)
+
+
+@pytest.mark.parametrize("shape", [(1, 64), (37, 256), (300, 5120), (8, 17408)])
+def test_nvfp4_activations_quantize_as_the_reference_does(blackwell, shape):
+    from vllm_srun.accel import nvfp4, triton_nvfp4
+
+    torch.manual_seed(0)
+    x = (torch.randn(*shape, device=blackwell) * 3).to(torch.bfloat16)
+    global_ = (
+        nvfp4.global_scale(x) * 0.7
+    )  # below this input's range: some blocks saturate
+    codes, scales = triton_nvfp4.quantize(x, float(global_))
+    want_codes, want_scales = nvfp4.quantize(x, global_)
+    assert codes.equal(want_codes)
+    assert scales.view(torch.uint8).equal(want_scales.view(torch.uint8))
+
+
+@pytest.mark.parametrize(
+    "shape", [(32, 64, 1), (256, 512, 37), (5120, 17408, 300), (1024, 2048, 9000)]
+)
+def test_the_nvfp4_layer_multiplies_the_fp4_values_it_holds(blackwell, shape):
+    from vllm_srun.accel import nvfp4
+
+    rows, columns, inputs = shape
+    module, weight = nvfp4_layer(rows, columns, blackwell)
+    x = torch.randn(inputs, columns, device=blackwell).to(torch.bfloat16)
+    got = module(x).float()
+    codes, scales = nvfp4.quantize(x.float(), module.input_global_scale)
+    want = nvfp4.dequantize(codes, scales, module.input_global_scale) @ weight.T
+    # the same FP4 products in FP32; the layer writes BF16 (9000 rows: in slices)
+    assert ((got - want).norm() / want.norm()) < 4e-3
+
+
+def test_the_nvfp4_layer_replays_in_a_graph(blackwell):
+    module, _ = nvfp4_layer(256, 512, blackwell)
+    x = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    want = module(x)
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        module(x)
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        got = module(x)
+    graph.replay()
+    torch.cuda.synchronize()
+    assert got.equal(want)
+
+
+def test_a_whole_model_cast_keeps_the_nvfp4_weights(device):
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    module = NVFP4Linear(nn.Linear(64, 32, bias=False))
+    module.float().to(torch.bfloat16).to(device)
+    assert {name: b.dtype for name, b in module.named_buffers()} == {
+        "weight_packed": torch.uint8,
+        "weight_scale": torch.float8_e4m3fn,
+        "weight_global_scale": torch.float32,
+        "input_global_scale": torch.float32,
+    }
+
+
+def test_cuda_offers_nvfp4_where_its_fp4_tensor_cores_run(device):
+    from vllm_srun.accel.cuda import CUDAAccelerator
+    from vllm_srun.accel.gpu import nvfp4_unavailable
+
+    if torch.version.hip:
+        pytest.skip("CUDA accelerator")
+    accelerator = CUDAAccelerator()
+    info = accelerator.devices()[0]
+    offered = accelerator.capabilities(info)["nvfp4"]
+    assert offered is (nvfp4_unavailable(info.index) is None)
+    if not offered:
+        assert "Blackwell" in accelerator.lacks(info, "nvfp4")
+
+
+def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
+    blackwell, tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    plain = write_quantized_fixture(
+        d3_text_package, tmp_path / "plain", scheme="nvfp4", dequantized=True
+    )
+    got, parameters, size = gpu_answers(packed)
+    assert numbers(gpu_answers(packed)[0]).equal(numbers(got))
+    _, plain_parameters, plain_size = gpu_answers(plain)
+    assert parameters == plain_parameters and size < plain_size
+
+    prepare = NVFP4Linear.prepare
+
+    def keep_weight(self):
+        self.reference = nvfp4.dequantize(
+            self.weight_packed, self.weight_scale, self.weight_global_scale
+        )
+        prepare(self)
+
+    def emulated(self, rows):
+        codes, scales = nvfp4.quantize(rows, self.input_global_scale)
+        x = nvfp4.dequantize(codes, scales, self.input_global_scale)
+        return (x @ self.reference.T).to(torch.bfloat16)
+
+    monkeypatch.setattr(NVFP4Linear, "prepare", keep_weight)
+    monkeypatch.setattr(NVFP4Linear, "_product", emulated)
+    want = gpu_answers(packed)[0]
+    # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
+    assert (numbers(got) - numbers(want)).abs().max() < 0.02
