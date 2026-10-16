@@ -101,6 +101,31 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # TEMPORARY (#5137): identify the backend Go test failing only in CI.
+      - name: Show failing Dashboard backend Go tests
+        if: failure()
+        run: |
+          report=.agent-harness/dashboard/backend.jsonl
+          [ -s "$report" ] || { echo "No backend test report was written."; exit 0; }
+          jq -r 'select(.Action=="fail") | "FAIL \(.Package) \(.Test // "(package)")"' "$report" | sort -u
+          failed=$(jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)\t\(.Test)"' "$report" | sort -u)
+          while IFS=$'\t' read -r package test; do
+            [ -n "$test" ] || continue
+            echo "::group::$package $test"
+            jq -r --arg p "$package" --arg t "$test" 'select(.Package==$p and .Test==$t and .Action=="output") | .Output' "$report"
+            echo "::endgroup::"
+          done <<< "$failed"
+
+      - name: Upload Dashboard backend test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-backend-test-report
+          path: .agent-harness/dashboard/backend.jsonl
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload Evaluation browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
