@@ -246,6 +246,23 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 
 // ---------- Level 2: Reference Checks ----------
 
+// routeAnswersWithFastResponse reports whether a route replies with the
+// fast_response plugin, inline or through a template: it calls no model, so
+// it needs no MODEL.
+func (v *Validator) routeAnswersWithFastResponse(route *RouteDecl) bool {
+	for _, ref := range route.Plugins {
+		if ref.Name == config.DecisionPluginFastResponse {
+			return true
+		}
+		for _, template := range v.prog.Plugins {
+			if template.Name == ref.Name && template.PluginType == config.DecisionPluginFastResponse {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (v *Validator) checkReferences() {
 	for _, route := range v.prog.Routes {
 		v.checkRouteReferences(route)
@@ -272,6 +289,9 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 	}
 
 	if !routeHasModelCandidates(route) {
+		if v.routeAnswersWithFastResponse(route) {
+			return
+		}
 		v.addDiag(DiagWarning, route.Pos,
 			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
 			nil,

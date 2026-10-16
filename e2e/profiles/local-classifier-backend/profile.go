@@ -1,5 +1,5 @@
 // Package localclassifierbackend validates the classifier signal's local
-// (in-process Candle) backend end-to-end, isolated from the shared
+// (router-managed model runtime) backend end-to-end, isolated from the shared
 // ai-gateway profile's safety-decision priority space (block_jailbreak,
 // block_pii). See #3756/#3178.
 package localclassifierbackend
@@ -41,7 +41,7 @@ func (p *Profile) Name() string { return "local-classifier-backend" }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the classifier signal's local (in-process Candle) backend end-to-end"
+	return "Tests the classifier signal's local (router-managed model runtime) backend end-to-end"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.

@@ -36,6 +36,8 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 				DecidedBy:  "priority",
 				Winner:     "local_route",
 				Candidates: 2,
+				RunnerUp:   "guarded",
+				Reason:     "priority 200 > 100",
 			},
 		},
 	}
@@ -70,6 +72,9 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 	if ranking.Winner != "local_route" || ranking.DecidedBy != "priority" ||
 		ranking.Fallback != "guarded reported no comparable score" {
 		t.Fatalf("decision ranking = %+v, want the winner, the key that decided and why confidence did not apply", ranking)
+	}
+	if ranking.RunnerUp != "guarded" || ranking.Reason != "priority 200 > 100" {
+		t.Fatalf("decision ranking = %+v, want the runner-up and the values compared", ranking)
 	}
 
 	immediate := resp.GetImmediateResponse()
@@ -112,7 +117,7 @@ func TestRespondSelectionRejectedReturnsServiceUnavailable(t *testing.T) {
 	if immediate == nil || int(immediate.GetStatus().GetCode()) != 503 {
 		t.Fatalf("selection rejection response = %#v, want HTTP 503", immediate)
 	}
-	if body := string(immediate.GetBody()); !strings.Contains(body, selection.ErrNoEligibleCandidates.Error()) {
+	if body := string(immediate.GetBody()); !strings.Contains(body, `"code":"no_eligible_model"`) {
 		t.Fatalf("selection rejection body = %q", body)
 	}
 }

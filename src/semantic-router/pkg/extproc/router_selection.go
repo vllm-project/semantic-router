@@ -86,11 +86,7 @@ func createModelSelectorRegistry(
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(context.Context, string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = models.EmbeddingBackend()
-	}
-	modelType := selectionEmbeddingModelType(models, backend)
+	modelType := selectionEmbeddingModelType(models, models.EmbeddingBackend())
 	defaultConfig := selection.EmbeddingConfig{
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),
@@ -327,8 +323,8 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 	mlCfg := intelligentRouting.ModelSelection.ML
 	// Same normalization as selectionEmbeddingModelType, and for the same
 	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
-	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
-	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
+	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and miss
+	// the prepared provider, which is keyed by the normalized name.
 	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
 	if mlCfg.ModelsPath == "" &&
 		mlCfg.KNN.PretrainedPath == "" &&

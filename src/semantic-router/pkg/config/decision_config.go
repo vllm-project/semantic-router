@@ -3,6 +3,8 @@ package config
 import (
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 type UnknownPolicy string
@@ -52,6 +54,8 @@ type Decision struct {
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
+	Reliability         *DecisionReliability       `yaml:"reliability,omitempty" json:"reliability,omitempty"`
+	Fallback            *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
@@ -109,6 +113,9 @@ type CandidateIterationOutputConfig struct {
 // AlgorithmConfig defines how multiple models should be executed and aggregated.
 type AlgorithmConfig struct {
 	Type              string                       `yaml:"type"`
+	Quality           *NativeQualityConfig         `yaml:"quality,omitempty"`
+	Stages            []CascadeStage               `yaml:"stages,omitempty"`
+	Budget            *AlgorithmBudget             `yaml:"budget,omitempty"`
 	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
 	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
 	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
@@ -127,7 +134,14 @@ type AlgorithmConfig struct {
 	Decision          *DecisionSelectionConfig     `yaml:"decision,omitempty"`
 	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
 	OnError           string                       `yaml:"on_error,omitempty"`
+	// Extensions holds the blocks of algorithm types registered outside the
+	// Router, each under its type's name.
+	Extensions map[string]*StructuredPayload `yaml:",inline" json:"-" jsonschema:"-"`
 }
+
+// extensionFields are the keys Extensions may hold: the registered
+// algorithm types the Router does not build in.
+func (*AlgorithmConfig) extensionFields() []string { return extensionAlgorithmTypes() }
 
 // PromptSelectionConfig configures deterministic, prompt-driven selection
 // among a decision's ModelRefs. The runtime owns the structured output schema,

@@ -60,6 +60,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
+	r.updateKVAddressRegistry(ctx)
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
@@ -161,8 +162,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	// Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
 	assistantContent := semanticAssistantContent(semanticResponse)
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.scoreResponseStageSignals(ctx, assistantContent)
 	commitSignalOutcomes := func() {
 		r.recordRouterReplayResponseJailbreak(ctx)
 		r.recordRouterReplayHallucination(ctx)
@@ -189,13 +189,15 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 
 	r.markUnverifiedFactualResponse(ctx)
 	memoryResponse := semanticResponse
-	if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
-		memoryResponse = cloned
-	} else {
-		logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"error":      err.Error(),
-		})
+	if _, _, suppressed := r.suppressedResponseMemoryStore(ctx); !suppressed {
+		if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
+			memoryResponse = cloned
+		} else {
+			logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"error":      err.Error(),
+			})
+		}
 	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
@@ -222,8 +224,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 // plugin can block or rewrite it and none runs; the observation is all that is
 // still possible, and the record says so.
 func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.scoreResponseStageSignals(ctx, assistantContent)
 	r.recordRouterReplayResponseJailbreak(ctx)
 	r.recordRouterReplayHallucination(ctx)
 }

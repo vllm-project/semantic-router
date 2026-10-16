@@ -1,14 +1,15 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType, DecisionModelSignal, SafetySignal } from '../types/config'
+import bundledCatalog from '../modelCatalogMetadata'
+import type {
+  DecisionConditionType,
+  DecisionModelSignal,
+  Listener,
+  SafetySignal,
+  TopicContinuitySignal,
+} from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
-export interface ListenerConfig {
-  name: string
-  address: string
-  port: number
-  timeout?: string
-}
+export type ListenerConfig = Listener
 
 export interface VLLMEndpoint {
   name: string
@@ -25,8 +26,6 @@ export interface VLLMEndpoint {
 
 export interface ModelConfig {
   model_id: string
-  use_modernbert?: boolean
-  use_mmbert_32k?: boolean
   threshold: number
   use_cpu: boolean
   use_contrastive?: boolean
@@ -116,6 +115,7 @@ export interface ModelPricing {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -129,6 +129,17 @@ export interface ProviderReliability {
   health_check_path?: string
   health_check_interval?: string
   health_check_timeout?: string
+  connect_timeout?: string
+  total_timeout?: string
+  idle_timeout?: string
+  per_try_timeout?: string
+  first_byte_timeout?: string
+  retriable_status_codes?: number[]
+  retry_back_off_base?: string
+  retry_back_off_max?: string
+  retry_after_max?: string
+  retry_budget_percent?: number
+  retry_budget_min_concurrency?: number
 }
 
 export interface LoRAAdapter {
@@ -267,9 +278,8 @@ export interface DecisionCondition {
   conditions?: DecisionCondition[]
 }
 
-export interface DecisionRuleSet {
-  operator?: 'AND' | 'OR' | 'NOT'
-  conditions?: DecisionCondition[]
+// The root is a combination, a single leaf condition, or empty (unconditional).
+export interface DecisionRuleSet extends DecisionCondition {
   on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
@@ -298,6 +308,8 @@ export interface DecisionConfig {
   algorithm?: Record<string, unknown>
   action?: { type: string; destination: string }
   adaptations?: Record<string, unknown>
+  reliability?: Record<string, unknown>
+  fallback?: Record<string, unknown>
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
   emits?: Array<Record<string, unknown>>
@@ -364,6 +376,7 @@ export interface NormalizedModel {
     prompt_per_1m?: number
     cached_input_per_1m?: number
     cache_write_per_1m?: number
+    cache_write_1h_per_1m?: number
     completion_per_1m?: number
   }
   reliability?: ProviderReliability
@@ -418,6 +431,13 @@ export interface RouterReplayConfig {
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
+  capture_request_body?: boolean
+  capture_response_body?: boolean
+  capture_personal_data?: boolean
+  max_records?: number
+  max_body_bytes?: number
+  max_tool_trace_bytes?: number
+  max_tool_trace_steps?: number
 }
 
 export interface MemoryMilvusConfig {
@@ -457,7 +477,6 @@ export interface FactCheckModelModuleConfig {
   model_ref?: string
   threshold?: number
   use_cpu?: boolean
-  use_mmbert_32k?: boolean
 }
 
 export interface HallucinationDetectorModuleConfig {
@@ -468,22 +487,12 @@ export interface HallucinationDetectorModuleConfig {
   min_span_length?: number
   min_span_confidence?: number
   context_window_size?: number
-  enable_nli_filtering?: boolean
-  nli_entailment_threshold?: number
-}
-
-export interface NLIExplainerModuleConfig {
-  model_id?: string
-  model_ref?: string
-  threshold?: number
-  use_cpu?: boolean
 }
 
 export interface HallucinationMitigationConfig {
   enabled?: boolean
   fact_check_model?: FactCheckModelModuleConfig
   hallucination_model?: HallucinationDetectorModuleConfig
-  nli_model?: NLIExplainerModuleConfig
 }
 
 export interface FeedbackDetectorConfig {
@@ -491,12 +500,10 @@ export interface FeedbackDetectorConfig {
   model_id?: string
   threshold?: number
   use_cpu?: boolean
-  use_mmbert_32k?: boolean
-  use_modernbert?: boolean
 }
 
 export interface EmbeddingOptimizationConfig {
-  backend?: 'candle' | 'openvino' | 'openai_compatible'
+  backend?: 'model_runtime' | 'openai_compatible'
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -518,10 +525,8 @@ export interface EmbeddingEndpointConfig {
 
 export interface EmbeddingModelsConfig {
   qwen3_model_path?: string
-  gemma_model_path?: string
   mmbert_model_path?: string
   multimodal_model_path?: string
-  bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
   endpoint?: EmbeddingEndpointConfig
@@ -706,12 +711,14 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
+  decision_model?: { deployment: string }
+  safety?: string
+  hazard?: string
   prompt_guard?: string
   domain_classifier?: string
   pii_classifier?: string
   fact_check_classifier?: string
   hallucination_detector?: string
-  hallucination_explainer?: string
   feedback_detector?: string
 }
 
@@ -767,7 +774,6 @@ export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
-  explainer?: NLIExplainerModuleConfig
 }
 
 export interface CanonicalEmbeddingCatalogConfig {
@@ -777,9 +783,7 @@ export interface CanonicalEmbeddingCatalogConfig {
 export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
-  auto_model_name?: string
-  auto_model_names?: string[]
-  include_config_models_in_list?: boolean
+  list_backend_models?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }
@@ -830,7 +834,23 @@ export interface CanonicalModelModulesConfig {
   modality_detector?: ModalityDetectorConfig
 }
 
+export interface CanonicalModelDeployment {
+  artifact?: string
+  revision?: string
+  external_model?: string
+  provider?: string
+  device?: string
+  input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
+  profile?: string
+  endpoint?: string
+  replicas?: Array<{ device?: string; endpoint?: string; served_name?: string }>
+  served_name?: string
+  public_name?: string
+}
+
 export interface CanonicalModelCatalogConfig {
+  bindings?: Record<string, { deployment: string; contract: string }>
+  deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
   external?: ExternalModelConfig[]
@@ -908,6 +928,7 @@ export interface ConfigSignals {
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
   decision?: DecisionModelSignal[]
+  topic_continuity?: TopicContinuitySignal[]
 }
 
 export interface ConfigProjections {
@@ -1206,7 +1227,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean
   description?: string
 }
 
@@ -1318,6 +1338,7 @@ export interface JailbreakSignal {
 export interface PIISignal {
   name: string
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
   description?: string
@@ -1398,6 +1419,8 @@ export interface DecisionFormState {
   action: Record<string, unknown>
   algorithm?: Record<string, unknown>
   adaptations: Record<string, unknown>
+  reliability: Record<string, unknown>
+  fallback: Record<string, unknown>
   declarative: Record<string, unknown>
 }
 

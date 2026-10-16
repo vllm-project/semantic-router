@@ -22,6 +22,9 @@ support:
 - use [Deployment Support](support-matrix) for
   project-maintained stacks, integrations, and hardware profiles.
 
+For client connection settings, virtual model limits, and a tool-loop check,
+start with [Connect an agent harness](agent-harness).
+
 ## Client-facing protocols
 
 | Client API | Inference endpoint | Buffered | Streaming | Availability |
@@ -33,6 +36,15 @@ support:
 The public listener also serves `GET /v1/models`. See the
 [Router API](../api/router) for the complete method and path inventory,
 Responses object operations, and request examples.
+
+System One is a separate typed API, available in either startup mode when
+`listeners[].systemone.models` publishes a concrete model. It uses
+`POST /v1/systemone` (alias `/v1/decisions`) and
+`GET /v1/systemone/models`. Router mode can also publish an explicit native
+recipe through an `api: systemone` entrypoint and matching listener grant.
+These typed requests do not use the Chat protocol-translation matrix or the
+Chat model allowlist. See the
+[System One quickstart](../model-runtime/quickstart.md).
 
 ## Backend model protocols
 
@@ -57,7 +69,8 @@ path is retained and the protocol operation suffix is appended exactly once;
 the protocol's default `/v1` base path is used only when the URL has no path.
 `chat_path` applies only to Chat Completions.
 
-For an HTTPS backend, the generated Envoy cluster verifies both the server
+With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
+verifies both the server
 certificate chain and its DNS hostname. An HTTPS replica pool must keep one
 hostname because the supported Envoy runtime shares its TLS context within a
 cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
@@ -115,6 +128,14 @@ This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
+
+When translating Chat history to an Anthropic Messages backend, empty text
+blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
+behaves like `content: null`. Empty tool results keep their call IDs and use
+`content: []`; an empty system prompt is omitted. Non-empty text, including
+whitespace, is preserved. A conversation message containing only empty text
+is rejected, as is an empty text block carrying a cache directive, because
+removing either would discard a conversation turn or cache boundary.
 
 For an Anthropic Messages client using a Chat Completions or Responses backend,
 `thinking.type: adaptive` uses the backend model's default reasoning behavior;
@@ -176,13 +197,14 @@ providers:
 OpenAI, or any other runtime Provider. Router-owned listeners require a
 physical model to declare `backend_refs[].provider`; metadata-only
 `listeners: []` configurations leave transport and credentials to the external
-gateway. The local `vllm-sr serve` workflow manages Envoy transport, so it does
-not accept a backendless physical model; use the external-gateway deployment
-profile for that topology.
+gateway. The local `vllm-sr serve` workflow owns backend transport through its
+standalone frontend or generated Envoy configuration, so it does not accept a
+backendless physical model; use the external-gateway deployment profile for
+that topology.
 
 Test the backend directly with its native path and a minimal request first.
 Then send the same semantic request through the Router using the client API that
-your application needs. A successful health check does not validate request
+your agent harness or other API client needs. A successful health check does not validate request
 schema, streaming, tools, or error translation.
 
 ## Validation and failure behavior
@@ -191,6 +213,12 @@ schema, streaming, tools, or error translation.
   backend formats match. Unknown or unsupported request fields fail closed.
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
+- Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
+  Responses requests. The default strict policy rejects this translation with
+  `lossy_translation`; a false or absent flag remains supported. Anthropic
+  backends preserve the flag. Codec callers explicitly using
+  `LossyAllowWithDiagnostic` may omit the flag with a `tool_result.is_error`
+  diagnostic; the tool-result content is not rewritten.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
@@ -204,6 +232,13 @@ schema, streaming, tools, or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- When an OpenAI-compatible Chat provider reports an error inside a successful
+  stream with an integer HTTP status as its `code`, as vLLM does, streamed
+  clients receive the provider's message. Responses and Anthropic Messages
+  clients get the Router's error frame, with the status as a string `code` for
+  Responses and the mapped error type for Messages. Chat clients get either the
+  Router's error frame with a string `code` or the provider's error event as
+  sent, depending on how the stream is split into body chunks.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).

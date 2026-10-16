@@ -9,7 +9,9 @@ body:
         Thanks for proposing an improvement. New work enters `needs-acceptance`.
         Please do not begin implementation or open a PR until a collaborator with
         write access confirms one Workgroup owner and runs `/accept`;
-        contributor-ready work is explicitly marked `ready-for-dev`.
+        contributor-ready work is explicitly marked `ready-for-dev`. To claim
+        it, comment `/assign` on the issue; the claim counts once your name
+        appears under Assignees, and `/unassign` releases it.
   - type: textarea
     id: goal
     attributes:

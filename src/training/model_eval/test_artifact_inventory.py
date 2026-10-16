@@ -172,3 +172,108 @@ def test_positive_labels_are_read_from_the_gate_site(tmp_path):
     assert inventory["jailbreak"].positive_labels == ("jailbreak",)
     # An argmax classifier declares none, and must not be reported as a gate.
     assert inventory["domain"].positive_labels == ()
+
+
+# Since #4721 the maintained modules declare only a model_ref; the artifact
+# and threshold they run come from the system table the decision model fills.
+REF_ONLY_CONFIG = {
+    "global": {
+        "model_catalog": {
+            "system": {
+                "decision_model": "Vela-2.0-0.3B",
+                "hazard": "models/Vela-1.0-Encoder-307M-Hazard",
+            },
+            "modules": {
+                "prompt_guard": {
+                    "enabled": True,
+                    "model_ref": "prompt_guard",
+                    "positive_labels": ["jailbreak"],
+                },
+                "classifier": {
+                    "domain": {
+                        "enabled": True,
+                        "model_ref": "domain_classifier",
+                    }
+                },
+                "modality_detector": {
+                    "enabled": True,
+                    "classifier": {"model_path": ""},
+                },
+            },
+        }
+    }
+}
+
+
+def test_a_ref_only_module_resolves_to_the_decision_model(tmp_path):
+    inventory = served_artifacts(load_config(write_config(tmp_path, REF_ONLY_CONFIG)))
+    assert set(inventory) == {"jailbreak", "domain", "modality"}
+    for artifact in inventory.values():
+        assert artifact.model_path == "models/Vela-2.0-0.3B"
+    assert inventory["jailbreak"].positive_labels == ("jailbreak",)
+
+
+def test_an_unset_threshold_takes_the_served_models_published_one(tmp_path):
+    inventory = served_artifacts(load_config(write_config(tmp_path, REF_ONLY_CONFIG)))
+    # module_thresholds of the 0.3B in vela2-decision-model-sizes.json.
+    assert inventory["jailbreak"].thresholds == (0.75,)
+    assert inventory["domain"].thresholds == (0.28,)
+
+
+def test_the_decision_model_choice_moves_every_unset_line(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["system"]["decision_model"] = "Vela-2.0-4B"
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    assert inventory["jailbreak"].model_path == "models/Vela-2.0-4B"
+    assert inventory["jailbreak"].thresholds == (0.63,)
+    # Hazard is the one line a Vela 2.0 decision model does not move.
+    assert system_refs(load_config(write_config(tmp_path, config)))["hazard"] == (
+        "models/Vela-1.0-Encoder-307M-Hazard"
+    )
+
+
+def test_an_explicit_system_line_still_wins_over_the_decision_model(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["system"][
+        "prompt_guard"
+    ] = "models/Vela-1.0-Encoder-307M-Guard"
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    assert inventory["jailbreak"].model_path == "models/Vela-1.0-Encoder-307M-Guard"
+    # A module on a non-Vela-2.0 model runs at the Vela 1.0 thresholds.
+    assert inventory["jailbreak"].thresholds == (0.5,)
+    assert inventory["domain"].model_path == "models/Vela-2.0-0.3B"
+
+
+def test_vela1_restores_the_specialists(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["system"] = {"decision_model": "Vela-1.0"}
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    assert inventory["jailbreak"].model_path == "models/Vela-1.0-Encoder-307M-Guard"
+    assert inventory["domain"].model_path == "models/Vela-1.0-Encoder-307M-Domain"
+    assert inventory["modality"].model_path == ("models/Vela-1.0-Encoder-307M-Modality")
+
+
+def test_an_unknown_decision_model_is_a_load_error(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["system"]["decision_model"] = "Vela-3.0-1B"
+    with pytest.raises(ValueError, match="not a decision model"):
+        served_artifacts(load_config(write_config(tmp_path, config)))
+
+
+def test_an_unknown_model_ref_is_reported_and_not_served(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["modules"]["prompt_guard"][
+        "model_ref"
+    ] = "prompt_gard"
+    loaded = load_config(write_config(tmp_path, config))
+    assert "jailbreak" not in served_artifacts(loaded)
+    findings = ref_mismatches(loaded)
+    assert len(findings) == 1
+    assert "does not define" in findings[0]
+
+
+def test_a_disabled_ref_only_module_is_not_reported_as_served(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["modules"]["prompt_guard"]["enabled"] = False
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    assert "jailbreak" not in inventory

@@ -1,5 +1,5 @@
 import torch
-from vllm_sr_runtime.engines.native.models.lora import LoRALinear, adapter_key
+from vllm_srun.engines.native.models.lora import LoRALinear, adapter_key
 
 from .conftest import QUESTIONS, STATE, start_runtime
 
@@ -26,17 +26,19 @@ def test_adapter_package_serves_on_its_pinned_base(adapter_package):
     runtime = start_runtime(adapter_package, base_path=str(base))
     try:
         assert runtime.health.ready
-        engine_model = runtime.model.engine_model
+        model = runtime.lookup(None).model
+        engine_model = model.engine_model
         wrapped = [
             m for m in engine_model.backbone.modules() if isinstance(m, LoRALinear)
         ]
         assert len(wrapped) == 12
-        plan = runtime.model.plan(STATE, QUESTIONS)
-        with_adapter = runtime.model.run(plan.items)
+        plan = model.plan(STATE, QUESTIONS)
+        with_adapter = model.run(plan.items)
         for module in wrapped:
             module.lora_B.weight.data.zero_()
-        without = runtime.model.run(plan.items)
+        without = model.run(plan.items)
         assert with_adapter != without
-        assert runtime.model.info.parameters == runtime.package.loaded_parameters
+        package = runtime.lookup(None).package
+        assert model.info.parameters == package.loaded_parameters
     finally:
         runtime.stop()

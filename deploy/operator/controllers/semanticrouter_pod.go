@@ -17,9 +17,11 @@ limitations under the License.
 package controllers
 
 import (
+	"strconv"
+	"strings"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -59,7 +61,7 @@ func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticR
 					SecurityContext:    r.getPodSecurityContext(sr),
 					ImagePullSecrets:   sr.Spec.ImagePullSecrets,
 					Containers:         r.generateContainers(sr, gatewayMode),
-					Volumes:            r.generateVolumes(sr, gatewayMode),
+					Volumes:            r.generateVolumes(sr),
 					NodeSelector:       sr.Spec.NodeSelector,
 					Tolerations:        sr.Spec.Tolerations,
 					Affinity:           sr.Spec.Affinity,
@@ -122,34 +124,30 @@ func (r *SemanticRouterReconciler) getContainerSecurityContext(sr *vllmv1alpha1.
 }
 
 func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) []corev1.Container {
-	container := r.buildSemanticRouterContainer(sr)
-	r.applySemanticRouterProbes(&container, sr)
-
-	containers := []corev1.Container{container}
-	if gatewayMode == "standalone" {
-		containers = append(containers, r.generateEnvoyContainer(sr))
-	}
-	return containers
+	container := r.buildSemanticRouterContainer(sr, gatewayMode)
+	r.applySemanticRouterProbes(&container, sr, gatewayMode)
+	return []corev1.Container{container}
 }
 
-func (r *SemanticRouterReconciler) buildSemanticRouterContainer(sr *vllmv1alpha1.SemanticRouter) corev1.Container {
+func (r *SemanticRouterReconciler) buildSemanticRouterContainer(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) corev1.Container {
 	pullPolicy := corev1.PullIfNotPresent
 	if sr.Spec.Image.PullPolicy != "" {
 		pullPolicy = sr.Spec.Image.PullPolicy
+	}
+
+	traffic := corev1.ContainerPort{Name: "grpc", ContainerPort: DefaultGRPCPort, Protocol: corev1.ProtocolTCP}
+	if gatewayMode == GatewayModeStandalone {
+		traffic = corev1.ContainerPort{Name: DefaultListenerName, ContainerPort: DefaultListenerPort, Protocol: corev1.ProtocolTCP}
 	}
 
 	return corev1.Container{
 		Name:            "semantic-router",
 		Image:           semanticRouterImage(sr),
 		ImagePullPolicy: pullPolicy,
-		Args:            sr.Spec.Args,
+		Args:            append(routerGatewayArgs(gatewayMode), sr.Spec.Args...),
 		SecurityContext: r.getContainerSecurityContext(sr),
 		Ports: []corev1.ContainerPort{
-			{
-				Name:          "grpc",
-				ContainerPort: DefaultGRPCPort,
-				Protocol:      corev1.ProtocolTCP,
-			},
+			traffic,
 			{
 				Name:          "metrics",
 				ContainerPort: DefaultMetricsPort,
@@ -181,14 +179,55 @@ func semanticRouterImage(sr *vllmv1alpha1.SemanticRouter) string {
 	return image
 }
 
-func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.Container, sr *vllmv1alpha1.SemanticRouter) {
+// routerProbeHandler is what a probe checks. A standalone Router answers
+// /health once it serves and /ready once routing can take traffic, on its
+// listener. Plaintext ext_proc startup/readiness requires a serving generation;
+// liveness and TLS listeners retain TCP checks.
+func routerProbeHandler(gatewayMode, path string, args []string) corev1.ProbeHandler {
+	if gatewayMode == GatewayModeStandalone {
+		return corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   path,
+				Port:   intstr.FromString(DefaultListenerName),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		}
+	}
+	if path == "/ready" && !routerUsesGRPCTLS(args) {
+		return corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: DefaultGRPCPort}}
+	}
+	return corev1.ProbeHandler{
+		TCPSocket: &corev1.TCPSocketAction{
+			Port: intstr.FromInt(int(DefaultGRPCPort)),
+		},
+	}
+}
+
+// Native gRPC probes on supported clusters cannot probe TLS listeners.
+// Match the Router's boolean flag syntax and last-value-wins behavior.
+func routerUsesGRPCTLS(args []string) bool {
+	secure := false
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		name, value, hasValue := strings.Cut(arg, "=")
+		if name != "-secure" && name != "--secure" {
+			continue
+		}
+		secure = true
+		if hasValue {
+			parsed, err := strconv.ParseBool(value)
+			secure = err != nil || parsed
+		}
+	}
+	return secure
+}
+
+func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.Container, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) {
 	if sr.Spec.StartupProbe != nil && (sr.Spec.StartupProbe.Enabled == nil || *sr.Spec.StartupProbe.Enabled) {
 		container.StartupProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(int(DefaultGRPCPort)),
-				},
-			},
+			ProbeHandler:     routerProbeHandler(gatewayMode, "/ready", sr.Spec.Args),
 			PeriodSeconds:    r.getInt32OrDefault(sr.Spec.StartupProbe.PeriodSeconds, DefaultStartupProbePeriod),
 			TimeoutSeconds:   r.getInt32OrDefault(sr.Spec.StartupProbe.TimeoutSeconds, DefaultStartupProbeTimeout),
 			FailureThreshold: r.getInt32OrDefault(sr.Spec.StartupProbe.FailureThreshold, DefaultStartupProbeFailureThreshold),
@@ -197,11 +236,7 @@ func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.C
 
 	if sr.Spec.LivenessProbe != nil && (sr.Spec.LivenessProbe.Enabled == nil || *sr.Spec.LivenessProbe.Enabled) {
 		container.LivenessProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(int(DefaultGRPCPort)),
-				},
-			},
+			ProbeHandler:        routerProbeHandler(gatewayMode, "/health", sr.Spec.Args),
 			InitialDelaySeconds: r.getInt32OrDefault(sr.Spec.LivenessProbe.InitialDelaySeconds, DefaultLivenessProbeInitialDelay),
 			PeriodSeconds:       r.getInt32OrDefault(sr.Spec.LivenessProbe.PeriodSeconds, DefaultLivenessProbePeriod),
 			TimeoutSeconds:      r.getInt32OrDefault(sr.Spec.LivenessProbe.TimeoutSeconds, DefaultLivenessProbeTimeout),
@@ -211,11 +246,7 @@ func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.C
 
 	if sr.Spec.ReadinessProbe != nil && (sr.Spec.ReadinessProbe.Enabled == nil || *sr.Spec.ReadinessProbe.Enabled) {
 		container.ReadinessProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(int(DefaultGRPCPort)),
-				},
-			},
+			ProbeHandler:        routerProbeHandler(gatewayMode, "/ready", sr.Spec.Args),
 			InitialDelaySeconds: r.getInt32OrDefault(sr.Spec.ReadinessProbe.InitialDelaySeconds, DefaultReadinessProbeInitialDelay),
 			PeriodSeconds:       r.getInt32OrDefault(sr.Spec.ReadinessProbe.PeriodSeconds, DefaultReadinessProbePeriod),
 			TimeoutSeconds:      r.getInt32OrDefault(sr.Spec.ReadinessProbe.TimeoutSeconds, DefaultReadinessProbeTimeout),
@@ -224,70 +255,7 @@ func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.C
 	}
 }
 
-func (r *SemanticRouterReconciler) generateEnvoyContainer(sr *vllmv1alpha1.SemanticRouter) corev1.Container {
-	return corev1.Container{
-		Name:            "envoy-proxy",
-		Image:           "envoyproxy/envoy:v1.35.3",
-		ImagePullPolicy: corev1.PullIfNotPresent,
-		Command:         []string{"/usr/local/bin/envoy"},
-		Args: []string{
-			"-c",
-			"/etc/envoy/envoy.yaml",
-			"--component-log-level",
-			"ext_proc:info,router:info,http:info",
-		},
-		SecurityContext: r.getContainerSecurityContext(sr),
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          "envoy-http",
-				ContainerPort: 8801,
-				Protocol:      corev1.ProtocolTCP,
-			},
-			{
-				Name:          "envoy-admin",
-				ContainerPort: 19000,
-				Protocol:      corev1.ProtocolTCP,
-			},
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      "envoy-config-volume",
-				MountPath: "/etc/envoy",
-				ReadOnly:  true,
-			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("250m"),
-				corev1.ResourceMemory: resource.MustParse("256Mi"),
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-				corev1.ResourceMemory: resource.MustParse("512Mi"),
-			},
-		},
-		LivenessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(8801),
-				},
-			},
-			InitialDelaySeconds: 30,
-			PeriodSeconds:       30,
-		},
-		ReadinessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(8801),
-				},
-			},
-			InitialDelaySeconds: 10,
-			PeriodSeconds:       15,
-		},
-	}
-}
-
-func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) []corev1.Volume {
+func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRouter) []corev1.Volume {
 	volumes := []corev1.Volume{
 		{
 			Name: "config-volume",
@@ -323,19 +291,6 @@ func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRout
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
-	}
-
-	if gatewayMode == "standalone" {
-		volumes = append(volumes, corev1.Volume{
-			Name: "envoy-config-volume",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: sr.Name + "-envoy-config",
-					},
-				},
-			},
-		})
 	}
 
 	if sr.Spec.Persistence.Enabled != nil && *sr.Spec.Persistence.Enabled {

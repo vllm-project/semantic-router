@@ -18,6 +18,14 @@ const (
 	defaultCalibrationCategory  = "_default"
 	maxCalibrationCategories    = 256
 	conservativeRatioAlpha      = 0.90
+	// minCalibrationSampleBytes keeps short requests out of the learned ratio.
+	// Provider prompt usage includes chat-template, role and default system
+	// tokens that the request content does not carry; on a one-line prompt
+	// that fixed overhead is most of the count, so bytes/actualTokens falls
+	// toward 1 and the lower-tail ratio would inflate every long prose
+	// estimate by 3-5x. From about 1K tokens of content the overhead is a
+	// few percent and the sample measures the tokenizer.
+	minCalibrationSampleBytes = 4096
 )
 
 var (
@@ -136,9 +144,11 @@ func (c *CalibratedTokenCounter) EstimateWithCategory(category string, byteLen i
 	return tokens, ratio, calibrated
 }
 
-// Observe records an actual provider prompt-token usage sample.
+// Observe records an actual provider prompt-token usage sample. Samples below
+// minCalibrationSampleBytes are ignored because their prompt usage is
+// dominated by template overhead rather than content tokens.
 func (c *CalibratedTokenCounter) Observe(category string, byteLen int, actualTokens int) {
-	if byteLen <= 0 || actualTokens <= 0 {
+	if byteLen < minCalibrationSampleBytes || actualTokens <= 0 {
 		return
 	}
 

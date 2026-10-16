@@ -1,0 +1,285 @@
+# Streamed ExtProc and immediate responses
+
+This guide explains how to run vLLM Semantic Router behind an Envoy-compatible gateway when request bodies are delivered to ExtProc in streamed mode, and how streamed clients receive Semantic Router immediate responses such as looper, `response_cache`, and `fast_response` results.
+
+Use this guide when you need one of the following:
+
+- large OpenAI-compatible request bodies that should not be fully buffered by the gateway before ExtProc sees them;
+- agentgateway `FullDuplexStreamed` ExtProc processing;
+- Envoy AI Gateway or raw Envoy `STREAMED` request body processing;
+- streamed Chat Completions clients (`"stream": true`) that may be short-circuited by Semantic Router before the upstream backend responds.
+
+## How it works
+
+Semantic Router is an Envoy External Processor. In buffered mode the gateway sends the full request body in one ExtProc message. In streamed mode the gateway sends multiple body chunks. Semantic Router's streamed body handler accumulates the chunks, applies the same routing and mutation pipeline at end-of-stream, and then emits one complete mutated request body or an immediate response.
+
+Requests that name a concrete model are accumulated the same way as `auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
+
+For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
+
+- looper algorithms return `Content-Type: text/event-stream` when the original request has `"stream": true`;
+- looper responses include `x-vsr-looper-*` headers such as `x-vsr-looper-model`, `x-vsr-looper-models-used`, `x-vsr-looper-iterations`, and `x-vsr-looper-algorithm`;
+- non-streaming immediate responses, including many `fast_response` blocks, return a complete JSON response immediately;
+- Response API requests are translated back through the Response API layer, so looper execution is forced to non-streaming internally for those requests.
+
+:::note
+"Streamed request body" and "streamed model response" are separate knobs. `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed` controls how the gateway sends the request body to Semantic Router. The OpenAI request field `"stream": true` controls whether the client expects Server-Sent Events from the final model or immediate response.
+:::
+
+## Semantic Router configuration
+
+Enable streamed request body handling in the Semantic Router runtime config. The setting lives under `global.router.streamed_body` in the canonical config.
+
+```yaml
+global:
+  router:
+    streamed_body:
+      enabled: true
+      max_bytes: 10485760   # reject larger accumulated bodies with 413
+      timeout_sec: 30       # reject slow body accumulation with 408
+```
+
+Keep `max_bytes` high enough for your largest prompt or multimodal payload. Keep `timeout_sec` greater than the expected upload time between the first body chunk and end-of-stream.
+
+The 10 MiB and 30-second values above are example guardrails matching the
+streaming e2e profile in `e2e/profiles/streaming/values.yaml`; they are not
+runtime defaults or experimentally calibrated limits. Omitting either value or
+setting it to zero disables that guard. The reference `config/config.yaml`
+demonstrates a smaller 1 MiB and 15-second policy.
+
+With the Kubernetes Operator, set the same fields under
+`spec.config.streamed_body`; the Operator renders them into
+`global.router.streamed_body`:
+
+```yaml
+spec:
+  gateway:
+    existingRef:
+      name: shared-gateway
+      namespace: gateway-system
+  config:
+    streamed_body:
+      enabled: true
+      max_bytes: 10485760
+      timeout_sec: 30
+```
+
+The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
+for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
+behavior when an existing Gateway invokes ExtProc in a streamed mode.
+
+## Envoy AI Gateway / Envoy Gateway
+
+For Envoy AI Gateway examples that use `EnvoyPatchPolicy`, change the Semantic Router ExtProc filter from buffered request bodies to streamed request bodies.
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: ai-gateway-prepost-extproc-patch-policy
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          allowModeOverride: true
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:50051
+              clusterName: semantic-router
+            timeout: 60s
+          messageTimeout: 60s
+          processingMode:
+            requestHeaderMode: SEND
+            requestBodyMode: STREAMED
+            requestTrailerMode: SKIP
+            responseHeaderMode: SEND
+            responseBodyMode: BUFFERED
+            responseTrailerMode: SKIP
+```
+
+The important fields are:
+
+- `requestBodyMode: STREAMED` so request chunks are sent to ExtProc;
+- `allowModeOverride: true` so Semantic Router can request per-route response-body processing changes when needed;
+- `messageTimeout` and `grpcService.timeout` large enough for classification and body accumulation.
+
+A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-resources/gwapi-resources.yaml`.
+
+## Raw Envoy
+
+If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, keep its ExtProc filter on `request_body_mode: BUFFERED`. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-selected-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent.
+
+The Envoy AI Gateway example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
+
+## agentgateway
+
+agentgateway uses the Gateway API `AgentgatewayPolicy` abstraction rather than raw Envoy `processing_mode` names. For streamed bodies use `FullDuplexStreamed`.
+
+Buffered request bodies remain common in proxy defaults and other deployment
+examples. The bundled agentgateway example opts into streaming explicitly in
+`deploy/kubernetes/agentgateway/extproc-policy.yaml`; the Helm command in the
+[agentgateway installation guide](./agentgateway) explicitly enables
+`global.router.streamed_body`. Use both settings together when adopting that
+example.
+
+```yaml
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: semantic-router-extproc
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  traffic:
+    extProc:
+      backendRef:
+        name: semantic-router
+        namespace: agentgateway-system
+        port: 50051
+      processingOptions:
+        requestHeaderMode: Send
+        requestBodyMode: FullDuplexStreamed
+        responseHeaderMode: Send
+        responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
+        allowModeOverride: true
+```
+
+agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
+
+Semantic Router detects the negotiated ExtProc body mode. With
+`FullDuplexStreamed`, it buffers intermediate request chunks without emitting
+body replacements, then sends the complete processed request as one
+end-of-stream `StreamedBodyResponse`. With Envoy `STREAMED`, it retains the
+one-response-per-chunk behavior required by that mode.
+
+## Configure an immediate streamed looper response
+
+Looper algorithms are the main immediate-response path added by the full-duplex streaming work. A decision with a looper algorithm and multiple `modelRefs` can return an immediate ExtProc response instead of forwarding the original request to one backend.
+
+Example decision fragment:
+
+```yaml
+routing:
+  decisions:
+    - name: streamed_confidence_route
+      description: Escalate code requests when the first model is uncertain.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: computer science
+      modelRefs:
+        - model: small-code-model
+          use_reasoning: false
+        - model: large-code-model
+          use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: hybrid
+          threshold: 0.72
+          escalation_order: small_to_large
+          on_error: skip
+```
+
+The `computer science` signal and both provider models must also exist in the
+same recipe. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
+for the complete contract.
+
+When the client sends `"stream": true`, Semantic Router calls the candidate model(s), aggregates the looper result, and returns an immediate SSE body to the gateway. The client still receives a normal OpenAI-compatible stream:
+
+```bash
+curl -N -i http://localhost:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "auto",
+    "stream": true,
+    "messages": [
+      {"role": "user", "content": "Write and explain a Python debounce decorator."}
+    ],
+    "max_tokens": 128
+  }'
+```
+
+Look for:
+
+- `HTTP/1.1 200 OK`;
+- `content-type: text/event-stream`;
+- `x-vsr-looper-algorithm: confidence`, `ratings`, or `remom`;
+- SSE events beginning with `data: {"id":"chatcmpl-...","object":"chat.completion.chunk"...}`;
+- final `data: [DONE]`.
+
+## Configure a streamed-body safety block
+
+`fast_response` can also short-circuit requests that arrive as streamed body chunks. This is useful for safety decisions such as PII or jailbreak blocking.
+
+```yaml
+routing:
+  signals:
+    jailbreak:
+      - name: streamed_jailbreak
+        method: classifier
+        threshold: 0.6
+        description: Detect prompt-injection attempts before forwarding.
+  decisions:
+    - name: streamed_jailbreak_block
+      description: Return a policy response for detected prompt injection.
+      priority: 1000
+      rules:
+        operator: AND
+        conditions:
+          - type: jailbreak
+            name: streamed_jailbreak
+      modelRefs: []
+      plugins:
+        - type: fast_response
+          configuration:
+            message: This request was blocked by policy.
+```
+
+With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Semantic Router accumulates the body, runs the safety signal at end-of-stream, and returns the configured immediate response without forwarding the request to the backend.
+
+## Verification checklist
+
+1. Confirm the gateway policy/filter is accepted:
+
+   ```bash
+   kubectl describe envoypatchpolicy ai-gateway-prepost-extproc-patch-policy -n default
+   # or
+   kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-system
+   ```
+
+2. Confirm Semantic Router has streamed body handling enabled:
+
+   ```bash
+   kubectl logs deploy/semantic-router -n vllm-semantic-router-system | grep -i streamed
+   ```
+
+3. Send a large or chunked request with `"model": "auto"` and verify it routes normally.
+
+4. Send a streamed Chat Completions request with `"stream": true` that matches a looper decision and verify SSE output plus `x-vsr-looper-*` headers.
+
+5. Send a request that matches a `fast_response` decision and verify the backend model is not called.
+
+## Troubleshooting
+
+- **Gateway accepts requests but Semantic Router never sees body chunks**: the ExtProc filter still uses buffered or skipped request body mode. Set Envoy `requestBodyMode: STREAMED` or agentgateway `requestBodyMode: FullDuplexStreamed`.
+- **Request fails with 413**: the accumulated body exceeds `global.router.streamed_body.max_bytes`. Increase `max_bytes` or reduce request size.
+- **Request fails with 408**: body chunks did not finish before `timeout_sec`. Increase `timeout_sec` or investigate client upload speed.
+- **Client expected SSE but got JSON**: the OpenAI request did not include `"stream": true`, or the matched path is a non-streaming immediate response. Add `"stream": true` for Chat Completions looper routes and verify the matched decision.
+- **agentgateway rejects `Streamed`**: agentgateway supports `FullDuplexStreamed`, not `Streamed`. Use `requestBodyMode: FullDuplexStreamed`.
+- **Duplicate or partial upstream request body**: gateway and Semantic Router streamed modes are mismatched. Enable both the gateway streamed request-body mode and Semantic Router `streamed_body.enabled`.
+- **Some requests reach the default backend with the client's `Authorization` header**: a raw Envoy filter uses `request_body_mode: STREAMED`. Switch it to `BUFFERED`, as described in [Raw Envoy](#raw-envoy).

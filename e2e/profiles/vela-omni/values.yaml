@@ -1,4 +1,4 @@
-# This profile requires an image built with VELA_OMNI_VARIANTS="nano mini".
+# The runtime downloads both pinned Omni releases into the model cache.
 # Both models run in one process, under separate recipe bindings.
 persistence:
   enabled: false
@@ -115,13 +115,15 @@ config:
             top_k: 0
       deployments:
         nano:
-          artifact: models/vela-1.0-omni-nano
-          provider: ort
+          provider: model_runtime
+          artifact: vllm-sr/Vela-1.0-Omni-Nano
+          revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
           device: cpu
           input: {max_tokens: 512, overflow: reject}
         mini:
-          artifact: models/vela-1.0-omni-mini
-          provider: ort
+          provider: model_runtime
+          artifact: vllm-sr/Vela-1.0-Omni-Mini
+          revision: 801bae3ad28df6891408f0e0441c676b30e132e3
           device: cpu
           input: {max_tokens: 32768, overflow: reject}
     services:

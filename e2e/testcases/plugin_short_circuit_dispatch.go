@@ -260,7 +260,7 @@ func sendShortCircuitRequest(
 	sessionID string,
 ) (*localChatCompletionResponse, error) {
 	payload, err := json.Marshal(map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
