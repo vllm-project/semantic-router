@@ -29,7 +29,9 @@ func checkAnswers(questions []Question, response Response) Response {
 // answerFits reports whether an answer is of the type asked and answers the
 // question, with a confidence in [0, 1]. A Choice gives every declared option
 // a probability and no other option, and chooses a most probable one. A Noul
-// is a probability. A Score comes with a distribution over its levels and is
+// is a probability. A Set gives every declared label an independent probability
+// and no other label; its probabilities need not sum to one.
+// A Score comes with a distribution over its levels and is
 // that distribution's expected level. Answer types the router does not ask for
 // pass unchecked.
 func answerFits(question Question, answer Answer) bool {
@@ -37,6 +39,19 @@ func answerFits(question Question, answer Answer) bool {
 		return false
 	}
 	switch question.Type {
+	case "set":
+		if len(question.Labels) == 0 {
+			return true
+		}
+		if len(answer.Probabilities) != len(question.Labels) {
+			return false
+		}
+		for _, label := range question.Labels {
+			if _, ok := answer.Probabilities[label.Key]; !ok {
+				return false
+			}
+		}
+		return true
 	case "choice":
 		keys := make([]string, len(question.Choices))
 		for index, choice := range question.Choices {
