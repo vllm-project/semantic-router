@@ -24,8 +24,8 @@ four scored panels), so it runs at the published precision by default:
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
   several forwards each. Graphs are captured until there are ``MAX_GRAPHS`` of
-  them or the device's used memory has grown since the first capture by
-  ``MAX_GRAPH_BYTES`` or by half of what was free then, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
+  them or the captures have taken ``MAX_GRAPH_BYTES`` of device memory or half
+  of what was free at the first, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
   batches of Index traffic, led to GPU memory access faults. On CUDA the same
   runner also replays Vela 2.0's forest forward (``models/forest.py``) per
@@ -48,6 +48,7 @@ from .models import Backbone
 from .models.common import attention
 from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
+from .models.packed import Packed, is_packed, packed_rule
 from .models.qwen3_5 import noncausal_masks
 from .models.tree import Tree, is_tree, suffix_rule
 
@@ -430,11 +431,51 @@ def _tree_gated_delta(
     return projected
 
 
+def _packed_gated_delta(
+    m: GatedDeltaNet,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    packed: Packed,
+    kernels: KernelSet,
+) -> torch.Tensor:
+    """``packed.packed_gated_delta`` with the fused kernels: ``gdn_prep`` over the gapped rows.
+
+    The projections feeding the convolution have no bias, so the zero rows
+    ``gapped`` puts before every row stay zero through them; their outputs are
+    dropped before the delta rule.
+    """
+    _, length, _ = normed.shape
+    window = m.conv_kernel_size
+    gapped = packed.gapped(normed, window)
+    q, k, v, g, beta = (
+        packed.ungapped(x, window)
+        for x in kernels("gdn_prep")(
+            m.in_proj_qkv(gapped).contiguous(), m.in_proj_b(gapped).contiguous(),
+            m.in_proj_a(gapped).contiguous(), p["conv_w"], p["A_log"], p["dt_bias"],
+            m.num_k_heads, m.head_k_dim,
+        )
+    )  # fmt: skip
+    z = m.in_proj_z(normed)
+    repeat = m.num_v_heads // m.num_k_heads
+    if repeat > 1:
+        q = q.repeat_interleave(repeat, dim=2)
+        k = k.repeat_interleave(repeat, dim=2)
+    core = packed_rule(kernels("chunk_gated_delta_rule"), packed, q, k, v, g, beta)
+    out = kernels("gated_rmsnorm")(
+        core.reshape(-1, m.head_v_dim).contiguous(),
+        z.reshape(-1, m.head_v_dim).contiguous(),
+        m.norm.weight,
+        m.norm.variance_epsilon,
+    )
+    projected: torch.Tensor = m.out_proj(out.reshape(1, length, -1))
+    return projected
+
+
 def _gated_delta(
     m: GatedDeltaNet,
     p: dict[str, Any],
     normed: torch.Tensor,
-    mask: torch.Tensor | Tree | None,
+    mask: torch.Tensor | Tree | Packed | None,
     kernels: KernelSet,
 ) -> torch.Tensor:
     conv = kernels.select("causal_conv1d").variant
@@ -446,6 +487,8 @@ def _gated_delta(
         return eager
     if is_tree(mask):
         return _tree_gated_delta(m, p, normed, mask, kernels)
+    if is_packed(mask):
+        return _packed_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:
         normed = (normed * mask[:, :, None]).to(normed.dtype)
     batch, length, _ = normed.shape
@@ -677,8 +720,8 @@ class Graphs:
         self.graphs: dict[Hashable, dict[str, Any]] = {}
         self.seen: dict[Hashable, int] = {}
         self.failed: set[Hashable] = set()
-        self.base: int | None = None
-        self.budget = max_bytes
+        self.budget: int | None = None
+        self.spent = 0
         self.pool: Any = None
         self.stream: Any = None
         self.stats = {
@@ -749,16 +792,20 @@ class Graphs:
         inputs: tuple[torch.Tensor, ...],
         body: Callable[..., torch.Tensor],
     ) -> dict[str, Any] | None:
-        # A graph costs far more than its output, and part of it is taken only
-        # after the capture, so the budget is the device's growth since the first.
-        free, total = torch.cuda.mem_get_info(inputs[0].device)
-        used = total - free
-        if self.base is None:
-            # Half of what is free leaves room for eager forwards on a shared card.
-            self.base, self.budget = used, min(self.max_bytes, free // 2)
-        if len(self.graphs) >= self.max_graphs or used - self.base >= self.budget:
+        budget = self.max_bytes if self.budget is None else self.budget
+        if len(self.graphs) >= self.max_graphs or self.spent >= budget:
             self.stats["full"] += 1
             return None
+        # A graph costs far more than its output. torch.cuda.graph empties the
+        # allocator's cache when a capture begins, so with the cache emptied before
+        # and after it, the device memory a capture takes is what the graph holds.
+        # Growth of the cache between captures belongs to eager forwards.
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        free, _ = torch.cuda.mem_get_info(inputs[0].device)
+        if self.budget is None:
+            # Half of what is free leaves room for eager forwards on a shared card.
+            self.budget = min(self.max_bytes, free // 2)
         static = tuple(value.clone() for value in inputs)
         try:
             # One capture stream: BLAS keeps a workspace per stream, so a new stream per
@@ -800,6 +847,8 @@ class Graphs:
             self.failed.add(key)
             self.stats["failed"] += 1
             return None
+        torch.cuda.empty_cache()
+        self.spent += max(0, free - torch.cuda.mem_get_info(inputs[0].device)[0])
         entry = {"inputs": static, "graph": graph, "output": output}
         self.graphs[key] = entry
         self.stats["captures"] += 1

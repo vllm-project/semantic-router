@@ -3,9 +3,13 @@
 Every row of every queued request (one per question of a decision request,
 one per input or window of the other surfaces) is planned together: rows of
 concurrent requests share forwards of at most ``max_num_batched_tokens``
-padded tokens and ``max_num_seqs`` rows, longest first (``coalesced``).
-Padding and GEMM shapes then depend on the rows beside a row, so answers can
-move by rounding; ``max_num_seqs`` 1 runs every row alone. A batch-invariant
+tokens and ``max_num_seqs`` rows (``coalesced``). Each lane of the model
+(``LoadedModel.lane``: text rows, rows that read images) is planned on its own,
+so no forward mixes lanes. Padded forwards take rows longest first and count
+their rows times their longest row; a model that packs merged rows back to
+back counts their sum and takes them in arrival order. Padding, neighbours and
+GEMM shapes then depend on the rows beside a row, so answers can move by
+rounding; ``max_num_seqs`` 1 runs every row alone. A batch-invariant
 model, whose rows give the same answer alone or in any batch, merges the
 requests already queued without waiting and keeps its forwards short
 (``merged``), so its answers never change. With shared context, a
@@ -19,9 +23,12 @@ so readiness compares like with like against the recorded answers.
 
 from __future__ import annotations
 
+import itertools
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from ..config import DEFAULT_MAX_NUM_BATCHED_TOKENS, DEFAULT_MAX_NUM_SEQS
 from ..plugins.base import Batch, Job, LoadedModel, WorkItem
 from .planner import cost, exact_split, length_class, padded
 
@@ -42,10 +49,12 @@ WIDE_HYBRID_BREAK_EVEN = 512
 MIN_SHARED_PREFIX = 4
 
 
-def _batch(parts: dict[int, tuple[Job, list[int]]], exact: bool = True) -> Batch:
+def _batch(
+    parts: dict[int, tuple[Job, list[int]]], exact: bool = True, lane: str = "text"
+) -> Batch:
     for _, indices in parts.values():
         indices.sort()
-    return Batch(parts=list(parts.values()), exact=exact)
+    return Batch(parts=list(parts.values()), exact=exact, lane=lane)
 
 
 def reference(
@@ -104,33 +113,74 @@ def merged(
     return batches
 
 
-def coalesced(jobs: list[Job], budget: int, max_rows: int) -> list[Batch]:
-    """Rows of every queued request in shared padded batches, longest first.
+def coalesced(
+    jobs: list[Job],
+    budget: int | Callable[[str], int],
+    max_rows: int,
+    lane: Callable[[WorkItem], str] | None = None,
+    packed: bool = False,
+) -> list[Batch]:
+    """Rows of every queued request in shared batches, each holding the rows of one lane.
 
-    Each batch holds at most ``budget`` padded tokens (its rows times its
-    longest row) and at most ``max_rows`` rows; a row costlier than ``budget``
-    runs alone. The batches are approximate: a row's padding and GEMM shapes
-    depend on the rows beside it.
+    ``lane`` names each row's lane (one lane when None) and ``budget`` is the
+    token budget of every lane, or of each lane by name. A padded batch holds
+    at most its budget in rows times its longest row, longest first, so rows
+    of like lengths share a forward; a ``packed`` batch (a model that lays
+    merged rows back to back) holds at most its budget in the sum of its rows,
+    each rounded up to 8, in arrival order. Every batch holds at most
+    ``max_rows`` rows; a row costlier than its budget runs alone. The n-th
+    batches of the lanes share one turn (``Batch.sub``), so planning a round
+    of arrivals adds as many turns as its busiest lane needs, as it would
+    without lanes. The batches are approximate: a row's neighbours, padding
+    and GEMM shapes depend on the rows beside it.
     """
-    rows = sorted(
-        ((job, index) for job in jobs for index in range(len(job.items))),
-        key=lambda pair: -cost(pair[0].items[pair[1]]),
+    lanes: dict[str, list[tuple[Job, int]]] = {}
+    for job in jobs:
+        for index, item in enumerate(job.items):
+            name = lane(item) if lane is not None else "text"
+            lanes.setdefault(name, []).append((job, index))
+    planned: list[list[Batch]] = []
+    for name, rows in lanes.items():
+        cap = budget(name) if callable(budget) else budget
+        if not packed:
+            rows.sort(key=lambda pair: -cost(pair[0].items[pair[1]]))
+        batches: list[Batch] = []
+        current: dict[int, tuple[Job, list[int]]] = {}
+        width = total = count = 0
+        for job, index in rows:
+            length = padded(cost(job.items[index]))
+            new_width = max(width, length)
+            size = total + length if packed else new_width * (count + 1)
+            if current and (size > cap or count + 1 > max_rows):
+                batches.append(_batch(current, exact=False, lane=name))
+                current, total, count = {}, 0, 0
+                new_width = length
+            current.setdefault(id(job), (job, []))[1].append(index)
+            width, total, count = new_width, total + length, count + 1
+        if current:
+            batches.append(_batch(current, exact=False, lane=name))
+        planned.append(batches)
+    turns = []
+    for group in itertools.zip_longest(*planned):
+        sub = tuple(batch for batch in group if batch is not None)
+        turns.append(sub[0] if len(sub) == 1 else _turn(sub))
+    return turns
+
+
+def _turn(sub: tuple[Batch, ...]) -> Batch:
+    """One turn for batches of several lanes: their union, run batch by batch."""
+    parts: dict[int, tuple[Job, list[int]]] = {}
+    for batch in sub:
+        for job, indices in batch.parts:
+            parts.setdefault(id(job), (job, []))[1].extend(indices)
+    for _, indices in parts.values():
+        indices.sort()
+    return Batch(
+        parts=list(parts.values()),
+        exact=False,
+        lane="+".join(batch.lane for batch in sub),
+        sub=sub,
     )
-    batches: list[Batch] = []
-    current: dict[int, tuple[Job, list[int]]] = {}
-    width = count = 0
-    for job, index in rows:
-        length = padded(cost(job.items[index]))
-        new_width = max(width, length)
-        if current and (new_width * (count + 1) > budget or count + 1 > max_rows):
-            batches.append(_batch(current, exact=False))
-            current, width, count = {}, 0, 0
-            new_width = length
-        current.setdefault(id(job), (job, []))[1].append(index)
-        width, count = new_width, count + 1
-    if current:
-        batches.append(_batch(current, exact=False))
-    return batches
 
 
 @dataclass(frozen=True)
@@ -233,12 +283,16 @@ class Batcher:
     ``coalesces`` says the scheduler should hold a queue for the batching
     window before planning it, so rows of concurrent requests share forwards:
     for any model but a batch-invariant one, once a forward may hold more than
-    one row. Every item of every job is planned exactly once.
+    one row. Every item of every job is planned exactly once. Limits the
+    engine arguments leave unset take the CPU's defaults; the runtime resolves
+    them for the model's device before it builds the batcher.
     """
 
     def __init__(self, args: EngineArgs, shared: SharedContext | None = None):
-        self.max_num_seqs = args.max_num_seqs
-        self.max_num_batched_tokens = args.max_num_batched_tokens
+        self.max_num_seqs = args.max_num_seqs or DEFAULT_MAX_NUM_SEQS
+        self.max_num_batched_tokens = (
+            args.max_num_batched_tokens or DEFAULT_MAX_NUM_BATCHED_TOKENS
+        )
         self.shared = shared
         self.model: LoadedModel[Any, Any] | None = None
 
@@ -280,7 +334,13 @@ class Batcher:
         budget = min(
             token_budget or self.max_num_batched_tokens, self.max_num_batched_tokens
         )
-        family = model.coalesced_token_budget() if model is not None else None
-        if family:
-            budget = min(budget, family)
-        return trees + coalesced(rest, budget, self.max_num_seqs)
+        if model is None:
+            return trees + coalesced(rest, budget, self.max_num_seqs)
+
+        def lane_budget(lane: str) -> int:
+            family = model.coalesced_token_budget(lane)
+            return min(budget, family) if family else budget
+
+        return trees + coalesced(
+            rest, lane_budget, self.max_num_seqs, model.lane, model.packs_merged_rows
+        )

@@ -140,6 +140,7 @@ curl -s localhost:8080/startup-status
 | 消息提到 | 处理方法 |
 | --- | --- |
 | `removed model execution fields`、`candle`、`ort`、`openvino`、`precision`、`variant`、`use_mmbert_32k`、`use_nli`、`polarity_guard` | 运行 `vllm-sr config migrate`。见[迁移](model-runtime/migrate.md)。 |
+| `profile was removed`，而你的 `config.yaml` 里没有 `profile` | 这是 CLI 写入的：路由器镜像比 CLI 新。从同一渠道重新安装 CLI，或用 `--image` 指定与你的 CLI 一起构建的镜像；较早的开发版 CLI 拉取 `:latest`，而不是它们自己的镜像。 |
 | a binding does not match the model | 模型的标签、头、维度与该功能所需不同，或输入上限更小。绑定为该功能训练的模型，或修改 `input`。 |
 | `artifact must be a Hub repository ID or an absolute package path` | Hub 模型用 `owner/name`，本地副本用绝对路径。 |
 | `revision must be a 40-hex commit` | 使用完整的 commit 哈希，而不是分支或标签。 |

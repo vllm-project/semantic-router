@@ -154,6 +154,21 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         errors.append("community metadata must not repeat on every synchronization")
 
 
+def validate_main_publishers(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    """A development CLI defaults to its commit's images, so they come first."""
+    main = workflows.get("main.yml")
+    pypi = main.jobs.get("pypi", {}) if main else {}
+    if "images" not in needs(pypi) or "needs.images.result == 'success'" not in (
+        pypi.get("if", "")
+    ):
+        errors.append(
+            ".github/workflows/main.yml: 'pypi' must wait for the successful "
+            "publication of its commit's images"
+        )
+
+
 def validate_release_contract(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
@@ -435,6 +450,7 @@ def validate_workflow_policies(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
     validate_pr_contract(workflows, errors)
+    validate_main_publishers(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
     validate_removed_workflows(errors)

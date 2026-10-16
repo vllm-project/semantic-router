@@ -8,7 +8,55 @@ import (
 	"testing"
 )
 
-// referenceModel is how the public handler read a body before requestModel.
+// requestModel is the model scanRequest reads.
+func requestModel(body []byte) (string, bool) {
+	request, ok := scanRequest(body)
+	return request.model, ok
+}
+
+// referenceOptions is the options member encoding/json reads: the last one.
+func referenceOptions(body []byte) ([]byte, bool) {
+	var request map[string]json.RawMessage
+	if json.Unmarshal(body, &request) != nil || request == nil {
+		return nil, false
+	}
+	options, present := request["options"]
+	return options, present
+}
+
+func TestScanRequestFindsTheOptionsEncodingJSONReads(t *testing.T) {
+	repeated := map[string]bool{`{"options":{"a":1},"options":{"b":2}}`: true, `{"options":1,"opti\u006fns":2}`: true}
+	cases := []string{
+		`{"model":"m","options":{"return_meta":true}}`, `{"options":null,"model":"m"}`, `{"opti\u006fns":{"a":1}}`,
+		`{"a":{"options":{"inner":1}},"model":"m"}`, ` { "options" : { "deadline_ms" : 5 } , "state" : "s" } `,
+	}
+	for body := range repeated {
+		cases = append(cases, body)
+	}
+	for _, body := range append(cases, bodyCases...) {
+		request, ok := scanRequest([]byte(body))
+		if !ok {
+			continue
+		}
+		want, present := referenceOptions([]byte(body))
+		if present != (request.options != nil) || string(request.options) != string(want) ||
+			string([]byte(body)[request.optionsStart:request.optionsEnd]) != string(request.options) {
+			t.Fatalf("scanRequest(%q) options %q; encoding/json reads %q", body, request.options, want)
+		}
+		if request.repeatedOptions != repeated[body] {
+			t.Fatalf("scanRequest(%q) repeated options %v", body, request.repeatedOptions)
+		}
+		if request.options == nil {
+			continue
+		}
+		replaced := request.withOptions([]byte(body), []byte(`{"x":1}`))
+		if got, _ := referenceOptions(replaced); string(got) != `{"x":1}` {
+			t.Fatalf("withOptions(%q) = %q", body, replaced)
+		}
+	}
+}
+
+// referenceModel is how the public handler read a body before scanRequest.
 func referenceModel(body []byte) (string, bool) {
 	var request map[string]json.RawMessage
 	if json.Unmarshal(body, &request) != nil || request == nil {

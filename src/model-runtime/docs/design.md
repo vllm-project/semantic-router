@@ -284,7 +284,11 @@ class EngineModel(ABC):
 ```
 
 `ForwardBatch` carries padded token IDs, the attention mask, the gathered
-positions (decision endpoints and query rows) and the shared-context prefix.
+positions (decision endpoints and query rows) and the shared-context prefix;
+with `packed`, an engine that `supports_packed` runs the rows back to back in
+one row instead (`engines/native/models/packed.py`: variable-length attention,
+the chunked gated delta rule over `cu_seqlens`, each causal convolution from a
+zero history), which only merged forwards ask for.
 `EncoderBatch` carries padded token IDs, the mask, the layer exits the readout
 needs and, for engines that run a graph, named graph inputs; `EncoderOutput`
 returns hidden states by layer or named graph outputs. Readouts stay in the
@@ -327,17 +331,36 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 
 | Argument | Default | What it does |
 | --- | --- | --- |
-| `max_num_seqs` | 8192 | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise. At the default token budget it never binds (a row costs at least 8 padded tokens); 1 runs every row alone |
-| `max_num_batched_tokens` | 65,536 | Padded tokens one forward may hold: its rows times its longest row, counted so also for models that pack rows |
+| `max_num_seqs` | by device | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone |
+| `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
 | `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
 | `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0) |
 
+Limits left unset take the device's memory class (`scheduler/calibration.py`:
+32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
+8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU and a device that reports no
+memory, such as MPS or a plugin's accelerator, keep 65,536 / 8,192). On a
+GPU the runtime then calibrates the token budget after the golden check, from
+merged forwards of the model's calibration rows (`calibration_items`) at
+doubling budgets: the largest budget whose cost per token is within 2% of
+the cheapest timed (on a flat curve the smallest would follow timing noise),
+but never more than one forward does in 0.3 s (interpolated between the timed
+forwards) nor than 85% of the free device memory holds. It logs the chosen
+values and their source, and `engine_args` reports them.
+
 The batcher (`scheduler/batching.py`) plans the rows of every queued request
-together, longest first (`coalesced`): a row's padding and GEMM shapes then
-depend on the rows beside it, so an answer can move by rounding. vLLM has no
-batching window because each decode step is a point where new sequences join;
-a request here is one forward, so the window is what lets a burst share it. A
+together (`coalesced`), one lane at a time (`LoadedModel.lane`; Decision 3.0:
+text rows and rows that read media), with a token budget per lane
+(`coalesced_token_budget(lane)`). Padded forwards take rows longest first; a
+model that packs merged rows fills forwards in arrival order and counts their
+summed length. The n-th batches of the lanes share one turn (`Batch.sub`): the
+scheduler runs each as its own forward, the one expected to take least first,
+and answers its rows as soon as it ran, so a planning round adds as many turns
+as its busiest lane needs. A row's padding, neighbours and GEMM shapes depend
+on the rows beside it, so an answer can move by rounding. A request here is one
+forward, with no later step where it could join others, so the batching window
+is what lets a burst share it. A
 batch-invariant model (`LoadedModel.batch_invariant`, set at load from a test
 that every row answers the same alone or in any batch) merges the requests
 already queued without waiting and keeps forwards within 512 padded tokens
@@ -566,8 +589,8 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
 HTTP, whatever its models' states. All three report `api_version`, the
-contract version (`info.version`); a client refuses a runtime of another
-major version.
+contract version (`info.version`). A router and its runtime come from one
+release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 
@@ -835,11 +858,16 @@ changing an answer: image and video data URLs are keyed by the SHA-256 of their 
 and a hit reuses the processed patch rows; the tower's features of a
 request's images are kept by the images' digests and the number of copies
 one tower call holds, which is what a pass of that many rows runs, so later
-passes of that size reuse them. Batched, text rows of concurrent
-requests share a pass, media rows of any requests share another, each
-request's images go through the tower once, and a coalesced forward is sized
-to about 0.3 seconds of device time at the measured cost per token
-([record](records/decision3-batching.md)).
+passes of that size reuse them. Batched, text rows and media rows of
+concurrent requests are planned in lanes of their own, each sized to about 0.3
+seconds of device time at its own measured cost per token
+([record](records/decision3-batching.md)). Where the engine packs rows, the
+tower reads the images of every request of a media forward in one call with
+one variable-length attention per block (features cached apart from the exact
+path's), and a merged pass runs its rows packed when left-padding them would
+add more than 10% to its tokens ([record](records/decision3-lanes-packing.md)).
+Request images and videos are decoded in the process's media worker processes
+(`vllm_srun/media.py`, `--media-workers`).
 
 ## 9. Scheduler and planner
 
@@ -870,8 +898,8 @@ items are answered from the model's result cache (`--result-cache-entries`,
 keyed by content).
 
 The worker runs planned batches in order of their jobs' expected finish: the
-time a job was queued plus its tokens at the measured cost per token (a running
-average of recent forwards). Short work goes first, and a long job still runs
+time a job was queued plus its tokens at the measured cost per token of their
+lane (a running average of that lane's recent forwards). Short work goes first, and a long job still runs
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
