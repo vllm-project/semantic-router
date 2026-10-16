@@ -36,6 +36,24 @@ MODEL_RUNTIME = "model_runtime"
 # Legacy device prefixes and the runtime accelerator that replaces them.
 _DEVICE_PREFIXES = {"cuda": "cuda", "rocm": "rocm", "migraphx": "rocm"}
 _EXECUTION_FIELDS = ("custom_ops_profile", "compilation_cache_dir")
+# The model runtime's former numerics profiles: the engine arguments that
+# replace each, and what the operator should know about the change.
+_PROFILE_ENGINE_ARGS: dict[str, tuple[dict[str, Any], str]] = {
+    "exact": (
+        {},
+        "the runtime now batches concurrent requests by default; no engine "
+        "argument restores one request per forward",
+    ),
+    "batching": ({}, "batching concurrent requests is the runtime's default"),
+    "shared_context": (
+        {"enable_shared_context": True},
+        "rows of concurrent requests now also share forwards",
+    ),
+    "max_speed": (
+        {"enable_shared_context": True},
+        "its batching, fused kernels and consented copies are the runtime's defaults",
+    ),
+}
 _LOCAL_SELECTORS = ("use_modernbert", "use_mmbert_32k", "variant")
 _HALLUCINATION_NLI_FIELDS = ("enable_nli_filtering", "nli_entailment_threshold")
 _HALLUCINATION_ENDPOINT = "hallucination-detector"
@@ -169,7 +187,33 @@ def _migrate_deployments(catalog: dict[str, Any], notes: MigrationNotes) -> set[
         ):
             _migrate_artifact(path, deployment, notes)
         _drop_execution_fields(path, deployment, notes)
+        _migrate_profile(path, deployment, notes)
     return migrated
+
+
+def _migrate_profile(
+    path: str, deployment: dict[str, Any], notes: MigrationNotes
+) -> None:
+    """Map a former runtime profile onto the engine arguments that replace it."""
+    if "profile" not in deployment:
+        return
+    profile = deployment.pop("profile")
+    mapped = _PROFILE_ENGINE_ARGS.get(profile) if isinstance(profile, str) else None
+    if mapped is None:
+        notes.action(
+            path + ".profile",
+            f"removed {profile!r}: profile plugins are gone; set the engine "
+            "arguments (max_num_seqs, max_num_batched_tokens, batch_window_ms, "
+            "enable_shared_context, dtype) it stood for",
+        )
+        return
+    args, note = mapped
+    for field, value in args.items():
+        deployment.setdefault(field, value)
+    shown = ", ".join(f"{field}: {str(value).lower()}" for field, value in args.items())
+    notes.changed(
+        path + ".profile", f"{profile} -> {shown or 'the runtime defaults'} ({note})"
+    )
 
 
 def _drop_execution_fields(
@@ -177,10 +221,10 @@ def _drop_execution_fields(
 ) -> None:
     precision = deployment.pop("precision", None)
     if precision == "fp16":
-        deployment.setdefault("profile", "max_speed")
         notes.changed(
             path + ".precision",
-            "fp16 -> profile max_speed (the default exact profile runs FP32)",
+            "removed fp16: the model runs in its published precision (dtype: auto); "
+            "dtype: float16 runs it in half precision on a GPU",
         )
     elif precision not in (None, "", "native", "fp32"):
         notes.changed(path + ".precision", f"removed unsupported value {precision!r}")

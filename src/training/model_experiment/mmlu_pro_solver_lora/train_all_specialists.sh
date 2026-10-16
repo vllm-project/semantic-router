@@ -4,6 +4,9 @@
 
 set -e  # Exit on error
 
+AREA="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$AREA"
+
 echo "======================================================================"
 echo "MMLU-Pro Specialist Training Pipeline"
 echo "======================================================================"
@@ -60,7 +63,7 @@ train_model() {
 
     LOG_FILE="training_logs/${MODEL_TYPE}_$(date +%Y%m%d_%H%M%S).log"
 
-    if python ft_qwen3_mmlu_solver_lora.py \
+    if uv run --project "$AREA" python "$AREA/ft_qwen3_mmlu_solver_lora.py" \
         --mode train \
         --model "$BASE_MODEL" \
         --model-type "$MODEL_TYPE" \
@@ -130,7 +133,7 @@ echo "Training logs saved in: training_logs/"
 echo ""
 echo "Next steps:"
 echo "  1. Test each model:"
-echo "     python ft_qwen3_mmlu_solver_lora.py --mode test --model-path qwen3_mmlu_math-reasoner_r32"
+echo "     uv run --project $AREA python $AREA/ft_qwen3_mmlu_solver_lora.py --mode test --model-path qwen3_mmlu_math-reasoner_r32"
 echo ""
 echo "  2. Build a router system to combine all specialists"
 echo ""

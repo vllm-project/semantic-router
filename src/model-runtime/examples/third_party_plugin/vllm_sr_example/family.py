@@ -155,8 +155,6 @@ class KeywordFamily(ModelFamily):
 
 
 class KeywordModel(LoadedModel):
-    fuse_bundled_jobs = True
-
     def __init__(
         self,
         info: ModelInfo,
