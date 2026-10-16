@@ -585,6 +585,7 @@ func cloneSignal(signal Signal) Signal {
 		Classifier:    cloneStringSlice(signal.Classifier),
 		InputModality: cloneStringSlice(signal.InputModality),
 		Decision:      cloneStringSlice(signal.Decision),
+		AgenticFacts:  cloneStringSlice(signal.AgenticFacts),
 	}
 }
 
