@@ -96,3 +96,16 @@ func TestAnthropicStopSequenceReasonRequiresMatchedValue(t *testing.T) {
 		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "anthropic_stop_sequence_required")
 	}
 }
+
+// A whitespace-only match is present, not absent: the neutral decode and the
+// buffered provider validation both accept it, so the stream validation must
+// agree instead of failing the same reply it passes when buffered.
+func TestAnthropicStopSequenceReasonAcceptsWhitespaceMatchedValue(t *testing.T) {
+	decoder := newProviderStreamDecoder(llmprotocol.AnthropicMessagesV1)
+	body := []byte("event: message_start\ndata: " + `{"type":"message_start","message":{"id":"msg1","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}` + "\n\n" +
+		"event: message_delta\ndata: " + `{"type":"message_delta","delta":{"stop_reason":"stop_sequence","stop_sequence":" "},"usage":{"output_tokens":1}}` + "\n\n")
+	_, _, err := decoder.Push(body)
+	if err != nil {
+		t.Fatalf("whitespace-only matched stop sequence rejected on the stream path: %v", err)
+	}
+}

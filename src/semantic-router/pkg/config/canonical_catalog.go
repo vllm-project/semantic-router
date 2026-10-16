@@ -405,7 +405,8 @@ func modelPricingFromCatalog(pricing modelcatalog.Pricing) ModelPricing {
 	return ModelPricing{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CompletionPer1M: pricing.CompletionPer1M, CachedInputPer1M: pricing.CachedInputPer1M,
-		CacheWritePer1M: pricing.CacheWritePer1M,
+		CacheWritePer1M:   pricing.CacheWritePer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
 	}
 }
 

@@ -379,11 +379,12 @@ type Defaults struct {
 }
 
 type Pricing struct {
-	Currency         string   `json:"currency,omitempty" yaml:"currency,omitempty"`
-	PromptPer1M      float64  `json:"prompt_per_1m,omitempty" yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M  float64  `json:"completion_per_1m,omitempty" yaml:"completion_per_1m,omitempty"`
-	CachedInputPer1M float64  `json:"cached_input_per_1m,omitempty" yaml:"cached_input_per_1m,omitempty"`
-	CacheWritePer1M  *float64 `json:"cache_write_per_1m,omitempty" yaml:"cache_write_per_1m,omitempty"`
+	Currency          string   `json:"currency,omitempty" yaml:"currency,omitempty"`
+	PromptPer1M       float64  `json:"prompt_per_1m,omitempty" yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M   float64  `json:"completion_per_1m,omitempty" yaml:"completion_per_1m,omitempty"`
+	CachedInputPer1M  float64  `json:"cached_input_per_1m,omitempty" yaml:"cached_input_per_1m,omitempty"`
+	CacheWritePer1M   *float64 `json:"cache_write_per_1m,omitempty" yaml:"cache_write_per_1m,omitempty"`
+	CacheWrite1hPer1M *float64 `json:"cache_write_1h_per_1m,omitempty" yaml:"cache_write_1h_per_1m,omitempty"`
 }
 
 type Reliability struct {

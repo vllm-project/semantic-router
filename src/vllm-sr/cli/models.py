@@ -2141,6 +2141,9 @@ class ModelPricing(BaseModel):
     prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    cache_write_1h_per_1m: Optional[float] = Field(
+        default=None, ge=0, allow_inf_nan=False
+    )
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
