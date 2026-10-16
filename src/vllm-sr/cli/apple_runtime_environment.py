@@ -29,19 +29,40 @@ PYTHON_VERSION = "3.12.12"
 # Run inside the selected image. Query installed metadata without loading torch
 # or a model. Lower-bound requirements become the image's concrete versions.
 IMAGE_METADATA = """
-import importlib.metadata as md, json, pathlib
+import importlib.metadata as md, json, os, sys
 from packaging.requirements import Requirement
 d = md.distribution('vllm-srun')
+target = json.loads(sys.argv[1])
+if 'VLLM_SRUN_EXTRAS' not in os.environ:
+    raise ValueError('Router image lacks its runtime extras manifest; rebuild the image for this CLI release')
+extras = ['', *os.environ['VLLM_SRUN_EXTRAS'].replace(',', ' ').split()]
 requirements = []
 for raw in d.requires or []:
     r = Requirement(raw)
-    if r.marker and not r.marker.evaluate({'extra': ''}):
+    if r.marker and not any(r.marker.evaluate({**target, 'extra': extra}) for extra in extras):
         continue
     requirements.append(r.name + '==' + md.version(r.name).split('+')[0])
 print(json.dumps({'package': str(d.locate_file('vllm_srun')),
     'metadata': str(d._path), 'requirements': sorted(requirements),
-    'version': d.version}))
+    'version': d.version, 'extras': extras[1:], 'target': target}))
 """
+
+
+def target_marker_environment() -> dict[str, str]:
+    """Describe the managed interpreter, not the Linux image or CLI's Python."""
+    return {
+        "implementation_name": "cpython",
+        "implementation_version": PYTHON_VERSION,
+        "os_name": "posix",
+        "platform_machine": "arm64",
+        "platform_python_implementation": "CPython",
+        "platform_release": platform.release(),
+        "platform_system": "Darwin",
+        "platform_version": platform.version(),
+        "python_full_version": PYTHON_VERSION,
+        "python_version": ".".join(PYTHON_VERSION.split(".")[:2]),
+        "sys_platform": "darwin",
+    }
 
 
 def validate_apple_host(target: str, runtime: str) -> None:
@@ -116,8 +137,9 @@ def prepare_environment(image: str) -> Path:
     ).strip()
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
         raise ValueError("Apple runtime requires an immutable local Router image ID")
+    target = target_marker_environment()
     identity = hashlib.sha256(
-        f"{image_id}/{PYTHON_VERSION}/{UV_VERSION}/arm64-v1".encode()
+        f"{image_id}/{PYTHON_VERSION}/{UV_VERSION}/arm64-v2/{json.dumps(target, sort_keys=True)}".encode()
     ).hexdigest()
     root = cache_root()
     with acquire_runtime_lifecycle_lock(
@@ -142,6 +164,7 @@ def prepare_environment(image: str) -> Path:
                         image_id,
                         "-c",
                         IMAGE_METADATA,
+                        json.dumps(target),
                     ],
                     capture=True,
                 )
@@ -220,6 +243,8 @@ def prepare_environment(image: str) -> Path:
                         "image": image_id,
                         "runtime": metadata["version"],
                         "dependencies": requirements,
+                        "extras": metadata["extras"],
+                        "target": metadata["target"],
                         "python": PYTHON_VERSION,
                     }
                 )
