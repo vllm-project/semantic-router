@@ -20,6 +20,7 @@ func runStoreContract(t *testing.T, open openContractStore, records int) {
 	t.Run("pages", func(t *testing.T) { checkContractPages(t, open(t, 0), records) })
 	t.Run("ttl", func(t *testing.T) { checkContractTTL(t, open(t, 60)) })
 	t.Run("size", func(t *testing.T) { checkContractSize(t, open(t, 0)) })
+	t.Run("subsecond", func(t *testing.T) { checkContractSubsecond(t, open(t, 0)) })
 }
 
 func checkContractPages(t *testing.T, s Storage, records int) {
@@ -87,6 +88,37 @@ func checkContractPages(t *testing.T, s Storage, records int) {
 	}
 	if scanned != records {
 		t.Fatalf("scanned %d records, want %d", scanned, records)
+	}
+}
+
+// Records within one millisecond still page by timestamp. PostgreSQL keeps
+// microseconds, so that is the finest gap every store can tell apart.
+func checkContractSubsecond(t *testing.T, s Storage) {
+	ctx := context.Background()
+	base := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	for i, id := range []string{"c", "b", "a"} {
+		if _, err := s.Add(ctx, Record{ID: id, Timestamp: base.Add(time.Duration(100+400*i) * time.Microsecond)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		limit, offset int
+		want          []string
+	}{
+		{2, 0, []string{"a", "b"}},
+		{1, 1, []string{"b"}},
+	} {
+		page, err := s.QueryPage(ctx, QueryFilters{}, tc.limit, tc.offset, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, record := range page.Records {
+			got = append(got, record.ID)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Fatalf("limit %d offset %d returned %v, want %v", tc.limit, tc.offset, got, tc.want)
+		}
 	}
 }
 
