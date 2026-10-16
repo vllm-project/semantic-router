@@ -3856,5 +3856,11 @@
   },
   "team.members.yuluo-yx.bio": {
     "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.PharosEast.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.PharosEast.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
   }
 }

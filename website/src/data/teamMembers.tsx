@@ -367,6 +367,14 @@ export const topNewContributorMembers: TeamMember[] = [
 export const allCommitterMembers: TeamMember[] = [
   ...topNewContributorMembers,
   {
+    name: 'Haoyu Jing',
+    role: <Translate id="team.members.PharosEast.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/PharosEast.png',
+    github: 'https://github.com/PharosEast',
+    bio: <Translate id="team.members.PharosEast.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
     name: 'Stefan Wang',
     role: <Translate id="team.members.1fanwang.role">AI Infrastructure</Translate>,
     company: 'LinkedIn',
