@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 	"unsafe"
@@ -281,5 +282,163 @@ func TestMemoryStoreTTLPurgeClearsBackingSlots(t *testing.T) {
 		if slots[i] != nil {
 			t.Errorf("backing array trailing slot[%d] = %q, want nil", i, slots[i].ID)
 		}
+	}
+}
+
+// TestMemoryStoreTTLExpiredRecordsAreGCRetainedDirectly verifies that after
+// purge, the backing array no longer holds any reference to expired Record
+// payloads — confirmed by runtime.SetFinalizer. This is the reviewer's
+// "retention regression": it proves expired payloads are not just absent
+// from the visible slice, but are also unreachable from the slice's
+// backing array and will be reclaimed by GC.
+//
+// If purgeExpiredLocked or the ring-buffer eviction ever stops niling out
+// a backing-array slot, this test will hang forever waiting for the
+// finalizer to fire — an unambiguous signal that the stale pointer is
+// still reachable.
+func TestMemoryStoreTTLExpiredRecordsAreGCRetainedDirectly(t *testing.T) {
+	m := NewMemoryStore(100, 5) // retention: 5s
+	now := time.Now().UTC()
+
+	// Create a large expired record with a SetFinalizer so we can detect
+	// when GC considers it unreachable.
+	stale := ttlRecord("gc_expired", now.Add(-30*time.Second))
+	// Give it a non-trivial payload so there is actually something worth
+	// reclaiming (reviewer flagged "1 MiB expired payload").
+	stale.ResponseBody = string(make([]byte, 1<<20)) // 1 MiB
+	stale.RequestBody = string(make([]byte, 1<<20))  // 1 MiB
+
+	// finalizerFired closes when the stale *Record has no more references
+	// and GC finally collects it.
+	finalizerFired := make(chan struct{})
+	// Capture the Record we store via Add (it clones the input, so we need
+	// to attach the finalizer to the clone actually held by the store).
+	// We'll grab the *Record out of the store right after Add to attach it.
+	_, err := m.Add(context.Background(), stale)
+	if err != nil {
+		t.Fatalf("Add expired record: %v", err)
+	}
+
+	// Attach finalizer to the clone held inside m.records — GC only fires
+	// it once that exact pointer becomes unreachable.
+	m.mu.Lock()
+	if len(m.records) == 0 {
+		m.mu.Unlock()
+		t.Fatal("precondition: expected 1 record after Add")
+	}
+	staleClone := m.records[0]
+	runtime.SetFinalizer(staleClone, func(*Record) {
+		close(finalizerFired)
+	})
+	m.mu.Unlock()
+
+	// Purge via Get — same purge path the reviewer exercised
+	_, ok, err := m.Get(context.Background(), "gc_expired")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected expired record to be elided from Get")
+	}
+
+	// Force aggressive GC to make sure the finalizer runs promptly.
+	// We run multiple GCs because finalizers are only guaranteed to run
+	// after the object is unreachable, and a single GC may not collect
+	// everything.
+	for i := 0; i < 10; i++ {
+		runtime.GC()
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	select {
+	case <-finalizerFired:
+		// Good — the stale *Record clone is now unreachable; both the
+		// byID map and the backing array have released it.
+	case <-time.After(2 * time.Second):
+		t.Fatalf(
+			"GC retention leak: finalizer for stale record never fired. " +
+				"The backing array still holds a reference to the expired *Record, " +
+				"preventing GC from reclaiming its 2 MiB payload.",
+		)
+	}
+}
+
+// TestMemoryStoreRingBufferEvictReleasesGC verifies that when the ring
+// buffer evicts the oldest record (because maxRecords is hit), the evicted
+// slot is niled so the evicted *Record becomes GC-reclaimable.
+//
+// We use ttl=0 (no time-based expiry) so all three records survive Add and
+// the eviction path is exercised purely by the ring-buffer overflow, which
+// is a distinct code path from purgeExpiredLocked.
+func TestMemoryStoreRingBufferEvictReleasesGC(t *testing.T) {
+	m := NewMemoryStore(2, 0) // maxRecords=2, no TTL — eviction only by ring buffer
+	now := time.Now().UTC()
+
+	rec1 := ttlRecord("r1", now.Add(-30*time.Second)) // old, but ttl=0 so no expiry
+	rec2 := ttlRecord("r2", now)
+	rec3 := ttlRecord("r3", now.Add(5*time.Second))
+
+	if _, err := m.Add(context.Background(), rec1); err != nil {
+		t.Fatalf("Add r1: %v", err)
+	}
+	if _, err := m.Add(context.Background(), rec2); err != nil {
+		t.Fatalf("Add r2: %v", err)
+	}
+
+	// At this point ring buffer is full (len=2). records[0]=r1, records[1]=r2.
+	// Attach finalizer to r1 which will be evicted by the next Add.
+	finalizerFired := make(chan struct{})
+	m.mu.Lock()
+	if len(m.records) != 2 {
+		t.Fatalf("precondition: expected 2 records, got %d", len(m.records))
+	}
+	r1 := m.records[0]
+	if r1.ID != "r1" {
+		t.Fatalf("precondition: records[0].ID=%q, want 'r1'", r1.ID)
+	}
+	runtime.SetFinalizer(r1, func(*Record) { close(finalizerFired) })
+	m.mu.Unlock()
+
+	// Add third record → triggers ring-buffer eviction of r1.
+	if _, err := m.Add(context.Background(), rec3); err != nil {
+		t.Fatalf("Add r3: %v", err)
+	}
+
+	// Verify r1 is gone from both logical containers
+	m.mu.Lock()
+	for _, rec := range m.records {
+		if rec != nil && rec.ID == "r1" {
+			t.Errorf("r1 still in records slice after eviction")
+		}
+	}
+	if _, exists := m.byID["r1"]; exists {
+		t.Errorf("r1 still in byID map after eviction")
+	}
+	m.mu.Unlock()
+
+	// Verify backing array slot is niled (defense in depth).
+	m.mu.Lock()
+	slots := backingArrayPtrs(t, m.records)
+	m.mu.Unlock()
+	for idx, ptr := range slots {
+		if ptr != nil && ptr.ID == "r1" {
+			t.Errorf("backing array slot[%d] still holds r1 after ring-buffer eviction", idx)
+		}
+	}
+
+	// Run aggressive GC to make sure finalizer fires
+	for i := 0; i < 10; i++ {
+		runtime.GC()
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	select {
+	case <-finalizerFired:
+		// Good — r1's payload is GC-reclaimable after ring-buffer eviction.
+	case <-time.After(2 * time.Second):
+		t.Fatalf(
+			"GC retention leak in ring-buffer eviction: finalizer for evicted record never fired. " +
+				"The backing array slot was not niled, keeping the evicted *Record reachable.",
+		)
 	}
 }
