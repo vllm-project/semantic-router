@@ -42,7 +42,7 @@ const SchemaVersion = "1"
 // caller-controlled until Validate has run. Callers outside this package
 // consume Accepted instead.
 //
-// ExpiresAt is a string rather than a time.Time so that an unparseable
+// ExpiresAt is a string rather than a time.Time so that an unparsable
 // timestamp becomes a field-level rejection with a reason, instead of an
 // unmarshal error that discards the whole payload before any other field can be
 // reported.
