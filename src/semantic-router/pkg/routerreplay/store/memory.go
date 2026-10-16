@@ -22,7 +22,10 @@ type MemoryStore struct {
 	records    []*Record
 	byID       map[string]*Record
 	maxRecords int
-	ttl        int // Not used in memory store, but kept for interface compatibility
+	// ttl bounds record retention in seconds. Records older than ttl are
+	// elided from List/Get and purged on the next mutation. 0 (or negative)
+	// disables time-based expiry and keeps only the maxRecords ring bound.
+	ttl int
 }
 
 // NewMemoryStore creates a new in-memory storage backend.
@@ -44,6 +47,8 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.purgeExpiredLocked(time.Now())
+
 	if record.ID == "" {
 		id, err := generateID()
 		if err != nil {
@@ -54,11 +59,17 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 	if record.LifecycleState == "" {
 		record.LifecycleState = LifecycleInProgress
 	}
+	if record.Timestamp.IsZero() {
+		record.Timestamp = time.Now().UTC()
+	}
 
-	// Evict oldest if at capacity
+	// Evict oldest if at capacity. Clear the evicted slot so the
+	// backing array does not retain a reference to the dropped Record,
+	// allowing GC to reclaim its payload immediately.
 	if len(m.records) >= m.maxRecords {
 		oldest := m.records[0]
 		delete(m.byID, oldest.ID)
+		m.records[0] = nil
 		m.records = m.records[1:]
 	}
 
@@ -70,10 +81,12 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 	return copyRec.ID, nil
 }
 
-// Get retrieves a record by ID from memory.
+// Get retrieves a record by ID from memory. Expired records are elided.
 func (m *MemoryStore) Get(ctx context.Context, id string) (Record, bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.purgeExpiredLocked(time.Now())
 
 	rec, ok := m.byID[id]
 	if !ok {
@@ -83,10 +96,13 @@ func (m *MemoryStore) Get(ctx context.Context, id string) (Record, bool, error) 
 	return cloneRecord(*rec), true, nil
 }
 
-// List returns all records ordered by timestamp descending.
+// List returns all records ordered by timestamp descending. Expired records
+// are elided so the caller never observes past-retention entries.
 func (m *MemoryStore) List(ctx context.Context) ([]Record, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.purgeExpiredLocked(time.Now())
 
 	result := make([]Record, len(m.records))
 	for i := len(m.records) - 1; i >= 0; i-- {
@@ -94,6 +110,42 @@ func (m *MemoryStore) List(ctx context.Context) ([]Record, error) {
 	}
 
 	return result, nil
+}
+
+// purgeExpiredLocked drops records older than the configured retention ttl.
+// It is a no-op when ttl <= 0, in which case only the maxRecords ring bound
+// applies. Callers must hold m.mu.
+func (m *MemoryStore) purgeExpiredLocked(now time.Time) {
+	if m.ttl <= 0 || len(m.records) == 0 {
+		return
+	}
+	cutoff := now.Add(-time.Duration(m.ttl) * time.Second)
+
+	// Re-slice in place so we preserve the original capacity, but nil out
+	// every slot that we skip. Go keeps the backing array alive for the full
+	// capacity even after the length shortens, so we must clear the stale
+	// pointers explicitly or GC cannot reclaim the expired Record payloads.
+	kept := m.records[:0]
+	for _, rec := range m.records {
+		ts := rec.Timestamp
+		if ts.IsZero() {
+			// A record with no timestamp is treated as fresh; it is only
+			// bounded by the maxRecords ring eviction, never by TTL.
+			kept = append(kept, rec)
+			continue
+		}
+		if ts.Before(cutoff) {
+			delete(m.byID, rec.ID)
+			continue
+		}
+		kept = append(kept, rec)
+	}
+	// Nil the trailing slots in the original backing array so stale
+	// *Record pointers don't keep expired payloads reachable.
+	for i := len(kept); i < len(m.records); i++ {
+		m.records[i] = nil
+	}
+	m.records = kept
 }
 
 // UpdateStatus updates the response status and flags for a record.
@@ -258,10 +310,12 @@ func (m *MemoryStore) SetMaxRecords(max int) {
 	}
 	m.maxRecords = max
 
-	// Evict oldest records if over capacity
+	// Evict oldest records if over capacity. Clear evicted slots so the
+	// backing array does not retain references to dropped Records.
 	for len(m.records) > m.maxRecords {
 		oldest := m.records[0]
 		delete(m.byID, oldest.ID)
+		m.records[0] = nil
 		m.records = m.records[1:]
 	}
 }
