@@ -71,7 +71,7 @@ global:
 | `provider` | Always `model_runtime` for models the runtime serves. |
 | `artifact` | A Hugging Face repository, or an absolute path to a local copy. |
 | `revision` | The exact 40-character commit to load. Built-in models are already pinned; other repositories need one. |
-| `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N`, `mps`, or an accelerator a plugin adds. |
+| `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N`, `npu:N`, `mps`, or an accelerator a plugin adds. |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context` | Engine arguments: how the worker batches requests and the precision it computes in. Leave them out for the runtime's defaults. See [Engine arguments](./engine-args.md). |
 | `input` | For task models: the longest input in tokens (`max_tokens`) and what to do with longer input (`overflow`: `reject`, `truncate` or `window`). |
 | `replicas` | Explicit managed `device` or attached `endpoint`/`served_name` placements for this model. Omit for one worker. |
@@ -194,6 +194,33 @@ are busy; longer inputs on dedicated cores may benefit from a higher override.
 This is a per-worker limit, so several busy workers can still contend for the
 same cores. Reserve cores for other services when sharing a host. Runtimes you
 attach through `endpoint` manage their own threads.
+
+A managed CPU runtime can also learn the intra-op thread count its traffic
+wants: the fastest count for a short input is often lower than for a long
+one, and on a shared host it moves with the neighbors' load. Setting
+`VLLM_SRUN_CPU_ADAPTIVE_THREADS=1` before starting the stack opts each CPU
+worker into learning and reporting. Exploration starts only after the
+startup golden check has passed; for its first requests the worker serves
+each request with this setting's count while the allowed counts run as
+timed shadow passes that must reproduce the served answer bit for bit — a
+warm pass at this setting's count keeps the caches out of the comparison,
+and one count that drifts on this host retires the learning for good. When
+the table builds, the fastest count per input-size range is logged; the
+worker's answers never left this setting's count, so point `--threads` at
+the learned optimum to apply it — a single count is safe on every host,
+because only a change of count can move an answer.
+
+Whether answers survive a change of count is a property of the host and its
+kernels: bit-identical on the measured Arm hosts, input-dependent drift on
+x86. `VLLM_SRUN_CPU_ADAPTIVE_THREADS=2` additionally serves the learned
+counts, after they shadow-verify against the served answers for a transition
+window; it is meant for hosts whose bit-identity across counts a record
+vouches for, because a host that drifts only on inputs the window never saw
+could still move an exact answer. All forwards state their thread count on
+a shared per-process context, so several workers in one process never
+inherit each other's count. The exploration asks something of the first
+requests, and the learned setting reflects the load the worker saw while
+learning; on a host whose load shifts, relearn by restarting the worker.
 
 ## Publish a native API
 
