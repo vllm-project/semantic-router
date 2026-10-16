@@ -443,7 +443,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if format == "" {
 			format = llmprotocol.OpenAIChatV1
 		}
-		streamBody, diags, streamErr := engine.EncodeResponseStream(format, candidateResponse, llmprotocol.StreamContext{
+		streamBody, diags, streamErr := engine.EncodeResponseStreamWithEnvelope(format, candidateResponse, translated.Envelope, llmprotocol.StreamContext{
 			Context:            ctx.TraceContext,
 			Source:             format,
 			Target:             format,
@@ -530,7 +530,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 				format = llmprotocol.OpenAIChatV1
 			}
 			streamResp := *ctx.SemanticResponse
-			reencodedStream, _, streamErr := engine.EncodeResponseStream(format, streamResp, llmprotocol.StreamContext{
+			reencodedStream, _, streamErr := engine.EncodeResponseStreamWithEnvelope(format, streamResp, translated.Envelope, llmprotocol.StreamContext{
 				Context:            ctx.TraceContext,
 				Source:             format,
 				Target:             format,
@@ -546,7 +546,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					// The single SSE text frame exceeded Limits.SSEFrameBytes (e.g. policy warning pushed it over limit).
 					// Produce a bounded stream containing the policy result by chunking text across frames within SSE limits.
 					boundedResp := splitResponseTextContent(streamResp, 64*1024)
-					boundedStream, _, boundedErr := engine.EncodeResponseStream(format, boundedResp, llmprotocol.StreamContext{
+					boundedStream, _, boundedErr := engine.EncodeResponseStreamWithEnvelope(format, boundedResp, translated.Envelope, llmprotocol.StreamContext{
 						Context:            ctx.TraceContext,
 						Source:             format,
 						Target:             format,

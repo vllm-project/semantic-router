@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -95,11 +96,36 @@ func TestResponseFallbackValidatesDynamoResponse(t *testing.T) {
 					require.NotNil(t, response)
 					require.Equal(t, "succeeded", ctx.FallbackRecord.FinalStatus)
 					require.Contains(t, string(response.GetImmediateResponse().Body), "hello")
+					require.Contains(t, string(response.GetImmediateResponse().Body), `"nvext":{"token_ids":[1]}`)
 					if streamed {
 						require.Contains(t, string(response.GetImmediateResponse().Body), "data:")
 					}
 				}
 			})
 		}
+	}
+}
+
+func TestDynamoFallbackStreamPreservesMetadataAfterPolicy(t *testing.T) {
+	for _, size := range []int{5, (1 << 20) - 200} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			router, cfg := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+			cfg.VLLMEndpoints[1].Type = "dynamo"
+			ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+			ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+			ctx.ExpectStreamingResponse = true
+			ctx.SemanticRequest.Stream = true
+			ctx.HallucinationDetected = true
+			ctx.VSRSelectedDecision = decisionWithHallucinationActions("body", "header")
+			router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+				return []byte(fmt.Sprintf(`{"id":"fallback","object":"chat.completion","model":"model-fallback-1","choices":[{"index":0,"message":{"role":"assistant","content":%q},"finish_reason":"stop"}],"nvext":{"token_ids":[1,2]}}`, strings.Repeat("x", size))), http.StatusOK, nil
+			}
+			response := router.maybeExecuteFallback([]byte("unavailable"), ctx)
+			require.NotNil(t, response)
+			wire := string(response.GetImmediateResponse().Body)
+			require.Contains(t, wire, "[Hallucination Warning]")
+			require.Equal(t, 1, strings.Count(wire, `"nvext":{"token_ids":[1,2]}`))
+			require.Contains(t, wire, "data: [DONE]")
+		})
 	}
 }
