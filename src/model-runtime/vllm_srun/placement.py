@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from . import dtypes
 from .errors import PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
@@ -112,7 +113,9 @@ def place(
     parameters: int,
     memory_budget_gib: float | None = None,
     bf16_parameters: int = 0,
+    dtype: str = "auto",
 ) -> Placement:
+    """A device for ``spec`` at ``dtype`` (``--dtype``), which decides the dtypes its weights are held in."""
     kind, index = parse_device(device)
     budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
     candidates = auto_order() if kind == "auto" else [kind]
@@ -130,25 +133,31 @@ def place(
         if not accelerator.available():
             absent.append(f"{name}: not available on this host")
             continue
-        needed = estimate_bytes(spec, parameters, name, bf16_parameters)
-        if budget is not None and needed > budget:
-            reasons.append(
-                f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "
-                f"above --memory-budget {memory_budget_gib} GiB"
-            )
-            continue
         devices = accelerator.devices()
         if index is not None:
             devices = [d for d in devices if d.index == index]
         required = spec.requires.get(name, ())
         for info in devices:
+            # The dtypes a device holds the weights in follow its torch device, as
+            # the runtime resolves --dtype and the engines read the policy.
+            gpu = accelerator.torch_device(info).type != "cpu"
+            running = dtypes.apply(spec, dtype, gpu)
+            needed = estimate_bytes(
+                running, parameters, name, bf16_parameters if gpu else 0
+            )
+            if budget is not None and needed > budget:
+                reasons.append(
+                    f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "
+                    f"above --memory-budget {memory_budget_gib} GiB"
+                )
+                break
             if required:
                 offered = accelerator.capabilities(info)
                 lacking = [need for need in required if not offered.get(need)]
                 if lacking:
                     unsupported += [accelerator.lacks(info, need) for need in lacking]
                     continue
-            if name != "cpu" and not info.bf16 and spec.dtype.needs_gpu_bf16:
+            if gpu and not info.bf16 and running.dtype.needs_gpu_bf16:
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
             if (

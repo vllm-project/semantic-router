@@ -280,6 +280,31 @@ def test_the_estimate_covers_each_measured_bf16_resident_peak_on_a_24_gb_gpu(mod
     assert peak + 0.6 <= needed < RTX_4090_FREE_GIB
 
 
+def test_an_explicit_dtype_is_estimated_as_it_holds_the_weights(monkeypatch):
+    _one_rocm_device(monkeypatch, 22.8)
+    parameters, bf16, _ = BF16_RESIDENT_PEAKS_GIB["Decision-2.0-Lux-9B"]
+    published = place(SPEC, "rocm:0", parameters, bf16_parameters=bf16)
+    with pytest.raises(PlacementError, match=r"needs about 31\.6 GiB, 22\.8 GiB free"):
+        place(SPEC, "rocm:0", parameters, bf16_parameters=bf16, dtype="float32")
+    # BF16 autocast is the published precision on a GPU, so bfloat16 keeps it.
+    held = place(SPEC, "rocm:0", parameters, bf16_parameters=bf16, dtype="bfloat16")
+    assert held.estimated_bytes == published.estimated_bytes
+    _one_rocm_device(monkeypatch, 70.2)
+    with pytest.raises(PlacementError, match=r"needs about 99\.2 GiB, 70\.2 GiB free"):
+        place(D3, "rocm:0", D3_PARAMETERS, dtype="float32")
+
+
+def test_float32_needs_no_bf16_support(monkeypatch):
+    _one_rocm_device(monkeypatch, 40.0)
+    (device,) = ROCmAccelerator().devices()
+    monkeypatch.setattr(
+        ROCmAccelerator, "devices", lambda self: [replace(device, bf16=False)]
+    )
+    with pytest.raises(PlacementError, match="no BF16 support"):
+        place(SPEC, "rocm:0", 1_000_000)
+    assert place(SPEC, "rocm:0", 1_000_000, dtype="float32").device.index == 0
+
+
 # "all" is a stock checkpoint (the Qwen base under Decision-2.0-Vega-27B): its
 # embeddings, norms and convolutions are BF16 too, but stay FP32 on the GPU.
 @pytest.mark.parametrize("stored", ["linear", "all"])

@@ -70,11 +70,12 @@ log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
 
 
-def _bf16_parameters(spec: ModelSpec, config: ModelConfig) -> int:
-    """The backbone parameters the native engine holds in BF16 on a GPU (``DtypePolicy.bf16_resident``)."""
+def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
+    """The backbone parameters the native engine holds in BF16 on a GPU at ``dtype`` (``DtypePolicy.bf16_resident``)."""
+    policy = dtypes.apply(spec, dtype, True).dtype
     if (
-        not spec.dtype.bf16_resident
-        or spec.dtype.gpu_weights
+        not policy.bf16_resident
+        or policy.gpu_weights
         or config.engine not in (AUTO_ENGINE, "native")
         or device_kind(config.device) == "cpu"
     ):
@@ -355,8 +356,14 @@ class ServedModel:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
+        dtype = self.requested_args.dtype
         placement = place(
-            spec, config.device, parameters, budget, _bf16_parameters(spec, config)
+            spec,
+            config.device,
+            parameters,
+            budget,
+            _bf16_parameters(spec, config, dtype),
+            dtype,
         )
         device = placement.device
         self.args, self.limits_source = calibration.resolve(self.requested_args, device)
