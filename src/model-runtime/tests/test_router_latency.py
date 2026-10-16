@@ -1,5 +1,6 @@
 """The router latency tool's connection-error tolerance (``tools/router_latency.py``)."""
 
+import argparse
 import http.server
 import importlib.util
 import json
@@ -22,6 +23,39 @@ def tool():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _outcome(status, decision="chat", model="m1", ms=1.0):
+    row = {"status": status, "decision": None, "model": None}
+    if status == http.HTTPStatus.OK:
+        row.update(decision=decision, model=model, ms=ms, signal_ms={})
+    return row
+
+
+def _run_file(path, outcomes):
+    path.write_text(
+        json.dumps({"passes": {"sequential": {}}, "outcomes": outcomes}),
+        encoding="utf-8",
+    )
+
+
+def _round_file(path, outcomes):
+    path.write_text(
+        json.dumps(
+            {
+                "passes": {
+                    "sequential": {
+                        "p50_ms": 1.0,
+                        "p95_ms": 1.0,
+                        "p99_ms": 1.0,
+                        "throughput_rps": 1.0,
+                    }
+                },
+                "outcomes": outcomes,
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 class _DroppingRouter(http.server.ThreadingHTTPServer):
@@ -101,3 +135,102 @@ def test_run_survives_first_input_disconnects(tool, tmp_path, monkeypatch):
     }
     assert result["outcomes"][1]["status"] == http.HTTPStatus.OK
     assert result["outcomes"][1]["decision"] == "stable"
+
+
+def test_compare_partitions_failures_from_parity(tool, tmp_path, capsys):
+    """Double failures are not agreement and single-sided ones are not regressions.
+
+    A 200 with a null decision still compares: the partition keys on status,
+    not on the decision.
+    """
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text(
+        json.dumps(["ok", "changed", "boom-both", "boom-new", "err-empty", "empty"]),
+        encoding="utf-8",
+    )
+    base, new = tmp_path / "base.json", tmp_path / "new.json"
+    _run_file(
+        base,
+        [
+            _outcome(200),
+            _outcome(200),
+            _outcome("error"),
+            _outcome(200, decision=None, model=None),
+            _outcome("error"),
+            _outcome(200, decision=None, model=None),
+        ],
+    )
+    _run_file(
+        new,
+        [
+            _outcome(200, ms=1.5),
+            _outcome(200, model="m2", ms=2.0),
+            _outcome("error"),
+            _outcome(500),
+            _outcome(200, decision=None, model=None),
+            _outcome(200, decision=None, model=None),
+        ],
+    )
+    args = argparse.Namespace(base=str(base), new=str(new), corpus=str(corpus), show=5)
+    tool.cmd_compare(args)
+    out = capsys.readouterr().out
+    assert (
+        "decisions differing: 1 / 3 compared "
+        "(1 failed on both sides, 2 failed on one side)" in out
+    )
+    assert "None -> None ms" not in out
+    assert "'changed'" in out and "chat/m1 -> chat/m2" in out
+
+
+def test_compare_reports_plain_counts_without_failures(tool, tmp_path, capsys):
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text(json.dumps(["ok", "same"]), encoding="utf-8")
+    base, new = tmp_path / "base.json", tmp_path / "new.json"
+    outcomes = [_outcome(200), _outcome(200, ms=2.0)]
+    _run_file(base, outcomes)
+    _run_file(new, outcomes)
+    args = argparse.Namespace(base=str(base), new=str(new), corpus=str(corpus), show=5)
+    tool.cmd_compare(args)
+    out = capsys.readouterr().out
+    assert "decisions differing: 0 / 2 compared" in out
+    assert "failed on" not in out
+
+
+def test_rounds_denominator_excludes_failures(tool, tmp_path, capsys):
+    d = tmp_path
+    for side in ("base", "new"):
+        _round_file(
+            d / f"r1-{side}.json",
+            [
+                _outcome(200),
+                _outcome(200, decision=None, model=None),
+                _outcome("error"),
+                _outcome(500),
+            ],
+        )
+    # round 2: input 3 fails only on the new side.
+    _round_file(
+        d / "r2-base.json",
+        [
+            _outcome(200),
+            _outcome(200, decision=None, model=None),
+            _outcome("error"),
+            _outcome(200),
+        ],
+    )
+    _round_file(
+        d / "r2-new.json",
+        [
+            _outcome(200),
+            _outcome(200, decision=None, model=None),
+            _outcome("error"),
+            _outcome(500),
+        ],
+    )
+    args = argparse.Namespace(dir=str(d), base="base", new="new", out="")
+    tool.cmd_rounds(args)
+    out = capsys.readouterr().out
+    assert (
+        "same decision and model per round: [2, 2] of [2, 2] compared "
+        "([2, 1] failed on both sides, [0, 1] failed on one side)" in out
+    )
