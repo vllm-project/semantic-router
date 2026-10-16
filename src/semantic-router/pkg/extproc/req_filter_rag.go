@@ -394,6 +394,10 @@ func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName 
 		return nil, false
 	}
 
+	if applies, _ := r.pluginApplies(ctx, config.DecisionPluginRAG); !applies {
+		return nil, false
+	}
+
 	if ragConfig.Backend == "" {
 		logging.Warnf("[RAG] Decision '%s' has RAG enabled but no backend configured, skipping", decisionName)
 		metrics.RecordRAGRetrieval("unknown", requestDecisionStateKey(ctx), "config_error", 0)
