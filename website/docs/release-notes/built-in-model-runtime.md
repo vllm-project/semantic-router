@@ -88,9 +88,19 @@ own settings. See
   `/opt/router-model-artifacts/vela-1.0-omni-*` paths. ONNX Runtime is the
   optional `onnx` extra of `vllm-srun`, for ONNX packages and prepared Omni
   bundles (`engine: onnxruntime`).
-- **Runtime contract 2.0.0.** The router treats an attached runtime that
-  doesn't serve contract 2.x, such as the 1.0.0 runtime of #4481, as
-  incompatible. Upgrade attached runtimes together with the router.
+- **A router and its runtime come from one release.** The router accepts only
+  a runtime that serves exactly its contract version (3.0.0 in this release)
+  and reports any other, another 3.x included, as `incompatible`, with both
+  versions in the reason. Upgrade attached runtimes together with the router.
+- **System One requests lose `options.profile`**
+  ([#5071](https://github.com/vllm-project/semantic-router/pull/5071)). A
+  request that sets it returns `400` (`invalid_request`): it runs with its
+  deployment's [engine arguments](model-runtime/engine-args.md). A
+  `return_meta` answer reports `dtype` and `numerics` (`exact` or
+  `approximate`) instead of `profile`. The router checks `options` itself and
+  refuses any option the
+  [public System One API](api/router.md#system-one-api-stability) does not
+  define.
 - **Long inputs cost what their model reads**
   ([#4654](https://github.com/vllm-project/semantic-router/issues/4654)). The
   runtime tokenizes an input only as far as its token budget decides the
@@ -128,8 +138,7 @@ own settings. See
   read as a request of its own. Once the call is sent, every question in it
   waits for it as long as the latest of them, so a decision question's
   `timeout_ms` no longer drops an answer that shares the call. Contract 2.2.0
-  adds the decisions field `states`; an attached runtime on 2.1 gets one call
-  per text in the same bundle.
+  adds the decisions field `states`.
 - **Training contract `semantic-router.training/v2`.** One
   `runtime/model-runtime@v1` capability replaces `runtime/candle@v1` and
   `runtime/onnxruntime@v1`. BERT and RoBERTa (`architecture/hf-bert@v1`), the
