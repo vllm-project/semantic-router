@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +41,7 @@ func TestServingModeUsesActiveFrontendIdentity(t *testing.T) {
 				_, _ = w.Write([]byte(test.health))
 			}))
 			defer server.Close()
-			probe := probeServingHealth(server.URL, statusCredentialProvider{token: "serving-mode-token"})
+			probe := probeServingHealth(context.Background(), server.URL, statusCredentialProvider{token: "serving-mode-token"})
 			if probe.mode != test.mode || probe.healthy != test.healthy || requests != 1 {
 				t.Fatalf("probe=%+v requests=%d", probe, requests)
 			}
@@ -68,7 +69,7 @@ func TestServingModeDoesNotFollowCredentialRedirects(t *testing.T) {
 				_, _ = w.Write([]byte(engineReadyHealth))
 			}))
 			defer upstream.Close()
-			probe := probeServingHealth(upstream.URL, statusCredentialProvider{token: "private-management-token"})
+			probe := probeServingHealth(context.Background(), upstream.URL, statusCredentialProvider{token: "private-management-token"})
 			if probe.mode != servingModeUnknown || redirectedRequests.Load() != 0 {
 				t.Fatalf("redirected identity probe: mode=%s redirected requests=%d", probe.mode, redirectedRequests.Load())
 			}
@@ -83,7 +84,7 @@ func TestServingModeHealthTimeoutIsBounded(t *testing.T) {
 		close(canceled)
 	}))
 	defer server.Close()
-	probe := probeServingHealth(server.URL)
+	probe := probeServingHealth(context.Background(), server.URL)
 	if probe.mode != servingModeUnknown || probe.healthy {
 		t.Fatalf("timed-out probe = %+v", probe)
 	}
@@ -130,10 +131,10 @@ func TestStatusHTTPReportsServingModeAndEngineReadiness(t *testing.T) {
 					var status SystemStatus
 					switch collector {
 					case "managed":
-						status = collectManagedStackStatus("", StackState{}, upstream.URL, upstream.URL)
+						status = collectManagedStackStatus(context.Background(), "", StackState{}, upstream.URL, upstream.URL)
 					case "direct":
 						var present bool
-						status, present = collectDirectStatus("", upstream.URL, upstream.URL)
+						status, present = collectDirectStatus(context.Background(), "", upstream.URL, upstream.URL)
 						if !present {
 							t.Fatal("known engine must remain observable while warming")
 						}
