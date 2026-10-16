@@ -36,4 +36,5 @@ export const initialDSLState: DSLState = {
   deployPreviewMerged: '',
   deployPreviewLoading: false,
   deployPreviewError: null,
+  deployPreviewValidationError: null,
 }

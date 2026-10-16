@@ -66,6 +66,7 @@ const BuilderPage: React.FC = () => {
     deployPreviewMerged,
     deployPreviewLoading,
     deployPreviewError,
+    deployPreviewValidationError,
   } = useDSLStore()
 
   // Derived from the store: the source differs from the last load, import, reset, or
@@ -583,6 +584,7 @@ const BuilderPage: React.FC = () => {
         open={showDeployConfirm}
         loading={deployPreviewLoading}
         error={deployPreviewError}
+        validationError={deployPreviewValidationError}
         currentYaml={deployPreviewCurrent}
         mergedYaml={deployPreviewMerged}
         onClose={dismissDeploy}

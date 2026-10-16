@@ -545,6 +545,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       deployPreviewMerged: '',
       deployPreviewLoading: true,
       deployPreviewError: null,
+      deployPreviewValidationError: null,
     })
 
     // Fetch preview asynchronously
@@ -560,11 +561,15 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         }
         return resp.json()
       })
-      .then((data: { current: string; preview: string }) => {
+      .then((data: { current: string; preview: string; validation_error?: string }) => {
+        // The preview runs the Router's parser over the merged config and
+        // reports the verdict beside the diff, so a refused document is
+        // caught here rather than by the toast after Deploy.
         set({
           deployPreviewCurrent: data.current,
           deployPreviewMerged: data.preview,
           deployPreviewLoading: false,
+          deployPreviewValidationError: data.validation_error || null,
         })
       })
       .catch((err) => {
