@@ -239,9 +239,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 	response := service.buildIntentResponseFromSignals(
 		signals,
 		decisionResult,
-		"projection_route",
-		0.91,
-		12,
+		Classification{Category: "projection_route", Confidence: 0.91, ConfidenceAvailable: confidenceAvailability(true), ProcessingTimeMs: 12},
 		req,
 		service.classifier,
 		service.config,
@@ -756,3 +754,25 @@ func samplePIIResponseDetections() []classification.PIIDetection {
 }
 
 const samplePIIResponseText = "Alice reached alice@test.com at tel 555-123-4567"
+
+func TestBuildEvalResponse_IncludesDecisionRanking(t *testing.T) {
+	service := &ClassificationService{}
+	signals := &classification.SignalResults{
+		Metrics: &classification.SignalMetricsCollection{},
+		Diagnostics: decision.EvaluationDiagnostics{
+			Ranking: &decision.RankingTrace{
+				Strategy:   "priority",
+				Winner:     "law_route",
+				DecidedBy:  "priority",
+				Fallback:   "keyword_route reported no comparable score",
+				Candidates: 2,
+			},
+		},
+	}
+
+	response := service.buildEvalResponse("why?", signals, nil, nil)
+	require.NotNil(t, response)
+	require.NotNil(t, response.DecisionRanking, "the eval response must report how the decision was ranked")
+	assert.Equal(t, "law_route", response.DecisionRanking.Winner)
+	assert.Equal(t, "keyword_route reported no comparable score", response.DecisionRanking.Fallback)
+}

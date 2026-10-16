@@ -6,6 +6,44 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
+func TestModelParamsEvidenceResultUsesExactEffort(t *testing.T) {
+	low, high := 70.0, 80.0
+	params := ModelParams{
+		QualityIndex: "acme/index@1.0.0",
+		IndexResults: map[string]modelcatalog.IndexResult{
+			"acme/index@1.0.0": {Status: "available", Score: &low, Coverage: 0.6},
+		},
+		IndexResultsByEffort: map[string]map[string]modelcatalog.IndexResult{
+			"high": {"acme/index@1.0.0": {Status: "available", Score: &high, Coverage: 1}},
+		},
+	}
+	result, ok := params.EvidenceResultAt("", "high")
+	if !ok || result.Score == nil || *result.Score != 80 || result.Coverage != 1 {
+		t.Fatalf("high evidence = %+v, %v", result, ok)
+	}
+	if _, found := params.EvidenceResultAt("", "medium"); found {
+		t.Fatal("missing exact effort fell back to default")
+	}
+	result, ok = params.EvidenceResultAt("", "")
+	if !ok || result.Score == nil || *result.Score != 70 {
+		t.Fatalf("default evidence = %+v, %v", result, ok)
+	}
+}
+
+func TestCloneCatalogIndexResultsByEffortIsDeep(t *testing.T) {
+	score := 80.0
+	source := map[string]map[string]modelcatalog.IndexResult{
+		"high": {"acme/index@1.0.0": {Score: &score, Domains: map[string]float64{"reasoning": 0.8}}},
+	}
+	clone := cloneCatalogIndexResultsByEffort(source)
+	result := clone["high"]["acme/index@1.0.0"]
+	*result.Score = 0
+	result.Domains["reasoning"] = 0
+	if *source["high"]["acme/index@1.0.0"].Score != 80 || source["high"]["acme/index@1.0.0"].Domains["reasoning"] != 0.8 {
+		t.Fatal("effort result clone mutated source")
+	}
+}
+
 func TestGetModelIndexResultReturnsDeepCopy(t *testing.T) {
 	const (
 		wantScore      = 84.0

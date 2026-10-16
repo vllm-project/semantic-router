@@ -4,8 +4,34 @@
   "$defs": {
     "APIConfig": {
       "properties": {
+        "embeddings": {
+          "$ref": "#/$defs/EmbeddingAPIConfig"
+        },
         "batch_classification": {
           "$ref": "#/$defs/BatchClassificationConfig"
+        },
+        "routing_preview": {
+          "$ref": "#/$defs/RoutingPreviewConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ActionRule": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "explain",
+            "fix",
+            "refactor",
+            "test",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -74,13 +100,79 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AlgorithmBudget": {
+      "properties": {
+        "deadline": {
+          "type": "string"
+        },
+        "max_calls": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deadline",
+        "max_calls"
+      ]
+    },
     "AlgorithmConfig": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cascade"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minimum_candidates"
+              ]
+            },
+            "required": [
+              "budget",
+              "quality",
+              "stages"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "budget"
+                  ]
+                },
+                {
+                  "required": [
+                    "quality"
+                  ]
+                },
+                {
+                  "required": [
+                    "stages"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "type": {
           "type": "string",
           "enum": [
             "automix",
+            "cascade",
             "confidence",
+            "decision",
             "fusion",
             "hybrid",
             "kmeans",
@@ -89,6 +181,7 @@
             "mlp",
             "multi_factor",
             "prompt",
+            "random",
             "ratings",
             "remom",
             "router_dc",
@@ -96,6 +189,18 @@
             "svm",
             "workflows"
           ]
+        },
+        "quality": {
+          "$ref": "#/$defs/NativeQualityConfig"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/CascadeStage"
+          },
+          "type": "array"
+        },
+        "budget": {
+          "$ref": "#/$defs/AlgorithmBudget"
         },
         "minimum_candidates": {
           "type": "integer"
@@ -132,6 +237,9 @@
         },
         "prompt": {
           "$ref": "#/$defs/PromptSelectionConfig"
+        },
+        "decision": {
+          "$ref": "#/$defs/DecisionSelectionConfig"
         },
         "on_error": {
           "type": "string"
@@ -346,6 +454,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CalibrationArtifact": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "source",
+        "sha256"
+      ]
+    },
     "CandidateIterationConfig": {
       "properties": {
         "variable": {
@@ -377,6 +506,24 @@
         },
         "value": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CandidateRequirements": {
+      "properties": {
+        "capabilities": {
+          "type": "string",
+          "enum": [
+            "declared"
+          ]
+        },
+        "context": {
+          "type": "string",
+          "enum": [
+            "known_limits"
+          ]
         }
       },
       "additionalProperties": false,
@@ -425,6 +572,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "openai_compat_gateway": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -432,6 +582,9 @@
     },
     "CanonicalCategoryModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -443,15 +596,6 @@
         },
         "use_cpu": {
           "type": "boolean"
-        },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
-        "variant": {
-          "type": "string"
         },
         "backend": {
           "$ref": "#/$defs/RemoteClassifierBackend"
@@ -498,6 +642,13 @@
     },
     "CanonicalEntrypoint": {
       "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "chat",
+            "systemone"
+          ]
+        },
         "model_names": {
           "items": {
             "type": "string"
@@ -513,6 +664,12 @@
     },
     "CanonicalEvaluation": {
       "properties": {
+        "calibrations": {
+          "items": {
+            "$ref": "#/$defs/CalibrationArtifact"
+          },
+          "type": "array"
+        },
         "benchmarks": {
           "items": {
             "$ref": "#/$defs/BenchmarkDefinition"
@@ -568,26 +725,11 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalExplainerModule": {
-      "properties": {
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalFactCheckModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "model_id": {
           "type": "string"
         },
@@ -595,9 +737,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "model_ref": {
@@ -609,6 +748,9 @@
     },
     "CanonicalFeedbackDetectorModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -619,12 +761,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "feedback_mapping_path": {
@@ -663,9 +799,6 @@
         "backend": {
           "type": "string"
         },
-        "endpoint": {
-          "type": "string"
-        },
         "include_explanation": {
           "type": "boolean"
         },
@@ -687,12 +820,6 @@
         "context_window_size": {
           "type": "integer"
         },
-        "enable_nli_filtering": {
-          "type": "boolean"
-        },
-        "nli_entailment_threshold": {
-          "type": "number"
-        },
         "model_ref": {
           "type": "string"
         }
@@ -710,9 +837,6 @@
         },
         "detector": {
           "$ref": "#/$defs/CanonicalHallucinationDetector"
-        },
-        "explainer": {
-          "$ref": "#/$defs/CanonicalExplainerModule"
         }
       },
       "additionalProperties": false,
@@ -720,6 +844,9 @@
     },
     "CanonicalIntegrationGlobal": {
       "properties": {
+        "kv_transfer": {
+          "$ref": "#/$defs/KVTransferConfig"
+        },
         "tools": {
           "$ref": "#/$defs/ToolsConfig"
         },
@@ -732,6 +859,37 @@
     },
     "CanonicalModelCatalog": {
       "properties": {
+        "bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
+        "deployments": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelDeployment"
+          },
+          "type": "object",
+          "default": {
+            "hazard": {
+              "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+              "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {
+                "max_tokens": 32768,
+                "overflow": "reject"
+              }
+            },
+            "primary": {
+              "artifact": "vllm-sr/Vela-2.0-0.3B",
+              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {}
+            }
+          }
+        },
         "embeddings": {
           "$ref": "#/$defs/CanonicalEmbeddingModels"
         },
@@ -758,6 +916,9 @@
             "$ref": "#/$defs/AdmissionConfig"
           },
           "type": "object"
+        },
+        "signal_timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -765,6 +926,9 @@
     },
     "CanonicalModelModules": {
       "properties": {
+        "safety": {
+          "$ref": "#/$defs/SafetyModelsConfig"
+        },
         "prompt_compression": {
           "$ref": "#/$defs/PromptCompressionConfig"
         },
@@ -792,6 +956,12 @@
     },
     "CanonicalPIIModule": {
       "properties": {
+        "window": {
+          "$ref": "#/$defs/SequenceHeadWindowConfig"
+        },
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -804,10 +974,16 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
         "pii_mapping_path": {
+          "type": "string"
+        },
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        },
+        "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -843,6 +1019,15 @@
     },
     "CanonicalPromptGuardModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        },
+        "window": {
+          "$ref": "#/$defs/SequenceHeadWindowConfig"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -864,13 +1049,10 @@
           },
           "type": "array"
         },
-        "variant": {
-          "type": "string"
-        },
-        "protocol": {
-          "type": "string"
-        },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -898,6 +1080,9 @@
           "type": "string"
         },
         "catalog": {
+          "type": "string"
+        },
+        "deployment": {
           "type": "string"
         },
         "reasoning": {
@@ -1008,6 +1193,15 @@
     },
     "CanonicalRecipeRouting": {
       "properties": {
+        "candidate_requirements": {
+          "$ref": "#/$defs/CandidateRequirements"
+        },
+        "model_bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "signals": {
           "$ref": "#/$defs/CanonicalSignals"
         },
@@ -1026,6 +1220,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1034,6 +1231,9 @@
     },
     "CanonicalRouterGlobal": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "config_source": {
           "type": "string",
           "enum": [
@@ -1044,16 +1244,7 @@
         "strategy": {
           "type": "string"
         },
-        "auto_model_name": {
-          "type": "string"
-        },
-        "auto_model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "include_config_models_in_list": {
+        "list_backend_models": {
           "type": "boolean"
         },
         "clear_route_cache": {
@@ -1070,6 +1261,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1077,6 +1271,15 @@
     },
     "CanonicalRouting": {
       "properties": {
+        "candidate_requirements": {
+          "$ref": "#/$defs/CandidateRequirements"
+        },
+        "model_bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "modelCards": {
           "items": {
             "$ref": "#/$defs/RoutingModel"
@@ -1101,6 +1304,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1222,6 +1428,12 @@
           },
           "type": "array"
         },
+        "safety": {
+          "items": {
+            "$ref": "#/$defs/SafetyRule"
+          },
+          "type": "array"
+        },
         "hallucination": {
           "items": {
             "$ref": "#/$defs/HallucinationRule"
@@ -1269,6 +1481,24 @@
             "$ref": "#/$defs/InputModalityRule"
           },
           "type": "array"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRule"
+          },
+          "type": "array"
+        },
+        "decision": {
+          "items": {
+            "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
+        },
+        "topic_continuity": {
+          "items": {
+            "$ref": "#/$defs/TopicContinuityRule"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -1284,6 +1514,9 @@
         },
         "vector_store": {
           "$ref": "#/$defs/VectorStoreConfig"
+        },
+        "tool_sessions": {
+          "$ref": "#/$defs/ToolSessionStoreConfig"
         }
       },
       "additionalProperties": false,
@@ -1306,6 +1539,15 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "$ref": "#/$defs/DecisionModelBinding"
+        },
+        "safety": {
+          "type": "string"
+        },
+        "hazard": {
+          "type": "string"
+        },
         "prompt_guard": {
           "type": "string"
         },
@@ -1321,15 +1563,51 @@
         "hallucination_detector": {
           "type": "string"
         },
-        "hallucination_explainer": {
-          "type": "string"
-        },
         "feedback_detector": {
           "type": "string"
         }
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "CascadeStage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "native",
+            "judge"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "accept": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "generation": {
+          "$ref": "#/$defs/NativeGenerationConfig"
+        },
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "model"
+      ]
     },
     "Category": {
       "properties": {
@@ -1350,6 +1628,28 @@
             "$ref": "#/$defs/ModelScore"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CircuitBreakerConfig": {
+      "properties": {
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "cooldown_period": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "half_open_probes": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -1380,6 +1680,9 @@
         },
         "instructions": {
           "type": "string"
+        },
+        "disable_rationale": {
+          "type": "boolean"
         },
         "use_cpu": {
           "type": "boolean"
@@ -1446,6 +1749,9 @@
       "properties": {
         "name": {
           "type": "string"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
         },
         "threshold": {
           "type": "number"
@@ -1556,6 +1862,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ContextCompressionCurrentUserConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ContextCompressionPluginConfig": {
       "properties": {
         "enabled": {
@@ -1660,6 +1975,9 @@
     },
     "ContextCompressionTargetsConfig": {
       "properties": {
+        "current_user": {
+          "$ref": "#/$defs/ContextCompressionCurrentUserConfig"
+        },
         "tool_outputs": {
           "$ref": "#/$defs/ContextCompressionTargetConfig"
         },
@@ -1774,6 +2092,12 @@
         "adaptations": {
           "$ref": "#/$defs/DecisionAdaptationsConfig"
         },
+        "reliability": {
+          "$ref": "#/$defs/DecisionReliability"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackOverride"
+        },
         "plugins": {
           "items": {
             "$ref": "#/$defs/DecisionPlugin"
@@ -1839,6 +2163,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DecisionChoice": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DecisionLearningAdaptationConfig": {
       "properties": {
         "mode": {
@@ -1885,6 +2221,19 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "DecisionModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deployment"
+      ]
     },
     "DecisionPlugin": {
       "allOf": [
@@ -2139,6 +2488,25 @@
           "if": {
             "properties": {
               "type": {
+                "const": "prompt_cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/PromptCachePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "shadow_dispatch"
               }
             },
@@ -2164,6 +2532,7 @@
             "hallucination",
             "header_mutation",
             "memory",
+            "prompt_cache",
             "rag",
             "request_params",
             "response_cache",
@@ -2186,6 +2555,126 @@
         "type",
         "configuration"
       ]
+    },
+    "DecisionQuestion": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionReliability": {
+      "properties": {
+        "total_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "retry_on": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSelectionConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "candidates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSignalRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/DecisionQuestion"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "DynamicRetrievalConfig": {
       "properties": {
@@ -2229,6 +2718,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "EmbeddingAPIConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "EmbeddingEndpointConfig": {
       "properties": {
         "base_url": {
@@ -2261,16 +2759,10 @@
         "qwen3_model_path": {
           "type": "string"
         },
-        "gemma_model_path": {
-          "type": "string"
-        },
         "mmbert_model_path": {
           "type": "string"
         },
         "multimodal_model_path": {
-          "type": "string"
-        },
-        "bert_model_path": {
           "type": "string"
         },
         "use_cpu": {
@@ -2300,11 +2792,32 @@
           },
           "type": "array"
         },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "aggregation_method": {
           "type": "string"
         },
         "query_modality": {
           "type": "string"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
         }
       },
       "additionalProperties": false,
@@ -2390,6 +2903,9 @@
         "temperature": {
           "type": "number"
         },
+        "reasoning": {
+          "$ref": "#/$defs/ExternalModelReasoningConfig"
+        },
         "max_request_bytes": {
           "type": "integer"
         },
@@ -2400,6 +2916,25 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ExternalModelReasoningConfig": {
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "use_reasoning": {
+          "type": "boolean"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "family",
+        "use_reasoning"
+      ]
+    },
     "FactCheckRule": {
       "properties": {
         "name": {
@@ -2407,6 +2942,88 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackOverride": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackPolicy": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
         }
       },
       "additionalProperties": false,
@@ -2423,12 +3040,6 @@
     },
     "FlowRuntimeConfig": {
       "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "state": {
           "$ref": "#/$defs/WorkflowStateRuntimeConfig"
         }
@@ -2477,6 +3088,12 @@
         "on_error": {
           "type": "string"
         },
+        "quorum_failure_policy": {
+          "type": "string"
+        },
+        "quorum_fallback_target": {
+          "type": "string"
+        },
         "analysis_template": {
           "type": "string"
         },
@@ -2513,7 +3130,7 @@
         "min_keep": {
           "type": "integer"
         },
-        "nli_contradiction_penalty": {
+        "contradiction_penalty": {
           "type": "number"
         },
         "on_error": {
@@ -2538,20 +3155,11 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "FusionRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "HNSWConfig": {
       "properties": {
+        "full_context": {
+          "type": "boolean"
+        },
         "backend": {
           "type": "string"
         },
@@ -2588,9 +3196,6 @@
         "enabled": {
           "type": "boolean"
         },
-        "use_nli": {
-          "type": "boolean"
-        },
         "hallucination_action": {
           "type": "string"
         },
@@ -2611,9 +3216,6 @@
         },
         "description": {
           "type": "string"
-        },
-        "use_nli": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -2891,6 +3493,105 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "KVServingIdentity": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "weight_revision": {
+          "type": "string"
+        },
+        "tokenizer": {
+          "type": "string"
+        },
+        "tokenizer_revision": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "string"
+        },
+        "tensor_parallel": {
+          "type": "integer"
+        },
+        "kv_heads": {
+          "type": "integer"
+        },
+        "head_dim": {
+          "type": "integer"
+        },
+        "head_order": {
+          "type": "string"
+        },
+        "adapter_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferBackend": {
+      "properties": {
+        "model_alias": {
+          "type": "string"
+        },
+        "backend_name": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "can_export": {
+          "type": "boolean"
+        },
+        "can_load": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backends": {
+          "items": {
+            "$ref": "#/$defs/KVTransferBackend"
+          },
+          "type": "array"
+        },
+        "pairs": {
+          "items": {
+            "$ref": "#/$defs/KVTransferPair"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferPair": {
+      "properties": {
+        "mapper_id": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "target": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_transfer_turn": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "KeywordRule": {
       "properties": {
         "name": {
@@ -2925,6 +3626,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3042,6 +3746,66 @@
         },
         "timeout": {
           "type": "string"
+        },
+        "api_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "systemone": {
+          "$ref": "#/$defs/ListenerSystemOne"
+        },
+        "tls": {
+          "$ref": "#/$defs/ListenerTLS"
+        },
+        "identity": {
+          "$ref": "#/$defs/ListenerIdentity"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerIdentity": {
+      "properties": {
+        "trust_headers": {
+          "type": "boolean"
+        },
+        "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerSystemOne": {
+      "properties": {
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerTLS": {
+      "properties": {
+        "cert_file": {
+          "type": "string"
+        },
+        "key_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -3099,12 +3863,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "remom": {
-          "$ref": "#/$defs/ReMoMRuntimeConfig"
-        },
-        "fusion": {
-          "$ref": "#/$defs/FusionRuntimeConfig"
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
@@ -3345,6 +4103,9 @@
         },
         "reflection": {
           "$ref": "#/$defs/MemoryReflectionConfig"
+        },
+        "persistence": {
+          "$ref": "#/$defs/MemoryPersistenceConfig"
         }
       },
       "additionalProperties": false,
@@ -3363,6 +4124,32 @@
         },
         "num_partitions": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryPersistenceConfig": {
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 0
+        },
+        "queue": {
+          "type": "integer",
+          "maximum": 1024,
+          "minimum": 0
+        },
+        "shutdown_grace_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -3748,6 +4535,9 @@
     },
     "ModalityClassifierConfig": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "model_path": {
           "type": "string"
         },
@@ -3803,6 +4593,87 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "contract": {
+          "type": "string"
+        },
+        "adapter": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        },
+        "mapping_path": {
+          "type": "string"
+        },
+        "pair_scorer": {
+          "$ref": "#/$defs/PairScorerSelection"
+        },
+        "operating_point": {
+          "$ref": "#/$defs/OperatingPointReference"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelDeployment": {
+      "properties": {
+        "artifact": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "external_model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/ModelInputBudget"
+        },
+        "max_num_seqs": {
+          "type": "integer"
+        },
+        "max_num_batched_tokens": {
+          "type": "integer"
+        },
+        "batch_window_ms": {
+          "type": "number"
+        },
+        "dtype": {
+          "type": "string"
+        },
+        "enable_shared_context": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "replicas": {
+          "items": {
+            "$ref": "#/$defs/ModelReplica"
+          },
+          "type": "array"
+        },
+        "served_name": {
+          "type": "string"
+        },
+        "public_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ModelDistribution": {
       "properties": {
         "type": {
@@ -3812,6 +4683,18 @@
           "type": "string"
         },
         "license": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelInputBudget": {
+      "properties": {
+        "max_tokens": {
+          "type": "integer"
+        },
+        "overflow": {
           "type": "string"
         }
       },
@@ -3833,6 +4716,9 @@
           "type": "number"
         },
         "cache_write_per_1m": {
+          "type": "number"
+        },
+        "cache_write_1h_per_1m": {
           "type": "number"
         }
       },
@@ -3860,6 +4746,21 @@
           "type": "string"
         },
         "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelReplica": {
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "served_name": {
           "type": "string"
         }
       },
@@ -3964,8 +4865,19 @@
         "quality": {
           "$ref": "#/$defs/QualityEvidenceConfig"
         },
+        "expected_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
         "latency_percentile": {
           "type": "integer"
+        },
+        "latency_metric": {
+          "type": "string",
+          "enum": [
+            "ttft",
+            "tpot"
+          ]
         },
         "on_no_candidates": {
           "type": "string"
@@ -3991,6 +4903,93 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "NativeAcceptance": {
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/NativeAcceptanceRule"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "rules"
+      ]
+    },
+    "NativeAcceptanceRule": {
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "question_type": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string",
+          "enum": [
+            "confidence",
+            "top_probability",
+            "probability_margin"
+          ]
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "field",
+        "predicate"
+      ]
+    },
+    "NativeGenerationConfig": {
+      "properties": {
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "max_output_tokens"
+      ]
+    },
+    "NativeQualityConfig": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "uncalibrated",
+            "calibrated"
+          ]
+        },
+        "acceptance": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "loss": {
+          "type": "string"
+        },
+        "max_risk": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
     },
     "Normalization": {
       "properties": {
@@ -4069,6 +5068,22 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "OperatingPointReference": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ]
     },
     "OutputContractChoiceSetSpec": {
       "properties": {
@@ -4201,6 +5216,9 @@
         "include_history": {
           "type": "boolean"
         },
+        "source": {
+          "type": "string"
+        },
         "description": {
           "type": "string"
         }
@@ -4208,22 +5226,13 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PolarityGuardConfig": {
+    "PairScorerSelection": {
       "properties": {
-        "mode": {
-          "type": "string"
+        "layer": {
+          "type": "integer"
         },
-        "nli": {
-          "$ref": "#/$defs/PolarityGuardNLIConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PolarityGuardNLIConfig": {
-      "properties": {
-        "contradiction_threshold": {
-          "type": "number"
+        "dimension": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4275,6 +5284,56 @@
         },
         "bind": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProgressGateTuning": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "observe",
+            "enforce"
+          ]
+        },
+        "calibration_id": {
+          "type": "string"
+        },
+        "window_size": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 1
+        },
+        "window_ttl_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 1
+        },
+        "min_window_outcomes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_regressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_recoveries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_switches_per_window": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -4398,11 +5457,13 @@
             "modality",
             "authz",
             "jailbreak",
+            "safety",
             "pii",
             "kb",
             "conversation",
             "event",
             "input_modality",
+            "decision",
             "kb_metric",
             "projection"
           ]
@@ -4427,6 +5488,27 @@
         },
         "miss": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptCachePluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ttl": {
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on_unsupported": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4559,6 +5641,42 @@
         },
         "health_check_timeout": {
           "type": "string"
+        },
+        "connect_timeout": {
+          "type": "string"
+        },
+        "total_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
+        },
+        "retry_budget_percent": {
+          "type": "number"
+        },
+        "retry_budget_min_concurrency": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4650,6 +5768,9 @@
         "injection_mode": {
           "type": "string"
         },
+        "rerank": {
+          "$ref": "#/$defs/RAGRerankConfig"
+        },
         "backend_config": {
           "additionalProperties": true,
           "type": "object"
@@ -4665,6 +5786,15 @@
         },
         "min_confidence_threshold": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RAGRerankConfig": {
+      "properties": {
+        "top_k": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4806,18 +5936,6 @@
         },
         "max_responses_per_round": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ReMoMRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -4978,6 +6096,18 @@
     },
     "RequestParamsPluginConfig": {
       "properties": {
+        "default_max_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
+        },
         "blocked_params": {
           "items": {
             "type": "string"
@@ -5208,9 +6338,6 @@
         },
         "embedding_model": {
           "type": "string"
-        },
-        "polarity_guard": {
-          "$ref": "#/$defs/PolarityGuardConfig"
         }
       },
       "additionalProperties": false,
@@ -5403,6 +6530,9 @@
         "stability_weight": {
           "type": "number",
           "minimum": 0
+        },
+        "progress_gate": {
+          "$ref": "#/$defs/ProgressGateTuning"
         }
       },
       "additionalProperties": false,
@@ -5477,6 +6607,27 @@
     },
     "RouterReplayConfig": {
       "properties": {
+        "capture_request_body": {
+          "type": "boolean"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_personal_data": {
+          "type": "boolean"
+        },
+        "max_records": {
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_steps": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -5531,6 +6682,9 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
+        "capture_personal_data": {
+          "type": "boolean"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -5715,16 +6869,35 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RoutingPreviewConfig": {
+      "properties": {
+        "request_timeout_seconds": {
+          "type": "integer",
+          "maximum": 3600,
+          "minimum": 1,
+          "default": 120
+        },
+        "max_concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 16
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "RuleNode": {
       "properties": {
         "type": {
           "type": "string",
           "enum": [
+            "action",
             "authz",
             "classifier",
             "complexity",
             "context",
             "conversation",
+            "decision",
             "domain",
             "embedding",
             "event",
@@ -5739,6 +6912,7 @@
             "pii",
             "preference",
             "reask",
+            "safety",
             "structure",
             "user_feedback",
             "projection"
@@ -5772,6 +6946,108 @@
             "$ref": "#/$defs/RuleNode"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SafetyHazardRule": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SafetyModelsConfig": {
+      "properties": {
+        "safety": {
+          "$ref": "#/$defs/SequenceHeadModelConfig"
+        },
+        "hazard": {
+          "$ref": "#/$defs/SequenceHeadModelConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SafetyRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unsafe_labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "hazard": {
+          "$ref": "#/$defs/SafetyHazardRule"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SequenceHeadModelConfig": {
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "model_ref": {
+          "type": "string"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "max_sequence_length": {
+          "type": "integer"
+        },
+        "window": {
+          "$ref": "#/$defs/SequenceHeadWindowConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SequenceHeadWindowConfig": {
+      "properties": {
+        "size": {
+          "type": "integer"
+        },
+        "overlap": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -5853,6 +7129,24 @@
         },
         "db": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "StickyToolSelectionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_tools": {
+          "type": "integer"
+        },
+        "max_new_tools_per_turn": {
+          "type": "integer"
+        },
+        "pin_called_tools": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -5997,6 +7291,54 @@
         },
         "preserve_count": {
           "type": "integer"
+        },
+        "sticky": {
+          "$ref": "#/$defs/StickyToolSelectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "database": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionStoreConfig": {
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "max_sessions": {
+          "type": "integer"
+        },
+        "max_sessions_per_identity": {
+          "type": "integer"
+        },
+        "max_state_bytes": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "redis": {
+          "$ref": "#/$defs/ToolSessionRedisConfig"
         }
       },
       "additionalProperties": false,
@@ -6057,6 +7399,54 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityEvidenceLimits": {
+      "properties": {
+        "max_prior_turns": {
+          "type": "integer"
+        },
+        "max_turn_bytes": {
+          "type": "integer"
+        },
+        "max_input_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "include_assistant": {
+          "type": "boolean"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/TopicContinuityThresholds"
+        },
+        "limits": {
+          "$ref": "#/$defs/TopicContinuityEvidenceLimits"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityThresholds": {
+      "properties": {
+        "continuation": {
+          "type": "number"
+        },
+        "change": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -6403,9 +7793,6 @@
         "update_interval": {
           "type": "string"
         },
-        "queue_depth_estimation": {
-          "type": "boolean"
-        },
         "max_models": {
           "type": "integer"
         }
@@ -6736,6 +8123,14 @@
         "schema_ref": "#/$defs/JailbreakRule"
       },
       {
+        "type": "safety",
+        "display_name": "Safety",
+        "collection": "safety",
+        "observation_key": "safety",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/SafetyRule"
+      },
+      {
         "type": "hallucination",
         "display_name": "Hallucination",
         "collection": "hallucination",
@@ -6798,9 +8193,40 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
+      },
+      {
+        "type": "action",
+        "display_name": "Action",
+        "collection": "actions",
+        "observation_key": "action",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ActionRule"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "collection": "decision",
+        "observation_key": "decision",
+        "decision_referenceable": true,
+        "reference_qualifier": "label",
+        "schema_ref": "#/$defs/DecisionSignalRule"
+      },
+      {
+        "type": "topic_continuity",
+        "display_name": "Topic Continuity",
+        "collection": "topic_continuity",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/TopicContinuityRule"
       }
     ],
     "algorithms": [
+      {
+        "type": "cascade",
+        "display_name": "Native Cascade",
+        "description": "Escalate complete typed responses through declared stages.",
+        "tier": "experimental",
+        "execution": "native"
+      },
       {
         "type": "automix",
         "display_name": "AutoMix",
@@ -6877,6 +8303,13 @@
         "schema_ref": "#/$defs/MultiFactorSelectionConfig"
       },
       {
+        "type": "random",
+        "display_name": "Random",
+        "description": "Select uniformly from the eligible candidate models.",
+        "tier": "supported",
+        "execution": "selector"
+      },
+      {
         "type": "ratings",
         "display_name": "Ratings",
         "description": "Execute a bounded candidate set and return comparable choices.",
@@ -6935,6 +8368,16 @@
         "config_field": "prompt",
         "payload_shape": "nested",
         "schema_ref": "#/$defs/PromptSelectionConfig"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "description": "Ask a decision model which declared candidate should answer.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "decision",
+        "payload_shape": "nested",
+        "schema_ref": "#/$defs/DecisionSelectionConfig"
       }
     ],
     "plugins": [
@@ -7017,6 +8460,12 @@
         "schema_ref": "#/$defs/ContextCompressionPluginConfig"
       },
       {
+        "type": "prompt_cache",
+        "display_name": "Prompt Cache",
+        "description": "Add bounded Anthropic prompt-cache markers after route selection.",
+        "schema_ref": "#/$defs/PromptCachePluginConfig"
+      },
+      {
         "type": "shadow_dispatch",
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
@@ -7055,11 +8504,13 @@
       "modality",
       "authz",
       "jailbreak",
+      "safety",
       "pii",
       "kb",
       "conversation",
       "event",
       "input_modality",
+      "decision",
       "kb_metric",
       "projection"
     ],
@@ -7172,6 +8623,24 @@
         ]
       },
       {
+        "key": "tool_sessions",
+        "layer": "stores",
+        "display_name": "Tool Sessions",
+        "path": [
+          "stores",
+          "tool_sessions"
+        ]
+      },
+      {
+        "key": "kv_transfer",
+        "layer": "integrations",
+        "display_name": "Kv Transfer",
+        "path": [
+          "integrations",
+          "kv_transfer"
+        ]
+      },
+      {
         "key": "tools",
         "layer": "integrations",
         "display_name": "Tools",
@@ -7187,6 +8656,24 @@
         "path": [
           "integrations",
           "looper"
+        ]
+      },
+      {
+        "key": "bindings",
+        "layer": "model_catalog",
+        "display_name": "Bindings",
+        "path": [
+          "model_catalog",
+          "bindings"
+        ]
+      },
+      {
+        "key": "deployments",
+        "layer": "model_catalog",
+        "display_name": "Deployments",
+        "path": [
+          "model_catalog",
+          "deployments"
         ]
       },
       {
@@ -7223,6 +8710,16 @@
         "path": [
           "model_catalog",
           "kbs"
+        ]
+      },
+      {
+        "key": "safety",
+        "layer": "model_catalog",
+        "display_name": "Safety",
+        "path": [
+          "model_catalog",
+          "modules",
+          "safety"
         ]
       },
       {
@@ -7302,6 +8799,15 @@
         "path": [
           "model_catalog",
           "admission"
+        ]
+      },
+      {
+        "key": "signal_timeout_ms",
+        "layer": "model_catalog",
+        "display_name": "Signal Timeout Ms",
+        "path": [
+          "model_catalog",
+          "signal_timeout_ms"
         ]
       }
     ]

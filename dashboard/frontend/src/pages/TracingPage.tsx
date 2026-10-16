@@ -1,5 +1,3 @@
-import { useMemo } from 'react'
-
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
 import { DOCS_LINKS } from '../utils/docsLinks'
@@ -13,16 +11,14 @@ const JAEGER_SERVICE: ServiceConfig = {
 }
 
 export default function TracingPage() {
-  const src = useMemo(() => '/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr', [])
-
   return (
     <EmbeddedServicePage
       eyebrow="Observability"
       title="Tracing"
-      description="Follow each request from captured signals through decisions, plugins, and backend inference."
+      description="Choose a service and time range to follow recorded requests through routing and backend inference."
       service={JAEGER_SERVICE}
       availabilityUrl="/embedded/jaeger/"
-      src={src}
+      src="/embedded/jaeger/search"
       iframeTitle="Jaeger distributed tracing"
     />
   )

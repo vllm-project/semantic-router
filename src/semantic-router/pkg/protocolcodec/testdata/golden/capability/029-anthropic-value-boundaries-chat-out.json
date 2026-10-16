@@ -71,10 +71,17 @@
     {
       "name": "top_k_minimum",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_capability"
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 64,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_k": 0
         }
       }
     },

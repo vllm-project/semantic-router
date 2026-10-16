@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provider-mocker
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: provider-mocker
+  template:
+    metadata:
+      labels:
+        app: provider-mocker
+    spec:
+      containers:
+        - name: provider-mocker
+          image: semantic-router-ci/provider-mocker:e2e-test
+          imagePullPolicy: Never
+          env:
+            - name: PROVIDER_MOCKER_SHADOW_CONTROL
+              value: "true"
+          ports:
+            - containerPort: 8000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-mocker
+  namespace: default
+spec:
+  selector:
+    app: provider-mocker
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

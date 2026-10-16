@@ -52,18 +52,11 @@ func (s *fakeResolvedClassificationService) ClassifyUserFeedback(_ context.Conte
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) ClassifyNLI(_ context.Context, _ services.NLIRequest) (*services.NLIResponse, error) {
-	return nil, fmt.Errorf("NLI not available in fake resolved service")
-}
-
-func (s *fakeResolvedClassificationService) IsNLIReady() bool { return false }
-
-func (s *fakeResolvedClassificationService) HasUnifiedClassifier() bool      { return true }
-func (s *fakeResolvedClassificationService) HasClassifier() bool             { return true }
-func (s *fakeResolvedClassificationService) HasFactCheckClassifier() bool    { return true }
-func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool  { return true }
-func (s *fakeResolvedClassificationService) HasHallucinationExplainer() bool { return true }
-func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool       { return true }
+func (s *fakeResolvedClassificationService) HasUnifiedClassifier() bool     { return true }
+func (s *fakeResolvedClassificationService) HasClassifier() bool            { return true }
+func (s *fakeResolvedClassificationService) HasFactCheckClassifier() bool   { return true }
+func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool { return true }
+func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool      { return true }
 func (s *fakeResolvedClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	s.updatedConfig = newConfig
 }
@@ -176,8 +169,8 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 		t.Fatalf("failed to decode config payload: %v", err)
 	}
 
-	if cfg["AutoModelName"] != "LiveRouter" {
-		t.Fatalf("expected live config payload, got %#v", cfg["AutoModelName"])
+	if cfg["Entrypoints"] == nil {
+		t.Fatalf("expected live entrypoint config payload, got %#v", cfg["Entrypoints"])
 	}
 }
 
@@ -294,12 +287,10 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 
 func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	memoryStore := newMockMemoryStore()
 	manager := &vectorstore.Manager{}
 	fileStore := &vectorstore.FileStore{}
 
 	registry := routerruntime.NewRegistry(cfg)
-	registry.SetMemoryStore(memoryStore)
 	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{
 		Manager:   manager,
 		FileStore: fileStore,
@@ -309,9 +300,6 @@ func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 		runtimeRegistry: registry,
 	}
 
-	if got := apiServer.currentMemoryStore(); got != memoryStore {
-		t.Fatalf("currentMemoryStore() = %v, want %v", got, memoryStore)
-	}
 	if got := apiServer.currentVectorStoreManager(); got != manager {
 		t.Fatalf("currentVectorStoreManager() = %v, want %v", got, manager)
 	}
@@ -329,6 +317,7 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 	}
 
 	return &config.RouterConfig{
+		Entrypoints: []config.EntrypointMapping{{ModelNames: []string{autoModelName}, Recipe: config.DefaultRecipeName}},
 		BackendModels: config.BackendModels{
 			VLLMEndpoints: []config.VLLMEndpoint{
 				{
@@ -341,8 +330,7 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 			ModelConfig: modelConfig,
 		},
 		RouterOptions: config.RouterOptions{
-			AutoModelName:             autoModelName,
-			IncludeConfigModelsInList: includeConfigModels,
+			ListBackendModels: includeConfigModels,
 		},
 	}
 }

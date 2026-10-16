@@ -20,11 +20,15 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	ctx.StartTime = time.Now()
 
 	span := startRequestHeaderSpan(v, ctx)
-	defer span.End()
 
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
-
+	// The skip-processing opt-out would bypass a listener's model allow-list,
+	// so a restricted listener does not honor it.
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
+	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
+		return rejected, nil
+	}
+
 	detectSourceFormat(path, ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
@@ -43,20 +47,43 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
+		mutation := buildLooperInternalHeaderRemovalMutation()
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		if isAzureOpenAIPath(path) {
+			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+		}
+		response := newContinueRequestHeadersResponse(mutation)
+		if headerValueCI(ctx, headers.SelectedModel) != "" {
+			// A caller-supplied selected-model header may have selected a provider
+			// route before ext_proc ran. Skip-processing does not materialize a
+			// provider path, so remove the untrusted selector and re-evaluate onto
+			// the default route, which owns the ingress path-prefix rewrite.
+			response.GetRequestHeaders().GetResponse().ClearRouteCache = true
+		}
+		return response, nil
 	}
 
 	detectStreamingExpectation(ctx)
-	if modelsResp, err := r.handleModelsRequestHeaders(method, path); err != nil || modelsResp != nil {
+	if modelsResp, err := r.handleModelsRequestHeaders(method, path, ctx); err != nil || modelsResp != nil {
 		return modelsResp, err
 	}
 	if responseAPIResp, err := r.handleResponseAPIRequestHeaders(method, path, ctx); err != nil || responseAPIResp != nil {
 		return responseAPIResp, err
 	}
-	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
+	validationResp, requiresBody := r.classifyRequestHeaders(method, path)
+	if validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	// Envoy sends no body stage after end_of_stream headers, so reject here.
+	if requiresBody && v.RequestHeaders.GetEndOfStream() {
+		return r.rejectBodylessInferenceRequest(ctx), nil
+	}
+	mutation := buildIdentityEncodingRequestMutation()
+	if isAzureOpenAIPath(path) {
+		// The Azure client key authenticates to the Router, never to a provider.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+	}
+	return newContinueRequestHeadersResponse(mutation), nil
 }
 
 func startRequestHeaderSpan(
@@ -75,10 +102,11 @@ func startRequestHeaderSpan(
 	ctx.TraceContext = tracing.ExtractTraceContext(baseCtx, headerMap)
 	spanCtx, span := tracing.StartSpan(
 		ctx.TraceContext,
-		tracing.SpanRequestReceived,
+		tracing.SpanRequest,
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	ctx.TraceContext = spanCtx
+	ctx.RequestSpan = span
 	return span
 }
 
@@ -110,7 +138,7 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
-	authenticateLooperRequestContext(ctx)
+	markLooperHop(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
@@ -132,6 +160,16 @@ func setRequestHeaderSpanAttributes(
 	method string,
 	path string,
 ) {
+	route, kind := requestTraceRoute(path)
+	if kind == "inference" && ctx.LooperRequest {
+		kind = "inference_internal"
+	}
+	ctx.TraceTrafficKind = kind
+	switch method {
+	case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
+	default:
+		method = "OTHER"
+	}
 	if ctx.RequestID != "" {
 		tracing.SetSpanAttributes(
 			span,
@@ -142,7 +180,9 @@ func setRequestHeaderSpanAttributes(
 	tracing.SetSpanAttributes(
 		span,
 		attribute.String(tracing.AttrHTTPMethod, method),
-		attribute.String(tracing.AttrHTTPPath, path),
+		attribute.String(tracing.AttrHTTPPath, route),
+		attribute.String("http.route", route),
+		attribute.String("traffic.kind", kind),
 	)
 }
 

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -20,12 +20,17 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 		Architecture: runtime.GOARCH,
 		OS:           runtime.GOOS,
 		MemoryUsage:  fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024),
-		GPUAvailable: false, // TODO: Implement GPU detection.
 	}
 }
 
 func (s *ClassificationAPIServer) loadModelsRuntimeState() *startupstatus.State {
-	if s == nil || s.configPath == "" {
+	if s == nil {
+		return nil
+	}
+	if s.runtimeRegistry != nil {
+		return s.runtimeRegistry.StartupState()
+	}
+	if s.configPath == "" {
 		return nil
 	}
 

@@ -7,7 +7,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -17,6 +16,7 @@ var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/base-model-route.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 

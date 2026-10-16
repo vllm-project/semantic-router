@@ -101,7 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
+	It("defers routing contracts until CRDs are available in k8s mode", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
 			IntelligentRouting: IntelligentRouting{
@@ -133,6 +133,7 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 	It("keeps the shared dispatch table wired for file and k8s validation", func() {
 		for _, validators := range [][]configContractValidator{
 			globalConfigContractValidators,
+			routingConfigContractValidators,
 			routingProfileContractValidators,
 		} {
 			Expect(validators).NotTo(BeEmpty())
@@ -502,25 +503,11 @@ func registerValidateConfigStructureReMoMSpecs() {
 }
 
 func registerValidateConfigStructureReMoMRuntimeSpecs() {
-	It("uses only the vllm-sr ReMoM slug by default", func() {
+	It("requires explicit entrypoints for orchestration names", func() {
 		cfg := &RouterConfig{}
-
-		Expect(cfg.Looper.ReMoM.EffectiveModelNames()).To(Equal([]string{DefaultReMoMModelName}))
-		Expect(cfg.IsReMoMModelName(DefaultReMoMModelName)).To(BeTrue())
-	})
-
-	It("rejects invalid ReMoM direct model aliases", func() {
-		cfg := &RouterConfig{
-			Looper: LooperConfig{
-				ReMoM: ReMoMRuntimeConfig{
-					ModelNames: []string{"vllm-sr/remom", " "},
-				},
-			},
+		for _, name := range []string{DefaultReMoMModelName, DefaultFusionModelName, DefaultFlowModelName, OpenRouterFusionModelAlias} {
+			Expect(cfg.IsEntrypointModelName(name)).To(BeFalse())
 		}
-
-		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("global.integrations.looper.remom: model_names[1] cannot be empty"))
 	})
 }
 
@@ -547,7 +534,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid remom model_distribution", func() {
@@ -628,32 +615,10 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 }
 
 func registerValidateConfigStructureFusionSpecs() {
-	It("uses only the vllm-sr Fusion slug by default", func() {
-		cfg := &RouterConfig{}
-
-		Expect(cfg.Looper.Fusion.EffectiveModelNames()).To(Equal([]string{DefaultFusionModelName}))
-		Expect(cfg.IsFusionModelName(DefaultFusionModelName)).To(BeTrue())
-		Expect(cfg.IsFusionModelName(OpenRouterFusionModelAlias)).To(BeFalse())
-	})
-
-	It("allows OpenRouter Fusion alias only when configured", func() {
-		cfg := &RouterConfig{
-			Looper: LooperConfig{
-				Fusion: FusionRuntimeConfig{
-					ModelNames: []string{
-						DefaultFusionModelName,
-						OpenRouterFusionModelAlias,
-					},
-				},
-			},
-		}
-
-		Expect(cfg.Looper.Fusion.EffectiveModelNames()).To(Equal([]string{
-			DefaultFusionModelName,
-			OpenRouterFusionModelAlias,
-		}))
-		Expect(cfg.IsFusionModelName(DefaultFusionModelName)).To(BeTrue())
-		Expect(cfg.IsFusionModelName(OpenRouterFusionModelAlias)).To(BeTrue())
+	It("allows orchestration aliases only through explicit entrypoints", func() {
+		cfg := &RouterConfig{Entrypoints: []EntrypointMapping{{ModelNames: []string{DefaultFusionModelName, OpenRouterFusionModelAlias}, Recipe: DefaultRecipeName}}}
+		Expect(cfg.IsEntrypointModelName(DefaultFusionModelName)).To(BeTrue())
+		Expect(cfg.IsEntrypointModelName(OpenRouterFusionModelAlias)).To(BeTrue())
 	})
 
 	It("accepts fusion with decision modelRefs and no fusion block", func() {
@@ -670,7 +635,7 @@ func registerValidateConfigStructureFusionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid decision fusion on_error", func() {
@@ -705,12 +670,7 @@ func registerValidateConfigStructureWorkflowsSpecs() {
 }
 
 func registerValidateConfigStructureFlowDefaultsSpecs() {
-	It("uses only the vllm-sr Flow slug by default", func() {
-		cfg := &RouterConfig{}
-
-		Expect(cfg.Looper.Flow.EffectiveModelNames()).To(Equal([]string{DefaultFlowModelName}))
-		Expect(cfg.IsFlowModelName(DefaultFlowModelName)).To(BeTrue())
-	})
+	It("does not reserve a Flow model name", func() { Expect((&RouterConfig{}).IsEntrypointModelName(DefaultFlowModelName)).To(BeFalse()) })
 }
 
 func registerValidateConfigStructureDynamicWorkflowsSpecs() {
@@ -746,7 +706,7 @@ func registerValidateConfigStructureDynamicWorkflowPlannerSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflows with invalid planner max completion tokens", func() {
@@ -833,7 +793,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflow final model outside modelRefs", func() {
@@ -862,7 +822,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		Expect(err.Error()).To(ContainSubstring("algorithm.workflows.final.model references model \"final-a\" outside decision modelRefs"))
 	})
 
-	It("rejects dynamic workflows without planner model", func() {
+	It("accepts dynamic workflows with an assigned worker planner default", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{
@@ -881,9 +841,8 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.workflows: planner.model is required"))
+		err := validateConfigStructure(withDecisionBackends(cfg))
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
 
@@ -918,7 +877,7 @@ func registerValidateConfigStructureStaticWorkflowsSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects static workflows without roles", func() {
@@ -1052,55 +1011,30 @@ var _ = Describe("validateConfigStructure", func() {
 })
 
 var _ = Describe("validatePromptGuardBackendConfig", func() {
-	It("accepts an unset variant/protocol (defaults to candle)", func() {
+	It("accepts the local model (no backend)", func() {
 		cfg := &PromptGuardConfig{}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("accepts variant candle", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle}
+	It("accepts backend http_chat", func() {
+		cfg := &PromptGuardConfig{
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPChat,
+				Contract: RemoteClassifierContractLabelDecision,
+				Model:    "guard",
+			},
+		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("accepts variant mmbert32k", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
+	It("accepts backend http_classify", func() {
+		cfg := &PromptGuardConfig{
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPClassify,
+				Contract: RemoteClassifierContractLabelDistribution,
+				Model:    "guard",
+			},
+		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts protocol http_chat", func() {
-		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPChat}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts protocol http_classify", func() {
-		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPClassify}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("rejects an unrecognized variant", func() {
-		cfg := &PromptGuardConfig{Variant: "some_typo"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("some_typo"))
-	})
-
-	It("rejects an unrecognized protocol", func() {
-		cfg := &PromptGuardConfig{Protocol: "some_typo"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("some_typo"))
-	})
-
-	It("rejects a stale boolean-flag-era value", func() {
-		cfg := &PromptGuardConfig{Variant: "use_vllm"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("rejects setting both variant and protocol", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle, Protocol: PromptGuardProtocolHTTPChat}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
 	})
 })

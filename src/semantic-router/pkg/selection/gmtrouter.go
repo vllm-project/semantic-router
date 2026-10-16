@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -152,7 +153,8 @@ type UserPreferenceState struct {
 // This selector learns user preferences from multi-turn interactions and routes queries
 // to LLMs that best match individual user preferences.
 type GMTRouterSelector struct {
-	config *GMTRouterConfig
+	config      *GMTRouterConfig
+	modelParams map[string]config.ModelParams
 
 	// Heterogeneous graph components
 	nodes   map[string]*GraphNode // nodeID -> node
@@ -197,6 +199,7 @@ func (g *GMTRouterSelector) InitializeFromConfig(modelConfig map[string]config.M
 	g.nodesMu.Lock()
 	defer g.llmMu.Unlock()
 	defer g.nodesMu.Unlock()
+	g.modelParams = modelConfig
 
 	for model, params := range modelConfig {
 		// Create LLM node with description as embedding source
@@ -213,13 +216,6 @@ func (g *GMTRouterSelector) InitializeFromConfig(modelConfig map[string]config.M
 				node.Embedding = emb
 				g.llmEmbeddings[model] = emb
 			}
-		}
-
-		// Store separate cost and evidence-backed intelligence features.
-		intelligence, _ := params.EvidenceScore("")
-		node.Features = []float32{
-			float32(params.Pricing.PromptPer1M),
-			float32(intelligence / 100),
 		}
 
 		g.nodes[nodeID] = node
@@ -255,60 +251,45 @@ func (g *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext
 	usePersonalization := g.config.EnablePersonalization &&
 		userState.TotalInteractions >= g.config.MinInteractionsForPersonalization
 
-	allScores := make(map[string]float64)
-	var selectedModel *config.ModelRef
-	var bestScore float64
-	var reasoning string
-
+	ranked := make(CandidateScores, len(selCtx.CandidateModels))
+	candidateScores := make([]float64, len(selCtx.CandidateModels))
 	if usePersonalization {
-		// Personalized routing using graph-based preference learning
-		scores := g.computePersonalizedScores(userID, selCtx)
-
-		for _, model := range selCtx.CandidateModels {
-			score := scores[model.Model]
-			allScores[model.Model] = score
-
-			if score > bestScore || selectedModel == nil {
-				bestScore = score
-				selectedModel = &model
-			}
-		}
-
-		reasoning = fmt.Sprintf("GMTRouter personalized selection for user %s (%d interactions)",
-			userID, userState.TotalInteractions)
-
-		logging.Infof("[GMTRouter] Personalized selection for user %s: %s (score=%.4f)",
-			userID, selectedModel.Model, bestScore)
-	} else {
-		// Cold start: use model quality scores
-		for _, model := range selCtx.CandidateModels {
-			score := g.getDefaultModelScore(model.Model)
-			allScores[model.Model] = score
-
-			if score > bestScore || selectedModel == nil {
-				bestScore = score
-				selectedModel = &model
-			}
-		}
-
-		reasoning = fmt.Sprintf("GMTRouter cold-start selection (need %d more interactions)",
-			g.config.MinInteractionsForPersonalization-userState.TotalInteractions)
-
-		logging.Infof("[GMTRouter] Cold-start selection: %s (user %s has %d interactions)",
-			selectedModel.Model, userID, userState.TotalInteractions)
+		candidateScores = g.computePersonalizedScores(userID, selCtx)
 	}
+	for i, candidate := range selCtx.CandidateModels {
+		score, evidence := g.getDefaultModelScore(candidate)
+		if usePersonalization {
+			score = candidateScores[i]
+		}
+		candidateScores[i] = score
+		ranked[i] = CandidateScore{Candidate: candidate, Score: score, Evidence: evidence}
+	}
+	best := ranked.Best(HigherIsBetter, true)
+	if best < 0 {
+		return nil, fmt.Errorf("GMTRouter produced no finite candidate scores")
+	}
+	selectedModel, bestScore := &ranked[best].Candidate, ranked[best].Score
+	reasoning := fmt.Sprintf("GMTRouter cold-start selection (need %d more interactions)",
+		g.config.MinInteractionsForPersonalization-userState.TotalInteractions)
+	if usePersonalization {
+		reasoning = fmt.Sprintf("GMTRouter personalized selection for user %s (%d interactions)", userID, userState.TotalInteractions)
+	}
+	reasoning += "; " + evidenceDiagnostic(ranked[best].Evidence)
+	logging.Infof("[GMTRouter] %s: %s (score=%.4f)", reasoning, selectedModel.Model, bestScore)
 
 	// Calculate confidence based on preference strength
-	confidence := g.computeConfidence(userID, selectedModel.Model, allScores)
+	confidence := g.computeConfidence(bestScore, candidateScores)
 
 	return &SelectionResult{
-		SelectedModel: selectedModel.Model,
-		LoRAName:      selectedModel.LoRAName,
-		Score:         bestScore,
-		Confidence:    confidence,
-		Method:        MethodGMTRouter,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     selectedModel.Model,
+		SelectedCandidate: selectedModel,
+		LoRAName:          selectedModel.LoRAName,
+		Score:             bestScore,
+		Confidence:        confidence,
+		Method:            MethodGMTRouter,
+		Reasoning:         reasoning,
+		AllScores:         ranked.Diagnostics(),
+		CandidateScores:   ranked,
 	}, nil
 }
 
@@ -691,43 +672,39 @@ func (g *GMTRouterSelector) computeCosineSimilarity(vecA, vecB []float32) float6
 }
 
 // computePersonalizedScores computes scores for each model based on user preferences
-func (g *GMTRouterSelector) computePersonalizedScores(userID string, selCtx *SelectionContext) map[string]float64 {
+func (g *GMTRouterSelector) computePersonalizedScores(userID string, selCtx *SelectionContext) []float64 {
 	g.userMu.RLock()
 	defer g.userMu.RUnlock()
 
-	scores := make(map[string]float64)
+	scores := make([]float64, len(selCtx.CandidateModels))
 	state := g.userStates[userID]
 
-	for _, model := range selCtx.CandidateModels {
-		baseScore := g.getDefaultModelScore(model.Model)
+	for i, model := range selCtx.CandidateModels {
+		baseScore, _ := g.getDefaultModelScore(model)
 
 		if state != nil {
 			if preference, ok := state.ModelPreferences[model.Model]; ok {
 				// Blend base score with learned preference
-				scores[model.Model] = 0.3*baseScore + 0.7*preference
+				scores[i] = 0.3*baseScore + 0.7*preference
 			} else {
 				// No preference data for this model - use base score with small penalty
-				scores[model.Model] = baseScore * 0.9
+				scores[i] = baseScore * 0.9
 			}
 		} else {
-			scores[model.Model] = baseScore
+			scores[i] = baseScore
 		}
 	}
 
 	return scores
 }
 
-// getDefaultModelScore returns a default score for a model (cold start)
-func (g *GMTRouterSelector) getDefaultModelScore(model string) float64 {
-	g.nodesMu.RLock()
-	defer g.nodesMu.RUnlock()
-
-	nodeID := fmt.Sprintf("llm:%s", model)
-	if node, ok := g.nodes[nodeID]; ok && len(node.Features) >= 2 {
-		// Use quality score from features
-		return float64(node.Features[1])
+// getDefaultModelScore returns exact-effort evidence or the neutral cold-start fallback.
+func (g *GMTRouterSelector) getDefaultModelScore(candidate config.ModelRef) (float64, *modelcatalog.IndexResult) {
+	evidence := evidenceForCandidate(g.modelParams, candidate)
+	if evidence == nil {
+		return 0.5, nil
 	}
-	return 0.5 // Default score
+	return *evidence.Score / 100, evidence
 }
 
 // getOrCreateUserState gets or creates a user preference state
@@ -749,37 +726,27 @@ func (g *GMTRouterSelector) getOrCreateUserState(userID string) *UserPreferenceS
 }
 
 // computeConfidence computes selection confidence based on preference strength
-func (g *GMTRouterSelector) computeConfidence(userID, selectedModel string, allScores map[string]float64) float64 {
-	if len(allScores) <= 1 {
+func (g *GMTRouterSelector) computeConfidence(selectedScore float64, candidateScores []float64) float64 {
+	if len(candidateScores) <= 1 {
 		return 0.5
 	}
 
-	// Get selected model score
-	selectedScore := allScores[selectedModel]
-
 	// Compute score difference from second best
-	scores := make([]float64, 0, len(allScores))
-	for _, score := range allScores {
-		scores = append(scores, score)
-	}
+	scores := append([]float64(nil), candidateScores...)
 	sort.Float64s(scores)
 
-	if len(scores) >= 2 {
-		secondBest := scores[len(scores)-2]
-		margin := selectedScore - secondBest
+	secondBest := scores[len(scores)-2]
+	margin := selectedScore - secondBest
 
-		// Convert margin to confidence (sigmoid-like)
-		confidence := 0.5 + margin*0.5
-		if confidence > 0.95 {
-			confidence = 0.95
-		}
-		if confidence < 0.1 {
-			confidence = 0.1
-		}
-		return confidence
+	// Convert margin to confidence (sigmoid-like)
+	confidence := 0.5 + margin*0.5
+	if confidence > 0.95 {
+		confidence = 0.95
 	}
-
-	return 0.5
+	if confidence < 0.1 {
+		confidence = 0.1
+	}
+	return confidence
 }
 
 // SetEmbeddingFunc sets the function used for encoding text to embeddings

@@ -19,6 +19,10 @@ type responseUsageMetrics struct {
 	cachedPromptTokensReported bool
 	cacheWriteTokens           int
 	cacheWriteTokensReported   bool
+	cacheWrite5mTokens         int
+	cacheWrite5mTokensReported bool
+	cacheWrite1hTokens         int
+	cacheWrite1hTokensReported bool
 	completionTokens           int
 	completionTokensReported   bool
 	totalTokens                int
@@ -72,6 +76,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
+	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
 		usage = responseUsageMetrics{}
 	}
@@ -95,12 +100,12 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 
 	recordModelUsageTokens(ctx.RequestModel, usage)
 	metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
-	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	inflight.End(ctx.InflightModel, ctx.InflightToken)
 	ctx.InflightToken = 0
 
 	if usage.completionTokens > 0 {
 		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
 		logging.Debugf("Updating TPOT cache for model: %q, TPOT: %.4f", ctx.RequestModel, timePerToken)
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
@@ -110,8 +115,6 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		completionLatency.Seconds(),
 		int64(usage.promptTokens),
 		int64(usage.completionTokens),
-		false,
-		false,
 	)
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
@@ -224,6 +227,7 @@ func (r *OpenAIRouter) recordResponseCost(
 			eventFields["pricing_prompt_per_1m"] = pricing.PromptPer1M
 			eventFields["pricing_cached_input_per_1m"] = pricing.CachedInputPer1M
 			eventFields["pricing_cache_write_per_1m"] = effectiveCacheWriteRate(pricing)
+			eventFields["pricing_cache_write_1h_per_1m"] = effectiveCacheWrite1hRate(pricing)
 			eventFields["pricing_completion_per_1m"] = pricing.CompletionPer1M
 			logging.LogEvent("llm_usage", eventFields)
 			return replayUsage

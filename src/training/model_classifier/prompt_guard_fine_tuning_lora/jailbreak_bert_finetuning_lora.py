@@ -1,65 +1,8 @@
-"""
-Jailbreak Classification Fine-tuning with Enhanced LoRA Training
-Uses PEFT (Parameter-Efficient Fine-Tuning) with LoRA adapters for efficient security detection.
+"""Inference and adapter export compatibility for historical Guard checkpoints.
 
-🚀 **ENHANCED VERSION**: This is the LoRA-enhanced version of jailbreak_bert_finetuning.py
-   Benefits: 99% parameter reduction, 67% memory savings, higher confidence scores
-   Original: src/training/prompt_guard_fine_tuning/jailbreak_bert_finetuning.py
-
-🔧  Enhanced based on LLM Guard and Guardrails best practices
-   - Fixed gradient explosion: learning_rate 1e-4→3e-5 and stabilized the LoRA trainer settings
-   - Improved training stability: cosine scheduling, warmup_ratio=0.06
-   - Enhanced jailbreak detection: Added 25+ diverse attack patterns for better coverage
-   - Addresses 26% false negative rate: Role-playing, hypothetical, educational disclaimer attacks
-   - Based on research from /protectai/llm-guard and /guardrails-ai/guardrails
-
-Usage:
-    # Train with recommended parameters (CPU-optimized)
-    python jailbreak_bert_finetuning_lora.py --mode train --model bert-base-uncased --epochs 8 --lora-rank 16 --max-samples 2000
-
-    # Train with custom LoRA parameters
-    python jailbreak_bert_finetuning_lora.py --mode train --lora-rank 16 --lora-alpha 32 --batch-size 2
-
-    # Train specific model with optimized settings
-    python jailbreak_bert_finetuning_lora.py --mode train --model roberta-base --epochs 8 --learning-rate 3e-4
-
-    # Test inference with trained LoRA model
-    python jailbreak_bert_finetuning_lora.py --mode test --model-path lora_jailbreak_classifier_bert-base-uncased_r16_model
-
-    # Quick training test (for debugging)
-    python jailbreak_bert_finetuning_lora.py --mode train --model bert-base-uncased --epochs 1 --max-samples 50
-
-Supported models:
-    - mmbert-base: mmBERT base model (149M parameters, 1800+ languages, RECOMMENDED)
-    - bert-base-uncased: Standard BERT base model (110M parameters, most stable)
-    - roberta-base: RoBERTa base model (125M parameters, better context understanding)
-    - modernbert-base: ModernBERT base model (149M parameters, latest architecture)
-
-Datasets:
-    - toxic-chat: LMSYS Toxic Chat dataset for toxicity detection
-      * Format: Binary classification (toxic/benign)
-      * Source: lmsys/toxic-chat from Hugging Face
-      * Sample size: configurable via --max-samples parameter (recommended: 2000-5000)
-    - salad-data: OpenSafetyLab Salad-Data jailbreak attacks
-      * Format: Jailbreak prompts labeled as malicious
-      * Source: OpenSafetyLab/Salad-Data from Hugging Face
-      * Quality: Comprehensive jailbreak attack patterns
-    - Combined dataset: Automatically balanced toxic-chat + salad-data with quality validation
-
-Key Features:
-    - LoRA (Low-Rank Adaptation) for binary security classification
-    - 99%+ parameter reduction (only ~0.02% trainable parameters)
-    - Multi-dataset integration with automatic balancing
-    - Real-time dataset downloading from Hugging Face
-    - Binary classification for jailbreak/prompt injection detection
-    - Dynamic model path configuration via command line
-    - Configurable LoRA hyperparameters (rank, alpha, dropout)
-    - Security-focused evaluation metrics (accuracy, F1, precision, recall)
-    - Built-in inference testing with security examples
-    - Auto-merge functionality: Generates both LoRA adapters and Rust-compatible models
-    - Multi-architecture support: Dynamic target_modules configuration for all models
-    - CPU optimization: Efficient training on CPU with memory management
-    - Production-ready: Robust error handling and validation throughout
+New Guard training uses the shared sequence_repair trainer with a fresh task
+head on the Vela Base. This module retains legacy checkpoint helpers only;
+its command-line interface accepts inference, not historical training recipes.
 """
 
 import json
@@ -829,72 +772,16 @@ def demo_inference(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Enhanced LoRA Security Detection")
-    parser.add_argument("--mode", choices=["train", "test"], default="train")
-    parser.add_argument(
-        "--model",
-        choices=[
-            "mmbert-32k",  # mmBERT-32K YaRN - 32K context, multilingual (RECOMMENDED)
-            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, 8K context)
-            "modernbert-base",  # ModernBERT base model - latest architecture
-            "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
-            "roberta-base",  # RoBERTa base model - best performance
-        ],
-        default="mmbert-32k",  # Default to mmBERT-32K for extended context support
-        help="Model to use for fine-tuning",
-    )
-    parser.add_argument("--lora-rank", type=int, default=8)
-    parser.add_argument("--lora-alpha", type=int, default=16)
-    parser.add_argument("--lora-dropout", type=float, default=0.1)
-    parser.add_argument("--epochs", type=int, default=3)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=3e-5)
-    parser.add_argument(
-        "--max-samples",
-        type=int,
-        default=1000,
-        help="Maximum samples from jailbreak datasets",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed recorded in the run manifest",
-    )
-    parser.add_argument(
-        "--manifest-dir",
-        type=str,
-        default=None,
-        help="Directory for provenance manifests (default: <output-dir>/manifests)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default=None,
-        help="Custom output directory for saving the model (default: ./lora_jailbreak_classifier_{model_name}_r{lora_rank}_model)",
-    )
-    parser.add_argument(
-        "--model-path",
-        type=str,
-        default="lora_jailbreak_classifier_bert-base-uncased_r8_model",  # Changed from modernbert-base
-        help="Path to saved model for inference (default: ../../../models/lora_security_detector_r8)",
-    )
-
-    args = parser.parse_args()
-
-    if args.mode == "train":
-        main(
-            model_name=args.model,
-            lora_rank=args.lora_rank,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            num_epochs=args.epochs,
-            batch_size=args.batch_size,
-            learning_rate=args.learning_rate,
-            max_samples=args.max_samples,
-            output_dir=args.output_dir,
-            seed=args.seed,
-            manifest_dir=args.manifest_dir,
+    parser = argparse.ArgumentParser(
+        description=(
+            "Inspect a legacy checkpoint. Train Vela Guard with "
+            "python -m src.training.model_classifier.sequence_repair.train "
+            "and the Vela Base."
         )
-    elif args.mode == "test":
-        demo_inference(args.model_path)
+    )
+    parser.add_argument("--mode", choices=["test"], default="test")
+    parser.add_argument(
+        "--model-path", required=True, help="Legacy checkpoint directory"
+    )
+    args = parser.parse_args()
+    demo_inference(args.model_path)

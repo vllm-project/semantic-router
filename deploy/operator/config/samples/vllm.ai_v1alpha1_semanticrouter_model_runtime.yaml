@@ -1,0 +1,29 @@
+# The built-in model runtime downloads the pinned Vela PII release and serves it;
+# the binding takes its labels from the served model.
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-model-runtime
+spec:
+  replicas: 1
+  config:
+    model_deployments:
+      local-pii:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
+        revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 512
+          overflow: reject
+    model_admission:
+      local-pii:
+        max_concurrency: 2
+        max_queue: 8
+        queue_timeout_ms: 1000
+        on_overflow: shed
+    routing:
+      model_bindings:
+        pii_classifier:
+          deployment: local-pii
+          contract: token_spans.v1

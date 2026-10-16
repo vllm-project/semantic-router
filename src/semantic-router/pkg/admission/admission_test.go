@@ -216,17 +216,14 @@ func TestSemaphoreWaitQueueTimeoutWhileQueueFull(t *testing.T) {
 	}
 	defer ticket()
 
-	go func() {
-		waited, err := gate.Acquire(context.Background())
-		if err == nil {
-			defer waited()
-		}
-	}()
-	for len(gate.waiters) == 0 {
-		time.Sleep(time.Millisecond)
-	}
+	// Hold the queue slot until the assertion completes. A second Acquire can
+	// time out before this goroutine observes its brief queue occupancy.
+	gate.waiters <- struct{}{}
+	defer func() { <-gate.waiters }()
 
-	if _, err := gate.Acquire(context.Background()); !errors.Is(err, ErrQueueFull) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := gate.Acquire(ctx); !errors.Is(err, ErrQueueFull) {
 		t.Fatalf("err = %v, want ErrQueueFull", err)
 	}
 }

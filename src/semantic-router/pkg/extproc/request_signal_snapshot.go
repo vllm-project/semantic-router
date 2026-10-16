@@ -4,15 +4,19 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/classifi
 
 // requestSignalSnapshot contains the protocol-neutral facts consumed by
 // routing signals. It deliberately excludes wire JSON, provider fields, raw
-// media, tool schemas, and tool-result payloads.
+// media and tool schemas. Tool-result text is confined to the dedicated Guard
+// projection; it is not added to the general semantic signal text.
 type requestSignalSnapshot struct {
 	Model             string
 	Stream            bool
 	UserContent       string
 	PriorUserMessages []string
 	NonUserMessages   []string
+	JailbreakInput    *classification.JailbreakInput
 	HasAssistantReply bool
+	LastUserHasText   bool
 	FirstImageURL     string
+	FirstAudio        string
 	ImageContentCount int
 	// InputModality holds the structural input-modality counts for the
 	// input_modality signal family, scoped to user messages.

@@ -68,9 +68,20 @@ func reasoningFamilyAllowsEffort(family *config.ReasoningFamilyConfig, effort st
 	return false
 }
 
+// modelRefMatchesCandidate reports whether ref matches the candidate identity.
+// For a LoRA adapter (LoRAName != ""), it matches only against LoRAName (or its alias).
+// For a bare base model (LoRAName == ""), it matches against Model (or its alias).
+func (r *OpenAIRouter) modelRefMatchesCandidate(ref config.ModelRef, candidateIdentity string) bool {
+	identity := candidateModelIdentity(ref)
+	if r != nil && r.Config != nil {
+		return r.Config.ModelNameMatches(identity, candidateIdentity)
+	}
+	return identity == candidateIdentity
+}
+
 func (r *OpenAIRouter) reasoningEffortForDecision(decision config.Decision, modelName string) string {
 	for _, modelRef := range decision.ModelRefs {
-		if r.Config.ModelNameMatches(modelRef.Model, modelName) {
+		if r.modelRefMatchesCandidate(modelRef, modelName) {
 			return modelRef.ReasoningEffort
 		}
 	}
@@ -79,7 +90,7 @@ func (r *OpenAIRouter) reasoningEffortForDecision(decision config.Decision, mode
 
 func (r *OpenAIRouter) reasoningModeForDecision(decision config.Decision, modelName string) string {
 	for _, modelRef := range decision.ModelRefs {
-		if r.Config.ModelNameMatches(modelRef.Model, modelName) {
+		if r.modelRefMatchesCandidate(modelRef, modelName) {
 			return modelRef.ReasoningMode
 		}
 	}

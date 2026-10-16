@@ -1,6 +1,5 @@
-# Advanced YAML sample for vLLM Semantic Router.
-# Most users should start with `vllm-sr serve` and finish setup in the dashboard.
-# Use this template when you want to hand-author routing config directly.
+# Minimal canonical YAML starter for vLLM Semantic Router.
+# Replace the model name and backend endpoint, then validate before applying.
 
 version: v0.3
 
@@ -34,5 +33,6 @@ routing:
         operator: "AND"
         conditions: []
       modelRefs:
+        # A provider model is routable only when a decision references it here.
         - model: "replace-with-your-model"
           use_reasoning: false

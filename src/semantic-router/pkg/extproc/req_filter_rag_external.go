@@ -89,88 +89,60 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("invalid external API RAG config: %w", err)
 	}
 
-	// Build one request per window of the query for the formats that search by
-	// vector, so a long query is not searched by its opening alone.
-	var requestBodies [][]byte
-	var buildErr error
-
+	var requestBody []byte
 	switch apiConfig.RequestFormat {
 	case "pinecone", "weaviate":
-		var queryEmbeddings [][]float32
-		queryEmbeddings, buildErr = ragQueryEmbeddings(ctx.UserContent)
-		for _, queryEmbedding := range queryEmbeddings {
-			var body []byte
-			if apiConfig.RequestFormat == "pinecone" {
-				body, buildErr = r.buildPineconeRequest(queryEmbedding, ragConfig)
-			} else {
-				body, buildErr = r.buildWeaviateRequest(queryEmbedding, ragConfig)
-			}
-			if buildErr != nil {
-				break
-			}
-			requestBodies = append(requestBodies, body)
-		}
+		requestBody, err = r.buildVectorSearchRequest(traceCtx, ctx, ragConfig, apiConfig.RequestFormat)
 	case "elasticsearch":
-		var body []byte
-		body, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
-		requestBodies = [][]byte{body}
+		requestBody, err = r.buildElasticsearchRequest(ctx, ragConfig)
 	case "custom":
-		var body []byte
-		body, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
-		requestBodies = [][]byte{body}
+		requestBody, err = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
 	default:
 		return "", fmt.Errorf("unsupported request format: %s", apiConfig.RequestFormat)
 	}
-
-	if buildErr != nil {
-		return "", fmt.Errorf("failed to build request: %w", buildErr)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request: %w", err)
 	}
 
+	apiResponse, latency, err := r.sendExternalRAGRequest(traceCtx, apiConfig, requestBody)
+	if err != nil {
+		return "", err
+	}
+	ctx.RAGRetrievalLatency = latency
+	documents, err := r.extractDocumentsFromResponse(apiResponse, apiConfig.RequestFormat)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract context: %w", err)
+	}
+	if len(documents) == 0 {
+		return "", fmt.Errorf("no content found in %s response", apiConfig.RequestFormat)
+	}
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
-	}
-
-	// A document that several windows retrieve is kept once, at the rank the
-	// first window that found it gave it.
-	var documents []string
-	seen := make(map[string]struct{})
-	var totalLatency float64
-	for _, requestBody := range requestBodies {
-		apiResponse, latency, sendErr := r.sendExternalRAGRequest(traceCtx, apiConfig, requestBody)
-		totalLatency += latency
-		if sendErr != nil {
-			return "", sendErr
-		}
-		windowDocuments, extractErr := r.extractDocumentsFromResponse(apiResponse, apiConfig.RequestFormat)
-		if extractErr != nil {
-			return "", fmt.Errorf("failed to extract context: %w", extractErr)
-		}
-		for _, document := range windowDocuments {
-			if _, duplicate := seen[document]; duplicate {
-				continue
-			}
-			seen[document] = struct{}{}
-			documents = append(documents, document)
-		}
-	}
-	ctx.RAGRetrievalLatency = totalLatency
-
-	if len(documents) == 0 {
-		return "", fmt.Errorf("no content found in %s response", apiConfig.RequestFormat)
 	}
 	if topK > 0 && len(documents) > topK {
 		documents = documents[:topK]
 	}
 
-	logging.Infof("Retrieved %d documents from external API over %d query window(s) (latency: %.3fs, format: %s)",
-		len(documents), len(requestBodies), totalLatency, apiConfig.RequestFormat)
+	logging.Infof("Retrieved %d documents from external API (latency: %.3fs, format: %s)",
+		len(documents), latency, apiConfig.RequestFormat)
 	return strings.Join(documents, "\n\n---\n\n"), nil
 }
 
+// buildVectorSearchRequest embeds the query for the formats that search by vector.
+func (r *OpenAIRouter) buildVectorSearchRequest(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig, format string) ([]byte, error) {
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, ctx.UserContent, ctx)
+	if err != nil {
+		return nil, err
+	}
+	if format == "pinecone" {
+		return r.buildPineconeRequest(queryEmbedding, ragConfig)
+	}
+	return r.buildWeaviateRequest(queryEmbedding, ragConfig)
+}
+
 // sendExternalRAGRequest posts one request body and decodes the response,
-// returning how long the call took so a caller that sends several can report
-// their total.
+// returning how long the call took.
 func (r *OpenAIRouter) sendExternalRAGRequest(traceCtx context.Context, apiConfig *config.ExternalAPIRAGConfig, requestBody []byte) (map[string]interface{}, float64, error) {
 	req, err := http.NewRequestWithContext(traceCtx, "POST", apiConfig.Endpoint, bytes.NewBuffer(requestBody))
 	if err != nil {
@@ -376,7 +348,7 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 	return []byte(replaced), nil
 }
 
-// extractContextFromResponse extracts context from API response based on format
+// extractDocumentsFromResponse extracts the retrieved documents from an API response.
 func (r *OpenAIRouter) extractDocumentsFromResponse(response map[string]interface{}, format string) ([]string, error) {
 	switch format {
 	case "pinecone":

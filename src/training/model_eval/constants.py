@@ -1,8 +1,11 @@
 """
-Constants for MoM Collection Evaluation Script
+Constants for served-model evaluation and explicit legacy MoM evaluation
 All shared constants, registries and configs are defined here.
 """
 
+from copy import deepcopy
+
+# Historical reference only; loaders must use the artifact's declared base.
 BASE_MODEL_ID = "jhu-clsp/mmBERT-base"
 
 # Supported langs
@@ -20,40 +23,41 @@ LANGUAGE_CODES = {
 }
 
 # Registry of all MoM models (merged as well as LoRA)
-MODEL_REGISTRY = {
+LEGACY_MODEL_REGISTRY = {
     "feedback": {
-        "id": "llm-semantic-router/mmbert32k-feedback-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert32k-feedback-detector-lora",
+        "id": "vllm-sr/mmbert32k-feedback-detector-merged",
+        "lora_id": "vllm-sr/mmbert32k-feedback-detector-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/feedback-detector-dataset",
+        "hf_dataset": "vllm-sr/feedback-detector-dataset",
         "labels": ["SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT"],
         "text_col": "text",
         "label_col": "label",
         "split": "validation",
     },
     "jailbreak": {
-        "id": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert32k-jailbreak-detector-lora",
+        "id": "vllm-sr/mmbert32k-jailbreak-detector-merged",
+        "lora_id": "vllm-sr/mmbert32k-jailbreak-detector-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/jailbreak-detection-dataset",
-        "labels": ["safe", "unsafe"],
+        "hf_dataset": "vllm-sr/jailbreak-detection-dataset",
+        "labels": ["benign", "jailbreak"],
+        "dataset_label_aliases": {"safe": "benign", "unsafe": "jailbreak"},
         "text_col": "text",
         "label_col": "label",
         "split": "test",
     },
     "fact-check": {
-        "id": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
-        "lora_id": "llm-semantic-router/mmbert32k-factcheck-classifier-lora",
+        "id": "vllm-sr/mmbert32k-factcheck-classifier-merged",
+        "lora_id": "vllm-sr/mmbert32k-factcheck-classifier-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/fact-check-classification-dataset",
+        "hf_dataset": "vllm-sr/fact-check-classification-dataset",
         "labels": ["NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"],
         "text_col": "text",
         "label_col": "label_id",
         "split": "test",
     },
     "intent": {
-        "id": "llm-semantic-router/mmbert32k-intent-classifier-merged",
-        "lora_id": "llm-semantic-router/mmbert32k-intent-classifier-lora",
+        "id": "vllm-sr/mmbert32k-intent-classifier-merged",
+        "lora_id": "vllm-sr/mmbert32k-intent-classifier-lora",
         "type": "text_classification",
         "hf_dataset": "TIGER-Lab/MMLU-Pro",
         "labels": [
@@ -77,8 +81,8 @@ MODEL_REGISTRY = {
         "split": "test",
     },
     "pii": {
-        "id": "llm-semantic-router/mmbert32k-pii-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert32k-pii-detector-lora",
+        "id": "vllm-sr/mmbert32k-pii-detector-merged",
+        "lora_id": "vllm-sr/mmbert32k-pii-detector-lora",
         "type": "token_classification",
         "hf_dataset": "presidio",
         "labels": [
@@ -123,3 +127,55 @@ MODEL_REGISTRY = {
         "split": "test",
     },
 }
+
+# Immutable native releases. Keep these in sync with config/registry.go; tests
+# compare every entry, including releases outside this classifier evaluator.
+VELA_RELEASE_REVISIONS = {
+    "vllm-sr/Vela-1.0-Encoder-307M": "fe9ccc074b781bc0e2e13c2c8d26f2640410636a",
+    "vllm-sr/Vela-1.0-Encoder-307M-FactCheck": "99ede1aba1563e59e416f744d25b3f6b7e9d8274",
+    "vllm-sr/Vela-1.0-Encoder-307M-Domain": "f6354f54adcf38770f635ad903be2b00577f6c11",
+    "vllm-sr/Vela-1.0-Encoder-307M-PII": "6d3300c4bd7975f30a664503f6c725cf1fbbad48",
+    "vllm-sr/Vela-1.0-Encoder-307M-Modality": "5384b8997e3cbb79ca3a670e869577f4e4f4997e",
+    "vllm-sr/Vela-1.0-Encoder-307M-Feedback": "47434a7fd7c245c0c7c17564a000b3c56ccfec41",
+    "vllm-sr/Vela-1.0-Encoder-307M-Reranker": "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
+    "vllm-sr/Vela-1.0-Encoder-307M-Hazard": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
+    "vllm-sr/Vela-1.0-Encoder-307M-Safety": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85",
+    "vllm-sr/Vela-1.0-Encoder-307M-Shield": "a981a99eeb05a2859b88b5cee9af4352897ec4ec",
+    "vllm-sr/Vela-1.0-Encoder-307M-Guard": "087f9e401012df839c83717b746967ac7aebfa3e",
+    "vllm-sr/Vela-1.0-Encoder-307M-Embedding": "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
+    "vllm-sr/Vela-1.0-Encoder-307M-Halu": "ca87531211e414ac21c641b2faa8b8e21619de8f",
+    "vllm-sr/Vela-1.0-Omni-Nano": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
+    "vllm-sr/Vela-1.0-Omni-Mini": "801bae3ad28df6891408f0e0441c676b30e132e3",
+    "vllm-sr/Vela-2.0-0.3B": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+    "vllm-sr/Vela-2.0-0.8B": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+    "vllm-sr/Vela-2.0-4B": "c1e64d4f872cb38bc58502e6888340100bab9d55",
+    "vllm-sr/Vela-2.0-9B": "bc8761637d8788619dfbaf6d8890128efe85fd40",
+}
+
+MODEL_REGISTRY = deepcopy(LEGACY_MODEL_REGISTRY)
+for _role, _suffix in {
+    "feedback": "Feedback",
+    "jailbreak": "Guard",
+    "fact-check": "FactCheck",
+    "intent": "Domain",
+    "pii": "PII",
+}.items():
+    _entry = MODEL_REGISTRY[_role]
+    _entry["id"] = f"vllm-sr/Vela-1.0-Encoder-307M-{_suffix}"
+    _entry["revision"] = VELA_RELEASE_REVISIONS[_entry["id"]]
+    # Vela releases are self-contained task models.
+    del _entry["lora_id"]
+MODEL_REGISTRY["feedback"]["labels"].append("NO_FEEDBACK")
+# Guard detects instruction attacks. The historical dataset mixed toxicity
+# with attacks; identical binary label names do not make that gold compatible.
+del MODEL_REGISTRY["jailbreak"]["hf_dataset"]
+del MODEL_REGISTRY["jailbreak"]["dataset_label_aliases"]
+
+COLLECTIONS = {"served": MODEL_REGISTRY, "legacy-mom": LEGACY_MODEL_REGISTRY}
+
+
+def model_registry(collection="served"):
+    """Return an explicit collection; never fall back to a legacy artifact."""
+    if collection not in COLLECTIONS:
+        raise ValueError(f"Unknown model collection: {collection}")
+    return COLLECTIONS[collection]

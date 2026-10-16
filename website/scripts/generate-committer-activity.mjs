@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertGeneratedSource, generatedSourceDigest, withGeneratedSource } from './lib/generated-source.mjs'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(scriptDir, '..', '..')
@@ -19,6 +20,23 @@ const teamMembersPath = resolve(
   'data',
   'teamMembers.tsx',
 )
+const sourceDigest = generatedSourceDigest(repoRoot, [
+  'website/scripts/generate-committer-activity.mjs',
+  'website/scripts/lib/generated-source.mjs',
+  'website/src/data/teamMembers.tsx',
+])
+const regenerateCommand = 'npm run committers:activity'
+const args = process.argv.slice(2)
+if (args.length > 1 || args.some(argument => argument !== '--check-source')) {
+  console.error('Usage: node scripts/generate-committer-activity.mjs [--check-source]')
+  process.exit(2)
+}
+if (args.includes('--check-source')) {
+  assertGeneratedSource(outputPath, sourceDigest, regenerateCommand)
+  console.log('Committer activity snapshot source is up to date.')
+  process.exit(0)
+}
+
 const githubOwner = 'vllm-project'
 const githubRepo = 'semantic-router'
 const reviewStates = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])
@@ -98,10 +116,14 @@ try {
   })
 
   mkdirSync(dirname(outputPath), { recursive: true })
-  writeFileSync(outputPath, renderTypeScript(generatedAt, cutoffDate, entries))
+  writeFileSync(outputPath, withGeneratedSource(
+    renderTypeScript(generatedAt, cutoffDate, entries),
+    sourceDigest,
+  ))
 }
 catch (error) {
   if (existsSync(outputPath)) {
+    assertGeneratedSource(outputPath, sourceDigest, regenerateCommand)
     console.warn(`Skipping committer activity refresh: ${error.message}`)
     process.exit(0)
   }
@@ -288,6 +310,7 @@ function graphqlRequest(query, variables) {
     cwd: repoRoot,
     encoding: 'utf8',
     maxBuffer: 1024 * 1024 * 32,
+    timeout: 30_000,
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim()
   const payload = JSON.parse(output)

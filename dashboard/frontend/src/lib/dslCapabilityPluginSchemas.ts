@@ -1,5 +1,29 @@
 import type { FieldSchema } from './dslSchemas'
 
+const promptCacheFields: FieldSchema[] = [
+  { key: 'enabled', label: 'Enabled', type: 'boolean' },
+  {
+    key: 'ttl',
+    label: 'Marker TTL',
+    type: 'select',
+    options: ['5m', '1h'],
+  },
+  {
+    key: 'targets',
+    label: 'Stable Targets',
+    type: 'string[]',
+  },
+  {
+    key: 'on_unsupported',
+    label: 'Unsupported Target',
+    type: 'select',
+    options: ['skip', 'reject'],
+  },
+]
+
+const additionalCapabilityPluginFields = new Map<string, FieldSchema[]>([
+  ['prompt_cache', promptCacheFields],
+])
 // Plugin schemas added after getCapabilityPluginFieldSchema reached the
 // structure ratchet live in this table so that function never grows.
 const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
@@ -32,7 +56,10 @@ const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
 }
 
 export function resolveCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
-  return CAPABILITY_PLUGIN_FIELD_SCHEMAS[pluginType] ?? getCapabilityPluginFieldSchema(pluginType)
+  if (Object.prototype.hasOwnProperty.call(CAPABILITY_PLUGIN_FIELD_SCHEMAS, pluginType)) {
+    return CAPABILITY_PLUGIN_FIELD_SCHEMAS[pluginType]
+  }
+  return getCapabilityPluginFieldSchema(pluginType)
 }
 
 export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
@@ -233,6 +260,6 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
         },
       ]
     default:
-      return null
+      return additionalCapabilityPluginFields.get(pluginType) ?? null
   }
 }

@@ -3,7 +3,7 @@
 Mock web search service for hallucination detection demo.
 
 Returns context data that can be used to verify LLM responses.
-The contexts are designed to conflict with mock vLLM's hallucinated responses.
+The contexts are designed to conflict with provider mocker's hallucinated responses.
 
 Usage:
     python mock_web_search.py --port 8003
@@ -11,8 +11,8 @@ Usage:
 
 import argparse
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Dict
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 # Search results - keyword to context mapping
@@ -57,7 +57,7 @@ class MockWebSearchHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[Mock Search] {args[0]}")
 
-    def send_json_response(self, data: Dict[str, Any], status: int = 200):
+    def send_json_response(self, data: dict[str, Any], status: int = 200):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -128,10 +128,10 @@ def main():
 
     server = HTTPServer((args.host, args.port), MockWebSearchHandler)
     print(f"[Mock Search] Starting server on {args.host}:{args.port}")
-    print(f"[Mock Search] Endpoints:")
-    print(f"  - GET  /health")
-    print(f"  - GET  /search?q=<query>")
-    print(f'  - POST /search {{"query": "..."}}')
+    print("[Mock Search] Endpoints:")
+    print("  - GET  /health")
+    print("  - GET  /search?q=<query>")
+    print('  - POST /search {"query": "..."}')
     print(f"[Mock Search] Available topics: {list(SEARCH_CONTEXTS.keys())}")
     print()
 

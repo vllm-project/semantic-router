@@ -215,7 +215,8 @@ func modelPricingRates(pricing config.ModelPricing) modelpricing.Rates {
 	return modelpricing.Rates{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CachedInputPer1M: pricing.CachedInputPer1M, CacheWritePer1M: pricing.CacheWritePer1M,
-		CompletionPer1M: pricing.CompletionPer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
+		CompletionPer1M:   pricing.CompletionPer1M,
 	}
 }
 
@@ -522,12 +523,14 @@ func estimatedAttemptCost(spec attemptSpec) *float64 {
 }
 
 func actualAttemptCost(pricing modelpricing.Rates, usage TokenUsage) *float64 {
-	if !pricing.IsConfigured() {
+	if !pricing.IsConfigured() || !usage.Complete() {
 		return nil
 	}
 	cost := modelpricing.Cost(modelpricing.Usage{
-		PromptTokens:     saturatingInt64ToInt(usage.PromptTokens),
-		CompletionTokens: saturatingInt64ToInt(usage.CompletionTokens),
+		PromptTokens:      saturatingInt64ToInt(usage.PromptTokens),
+		CachedInputTokens: saturatingInt64ToInt(usage.CachedInputTokens),
+		CacheWriteTokens:  saturatingInt64ToInt(usage.CacheWriteTokens),
+		CompletionTokens:  saturatingInt64ToInt(usage.CompletionTokens),
 	}, pricing)
 	return &cost
 }

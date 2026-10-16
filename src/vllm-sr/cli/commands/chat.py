@@ -54,7 +54,10 @@ log = get_logger(__name__)
 @click.option(
     "--base-url",
     default=None,
-    help="Explicit routed HTTP base URL for a remote or port-forwarded stack.",
+    help=(
+        "Explicit routed listener origin or OpenAI /v1 base URL for a remote "
+        "or port-forwarded stack."
+    ),
 )
 @click.option(
     "--json",

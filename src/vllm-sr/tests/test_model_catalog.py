@@ -146,7 +146,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
@@ -158,6 +158,17 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert all(model.protocols == CATALOG_PROTOCOLS for model in catalog.models)
     assert all(model.compatibility.compatible for model in catalog.models)
     assert all(model.verified for model in catalog.models)
+
+
+def test_native_protocol_does_not_expand_chat_recipe_interfaces() -> None:
+    shared = packaged_model_catalog_document()
+    assert any(
+        protocol["id"] == "vllm-sr/systemone@1" for protocol in shared["protocols"]
+    )
+    assert all(
+        "vllm-sr/systemone@1" not in model.protocols
+        for model in load_model_catalog("latest").models
+    )
 
 
 def test_model_assets_root_supports_shallow_installed_package(
@@ -211,9 +222,7 @@ def test_packaged_catalog_export_is_complete_and_config_independent(
         model for model in document["models"] if model["kind"] == "virtual"
     ]
     assert {model["id"] for model in virtual_models} == CATALOG_MODELS
-    assert all(
-        model["verification"]["status"] == "reproduced" for model in virtual_models
-    )
+    assert all(model["verification"]["status"] == "claimed" for model in virtual_models)
 
 
 def test_packaged_mom_recipes_do_not_inject_system_prompts() -> None:
@@ -258,6 +267,19 @@ def test_catalog_evaluates_cli_and_router_versions_independently(
             CatalogComponentVersions(cli="0.5.0-rc.1", router="0.3.0"),
             True,
             "compatible",
+        ),
+        # A PEP 440 dev build precedes its release, as a prerelease does.
+        (
+            CatalogComponentVersions(
+                cli="0.5.0.dev20261007063125", router="0.5.0.dev20261007063125"
+            ),
+            True,
+            "compatible",
+        ),
+        (
+            CatalogComponentVersions(cli="0.3.0.dev1", router="0.3.0"),
+            False,
+            "requires cli >= 0.3.0",
         ),
     ],
 )
@@ -408,8 +430,8 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
         (("protocols", 0, "id"), "openai", "unsupported values"),
         (
             ("models", 0, "roles", 0, "minimum_candidates"),
-            99,
-            "exceeds its recommended pool",
+            0,
+            "must be a positive integer",
         ),
     ),
 )

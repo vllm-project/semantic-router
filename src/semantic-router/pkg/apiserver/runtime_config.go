@@ -1,3 +1,5 @@
+//go:build !windows
+
 package apiserver
 
 import (
@@ -65,8 +67,23 @@ func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {
 	return s.config
 }
 
+// servingConfig is the configuration the Router serves, or nil for an API
+// without the Router's runtime. The persisted document differs from it while
+// a change activates, and after one was rejected.
+func (s *ClassificationAPIServer) servingConfig() *config.RouterConfig {
+	if s == nil || s.runtimeRegistry == nil {
+		return nil
+	}
+	return s.runtimeRegistry.CurrentConfig()
+}
+
 func (s *ClassificationAPIServer) publishConfigMutation(newCfg *config.RouterConfig) {
 	if s == nil {
+		return
+	}
+	if s.runtimeRegistry != nil {
+		// Persistence has queued the candidate for the router watcher. Only its
+		// whole-generation publish may replace live service/config references.
 		return
 	}
 	s.configMu.Lock()
@@ -74,15 +91,6 @@ func (s *ClassificationAPIServer) publishConfigMutation(newCfg *config.RouterCon
 	s.configMu.Unlock()
 	if s.runtimeConfig != nil {
 		s.runtimeConfig.Update(newCfg)
-		return
-	}
-	if s.runtimeRegistry != nil {
-		s.runtimeRegistry.UpdateConfig(newCfg)
-		if s.classificationSvc != nil {
-			s.classificationSvc.RefreshRuntimeConfig(newCfg)
-		} else if svc := s.runtimeRegistry.ClassificationService(); svc != nil {
-			svc.RefreshRuntimeConfig(newCfg)
-		}
 		return
 	}
 	config.Replace(newCfg)

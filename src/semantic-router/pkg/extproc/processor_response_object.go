@@ -68,7 +68,9 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	if ctx.UpstreamStatusCode != 0 && (ctx.UpstreamStatusCode < 200 || ctx.UpstreamStatusCode >= 300) {
 		return
 	}
-	if !state.ShouldStore || ctx.SemanticResponse.Error != nil ||
+	// A decision can tighten the client's store preference. Like store:false,
+	// drop suppresses this turn's write without changing generation or lineage.
+	if !state.ShouldStore || retentionDropsResponseContent(ctx) || ctx.SemanticResponse.Error != nil ||
 		strings.TrimSpace(ctx.SemanticResponse.ID) == "" {
 		return
 	}

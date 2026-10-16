@@ -20,11 +20,7 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 		return false, ""
 	}
 	for _, ref := range decision.ModelRefs {
-		matchesModel := ref.Model == modelName
-		if r.Config != nil {
-			matchesModel = r.Config.ModelNameMatches(ref.Model, modelName)
-		}
-		if matchesModel || ref.LoRAName == modelName {
+		if r.modelRefMatchesCandidate(ref, modelName) {
 			if ref.UseReasoning == nil {
 				break
 			}
@@ -99,13 +95,22 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 // same provider boundary as ordinary requests.
 func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	modelName string,
+	decisionName string,
+	useReasoning bool,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, modelName, "", false, ctx)
 	if err != nil {
 		return nil, err
 	}
+	// Semantic decision mutations already ran for this hop. Keep their stage
+	// controls for final provider adaptation without inserting the prompt again.
+	dispatch.decisionName = decisionName
+	dispatch.useReasoning = useReasoning
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
 		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
@@ -138,7 +143,7 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 	ctx.SemanticRequest.Generation++
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
-	return r.buildLooperBackendDispatchResponse(modelName, ctx)
+	return r.buildLooperBackendDispatchResponse(modelName, "", false, ctx)
 }
 
 // handleLooperInternalRequestWithPlugins handles looper internal requests with plugin execution.
@@ -147,7 +152,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	r.hydrateLooperRoutingContext(ctx)
-	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
+	decisionName := looperHopDecision(ctx)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil
@@ -190,7 +195,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	}
 
 	r.startLooperInternalReplay(ctx, modelName, decisionName)
-	return r.buildLooperBackendDispatchResponse(modelName, ctx)
+	return r.buildLooperBackendDispatchResponse(modelName, decisionName, useReasoning, ctx)
 }
 
 func (r *OpenAIRouter) resolveLooperDecision(
@@ -240,7 +245,8 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.Config.EffectiveRouterReplayConfig(decision); replayCfg != nil {
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, decision)
+	if replayCfg := ctx.RouterReplayPluginConfig; replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{

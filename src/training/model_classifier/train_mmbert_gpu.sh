@@ -1,6 +1,8 @@
 #!/bin/bash
-# GPU Training Script for mmBERT LoRA Adapters using ROCm Docker
-# Optimized hyperparameters for high accuracy
+# Historical mmBERT LoRA training for the remaining legacy task scripts.
+# New Vela training uses explicit Base identity and reviewed data via
+# sequence_repair.train (or the PII token trainer); see vela-applications.md.
+# Guard training is no longer provided by this legacy wrapper.
 #
 # Environment overrides:
 #   TRAINING_WORK_DIR  — working directory (default: this script's directory)
@@ -97,10 +99,7 @@ train_task "Fact-Check Classifier" "fact_check_fine_tuning_lora/fact_check_bert_
 # 3. PII Detection
 train_task "PII Detector" "pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py"
 
-# 4. Jailbreak Detection
-train_task "Jailbreak Detector" "prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py"
-
-# 5. Modality Routing (AR vs Diffusion vs Both)
+# 4. Modality Routing (AR vs Diffusion vs Both)
 train_task "Modality Router" "modality_routing_classifier/modality_routing_bert_finetuning_lora.py"
 
 echo -e "${BLUE}========================================${NC}"

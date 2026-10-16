@@ -24,7 +24,7 @@ func New(outputDir string) *Profiler {
 
 // StartCPU begins CPU profiling
 func (p *Profiler) StartCPU() error {
-	if err := os.MkdirAll(p.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(p.outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -62,7 +62,7 @@ func (p *Profiler) StopCPU() error {
 
 // TakeMemSnapshot takes a memory profile snapshot
 func (p *Profiler) TakeMemSnapshot() error {
-	if err := os.MkdirAll(p.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(p.outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func (p *Profiler) TakeMemSnapshot() error {
 
 // TakeGoroutineSnapshot takes a goroutine profile snapshot
 func (p *Profiler) TakeGoroutineSnapshot() error {
-	if err := os.MkdirAll(p.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(p.outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -107,7 +107,7 @@ func (p *Profiler) TakeGoroutineSnapshot() error {
 func (p *Profiler) TakeBlockSnapshot() error {
 	runtime.SetBlockProfileRate(1) // Enable block profiling
 
-	if err := os.MkdirAll(p.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(p.outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -130,7 +130,7 @@ func (p *Profiler) TakeBlockSnapshot() error {
 func (p *Profiler) TakeMutexSnapshot() error {
 	runtime.SetMutexProfileFraction(1) // Enable mutex profiling
 
-	if err := os.MkdirAll(p.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(p.outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 

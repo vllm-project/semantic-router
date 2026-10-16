@@ -10,14 +10,13 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
 const valuesFile = "e2e/profiles/hallucination/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/hallucination/mock-hallucination-detector.yaml",
 	"deploy/kubernetes/hallucination/gwapi-resources.yaml",
 }
@@ -25,7 +24,7 @@ var resourceManifests = []string{
 // waitDeployments are the mock backends the profile must wait on before running
 // tests: the LLM backend and the endpoint detector both back the detection path.
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 	{Namespace: "default", Name: "mock-hallucination-detector"},
 }
 

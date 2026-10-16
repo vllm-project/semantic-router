@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -67,14 +70,8 @@ func validateJailbreakPositiveLabels(configured []string, mapping *JailbreakMapp
 // the probability mass on the positive_labels classes — independent of which
 // class the model actually predicts (argmax).
 //
-// When the full softmax distribution is available it returns the exact summed
-// P(positive_labels). Otherwise it derives a conservative estimate from the
-// predicted-class confidence: the confidence itself when the predicted class is
-// one of positive_labels, or 1-confidence otherwise (an upper bound on risk that
-// is exact for binary models and never under-reports risk).
-//
-// This avoids the misleading case where a confident benign prediction reports a
-// high risk_score: the predicted-class confidence is P(benign), not P(jailbreak).
+// Only probability mass reported for configured positive labels is meaningful.
+// Missing output or labels is unavailable; it cannot be replaced by 1 - top1.
 func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, result SequenceClassificationResult) float32 {
 	labels := resolvePositiveLabels(positiveLabels)
 
@@ -93,15 +90,7 @@ func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, resu
 		}
 	}
 
-	class, confidence := deriveArgmax(result.Probabilities)
-	if mapping != nil {
-		if predicted, ok := mapping.GetJailbreakTypeFromIndex(class); ok &&
-			isPositiveJailbreakLabel(labels, predicted) {
-			return confidence
-		}
-	}
-
-	return 1 - confidence
+	return float32(math.NaN())
 }
 
 // isJailbreakRiskAboveThreshold reports whether result's summed positive-label
@@ -129,17 +118,22 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // result.
 func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
 	bestRisk := float32(-1)
-	for _, chunk := range jailbreakSignalChunks(text) {
-		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
-		if err != nil {
-			logging.Errorf("jailbreak classification failed on one chunk: %v", err)
-			lastErr = err
-			continue
-		}
-		risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
-		if risk > bestRisk {
-			bestRisk = risk
-			result = chunkResult
+	for _, chunk := range c.jailbreakModelInputs(text) {
+		for _, window := range c.classifyJailbreakWindows(ctx, chunk) {
+			chunkResult, err := window.result, window.err
+			if err == nil {
+				err = validateJailbreakDistribution(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+			}
+			if err != nil {
+				logging.Errorf("jailbreak classification failed on one chunk: %v", err)
+				lastErr = err
+				continue
+			}
+			risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+			if risk > bestRisk {
+				bestRisk = risk
+				result = chunkResult
+			}
 		}
 	}
 	return result, bestRisk >= 0, lastErr
@@ -170,10 +164,12 @@ func (c *Classifier) CheckForJailbreakWithRisk(ctx context.Context, text string)
 // rule, or a rule whose threshold the score misses is published as clean on a
 // text that was never fully read.
 type JailbreakScan struct {
-	Type       string
-	Confidence float32
-	RiskScore  float32
-	PartialErr error
+	Decision         *tasks.LabelDecision
+	CategoricalMatch bool
+	Type             string
+	Confidence       float32
+	RiskScore        float32
+	PartialErr       error
 }
 
 // ScanJailbreakRisk scans text in chunks and reports what it saw, without
@@ -187,6 +183,9 @@ type JailbreakScan struct {
 // transient failure in an earlier one; it is reported as PartialErr instead.
 // An error is returned only when no chunk was scored at all.
 func (c *Classifier) ScanJailbreakRisk(ctx context.Context, text string) (JailbreakScan, error) {
+	if jailbreakDecisionBackend(c.jailbreakInference) != nil {
+		return JailbreakScan{}, tasks.ErrProbabilitiesUnavailable
+	}
 	if !c.IsJailbreakEnabled() {
 		return JailbreakScan{}, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -239,4 +238,38 @@ func (c *Classifier) CheckForJailbreakRiskWithThreshold(ctx context.Context, tex
 	}
 
 	return isJailbreak, scan.Type, scan.Confidence, scan.RiskScore, nil
+}
+
+func validateJailbreakDistribution(mapping *JailbreakMapping, positiveLabels []string, result SequenceClassificationResult) error {
+	if err := validateJailbreakInputCoverage(result.Input); err != nil {
+		return err
+	}
+	if mapping == nil || len(result.Probabilities) != mapping.GetJailbreakTypeCount() {
+		return fmt.Errorf("jailbreak distribution does not match the configured label set")
+	}
+	var total float64
+	for _, value := range result.Probabilities {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) || value < 0 || value > 1 {
+			return fmt.Errorf("jailbreak distribution contains an invalid probability")
+		}
+		total += float64(value)
+	}
+	if math.Abs(total-1) > 1e-4 {
+		return fmt.Errorf("jailbreak probabilities do not sum to one")
+	}
+	if math.IsNaN(float64(jailbreakRiskScore(mapping, positiveLabels, result))) {
+		return fmt.Errorf("jailbreak positive-label probability is unavailable: %w", tasks.ErrProbabilitiesUnavailable)
+	}
+	return nil
+}
+
+// A provider may return valid probabilities for only a prefix. All Guard
+// consumers must treat that as an unscanned input, not a clean full one: the
+// error is an input limit, which a jailbreak rule matches whatever on_error
+// says. Older backends without input metadata retain their existing contract.
+func validateJailbreakInputCoverage(input *tasks.InputUsage) error {
+	if input != nil && (input.Truncated || input.ProcessedTokens < input.OriginalTokens) {
+		return fmt.Errorf("%w: jailbreak input is incomplete: processed %d of %d tokens (truncated=%t)", binding.ErrInputLimit, input.ProcessedTokens, input.OriginalTokens, input.Truncated)
+	}
+	return nil
 }

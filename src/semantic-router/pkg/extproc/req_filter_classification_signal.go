@@ -3,34 +3,50 @@ package extproc
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 )
 
 type signalEvaluationInput struct {
-	evaluationText         string
-	allMessagesText        string
-	compressedText         string
-	skipCompressionSignals map[string]bool
-	currentUserText        string
-	priorUserMessages      []string
-	hasAssistantReply      bool
-	conversationFacts      classification.ConversationFacts
-	requestFacts           classification.RequestFacts
+	toolResultTexts          []string
+	toolResultScanIncomplete bool
+	evaluationText           string
+	allMessagesText          string
+	compressedText           string
+	skipCompressionSignals   map[string]bool
+	currentUserText          string
+	priorUserMessages        []string
+	hasAssistantReply        bool
+	conversationFacts        classification.ConversationFacts
+	requestFacts             classification.RequestFacts
+	compression              promptCompressionRun
+}
+
+// promptCompressionRun reports what prompt compression did to the evaluation
+// text. An empty outcome means compression was never considered.
+type promptCompressionRun struct {
+	outcome string
+	elapsed time.Duration // set only for the compressed outcome
 }
 
 func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
 	input := signalEvaluationInput{
-		evaluationText:    history.currentUserMessage,
-		compressedText:    history.currentUserMessage,
-		allMessagesText:   strings.Join(history.nonUserMessages, " "),
-		currentUserText:   history.currentUserMessage,
-		priorUserMessages: append([]string(nil), history.priorUserMessages...),
-		hasAssistantReply: history.hasAssistantReply,
+		evaluationText:           history.currentUserMessage,
+		compressedText:           history.currentUserMessage,
+		allMessagesText:          strings.Join(history.nonUserMessages, " "),
+		currentUserText:          history.currentUserMessage,
+		priorUserMessages:        append([]string(nil), history.priorUserMessages...),
+		toolResultTexts:          append([]string(nil), history.toolResultTexts...),
+		toolResultScanIncomplete: history.toolResultScanIncomplete,
+		// Feedback applies to a new textual user turn after an answer. Tool
+		// results and assistant prefills must not reclassify stale user text.
+		hasAssistantReply: history.hasAssistantReply && history.lastMessageRole == "user" && history.lastUserHasText,
 		conversationFacts: classification.ConversationFacts{
 			HasDeveloperMessage:       history.hasDeveloperMessage,
 			UserMessageCount:          history.userMessageCount,
@@ -50,6 +66,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			LastUserAfterToolResult:   history.lastUserAfterToolResult,
 		},
 		requestFacts: classification.RequestFacts{
+			JailbreakInput:         history.jailbreakInput,
 			Metadata:               cloneRoutingMetadata(history.metadata),
 			ContextTokenFloor:      history.contextTokenFloor,
 			ContextTextBytes:       history.contextTextBytes,
@@ -77,32 +94,34 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		return input
 	}
 
-	input.compressedText, input.skipCompressionSignals = r.compressSignalEvaluationText(input.evaluationText)
+	input.compressedText, input.skipCompressionSignals, input.compression = r.compressSignalEvaluationText(input.evaluationText)
 	return input
 }
 
-func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool) {
+func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool, promptCompressionRun) {
 	compressedText := evaluationText
 	var skipCompressionSignals map[string]bool
 
 	if !r.Config.PromptCompression.Enabled || r.Config.PromptCompression.MaxTokens <= 0 {
-		return compressedText, skipCompressionSignals
+		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedDisabled}
 	}
 
 	cfg := buildCompressionConfig(r.Config.PromptCompression)
 	origTokens := promptcompression.CountTokensApprox(evaluationText)
 	if r.Config.PromptCompression.MinLength > 0 && len(evaluationText) <= r.Config.PromptCompression.MinLength {
 		logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), r.Config.PromptCompression.MinLength)
-		return compressedText, skipCompressionSignals
+		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedMinLength}
 	}
 	if origTokens <= cfg.MaxTokens {
-		return compressedText, skipCompressionSignals
+		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedMaxTokens}
 	}
 
+	started := time.Now()
 	result := promptcompression.Compress(evaluationText, cfg)
+	run := promptCompressionRun{outcome: metrics.PromptCompressionCompressed, elapsed: time.Since(started)}
 	logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
 		result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
-	return result.Compressed, r.Config.PromptCompression.SkipSignalsSet()
+	return result.Compressed, r.Config.PromptCompression.SkipSignalsSet(), run
 }
 
 func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals *classification.SignalResults) {
@@ -114,6 +133,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedReask = signals.MatchedReaskRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
+	ctx.VSRMatchedAction = signals.MatchedActionRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedStructure = signals.MatchedStructureRules
@@ -121,6 +141,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
+	ctx.VSRMatchedSafety = signals.MatchedSafetyRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
 	ctx.VSRMatchedKB = signals.MatchedKBRules
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
@@ -128,18 +149,24 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedMetadata = signals.MatchedMetadataRules
 	ctx.VSRMatchedClassifier = signals.MatchedClassifierRules
 	ctx.VSRMatchedInputModality = signals.MatchedInputModalityRules
+	ctx.VSRMatchedDecisionModel = signals.MatchedDecisionRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
+	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
 
-	if signals.JailbreakDetected {
+	if signals.JailbreakDetected || signals.JailbreakScoreAvailable {
 		ctx.JailbreakDetected = signals.JailbreakDetected
 		ctx.JailbreakType = signals.JailbreakType
 		ctx.JailbreakConfidence = signals.JailbreakConfidence
+		ctx.JailbreakScoreAvailable = signals.JailbreakScoreAvailable
+		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
+	ctx.PIIContentVerified = signals.PIIContentVerified
+	ctx.PIIEvidence = append([]classification.PrivacyEvidence(nil), signals.PIIEvidence...)
 	if signals.PIIDetected {
 		ctx.PIIDetected = signals.PIIDetected
 		ctx.PIIEntities = signals.PIIEntities
@@ -188,6 +215,17 @@ func cloneReplayStringMap(values map[string]string) map[string]string {
 	return cloned
 }
 
+func cloneReplayBoolMap(values map[string]bool) map[string]bool {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]bool, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules := []string{}
 	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
@@ -204,6 +242,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedSafetyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)
@@ -211,6 +250,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedMetadataRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedClassifierRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedInputModalityRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedDecisionRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

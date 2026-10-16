@@ -26,22 +26,41 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 	t.Run("keeps config editing available when only the package store is read-only", testSettingsStoreReadonly)
 }
 
-func TestSettingsHandlerReportsFrozenEvaluationAvailability(t *testing.T) {
+func TestSettingsHandlerReportsSRBenchConfiguration(t *testing.T) {
 	t.Parallel()
 	authContext := adminSettingsAuthContext("evaluation-admin")
 
 	available := requestSettings(t, &config.Config{
-		EvaluationAvailable: true,
+		SRBenchAvailable: true,
 	}, authContext)
-	if !available.EvaluationAvailable || available.EvaluationUnavailableReason != "" {
-		t.Fatalf("available Evaluation response = %#v", available)
+	if !available.SRBenchAvailable || available.SRBenchUnavailableReason != "" {
+		t.Fatalf("available sr-bench response = %#v", available)
 	}
 
 	unavailable := requestSettings(t, &config.Config{
-		EvaluationUnavailableReason: "Evaluation could not be initialized.",
+		SRBenchUnavailableReason: "sr-bench service is not configured.",
 	}, authContext)
-	if unavailable.EvaluationAvailable || unavailable.EvaluationUnavailableReason != "Evaluation could not be initialized." {
-		t.Fatalf("unavailable Evaluation response = %#v", unavailable)
+	if unavailable.SRBenchAvailable || unavailable.SRBenchUnavailableReason != "sr-bench service is not configured." {
+		t.Fatalf("unavailable sr-bench response = %#v", unavailable)
+	}
+}
+
+func TestSettingsHandlerReportsMLPipelineConfiguration(t *testing.T) {
+	t.Parallel()
+	authContext := adminSettingsAuthContext("ml-pipeline-admin")
+
+	available := requestSettings(t, &config.Config{
+		MLPipelineAvailable: true,
+	}, authContext)
+	if !available.MLPipelineAvailable || available.MLPipelineUnavailableReason != "" {
+		t.Fatalf("available ML pipeline response = %#v", available)
+	}
+
+	unavailable := requestSettings(t, &config.Config{
+		MLPipelineUnavailableReason: "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true.",
+	}, authContext)
+	if unavailable.MLPipelineAvailable || unavailable.MLPipelineUnavailableReason == "" {
+		t.Fatalf("unavailable ML pipeline response = %#v", unavailable)
 	}
 }
 

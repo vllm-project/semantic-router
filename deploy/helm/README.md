@@ -23,6 +23,13 @@ helm upgrade --install semantic-router ./deploy/helm/semantic-router \
   --create-namespace
 ```
 
+Every image the chart deploys defaults to the chart's `appVersion`. A checkout
+of `main` deploys the development images (`latest`), the same images as the
+published `0.0.0-latest` chart; a release tag's chart deploys that release's
+images. In production, install a published release chart with `--version`, as
+the [upgrade runbook](../../website/docs/installation/upgrade-rollback.md)
+shows, and pin a digest where you need immutability.
+
 The CLI translates canonical Router YAML into chart values and invokes Helm.
 Helm users can instead set `configOverride` to a complete canonical Router
 document. Do not maintain a second, hand-converted configuration.
@@ -65,6 +72,38 @@ release rather than using Helm templating to invent a second schema.
 Create a separate values file for environment-specific endpoints, images,
 resources, Secret references, storage classes, and ingress. Avoid editing
 `values.yaml` for one cluster.
+
+## Grafana Live behind an external proxy
+
+If a proxy forwards an internal `Host` while the browser sends the public
+Dashboard `Origin`, Grafana Live can reject `/embedded/grafana/api/live/ws`
+even when panels load. Configure the trusted **Dashboard origin**, not the
+internal Grafana service URL, in your release values:
+
+```yaml
+dashboard:
+  enabled: true
+dependencies:
+  observability:
+    grafana:
+      enabled: true
+grafana:
+  grafana.ini:
+    live:
+      allowed_origins: "https://dashboard.example.com,https://dashboard.example.net:8443"
+```
+
+This uses the Grafana subchart's native configuration; `grafana.ini` is one
+literal YAML key. Origins include the scheme, hostname, and optional port,
+but no path or trailing slash. Match the browser's actual address, including
+`http://127.0.0.1:8700` when needed for a local port-forward. An empty value
+preserves Grafana's default origin checks. Do not set `*` to bypass validation.
+This setting does not replace authentication or configure WebSocket forwarding
+in your ingress/proxy.
+
+Render with Grafana enabled and check the ConfigMap's `grafana.ini` before
+upgrading. After rollout, verify that the configured origin can establish a
+Live WebSocket and that an unrelated origin is rejected.
 
 ## Credentials
 
@@ -115,6 +154,14 @@ make helm-safety-validate HELM_REPO_UPDATE=false
 `helm-ci-validate` resolves dependencies and renders the maintained profiles.
 `helm-safety-validate` checks value-schema and local-state safety guards, such
 as unsupported shared use of replica-local learning state.
+
+The Grafana Live render tests require `helm`, `kubectl` (including Kustomize),
+and PyYAML. They run in `helm-ci-validate` and `validate-chart.sh`, without
+accessing a cluster. After resolving chart dependencies, run them directly:
+
+```bash
+.venv-agent/bin/python -m unittest discover -s deploy/helm -p test_grafana_live.py -v
+```
 
 When a chart value changes, update `values.yaml`, `values.schema.json`, the
 affected templates, and the generated

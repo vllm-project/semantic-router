@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func openProtocolCodecProviderSession(
@@ -21,11 +22,11 @@ func openProtocolCodecProviderSession(
 	switch backendFormat {
 	case "openai.chat.v1", "openai.responses.v1":
 		backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
-			Namespace: "default", Name: "mock-vllm", ServicePort: "8000",
+			Namespace: "default", Name: "provider-mocker", ServicePort: "8000",
 		}
 	case "anthropic.messages.v1":
 		backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
-			Namespace: "anthropic-backend-system", Name: "anthropic-backend-qwen", ServicePort: "8080",
+			Namespace: "provider-protocols-system", Name: "provider-mocker", ServicePort: "8000",
 		}
 	default:
 		return nil, fmt.Errorf("provider simulator is not registered for backend format %q", backendFormat)

@@ -20,12 +20,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -90,7 +92,7 @@ type RouterDCSelector struct {
 	affinityMu     sync.RWMutex
 
 	// Embedding provider function (injected dependency)
-	embeddingFunc func(text string) ([]float32, error)
+	embeddingFunc func(context.Context, string) ([]float32, error)
 }
 
 // NewRouterDCSelector creates a new RouterDC-based selector
@@ -112,6 +114,16 @@ func (r *RouterDCSelector) Method() SelectionMethod {
 
 // SetEmbeddingFunc sets the function used to compute embeddings
 func (r *RouterDCSelector) SetEmbeddingFunc(f func(text string) ([]float32, error)) {
+	if f == nil {
+		r.embeddingFunc = nil
+		return
+	}
+	r.setContextEmbeddingFunc(func(_ context.Context, text string) ([]float32, error) {
+		return f(text)
+	})
+}
+
+func (r *RouterDCSelector) setContextEmbeddingFunc(f func(context.Context, string) ([]float32, error)) {
 	r.embeddingFunc = f
 }
 
@@ -126,7 +138,7 @@ func (r *RouterDCSelector) InitializeModelEmbeddings(modelDescriptions map[strin
 	defer r.embeddingMu.Unlock()
 
 	for model, description := range modelDescriptions {
-		embedding, err := r.embeddingFunc(description)
+		embedding, err := r.embeddingFunc(context.Background(), description)
 		if err != nil {
 			logging.Warnf("[RouterDC] Failed to embed model %s description: %v", model, err)
 			continue
@@ -173,13 +185,19 @@ func (r *RouterDCSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 		}
 
 		// Compute embedding for the model description
-		embedding, err := r.embeddingFunc(descText)
+		vector, err := r.embeddingFunc(context.Background(), descText)
+		if errors.Is(err, embedding.ErrModelNotPrepared) {
+			// A generation prepares this embedding model only for decisions that
+			// route with router_dc (or hybrid), so none of its decisions use it.
+			logging.Debugf("[RouterDC] Embedding model not prepared, skipping model descriptions: %v", err)
+			break
+		}
 		if err != nil {
 			logging.Warnf("[RouterDC] Failed to embed model %s: %v", model, err)
 			continue
 		}
 
-		r.modelEmbeddings[model] = embedding
+		r.modelEmbeddings[model] = vector
 		modelsWithDescriptions++
 		logging.ComponentDebugEvent("selection", "router_dc_model_embedding_initialized", map[string]interface{}{
 			"model": model,
@@ -258,11 +276,20 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		if r.embeddingFunc == nil {
 			return r.defaultSelection(selCtx, "no embedding function available")
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 
 		var err error
-		queryEmbedding, err = r.embeddingFunc(selCtx.Query)
+		queryEmbedding, err = r.embeddingFunc(ctx, selCtx.Query)
 		if err != nil {
+			if requestErr := ctx.Err(); requestErr != nil {
+				return nil, requestErr
+			}
 			return r.defaultSelection(selCtx, fmt.Sprintf("embedding error: %v", err))
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -320,13 +347,14 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		bestModel.Model, bestScore, confidence)
 
 	return &SelectionResult{
-		SelectedModel: bestModel.Model,
-		LoRAName:      bestModel.LoRAName,
-		Score:         softmaxScores[bestModel.Model],
-		Confidence:    confidence,
-		Method:        MethodRouterDC,
-		Reasoning:     reasoning,
-		AllScores:     softmaxScores,
+		SelectedModel:     bestModel.Model,
+		SelectedCandidate: bestModel,
+		LoRAName:          bestModel.LoRAName,
+		Score:             softmaxScores[bestModel.Model],
+		Confidence:        confidence,
+		Method:            MethodRouterDC,
+		Reasoning:         reasoning,
+		AllScores:         softmaxScores,
 	}, nil
 }
 
@@ -464,13 +492,14 @@ func (r *RouterDCSelector) defaultSelection(selCtx *SelectionContext, reason str
 	logging.Warnf("[RouterDC] Default candidate selection: %s, using first candidate %s", reason, firstModel.Model)
 
 	return &SelectionResult{
-		SelectedModel: firstModel.Model,
-		LoRAName:      firstModel.LoRAName,
-		Score:         allScores[firstModel.Model],
-		Confidence:    0.5,
-		Method:        MethodRouterDC,
-		Reasoning:     fmt.Sprintf("Default candidate selection: %s", reason),
-		AllScores:     allScores,
+		SelectedModel:     firstModel.Model,
+		SelectedCandidate: firstModel,
+		LoRAName:          firstModel.LoRAName,
+		Score:             allScores[firstModel.Model],
+		Confidence:        0.5,
+		Method:            MethodRouterDC,
+		Reasoning:         fmt.Sprintf("Default candidate selection: %s", reason),
+		AllScores:         allScores,
 	}, nil
 }
 

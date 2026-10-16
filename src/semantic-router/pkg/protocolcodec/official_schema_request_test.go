@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -35,6 +36,70 @@ func TestOfficialAnthropicContentVariantsRejectCrossVariantFields(t *testing.T) 
 	}`)
 	_, _, _, err = engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, response)
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_response_content")
+}
+
+func TestOfficialAnthropicToolUseCallerIsAcceptedAsProvenance(t *testing.T) {
+	engine := NewBuiltinEngine()
+
+	t.Run("provider response", func(t *testing.T) {
+		body := []byte(`{
+			"id":"msg_1","type":"message","role":"assistant","model":"m",
+			"content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"caller":{"type":"direct"}}],
+			"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}
+		}`)
+		response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+		if err != nil {
+			t.Fatalf("tool_use caller rejected on provider response: %v", err)
+		}
+		if len(response.Output) != 1 || len(response.Output[0].Content) != 1 ||
+			response.Output[0].Content[0].ToolCall == nil ||
+			response.Output[0].Content[0].ToolCall.ID != "call_1" ||
+			response.Output[0].Content[0].ToolCall.Name != "lookup" {
+			t.Fatalf("decoded tool call changed: %+v", response.Output)
+		}
+		roundTrip, err := engine.TranslateResponse(
+			llmprotocol.AnthropicMessagesV1,
+			llmprotocol.AnthropicMessagesV1,
+			body,
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("same-format tool response translation failed: %v", err)
+		}
+		if !bytes.Equal(roundTrip.Body, body) {
+			t.Fatalf("same-format response did not preserve caller: %s", roundTrip.Body)
+		}
+	})
+
+	t.Run("request history", func(t *testing.T) {
+		body := []byte(`{
+			"model":"m","max_tokens":16,"messages":[
+				{"role":"user","content":"What is the weather?"},
+				{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"caller":{"type":"direct"}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"sunny"}]}
+			]
+		}`)
+		request, _, _, err := engine.DecodeRequestForMutation(llmprotocol.AnthropicMessagesV1, body)
+		if err != nil {
+			t.Fatalf("tool_use caller rejected in request history: %v", err)
+		}
+		if len(request.Messages) != 3 || len(request.Messages[1].Content) != 1 ||
+			request.Messages[1].Content[0].ToolCall == nil ||
+			request.Messages[1].Content[0].ToolCall.ID != "call_1" ||
+			request.Messages[1].Content[0].ToolCall.Name != "lookup" {
+			t.Fatalf("decoded request tool call changed: %+v", request.Messages)
+		}
+	})
+}
+
+func TestOfficialAnthropicToolUseCallerRejectsProgrammaticInvocation(t *testing.T) {
+	body := []byte(`{
+		"id":"msg_1","type":"message","role":"assistant","model":"m",
+		"content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{},"caller":{"type":"code_execution_20260120","tool_id":"srvtoolu_1"}}],
+		"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}
+	}`)
+	_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_content_caller")
 }
 
 func TestOfficialAnthropicMediaSourceUnionIsClosed(t *testing.T) {
@@ -206,16 +271,16 @@ func TestOfficialUnsupportedRequestFieldsFailWithTypedErrors(t *testing.T) {
 			base:   map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": "hello"}}},
 			fields: fields(
 				"audio", "function_call", "functions", "logit_bias", "logprobs", "modalities", "moderation",
-				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
-				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
+				"prediction", "prompt_cache_options", "prompt_cache_retention",
+				"safety_identifier", "service_tier", "top_logprobs", "web_search_options",
 			),
 		},
 		{
 			format: llmprotocol.OpenAIResponsesV1,
 			base:   map[string]any{"model": "m", "input": "hello"},
 			fields: fields(
-				"background", "context_management", "include", "max_tool_calls", "moderation", "prompt",
-				"prompt_cache_key", "prompt_cache_options", "prompt_cache_retention", "safety_identifier",
+				"background", "context_management", "max_tool_calls", "moderation", "prompt",
+				"prompt_cache_options", "prompt_cache_retention", "safety_identifier",
 				"service_tier", "top_logprobs",
 			),
 		},

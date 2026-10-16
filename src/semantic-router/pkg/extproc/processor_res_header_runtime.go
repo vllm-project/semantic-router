@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -29,13 +30,16 @@ func (r *OpenAIRouter) handleLooperResponseHeaders(
 		return nil
 	}
 
-	statusCode := 200
-	if v != nil && v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
-		statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
+	outcome := evaluateResponseHeaderOutcome(v, ctx)
+	ctx.UpstreamStatusCode = outcome.statusCode
+	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx.IsStreamingResponse)
+	// Internal hops still own a provider transport boundary. Preserve status
+	// and streaming mode so their response can be translated back to Chat.
+	var mutation *ext_proc.HeaderMutation
+	if requiresClientResponseRewrite(ctx) || ctx.IsStreamingResponse {
+		mutation = &ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}}
 	}
-
-	r.updateRouterReplayStatus(ctx, statusCode, false)
-	return buildResponseHeadersContinueResponse(nil, false)
+	return buildResponseHeadersContinueResponse(mutation, ctx.IsStreamingResponse)
 }
 
 func evaluateResponseHeaderOutcome(
@@ -67,7 +71,7 @@ func recordResponseHeaderErrorMetrics(ctx *RequestContext, statusCode int) {
 	}
 }
 
-func finishUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutcome) {
+func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutcome) {
 	if ctx == nil || ctx.UpstreamSpan == nil {
 		return
 	}
@@ -76,9 +80,6 @@ func finishUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutco
 	if !outcome.isSuccessful && outcome.statusCode != 0 {
 		ctx.UpstreamSpan.SetStatus(codes.Error, "upstream request failed")
 	}
-
-	ctx.UpstreamSpan.End()
-	ctx.UpstreamSpan = nil
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
@@ -95,7 +96,7 @@ func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
@@ -110,6 +111,8 @@ func buildResponseHeadersContinueResponse(
 	headerMutation *ext_proc.HeaderMutation,
 	streaming bool,
 ) *ext_proc.ProcessingResponse {
+	headerMutation = mergeHeaderMutations(headerMutation,
+		&ext_proc.HeaderMutation{RemoveHeaders: []string{headers.VSRUpstreamHost}})
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HeadersResponse{
@@ -132,18 +135,22 @@ func buildResponseStreamingMutation(
 	ctx *RequestContext,
 	outcome responseHeaderOutcome,
 ) *ext_proc.HeaderMutation {
-	if !outcome.isSuccessful || !isResponseAPIStreamRequest(ctx) {
+	if !outcome.isSuccessful || ctx == nil || !ctx.IsStreamingResponse {
 		return nil
 	}
-	return &ext_proc.HeaderMutation{
-		SetHeaders: []*core.HeaderValueOption{{
+	// Streaming headers reach the client before body translation or usage
+	// filtering can determine its final size, including same-wire Chat. A
+	// provider's length describes its own bytes and cannot frame that output.
+	mutation := &ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}}
+	if isResponseAPIStreamRequest(ctx) {
+		mutation.SetHeaders = []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
 				Key: "content-type", RawValue: []byte("text/event-stream; charset=utf-8"),
 			},
 			AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
-		}},
-		RemoveHeaders: []string{"content-length"},
+		}}
 	}
+	return mutation
 }
 
 func isResponseAPIStreamRequest(ctx *RequestContext) bool {

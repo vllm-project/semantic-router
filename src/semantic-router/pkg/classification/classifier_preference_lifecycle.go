@@ -13,8 +13,11 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 	if len(c.Config.PreferenceRules) == 0 {
 		return false
 	}
+	if c.Config.PreferenceUsesDecisionTask() && c.models != nil && c.Config.DecisionModel != "" {
+		return true
+	}
 
-	if c.Config.PreferenceModel.ContrastiveEnabled() {
+	if c.Config.PreferenceUsesPrototypes() {
 		return true
 	}
 
@@ -24,14 +27,26 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 		externalCfg.ModelName != ""
 }
 
-// initializePreferenceClassifier initializes the preference classifier with external LLM.
+// initializePreferenceClassifier prepares the selected preference execution contract.
 func (c *Classifier) initializePreferenceClassifier() error {
 	if !c.IsPreferenceClassifierEnabled() {
 		return nil
 	}
+	if c.Config.PreferenceUsesDecisionTask() {
+		judgment, err := prepareDecisionPreference(c.models, c.Config.PreferenceRules)
+		if err != nil {
+			return err
+		}
+		if judgment != nil {
+			c.preferenceClassifier = &PreferenceClassifier{judgment: judgment, preferenceRules: c.Config.PreferenceRules}
+			return nil
+		}
+	}
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
 	preferenceCfg := c.Config.PreferenceModel.WithDefaults()
+	usePrototypes := c.Config.PreferenceUsesPrototypes()
+	preferenceCfg.UseContrastive = &usePrototypes
 	provider, err := c.preferenceEmbeddingProvider()
 	if err != nil {
 		return err
@@ -47,14 +62,17 @@ func (c *Classifier) initializePreferenceClassifier() error {
 }
 
 func (c *Classifier) preferenceEmbeddingProvider() (embedding.Provider, error) {
-	if c == nil || c.Config == nil || !c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if c == nil || c.Config == nil || !c.Config.PreferenceUsesPrototypes() {
 		return nil, nil
 	}
-	provider, err := embedding.NewProvider(c.Config.EmbeddingModels, embedding.ProviderOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create preference embedding provider: %w", err)
+	model := c.Config.PreferenceModel.EmbeddingModel
+	if model == "" {
+		model = "mmbert"
 	}
-	return provider, nil
+	if c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		model = ""
+	}
+	return c.EmbeddingForModel(model, 0, 0)
 }
 
 func logPreferenceClassifierInitialized(

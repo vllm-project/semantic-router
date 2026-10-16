@@ -9,14 +9,21 @@ from pathlib import Path
 
 import yaml
 
+from cli.commands.validate import collect_config_errors
 from cli.config_generator import generate_envoy_config_from_user_config
-from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
+from cli.config_migration_notes import MigrationNotes
 from cli.config_schema import schema_document
 from cli.config_schema.views import parse_surface_selector, schema_view
-from cli.parser import ConfigParseError, load_config_file, parse_user_config
+from cli.config_yaml import safe_load_router_config
+from cli.parser import (
+    ConfigParseError,
+    load_config_file,
+    parse_user_config,
+    parse_user_config_data,
+)
 from cli.router_management_client import RouterManagementClient
-from cli.terminal import echo, fields, heading, success
+from cli.terminal import echo, fields, heading, success, warning
 from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
@@ -24,6 +31,36 @@ from cli.validator import (
 )
 
 log = get_logger(__name__)
+CONFIG_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[1] / "templates" / "config.template.yaml"
+)
+
+
+def init_config_command(
+    output_path: str = "config.yaml",
+    *,
+    force: bool = False,
+) -> Path:
+    """Write the packaged minimal canonical configuration template."""
+
+    destination = Path(output_path)
+    if destination.exists():
+        if destination.is_dir():
+            raise ValueError(f"Config output path is a directory: {destination}")
+        if not force:
+            raise ValueError(
+                f"Config file already exists: {destination}. Use --force to overwrite it."
+            )
+    try:
+        template = CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError("packaged config template is unavailable") from exc
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(template, encoding="utf-8")
+
+    success("Configuration template created")
+    fields((("Output", destination),))
+    return destination
 
 
 def config_schema_command(
@@ -32,6 +69,7 @@ def config_schema_command(
     full: bool = False,
     section: str | None = None,
     surface: str | None = None,
+    expanded: bool = False,
     timeout: float = 15,
     token_env: str = "VSR_MGMT_TOKEN",
 ) -> None:
@@ -40,6 +78,8 @@ def config_schema_command(
     selected = sum((full, section is not None, surface is not None))
     if selected > 1:
         raise ValueError("use only one of --full, --section, or --surface")
+    if expanded and section is None:
+        raise ValueError("--expanded requires --section")
     view = (
         "full" if full else "section" if section else "surface" if surface else "index"
     )
@@ -60,6 +100,7 @@ def config_schema_command(
                 path=section,
                 surface_kind=surface_kind,
                 surface_name=surface_name,
+                expanded=expanded,
             )
             .payload
         )
@@ -72,6 +113,7 @@ def config_schema_command(
         path=section,
         surface_kind=surface_kind,
         surface_name=surface_name,
+        expanded=expanded,
     )
     echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
 
@@ -161,7 +203,9 @@ def migrate_config_command(
         log.error(f"Failed to read configuration: {e}")
         sys.exit(1)
 
-    migrated = migrate_config_data(data)
+    notes = MigrationNotes()
+    migrated = migrate_config_data(data, notes)
+    rendered = yaml.safe_dump(migrated, sort_keys=False, allow_unicode=True)
 
     destination = (
         Path(output_path)
@@ -173,11 +217,10 @@ def migrate_config_command(
         log.error("Use --force to overwrite the destination")
         sys.exit(1)
 
+    _validate_migrated_config(rendered, config_path)
+
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(
-        yaml.safe_dump(migrated, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    destination.write_text(rendered, encoding="utf-8")
 
     success("Configuration migrated")
     heading("Files")
@@ -187,20 +230,41 @@ def migrate_config_command(
             ("Output", destination),
         )
     )
+    _print_migration_notes(notes)
     return destination
 
 
-def import_config_from_source_command(
-    from_type: str,
-    source_path: str | None = None,
-    target_path: str = "config.yaml",
-    force: bool = False,
-):
-    """Import a supported external config source into canonical v0.3 YAML."""
+def _print_migration_notes(notes: MigrationNotes) -> None:
+    changes = [note for note in notes if not note.action_required]
+    actions = [note for note in notes if note.action_required]
+    if changes:
+        heading("Changes to review")
+        for note in changes:
+            echo(f"  {note.path}")
+            echo(f"      {note.message}")
+    for note in actions:
+        warning(f"{note.path}: {note.message}")
 
-    return run_import_config_command(
-        from_type=from_type,
-        source_path=source_path,
-        target_path=target_path,
-        force=force,
-    )
+
+def _validate_migrated_config(rendered: str, config_path: str) -> None:
+    """Hold migrated output to the `config validate` standard before writing.
+
+    The rendered YAML is reloaded so the checks see exactly what would land on
+    disk. Fields migration carries over without a canonical form fail here with
+    their field paths instead of at serve time.
+    """
+
+    try:
+        user_config = parse_user_config_data(
+            safe_load_router_config(rendered), config_path, log_summary=False
+        )
+    except ConfigParseError as e:
+        log.error(f"Migrated configuration is not canonical: {e}")
+        log.error("No output was written")
+        sys.exit(1)
+
+    errors = collect_config_errors(user_config)
+    if errors:
+        print_validation_errors(errors)
+        log.error("No output was written")
+        sys.exit(1)

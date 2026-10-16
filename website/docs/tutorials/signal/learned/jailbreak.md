@@ -52,6 +52,105 @@ routing:
 
 Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
 
+### Request content and history
+
+For a routed request, Guard scores the consecutive user and tool messages at
+the end of the request, stopping at an assistant, system or developer message.
+This keeps all textual tool results together when a protocol represents them
+inside one user message. With
+`include_history: true`, it also scores earlier user and tool text. System and
+developer instructions and assistant replies are not independently scored as
+attack evidence. This narrows earlier versions' history behavior, which also
+scanned those trusted roles.
+
+If this current group has no eligible text, Guard does not substitute an older
+user turn or concatenate trusted instructions. Eligible earlier content is
+still inspected when `include_history` is enabled. No eligible text means no
+classification evidence, not a guarantee that the request is safe.
+
+This projection preserves complete text pieces and does not use the general
+routing text compressor. Each piece is scored separately; any matching piece
+can match the rule. It does not infer authority relationships across messages
+or inspect images, raw tool arguments, or content retrieved after routing.
+Message roles are a protocol boundary, not authenticated identity. The direct
+text detection API and response-direction scans retain their existing input
+contract; callers supplying flat text remain responsible for its scope.
+
+### Token windows for a local classifier
+
+The default prompt guard, Vela 2.0 0.3B, reads each text whole, up to its
+8,192-token input, and takes no window
+([Choose a model](../../../model-runtime/choose-a-model.md#vela-20)). When the
+module runs Vela 1.0 Guard, it scans each text piece in 512-token windows with
+255 content tokens of overlap, within that model's document budget: 32,768
+tokens including special tokens. This applies only when no recipe model binding
+or `window` is specified and `max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
+a long piece requires multiple forwards. Preparation records the resolved window and document budget
+and checks the loaded model's actual capacity. An incompatible custom artifact
+fails preparation, and a piece exceeding the document budget produces an
+input-limit error.
+
+Explicit model bindings, document budgets, window policies, and remote backends
+keep their configured behavior. For example, a qualified 8K deployment with
+`input.overflow: reject` continues to process one whole piece within that budget.
+
+For a checkpoint evaluated with overlapping token windows, configure the same
+window policy in the prompt-guard module:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        max_sequence_length: 32768
+        window:
+          size: 128
+          overlap: 63
+```
+
+`size` includes the tokenizer's special tokens; `overlap` counts content
+tokens. For a tokenizer with two special tokens, this example scans 126 content
+tokens at a time with a stride of 63. The runtime plans windows from the
+complete input's token IDs without decoding and re-tokenizing window text,
+and resets positions in each window.
+The total input must fit `max_sequence_length`; overflow is an inference
+error, never an uninspected suffix.
+
+For an explicit local binding, the deployment's `input.max_tokens` supplies the
+complete-document budget. With window scanning, that budget can exceed the
+checkpoint's single-forward capacity: `input: {max_tokens: 65536, overflow: window}`
+and `window: {size: 32768, overlap: 256}` scan up to 64K tokens using forwards of
+at most 32K tokens. Preparation checks each window against the loaded checkpoint
+and graph; a 32K document budget alone does not establish 32K forward support.
+All counts use the Guard tokenizer, including its special tokens. Explicit
+non-window `reject` and `truncate` deployments keep their existing input policy.
+
+Request rules, the detection API, and response scans use the same maximum
+positive-label risk across windows. For multiple positive labels, the runtime
+sums their probabilities within each window before choosing the riskiest
+window. It retains that window's complete distribution for labels and
+confidence. Contrastive rules keep their existing text-window policy.
+
+Outside the implicit default, omitting `window` retains whole-input inference
+or the configured legacy scan. Window sizes and thresholds need separate
+checkpoint evaluation; scanning all tokens does not establish understanding of
+distant context. Quoted attacks and instructions whose meaning depends on
+another window require separate evaluation. Model bindings to a
+[model runtime](../../../model-runtime/guides/safety.md) deployment can also
+select token windows; the model must support the requested window size.
+
+A provider result declaring truncated or incompletely processed input is an
+unscanned input, as is an input over the guard's input under `reject` or over
+its [scan budget](../../../model-runtime/reference.md#long-inputs). Request
+rules, the text detection APIs, and response scans cannot use its
+probabilities to report a clean complete input: a rule matches it with the
+type `unscanned`, whatever `on_error` says, so padding a prompt cannot carry an
+attack past the guard. So does a scan that misses the signals' deadline
+(`global.model_catalog.signal_timeout_ms`). Set `prompt_guard.on_unscanned:
+allow` to let such content follow `on_error` instead. A detection on another
+completely scored piece still counts as a detection; backend failures remain
+subject to the configured `on_error` and response-rule policies.
+
 ### Direction
 
 `direction` selects what a rule scores. The default, `request`, scores the

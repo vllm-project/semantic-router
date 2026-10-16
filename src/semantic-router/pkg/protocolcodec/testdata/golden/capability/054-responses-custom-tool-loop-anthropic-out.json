@@ -1,0 +1,13 @@
+{
+  "status": "error",
+  "error": {
+    "category": "unsupported_feature",
+    "code": "unsupported_capability"
+  },
+  "diagnostics": [
+    {
+      "field": "text.verbosity",
+      "action": "dropped"
+    }
+  ]
+}

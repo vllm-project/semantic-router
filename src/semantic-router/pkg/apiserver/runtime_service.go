@@ -1,9 +1,10 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -24,22 +25,18 @@ type batchClassificationService interface {
 type auxiliaryClassificationService interface {
 	ClassifyFactCheck(ctx context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error)
 	ClassifyUserFeedback(ctx context.Context, req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error)
-	ClassifyNLI(ctx context.Context, req services.NLIRequest) (*services.NLIResponse, error)
-	IsNLIReady() bool
 	HasClassifier() bool
 }
 
 type classificationReadinessService interface {
 	HasFactCheckClassifier() bool
 	HasHallucinationDetector() bool
-	HasHallucinationExplainer() bool
 	HasFeedbackDetector() bool
 }
 
 type classificationInventoryReadinessService interface {
 	HasAnyFactCheckClassifier() bool
 	HasAnyHallucinationDetector() bool
-	HasAnyHallucinationExplainer() bool
 	HasAnyFeedbackDetector() bool
 }
 
@@ -79,20 +76,68 @@ func newLiveClassificationService(
 // classifier cannot be closed underneath an in-flight API call.
 func (s *liveClassificationService) acquire() (classificationService, func()) {
 	if s != nil && s.acquirer != nil {
-		if svc, release, ok := s.acquirer(); ok && svc != nil {
-			return svc, release
+		if svc, release, ok := s.acquirer(); ok {
+			if !isNilClassificationService(svc) {
+				return svc, release
+			}
+			if release != nil {
+				release()
+			}
 		}
+		if !isNilClassificationService(s.fallback) {
+			return s.fallback, func() {}
+		}
+		return services.NewPlaceholderClassificationService(), func() {}
 	}
 	return s.current(), func() {}
 }
 
+func (s *ClassificationAPIServer) acquireClassificationService() (classificationService, func()) {
+	if s != nil {
+		if live, ok := s.classificationSvc.(*liveClassificationService); ok {
+			return live.acquire()
+		}
+		if !isNilClassificationService(s.classificationSvc) {
+			return s.classificationSvc, func() {}
+		}
+	}
+	return services.NewPlaceholderClassificationService(), func() {}
+}
+
+func (s *ClassificationAPIServer) acquireClassificationRuntime() (
+	*config.RouterConfig,
+	classificationService,
+	func(),
+) {
+	if s != nil && s.runtimeRegistry != nil {
+		if cfg, service, release, ok := s.runtimeRegistry.AcquireClassificationRuntime(); ok {
+			return cfg, service, release
+		}
+	}
+	service, release := s.acquireClassificationService()
+	return s.currentConfig(), service, release
+}
+
+// isNilClassificationService reports whether a service value is nil,
+// including a typed nil pointer held in a non-nil interface. A resolver
+// that constructs its service conditionally can return such a typed nil
+// when construction fails; treating it as present panics on the nil
+// receiver at the first field access (the nil check itself dereferences).
+func isNilClassificationService(svc classificationService) bool {
+	if svc == nil {
+		return true
+	}
+	value := reflect.ValueOf(svc)
+	return value.Kind() == reflect.Pointer && value.IsNil()
+}
+
 func (s *liveClassificationService) current() classificationService {
 	if s != nil && s.resolver != nil {
-		if svc := s.resolver(); svc != nil {
+		if svc := s.resolver(); !isNilClassificationService(svc) {
 			return svc
 		}
 	}
-	if s != nil && s.fallback != nil {
+	if s != nil && !isNilClassificationService(s.fallback) {
 		return s.fallback
 	}
 	return services.NewPlaceholderClassificationService()
@@ -146,18 +191,6 @@ func (s *liveClassificationService) ClassifyUserFeedback(
 	return svc.ClassifyUserFeedback(ctx, req)
 }
 
-func (s *liveClassificationService) ClassifyNLI(ctx context.Context, req services.NLIRequest) (*services.NLIResponse, error) {
-	svc, release := s.acquire()
-	defer release()
-	return svc.ClassifyNLI(ctx, req)
-}
-
-func (s *liveClassificationService) IsNLIReady() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.IsNLIReady()
-}
-
 func (s *liveClassificationService) HasUnifiedClassifier() bool {
 	svc, release := s.acquire()
 	defer release()
@@ -182,12 +215,6 @@ func (s *liveClassificationService) HasHallucinationDetector() bool {
 	return svc.HasHallucinationDetector()
 }
 
-func (s *liveClassificationService) HasHallucinationExplainer() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.HasHallucinationExplainer()
-}
-
 func (s *liveClassificationService) HasFeedbackDetector() bool {
 	svc, release := s.acquire()
 	defer release()
@@ -210,15 +237,6 @@ func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
 		return inventory.HasAnyHallucinationDetector()
 	}
 	return current.HasHallucinationDetector()
-}
-
-func (s *liveClassificationService) HasAnyHallucinationExplainer() bool {
-	current, release := s.acquire()
-	defer release()
-	if inventory, ok := current.(classificationInventoryReadinessService); ok {
-		return inventory.HasAnyHallucinationExplainer()
-	}
-	return current.HasHallucinationExplainer()
 }
 
 func (s *liveClassificationService) HasAnyFeedbackDetector() bool {

@@ -1,0 +1,79 @@
+.detail {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.section {
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+.section h4 {
+  margin: 0 0 1rem;
+}
+.budgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+.fields > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fields dt {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 0.4rem;
+}
+.fields dd {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.fields .fields {
+  grid-template-columns: 1fr;
+}
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+  font-family: inherit;
+}
+.entries {
+  list-style: none;
+  display: grid;
+  gap: 0.8rem;
+  padding: 0;
+  margin: 1rem 0;
+}
+.entries > li {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.entryHeading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 13px;
+}
+.entryHeading span {
+  color: var(--text-secondary);
+}
+.toolHeading span {
+  margin-left: 1rem;
+  font-weight: normal;
+  color: var(--text-secondary);
+}

@@ -1,5 +1,3 @@
-//go:build !windows && cgo && (amd64 || arm64)
-
 package promptcompression
 
 import (
@@ -7,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	nlp_binding "github.com/vllm-project/semantic-router/nlp-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification/lexical"
 )
 
 // ---------------------------------------------------------------------------
@@ -75,8 +73,7 @@ func TestBM25ClassificationConsistency(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Classify original text
-			origClassifier := nlp_binding.NewBM25Classifier()
-			defer origClassifier.Free()
+			origClassifier := newBM25Rules()
 			if err := origClassifier.AddRule(tt.rule, tt.operator, tt.keywords, 0.1, false); err != nil {
 				t.Fatalf("AddRule failed: %v", err)
 			}
@@ -88,8 +85,7 @@ func TestBM25ClassificationConsistency(t *testing.T) {
 			compressed := Compress(tt.text, cfg)
 
 			// Classify compressed text
-			compClassifier := nlp_binding.NewBM25Classifier()
-			defer compClassifier.Free()
+			compClassifier := newBM25Rules()
 			if err := compClassifier.AddRule(tt.rule, tt.operator, tt.keywords, 0.1, false); err != nil {
 				t.Fatalf("AddRule failed: %v", err)
 			}
@@ -155,8 +151,7 @@ func TestBM25ANDClassificationConsistency(t *testing.T) {
 		"Weight initialization follows the Xavier method for better convergence. " +
 		"Please help me fix the code and debug the machine learning pipeline."
 
-	classifier := nlp_binding.NewBM25Classifier()
-	defer classifier.Free()
+	classifier := newBM25Rules()
 	if err := classifier.AddRule("code_debug", "AND", []string{"code", "debug"}, 0.1, false); err != nil {
 		t.Fatalf("AddRule failed: %v", err)
 	}
@@ -175,8 +170,7 @@ func TestBM25ANDClassificationConsistency(t *testing.T) {
 			cfg := DefaultConfig(budget)
 			compressed := Compress(text, cfg)
 
-			compClassifier := nlp_binding.NewBM25Classifier()
-			defer compClassifier.Free()
+			compClassifier := newBM25Rules()
 			if err := compClassifier.AddRule("code_debug", "AND", []string{"code", "debug"}, 0.1, false); err != nil {
 				t.Fatalf("AddRule failed: %v", err)
 			}
@@ -238,8 +232,7 @@ func TestNgramClassificationConsistency(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Classify original
-			origClassifier := nlp_binding.NewNgramClassifier()
-			defer origClassifier.Free()
+			origClassifier := newNgramRules()
 			if err := origClassifier.AddRule(tt.rule, "OR", tt.keywords, 0.4, false, 3); err != nil {
 				t.Fatalf("AddRule failed: %v", err)
 			}
@@ -251,8 +244,7 @@ func TestNgramClassificationConsistency(t *testing.T) {
 			compressed := Compress(tt.text, cfg)
 
 			// Classify compressed
-			compClassifier := nlp_binding.NewNgramClassifier()
-			defer compClassifier.Free()
+			compClassifier := newNgramRules()
 			if err := compClassifier.AddRule(tt.rule, "OR", tt.keywords, 0.4, false, 3); err != nil {
 				t.Fatalf("AddRule failed: %v", err)
 			}
@@ -293,8 +285,7 @@ func TestNgramFuzzyMatchAfterCompression(t *testing.T) {
 	cfg := DefaultConfig(originalTokens * 2 / 3)
 	compressed := Compress(text, cfg)
 
-	classifier := nlp_binding.NewNgramClassifier()
-	defer classifier.Free()
+	classifier := newNgramRules()
 	if err := classifier.AddRule("urgent_request", "OR", []string{"urgent", "emergency"}, 0.4, false, 3); err != nil {
 		t.Fatalf("AddRule failed: %v", err)
 	}
@@ -327,9 +318,8 @@ func TestBM25MultiRuleAfterCompression(t *testing.T) {
 	compressed := Compress(text, cfg)
 
 	// Set up multi-rule classifier
-	classify := func(input string) nlp_binding.MatchResult {
-		c := nlp_binding.NewBM25Classifier()
-		defer c.Free()
+	classify := func(input string) keywordMatch {
+		c := newBM25Rules()
 		_ = c.AddRule("cooking", "OR", []string{"recipe", "ingredient", "bake", "cook"}, 0.1, false)
 		_ = c.AddRule("coding", "OR", []string{"code", "implement", "function", "debug", "API"}, 0.1, false)
 		_ = c.AddRule("medical", "OR", []string{"symptom", "diagnosis", "treatment", "pain"}, 0.1, false)
@@ -365,9 +355,8 @@ func TestBM25NORAfterCompression(t *testing.T) {
 	cfg := DefaultConfig(originalTokens / 2)
 	compressed := Compress(text, cfg)
 
-	classify := func(input string) nlp_binding.MatchResult {
-		c := nlp_binding.NewBM25Classifier()
-		defer c.Free()
+	classify := func(input string) keywordMatch {
+		c := newBM25Rules()
 		_ = c.AddRule("safe_content", "NOR", []string{"hack", "exploit", "attack", "bypass"}, 0.1, false)
 		return c.Classify(input)
 	}
@@ -413,9 +402,8 @@ func TestClassificationUnderAggressiveCompression(t *testing.T) {
 	cfg := DefaultConfig(originalTokens / 4)
 	compressed := Compress(text, cfg)
 
-	classify := func(input string) nlp_binding.MatchResult {
-		c := nlp_binding.NewBM25Classifier()
-		defer c.Free()
+	classify := func(input string) keywordMatch {
+		c := newBM25Rules()
 		_ = c.AddRule("ml_deployment", "OR",
 			[]string{"model", "deploy", "inference", "production", "kubernetes"},
 			0.1, false)
@@ -433,4 +421,52 @@ func TestClassificationUnderAggressiveCompression(t *testing.T) {
 	if origResult.Matched && !compResult.Matched {
 		t.Error("classification lost under aggressive compression")
 	}
+}
+
+// keywordRules evaluates BM25 or n-gram keyword rules first-match, as the
+// router's keyword signal does.
+type keywordRules struct {
+	ngram    bool
+	matchers []func(*lexical.Text) (lexical.Match, bool)
+	names    []string
+}
+
+type keywordMatch struct {
+	Matched         bool
+	RuleName        string
+	MatchedKeywords []string
+	MatchCount      int
+	TotalKeywords   int
+}
+
+func newBM25Rules() *keywordRules  { return &keywordRules{} }
+func newNgramRules() *keywordRules { return &keywordRules{ngram: true} }
+
+func (k *keywordRules) AddRule(name, operator string, keywords []string, threshold float32, caseSensitive bool, arity ...int) error {
+	rule := lexical.Rule{Name: name, Operator: operator, Keywords: keywords, Threshold: threshold, CaseSensitive: caseSensitive}
+	if k.ngram {
+		matcher, err := lexical.NewNgram(rule, arity[0])
+		if err != nil {
+			return err
+		}
+		k.matchers = append(k.matchers, matcher.Match)
+	} else {
+		matcher, err := lexical.NewBM25(rule)
+		if err != nil {
+			return err
+		}
+		k.matchers = append(k.matchers, matcher.Match)
+	}
+	k.names = append(k.names, name)
+	return nil
+}
+
+func (k *keywordRules) Classify(text string) keywordMatch {
+	analysis := lexical.NewText(text)
+	for i, match := range k.matchers {
+		if m, ok := match(analysis); ok {
+			return keywordMatch{Matched: true, RuleName: k.names[i], MatchedKeywords: m.Keywords, MatchCount: m.MatchCount, TotalKeywords: m.TotalKeywords}
+		}
+	}
+	return keywordMatch{}
 }

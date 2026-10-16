@@ -19,6 +19,8 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -30,8 +32,8 @@ import (
 )
 
 // newUsageBackend returns an httptest server that mimics an OpenAI-compatible
-// backend reporting a fixed usage block per call (like mock-vllm-simple.py and
-// llm-katan do in the e2e suite). It counts how many calls it received.
+// backend reporting a fixed usage block per call (like provider-mocker in the
+// e2e suite). It counts how many calls it received.
 func newUsageBackend(t *testing.T, prompt, completion, total int64) (*httptest.Server, *int64) {
 	t.Helper()
 	var calls int64
@@ -110,4 +112,93 @@ func TestBaseLooper_Execute_AggregatesUsageOverHTTP(t *testing.T) {
 	if parsed.Usage != want {
 		t.Errorf("body usage = %+v, want %+v (must not be the legacy {0,0,0})", parsed.Usage, want)
 	}
+}
+
+func TestLooperCacheWriteAliasesReachAttemptReceipts(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		for _, conflict := range []bool{false, true} {
+			t.Run(fmt.Sprintf("streaming=%t/conflict=%t", streaming, conflict), func(t *testing.T) {
+				server := newCacheWriteAliasBackend(t, conflict)
+				defer server.Close()
+				l := NewBaseLooper(&config.LooperConfig{Endpoint: server.URL})
+				defer l.Close()
+				req := usageBackendRequest(config.ModelRef{Model: "model-a"}, config.ModelRef{Model: "model-b"})
+				req.IsStreaming = streaming
+				writeRate := 2.0
+				pricing := config.ModelPricing{Currency: "USD", PromptPer1M: 1, CachedInputPer1M: 0.1, CacheWritePer1M: &writeRate, CompletionPer1M: 3}
+				req.ModelParams = map[string]config.ModelParams{
+					"model-a": {Pricing: pricing}, "model-b": {Pricing: pricing},
+				}
+				tracker, ctx, span := newAttemptTracker(context.Background(), "confidence")
+				defer span.End()
+				var aggregate TokenUsage
+				for i, model := range []string{"model-a", "model-b"} {
+					response, attempt, err := l.startConfidenceModelAttempt(ctx, req, req.OriginalRequest, model, "candidate", "subject", streaming, i+1, nil, "")
+					if err != nil {
+						if !streaming || !conflict {
+							t.Fatal(err)
+						}
+						continue // The stream decoder rejects contradictory provider evidence.
+					}
+					attempt.finish(attemptResult{response: response})
+					aggregate = aggregate.Add(response)
+				}
+				trace := tracker.snapshot()
+				if len(trace.Attempts) != 2 {
+					t.Fatalf("attempts missing: %+v", trace)
+				}
+				if !conflict && (!aggregate.Complete() || aggregate.CacheWriteTokens != 40) {
+					t.Fatalf("aggregate cache accounting lost: %+v", aggregate)
+				}
+				for _, attempt := range trace.Attempts {
+					if attempt.Usage.Complete() == conflict || !conflict && (attempt.Usage.CachedInputTokens != 40 || attempt.Usage.CacheWriteTokens != 20) {
+						t.Fatalf("attempt cache buckets lost: %+v", attempt)
+					}
+					if conflict {
+						if attempt.ActualCost != nil {
+							t.Fatalf("conflicting attempt usage priced: %+v", attempt)
+						}
+					} else if attempt.ActualCost == nil || math.Abs(*attempt.ActualCost-0.000114) > 1e-12 {
+						t.Fatalf("attempt cost omits cache-write rate: %+v", attempt)
+					}
+				}
+			})
+		}
+	}
+}
+
+func newCacheWriteAliasBackend(t *testing.T, conflict bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Model  string `json:"model"`
+			Stream bool   `json:"stream"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		alias := "created_cache_tokens"
+		if request.Model == "model-b" {
+			alias = "cache_creation_tokens"
+		}
+		details := map[string]int64{"cached_tokens": 40, alias: 20}
+		if conflict {
+			details["cache_write_tokens"] = 0
+		}
+		usage := map[string]interface{}{"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110, "prompt_tokens_details": details}
+		if request.Stream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"answer\"}}]}\n\n")
+			usageChunk, _ := json.Marshal(map[string]interface{}{"usage": usage})
+			_, _ = fmt.Fprintf(w, "data: %s\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n", usageChunk)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"object": "chat.completion", "model": request.Model, "usage": usage,
+			"choices": []map[string]interface{}{{"index": 0, "message": map[string]string{"role": "assistant", "content": "answer"}, "finish_reason": "stop"}},
+		})
+	}))
 }

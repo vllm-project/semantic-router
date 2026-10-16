@@ -1,3 +1,88 @@
+- id: xiaomi/mimo-v2.6-flash-model-card-deep-swe-1.1@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.679
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-automation-bench@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    score: 0.523
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-agents-last-exam@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: berkeley-rdi/agents-last-exam@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    pass_rate: 0.276
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.876
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-osworld-verified@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: osworld/verified@1.0.0
+  benchmark_profile: official
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    success_rate: 0.808
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
 - id: independent/mimo-v2-5-pro-non-reasoning-critpt@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: artificial-analysis/critpt@1.0.0

@@ -313,4 +313,26 @@ describe('Recipe API client', () => {
       signal: undefined,
     })
   })
+
+  it('preserves raw value expectations, observations and failure diagnostics', async () => {
+    const validation = {
+      probe_id: 'route/raw',
+      passed: false,
+      expected: { signal_values: { 'embedding:information': { gte: -1, lte: 1 } } },
+      actual: { signal_values: { 'embedding:information': 'invalid' } },
+      checks: { signal_values: false },
+      failures: ['signal value embedding:information: expected finite number'],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(validation))),
+    )
+
+    const result = await validateRecipeProbe('route', 'raw', 'sha256:recipe')
+
+    expect(result.expected.signal_values?.['embedding:information']).toEqual({ gte: -1, lte: 1 })
+    expect(result.actual.signal_values?.['embedding:information']).toBe('invalid')
+    expect(result.checks.signal_values).toBe(false)
+    expect(result).toEqual(validation)
+  })
 })

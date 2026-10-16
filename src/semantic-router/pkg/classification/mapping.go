@@ -20,6 +20,10 @@ type CategoryMapping struct {
 type PIIMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	// spanNamed marks the empty mapping of a model that lists no labels
+	// because its spans name their PII types (a decision model's ready-made
+	// PII question).
+	spanNamed bool
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
@@ -115,7 +119,49 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 		return nil, fmt.Errorf("failed to parse PII mapping JSON: %w", err)
 	}
 
+	// Reserve the sentinel after the same BIO normalization used by native
+	// translation and the remote label set, so a prefixed configured label
+	// cannot make a genuine detection indistinguishable from a failure.
+	if mapping.hasReservedLabel() {
+		return nil, fmt.Errorf(
+			"PII mapping %s: labels %q and %q are reserved for the on_error and on_unscanned sentinels and cannot be configured labels",
+			path, PIIClassificationErrorType, PIIUnscannedType)
+	}
+
 	return &mapping, nil
+}
+
+// hasReservedLabel reports whether either direction contains a sentinel alias.
+// Both are probed because TranslatePIIType
+// reads IdxToLabel while the token_spans decoder reads LabelToIdx as well.
+func (pm *PIIMapping) hasReservedLabel() bool {
+	if pm == nil {
+		return false
+	}
+	for known := range pm.LabelToIdx {
+		if isReservedPIILabel(known) {
+			return true
+		}
+	}
+	for _, known := range pm.IdxToLabel {
+		if isReservedPIILabel(known) {
+			return true
+		}
+	}
+	return false
+}
+
+// isReservedPIILabel also rejects stacked prefixes: the remote decoder and
+// detection API each normalize labels, so checking only one pass is unsafe.
+// Ordinary entity translation still strips exactly one prefix per call.
+func isReservedPIILabel(label string) bool {
+	for {
+		normalized := stripBIOPrefix(label)
+		if normalized == label {
+			return label == PIIClassificationErrorType || label == PIIUnscannedType
+		}
+		label = normalized
+	}
 }
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file
@@ -154,6 +200,11 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf(
 			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
 			path, JailbreakClassificationErrorType)
+	}
+	if _, collides := mapping.GetIndexForJailbreakType(JailbreakUnscannedType); collides {
+		return nil, fmt.Errorf(
+			"jailbreak mapping %s: label %q is reserved for content the model did not read and cannot be a configured label",
+			path, JailbreakUnscannedType)
 	}
 
 	return &mapping, nil
@@ -272,18 +323,6 @@ func (cm *CategoryMapping) GetCategoryFromIndex(classIndex int) (string, bool) {
 func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 	piiType, ok := pm.IdxToLabel[fmt.Sprintf("%d", classIndex)]
 	return piiType, ok
-}
-
-// stripBIOPrefix removes the BIO sequence labeling prefix from a PII type string.
-// For example: "B-PERSON" → "PERSON", "I-DATE_TIME" → "DATE_TIME", "PERSON" → "PERSON".
-func stripBIOPrefix(s string) string {
-	if len(s) > 2 && s[1] == '-' {
-		switch s[0] {
-		case 'B', 'I', 'E':
-			return s[2:]
-		}
-	}
-	return s
 }
 
 // TranslatePIIType translates a PII type from Rust binding format to named type.
@@ -451,7 +490,7 @@ func (jm *JailbreakMapping) LabelCount() int {
 // resolveSinglePositiveIndex resolves the configured positive_labels against
 // mapping down to a single class index, for backends (like http_chat) that
 // only ever produce one binary verdict and cannot represent more than one
-// positive class. Unlike the multi-label backends (candle, http_classify),
+// positive class. Unlike the multi-label backends (local models, http_classify),
 // which sum every positive label's independent probability, a label here
 // that isn't found in mapping is skipped rather than treated as an error -
 // matching the general "at least one configured label must exist" leniency

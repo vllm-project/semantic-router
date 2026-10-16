@@ -9,9 +9,15 @@ unnoticed. These tests assert both canonical entrypoints stay wired.
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_MK = REPO_ROOT / "tools" / "make" / "dashboard.mk"
@@ -116,15 +122,16 @@ class DashboardGateTest(unittest.TestCase):
             f"{check.prereqs}.",
         )
 
-    def test_dashboard_check_requires_fresh_evaluation_catalog_mirrors(self) -> None:
+    def test_sr_bench_uses_the_service_catalog_without_generated_mirrors(self) -> None:
         check = TARGETS.get("dashboard-check")
         self.assertIsNotNone(check)
-        self.assertIn("dashboard-evaluation-catalog-check", check.prereqs)
-
-        catalog_check = TARGETS.get("dashboard-evaluation-catalog-check")
-        self.assertIsNotNone(catalog_check)
-        recipe = _expand(" ".join(catalog_check.recipe), VARIABLES)
-        self.assertIn("tools/ci/sync_evaluation_catalogs.py --check", recipe)
+        self.assertNotIn("dashboard-evaluation-catalog-check", check.prereqs)
+        self.assertFalse((REPO_ROOT / "tools/ci/sync_evaluation_catalogs.py").exists())
+        api = (
+            REPO_ROOT / "dashboard/frontend/src/components/sr-bench/api.ts"
+        ).read_text()
+        self.assertIn("/api/sr-bench/v1", api)
+        self.assertIn("'/catalog'", api)
 
     def test_dashboard_test_backend_runs_go_test_in_the_backend_directory(self) -> None:
         backend = TARGETS.get("dashboard-test-backend")
@@ -181,9 +188,78 @@ class DashboardGateTest(unittest.TestCase):
         self.assertIn("playwright install --with-deps chromium", recipe)
         self.assertIn("npm run test:e2e:evaluation", recipe)
 
+    def test_parallel_dashboard_targets_build_frontend_and_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for path in ("bin", "dashboard/frontend"):
+                (root / path).mkdir(parents=True)
+            npm = root / "bin" / "npm"
+            npm.write_text(
+                "#!/bin/sh\nset -eu\n"
+                'if [ "$*" != "run build" ]; then exit 0; fi\n'
+                'echo frontend >> "$BUILD_CALLS"\n'
+                'test "${FAIL_FRONTEND:-0}" = 0\n'
+                "rm -rf dist\n"
+                "mkdir -p dist\n"
+                "echo frontend > dist/index.html\n"
+            )
+            npm.chmod(0o755)
+            makefile = root / "Makefile"
+            makefile.write_text(
+                f"include {DASHBOARD_MK}\n"
+                "dashboard-install dashboard-build-wasm:\n\t@true\n"
+            )
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKEFILES"}
+            }
+            env.update(
+                PATH=f"{root / 'bin'}:{env['PATH']}",
+                BUILD_CALLS=str(root / "build-calls.txt"),
+            )
+            for fail in (False, True):
+                with self.subTest(build_failure=fail):
+                    (root / "build-calls.txt").write_text("")
+                    result = subprocess.run(
+                        [
+                            "make",
+                            "-j4",
+                            "dashboard-type-check",
+                            "dashboard-build-frontend",
+                        ],
+                        cwd=root,
+                        env=dict(env, FAIL_FRONTEND=str(int(fail))),
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=15,
+                    )
+                    self.assertEqual(
+                        (root / "build-calls.txt").read_text(), "frontend\n"
+                    )
+                    if fail:
+                        self.assertNotEqual(result.returncode, 0)
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(
+                            (root / "dashboard/frontend/dist/index.html").read_text(),
+                            "frontend\n",
+                        )
+
     def test_dashboard_workflow_reuses_the_browser_make_target(self) -> None:
         workflow = DASHBOARD_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("run: make dashboard-test-e2e-evaluation", workflow)
+        jobs = yaml.safe_load(workflow)["jobs"]
+        commands = [
+            shlex.split(line)
+            for job in jobs.values()
+            for step in job.get("steps", [])
+            for line in step.get("run", "").splitlines()
+            if line.strip().startswith("make ")
+        ]
+        self.assertEqual(
+            sum("dashboard-test-e2e-evaluation" in command for command in commands), 1
+        )
         self.assertNotIn("run: npm run test:e2e:evaluation", workflow)
         self.assertNotIn("run: npx playwright install", workflow)
 

@@ -43,8 +43,9 @@ Two runners are available:
 
 ## Prerequisites
 
-- The repository's router and Candle binding built locally.
-- A local NLI model, such as `models/mom-halugate-explainer`.
+- The router built locally (`make build-router`) and the model runtime installed
+  (`make model-runtime-install`).
+- A router config whose hallucination detector serves context grounding.
 - A DRACO JSON export supplied through `DRACO_PATH` or `--draco-path`.
 - Ollama with the panel and judge models used by the command.
 - Python 3 with the benchmark dependencies.
@@ -104,10 +105,7 @@ Optional `annotate` and `filter` arms can be selected with `--arms`.
 Build the driver:
 
 ```bash
-cd src/semantic-router
-CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" \
-  go build -o ../../bin/fusioneval ./cmd/fusioneval
-cd ../..
+make build-fusioneval
 ```
 
 Prepare items and start the Ollama proxy:
@@ -126,9 +124,9 @@ In another shell, generate a four-item smoke run before increasing the sample
 count:
 
 ```bash
-LD_LIBRARY_PATH=candle-binding/target/release bin/fusioneval \
+bin/fusioneval \
   --items bench/grounded_fusion/results/items.jsonl \
-  --nli-model models/mom-halugate-explainer \
+  --router-config config/config.yaml \
   --endpoint http://localhost:11435/v1/chat/completions \
   --judge qwen3:14b \
   --panel qwen3:8b,llama3.1:8b,gemma3:12b \
@@ -175,9 +173,11 @@ and hardware alongside any shared result.
 
 ## Operational notes
 
-- Panel grounding requires an enabled NLI model. `evaluate.py
-  --assert-grounding` stops the router-path run if the on arm lacks a grounding
-  trace.
+- Grounding arms use the router's own backends: the hallucination detector
+  reads each answer against the request's context, or against every peer answer
+  in `panel` mode.
+  `evaluate.py --assert-grounding` stops the router-path run if the on arm lacks
+  a grounding trace.
 - `make_configs.py` creates a minimal local routing configuration and disables
   external stores that the benchmark does not use.
 - `ollama_proxy.py` forwards OpenAI-compatible requests to Ollama's native chat
@@ -198,4 +198,4 @@ and hardware alongside any shared result.
 | `items.py` | Export items for the cached-panel driver. |
 | `grade_only.py` | Grade cached-panel answer files. |
 | `compare_multiarm.py` | Compare cached-panel arms and write a verdict. |
-| `../../src/semantic-router/cmd/fusioneval` | Generate one panel and evaluate multiple arms in process. |
+| `../../bench/grounded_fusion/fusioneval` | Generate one panel and evaluate multiple arms in process. |

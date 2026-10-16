@@ -1,0 +1,23 @@
+# E2E overlay for deploy/kubernetes/agentgateway/semantic-router-values.
+# Helm replaces lists, so base-model repeats the base values unchanged.
+# agentgateway-full-duplex-routing: the full-duplex gateway routes on the
+# full-duplex-provider model name, and its backend checks this provider path
+# and credential.
+config:
+  providers:
+    models:
+      - name: base-model
+        reasoning:
+          family: qwen3
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: full-duplex-provider
+        backend_refs:
+          - name: full-duplex-selected
+            provider: vllm
+            endpoint: full-duplex-selected.agentgateway-system.svc.cluster.local:8000
+            chat_path: /provider/v1/chat/completions
+            api_key: e2e-provider-credential

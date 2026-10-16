@@ -8,7 +8,10 @@ body:
       value: |
         Thanks for reporting a bug. The report enters `needs-acceptance` so a
         collaborator with write access can confirm ownership, impact, and supported
-        behavior before running `/accept` and beginning implementation.
+        behavior before running `/accept` and beginning implementation. Once
+        an issue is accepted and marked `ready-for-dev`, claim the work by
+        commenting `/assign`; the claim counts once your name appears under Assignees,
+        and `/unassign` releases it.
   - type: dropdown
     id: workgroup
     attributes:

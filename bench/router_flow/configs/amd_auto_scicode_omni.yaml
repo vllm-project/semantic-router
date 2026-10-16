@@ -7,9 +7,6 @@ listeners:
     timeout: 1200s
 
 global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   integrations:
     looper:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
@@ -290,7 +287,7 @@ routing:
             policy: weight
             min_score: 0.0
             min_keep: 1
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0
             on_error: skip
 
     - name: scicode_multistep_remom
@@ -458,3 +455,7 @@ routing:
             {{end}}
 
             Return exactly one ```python code block and no prose.
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

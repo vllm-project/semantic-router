@@ -135,6 +135,7 @@ type ActivateRequest struct {
 
 type ActivateResult struct {
 	Status               string `json:"status"`
+	Message              string `json:"message,omitempty"`
 	RecipeDigest         string `json:"recipe_digest"`
 	PreviousRecipeDigest string `json:"previous_recipe_digest,omitempty"`
 	PlanDigest           string `json:"plan_digest"`
@@ -148,22 +149,26 @@ type DeactivateRequest struct {
 
 type DeactivateResult struct {
 	Status               string `json:"status"`
+	Message              string `json:"message,omitempty"`
 	PreviousRecipeDigest string `json:"previous_recipe_digest,omitempty"`
 	PlanDigest           string `json:"plan_digest,omitempty"`
 	Mode                 string `json:"mode,omitempty"`
 }
 
 type ExpectedAssertions struct {
-	Decision         string              `json:"decision"`
-	Recipe           string              `json:"recipe,omitempty"`
-	Algorithm        string              `json:"algorithm,omitempty"`
-	Alias            string              `json:"alias,omitempty"`
-	Plugins          []string            `json:"plugins"`
-	ForbiddenPlugins []string            `json:"forbidden_plugins"`
-	PluginMatch      string              `json:"plugin_match"`
-	Signals          map[string][]string `json:"signals"`
-	ForbiddenSignals map[string][]string `json:"forbidden_signals"`
-	SignalMatch      string              `json:"signal_match"`
+	SignalErrors     map[string]string            `json:"signal_errors,omitempty"`
+	SignalValues     map[string]SignalValueBounds `json:"signal_values,omitempty"`
+	Decision         string                       `json:"decision"`
+	Recipe           string                       `json:"recipe,omitempty"`
+	Algorithm        string                       `json:"algorithm,omitempty"`
+	SelectionStatus  string                       `json:"selection_status,omitempty"`
+	Alias            string                       `json:"alias,omitempty"`
+	Plugins          []string                     `json:"plugins"`
+	ForbiddenPlugins []string                     `json:"forbidden_plugins"`
+	PluginMatch      string                       `json:"plugin_match"`
+	Signals          map[string][]string          `json:"signals"`
+	ForbiddenSignals map[string][]string          `json:"forbidden_signals"`
+	SignalMatch      string                       `json:"signal_match"`
 }
 
 type Padding struct {
@@ -176,7 +181,8 @@ type GeneratedText struct {
 	MessageIndex    int    `json:"message_index"`
 	ContentIndex    int    `json:"content_index"`
 	TargetTextBytes int    `json:"target_text_bytes"`
-	Character       string `json:"character"`
+	Character       string `json:"character,omitempty"`
+	Text            string `json:"text,omitempty"`
 }
 
 type ImageFixtureMetadata struct {
@@ -290,6 +296,8 @@ type RequestModelResolver interface {
 }
 
 type ActualOutcome struct {
+	SignalErrors      map[string]string   `json:"signal_errors,omitempty"`
+	SignalValues      map[string]any      `json:"signal_values,omitempty"`
 	Decision          string              `json:"decision"`
 	Model             string              `json:"model,omitempty"`
 	RequestedModel    string              `json:"requested_model,omitempty"`
@@ -305,15 +313,17 @@ type ActualOutcome struct {
 }
 
 type ValidationChecks struct {
-	Decision  bool `json:"decision"`
-	Model     bool `json:"model"`
-	Recipe    bool `json:"recipe"`
-	Algorithm bool `json:"algorithm"`
-	Selection bool `json:"selection"`
-	Plugins   bool `json:"plugins"`
-	Signals   bool `json:"signals"`
-	Alias     bool `json:"alias"`
-	Trace     bool `json:"trace"`
+	SignalErrors bool `json:"signal_errors"`
+	SignalValues bool `json:"signal_values"`
+	Decision     bool `json:"decision"`
+	Model        bool `json:"model"`
+	Recipe       bool `json:"recipe"`
+	Algorithm    bool `json:"algorithm"`
+	Selection    bool `json:"selection"`
+	Plugins      bool `json:"plugins"`
+	Signals      bool `json:"signals"`
+	Alias        bool `json:"alias"`
+	Trace        bool `json:"trace"`
 }
 
 type ValidationResult struct {

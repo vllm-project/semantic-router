@@ -46,11 +46,33 @@ const recipeConfig: RoutingScopedConfigLike = {
 }
 
 describe('routingScopes', () => {
-  it('lists entrypoint-owned recipes without inventing an empty default scope', () => {
+  it('preserves and updates prepared model bindings only in the selected recipe', () => {
+    const base: RoutingScopedConfigLike = {
+      routing: { model_bindings: { embedding: { deployment: 'shared' } } },
+      recipes: [
+        { name: 'a', routing: { model_bindings: { pii_classifier: { deployment: 'pii-a' } } } },
+        { name: 'b', routing: { model_bindings: { pii_classifier: { deployment: 'pii-b' } } } },
+      ],
+    }
+    expect(listRoutingScopes(base).map((scope) => scope.id)).toEqual(['default', 'a', 'b'])
+    const projected = projectConfigForRoutingScope(base, 'a')
+    projected.routing!.model_bindings = { pii_classifier: { deployment: 'replacement' } }
+    const updated = applyRoutingScopeProjection(base, projected, 'a')
+    expect(updated.recipes?.[0].routing.model_bindings).toEqual(projected.routing!.model_bindings)
+    expect(updated.recipes?.[1]).toEqual(base.recipes?.[1])
+    expect(updated.routing).toEqual(base.routing)
+    projected.routing!.model_bindings = {}
+    expect(
+      applyRoutingScopeProjection(base, projected, 'a').recipes?.[0].routing.model_bindings,
+    ).toEqual({})
+  })
+
+  it('lists the effective builtin default beside named recipe entrypoints', () => {
     const scopes = listRoutingScopes(recipeConfig)
 
-    expect(scopes.map((scope) => scope.id)).toEqual(['balanced', 'privacy'])
-    expect(scopes[0].entrypointModelNames).toEqual(['vllm-sr/balanced'])
+    expect(scopes.map((scope) => scope.id)).toEqual(['default', 'balanced', 'privacy'])
+    expect(scopes[0].entrypointModelNames).toEqual(['vllm-sr/auto'])
+    expect(scopes[1].entrypointModelNames).toEqual(['vllm-sr/balanced'])
   })
 
   it('projects one recipe into the existing manager and topology view shape', () => {
@@ -74,9 +96,7 @@ describe('routingScopes', () => {
     expect(updated.recipes?.[1].routing.signals).toEqual({
       pii: [{ name: 'updated-private-pii' }],
     })
-    expect(updated.recipes?.[1].routing.decisions).toEqual([
-      { name: 'updated-private-route' },
-    ])
+    expect(updated.recipes?.[1].routing.decisions).toEqual([{ name: 'updated-private-route' }])
     expect(updated.routing?.decisions).toEqual([])
   })
 

@@ -60,8 +60,25 @@ func validateLeafSignalReference(
 	if !IsSupportedSignalType(signalType) {
 		return fmt.Errorf("routing.decisions[%q]: unsupported signal type %q", decisionName, node.Type)
 	}
+	if entry, _ := LookupSignalCatalog(signalType); !entry.DecisionReferenceable && signalType != SignalTypeHallucination {
+		// Response-stage hallucination references get their own, more specific
+		// error from the signal-stage validator.
+		return fmt.Errorf(
+			"routing.decisions[%q]: signal type %q is not decision-referenceable; "+
+				"it is evidence for context policy, read from the request context",
+			decisionName, signalType)
+	}
 	if !strictReferences {
 		return nil
+	}
+	if node.Name != name {
+		return fmt.Errorf(
+			"routing.decisions[%q]: signal %s reference %q has surrounding whitespace; expected %q without padding",
+			decisionName,
+			signalType,
+			node.Name,
+			name,
+		)
 	}
 	if name == "" {
 		return fmt.Errorf("routing.decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)

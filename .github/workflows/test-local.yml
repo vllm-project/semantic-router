@@ -1,0 +1,92 @@
+name: Local Stack Integration
+
+on:
+  workflow_call:
+    inputs:
+      verification:
+        type: string
+        required: true
+      prebuilt-images:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  integration:
+    name: Execute Contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      VERIFICATION: ${{ inputs.verification }}
+      CI_REQUIRE_MEMORY_TESTS: '1'
+      CI_REQUIRE_CLI_TESTS: '1'
+      MEMORY_TEST_REPORT_PATH: ${{ github.workspace }}/.agent-harness/local/evidence/memory-test-report.json
+      CLI_TEST_REPORT_PATH: ${{ github.workspace }}/.agent-harness/local/evidence/cli-test-report.json
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_XET: "1"
+      HF_DOWNLOAD_ATTEMPTS: "10"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/free-disk-space
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: ./.github/actions/load-ci-images
+        if: inputs.prebuilt-images
+        with:
+          images: ${{ toJSON(fromJSON(inputs.verification).images) }}
+      - name: Install the source CLI
+        run: python -m pip install -e src/vllm-sr
+      - name: Execute selected suite
+        env:
+          SUITE: ${{ fromJSON(inputs.verification).suite }}
+          MEMORY_TEST_DIR: ${{ runner.temp }}/memory-${{ github.run_id }}-${{ github.run_attempt }}
+          MEMORY_TEST_ARTIFACT_DIR: ${{ github.workspace }}/.agent-harness/local/evidence
+          KEEP_MEMORY_TEST_DIR: "1"
+          VLLM_SR_STACK_NAME: ci-${{ github.run_id }}-${{ github.run_attempt }}-memory
+        run: |
+          set -o pipefail
+          mkdir -p .agent-harness/local
+          case "$SUITE" in
+            cli)
+              unset VLLM_SR_STACK_NAME
+              make vllm-sr-test-integration 2>&1 | tee .agent-harness/local/cli.log
+              ;;
+            memory)
+              USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 \
+                make memory-test-integration \
+                2>&1 | tee .agent-harness/local/memory.log
+              ;;
+            *) echo "Unsupported local suite: $SUITE" >&2; exit 2 ;;
+          esac
+      - name: Record the required local contract
+        if: always()
+        env:
+          SUITE: ${{ fromJSON(inputs.verification).suite }}
+        run: |
+          python tools/ci/runtime_evidence.py local --directory .agent-harness/local/evidence --suite "$SUITE" --output .agent-harness/local/evidence.json
+          python tools/ci/ci_results.py record --verification "$VERIFICATION" \
+            --evidence .agent-harness/local/evidence.json --output .agent-harness/local/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: .agent-harness/local/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      # Upload collected logs only. Runtime state can contain root-owned data,
+      # model weights and databases; it is not an artifact collection directory.
+      - name: Publish local integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-${{ fromJSON(inputs.verification).suite }}-cpu
+          path: |
+            .agent-harness/local/*.log
+            .agent-harness/local/evidence/*.json
+            .agent-harness/local/evidence/memory-*/*.log
+          include-hidden-files: true
+          if-no-files-found: error

@@ -7,6 +7,9 @@ func (c *RAGPluginConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
+	if err := c.validateReranker(); err != nil {
+		return err
+	}
 	if c.Backend == "" {
 		return fmt.Errorf("RAG backend is required when enabled")
 	}
@@ -17,6 +20,9 @@ func (c *RAGPluginConfig) Validate() error {
 		return err
 	}
 	if err := validateRAGTopK(c.TopK); err != nil {
+		return err
+	}
+	if err := validateRAGMaxContextLength(c.MaxContextLength); err != nil {
 		return err
 	}
 	if err := validateRAGInjectionMode(c.InjectionMode); err != nil {
@@ -96,7 +102,7 @@ func validateMCPRAGBackend(c *RAGPluginConfig) error {
 	if mcpConfig.ToolName == "" {
 		return fmt.Errorf("MCP tool name is required")
 	}
-	return nil
+	return fmt.Errorf("RAG backend %q is not available: the router has no MCP tool invoker", c.Backend)
 }
 
 func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
@@ -124,6 +130,9 @@ func validateHybridRAGBackend(c *RAGPluginConfig) error {
 	if hybridConfig.Primary == "" {
 		return fmt.Errorf("primary backend is required for hybrid RAG")
 	}
+	if hybridConfig.Primary == "mcp" || hybridConfig.Fallback == "mcp" {
+		return fmt.Errorf("RAG backend %q is not available: the router has no MCP tool invoker", "mcp")
+	}
 	return nil
 }
 
@@ -142,6 +151,15 @@ func validateRAGTopK(topK *int) error {
 		return nil
 	}
 	return fmt.Errorf("TopK must be greater than 0, got %d", *topK)
+}
+
+func validateRAGMaxContextLength(maxContextLength *int) error {
+	// Zero is a supported explicit value: the injection path truncates a zero
+	// budget to the ellipsis marker, and issue #4327 keeps it valid.
+	if maxContextLength == nil || *maxContextLength >= 0 {
+		return nil
+	}
+	return fmt.Errorf("max_context_length must not be negative, got %d", *maxContextLength)
 }
 
 func validateRAGInjectionMode(mode string) error {

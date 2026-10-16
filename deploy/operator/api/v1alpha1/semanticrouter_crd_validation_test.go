@@ -1,11 +1,59 @@
 package v1alpha1
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
+	"sigs.k8s.io/yaml"
 )
+
+// Both copies matter: config/crd/bases is what `make install` applies and
+// bundle/manifests is what an OLM install uses. A change landing in only one
+// leaves the other install path unvalidated.
+var generatedCRDCopies = []string{
+	filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"),
+	filepath.Join("..", "..", "bundle", "manifests", "vllm.ai_semanticrouters.yaml"),
+}
+
+func generatedCRDName(relative string) string {
+	return filepath.Base(filepath.Dir(relative)) + "/" + filepath.Base(relative)
+}
+
+// The API server estimates each CEL rule's worst-case cost from the maxItems,
+// maxLength and maxProperties around it, and refuses the whole CRD when one
+// rule or the schema's total is over its limit. Evaluating the rules, as
+// semanticrouter_cel_admission_test.go does, never computes that estimate, so
+// a rule over an unbounded list of unbounded strings passed every test and
+// failed `make install` on a cluster. This runs the API server's own CRD
+// validation, cost estimates included, on each generated copy.
+func TestGeneratedCRDsPassAPIServerValidation(t *testing.T) {
+	for _, relative := range generatedCRDCopies {
+		data, err := os.ReadFile(relative)
+		if err != nil {
+			t.Fatalf("read %s: %v", relative, err)
+		}
+		var crd apiextensionsv1.CustomResourceDefinition
+		if err = yaml.Unmarshal(data, &crd); err != nil {
+			t.Fatalf("parse %s: %v", relative, err)
+		}
+		// The defaults the API server applies to a new CRD before validating it,
+		// stored versions included.
+		apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(&crd)
+		var internal apiextensions.CustomResourceDefinition
+		if err = apiextensionsv1.Convert_v1_CustomResourceDefinition_To_apiextensions_CustomResourceDefinition(&crd, &internal, nil); err != nil {
+			t.Fatalf("convert %s: %v", relative, err)
+		}
+		for _, cause := range validation.ValidateCustomResourceDefinition(context.Background(), &internal) {
+			t.Errorf("%s would be refused by the API server: %v", generatedCRDName(relative), cause)
+		}
+	}
+}
 
 // The CEL rules exist so an invalid complexity rule is a refused write rather
 // than a Router crashloop. They live in kubebuilder markers, which are easy to
@@ -13,9 +61,9 @@ import (
 // the CRD simply stops validating. This asserts the generated artifacts still
 // carry each expression.
 //
-// It checks presence, not CEL semantics: evaluating the expressions needs an
-// API server, so a rule that is present but wrong would pass here. What it
-// does catch is the failure that actually happened once on this branch - a
+// It checks presence, not CEL semantics; semanticrouter_cel_admission_test.go
+// evaluates the expressions with the API server's own validator. What this
+// one catches is the failure that actually happened once on this branch - a
 // generated CRD copy left behind by an API change.
 func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 	expressions := []string{
@@ -33,13 +81,7 @@ func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 		"!has(self.backend) || has(self.backend.contract)",
 	}
 
-	// Both copies matter: config/crd/bases is what `make install` applies and
-	// bundle/manifests is what an OLM install uses. A change landing in only
-	// one leaves the other install path unvalidated.
-	for _, relative := range []string{
-		filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"),
-		filepath.Join("..", "..", "bundle", "manifests", "vllm.ai_semanticrouters.yaml"),
-	} {
+	for _, relative := range generatedCRDCopies {
 		data, err := os.ReadFile(relative)
 		if err != nil {
 			t.Fatalf("read %s: %v", relative, err)
@@ -50,7 +92,33 @@ func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 		for _, expression := range expressions {
 			if !strings.Contains(flattened, strings.Join(strings.Fields(expression), " ")) {
 				t.Errorf("%s is missing the CEL rule %q; run 'make manifests' and 'make bundle'",
-					filepath.Base(filepath.Dir(relative))+"/"+filepath.Base(relative), expression)
+					generatedCRDName(relative), expression)
+			}
+		}
+	}
+}
+
+// The PII module's remote backend and failure policy must be in both generated
+// CRD copies, otherwise a Kubernetes user cannot select the token_spans.v1
+// backend or its on_error policy at all (review on #3498).
+func TestGeneratedCRDsCarryPIIBackendAndOnError(t *testing.T) {
+	for _, relative := range generatedCRDCopies {
+		data, err := os.ReadFile(relative)
+		if err != nil {
+			t.Fatalf("read %s: %v", relative, err)
+		}
+		flattened := strings.Join(strings.Fields(string(data)), " ")
+		for _, want := range []string{
+			"- token_spans.v1",
+			"OnError selects what a PII backend failure",
+			"Backend names a remote token classifier speaking token_spans.v1",
+			"external_models:",
+			"llm_model_name:",
+			"ExternalModels declares the remote models that classifier backends",
+		} {
+			if !strings.Contains(flattened, want) {
+				t.Errorf("%s is missing %q; run 'make manifests' and refresh bundle/manifests",
+					generatedCRDName(relative), want)
 			}
 		}
 	}

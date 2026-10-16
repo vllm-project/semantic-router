@@ -1,6 +1,6 @@
 """Grade pre-generated arm answers (from the fusioneval driver) with the DRACO rubric.
 
-The cached-panel paired evaluator (``cmd/fusioneval``) emits ``answers_{arm}.jsonl``:
+The cached-panel paired evaluator (``bench/grounded_fusion/fusioneval``) emits ``answers_{arm}.jsonl``:
 one final answer per item, already synthesized from the byte-identical cached panel.
 This grades those answers with the SAME ``RubricJudge`` + ``summarize`` the live
 harness uses (``evaluate.grade_sample`` / ``evaluate.summarize``) — only the answer

@@ -2,10 +2,10 @@
 title: Standalone HTTP Gateway
 description: An experimental standalone inference gateway plus a transport-neutral shared semantic runtime. One engine, two adapters (ExtProc and HTTP); the gateway additionally owns the physical traffic layer, traffic control, governance, observability, and security boundaries required before any production support decision.
 created: 2026-08-31
-status: Proposal
+status: Superseded
 ---
 
-> **Status:** Proposal - **Created:** 2026-08-31 - **Revised:** 2026-09-01
+> **Status:** Superseded by [Standalone Mode](./standalone-mode) - **Created:** 2026-08-31 - **Revised:** 2026-09-01
 
 ## Summary
 

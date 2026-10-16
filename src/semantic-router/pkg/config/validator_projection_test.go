@@ -14,6 +14,69 @@ func TestProjectionRejectsEnvelopeAndLabelledClassifierInputs(t *testing.T) {
 	}
 }
 
+func decisionProjectionYAML(input string) []byte {
+	return []byte(`
+routing:
+  signals:
+    decision:
+      - name: difficulty
+        question:
+          type: score
+          instructions: How much reasoning does the request need?
+          levels: [none, some, a lot]
+        predicate: {gte: 1}
+      - name: needs
+        question:
+          type: set
+          instructions: What does a good answer need?
+          labels:
+            - {key: deliberation, description: careful multi-step reasoning}
+            - {key: tools, description: calling tools}
+      - name: precise_facts
+        question:
+          type: noul
+          instructions: Does the answer depend on exact facts?
+  projections:
+    scores:
+      - name: effort
+        method: weighted_sum
+        inputs:
+          - {type: decision, name: difficulty, weight: 0.3, value_source: raw}
+          - {type: decision, name: ` + input + `, weight: 0.4, value_source: raw}
+    mappings:
+      - name: effort_band
+        source: effort
+        outputs:
+          - {name: effort_high, gte: 0.5}
+  decisions:
+    - name: hard
+      rules:
+        operator: AND
+        conditions:
+          - {type: projection, name: effort_high}
+      modelRefs:
+        - model: qwen3-8b
+`)
+}
+
+func TestProjectionInputsReadOneOptionOfADecisionQuestion(t *testing.T) {
+	for _, input := range []string{"needs:deliberation", "needs", "precise_facts"} {
+		if _, err := ParseRoutingYAMLBytes(decisionProjectionYAML(input)); err != nil {
+			t.Fatalf("%s: %v", input, err)
+		}
+	}
+	for input, want := range map[string]string{
+		"needs:creativity":   `names "creativity", which is not an option of the set question "needs"`,
+		"precise_facts:true": `names "true", which is not an option of the noul question "precise_facts"`,
+		"missing:tools":      `input decision("missing:tools") is not declared in routing.signals`,
+	} {
+		_, err := ParseRoutingYAMLBytes(decisionProjectionYAML(input))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: want an error containing %q, got %v", input, want, err)
+		}
+	}
+}
+
 func TestParseRoutingYAMLBytesRejectsUnknownProjectionDecisionReference(t *testing.T) {
 	yaml := []byte(`
 routing:
@@ -302,8 +365,11 @@ routing:
   signals:
     structure:
       - name: many_questions
-        operator: OR
-        patterns: ["\\?"]
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: "\\?"
   projections:
     scores:
       - name: workload_pressure

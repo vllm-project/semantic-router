@@ -31,7 +31,7 @@
 | BenchmarkClassifyBatch_Size100 | ns/op | 412345678 | 410234567 | -0.51% | OK |
 | BenchmarkClassifyCategory | ns/op | 8765432 | 8654321 | -1.27% | OK |
 | BenchmarkClassifyPII | ns/op | 10123456 | 10089123 | -0.34% | OK |
-| BenchmarkCGOOverhead | ns/op | 3456789 | 3423456 | -0.96% | OK |
+| BenchmarkClassifyRuntimeOverhead | ns/op | 3456789 | 3423456 | -0.96% | OK |
 | BenchmarkEvaluateDecisions_SingleDomain | ns/op | 234567 | 229876 | -2.00% | 🚀 IMPROVED |
 |  | P95 Latency | 0.24ms | 0.23ms | -4.17% |  |
 |  | Throughput | 4263 qps | 4350 qps | +2.04% |  |

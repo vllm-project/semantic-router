@@ -50,5 +50,27 @@ The feedback detector processes conversational text and can confuse quoted or
 hypothetical complaints with real feedback. Evaluate it on follow-up traffic
 and keep a normal fallback path.
 
-A prediction the detector is not confident about, one below the configured `threshold`, is reported as `satisfied` with the model's own probability for that class beside it. That number is often far below the threshold, because the model put its mass on a class the threshold rejected. Read the pair as uncertain, not as evidence the user was satisfied. See a complete example:
+The Router evaluates this signal only for a non-empty textual user turn after
+an assistant answer. First turns, tool-result continuations, assistant prefills,
+and user turns without text do not trigger feedback inference. The standalone
+classification API expects the caller to supply a genuine follow-up; it rejects
+empty input. Four-way classification cannot determine whether an arbitrary new
+question is feedback, and even high confidence does not establish applicability.
+A new topic later in a conversation can still trigger a false match; validate
+that case before using feedback to change the selected model.
+
+For existing four-class models, a prediction below the configured `threshold` is reported as `satisfied` with the model's own probability for that class beside it. That number is often far below the threshold, because the model put its mass on a class the threshold rejected. Read the pair as uncertain, not as evidence the user was satisfied. See a complete example:
 [`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml).
+
+Models that declare `NO_FEEDBACK` in their label mapping can distinguish ordinary
+follow-up tasks from feedback. That result does not match any of the four
+feedback rules. For these models, a prediction below the detector's configured
+`threshold` is uncertain: it follows the decision's `on_unknown` policy instead
+of activating `satisfied`. The standalone classification API preserves the
+predicted label and probability and returns `abstained: true` for this case.
+Existing four-class models retain their earlier threshold behavior.
+
+When a reachable routing decision depends on this signal, its configured model
+must initialize successfully or Router startup fails. A model used only by the
+standalone diagnostics API remains best-effort and does not block unrelated
+routes when it is unavailable.

@@ -7,115 +7,49 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: nightly
   cancel-in-progress: false
 
 jobs:
-  core:
-    name: Nightly core gate
+  ci:
+    name: CI
     if: >-
       github.repository == 'vllm-project/semantic-router'
       || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/test-and-build.yml
-    secrets: inherit
-
-  dashboard:
-    name: Nightly dashboard
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/dashboard-test.yml
-
-  e2e:
-    name: Nightly E2E
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/integration-test-k8s.yml
-    with:
-      profiles: '["envoy-ai-gateway","dashboard","remote-embedding"]'
-    secrets: inherit
-
-  cli:
-    name: Nightly CLI
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/integration-test-vllm-sr-cli.yml
-
-  memory:
-    name: Nightly memory
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/integration-test-memory.yml
-
-  operator:
-    name: Nightly operator
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/operator-ci.yml
-    with:
-      run_integration: true
-      integration_matrix: >-
-        [{"cache-backend":"memory","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router"},
-        {"cache-backend":"redis","deploy-redis":true,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-redis"},
-        {"cache-backend":"milvus","deploy-redis":false,"deploy-milvus":true,"deploy-qdrant":false,"router-name":"test-router-milvus"},
-        {"cache-backend":"qdrant","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":true,"router-name":"test-router-qdrant"},
-        {"cache-backend":"hybrid","deploy-redis":false,"deploy-milvus":true,"deploy-qdrant":false,"router-name":"test-router-hybrid"},
-        {"cache-backend":"mmbert","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-mmbert"},
-        {"cache-backend":"complexity","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-complexity"}]
-
-  performance:
-    name: Nightly performance
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/performance-test.yml
-
-  router-learning:
-    name: Nightly router learning
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
-    uses: ./.github/workflows/router-learning-eval.yml
-    with:
-      profile: release
-
-  docker:
-    name: Nightly Docker images
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
+    uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
+      actions: read
+      security-events: write
+    with:
+      profile: nightly
+    secrets: inherit
+
+  docker:
+    name: Publish Nightly Images
+    if: ${{ !cancelled() && needs.ci.result == 'success' }}
+    needs: ci
+    permissions:
+      contents: read
+      actions: read
       packages: write
     uses: ./.github/workflows/docker-publish.yml
     with:
       mode: nightly
-      images: '["anthropic-shim","dashboard","extproc","extproc-rocm","llm-katan","operator","operator-bundle","vllm-sr","vllm-sr-cuda","vllm-sr-rocm","vllm-sr-sim"]'
+      images: ${{ needs.ci.outputs.publish_images }}
       publish_latest: false
     secrets: inherit
 
   helm:
-    name: Nightly Helm chart
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      || github.event_name == 'workflow_dispatch'
-    needs: core
+    name: Publish Nightly Helm Chart
+    if: ${{ !cancelled() && needs.ci.result == 'success' }}
+    needs: ci
     permissions:
       contents: read
+      actions: read
       packages: write
     uses: ./.github/workflows/helm-publish.yml
     with:

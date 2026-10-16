@@ -1,6 +1,7 @@
 export const DEFAULT_ROUTING_SCOPE_ID = 'default'
 
 export interface RoutingProfileLike {
+  model_bindings?: Record<string, unknown>
   signals?: Record<string, unknown>
   projections?: Record<string, unknown>
   decisions?: unknown[]
@@ -15,6 +16,7 @@ export interface RoutingRecipeLike {
 }
 
 export interface RoutingEntrypointLike {
+  api?: 'chat' | 'systemone'
   model_names: string[]
   recipe: string
 }
@@ -75,6 +77,7 @@ export function hasRoutingProfileContent(profile: RoutingProfileLike | undefined
   return (
     countSignalsInProfile(profile).total > 0 ||
     countProjectionsInProfile(profile) > 0 ||
+    Object.keys(profile?.model_bindings ?? {}).length > 0 ||
     arrayCount(profile?.decisions) > 0
   )
 }
@@ -88,13 +91,21 @@ function defaultRoutingProfile(config: RoutingScopedConfigLike): RoutingProfileL
   }
 }
 
-function entrypointNamesForRecipe(
-  config: RoutingScopedConfigLike,
-  recipeName: string,
-): string[] {
+// Read-only projection of the canonical Chat entrypoint default. Never save
+// this derived row into authored configuration unless the user edits it.
+export function effectiveChatEntrypoints(config: Pick<RoutingScopedConfigLike, 'entrypoints'>): RoutingEntrypointLike[] {
+  const authored = (config.entrypoints ?? []).filter(
+    (entrypoint) => !entrypoint.api || entrypoint.api === 'chat',
+  )
+  return authored.some((entrypoint) => entrypoint.recipe === DEFAULT_ROUTING_SCOPE_ID)
+    ? authored
+    : [...authored, { model_names: ['vllm-sr/auto'], recipe: DEFAULT_ROUTING_SCOPE_ID }]
+}
+
+function entrypointNamesForRecipe(config: RoutingScopedConfigLike, recipeName: string): string[] {
   return [
     ...new Set(
-      (config.entrypoints ?? [])
+      effectiveChatEntrypoints(config)
         .filter((entrypoint) => entrypoint.recipe === recipeName)
         .flatMap((entrypoint) => entrypoint.model_names)
         .map((name) => name.trim())
@@ -110,21 +121,17 @@ export function listRoutingScopes(config: RoutingScopedConfigLike | null): Routi
   const explicitDefault = recipes.find((recipe) => recipe.name === DEFAULT_ROUTING_SCOPE_ID)
   const namedRecipes = recipes.filter((recipe) => recipe.name !== DEFAULT_ROUTING_SCOPE_ID)
   const defaultRouting = explicitDefault?.routing ?? defaultRoutingProfile(config)
-  const includeDefault =
-    Boolean(explicitDefault) || hasRoutingProfileContent(defaultRouting) || namedRecipes.length === 0
 
   const scopes: RoutingScope[] = []
-  if (includeDefault) {
-    scopes.push({
-      id: DEFAULT_ROUTING_SCOPE_ID,
-      label: 'Default routing',
-      description: explicitDefault?.description ?? 'Top-level routing profile.',
-      entrypointModelNames: entrypointNamesForRecipe(config, DEFAULT_ROUTING_SCOPE_ID),
-      routing: defaultRouting,
-      isDefault: true,
-      source: explicitDefault ? 'recipe' : 'routing',
-    })
-  }
+  scopes.push({
+    id: DEFAULT_ROUTING_SCOPE_ID,
+    label: 'Default routing',
+    description: explicitDefault?.description ?? 'Top-level routing profile.',
+    entrypointModelNames: entrypointNamesForRecipe(config, DEFAULT_ROUTING_SCOPE_ID),
+    routing: defaultRouting,
+    isDefault: true,
+    source: explicitDefault ? 'recipe' : 'routing',
+  })
 
   for (const recipe of namedRecipes) {
     const entrypointModelNames = entrypointNamesForRecipe(config, recipe.name)
@@ -146,7 +153,7 @@ export function resolveRoutingScope(
   scopeId?: string | null,
 ): RoutingScope | null {
   const scopes = listRoutingScopes(config)
-  return scopes.find((scope) => scope.id === scopeId) ?? scopes[0] ?? null
+  return scopes.find((scope) => scope.id === scopeId) ?? scopes.find((scope) => hasRoutingProfileContent(scope.routing)) ?? scopes[0] ?? null
 }
 
 export function projectConfigForRoutingScope<T extends RoutingScopedConfigLike>(
@@ -176,6 +183,7 @@ export function applyRoutingScopeProjection<T extends RoutingScopedConfigLike>(
   const next = cloneValue(baseConfig)
   const routing: RoutingProfileLike = {
     ...cloneValue(scope.routing),
+    model_bindings: cloneValue(projectedConfig.routing?.model_bindings),
     signals: cloneValue(projectedConfig.signals ?? projectedConfig.routing?.signals),
     projections: cloneValue(projectedConfig.projections ?? projectedConfig.routing?.projections),
     decisions: cloneValue(projectedConfig.decisions ?? projectedConfig.routing?.decisions ?? []),

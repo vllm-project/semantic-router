@@ -4,20 +4,19 @@ import (
 	"math"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func stubReaskEmbeddings(t *testing.T, embeddings map[string][]float32) {
+func stubReaskEmbeddings(t *testing.T, embeddings map[string][]float32) *testEmbeddingProvider {
 	t.Helper()
 
-	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		if embedding, ok := embeddings[text]; ok {
-			return &candle_binding.EmbeddingOutput{Embedding: embedding}, nil
+			return embedding, nil
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0, 1)}, nil
+		return makeEmbedding(0, 1), nil
 	})
-	t.Cleanup(restore)
+	return provider
 }
 
 func approxEqual(got float64, want float64) bool {
@@ -25,13 +24,13 @@ func approxEqual(got float64, want float64) bool {
 }
 
 func TestReaskClassifier_ClassifyNoPriorUserTurns(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current": makeEmbedding(1, 0),
 	})
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{{Name: "likely_dissatisfied"}}, "test-model")
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{{Name: "likely_dissatisfied"}}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", nil)
@@ -44,20 +43,20 @@ func TestReaskClassifier_ClassifyNoPriorUserTurns(t *testing.T) {
 }
 
 func TestReaskClassifier_ClassifyOneTurnRepeatMatches(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":     makeEmbedding(1, 0),
 		"previous":    makeEmbedding(1, 0),
 		"unrelated":   makeEmbedding(0, 1),
 		"threshold80": makeEmbedding(0.8, 0.6),
 	})
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{{
 		Name:          "likely_dissatisfied",
 		Threshold:     0.8,
 		LookbackTurns: 1,
-	}}, "test-model")
+	}}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", []string{"previous"})
@@ -79,18 +78,18 @@ func TestReaskClassifier_ClassifyOneTurnRepeatMatches(t *testing.T) {
 }
 
 func TestReaskClassifier_ClassifyOneTurnRepeatNonMatch(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":  makeEmbedding(1, 0),
 		"previous": makeEmbedding(0, 1),
 	})
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{{
 		Name:          "likely_dissatisfied",
 		Threshold:     0.8,
 		LookbackTurns: 1,
-	}}, "test-model")
+	}}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", []string{"previous"})
@@ -103,19 +102,19 @@ func TestReaskClassifier_ClassifyOneTurnRepeatNonMatch(t *testing.T) {
 }
 
 func TestReaskClassifier_ClassifyTwoTurnConsecutiveRepeatMatches(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":       makeEmbedding(1, 0),
 		"older-repeat":  makeEmbedding(0.8, 0.6),
 		"recent-repeat": makeEmbedding(1, 0),
 	})
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{{
 		Name:          "persistently_dissatisfied",
 		Threshold:     0.8,
 		LookbackTurns: 2,
-	}}, "test-model")
+	}}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", []string{"older-repeat", "recent-repeat"})
@@ -140,19 +139,19 @@ func TestReaskClassifier_ClassifyTwoTurnConsecutiveRepeatMatches(t *testing.T) {
 }
 
 func TestReaskClassifier_ClassifyOlderMatchBrokenByMostRecentTurn(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":       makeEmbedding(1, 0),
 		"older-repeat":  makeEmbedding(1, 0),
 		"recent-answer": makeEmbedding(0, 1),
 	})
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{{
 		Name:          "persistently_dissatisfied",
 		Threshold:     0.8,
 		LookbackTurns: 2,
-	}}, "test-model")
+	}}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", []string{"older-repeat", "recent-answer"})
@@ -165,13 +164,13 @@ func TestReaskClassifier_ClassifyOlderMatchBrokenByMostRecentTurn(t *testing.T) 
 }
 
 func TestReaskClassifier_ClassifyRetainsOnlyMaxLookbackMatch(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":       makeEmbedding(1, 0),
 		"older-repeat":  makeEmbedding(0.8, 0.6),
 		"recent-repeat": makeEmbedding(1, 0),
 	})
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{
 		{
 			Name:          "likely_dissatisfied",
 			Threshold:     0.8,
@@ -182,9 +181,9 @@ func TestReaskClassifier_ClassifyRetainsOnlyMaxLookbackMatch(t *testing.T) {
 			Threshold:     0.8,
 			LookbackTurns: 2,
 		},
-	}, "test-model")
+	}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", []string{"older-repeat", "recent-repeat"})
@@ -200,7 +199,7 @@ func TestReaskClassifier_ClassifyRetainsOnlyMaxLookbackMatch(t *testing.T) {
 }
 
 func TestClassifierEvaluateAllSignalsWithContext_ReaskRecordsConfidenceAndStreak(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":       makeEmbedding(1, 0),
 		"older-repeat":  makeEmbedding(0.8, 0.6),
 		"recent-repeat": makeEmbedding(1, 0),
@@ -211,9 +210,9 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRecordsConfidenceAndStreak
 		Threshold:     0.8,
 		LookbackTurns: 2,
 	}}
-	reaskClassifier, err := NewReaskClassifier(rules, "test-model")
+	reaskClassifier, err := NewReaskClassifierWithProvider(rules, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	classifier := &Classifier{
@@ -256,7 +255,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRecordsConfidenceAndStreak
 }
 
 func TestClassifierEvaluateAllSignalsWithContext_ReaskRetainsOnlyPersistentTier(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current":       makeEmbedding(1, 0),
 		"older-repeat":  makeEmbedding(0.8, 0.6),
 		"recent-repeat": makeEmbedding(1, 0),
@@ -274,9 +273,9 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRetainsOnlyPersistentTier(
 			LookbackTurns: 2,
 		},
 	}
-	reaskClassifier, err := NewReaskClassifier(rules, "test-model")
+	reaskClassifier, err := NewReaskClassifierWithProvider(rules, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	classifier := &Classifier{
@@ -322,7 +321,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRetainsOnlyPersistentTier(
 }
 
 func TestClassifierEvaluateAllSignalsWithContext_ReaskIgnoresNonUserMessages(t *testing.T) {
-	stubReaskEmbeddings(t, map[string][]float32{
+	provider := stubReaskEmbeddings(t, map[string][]float32{
 		"current": makeEmbedding(1, 0),
 	})
 
@@ -331,9 +330,9 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskIgnoresNonUserMessages(t *
 		Threshold:     0.8,
 		LookbackTurns: 1,
 	}}
-	reaskClassifier, err := NewReaskClassifier(rules, "test-model")
+	reaskClassifier, err := NewReaskClassifierWithProvider(rules, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	classifier := &Classifier{

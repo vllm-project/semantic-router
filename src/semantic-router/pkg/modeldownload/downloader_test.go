@@ -11,18 +11,19 @@ import (
 func TestBuildDownloadArgsFetchesFullSnapshotByDefault(t *testing.T) {
 	spec := ModelSpec{
 		LocalPath: "models/category_classifier_modernbert-base_model",
-		RepoID:    "llm-semantic-router/category_classifier_modernbert-base_model",
-		Revision:  "main",
+		RepoID:    "vllm-sr/category_classifier_modernbert-base_model",
 	}
 
-	got := buildDownloadArgs(spec)
 	want := []string{
 		"download",
 		spec.RepoID,
 		"--local-dir", spec.LocalPath,
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("buildDownloadArgs() = %#v, want %#v", got, want)
+	for _, revision := range []string{"", "main"} {
+		spec.Revision = revision
+		if got := buildDownloadArgs(spec); !reflect.DeepEqual(got, want) {
+			t.Fatalf("revision %q: buildDownloadArgs() = %#v, want %#v", revision, got, want)
+		}
 	}
 }
 

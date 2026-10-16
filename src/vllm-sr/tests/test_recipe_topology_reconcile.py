@@ -15,6 +15,7 @@ from cli.storage_secrets import (
 from recipe_topology_test_support import (
     _REDIS_NAMED_MOUNT,
     _STORAGE_CASES,
+    REQUIRES_LINUX_MEMFD,
     _remove_transition,
     _repair_transition,
     _storage_snapshot,
@@ -148,6 +149,37 @@ def test_container_status_distinguishes_absence_from_runtime_failure(monkeypatch
         ),
     )
     assert topology._container_status("missing") == "not found"
+
+
+def test_container_lookups_ask_podman_for_containers_only(monkeypatch):
+    """A kept `vllm-sr-redis-data` volume must not answer for `vllm-sr-redis`."""
+    calls = []
+
+    def podman(arguments):
+        calls.append(arguments)
+        name = arguments[-1]
+        typed = arguments[:2] == ["container", "inspect"]
+        if not typed and "vllm-sr-redis-data".startswith(name):
+            return subprocess.CompletedProcess(
+                args=arguments,
+                returncode=125,
+                stdout="",
+                stderr='Error: template: inspect:1:2: executing "inspect" at '
+                "<.State.Status>: can't evaluate field State in type interface {}",
+            )
+        return subprocess.CompletedProcess(
+            args=arguments,
+            returncode=125,
+            stdout="",
+            stderr=f"Error: no such container {name}",
+        )
+
+    monkeypatch.setattr(topology, "_run_raw", podman)
+
+    assert topology._container_status("vllm-sr-redis") == "not found"
+    with pytest.raises(topology.TopologyReconcileError, match="could not be inspected"):
+        topology._inspect("vllm-sr-redis")
+    assert [call[:2] for call in calls] == [["container", "inspect"]] * 2
 
 
 def test_host_hidden_state_dir_resolves_exact_split_dashboard_bind(monkeypatch):
@@ -311,6 +343,7 @@ def test_repair_apply_preserves_stopped_sidecar_before_snapshot_clone(
 
 
 @pytest.mark.parametrize("service,mount,port", _STORAGE_CASES)
+@REQUIRES_LINUX_MEMFD
 def test_repair_apply_clones_exact_storage_data_and_runtime_contract(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -390,6 +423,7 @@ def test_repair_apply_clones_exact_storage_data_and_runtime_contract(
 
 
 @pytest.mark.parametrize("service", ["router", "envoy"])
+@REQUIRES_LINUX_MEMFD
 def test_runtime_replacement_pins_immutable_image_id_when_tag_drifts(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, service: str
 ):
@@ -437,6 +471,7 @@ def test_runtime_replacement_pins_immutable_image_id_when_tag_drifts(
     assert not list(tmp_path.iterdir())
 
 
+@REQUIRES_LINUX_MEMFD
 def test_router_replacement_rewrites_and_verifies_management_publication(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -709,6 +744,7 @@ def test_repair_rejects_container_network_namespace(monkeypatch, tmp_path: Path)
         topology._repair_storage(tmp_path / "topology.json", transition)
 
 
+@REQUIRES_LINUX_MEMFD
 def test_clone_rejects_replacement_with_different_immutable_image_id(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):

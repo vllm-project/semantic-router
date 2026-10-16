@@ -1,0 +1,51 @@
+name: Component Contracts
+
+on:
+  workflow_call:
+    inputs:
+      batch:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Execute Contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        if: fromJSON(inputs.batch).go
+        with:
+          go-version: '1.25'
+      - name: Prepare Shared Python Environment
+        run: make harness-venv-install
+      - name: Execute Selected Component Contracts
+        env:
+          BATCH: ${{ inputs.batch }}
+          BATCH_ID: ${{ fromJSON(inputs.batch).id }}
+        run: |
+          .venv-agent/bin/python tools/ci/run_component_batch.py --batch "$BATCH" \
+            --output ".agent-harness/ci/components/$BATCH_ID"
+      - name: Upload Independent Contract Receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-result-components-${{ fromJSON(inputs.batch).id }}
+          path: .agent-harness/ci/components/${{ fromJSON(inputs.batch).id }}/results/*.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Upload Component Framework Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-evidence-${{ fromJSON(inputs.batch).id }}
+          path: .agent-harness/ci/components/${{ fromJSON(inputs.batch).id }}/raw/
+          include-hidden-files: true
+          if-no-files-found: warn

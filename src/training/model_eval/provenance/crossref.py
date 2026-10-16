@@ -19,7 +19,23 @@ from typing import Any
 
 from .manifest import ManifestError, load_manifests
 
-__all__ = ["artifact_identity_digest", "validate_bundle"]
+__all__ = [
+    "artifact_identity_digest",
+    "file_digest",
+    "load_validated_bundle",
+    "validate_bundle",
+    "verify_artifact_bytes",
+]
+
+DIGEST_CHUNK_BYTES = 1024 * 1024
+
+
+def file_digest(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(DIGEST_CHUNK_BYTES), b""):
+            hasher.update(chunk)
+    return f"sha256:{hasher.hexdigest()}"
 
 
 def artifact_identity_digest(files: list[dict[str, Any]]) -> str:
@@ -37,12 +53,42 @@ def artifact_identity_digest(files: list[dict[str, Any]]) -> str:
     return f"sha256:{hasher.hexdigest()}"
 
 
+def verify_artifact_bytes(manifest: dict[str, Any], directory: Path) -> list[str]:
+    """Re-hash the files an artifact manifest lists and report every mismatch.
+
+    Cross-reference validation reads no bytes, so it proves that a bundle is
+    internally consistent and nothing about the directory a caller is measuring.
+    A caller that attributes numbers to a manifest identity needs both.
+    """
+    problems: list[str] = []
+    for entry in manifest["files"]:
+        path = Path(directory) / entry["path"]
+        if not path.is_file():
+            problems.append(f"{entry['path']} is missing from {directory}")
+            continue
+        digest = file_digest(path)
+        if digest != entry["digest"]:
+            problems.append(
+                f"{entry['path']} hashes to {digest}, but {manifest['id']} "
+                f"records {entry['digest']}"
+            )
+    return problems
+
+
 def validate_bundle(directory: Path) -> dict[str, Any]:
     """Validate every manifest under ``directory`` and their mutual references.
 
     Returns a summary of what was checked. Raises :class:`ManifestError` listing
     every problem found, so one run reports the full set rather than the first.
     """
+    summary, _ = load_validated_bundle(directory)
+    return summary
+
+
+def load_validated_bundle(
+    directory: Path,
+) -> tuple[dict[str, Any], dict[str, list[tuple[Path, dict[str, Any]]]]]:
+    """Load manifests once, validate their references, and return summary and content."""
     grouped = load_manifests(directory)
     problems: list[str] = []
 
@@ -79,7 +125,7 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
         "runs": sorted(runs),
         "artifacts": sorted(artifacts),
         "evaluations": sorted(evaluations),
-    }
+    }, grouped
 
 
 def _index(

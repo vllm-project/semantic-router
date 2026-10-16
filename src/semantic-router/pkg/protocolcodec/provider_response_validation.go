@@ -70,6 +70,8 @@ func responsesOutputItemRequiredFields(item responsesItemWire) ([]string, error)
 		}
 	case "function_call":
 		required = append(required, "call_id", "name", "arguments")
+	case "custom_tool_call":
+		required = append(required, "call_id", "name", "input")
 	case "reasoning":
 		required = append(required, "id", "summary")
 	case "image_generation_call":

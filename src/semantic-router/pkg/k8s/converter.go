@@ -127,6 +127,13 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 		})
 	}
 
+	configDecision.Reliability = convertDecisionReliability(decision.Reliability)
+	decisionFallback, err := convertDecisionFallback(decision.Fallback)
+	if err != nil {
+		return config.Decision{}, fmt.Errorf("invalid fallback in decision %s: %w", decision.Name, err)
+	}
+	configDecision.Fallback = decisionFallback
+
 	return configDecision, nil
 }
 
@@ -184,8 +191,12 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 			Name:                      signal.Name,
 			SimilarityThreshold:       signal.Threshold,
 			Candidates:                signal.Candidates,
+			ImageCandidates:           signal.ImageCandidates,
+			NegativeCandidates:        signal.NegativeCandidates,
+			NegativeImageCandidates:   signal.NegativeImageCandidates,
 			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
 			QueryModality:             config.QueryModality(signal.QueryModality),
+			PrototypeScoring:          convertPrototypeScoring(signal.PrototypeScoring),
 		})
 	}
 

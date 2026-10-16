@@ -88,11 +88,21 @@ func collectSignalRefs(expr BoolExpr, negated bool, info *routeSignalInfo) {
 		collectSignalRefs(e.Expr, !negated, info)
 	case *SignalRefExpr:
 		if negated {
-			info.negatedRefs[e.SignalType] = append(info.negatedRefs[e.SignalType], e.SignalName)
+			info.negatedRefs[e.SignalType] = append(info.negatedRefs[e.SignalType], guardSignalName(e))
 		} else {
-			info.positiveRefs[e.SignalType] = append(info.positiveRefs[e.SignalType], e.SignalName)
+			info.positiveRefs[e.SignalType] = append(info.positiveRefs[e.SignalType], guardSignalName(e))
 		}
 	}
+}
+
+// guardSignalName is the exact reference that route guards compare. A
+// labelled reference names its label, so conditions on different options of
+// one decision question or classifier are different references.
+func guardSignalName(ref *SignalRefExpr) string {
+	if label, ok := ref.Fields["label"].(StringValue); ok && label.V != "" {
+		return ref.SignalName + ":" + label.V
+	}
+	return ref.SignalName
 }
 
 func containsString(ss []string, target string) bool {
@@ -380,46 +390,44 @@ func (v *Validator) checkProjectionPartitionImpossibleANDsInRoute(
 	route *RouteDecl,
 	memberToPartition map[string]string,
 ) {
+	// Distributing AND over OR can produce contradictory cross-products even
+	// when the original expression is satisfiable: (A OR B) AND (A OR B) still
+	// accepts A or B. An impossible-route constraint requires every alternative
+	// to contradict a partition; one viable alternative disproves that claim.
 	clauses := positiveConjunctionClauses(route.When)
 	seen := make(map[string]struct{})
-
+	var conflicts []string
 	for _, clause := range clauses {
 		partitionMembers := make(map[string]SignalRefExpr)
+		impossible := false
 		for _, ref := range clause {
 			partitionName, ok := memberToPartition[projectionPartitionMemberKey(ref.SignalType, ref.SignalName)]
 			if !ok {
 				continue
 			}
-
 			if existing, clash := partitionMembers[partitionName]; clash && existing.SignalName != ref.SignalName {
-				pair := []string{
-					projectionPartitionMemberKey(existing.SignalType, existing.SignalName),
-					projectionPartitionMemberKey(ref.SignalType, ref.SignalName),
-				}
+				impossible = true
+				pair := []string{projectionPartitionMemberKey(existing.SignalType, existing.SignalName), projectionPartitionMemberKey(ref.SignalType, ref.SignalName)}
 				sort.Strings(pair)
-				diagKey := route.Name + "|" + partitionName + "|" + strings.Join(pair, "|")
+				diagKey := partitionName + "|" + strings.Join(pair, "|")
 				if _, alreadyReported := seen[diagKey]; alreadyReported {
 					continue
 				}
 				seen[diagKey] = struct{}{}
-
-				v.addDiag(DiagConstraint, route.Pos,
-					fmt.Sprintf(
-						"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
-						route.Name,
-						partitionName,
-						existing.SignalType,
-						existing.SignalName,
-						ref.SignalType,
-						ref.SignalName,
-					),
-					nil,
-				)
+				conflicts = append(conflicts, fmt.Sprintf(
+					"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
+					route.Name, partitionName, existing.SignalType, existing.SignalName, ref.SignalType, ref.SignalName,
+				))
 				continue
 			}
-
 			partitionMembers[partitionName] = ref
 		}
+		if !impossible {
+			return
+		}
+	}
+	for _, message := range conflicts {
+		v.addDiag(DiagConstraint, route.Pos, message, nil)
 	}
 }
 
@@ -574,7 +582,12 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		v.checkProjectionScoreKBMetricInput(context, pos, input)
 		return
 	}
-	if !v.isSignalDefined(input.SignalType, input.SignalName) {
+	name := input.SignalName
+	if strings.EqualFold(input.SignalType, config.SignalTypeDecision) {
+		// A decision input may read one option of its question: "<question>:<option>".
+		name, _, _ = strings.Cut(name, ":")
+	}
+	if !v.isSignalDefined(input.SignalType, name) {
 		v.addDiag(
 			DiagWarning,
 			pos,

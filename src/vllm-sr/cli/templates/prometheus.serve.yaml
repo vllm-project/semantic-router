@@ -10,3 +10,10 @@ scrape_configs:
         labels:
           service: 'semantic-router'
 
+
+  # Admin metrics stay inside the stack network; no host port is published.
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['vllm-sr-jaeger:14269']
+        labels:
+          service: 'jaeger'

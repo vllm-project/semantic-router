@@ -1,20 +1,22 @@
-export interface Signal {
-  keyword?: string[]
-  embedding?: string[]
-  domain?: string[]
-  fact_check?: string[]
-  user_feedback?: string[]
-  reask?: string[]
-  preference?: string[]
-  language?: string[]
-  context?: string[]
-  structure?: string[]
-  complexity?: string[]
-  modality?: string[]
-  authz?: string[]
-  jailbreak?: string[]
-  pii?: string[]
-  kb?: string[]
+import type {
+  InsightsTrajectoryRoute,
+  ReplayAdaptationScore,
+  ReplayRouteDiagnostics,
+  ReplaySessionPolicy,
+} from './insightsPageRoutingTypes'
+import type { SignalType } from '../generated/routerConfigContract'
+
+export type Signal = Partial<Record<SignalType, string[]>> & Record<string, string[] | undefined>
+
+export interface InsightsOutcome {
+  timestamp?: string
+  source: string
+  target: string
+  target_ref?: string
+  verdict: string
+  reason?: string
+  score?: number
+  metadata?: Record<string, string>
 }
 
 export interface ToolTraceStep {
@@ -98,6 +100,7 @@ export interface ProjectionTrace {
 }
 
 export interface InsightsRecord {
+  conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
@@ -111,14 +114,29 @@ export interface InsightsRecord {
   original_model?: string
   selected_model?: string
   reasoning_mode?: string
-  confidence_score?: number
+  confidence_score?: number | null
+  confidence_score_available?: boolean
   selection_method?: string
+  route_diagnostics?: ReplayRouteDiagnostics
+  session_policy?: ReplaySessionPolicy
+  learning?: {
+    protection?: ReplaySessionPolicy
+    protection_preflight?: ReplaySessionPolicy
+    adaptation?: {
+      mode?: string
+      action?: string
+      reason?: string
+      scores?: Record<string, ReplayAdaptationScore>
+    }
+  }
   signals: Signal
+  outcomes?: InsightsOutcome[]
   projections?: string[]
   projection_scores?: Record<string, number>
   projection_trace?: ProjectionTrace
   signal_confidences?: Record<string, number>
   signal_values?: Record<string, number>
+  signal_error_matches?: Record<string, boolean>
   tool_trace?: ToolTrace
   request_body?: string
   response_body?: string
@@ -137,10 +155,12 @@ export interface InsightsRecord {
   pii_enabled?: boolean
   jailbreak_detected?: boolean
   jailbreak_type?: string
-  jailbreak_confidence?: number
+  jailbreak_confidence?: number | null
+  jailbreak_score_available?: boolean
   response_jailbreak_detected?: boolean
   response_jailbreak_type?: string
-  response_jailbreak_confidence?: number
+  response_jailbreak_confidence?: number | null
+  response_jailbreak_score_available?: boolean
   pii_detected?: boolean
   pii_entities?: string[]
   pii_blocked?: boolean
@@ -154,6 +174,8 @@ export interface InsightsRecord {
   context_token_count?: number
   hallucination_enabled?: boolean
   hallucination_detected?: boolean
+  hallucination_score_available?: boolean
+  hallucination_score_kind?: string
   hallucination_confidence?: number
   hallucination_spans?: string[]
   prompt_tokens?: number
@@ -176,6 +198,7 @@ export interface InsightsTrajectoryToolCall {
 }
 
 export interface InsightsTrajectoryMessage {
+  conversation_id?: string
   role: 'user' | 'assistant' | 'tool'
   content?: string
   tool_calls?: InsightsTrajectoryToolCall[]
@@ -189,6 +212,8 @@ export interface InsightsTrajectoryMessage {
 export interface InsightsTrajectory {
   object: 'router_replay.trajectory'
   session_id: string
+  recipe?: string
+  routes?: InsightsTrajectoryRoute[]
   record_count: number
   turn_count: number
   messages: InsightsTrajectoryMessage[]
@@ -207,6 +232,14 @@ export interface InsightsListResponse {
 
 export type InsightsFilterType = 'all' | 'cached' | 'streamed'
 
+export interface InsightsCurrencyCostSummary {
+  totalSaved: number
+  baselineSpend: number
+  actualSpend: number
+  currency: string
+  costRecordCount: number
+}
+
 export interface InsightsCostSummary {
   totalSaved: number
   baselineSpend: number
@@ -214,11 +247,20 @@ export interface InsightsCostSummary {
   currency?: string
   costRecordCount: number
   excludedRecordCount: number
+  byCurrency?: InsightsCurrencyCostSummary[]
 }
 
 export interface InsightsAggregateValue {
   name: string
   value: number
+}
+
+export interface InsightsAggregateCurrencySummary {
+  total_saved: number
+  baseline_spend: number
+  actual_spend: number
+  currency: string
+  cost_record_count: number
 }
 
 export interface InsightsAggregateSummary {
@@ -228,6 +270,7 @@ export interface InsightsAggregateSummary {
   currency?: string
   cost_record_count: number
   excluded_record_count: number
+  by_currency?: InsightsAggregateCurrencySummary[]
 }
 
 export interface InsightsAggregateTokenVolume {

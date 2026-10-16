@@ -24,7 +24,7 @@ class TextEncoder(nn.Module):
 
     def __init__(
         self,
-        model_name_or_path: str = "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+        model_name_or_path: str = "vllm-sr/mmbert-embed-32k-2d-matryoshka",
         revision: str | None = None,
         output_dim: int = 768,
         pooling_mode: str = "mean",

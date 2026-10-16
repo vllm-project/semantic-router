@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
+import { FiAlertCircle, FiCheck, FiCopy, FiTerminal, FiUser } from 'react-icons/fi'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import {
+  AGENT_INSTALL_DOC_PATH,
   AGENT_INSTALL_PROMPT,
   AGENT_SKILL_PATH,
   CURL_INSTALL_COMMAND,
@@ -91,12 +93,12 @@ export default function InstallQuickStartSection(): JSX.Element {
             {activeAudience === 'human'
               ? (
                   <Translate id="homepage.install.title.human">
-                    Install locally in one line
+                    Get started in one line
                   </Translate>
                 )
               : (
                   <Translate id="homepage.install.title.agent">
-                    Hand the setup to your agent
+                    Let your agent set it up
                   </Translate>
                 )}
           </h2>
@@ -123,6 +125,7 @@ export default function InstallQuickStartSection(): JSX.Element {
             }}
             onKeyDown={handleAudienceNavigation}
           >
+            <FiUser className={styles.audienceIcon} aria-hidden="true" />
             <Translate id="homepage.install.audience.human">For humans</Translate>
           </button>
           <button
@@ -138,6 +141,7 @@ export default function InstallQuickStartSection(): JSX.Element {
             }}
             onKeyDown={handleAudienceNavigation}
           >
+            <FiTerminal className={styles.audienceIcon} aria-hidden="true" />
             <Translate id="homepage.install.audience.agent">For agents</Translate>
           </button>
         </div>
@@ -165,19 +169,27 @@ export default function InstallQuickStartSection(): JSX.Element {
             title={copyLabel}
             aria-label={copyLabel}
           >
-            <span aria-hidden="true">{copied ? '✓' : failed ? '!' : '⧉'}</span>
+            <span aria-hidden="true">
+              {copied ? <FiCheck /> : failed ? <FiAlertCircle /> : <FiCopy />}
+            </span>
           </button>
         </div>
+
+        <p className={styles.channelNote}>
+          <strong><Translate id="homepage.install.channel">Development channel</Translate></strong>
+          <span aria-hidden="true"> · </span>
+          <Translate id="homepage.install.channelDescription">Matches the latest docs, including the built-in model runtime.</Translate>
+        </p>
 
         <div className={styles.actions}>
           {activeAudience === 'agent'
             ? (
                 <PillLink
                   className={styles.guideLink}
-                  href={AGENT_SKILL_PATH}
+                  to={AGENT_INSTALL_DOC_PATH}
                 >
                   <Translate id="homepage.install.agentCta">
-                    View agent skill
+                    Agent installation guide
                   </Translate>
                 </PillLink>
               )
@@ -190,8 +202,14 @@ export default function InstallQuickStartSection(): JSX.Element {
               )}
           {activeAudience === 'agent'
             ? (
-                <PillLink className={styles.docsLink} to="/docs/installation" muted>
-                  <Translate id="homepage.install.secondaryCta">Open quickstart</Translate>
+                <PillLink
+                  className={styles.docsLink}
+                  href={AGENT_SKILL_PATH}
+                  muted
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  <Translate id="homepage.install.secondaryCta">View raw skill</Translate>
                 </PillLink>
               )
             : (

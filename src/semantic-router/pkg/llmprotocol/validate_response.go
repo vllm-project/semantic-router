@@ -226,6 +226,7 @@ func ValidateUsage(usage Usage) error {
 	}
 	counts := []TokenCount{
 		usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite,
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h,
 		usage.OutputReasoning, usage.OutputOther, usage.InputTotal, usage.OutputTotal, usage.Total,
 	}
 	hasValue := false
@@ -268,6 +269,7 @@ func validUsageProvenance(provenance UsageProvenance) bool {
 func validateUsageTotals(usage Usage) error {
 	checks := [][2]bool{
 		usageSumStatus(usage.InputTotal, usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite),
+		usageSumStatus(usage.InputCacheWrite, usage.InputCacheWrite5m, usage.InputCacheWrite1h),
 		usageSumStatus(usage.OutputTotal, usage.OutputReasoning, usage.OutputOther),
 		usageSumStatus(usage.Total, usage.InputTotal, usage.OutputTotal),
 	}
@@ -289,12 +291,12 @@ func usageSumStatus(total TokenCount, parts ...TokenCount) [2]bool {
 
 func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	var sum int64
-	found := false
+	complete := true
 	for _, part := range parts {
 		if part.Value == nil {
+			complete = false
 			continue
 		}
-		found = true
 		if *part.Value > math.MaxInt64-sum {
 			return false, true
 		}
@@ -303,7 +305,12 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	if total.Value == nil {
 		return true, false
 	}
-	return !found || *total.Value == sum, false
+	// Optional usage buckets may be unknown. Known parts are a lower bound,
+	// while a complete breakdown must add up exactly to its declared total.
+	if complete {
+		return sum == *total.Value, false
+	}
+	return sum <= *total.Value, false
 }
 
 func exceeds(value string, limit int) bool { return limit > 0 && len(value) > limit }

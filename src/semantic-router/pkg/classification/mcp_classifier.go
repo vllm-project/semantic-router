@@ -3,9 +3,9 @@ package classification
 import (
 	"context"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 const (
@@ -32,8 +32,8 @@ type MCPCategoryInitializer interface {
 
 // MCPCategoryInference performs classification via MCP
 type MCPCategoryInference interface {
-	Classify(ctx context.Context, text string) (candle_binding.ClassResult, error)
-	ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error)
+	Classify(ctx context.Context, text string) (tasks.ClassResult, error)
+	ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error)
 	ListCategories(ctx context.Context) (*CategoryMapping, error)
 }
 

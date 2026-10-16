@@ -72,7 +72,7 @@ def test_prompt_candidates_reject_effective_lora_identity_collision():
         )
 
 
-def test_classifier_contract_rejects_multiple_local_rules():
+def test_classifier_contract_accepts_multiple_local_rules():
     config = UserConfig.model_validate(
         {
             "version": "v0.3",
@@ -96,7 +96,7 @@ def test_classifier_contract_rejects_multiple_local_rules():
             },
         }
     )
-    assert any(
+    assert not any(
         "only one local classifier" in error.message
         for error in validate_user_config(config)
     )
@@ -130,7 +130,7 @@ def test_classifier_contract_allows_one_local_rule_per_recipe():
     assert not any("only one local classifier" in error.message for error in errors)
 
 
-def test_classifier_contract_rejects_incompatible_recipe_local_models():
+def test_classifier_contract_allows_independent_recipe_local_models():
     def rule(path):
         return {
             "name": "risk",
@@ -161,7 +161,7 @@ def test_classifier_contract_rejects_incompatible_recipe_local_models():
 
     errors = validate_user_config(config)
 
-    assert any("identical model_path" in error.message for error in errors)
+    assert not any("identical model_path" in error.message for error in errors)
 
 
 @pytest.mark.parametrize(

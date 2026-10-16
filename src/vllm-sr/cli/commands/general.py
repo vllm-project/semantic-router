@@ -2,22 +2,26 @@
 
 from __future__ import annotations
 
-import json
+import os
+import sys
 from pathlib import Path
 
 import click
 
+from cli import router_validation
 from cli.commands.common import exit_with_logged_error
 from cli.commands.config import (
     config_command,
     config_schema_command,
-    import_config_from_source_command,
+    init_config_command,
     migrate_config_command,
 )
 from cli.commands.config_management import CONFIG_MANAGEMENT_COMMANDS
+from cli.commands.runtime_paths import resolve_state_root_dir
 from cli.commands.validate import validate_command
+from cli.config_proposal import propose_config_command
+from cli.gateway_mode import GATEWAY_ENV, VALID_GATEWAYS, resolve_gateway
 from cli.router_management_client import RouterManagementClient
-from cli.terminal import echo
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -31,15 +35,35 @@ def config(ctx: click.Context) -> None:
     Print generated configuration or run config subcommands.
 
     Examples:
-        vllm-sr config envoy
+        vllm-sr config init --output config.yaml
+        vllm-sr config validate --config config.yaml
+        vllm-sr config apply --config config.yaml
         vllm-sr config router
-        vllm-sr config envoy --config my-config.yaml
         vllm-sr config migrate --config old.yaml
-        vllm-sr config import --from openclaw --source openclaw.json
+        vllm-sr config envoy    # with --gateway extproc
     """
     if ctx.invoked_subcommand is not None:
         return
     click.echo(ctx.get_help())
+
+
+@config.command("init")
+@click.option(
+    "--output",
+    default="config.yaml",
+    show_default=True,
+    help="Path for the new canonical configuration template.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite the output file if it already exists.",
+)
+@exit_with_logged_error(log)
+def config_init(output: str, force: bool) -> None:
+    """Create a minimal canonical configuration template."""
+
+    init_config_command(output, force=force)
 
 
 @config.command("envoy")
@@ -95,6 +119,11 @@ def config_router(config_path: str) -> None:
     metavar="KIND:NAME",
     help="Print one signal, algorithm, plugin, or projection contract.",
 )
+@click.option(
+    "--expanded",
+    is_flag=True,
+    help="Include the selected section's self-contained JSON Schema.",
+)
 @exit_with_logged_error(log)
 def config_schema(
     endpoint: str | None,
@@ -103,6 +132,7 @@ def config_schema(
     full: bool,
     section: str | None,
     surface: str | None,
+    expanded: bool,
 ) -> None:
     """Discover the canonical config contract progressively."""
 
@@ -111,6 +141,7 @@ def config_schema(
         full=full,
         section=section,
         surface=surface,
+        expanded=expanded,
         timeout=timeout,
         token_env=token_env,
     )
@@ -139,46 +170,41 @@ def config_migrate(config_path: str, output: str | None, force: bool) -> None:
     migrate_config_command(config_path=config_path, output_path=output, force=force)
 
 
-@config.command("import")
+@config.command("propose")
 @click.option(
-    "--from",
-    "from_type",
+    "--config",
+    "config_path",
     required=True,
-    type=click.Choice(["openclaw"], case_sensitive=False),
-    help="Import source type.",
+    help="Path to a canonical v0.3 config file. The file is not modified.",
 )
 @click.option(
-    "--source",
-    "source_path",
-    help="Path to the source config file. Defaults to OpenClaw discovery order.",
+    "--intent",
+    required=True,
+    help="Maintained proposal intent id, for example selection.latency-aware.",
 )
 @click.option(
-    "--target",
-    "target_path",
-    default="config.yaml",
-    show_default=True,
-    help="Path to the target canonical config file.",
+    "--decision",
+    default=None,
+    help="Name of an existing routing decision. Used by decision intents.",
 )
 @click.option(
-    "--force",
-    is_flag=True,
-    help="Overwrite existing backup files for the source or target paths.",
+    "--recipe",
+    default=None,
+    help="Name of an existing recipe. Used by recipe intents.",
 )
 @exit_with_logged_error(log)
-def config_import(
-    from_type: str,
-    source_path: str | None,
-    target_path: str,
-    force: bool,
+def config_propose(
+    config_path: str, intent: str, decision: str | None, recipe: str | None
 ) -> None:
-    """Import a supported external config source into canonical v0.3 YAML."""
+    """Print a reviewable config proposal. This command does not apply it.
 
-    import_config_from_source_command(
-        from_type=from_type,
-        source_path=source_path,
-        target_path=target_path,
-        force=force,
-    )
+    Examples:
+        vllm-sr config propose --config config.yaml \\
+            --intent selection.latency-aware --decision default-route
+    """
+
+    if not propose_config_command(config_path, intent, decision, recipe):
+        sys.exit(1)
 
 
 @config.command("validate")
@@ -190,7 +216,23 @@ def config_import(
 @click.option(
     "--endpoint",
     default=None,
-    help="Also validate with this running Router's authoritative parser.",
+    help="Validate with this running Router instead of the local Router image.",
+)
+@click.option(
+    "--image",
+    default=None,
+    help="Router image whose own validation to run (default: the stack's, if present).",
+)
+@click.option(
+    "--gateway",
+    type=click.Choice(VALID_GATEWAYS),
+    default=None,
+    help="The gateway mode the configuration is served in (default: standalone).",
+)
+@click.option(
+    "--offline",
+    is_flag=True,
+    help="Run only the CLI's own checks, without the Router's validation.",
 )
 @click.option("--timeout", type=float, default=15, show_default=True)
 @click.option("--token-env", default="VSR_MGMT_TOKEN", show_default=True)
@@ -198,24 +240,45 @@ def config_import(
 def config_validate(
     config: str,
     endpoint: str | None,
+    image: str | None,
+    gateway: str | None,
+    offline: bool,
     timeout: float,
     token_env: str,
 ) -> None:
     """
     Validate configuration file.
 
+    The CLI's own checks run first. The Router's validation then decides, as
+    it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
+    Router in its local image (never pulled), or the running Router --endpoint
+    names.
+
     Examples:
         vllm-sr config validate
         vllm-sr config validate --config my-config.yaml
+        vllm-sr config validate --endpoint http://localhost:8080
     """
-    validate_command(config)
-    if endpoint:
-        response = RouterManagementClient(
-            endpoint,
-            timeout=timeout,
-            token_env=token_env,
-        ).validate_config(Path(config).read_text(encoding="utf-8"))
-        echo(json.dumps(response.payload, indent=2, sort_keys=True))
+    config_path = Path(config)
+    if offline:
+        router_verdict = None
+    elif endpoint:
+        client = RouterManagementClient(endpoint, timeout=timeout, token_env=token_env)
+
+        def router_verdict():
+            return router_validation.validate_with_endpoint(config_path, client)
+
+    else:
+
+        def router_verdict():
+            return router_validation.validate_with_image(
+                config_path,
+                router_validation.validation_image(image),
+                gateway=resolve_gateway(gateway or os.getenv(GATEWAY_ENV)),
+                models_dir=Path(resolve_state_root_dir(config)) / "models",
+            )
+
+    validate_command(config, router_verdict=router_verdict)
 
 
 for command in CONFIG_MANAGEMENT_COMMANDS:

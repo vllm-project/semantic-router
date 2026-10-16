@@ -2,6 +2,7 @@ package configschema
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +45,26 @@ func TestRenderFocusedViewsIncludeOnlyReferencedDefinitions(t *testing.T) {
 	if metadata["path"] != "global.router.learning" {
 		t.Fatalf("section metadata=%v", metadata)
 	}
+	if metadata["detail"] != "summary" || sectionDocument["$defs"] != nil {
+		t.Fatalf("section is not compact: %#v", sectionDocument)
+	}
+	fields, _ := sectionDocument["fields"].([]any)
+	if len(fields) == 0 {
+		t.Fatalf("section field directory is empty: %#v", sectionDocument)
+	}
+
+	expanded, err := Render(ViewOptions{View: ViewSection, Path: "global.router.learning", Expanded: true})
+	if err != nil {
+		t.Fatalf("render expanded section: %v", err)
+	}
+	var expandedDocument map[string]any
+	if decodeErr := json.Unmarshal(expanded.Body, &expandedDocument); decodeErr != nil {
+		t.Fatalf("decode expanded section: %v", decodeErr)
+	}
+	expandedMetadata, _ := expandedDocument["x-vllm-sr-view"].(map[string]any)
+	if expandedMetadata["detail"] != "expanded" || expandedDocument["$defs"] == nil {
+		t.Fatalf("expanded section is incomplete: %#v", expandedDocument)
+	}
 
 	surface, err := Render(ViewOptions{View: ViewSurface, SurfaceKind: "signal", SurfaceName: "keyword"})
 	if err != nil {
@@ -69,12 +90,12 @@ func TestRenderTopLevelCollectionAndScalarSections(t *testing.T) {
 		if err := json.Unmarshal(section.Body, &document); err != nil {
 			t.Fatalf("decode %s section: %v", path, err)
 		}
-		if document["type"] != "array" || document["items"] == nil {
-			t.Fatalf("%s section does not describe array items: %#v", path, document)
+		if shape, _ := document["shape"].(string); !strings.HasPrefix(shape, "array<") {
+			t.Fatalf("%s section does not describe its array shape: %#v", path, document)
 		}
-		definitions, ok := document["$defs"].(map[string]any)
-		if !ok || len(definitions) == 0 {
-			t.Fatalf("%s section is missing its item definitions", path)
+		fields, ok := document["fields"].([]any)
+		if !ok || len(fields) == 0 {
+			t.Fatalf("%s section is missing its item field directory", path)
 		}
 	}
 
@@ -86,7 +107,7 @@ func TestRenderTopLevelCollectionAndScalarSections(t *testing.T) {
 	if err := json.Unmarshal(version.Body, &document); err != nil {
 		t.Fatalf("decode version section: %v", err)
 	}
-	if document["type"] != "string" || document["const"] != ConfigVersion {
+	if document["shape"] != "string" || document["const"] != ConfigVersion {
 		t.Fatalf("version section does not publish its fixed scalar value: %#v", document)
 	}
 }

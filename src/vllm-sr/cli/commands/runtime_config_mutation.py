@@ -9,7 +9,7 @@ import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
 from cli.config_schema import routing_surface_catalog
-from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
+from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -35,6 +35,7 @@ ALGORITHM_OVERRIDE_TYPES = (
     "svm",
     "mlp",
     "multi_factor",
+    "random",
 )
 
 if not set(ALGORITHM_OVERRIDE_TYPES).issubset(_CANONICAL_ALGORITHM_TYPES):
@@ -51,6 +52,7 @@ ALGORITHM_HINTS = {
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
     "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
+    "random": "  Tip: No configuration needed",
 }
 
 ALGORITHM_CONFIG_BLOCKS = tuple(
@@ -88,11 +90,18 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
 GPU_OVERRIDE_PREVIEW_LIMIT = 8
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
-# Platforms that flip router internal-model `use_cpu` flags to false by default
-# so local signal models run on the platform GPU.
-GPU_DEFAULT_PLATFORMS = (PLATFORM_AMD, PLATFORM_NVIDIA)
+# Platforms with GPU defaults for router internal models. AMD semantic
+# embeddings retain their authored use_cpu setting.
+GPU_DEFAULT_PLATFORMS = (PLATFORM_ROCM, PLATFORM_CUDA)
+SEMANTIC_EMBEDDING_USE_CPU_PATH = (
+    "global",
+    "model_catalog",
+    "embeddings",
+    "semantic",
+    "use_cpu",
+)
 GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
-    ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
+    SEMANTIC_EMBEDDING_USE_CPU_PATH,
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
@@ -112,14 +121,6 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "detector",
         "use_cpu",
     ),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "explainer",
-        "use_cpu",
-    ),
     ("global", "model_catalog", "modules", "feedback_detector", "use_cpu"),
     (
         "global",
@@ -129,6 +130,9 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "classifier",
         "use_cpu",
     ),
+    # Safety runs the decision model too: on a GPU it shares the other
+    # signals' deployment instead of loading a CPU copy.
+    ("global", "model_catalog", "modules", "safety", "safety", "use_cpu"),
 )
 
 
@@ -138,22 +142,30 @@ def _normalize_platform(value: str | None) -> str:
     return str(value).strip().lower()
 
 
+def _preserve_use_cpu_setting(path: str, platform: str) -> bool:
+    return platform == PLATFORM_ROCM and path == ".".join(
+        SEMANTIC_EMBEDDING_USE_CPU_PATH
+    )
+
+
 def _set_use_cpu_false(
-    config_node: object, path: str, changed_paths: list[str]
+    config_node: object, path: str, changed_paths: list[str], platform: str
 ) -> None:
     if isinstance(config_node, dict):
         for key, value in config_node.items():
             current_path = f"{path}.{key}" if path else key
+            if _preserve_use_cpu_setting(current_path, platform):
+                continue
             if key == "use_cpu" and value is True:
                 config_node[key] = False
                 changed_paths.append(current_path)
             else:
-                _set_use_cpu_false(value, current_path, changed_paths)
+                _set_use_cpu_false(value, current_path, changed_paths, platform)
         return
 
     if isinstance(config_node, list):
         for index, item in enumerate(config_node):
-            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths)
+            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths, platform)
 
 
 def _ensure_mapping_path(
@@ -192,6 +204,11 @@ def _inject_missing_gpu_defaults(
             continue
 
         leaf_key = use_cpu_path[-1]
+        if _preserve_use_cpu_setting(".".join(use_cpu_path), platform):
+            if leaf_key not in parent:
+                parent[leaf_key] = True
+                changed_paths.append(".".join(use_cpu_path))
+            continue
         existing_value = parent.get(leaf_key)
         if existing_value is False:
             continue
@@ -243,9 +260,10 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD (ROCm) and NVIDIA (CUDA) platforms, rewrite router internal model
-    `use_cpu` flags to false by default so `--platform amd` / `--platform nvidia`
-    run local signal models on the platform GPU. Set
+    AMD (ROCm) and NVIDIA (CUDA) platforms default local signal models to GPU.
+    AMD semantic embeddings retain their authored `use_cpu` value, defaulting
+    to true when absent. Platform defaults never construct or modify bindings.
+    Set
     VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
     or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
     to preserve CPU settings when the router does not have dedicated GPU headroom.
@@ -255,7 +273,7 @@ def apply_platform_gpu_defaults(
         return False
 
     changed_paths: list[str] = []
-    _set_use_cpu_false(merged_config, "", changed_paths)
+    _set_use_cpu_false(merged_config, "", changed_paths, resolved_platform)
     _inject_missing_gpu_defaults(merged_config, changed_paths, resolved_platform)
     if not changed_paths:
         log.info(
@@ -268,7 +286,7 @@ def apply_platform_gpu_defaults(
     if len(changed_paths) > GPU_OVERRIDE_PREVIEW_LIMIT:
         preview = f"{preview}, ..."
     log.info(
-        "Platform %s detected: set %d use_cpu flag(s) to false for GPU default (%s)",
+        "Platform %s detected: applied %d internal model use_cpu default(s) (%s)",
         resolved_platform,
         len(changed_paths),
         preview,

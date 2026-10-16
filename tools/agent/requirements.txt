@@ -1,6 +1,8 @@
+-r ../docs/requirements.txt
 PyYAML==6.0.3
 codespell==2.4.1
 jsonschema==4.26.0
+rfc3339-validator==0.1.4
 nodeenv==1.10.0
 pre-commit==4.3.0
 pytest==9.0.3

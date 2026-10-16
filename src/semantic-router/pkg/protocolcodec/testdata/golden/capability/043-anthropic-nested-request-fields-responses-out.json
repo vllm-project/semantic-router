@@ -23,7 +23,6 @@
                   "type": "input_image"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -121,6 +120,44 @@
           "category": "unsupported_feature",
           "code": "unsupported_tools_input_examples"
         }
+      }
+    },
+    {
+      "name": "message_output_config_effort",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "first turn",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            },
+            {
+              "content": [
+                {
+                  "text": "second turn",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "max_output_tokens": 32,
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "messages[].output_config.effort",
+            "action": "dropped"
+          }
+        ]
       }
     }
   ]

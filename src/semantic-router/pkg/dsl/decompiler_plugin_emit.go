@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -13,6 +14,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"system_prompt":       emitSystemPromptPluginConfig,
 	"response_cache":      emitResponseCachePluginConfig,
 	"context_compression": emitStructuredPluginConfig,
+	"prompt_cache":        emitStructuredPluginConfig,
 	"router_replay":       emitRouterReplayPluginConfig,
 	"shadow_dispatch":     emitStructuredPluginConfig,
 	"memory":              emitMemoryPluginConfig,
@@ -73,31 +75,21 @@ func emitStructuredPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 }
 
 func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+	raw, ok := normalizePluginConfigMap(p.Configuration)
 	if !ok {
 		return
 	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
+	// Keep the canonical field order while retaining raw omission, false and
+	// zero; an effective capture struct would erase the inheritance contract.
+	typ := reflect.TypeOf(config.RouterReplayPluginConfig{})
+	for index := 0; index < typ.NumField(); index++ {
+		key := strings.Split(typ.Field(index).Tag.Get("json"), ",")[0]
+		if value, exists := raw[key]; exists {
+			fmt.Fprintf(sb, "    %s: %s\n", key, formatPluginConfigValue(value))
+			delete(raw, key)
+		}
 	}
-	if cfg.MaxRecords != 0 {
-		fmt.Fprintf(sb, "    max_records: %d\n", cfg.MaxRecords)
-	}
-	if cfg.CaptureRequestBody {
-		fmt.Fprintf(sb, "    capture_request_body: true\n")
-	}
-	if cfg.CaptureResponseBody {
-		fmt.Fprintf(sb, "    capture_response_body: true\n")
-	}
-	if cfg.MaxBodyBytes != 0 {
-		fmt.Fprintf(sb, "    max_body_bytes: %d\n", cfg.MaxBodyBytes)
-	}
-	if cfg.MaxToolTraceBytes != 0 {
-		fmt.Fprintf(sb, "    max_tool_trace_bytes: %d\n", cfg.MaxToolTraceBytes)
-	}
-	if cfg.MaxToolTraceSteps != 0 {
-		fmt.Fprintf(sb, "    max_tool_trace_steps: %d\n", cfg.MaxToolTraceSteps)
-	}
+	writePluginConfigMap(sb, raw, "    ")
 }
 
 func emitMemoryPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
@@ -127,9 +119,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.Enabled {
 		fmt.Fprintf(sb, "    enabled: true\n")
 	}
-	if cfg.UseNLI {
-		fmt.Fprintf(sb, "    use_nli: true\n")
-	}
 	if cfg.HallucinationAction != "" {
 		fmt.Fprintf(sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
 	}
@@ -158,6 +147,13 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if len(cfg.BlockedParams) > 0 {
 		fmt.Fprintf(sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
+	}
+	if cfg.DefaultMaxTokens != nil {
+		if cfg.DefaultMaxTokens.Auto {
+			fmt.Fprintln(sb, "    default_max_tokens: \"auto\"")
+		} else {
+			fmt.Fprintf(sb, "    default_max_tokens: %d\n", cfg.DefaultMaxTokens.Value)
+		}
 	}
 	if cfg.MaxTokensLimit != nil {
 		fmt.Fprintf(sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
@@ -193,8 +189,8 @@ func emitToolSelectionPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.Strategy != "" {
 		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
 	}
-	if cfg.FallbackToEmpty != nil && *cfg.FallbackToEmpty {
-		fmt.Fprintf(sb, "    fallback_to_empty: true\n")
+	if cfg.FallbackToEmpty != nil {
+		fmt.Fprintf(sb, "    fallback_to_empty: %v\n", *cfg.FallbackToEmpty)
 	}
 	if cfg.RelevanceThreshold != nil {
 		fmt.Fprintf(sb, "    relevance_threshold: %v\n", *cfg.RelevanceThreshold)
@@ -267,6 +263,13 @@ func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 }
 
 func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
+	if cfg.Rerank != nil {
+		if cfg.Rerank.TopK == nil {
+			fmt.Fprint(sb, "    rerank: {}\n")
+		} else {
+			fmt.Fprintf(sb, "    rerank: { top_k: %d }\n", *cfg.Rerank.TopK)
+		}
+	}
 	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
 		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
 	}

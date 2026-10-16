@@ -3,11 +3,15 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 const weatherRequestTimeout = 12 * time.Second
@@ -16,6 +20,8 @@ var (
 	weatherGeocodingBaseURL = "https://geocoding-api.open-meteo.com"
 	weatherForecastBaseURL  = "https://api.open-meteo.com"
 )
+
+var errNoWeatherResults = errors.New("no weather results found")
 
 type weatherRequest struct {
 	Location string `json:"location"`
@@ -105,13 +111,20 @@ func WeatherHandler() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), weatherRequestTimeout)
 		defer cancel()
 
-		result, err := fetchWeather(ctx, location, unit)
+		result, revoked, err := fetchWeather(ctx, location, unit, func() bool {
+			return dashboardauth.RejectRevokedMutation(w, r)
+		})
+		if revoked {
+			return
+		}
 		if err != nil {
-			status := http.StatusBadGateway
-			if strings.Contains(err.Error(), "no weather results") {
-				status = http.StatusNotFound
+			if errors.Is(err, errNoWeatherResults) {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
 			}
-			http.Error(w, err.Error(), status)
+			// Fetch errors name the upstream URL and the dial or proxy target, so only operators see them.
+			log.Printf("Weather lookup failed: %s", redactURLsForLog(err.Error()))
+			http.Error(w, "Weather service unavailable", http.StatusBadGateway)
 			return
 		}
 
@@ -131,15 +144,21 @@ func normalizeWeatherUnit(unit string) string {
 	}
 }
 
-func fetchWeather(ctx context.Context, location string, unit string) (*weatherLookupResult, error) {
+func fetchWeather(ctx context.Context, location string, unit string, rejectRevoked func() bool) (*weatherLookupResult, bool, error) {
+	if rejectRevoked() {
+		return nil, true, nil
+	}
 	target, err := geocodeLocation(ctx, location)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
+	if rejectRevoked() {
+		return nil, true, nil
+	}
 	forecast, err := fetchWeatherForecast(ctx, target, unit)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	return &weatherLookupResult{
@@ -165,7 +184,7 @@ func fetchWeather(ctx context.Context, location string, unit string) (*weatherLo
 			Precipitation:       forecast.Current.Precipitation,
 			PrecipitationUnit:   forecast.CurrentUnits.Precipitation,
 		},
-	}, nil
+	}, false, nil
 }
 
 func geocodeLocation(ctx context.Context, location string) (*weatherLocationResult, error) {
@@ -180,7 +199,7 @@ func geocodeLocation(ctx context.Context, location string) (*weatherLocationResu
 		return nil, err
 	}
 	if len(payload.Results) == 0 {
-		return nil, fmt.Errorf("no weather results found for %q", location)
+		return nil, fmt.Errorf("%w for %q", errNoWeatherResults, location)
 	}
 
 	result := payload.Results[0]

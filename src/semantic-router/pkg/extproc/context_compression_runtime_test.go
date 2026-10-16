@@ -37,7 +37,7 @@ func TestRecoveryTLSConfigRejectsIncompleteClientCertificate(t *testing.T) {
 func TestContextCompressionTokenCalibrationCategoryUsesSelectedModel(t *testing.T) {
 	ctx := &RequestContext{
 		VSRSelectedModel:           "selected-model",
-		RequestModel:               "auto",
+		RequestModel:               "vllm-sr/auto",
 		ContextCompressionRevision: "revision",
 	}
 	if got := contextCompressionTokenCalibrationCategory(ctx); got !=
