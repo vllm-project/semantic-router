@@ -182,7 +182,7 @@ func checkContractSize(t *testing.T, s Storage) {
 	}
 
 	// Each "<" takes six bytes once JSON-escaped.
-	if _, err := s.Add(ctx, Record{ID: "escaped", Timestamp: now, RequestBody: strings.Repeat("<", MaxRecordBytes)}); err != nil {
+	if _, err = s.Add(ctx, Record{ID: "escaped", Timestamp: now, RequestBody: strings.Repeat("<", MaxRecordBytes)}); err != nil {
 		t.Fatalf("escaped record: %v", err)
 	}
 	escaped, found, err := s.Get(ctx, "escaped")
@@ -191,13 +191,13 @@ func checkContractSize(t *testing.T, s Storage) {
 	}
 
 	// Later writes are held to the same limit.
-	if _, err := s.Add(ctx, Record{ID: "enriched", Timestamp: now, RequestBody: strings.Repeat("b", MaxRecordBytes/2)}); err != nil {
+	if _, err = s.Add(ctx, Record{ID: "enriched", Timestamp: now, RequestBody: strings.Repeat("b", MaxRecordBytes/2)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateToolTrace(ctx, "enriched", *trace(strings.Repeat("r", MaxRecordBytes))); err != nil {
+	if err = s.UpdateToolTrace(ctx, "enriched", *trace(strings.Repeat("r", MaxRecordBytes))); err != nil {
 		t.Fatalf("tool trace: %v", err)
 	}
-	if err := s.AttachResponse(ctx, "enriched", strings.Repeat("s", MaxRecordBytes), false); err != nil {
+	if err = s.AttachResponse(ctx, "enriched", strings.Repeat("s", MaxRecordBytes), false); err != nil {
 		t.Fatalf("response: %v", err)
 	}
 	enriched, found, err := s.Get(ctx, "enriched")

@@ -76,6 +76,7 @@ func TestRedisStoreContractIntegration(t *testing.T) {
 	}, 2500)
 }
 
+// StorageIntegration: redis
 func TestRedisStoreFinishesAnInterruptedIndexPass(t *testing.T) {
 	storagetest.Require(t, "redis")
 	host, port := contractEndpoint(t, "REDIS_HOST", "REDIS_PORT", 6379)
@@ -91,15 +92,15 @@ func TestRedisStoreFinishesAnInterruptedIndexPass(t *testing.T) {
 		_ = s.client.Close()
 	})
 	for i := range 3 {
-		if _, err := s.Add(ctx, Record{ID: fmt.Sprintf("rec-%d", i), Timestamp: time.Now().UTC()}); err != nil {
+		if _, err = s.Add(ctx, Record{ID: fmt.Sprintf("rec-%d", i), Timestamp: time.Now().UTC()}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// Simulate a pass that stopped partway.
-	if err := s.client.ZRem(ctx, s.indexKey, "rec-1", "rec-2").Err(); err != nil {
+	if err = s.client.ZRem(ctx, s.indexKey, "rec-1", "rec-2").Err(); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.client.Del(ctx, s.readyKey).Err(); err != nil {
+	if err = s.client.Del(ctx, s.readyKey).Err(); err != nil {
 		t.Fatal(err)
 	}
 

@@ -448,9 +448,9 @@ func (p *PostgresStore) updateExistingRecord(ctx context.Context, id string, mut
 // size-checked. It reports whether the record exists; mutate returns false to
 // skip the write.
 func (p *PostgresStore) updateRecord(ctx context.Context, id string, mutate func(*Record) bool) (bool, error) {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return false, err
+	release, beginErr := p.lifecycle.beginMutation()
+	if beginErr != nil {
+		return false, beginErr
 	}
 	defer release()
 
@@ -475,7 +475,7 @@ func (p *PostgresStore) updateRecord(ctx context.Context, id string, mutate func
 		if !mutate(&record) {
 			return nil
 		}
-		if _, err := encodeRecord(&record, MaxRecordBytes); err != nil {
+		if _, err = encodeRecord(&record, MaxRecordBytes); err != nil {
 			return err
 		}
 		row, err := newPostgresInsertRecord(record)
@@ -483,12 +483,13 @@ func (p *PostgresStore) updateRecord(ctx context.Context, id string, mutate func
 			return err
 		}
 		//nolint:gosec // tableName is validated during store creation
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf(postgresUpdateRecordQueryTemplate, p.tableName), row.args()...); err != nil {
+		if _, err = tx.ExecContext(ctx, fmt.Sprintf(postgresUpdateRecordQueryTemplate, p.tableName), row.args()...); err != nil {
 			return fmt.Errorf("failed to update record: %w", err)
 		}
 		return tx.Commit()
 	}
 
+	var err error
 	if p.asyncWrites {
 		err = p.runAsyncAndWait(ctx, fn)
 	} else {
