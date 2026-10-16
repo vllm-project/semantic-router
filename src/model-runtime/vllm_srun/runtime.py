@@ -534,6 +534,7 @@ class ServedModel:
                 batcher.max_num_batched_tokens = chosen.max_num_batched_tokens
                 self.limits_source = f"{self.limits_source}, calibrated"
                 log.info("calibrated %s: %s", self.label, chosen.describe())
+        model.engine_model.begin_traffic()
 
     def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
         """How a model without a device thread runs its batches on the CPU: inline, in its choice scope if pinned."""
