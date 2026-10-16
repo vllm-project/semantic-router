@@ -54,20 +54,20 @@ func (m *Manager) processPlans(deployments map[string]config.ModelDeployment) []
 	placed := make(map[string]config.ModelDeployment, len(deployments))
 	for name, deployment := range deployments {
 		deployment = deployment.WithDefaults()
-		if deployment.Managed() {
+		if deployment.Managed() && deployment.Device == autoDevice {
 			deployment.Device = "mps"
 		}
 		if len(deployment.Replicas) > 0 {
 			deployment.Replicas = append([]config.ModelReplica(nil), deployment.Replicas...)
 			for i := range deployment.Replicas {
-				if deployment.Replicas[i].Endpoint == "" {
+				if deployment.Replicas[i].Endpoint == "" && (deployment.Replicas[i].Device == "" || deployment.Replicas[i].Device == autoDevice) {
 					deployment.Replicas[i].Device = "mps"
 				}
 			}
 		}
 		placed[name] = deployment
 	}
-	return planProcesses(placed, m.command, "", m.cores, "mps")
+	return planProcesses(placed, m.command, m.cacheDir, m.cores, "mps")
 }
 
 func (h *hostRuntime) control(ctx context.Context, plan *processPlan, method, leaseID string) error {
@@ -116,7 +116,9 @@ func (h *hostRuntime) start(plan *processPlan) (*group, error) {
 		return nil, fmt.Errorf("create host process lease: %w", err)
 	}
 	lease := &hostLease{runtime: h, plan: plan, id: fmt.Sprintf("%x", nonce)}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Initial acquisition verifies the host package and placement before spawning.
+	// Renewals remain bounded separately and never repeat that preparation.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	if err := h.control(ctx, plan, http.MethodPost, lease.id); err != nil {
 		return nil, err

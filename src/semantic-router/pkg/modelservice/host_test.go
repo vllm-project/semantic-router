@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -55,7 +57,7 @@ func TestHostRuntimeGenerationLeases(t *testing.T) {
 	t.Setenv(RuntimeCommandEnv, "must-not-execute-on-linux")
 	manager := NewManager()
 	deployments := map[string]config.ModelDeployment{"shared": {
-		Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Device: "cpu",
+		Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Device: "auto",
 	}}
 	first, err := manager.AcquireDeployments(deployments)
 	if err != nil {
@@ -130,7 +132,7 @@ func TestHostRuntimeConcurrentReacquisitionKeepsNewLease(t *testing.T) {
 	t.Setenv(RuntimeCommandEnv, "must-not-execute-on-linux")
 	manager := NewManager()
 	deployments := map[string]config.ModelDeployment{"shared": {
-		Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Device: "cpu",
+		Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Device: "auto",
 	}}
 	first, err := manager.AcquireDeployments(deployments)
 	if err != nil {
@@ -194,24 +196,58 @@ func TestHostPlacementPreservesAttachedDeployments(t *testing.T) {
 	}
 }
 
+func TestExplicitCPUStaysWithTheContainerSupervisor(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("explicit CPU deployment contacted the Apple host")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(fakeRuntimeEnv, "1")
+	t.Setenv(RuntimeCommandEnv, binary)
+	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
+	t.Setenv(HostRuntimeEndpointEnv, server.URL)
+	t.Setenv(HostRuntimeTokenEnv, "private-test-token")
+	manager := NewManager()
+	defer func() { _ = manager.Shutdown(context.Background()) }()
+	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{
+		"cpu": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Device: "cpu"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lease.Close() }()
+	if len(lease.groups) != 1 || lease.groups[0].host != nil || lease.groups[0].supervisor == nil {
+		t.Fatal("explicit CPU placement did not retain the local managed supervisor")
+	}
+	waitReady(t, lease, "cpu")
+}
+
 func TestHostPlacementPreservesAuthoredReplicas(t *testing.T) {
 	manager := &Manager{host: &hostRuntime{}, cores: 4}
-	replicas := []config.ModelReplica{{Device: "cpu"}, {Endpoint: "http://external:8000"}}
+	replicas := []config.ModelReplica{{Device: "cpu"}, {Device: "auto"}, {Endpoint: "http://external:8000"}}
 	plans := manager.processPlans(map[string]config.ModelDeployment{
 		"pool": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Replicas: replicas},
 	})
-	managed, attached := 0, 0
+	cpu, gpu, attached := 0, 0, 0
 	for _, plan := range plans {
 		if plan.endpoint != "" {
 			attached++
 		} else {
-			managed++
-			if plan.models[0].Device != "mps" {
-				t.Fatal("managed replica did not select MPS")
+			switch plan.models[0].Device {
+			case "cpu":
+				cpu++
+			case "mps":
+				gpu++
+			default:
+				t.Fatal("managed replica lost its authored placement")
 			}
 		}
 	}
-	if managed != 1 || attached != 1 || replicas[0].Device != "cpu" {
+	if cpu != 1 || gpu != 1 || attached != 1 || replicas[0].Device != "cpu" || replicas[1].Device != "auto" {
 		t.Fatal("host placement changed replica ownership or authored configuration")
 	}
 }
