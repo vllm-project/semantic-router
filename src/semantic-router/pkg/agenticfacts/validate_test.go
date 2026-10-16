@@ -202,7 +202,7 @@ func TestValidateExpiry(t *testing.T) {
 		expiresAt any
 		reason    string // empty means the envelope must be accepted
 	}{
-		{"unparseable", "not-a-time", ReasonMalformed},
+		{"unparsable", "not-a-time", ReasonMalformed},
 		{"stale", fixedNow.Add(-10 * time.Minute).Format(time.RFC3339), ReasonExpired},
 		{"stale within clock skew", fixedNow.Add(-3 * time.Second).Format(time.RFC3339), ""},
 		{"beyond max lifetime", fixedNow.Add(time.Hour).Format(time.RFC3339), ReasonTooLong},

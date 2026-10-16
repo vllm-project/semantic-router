@@ -52,12 +52,10 @@ func (r *Result) reject(field string, reason string) {
 // sortRejections orders rejections so that validating the same bytes twice
 // produces an identical Result regardless of the order the checks ran in.
 func sortRejections(rejections []Rejection) {
-
 	sort.Slice(rejections, func(i, j int) bool {
 		if rejections[i].Field != rejections[j].Field {
 			return rejections[i].Field < rejections[j].Field
 		}
 		return rejections[i].Reason < rejections[j].Reason
 	})
-
 }

@@ -61,7 +61,7 @@ func validateAgenticFactsHeaderName(path string, value string) error {
 
 // validateAgenticFactsBounds rejects bounds the validator could not act on.
 // Zero is accepted throughout and means "keep the package default"; only
-// negative values, unparseable durations, and a non-positive declared lifetime
+// negative values, unparsable durations, and a non-positive declared lifetime
 // are errors.
 func validateAgenticFactsBounds(bounds AgenticFactsBoundsConfig) error {
 	numeric := []struct {
