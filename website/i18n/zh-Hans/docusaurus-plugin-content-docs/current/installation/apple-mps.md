@@ -23,26 +23,29 @@ vllm-sr logs model-runtime -f
 vllm-sr stop
 ```
 
-Router 和 Dashboard 保留在容器中，现有网关服务栈不变。CLI 管理宿主机上的
+两种实例模式都保留 Router 容器；现有 Dashboard/minimal 和网关选项不变。CLI 管理宿主机上的
 原生监督进程；Router 把活动 recipe 所需的模型进程组交给它启动，并通过
 带认证的 TCP 代理调用现有模型 HTTP/JSON API。配置重载时，不变的模型组
 继续共享，最后一个使用者释放它时停止模型进程。声明但未使用的模型不会
-加载；显式外部运行时端点仍保持外部部署。
+加载；显式外部运行时端点仍保持外部部署。只有受管理的 `device: auto` 放置会移到
+MPS；显式 `device: cpu` 仍在容器中通过私有 Unix socket 运行，混合副本池也保留
+这些设置。Apple 不支持 `-dp` 或 `--device-ids`，请在配置中声明放置。
 
-引擎模式直接在宿主机回环接口上提供模型 API，不启动 Router：
+MODEL 覆盖判断模型部署，并不启动另一种独立运行时。`--engine` 保留 Router 前端，
+仅关闭 recipe 路由，与其他平台一致：
 
 ```bash
-vllm-sr serve vllm-sr/Decision-1.0-Kai-0.6B --platform apple --port 8000
-curl http://127.0.0.1:8000/health
+vllm-sr serve vllm-sr/Vela-2.0-0.3B --platform apple --engine --dtype float32
 vllm-sr stop
 ```
 
-引擎模式在后台加载模型，调用前应检查 `/health`。支持 MODEL 名称、固定
-`MODEL@REVISION` 和 `--models` 文件；使用 MPS 和回环 TCP，不支持 `--uds`。
-引擎模式允许宿主机上的本地模型目录。`./my-model` 等相对路径（包括
-`--models` 文件中的条目）相对于运行 CLI 时的工作目录解析，而不是模型列表
-文件所在的目录。Router 模式必须使用 Hub 模型标识，
-镜像内的路径不能作为宿主机模型路径。独立的 Router 或引擎服务栈应使用
+部署中显式声明的设备仍然有效，使用 `device: auto` 才会放置到 MPS。
+不再提供 8000 端口上的独立运行时、`/engine` 控制路由或 Apple 专用的
+`--models`、`--device`、`--host`、`--port`、`--uds` serve 参数。
+模型进程使用短路径、私有目录中的 Unix socket；只有带认证的监督进程代理暴露 TCP。
+本地包必须位于服务栈挂载的模型目录中，例如 `/app/models/my-model` 会映射到该
+挂载的宿主机源目录。其他镜像路径以及通过 `..` 或符号链接逃逸该目录的路径都会被拒绝。
+Router 和 Engine 模式使用相同映射。独立的 Router 或引擎服务栈应使用
 不同的 `VLLM_SR_STACK_NAME`。
 
 ## 安装与缓存
@@ -51,6 +54,9 @@ vllm-sr stop
 镜像 ID 区分环境缓存。CLI 自动准备原生 Python，并安装与镜像中运行时
 直接依赖版本匹配的 macOS wheel；不会复制 Linux torch 库或修改用户 Python。
 无需另外安装模型运行时，但首次下载解释器、依赖及未缓存模型需要网络。
+镜像记录启用的运行时 extras，默认包含 `multimodal`。依赖标记按受管理的 macOS arm64
+解释器计算，而不是 Linux。缺少 extras 清单的旧镜像需要重新构建；缺少匹配的
+macOS wheel 时明确失败，不应复用不完整的原生环境。
 
 状态、原生环境、模型缓存和有大小限制的日志位于
 `~/Library/Caches/vllm-sr/apple`。停止服务保留缓存和日志，镜像变化会选择
@@ -73,6 +79,31 @@ MPS 当前使用 FP32 参考内核，不支持 bf16 autocast、Triton 或 GPU gr
 受管理的模型进程禁用 CPU 回退；不支持的算子或模型族会报错，而不是悄悄
 转为 CPU 推理。仅存在于镜像中的预处理资源和任意加速器插件尚未完成验证。
 该功能不会把配置中的回答生成后端 LLM 自动搬到 Mac 上。
+
+当前运行时固定报告 `bf16=False`，即使某些 Mac 上 PyTorch 的 BF16 运算可以运行。
+BF16 能力检测及验证属于独立的模型运行时工作；桥接不改变能力声明，也不会静默改变精度。
+Vela 1.0 编码器族的 FP32 路径已有评审者提供的冒烟结果，但不等于逐模型黄金答案验证。
+需要 BF16 的解码器（包括默认精度的 Decision 2.0 Kai）当前不能放置到 MPS。
+随附配置绑定了 Kai，因此 Apple 启动前必须显式调整配置。
+
+可在受影响的部署中设置 `dtype: float32`，或保留 `device: cpu`。`--dtype float32`
+只覆盖判断模型部署。FP32 仅消除 BF16 放置限制，不保证所有算子都受支持，其输出仍需
+独立验证。比如在现有规范配置中修改 Kai：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: auto
+        dtype: float32
+```
+
+监督进程在启动模型子进程之前，使用运行时自身的包校验和放置规则进行检查。
+该过程可能下载并校验缓存外的文件，但不会加载引擎或在 GPU 上分配模型权重。
+不支持的放置会报告部署名称和处理方法，而不是进入模型加载重试。未绑定的声明不会加载。
 
 GPU 与 macOS、应用程序及 Docker VM 共享系统内存。4B 模型仅 FP32 权重大约
 需要 16 GB，9B 大约需要 36 GB，尚未计入激活和临时分配。宿主机桥接移除了
