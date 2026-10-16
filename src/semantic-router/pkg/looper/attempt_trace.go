@@ -215,7 +215,8 @@ func modelPricingRates(pricing config.ModelPricing) modelpricing.Rates {
 	return modelpricing.Rates{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CachedInputPer1M: pricing.CachedInputPer1M, CacheWritePer1M: pricing.CacheWritePer1M,
-		CompletionPer1M: pricing.CompletionPer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
+		CompletionPer1M:   pricing.CompletionPer1M,
 	}
 }
 

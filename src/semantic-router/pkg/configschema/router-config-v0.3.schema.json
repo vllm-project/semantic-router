@@ -572,6 +572,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "openai_compat_gateway": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4754,6 +4757,9 @@
           "type": "number"
         },
         "cache_write_per_1m": {
+          "type": "number"
+        },
+        "cache_write_1h_per_1m": {
           "type": "number"
         }
       },

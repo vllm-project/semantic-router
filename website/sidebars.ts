@@ -382,6 +382,7 @@ const sidebars: SidebarsConfig = {
               items: [
                 'installation/amd-rocm',
                 'installation/nvidia-cuda',
+                'installation/ascend-npu',
               ],
             },
           ],
