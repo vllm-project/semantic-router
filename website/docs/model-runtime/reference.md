@@ -62,7 +62,7 @@ a frontend attaches to, or for direct runtime development:
 | `MODEL ...` | | Hub repositories, built-in model names or local package directories. Several models share one process. `MODEL@REVISION` pins a revision. |
 | `--models FILE` | | A models file instead of `MODEL` arguments. |
 | `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
-| `--device` | `auto` | `auto`, or an accelerator with an optional index: `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]`, `mps`, or one a plugin adds. |
+| `--device` | `auto` | `auto`, or an accelerator with an optional index: `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]`, `npu[:N]`, `mps`, or one a plugin adds. |
 | `--host` | `127.0.0.1` | Address to listen on. |
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
