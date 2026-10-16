@@ -1,10 +1,12 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -111,18 +113,25 @@ func (m *MemoryStore) count() (int, error) {
 	return live, nil
 }
 
+// scan visits live records newest first, by timestamp and then ID, the order
+// every store pages in. Insertion order can differ from timestamp order.
 func (m *MemoryStore) scan(from int, visit func(Record) bool) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	for i := len(m.records) - 1; i >= 0; i-- {
-		if isExpired(*m.records[i], m.ttl) {
-			continue
+	live := make([]*Record, 0, len(m.records))
+	for _, rec := range m.records {
+		if !isExpired(*rec, m.ttl) {
+			live = append(live, rec)
 		}
-		if from > 0 {
-			from--
-			continue
+	}
+	slices.SortFunc(live, func(a, b *Record) int {
+		if c := b.Timestamp.Compare(a.Timestamp); c != 0 {
+			return c
 		}
-		if !visit(cloneRecord(*m.records[i])) {
+		return cmp.Compare(b.ID, a.ID)
+	})
+	for _, rec := range live[min(from, len(live)):] {
+		if !visit(cloneRecord(*rec)) {
 			break
 		}
 	}

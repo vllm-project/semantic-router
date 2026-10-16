@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"testing"
@@ -24,7 +25,8 @@ func checkContractPages(t *testing.T, s Storage, records int) {
 	ctx := context.Background()
 	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	added := make([]Record, 0, records)
-	for i := range records {
+	// Insert out of order, so stores must sort rather than rely on arrival.
+	for _, i := range rand.New(rand.NewPCG(1, 2)).Perm(records) {
 		record := Record{
 			ID:            fmt.Sprintf("rec-%05d", i),
 			RequestID:     fmt.Sprintf("Req-%05d", i),
