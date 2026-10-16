@@ -108,7 +108,7 @@ type chatStopReasonWire struct {
 func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		if len(text) == 0 || len(text) > 128 {
+		if len(text) == 0 {
 			return fmt.Errorf("chat stop reason string is invalid")
 		}
 		reason.Text = &text
@@ -219,10 +219,10 @@ type chatCompletionTokensDetailsWire struct {
 }
 
 type chatErrorWire struct {
-	Message string `json:"message"`
-	Type    string `json:"type,omitempty"`
-	Param   string `json:"param,omitempty"`
-	Code    string `json:"code,omitempty"`
+	Message string          `json:"message"`
+	Type    string          `json:"type,omitempty"`
+	Param   string          `json:"param,omitempty"`
+	Code    openAIErrorCode `json:"code,omitempty"`
 }
 
 func validateChatExecutionMetadata(systemFingerprint *string) error {

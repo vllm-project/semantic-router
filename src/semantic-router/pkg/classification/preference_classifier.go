@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -16,6 +17,7 @@ type PreferenceResult struct {
 
 // PreferenceClassifier handles route preference matching via external LLM
 type PreferenceClassifier struct {
+	judgment           *decisionJudgment
 	client             *VLLMClient
 	modelName          string
 	timeout            time.Duration
@@ -54,6 +56,9 @@ func NewPreferenceClassifierWithProvider(
 
 // Classify determines the best route preference for the given conversation
 func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceResult, error) {
+	if p.judgment != nil {
+		return p.ClassifyContext(context.Background(), conversationJSON)
+	}
 	if p.useContrastive {
 		return p.classifyContrastive(conversationJSON)
 	}
@@ -65,6 +70,9 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 func (p *PreferenceClassifier) IsInitialized() bool {
 	if p == nil {
 		return false
+	}
+	if p.judgment != nil {
+		return true
 	}
 
 	if p.useContrastive {

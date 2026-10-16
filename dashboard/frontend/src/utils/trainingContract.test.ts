@@ -142,13 +142,18 @@ it('renders valid choices entirely from the capability catalog', () => {
   const trainingHw = peft.supported_hardware
   expect(trainingHw).toContain('hardware/cuda@v1')
 
-  const candleRuntime = capabilities.runtimes.find((r) => r.id === 'runtime/candle@v1')!
-  expect(candleRuntime.supported_hardware).toContain('hardware/cpu@v1')
+  // Router classifiers qualify on the model runtime, which loads the trained checkpoint directly
+  const classifierRuntimes = capabilities.runtimes.filter((r) =>
+    r.supported_targets.includes('signal.label-scores/v1'),
+  )
+  expect(classifierRuntimes.map((r) => r.id)).toEqual(['runtime/model-runtime@v1'])
+  expect(classifierRuntimes[0].supported_hardware).toContain('hardware/cpu@v1')
+  expect(peft.produced_formats.every((f) => classifierRuntimes[0].accepted_formats.includes(f))).toBe(true)
 })
 
 it('types planning requests and responses with stable diagnostic error codes', () => {
   const planReq: TrainingPlanRequest = {
-    schema_version: 'semantic-router.training/v1',
+    schema_version: 'semantic-router.training/v2',
     target_contract: 'selector.model-choice/v1',
     trainer: 'trainer/selector@v1',
     training_hardware: 'hardware/cpu@v1',

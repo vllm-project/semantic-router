@@ -13,22 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// SDKMessageRole extracts the role string from an SDK message union.
-func SDKMessageRole(msg openai.ChatCompletionMessageParamUnion) string {
-	switch {
-	case msg.OfUser != nil:
-		return "user"
-	case msg.OfSystem != nil:
-		return "system"
-	case msg.OfAssistant != nil:
-		return "assistant"
-	case msg.OfTool != nil:
-		return "tool"
-	default:
-		return ""
-	}
-}
-
 // SDKMessageContent extracts the plain-text content from an SDK message union.
 func SDKMessageContent(msg openai.ChatCompletionMessageParamUnion) string {
 	switch {

@@ -2,7 +2,7 @@
 title: 模型推理
 description: 继承、复用或定义模型推理契约，并从路由决策中选择其 mode 和 effort。
 translation:
-  source_commit: "6a4e51ad570a95c2a493ce4b1494bcedb525fa08"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/model-reasoning.md"
   outdated: false
 ---
@@ -37,7 +37,7 @@ providers:
           protocol: http
 ```
 
-在控制面板中，打开 **Build → Models → Add Model**，选择 Provider，然后选择 **Advanced settings → Reasoning family**。Models 页面上的 **Built-in Reasoning Families** 表显示可用 ID 及其原生参数。
+在控制面板中，打开 **Build → Routing → Models → Add Model**，选择 Provider，然后选择 **Advanced settings → Reasoning family**。Models 页面上的 **Built-in Reasoning Families** 表显示可用 ID 及其原生参数。
 
 ## 内联定义自定义家族
 

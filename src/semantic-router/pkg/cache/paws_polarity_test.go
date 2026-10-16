@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -42,7 +42,7 @@ func TestPAWSDerivedPolarityCandidateLookup(t *testing.T) {
 				// The published-model regression separately measures similarity.
 				cache := NewInMemoryCache(InMemoryCacheOptions{
 					Enabled: true, SimilarityThreshold: 0.8, MaxEntries: 4, TTLSeconds: 60,
-					UseHNSW: hnsw, EmbeddingModel: "bert",
+					UseHNSW: hnsw, EmbeddingModel: "qwen3",
 					EmbeddingProvider: storagetest.Vectors{Size: 384, Aliases: map[string]string{pair.Incoming: pair.Cached}},
 				})
 				t.Cleanup(func() { _ = cache.Close() })

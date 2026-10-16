@@ -11,7 +11,7 @@ import (
 
 // piiHTTPBackend adapts the remote token classifier to PII's historical
 // inference interface, so PIIDetected, PIIEntities, MatchedPIIRules and masking
-// keep working unchanged whether the spans came from Candle or from a remote
+// keep working unchanged whether the spans came from a local model or from a remote
 // token_spans.v1 provider. The request context reaches the HTTP call, so an
 // admission deadline or a cancelled request stops the remote call too.
 type piiHTTPBackend struct {

@@ -4,7 +4,7 @@ description: 定义已实现的 Router Flow M1 契约，用于有界的静态和
 created: 2026-06-30
 status: Implemented
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/router-flow-workflows.md"
   outdated: false
 ---
@@ -23,13 +23,16 @@ Router Flow 有三个公开概念：
 
 | 概念 | 表面 | 用途 |
 | --- | --- | --- |
-| Flow model | `vllm-sr/flow` | 选择具备 Flow 能力的决策的请求模型名。 |
+| Flow model | `vllm-sr/flow` | 映射到包含 workflow 决策的 recipe 的普通入口名。 |
 | Workflow algorithm | `algorithm.type: workflows` | 决策本地的编排策略。 |
 | Worker pool | `modelRefs` | 工作流步骤可以调用的唯一模型。 |
 
+公开名称不会按算法隐式筛选决策。请显式配置入口到 recipe 的映射与匹配规则；其他公开名称也可以暴露同一个 workflow recipe。
+
 ```mermaid
 flowchart LR
-  Request["model: vllm-sr/flow"] --> Decision["Match Flow decision"]
+  Request["model: vllm-sr/flow"] --> Recipe["Resolve configured entrypoint and recipe"]
+  Recipe --> Decision["Match decision with workflows algorithm"]
   Decision --> Plan{"Workflow mode"}
   Plan -->|"static"| Static["Configured role plan"]
   Plan -->|"dynamic"| Planner["Planner produces a plan"]

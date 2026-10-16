@@ -20,7 +20,7 @@ const preloadImage = (src: string): Promise<void> => {
 
 // Export preload function for early loading
 export const preloadPlatformAssets = (platform?: string) => {
-  if (platform?.toLowerCase() === 'amd') {
+  if (platform?.toLowerCase() === 'rocm') {
     preloadImage('/amd-logo.png')
   }
 }

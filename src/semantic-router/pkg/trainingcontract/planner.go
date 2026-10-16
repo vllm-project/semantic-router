@@ -76,7 +76,7 @@ type QualificationTargetRequest struct {
 
 // TrainingPlanRequest submits a proposed training configuration to be planned.
 type TrainingPlanRequest struct {
-	SchemaVersion        string                       `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion        string                       `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	TargetContract       Target                       `json:"target_contract"`
 	Architecture         *CapabilityID                `json:"architecture,omitempty"`
 	Trainer              CapabilityID                 `json:"trainer"`
@@ -120,7 +120,7 @@ type ResolvedTrainingPlan struct {
 
 // TrainingPlanResponse returns either a fully resolved plan or structured diagnostics.
 type TrainingPlanResponse struct {
-	SchemaVersion string                `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion string                `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	Valid         bool                  `json:"valid"`
 	Plan          *ResolvedTrainingPlan `json:"plan,omitempty"`
 	Diagnostics   []PlanDiagnostic      `json:"diagnostics,omitempty"`
@@ -154,7 +154,7 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 	if req.SchemaVersion != Version {
 		addError(CodeInvalidParameter, "schema_version",
 			fmt.Sprintf("unsupported schema_version %q, expected %q", req.SchemaVersion, Version),
-			"Use schema_version \"semantic-router.training/v1\"")
+			fmt.Sprintf("Use schema_version %q", Version))
 	}
 
 	if err := ValidateTarget(req.TargetContract); err != nil {

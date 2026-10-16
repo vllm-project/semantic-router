@@ -43,10 +43,10 @@ func TestCacheRequestPreservesDefaultAndExplicitModels(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	for _, model := range []string{"MoM", "e2e-cache"} {
+	for _, model := range []string{"vllm-sr/auto", "e2e-cache"} {
 		var response *http.Response
 		var err error
-		if model == "MoM" {
+		if model == "vllm-sr/auto" {
 			response, err = sendChatRequest(context.Background(), "unchanged query", port, false)
 		} else {
 			response, err = sendChatRequestForModel(context.Background(), "unchanged query", port, model, false)

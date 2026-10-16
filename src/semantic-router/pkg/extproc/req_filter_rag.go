@@ -277,6 +277,9 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	if ragConfig.MaxContextLength != nil {
 		maxLength = *ragConfig.MaxContextLength
 	}
+	if maxLength < 0 {
+		return fmt.Errorf("max_context_length must not be negative, got %d", maxLength)
+	}
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)
 		retrievedContext = string(runes[:maxLength]) + "..."
@@ -388,6 +391,10 @@ func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName 
 
 	ragConfig := decision.GetRAGConfig()
 	if ragConfig == nil || !ragConfig.Enabled {
+		return nil, false
+	}
+
+	if applies, _ := r.pluginApplies(ctx, config.DecisionPluginRAG); !applies {
 		return nil, false
 	}
 

@@ -5,12 +5,12 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 // PrepareOwnedEmbeddingAPI supports standalone management servers. Router
 // generations borrow the same API view from their global service embeddings.
-func PrepareOwnedEmbeddingAPI(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
+func PrepareOwnedEmbeddingAPI(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (*embedding.Set, error) {
 	if cfg == nil || !cfg.API.Embeddings.Enabled {
 		return nil, nil
 	}

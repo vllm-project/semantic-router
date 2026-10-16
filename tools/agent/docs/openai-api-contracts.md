@@ -268,7 +268,7 @@ during transport refactors:
 | Structured output | the complete JSON Schema survives routing mutation |
 | Anthropic `output_config` | reasoning effort and strict JSON Schema survive same-format mutation and OpenAI translation |
 | Reasoning streams | both OpenAI-compatible reasoning aliases and ordered Anthropic thinking/signature blocks remain explicit |
-| Terminal reasons | Anthropic pause/context-window stops and Responses content-filter incompletes remain exact or fail explicitly when the target cannot represent them; an Anthropic matched stop sequence is a separate response capability and can never silently collapse into a generic OpenAI `stop` |
+| Terminal reasons | Anthropic pause/context-window stops and Responses content-filter incompletes remain exact or fail explicitly when the target cannot represent them; an Anthropic matched stop sequence is a separate response capability that targets carrying it preserve exactly, while Chat and Responses targets receive the diagnosed projection to the generic OpenAI `stop` (`matched_stop_sequence` is dropped with a diagnostic, never silently) |
 | Stream indexes | Source-private neutral indexes are compacted by target encoders, while provider output indexes must be non-negative, contiguous, and bound to one active item identity |
 | Tool streams | Tool IDs and names are present before publication, immutable for the item lifetime, bounded, and paired with one final JSON-object argument value |
 | Parallel tool streams | Each call retains an independent identity, argument buffer, lifecycle, and compact target index even when deltas interleave or items finish out of order |
@@ -292,6 +292,7 @@ it remains valid when codec internals move.
 
 | Regression | Unit or seam contract | Envoy E2E contract |
 | --- | --- | --- |
+| [#4892](https://github.com/vllm-project/semantic-router/issues/4892) an Anthropic reply ending on a stop sequence must reach Chat and Responses clients as the generic `stop` terminal with a diagnostic, while capable targets keep the exact matched sequence | translate-seam projection tests for buffered and stream completions, the official terminal-reason inventory, and the capability goldens for the cross-format outcomes | `anthropic-chat-stop-sequence` |
 | [#2492](https://github.com/vllm-project/semantic-router/issues/2492) Responses streaming must preserve its public event taxonomy, tools, reasoning, refusal, headers, cache, and continuity across backend formats | complete official event inventory, 3×3 stream matrix, request-context propagation, and response-header rewrite tests | Responses-native plus Chat- and Messages-backed streaming matrices |
 | [#2486](https://github.com/vllm-project/semantic-router/issues/2486) FullDuplexStreamed must not replace an in-flight request with an empty body | non-EOS ExtProc responses defer mutation and EOS emits one complete body | `agentgateway-full-duplex-multiturn` |
 | [#2316](https://github.com/vllm-project/semantic-router/issues/2316) provider SSE frames may split at arbitrary Envoy chunk boundaries | SSE carry-buffer, one-byte replay, CR/LF, and split UTF-8 tests | three backend streaming matrices |

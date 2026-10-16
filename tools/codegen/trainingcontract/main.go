@@ -26,7 +26,7 @@ func main() {
 	schema := (&jsonschema.Reflector{Anonymous: true}).Reflect(c.Catalog{})
 	data, err := json.MarshalIndent(schema, "", "  ")
 	must(err)
-	write(*root, "src/semantic-router/pkg/trainingcontract/training-v1.schema.json", append(data, '\n'), *check)
+	write(*root, "src/semantic-router/pkg/trainingcontract/training-v2.schema.json", append(data, '\n'), *check)
 	capabilities, err := json.MarshalIndent(c.DefaultRegistry().Catalog(), "", "  ")
 	must(err)
 	write(*root, "src/semantic-router/pkg/trainingcontract/testdata/capabilities.json", append(capabilities, '\n'), *check)
@@ -135,7 +135,7 @@ func tsType(t reflect.Type) string {
 	if t == reflect.TypeOf(time.Time{}) {
 		return "string"
 	}
-	if t.Name() != "" && t.PkgPath() != "" {
+	if t.Kind() != reflect.Map && t.Name() != "" && t.PkgPath() != "" {
 		return t.Name()
 	}
 	switch t.Kind() {

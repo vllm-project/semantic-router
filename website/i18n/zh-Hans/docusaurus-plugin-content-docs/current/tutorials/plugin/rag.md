@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "a40f020886bccb76b38e5e598b37b0b83910bc3b"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/rag.md"
   outdated: false
 ---
@@ -99,10 +99,9 @@ global:
   model_catalog:
     deployments:
       document-ranker:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         device: cpu
-        precision: native
         input:
           max_tokens: 4096
           overflow: reject
@@ -111,7 +110,6 @@ routing:
     rag.reranker:
       deployment: document-ranker
       contract: relevance_scores.v1
-      adapter: vela_reranker
       pair_scorer:
         layer: 22
         dimension: 768
@@ -137,6 +135,6 @@ plugins:
 
 模型使用 tokenizer 的 query/document 配对模板。token 预算包含两段文本及特殊 token；超出预算会被拒绝，不会截断任一文本。加载时会校验所选层和维度是否经过训练；设为零时使用模型实际的完整深度或宽度。CPU 开销随候选数量和文本对长度增加，应显式设置部署预算。
 
-Candle 模型目录必须包含 encoder 权重、`config.json`、`tokenizer.json`、`matryoshka_config.json` 和 `classification_heads.safetensors`。ORT 部署通过绑定的 `head` 字段选择完整计算图；图内的 `semantic_router.pair_scorer` 元数据必须声明实际输出层、维度及 `relevance_logit` 契约，图文件名不能作为其语义依据。
+重排序模型运行在[模型运行时](../../model-runtime/guides/rerank)中。启动时路由器会检查模型是否声明了所选的出口，因此模型未训练过的 `pair_scorer` 会在流量到达前被拒绝。
 
 只有可达且启用了 `rerank` 插件的 recipe 才会加载模型。模型缺失、无效分数和输入超限均遵循 RAG 的 `on_failure` 策略。缓存上下文按 recipe、embedding 身份和重排序模型身份隔离。运行时 trace 记录实际重排序延迟和分数；路由 preview 不执行检索，也不生成重排序耗时。其他 RAG 后端目前不支持 `rerank`，需先提供结构化候选结果。

@@ -1,14 +1,36 @@
 package modeldownload
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestDefaultPIIDownloadUsesPublishedVelaMapping(t *testing.T) {
+// assertRuntimeServed checks that a built-in model reaches the model runtime
+// at its registered release and that the router downloads none of it beyond
+// companion files.
+func assertRuntimeServed(t *testing.T, cfg *config.RouterConfig, specs []ModelSpec, path string) {
+	t.Helper()
+	model := config.GetModelByPath(path)
+	if model == nil {
+		t.Fatalf("%s is not a built-in model", path)
+	}
+	if spec, ok := findSpecByPath(specs, model.LocalPath); ok && !spec.FilesOnly {
+		t.Fatalf("router downloads the runtime-served %s: %+v", path, spec)
+	}
+	for name, deployment := range config.ModelRuntimeDeploymentsInUse(cfg) {
+		if config.SameModelRepo(deployment.Artifact, model.RepoID) || config.ResolveModelPath(deployment.Artifact) == model.LocalPath {
+			// An omitted revision delegates the built-in pin to the model runtime.
+			if deployment.Revision != "" && deployment.Revision != model.Revision {
+				t.Fatalf("deployment %q serves %s at %q, want the release %q", name, path, deployment.Revision, model.Revision)
+			}
+			return
+		}
+	}
+	t.Fatalf("no model_runtime deployment in use serves %s: %+v", path, config.ModelRuntimeDeploymentsInUse(cfg))
+}
+
+func TestDefaultPIIIsServedWithItsOwnLabels(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 providers:
@@ -45,28 +67,8 @@ routing:
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The published Vela token-classification package contains pii_mapping.json,
-	// not the legacy MOM pii_type_mapping.json. Model-directory presence alone
-	// cannot establish that the download requirements are satisfiable.
-	packageDir := t.TempDir()
-	for _, name := range []string{"config.json", "pii_mapping.json"} {
-		if err := os.WriteFile(filepath.Join(packageDir, name), []byte("{}"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	if len(specs) != 0 || cfg.PIIModel.PIIMappingPath != "" {
+		t.Fatalf("default PII needs no mapping file, its card carries the labels: mapping %q, downloads %+v", cfg.PIIModel.PIIMappingPath, specs)
 	}
-	for _, spec := range specs {
-		if spec.RepoID != "vllm-sr/Vela-1.0-Encoder-307M-PII" {
-			continue
-		}
-		for _, name := range spec.RequiredFiles {
-			if _, err := os.Stat(filepath.Join(packageDir, name)); err != nil {
-				t.Fatalf("default PII provisioning requests absent published artifact %q: %v", name, err)
-			}
-		}
-		if cfg.PIIModel.PIIMappingPath != filepath.Join(spec.LocalPath, "pii_mapping.json") {
-			t.Fatalf("PII runtime mapping differs from the published package: %q", cfg.PIIModel.PIIMappingPath)
-		}
-		return
-	}
-	t.Fatal("PII signal did not provision the default Vela token classifier")
+	assertRuntimeServed(t, cfg, specs, config.DefaultSystemModels().PIIClassifier)
 }

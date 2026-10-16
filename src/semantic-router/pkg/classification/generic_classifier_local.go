@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 // A generic rule owns a prepared sequence binding, independent of every other
@@ -21,7 +21,10 @@ func newLocalLabelClassifier(rule config.ClassifierSignalRule, models ...*classi
 
 func newLocalLabelClassifierForBinding(consumerName string, rule config.ClassifierSignalRule, models ...*classifierModelRuntime) (labelClassifier, error) {
 	runtime := consumerModelRuntime(models)
-	spec := runtime.localSpec(consumerName, rule.ModelPath, "auto", config.RemoteClassifierContractLabelDistribution, rule.UseCPU)
+	spec, err := runtime.localSpec(consumerName, rule.ModelPath, "auto", config.RemoteClassifierContractLabelDistribution, rule.UseCPU)
+	if err != nil {
+		return nil, fmt.Errorf("initialize classifier %q: %w", rule.Name, err)
+	}
 	if spec.Binding.Contract == config.RemoteClassifierContractLabelScores {
 		handle, err := runtime.runtime.OperatingPoint(context.Background(), spec, rule.Labels)
 		if err != nil {
@@ -53,7 +56,7 @@ func (c *localLabelClassifier) Classify(ctx context.Context, input string) (labe
 func (c *localLabelClassifier) Close() error { return c.backend.Close() }
 
 type localOperatingPointClassifier struct {
-	handle *native.OperatingPointScorer
+	handle *serving.OperatingPointScorer
 	recipe string
 	labels []string
 }

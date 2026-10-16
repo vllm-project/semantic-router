@@ -33,7 +33,7 @@ func TestResponseCacheDemandUsesReachableConsumersAndPreservesExactOnly(t *testi
 			}
 		})
 	}
-	cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{}}}
+	cfg := &RouterConfig{}
 	cfg.SemanticCache.Enabled = true
 	cfg.SemanticCache.EmbeddingModel = "mmbert"
 	cfg.Recipes = []RoutingRecipe{{Name: "default"}, {Name: "cached", Profile: RoutingProfile{Decisions: []Decision{cacheDemandDecision("semantic", true)}}}, {Name: "uncached", Profile: RoutingProfile{Decisions: []Decision{{Name: "plain"}}}}}

@@ -9,6 +9,7 @@ import React, {
 import { useAuth } from './AuthContext'
 import { preloadPlatformAssets } from '../utils/platformAssets'
 import { decodeDashboardSettings } from './dashboardSettings'
+import { withRequestTimeout } from '../utils/boundedRequest'
 
 interface ReadonlyContextType {
   isReadonly: boolean
@@ -114,12 +115,14 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     // gets an answer instead of a permanently closed gate.
     const readMLPipelineAvailabilityFromMLSurface = async (signal: AbortSignal) => {
       try {
-        const response = await fetch('/api/ml-pipeline/availability', { signal })
-        if (!response.ok) return
-        const data = (await response.json()) as {
-          mlPipelineAvailable?: boolean
-          mlPipelineUnavailableReason?: string
-        }
+        const data = await withRequestTimeout(async (requestSignal) => {
+          const response = await fetch('/api/ml-pipeline/availability', { signal: requestSignal })
+          if (!response.ok) throw new Error('ML availability is unavailable.')
+          return (await response.json()) as {
+            mlPipelineAvailable?: boolean
+            mlPipelineUnavailableReason?: string
+          }
+        }, signal)
         if (signal.aborted) return
         setMLPipelineAvailable(data.mlPipelineAvailable === true)
         setMLPipelineUnavailableReason(
@@ -150,15 +153,17 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setMLPipelineAvailabilityChecked(false)
       let failureMessage = 'Dashboard access settings are unavailable. Refresh access to retry.'
       try {
-        const response = await fetch('/api/settings', { signal: controller.signal })
-        if (!response.ok) {
-          if (response.status === 403) {
-            failureMessage =
-              'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
+        const data = await withRequestTimeout(async (signal) => {
+          const response = await fetch('/api/settings', { signal })
+          if (!response.ok) {
+            if (response.status === 403) {
+              failureMessage =
+                'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
+            }
+            throw new Error(`Dashboard settings request failed (${response.status})`)
           }
-          throw new Error(`Dashboard settings request failed (${response.status})`)
-        }
-        const data = decodeDashboardSettings(await response.json())
+          return decodeDashboardSettings(await response.json())
+        }, controller.signal)
         if (controller.signal.aborted) return
         setSettingsError(null)
         setIsReadonly(data.readonlyMode)
@@ -179,7 +184,9 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         if (!controller.signal.aborted) {
           setSettingsError(failureMessage)
           setSrBenchUnavailableReason('Dashboard settings are unavailable.')
-          await readMLPipelineAvailabilityFromMLSurface(controller.signal)
+          // ML availability can recover independently; it must not hold the
+          // access-settings retry state open for another network round trip.
+          void readMLPipelineAvailabilityFromMLSurface(controller.signal)
           console.warn('Failed to fetch dashboard settings:', error)
         }
       } finally {

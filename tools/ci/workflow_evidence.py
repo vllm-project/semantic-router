@@ -131,14 +131,14 @@ def main() -> None:
             for name, metric in result["benchmarks"].items():
                 identity = metric.get("model_identity")
                 if identity and (identity["provider"], identity["device"]) != (
-                    "candle",
+                    "model_runtime",
                     "cpu",
                 ):
                     raise ValueError(
-                        "performance evidence requires actual Candle CPU measurements"
+                        "performance evidence requires actual model runtime CPU measurements"
                     )
                 cases.append({"id": name, "status": "passed", "measurement": metric})
-            evidence.update(runtime="candle", device="cpu")
+            evidence.update(runtime="model-runtime", device="cpu")
         cases.extend({"id": name, "status": "passed"} for name in args.case)
         expected.extend(args.case)
         evidence.update(cases=cases, expected_cases=expected)
