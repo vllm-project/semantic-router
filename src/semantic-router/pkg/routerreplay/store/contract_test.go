@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -25,7 +26,7 @@ func checkContractPages(t *testing.T, s Storage, records int) {
 	ctx := context.Background()
 	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	added := make([]Record, 0, records)
-	// Insert out of order, so stores must sort rather than rely on arrival.
+	// Insert out of order so stores have to sort.
 	for _, i := range rand.New(rand.NewPCG(1, 2)).Perm(records) {
 		record := Record{
 			ID:            fmt.Sprintf("rec-%05d", i),
@@ -148,14 +149,31 @@ func checkContractSize(t *testing.T, s Storage) {
 		t.Fatalf("large record kept %d raw bytes, truncated=%v, output=%q, request=%q", len(step.RawOutput), step.Truncated, step.Output, large.RequestBody)
 	}
 
-	// Each '<' serializes to six bytes, so cutting the raw body by the JSON
-	// excess removes all of it before the record fits.
+	// Each "<" takes six bytes once JSON-escaped.
 	if _, err := s.Add(ctx, Record{ID: "escaped", Timestamp: now, RequestBody: strings.Repeat("<", MaxRecordBytes)}); err != nil {
 		t.Fatalf("escaped record: %v", err)
 	}
 	escaped, found, err := s.Get(ctx, "escaped")
 	if err != nil || !found || !escaped.RequestBodyTruncated {
 		t.Fatalf("escaped record found=%v err=%v truncated=%v", found, err, escaped.RequestBodyTruncated)
+	}
+
+	// Later writes are held to the same limit.
+	if _, err := s.Add(ctx, Record{ID: "enriched", Timestamp: now, RequestBody: strings.Repeat("b", MaxRecordBytes/2)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateToolTrace(ctx, "enriched", *trace(strings.Repeat("r", MaxRecordBytes))); err != nil {
+		t.Fatalf("tool trace: %v", err)
+	}
+	if err := s.AttachResponse(ctx, "enriched", strings.Repeat("s", MaxRecordBytes), false); err != nil {
+		t.Fatalf("response: %v", err)
+	}
+	enriched, found, err := s.Get(ctx, "enriched")
+	if err != nil || !found {
+		t.Fatalf("enriched record found=%v err=%v", found, err)
+	}
+	if data, err := json.Marshal(enriched); err != nil || len(data) > MaxRecordBytes {
+		t.Fatalf("enriched record is %d bytes (err %v), over %d", len(data), err, MaxRecordBytes)
 	}
 }
 

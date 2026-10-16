@@ -34,8 +34,7 @@ func encodeRecord(record *Record, limit int) ([]byte, error) {
 			record.ToolTrace = cloneToolTrace(record.ToolTrace)
 			cloned = true
 		}
-		// Escaped text can save more than the bytes cut, and truncation flags
-		// add a few, so measure again.
+		// Escaping and truncation flags change the size, so measure again.
 		if !cutRecord(record, excess) {
 			return nil, fmt.Errorf("%w: %d bytes over %d", ErrRecordTooLarge, excess, limit)
 		}
@@ -89,13 +88,4 @@ func cutText(text *string, excess int) int {
 	removed := len(*text) - keep
 	*text = (*text)[:keep]
 	return removed
-}
-
-// fitToolTrace applies the record limit to a trace written on its own.
-func fitToolTrace(trace ToolTrace) (ToolTrace, error) {
-	holder := Record{ToolTrace: &trace}
-	if _, err := encodeRecord(&holder, MaxRecordBytes); err != nil {
-		return ToolTrace{}, err
-	}
-	return *holder.ToolTrace, nil
 }
