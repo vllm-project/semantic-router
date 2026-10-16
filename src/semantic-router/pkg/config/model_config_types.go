@@ -380,6 +380,11 @@ type ProviderProfile struct {
 	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion    string            `yaml:"api_version,omitempty"`
 	ChatPath      string            `yaml:"chat_path,omitempty"`
+	// OpenAICompatGateway marks a vLLM-type profile that actually points at an
+	// OpenAI-compatible gateway injecting its own usage metering fields, so
+	// the response decoder tolerates them instead of stripping undeclared
+	// usage fields. A plain vLLM backend must leave it unset.
+	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
 }
 
 type ModelPricing struct {
