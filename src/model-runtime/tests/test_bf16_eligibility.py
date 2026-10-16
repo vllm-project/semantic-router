@@ -1,6 +1,7 @@
 import pytest
 from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.accel.cuda import CUDAAccelerator
+from vllm_srun.accel.mps import MPSAccelerator
 from vllm_srun.accel.rocm import ROCmAccelerator
 from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.errors import PlacementError
@@ -40,6 +41,21 @@ def model_spec(dtype):
 def mock_device(monkeypatch, accelerator, device):
     monkeypatch.setattr(accelerator, "available", lambda self: True)
     monkeypatch.setattr(accelerator, "devices", lambda self: [device])
+
+
+@pytest.mark.parametrize(
+    "policy", [DtypePolicy(), DtypePolicy(autocast=None, gpu_weights="bfloat16")]
+)
+def test_explicit_fp32_is_applied_before_mps_placement(monkeypatch, policy):
+    device = DeviceInfo("mps", None, "synthetic Apple GPU", bf16=False)
+    mock_device(monkeypatch, MPSAccelerator, device)
+    spec = model_spec(policy)
+    with pytest.raises(PlacementError, match="no BF16 support"):
+        place(spec, "mps", parameters=1, dtype="auto")
+    assert place(spec, "mps", parameters=1, dtype="float32").device == device
+    with pytest.raises(PlacementError, match="no BF16 support"):
+        place(spec, "mps", parameters=1, dtype="bfloat16")
+    assert spec.dtype is policy
 
 
 @pytest.mark.parametrize("accelerator", [CUDAAccelerator, ROCmAccelerator])

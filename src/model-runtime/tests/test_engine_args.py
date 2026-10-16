@@ -7,9 +7,11 @@ import asyncio
 import pytest
 from vllm_srun import dtypes
 from vllm_srun.accel import onednn
+from vllm_srun.accel.mps import MPSAccelerator
 from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, EngineArgs, ModelConfig, ServeConfig
 from vllm_srun.engines.native.engine import NativeEngine
-from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
+from vllm_srun.errors import PlacementError
+from vllm_srun.plugins.base import BackboneSpec, DeviceInfo, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.fixtures import write_fixture
 
@@ -22,6 +24,33 @@ DECISION3 = DtypePolicy(
 TASK_HEADS = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
+
+
+@pytest.mark.parametrize("dtype", ["auto", "float32"])
+def test_prepare_checks_actual_model_placement_without_loading_an_engine(
+    monkeypatch, qwen3_package, dtype
+):
+    monkeypatch.setattr(MPSAccelerator, "available", lambda self: True)
+    device = DeviceInfo("mps", None, "synthetic Apple GPU", bf16=False)
+    monkeypatch.setattr(MPSAccelerator, "devices", lambda self: [device])
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("placement preparation allocated model weights")
+
+    monkeypatch.setattr(NativeEngine, "read", forbidden)
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(qwen3_package), device="mps", dtype=dtype),)
+        )
+    )
+    served = runtime.served[0]
+    if dtype == "auto":
+        with pytest.raises(PlacementError, match="no BF16 support"):
+            served.prepare()
+    else:
+        _, _, _, placement = served.prepare()
+        assert placement.device == device
+    assert served.model is None
 
 
 def spec(policy, variants=None):
