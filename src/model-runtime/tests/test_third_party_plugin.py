@@ -474,7 +474,7 @@ def test_wrong_result_count_fails_the_bundle_and_keeps_serving(
                 for result in results:
                     assert result["error"]["code"] == "internal_error"
                     assert (
-                        f"model returned {2 + extra} results for 2 items"
+                        f"model result count mismatch: expected 2, got {2 + extra}"
                         in result["error"]["message"]
                     )
                 served = await asyncio.wait_for(

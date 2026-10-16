@@ -441,7 +441,7 @@ class Scheduler:
             # Validate the whole forward before publishing any job's results.
             if len(values) != len(items):
                 raise RuntimeError(
-                    f"model returned {len(values)} results for {len(items)} items"
+                    f"model result count mismatch: expected {len(items)}, got {len(values)}"
                 )
         except Exception as exc:
             _timed(members, sequence, started, time.monotonic())

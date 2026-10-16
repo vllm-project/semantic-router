@@ -455,7 +455,8 @@ def test_wrong_result_count_fails_every_job_and_keeps_serving(
         assert futures is not None
         for future in futures:
             with pytest.raises(
-                RuntimeError, match=f"model returned {result_count} results for 2 items"
+                RuntimeError,
+                match=f"model result count mismatch: expected 2, got {result_count}",
             ):
                 future.result(timeout=5)
         assert model.calls == [["a", "b"]]
