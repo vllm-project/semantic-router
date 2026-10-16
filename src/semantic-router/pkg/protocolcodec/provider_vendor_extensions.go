@@ -18,7 +18,8 @@ const vendorExtensionReason = "provider vendor extension field is not part of th
 // value keeps strict decoding instead of silently accepting decorations.
 func providerVendorExtensionsAllowed(policy llmprotocol.Policy) bool {
 	switch policy.ResponseVendor {
-	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare:
+	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare,
+		llmprotocol.ResponseVendorOpenAICompatGateway:
 		return true
 	}
 	return false
@@ -168,4 +169,58 @@ func DiagnosticsDroppedVendorExtensions(diagnostics llmprotocol.Diagnostics) boo
 		}
 	}
 	return false
+}
+
+// gatewayUsageAliases maps the Anthropic-style usage counters that
+// OpenAI-compatible aggregating gateways emit onto their canonical OpenAI
+// names. The gateway vendor opts in to this translation; a canonical field
+// already present takes precedence and the alias is dropped later as ordinary
+// vendor metadata.
+var gatewayUsageAliases = map[string]string{
+	"input_tokens":  "prompt_tokens",
+	"output_tokens": "completion_tokens",
+}
+
+// translateGatewayUsageCounters rewrites Anthropic-style usage counters into
+// their canonical OpenAI names before the strict decode. Without it the strip
+// would leave total_tokens standing alone against zero input/output totals and
+// the usage consistency check would reject an otherwise sound gateway payload
+// (issue #5046: input_tokens=12, output_tokens=178, total_tokens=190).
+func translateGatewayUsageCounters(body []byte) []byte {
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(body, &document); err != nil {
+		return body
+	}
+	rawUsage, ok := document["usage"]
+	if !ok {
+		return body
+	}
+	var usage map[string]json.RawMessage
+	if err := json.Unmarshal(rawUsage, &usage); err != nil {
+		return body
+	}
+	changed := false
+	for alias, canonical := range gatewayUsageAliases {
+		raw, ok := usage[alias]
+		if !ok {
+			continue
+		}
+		if _, exists := usage[canonical]; !exists {
+			usage[canonical] = raw
+			changed = true
+		}
+	}
+	if !changed {
+		return body
+	}
+	usageBytes, err := json.Marshal(usage)
+	if err != nil {
+		return body
+	}
+	document["usage"] = usageBytes
+	rewritten, err := json.Marshal(document)
+	if err != nil {
+		return body
+	}
+	return rewritten
 }

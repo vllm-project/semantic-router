@@ -303,6 +303,8 @@ func mergeContextRecoveryUsage(
 		{initial.InputUncached, followup.InputUncached, &result.InputUncached},
 		{initial.InputCacheRead, followup.InputCacheRead, &result.InputCacheRead},
 		{initial.InputCacheWrite, followup.InputCacheWrite, &result.InputCacheWrite},
+		{initial.InputCacheWrite5m, followup.InputCacheWrite5m, &result.InputCacheWrite5m},
+		{initial.InputCacheWrite1h, followup.InputCacheWrite1h, &result.InputCacheWrite1h},
 		{initial.OutputReasoning, followup.OutputReasoning, &result.OutputReasoning},
 		{initial.OutputOther, followup.OutputOther, &result.OutputOther},
 		{initial.InputTotal, followup.InputTotal, &result.InputTotal},

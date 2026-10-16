@@ -27,14 +27,14 @@ func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 		if json.Unmarshal(body, &native) != nil || string(native["questions"]) != `{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}` {
 			t.Fatalf("native question order/types changed: %s", body)
 		}
-		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"profile":"exact"}}`), nil
+		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"dtype":"float32"}}`), nil
 	})
 	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
 		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"vllm-sr/test","state":"input","questions":{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}}`))
 		request.Header.Set("Authorization", "Bearer test-key")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if response.Code != 200 || strings.Contains(response.Body.String(), "private-") || !strings.Contains(response.Body.String(), `"profile":"exact"`) {
+		if response.Code != 200 || strings.Contains(response.Body.String(), "private-") || !strings.Contains(response.Body.String(), `"dtype":"float32"`) {
 			t.Fatalf("native response %d %s", response.Code, response.Body.String())
 		}
 	}
@@ -55,6 +55,55 @@ func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatal("denied inference reached runtime")
+	}
+}
+
+func TestPublicSystemOneChecksOptionsBeforeAModelReadsThem(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	var forwarded []string
+	handler := Handler(cfg, listener, func(_ context.Context, _ string, body json.RawMessage) (int, []byte, error) {
+		forwarded = append(forwarded, string(body))
+		return 200, []byte(`{"model":"private","answers":{},"usage":{"input_tokens":1}}`), nil
+	})
+	post := func(body string) (int, string, string) {
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body)))
+		var got struct {
+			Error struct{ Code, Message string } `json:"error"`
+		}
+		_ = json.Unmarshal(response.Body.Bytes(), &got)
+		return response.Code, got.Error.Code, got.Error.Message
+	}
+	for body, want := range map[string]string{
+		`{"model":"vllm-sr/test","state":"s"}`:                                                    `{"model":"vllm-sr/test","state":"s"}`,
+		`{"model":"vllm-sr/test","options":{"return_meta":true,"max_tokens":512},"state":"s"}`:    `{"model":"vllm-sr/test","options":{"max_tokens":512,"return_meta":true},"state":"s"}`,
+		`{"options" : { "deadline_ms" : 1500 } , "model":"vllm-sr/test"}`:                         `{"options" : {"deadline_ms":1500} , "model":"vllm-sr/test"}`,
+		`{"model":"vllm-sr/test","options":null,"images":["data:image/png;base64,iVBORw0KGgo="]}`: `{"model":"vllm-sr/test","options":{},"images":["data:image/png;base64,iVBORw0KGgo="]}`,
+	} {
+		forwarded = nil
+		if status, code, _ := post(body); status != 200 || len(forwarded) != 1 || forwarded[0] != want {
+			t.Fatalf("%s => %d %s, forwarded %q; want %s", body, status, code, forwarded, want)
+		}
+	}
+	forwarded = nil
+	for body, message := range map[string]string{
+		`{"model":"vllm-sr/test","options":{"profile":"exact"}}`:        "options.profile was removed: batching and numerics are the deployment's engine arguments (max_num_seqs, max_num_batched_tokens, batch_window_ms, enable_shared_context, dtype)",
+		`{"model":"vllm-sr/test","options":{"verbose":true}}`:           "options.verbose is not a System One option; the options are deadline_ms, max_tokens and return_meta",
+		`{"model":"vllm-sr/test","options":{"max_tokens":0}}`:           "options.max_tokens must be an integer of at least 1",
+		`{"model":"vllm-sr/test","options":"fast"}`:                     "options must be an object",
+		`{"model":"vllm-sr/test","options":{},"options":{"profile":1}}`: "options may appear only once",
+	} {
+		if status, code, got := post(body); status != 400 || code != "invalid_request" || got != message {
+			t.Fatalf("%s => %d %s %q; want 400 invalid_request %q", body, status, code, got, message)
+		}
+	}
+	if len(forwarded) != 0 {
+		t.Fatalf("a request with invalid options reached the model: %q", forwarded)
+	}
+	if status, code, _ := post(`{"model":"vllm-sr/other","options":{"profile":"exact"}}`); status != 403 || code != "model_not_allowed" {
+		t.Fatalf("the grant is checked before the options: %d %s", status, code)
 	}
 }
 

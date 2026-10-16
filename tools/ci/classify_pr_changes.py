@@ -28,6 +28,8 @@ PRODUCTION_RELEASE_IMAGES = (
     "vllm-sr-rocm",
 )
 NIGHTLY_IMAGES = PRODUCTION_RELEASE_IMAGES
+# The first-party images a development CLI runs from its own commit.
+CLI_RUNTIME_IMAGES = ("dashboard", "vllm-sr", "vllm-sr-cuda", "vllm-sr-rocm")
 
 
 @dataclass(frozen=True)

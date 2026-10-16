@@ -297,11 +297,12 @@ func poolingContract(card modelservice.ModelCard) string {
 }
 
 // numerics names everything besides the input and view that determines a
-// vector: package content, revision, engine, accelerator, dtype, profile and
-// the input budget that truncates long inputs.
+// vector: package content, revision, engine, accelerator, dtype, numerics
+// (whether batching can move a vector) and the input budget that truncates
+// long inputs.
 func numerics(card modelservice.ModelCard, limits binding.Limits) string {
 	encoded, _ := json.Marshal([]string{
-		card.ModelSHA256, card.Revision, card.Engine, card.Accelerator, card.Dtype, card.Profile,
+		card.ModelSHA256, card.Revision, card.Engine, card.Accelerator, card.Dtype, card.Numerics,
 		limits.Overflow, strconv.Itoa(limits.EffectiveTokens()),
 	})
 	return string(encoded)

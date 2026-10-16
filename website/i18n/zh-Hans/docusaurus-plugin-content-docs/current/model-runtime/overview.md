@@ -57,8 +57,9 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 
 - **固定版本并经过校验。** 内置模型固定到确切的 Hugging Face revision。
   每个文件在加载前都会对照记录的 SHA-256 校验，模型仓库中附带的代码永远不会执行。
-- **与发布模型相同的答案。** 默认的 `exact` profile 给出模型发布方测得的答案。
-  更快的设置需要显式开启，并会说明可能改变结果。见 [Profiles](model-runtime/profiles.md)。
+- **吞吐优先，保持发布精度。** 和 vLLM 一样，运行时默认对并发请求做批处理，
+  并以模型发布时的精度运行。批处理后的答案可能因舍入而变动，记录按模型给出了变动幅度；
+  记录无法证明准确率不变的更快设置是显式开关。见[引擎参数](model-runtime/engine-args.md)。
 - **等待有上限。** 模型过慢或不可用时，按信号截止时间和错误策略处理。
   已开始的模型前向计算可能在调用方超时后继续执行，并延迟队列中的请求。
   路由器会重启崩溃的运行时。
@@ -71,7 +72,7 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 ## 硬件 {#hardware}
 
 CPU 和 AMD GPU（MI300X、MI325X）已经验证。NVIDIA GPU 可用但尚未验证；
-Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
+Intel GPU（`xpu`）、昇腾 NPU（`npu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
 AMD 和 NVIDIA 镜像（`vllm-sr serve --platform rocm` 或 `--platform cuda`）还能在 GPU 上运行它们。
 
 ## 从旧版本升级？ {#coming-from-an-older-release}
