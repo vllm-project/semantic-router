@@ -213,30 +213,33 @@ class Float8Linear(nn.Module):
             )
             self.weight = bits.view(torch.float8_e4m3fnuz)
             self.weight_scale = self.weight_scale * 2
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # views and the kernel bound once: without graphs every call's host time counts
+        self.weight_t, self.scale_t = self.weight.t(), self.weight_scale.t()
         from ...accel.triton_fp8 import quantize_rows
 
+        self.quantize_rows = quantize_rows
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.shape
         rows = x.reshape(-1, shape[-1])
         if rows.stride(-1) != 1:
             rows = rows.contiguous()
-        q, scale = quantize_rows(rows, self.weight.dtype)
+        q, scale = self.quantize_rows(rows, self.weight.dtype)
         if self.unscaled_product and rows.shape[0] >= UNSCALED_ROWS:
             out = torch._scaled_mm(
                 q,
-                self.weight.t(),
+                self.weight_t,
                 scale_a=self.one,
                 scale_b=self.one,
                 out_dtype=torch.float32,
             )
-            out = (out * scale * self.weight_scale.t()).to(x.dtype)
+            out = (out * scale * self.scale_t).to(x.dtype)
         else:
             out = torch._scaled_mm(
                 q,
-                self.weight.t(),
+                self.weight_t,
                 scale_a=scale,
-                scale_b=self.weight_scale.t(),
+                scale_b=self.scale_t,
                 out_dtype=x.dtype,
             )
         if self.bias is not None:

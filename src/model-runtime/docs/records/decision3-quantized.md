@@ -60,7 +60,16 @@ answered a second time):
 | AWQ int4 | 45.1 ms | 60.2 ms | 67.5 ms | 86.1 ms |
 
 FP8 pays per layer for one activation quantization and one scaled GEMM launch,
-which costs more host time than it saves without graphs. After loading, the
+which costs more host time than it saves without graphs. Triton's launcher binds
+and specializes the quantization kernel's arguments on every call (about 17 us
+of host time per layer on the MI300X), so after a shape's first call the
+compiled kernel is launched directly, once a direct launch has written the same
+bytes: about 15 us instead of 21.5 per call. Binding the layer's transposed
+views at load saves another 6 us; one gate projection of 64 rows then takes
+40 us of host time against about 20 us for the BF16 GEMM, and writes the same
+bytes.
+Without graphs the FP8 package's median falls from 84.0 and 85.4 ms to 77.5 ms
+in alternating runs (d3 68.3 to 71.3 ms). After loading, the
 packages hold 52.3 GB (BF16), 32.2 GB (FP8) and 16.9 GB (AWQ) of device memory,
 and 52.9, 32.9 and 17.5 GB at the peak of the 20 longest of those 1,000 rows
 (up to 5,928 characters of state), each in its own process. Int4 layers unpack
