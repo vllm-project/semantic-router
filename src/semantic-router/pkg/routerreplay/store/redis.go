@@ -28,6 +28,7 @@ type RedisStore struct {
 	client      *redis.Client
 	keyPrefix   string
 	indexKey    string
+	readyKey    string
 	ttl         time.Duration
 	sweep       retentionSweep
 	asyncWrites bool
@@ -91,6 +92,7 @@ func NewRedisStore(cfg *RedisConfig, ttlSeconds int, asyncWrites bool) (*RedisSt
 		client:      client,
 		keyPrefix:   keyPrefix,
 		indexKey:    redisIndexKey(keyPrefix),
+		readyKey:    redisIndexKey(keyPrefix) + "_ready",
 		ttl:         time.Duration(ttlSeconds) * time.Second,
 		asyncWrites: asyncWrites,
 		done:        make(chan struct{}),
@@ -316,10 +318,11 @@ func (r *RedisStore) trimIndex(ctx context.Context) error {
 	return r.client.ZRemRangeByScore(ctx, r.indexKey, "-inf", cutoff).Err()
 }
 
-// indexExisting indexes records written before the index existed.
+// indexExisting indexes records written before the index existed. Writes also
+// create the index, so the ready key marks a finished pass.
 func (r *RedisStore) indexExisting(ctx context.Context) error {
-	exists, err := r.client.Exists(ctx, r.indexKey).Result()
-	if err != nil || exists > 0 {
+	ready, err := r.client.Exists(ctx, r.readyKey).Result()
+	if err != nil || ready > 0 {
 		return err
 	}
 	var cursor uint64
@@ -332,7 +335,7 @@ func (r *RedisStore) indexExisting(ctx context.Context) error {
 			return err
 		}
 		if next == 0 {
-			return nil
+			return r.client.Set(ctx, r.readyKey, "1", 0).Err()
 		}
 		cursor = next
 	}
