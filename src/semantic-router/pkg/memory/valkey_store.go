@@ -9,6 +9,7 @@ import (
 	"time"
 
 	glide "github.com/valkey-io/valkey-glide/go/v2"
+	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -32,6 +33,7 @@ type ValkeyStore struct {
 	collectionPrefix string
 	metricType       string
 	dimension        int
+	clusterMode      bool
 }
 
 // valkeyMemoryClient is the subset of Glide used by ValkeyStore. Keeping the
@@ -41,6 +43,11 @@ type valkeyMemoryClient interface {
 	HGetAll(ctx context.Context, key string) (map[string]string, error)
 	HSet(ctx context.Context, key string, fields map[string]string) (int64, error)
 	Del(ctx context.Context, keys []string) (int64, error)
+	InvokeScriptWithOptions(
+		ctx context.Context,
+		script glideoptions.Script,
+		scriptOptions glideoptions.ScriptOptions,
+	) (any, error)
 }
 
 var _ valkeyMemoryClient = (*glide.Client)(nil)
@@ -134,6 +141,12 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if err := store.initializeSearchIndex(ctx); err != nil {
 		return nil, err
 	}
+	clusterCtx, clusterCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	store.clusterMode = store.detectClusterMode(clusterCtx)
+	clusterCancel()
+	if store.clusterMode {
+		logging.Warnf("ValkeyStore: cluster mode detected; atomic memory consolidation is disabled")
+	}
 
 	logging.Infof("ValkeyStore: initialized with index='%s', prefix='%s', embedding_model='%s', dimension=%d",
 		store.indexName, store.collectionPrefix, store.embeddingConfig.Model, store.dimension)
@@ -209,6 +222,31 @@ func (v *ValkeyStore) ensureIndex(ctx context.Context) error {
 // hashKey returns the HASH key for a memory document.
 func (v *ValkeyStore) hashKey(id string) string {
 	return v.collectionPrefix + id
+}
+
+// detectClusterMode is deliberately best-effort. Standalone Valkey returns an
+// error for CLUSTER INFO, while a clustered server returns cluster_state. The
+// memory client is a single-node GLIDE client, so multi-key Lua operations are
+// not safe against a cluster and consolidation must be disabled there.
+func (v *ValkeyStore) detectClusterMode(ctx context.Context) bool {
+	result, err := v.client.CustomCommand(ctx, []string{"CLUSTER", "INFO"})
+	if err != nil {
+		return false
+	}
+	return valkeyClusterInfoIndicatesMode(result)
+}
+
+func valkeyClusterInfoIndicatesMode(result any) bool {
+	var info string
+	switch value := result.(type) {
+	case string:
+		info = value
+	case []byte:
+		info = string(value)
+	default:
+		info = fmt.Sprint(value)
+	}
+	return strings.Contains(info, "cluster_state:")
 }
 
 // Store saves a new memory to Valkey.
@@ -333,6 +371,8 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 // Note: RETURN fetches fields from the underlying HASH document, not from the
 // index schema. The "metadata" field is stored in the HASH but not indexed as
 // a schema field, which is intentional — it's only needed for result parsing.
+// last_accessed and access_count are authoritative hash fields, not metadata
+// JSON, so they must be projected or Retrieve returns zero access state.
 func (v *ValkeyStore) buildRetrieveSearchCmd(opts RetrieveOptions, embedding []float32, limit int) []string {
 	return v.buildRetrieveSearchCmdWithTopK(opts, embedding, retrieveSearchTopK(limit, opts.HybridSearch))
 }
@@ -362,7 +402,7 @@ func (v *ValkeyStore) buildRetrieveSearchCmdWithTopK(opts RetrieveOptions, embed
 	return []string{
 		"FT.SEARCH", v.indexName, query,
 		"PARAMS", "2", "BLOB", string(embeddingBytes),
-		"RETURN", "5", "id", "content", "memory_type", "metadata", "vector_distance",
+		"RETURN", "7", "id", "content", "memory_type", "metadata", "vector_distance", "last_accessed", "access_count",
 		"LIMIT", "0", strconv.Itoa(searchTopK),
 		"DIALECT", "2",
 	}
@@ -503,8 +543,8 @@ func (v *ValkeyStore) Get(ctx context.Context, id string) (*Memory, error) {
 	return mem, nil
 }
 
-// Update modifies an existing memory in Valkey using HSET (atomic overwrite).
-// Preserves CreatedAt from the existing row and sets UpdatedAt to now.
+// Update modifies an existing memory in Valkey.
+// Preserves CreatedAt and access metadata, re-embeds changed content, and sets UpdatedAt to now.
 func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) error {
 	startTime := time.Now()
 	backend := "valkey"
@@ -531,9 +571,15 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 	memory.ID = id
 	memory.UpdatedAt = time.Now()
 
-	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
+	// CreatedAt and access metadata come from the existing row. A missing vector
+	// is chosen by memoryUpdateEmbedding: unchanged content keeps its vector,
+	// changed content is re-embedded, and an explicit vector stays authoritative.
+	// The generated vector is written only on the update copy so a later update
+	// does not treat it as caller-supplied input. Access fields are copied onto
+	// the caller object but omitted from the hash write, so concurrent retrieval
+	// tracking is not reset.
 	var existing *Memory
-	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
+	if memory.CreatedAt.IsZero() || memory.LastAccessed.IsZero() || memory.AccessCount == 0 || len(memory.Embedding) == 0 {
 		var err error
 		existing, err = v.Get(ctx, id)
 		if err != nil {
@@ -542,6 +588,12 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 		}
 		if memory.CreatedAt.IsZero() {
 			memory.CreatedAt = existing.CreatedAt
+		}
+		if memory.LastAccessed.IsZero() {
+			memory.LastAccessed = existing.LastAccessed
+		}
+		if memory.AccessCount == 0 {
+			memory.AccessCount = existing.AccessCount
 		}
 	}
 	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, v.embeddingConfig)
@@ -560,27 +612,26 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 	return nil
 }
 
-// upsert atomically replaces a memory in Valkey by HSET on its hash key.
-// The memory must be fully populated (including Embedding, timestamps, etc.).
-// Reuses valkeyBuildHashFields to avoid duplicating field-building logic.
+// upsert replaces a memory's content fields in Valkey. Access metadata is
+// intentionally excluded so concurrent retrieval tracking cannot be reset.
 func (v *ValkeyStore) upsert(ctx context.Context, memory *Memory) error {
 	if len(memory.Embedding) == 0 {
 		return fmt.Errorf("embedding is required for upsert")
 	}
 
-	fields, err := valkeyBuildHashFields(memory, memory.Embedding)
+	fields, err := valkeyBuildUpdateHashFields(memory)
 	if err != nil {
 		return fmt.Errorf("failed to build hash fields: %w", err)
 	}
 
 	key := v.hashKey(memory.ID)
 
-	err = v.retryWithBackoff(ctx, func() error {
-		_, hsetErr := v.client.HSet(ctx, key, fields)
-		return hsetErr
-	})
+	updated, err := v.updateHashIfCurrent(ctx, key, memory.ID, fields)
 	if err != nil {
-		return fmt.Errorf("valkey HSET upsert failed for memory id=%s: %w", memory.ID, err)
+		return fmt.Errorf("valkey conditional update failed for memory id=%s: %w", memory.ID, err)
+	}
+	if !updated {
+		return fmt.Errorf("memory not found: %s", memory.ID)
 	}
 
 	logging.Debugf("ValkeyStore.upsert: successfully upserted memory id=%s", memory.ID)
@@ -659,21 +710,27 @@ func (v *ValkeyStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 // searchMemoryList runs FT.SEARCH sorted by created_at descending.
 // The returned slice is ordered by created_at descending, then id descending.
 func (v *ValkeyStore) searchMemoryList(ctx context.Context, filterExpr string, offset, limit int) ([]*Memory, int, error) {
-	if limit < 1 {
-		limit = 1
-	}
-	searchCmd := []string{
-		"FT.SEARCH", v.indexName, filterExpr,
-		"RETURN", "7", "id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at",
-		"SORTBY", "created_at", "DESC",
-		"LIMIT", strconv.Itoa(offset), strconv.Itoa(limit),
-		"DIALECT", "2",
-	}
-	result, err := v.client.CustomCommand(ctx, searchCmd)
+	result, err := v.client.CustomCommand(ctx, v.buildListSearchCmd(filterExpr, offset, limit))
 	if err != nil {
 		return nil, 0, fmt.Errorf("valkey FT.SEARCH list failed: %w", err)
 	}
 	return v.parseListSearchResults(result), v.extractTotalCount(result), nil
+}
+
+// buildListSearchCmd projects the hash fields List decodes, including the
+// authoritative access fields. Those live outside metadata JSON, so omitting
+// them makes LastAccessed and AccessCount zero on every listed memory.
+func (v *ValkeyStore) buildListSearchCmd(filterExpr string, offset, limit int) []string {
+	if limit < 1 {
+		limit = 1
+	}
+	return []string{
+		"FT.SEARCH", v.indexName, filterExpr,
+		"RETURN", "9", "id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at", "last_accessed", "access_count",
+		"SORTBY", "created_at", "DESC",
+		"LIMIT", strconv.Itoa(offset), strconv.Itoa(limit),
+		"DIALECT", "2",
+	}
 }
 
 // Forget deletes a memory by ID from Valkey.

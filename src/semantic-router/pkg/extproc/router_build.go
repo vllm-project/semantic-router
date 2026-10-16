@@ -60,6 +60,7 @@ type routerComponents struct {
 	memoryStatus                routerruntime.MemoryStatus
 	memoryExtractor             *memory.MemoryExtractor
 	memoryPersistence           *memory.PersistenceRunner
+	memoryConsolidation         *memory.ConsolidationRunner
 	protocolCodecs              *protocolcodec.Registry
 	credentialResolver          *authz.CredentialResolver
 	rateLimiter                 *ratelimit.RateLimitResolver
@@ -353,6 +354,15 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 			return components.memoryPersistence.RetireAndWait(grace)
 		}, components.memoryPersistence.Done())
 	}
+	// Added after persistence so shutdown retires consolidation first, while the
+	// store is still open for in-flight merges.
+	components.memoryConsolidation = createMemoryConsolidationRunner(cfg, components.memoryStore)
+	if components.memoryConsolidation != nil {
+		grace := time.Duration(cfg.Memory.Persistence.ShutdownGraceSeconds) * time.Second
+		components.resources.addDraining(func() error {
+			return components.memoryConsolidation.RetireAndWait(grace)
+		}, components.memoryConsolidation.Done())
+	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
 	components.rateLimiter = buildRateLimitResolver(cfg)
@@ -474,6 +484,18 @@ func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.M
 	)
 }
 
+func createMemoryConsolidationRunner(cfg *config.RouterConfig, store memory.Store) *memory.ConsolidationRunner {
+	if cfg == nil || store == nil || !isMemoryEnabled(cfg) || !cfg.Memory.Consolidation.Enabled {
+		return nil
+	}
+	consolidation := cfg.Memory.Consolidation
+	return memory.NewConsolidationRunner(store, memory.ConsolidationOptions{
+		Cooldown:    time.Duration(consolidation.CooldownSeconds) * time.Second,
+		Timeout:     time.Duration(consolidation.TimeoutSeconds) * time.Second,
+		Concurrency: consolidation.Concurrency,
+	})
+}
+
 func registerModelSelectorResources(
 	resources *resourceScope,
 	registries map[config.RecipeName]*selection.Registry,
@@ -547,6 +569,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryStatus:                components.memoryStatus,
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,
+		memoryConsolidation:         components.memoryConsolidation,
 		ProtocolCodecs:              components.protocolCodecs,
 		CredentialResolver:          components.credentialResolver,
 		RateLimiter:                 components.rateLimiter,

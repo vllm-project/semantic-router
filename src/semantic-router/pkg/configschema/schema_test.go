@@ -189,8 +189,8 @@ func TestSchemaPublishesMemoryPersistenceBounds(t *testing.T) {
 	if err := json.Unmarshal(Document(), &document); err != nil {
 		t.Fatal(err)
 	}
-	persistence, ok := document.Definitions["MemoryPersistenceConfig"]
-	if !ok {
+	persistence, found := document.Definitions["MemoryPersistenceConfig"]
+	if !found {
 		t.Fatal("MemoryPersistenceConfig schema is missing")
 	}
 	wantMaximum := map[string]string{
@@ -200,13 +200,33 @@ func TestSchemaPublishesMemoryPersistenceBounds(t *testing.T) {
 		"shutdown_grace_seconds": fmt.Sprint(routerconfig.MaxMemoryPersistenceDurationSeconds),
 	}
 	for field, maximum := range wantMaximum {
-		got, ok := persistence.Properties[field]
-		if !ok {
+		got, exists := persistence.Properties[field]
+		if !exists {
 			t.Errorf("MemoryPersistenceConfig schema is missing %q", field)
 			continue
 		}
 		if got.Minimum.String() != "0" || got.Maximum.String() != maximum {
 			t.Errorf("MemoryPersistenceConfig.%s bounds = [%s, %s], want [0, %s]", field, got.Minimum, got.Maximum, maximum)
+		}
+	}
+
+	consolidation, found := document.Definitions["MemoryConsolidationConfig"]
+	if !found {
+		t.Fatal("MemoryConsolidationConfig schema is missing")
+	}
+	consolidationMaximum := map[string]string{
+		"cooldown_seconds": fmt.Sprint(routerconfig.MaxMemoryPersistenceDurationSeconds),
+		"timeout_seconds":  fmt.Sprint(routerconfig.MaxMemoryPersistenceDurationSeconds),
+		"concurrency":      fmt.Sprint(routerconfig.MaxMemoryPersistenceConcurrency),
+	}
+	for field, maximum := range consolidationMaximum {
+		got, exists := consolidation.Properties[field]
+		if !exists {
+			t.Errorf("MemoryConsolidationConfig schema is missing %q", field)
+			continue
+		}
+		if got.Minimum.String() != "0" || got.Maximum.String() != maximum {
+			t.Errorf("MemoryConsolidationConfig.%s bounds = [%s, %s], want [0, %s]", field, got.Minimum, got.Maximum, maximum)
 		}
 	}
 }
