@@ -3862,5 +3862,11 @@
   },
   "team.members.PharosEast.bio": {
     "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.Zi-Yi-Ming.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.Zi-Yi-Ming.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
   }
 }

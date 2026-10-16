@@ -375,6 +375,14 @@ export const allCommitterMembers: TeamMember[] = [
     memberType: 'committer',
   },
   {
+    name: 'ZiY1Ming',
+    role: <Translate id="team.members.Zi-Yi-Ming.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/Zi-Yi-Ming.png',
+    github: 'https://github.com/Zi-Yi-Ming',
+    bio: <Translate id="team.members.Zi-Yi-Ming.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
     name: 'Stefan Wang',
     role: <Translate id="team.members.1fanwang.role">AI Infrastructure</Translate>,
     company: 'LinkedIn',
