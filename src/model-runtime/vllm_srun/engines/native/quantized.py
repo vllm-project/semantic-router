@@ -23,8 +23,9 @@ checkpoint's compressed tensors as they are stored:
   doubles the scale, which keeps every value. On Ada (compute capability 8.9)
   the scaled product with per-row scales takes a slow kernel from 256 rows on
   (1.4x the BF16 GEMM on an RTX 4070 Ti SUPER, where one scale per operand runs
-  at half of it), so there the product is taken unscaled in FP32 and the scales
-  are applied after, as the per-row epilogue applies them.
+  at half of it), so there approximate kernels take the product of
+  ``UNSCALED_ROWS`` rows or more unscaled in FP32 and apply the scales after,
+  as the per-row epilogue applies them; exact kernels keep the scaled product.
 """
 
 from __future__ import annotations
@@ -39,6 +40,8 @@ from ...quantization import FLOAT8, PACK, QuantizedWeights
 E4M3FN_NEGATIVE_ZERO = -128
 # Rows up to which approximate kernels multiply int4 weights in one fused kernel (NVIDIA GPUs).
 FUSED_ROWS = 256
+# Rows from which approximate kernels take the FP8 product unscaled on Ada, where the per-row scaled one turns slow.
+UNSCALED_ROWS = 256
 # The FP8 format each ROCm architecture's matrix units multiply.
 ROCM_FLOAT8 = {"gfx942": torch.float8_e4m3fnuz, "gfx950": torch.float8_e4m3fn}
 
@@ -159,7 +162,7 @@ class Float8Linear(nn.Module):
 
     weight: torch.Tensor
     weight_scale: torch.Tensor
-    unscaled_product: bool = False
+    unscaled_product: bool = False  # approximate kernels on Ada (``UNSCALED_ROWS``)
 
     def __init__(self, linear: nn.Linear):
         super().__init__()
@@ -219,7 +222,7 @@ class Float8Linear(nn.Module):
         if rows.stride(-1) != 1:
             rows = rows.contiguous()
         q, scale = quantize_rows(rows, self.weight.dtype)
-        if self.unscaled_product:
+        if self.unscaled_product and rows.shape[0] >= UNSCALED_ROWS:
             out = torch._scaled_mm(
                 q,
                 self.weight.t(),

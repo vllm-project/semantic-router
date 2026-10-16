@@ -86,9 +86,10 @@ projection shapes (`in_proj_qkv`, `in_proj_z`, `out_proj`, `q_proj`, `k_proj`,
 On Ada, `torch._scaled_mm` with per-row scales takes a slow kernel from 256
 rows on, while one scale per operand runs at about half the BF16 GEMM's time
 (the gate projection at 256 rows: 824 us per row-scaled, 288 us per-tensor,
-591 us BF16). There the FP8 layer multiplies unscaled into FP32 and applies
-the scales after (348 us for the same product), which differs from the
-per-row result by about one BF16 rounding step. On MI300X both scalings run
+591 us BF16). There approximate kernels multiply products of 256 rows or more
+unscaled into FP32 and apply the scales after (348 us for the same product),
+which differs from the per-row result by about one BF16 rounding step (see
+below); exact kernels keep the per-row product. On MI300X both scalings run
 alike and the per-row product is kept.
 
 A Triton kernel that multiplies straight from the packed int4 weights takes
@@ -115,3 +116,27 @@ only (an explicit `--dtype`) they keep the unpacked product. An AWQ int4
 
 Against the BF16 package, the int4 one changes 17 of the 500 answers (96.6%;
 accuracy 0.812 against 0.820).
+
+## The unscaled FP8 product in a model
+
+On Ada, approximate kernels (`--dtype auto` for a quantized package) take the
+FP8 product of 256 rows or more unscaled; exact kernels only
+(`EngineOptions.exact_kernels_only`) keep the per-row scaled product. One
+`k_proj`-shaped layer (5,120 to 1,024, 256 rows, activations with outlier
+channels) gives bit-identical outputs for 91.5% of its elements unscaled, and
+every output above 1% of the largest stays within 2.53 BF16 ulps of the scaled
+one. An FP8 `vllm-sr/d3-mini` (made as the FP8 package above) on the RTX 4070
+Ti SUPER, the first 500 of the 1,000 train rows (210 of them 256 tokens or
+longer), each answered a third time, each setting loaded alone:
+
+| Kernels | Changed against exact kernels | Largest probability change | Accuracy | Median latency |
+| --- | --- | --- | --- | --- |
+| Exact kernels only | | | 0.826 | 49.5 ms |
+| Approximate, scaled product | 8 of 500 | 0.176 | 0.824 | 39.6 ms |
+| Approximate (the default) | 7 of 500 | 0.176 | 0.826 | 40.7 ms |
+
+The unscaled product itself changes 1 of the 500 answers against the
+approximate kernels with the scaled product (largest probability change
+0.087); the other changes come from the fused element-wise kernels. One
+request at a time it saves no latency at these lengths; the gain is the
+kernel table's, at 256 rows and more, as batches of concurrent requests reach.

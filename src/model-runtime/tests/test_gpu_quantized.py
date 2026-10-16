@@ -204,22 +204,66 @@ def test_only_approximate_kernels_take_the_fused_int4_kernel(device):
     assert torch.equal(module(big), big @ module.unpacked(torch.bfloat16).t())
 
 
-def test_the_unscaled_fp8_product_matches_the_scaled_one(device):
-    from vllm_srun.engines.native.quantized import Float8Linear, float8_format
+def test_the_unscaled_fp8_product_stays_within_a_few_bf16_ulps(device):
+    from vllm_srun.engines.native.quantized import (
+        UNSCALED_ROWS,
+        Float8Linear,
+        float8_format,
+    )
 
     fmt = float8_format(device)
     if fmt is None:
         pytest.skip("needs FP8 matrix units")
     torch.manual_seed(0)
-    module = Float8Linear(nn.Linear(256, 128, bias=False)).to(device)
-    module.weight = (torch.randn(128, 256, device=device) * 50).to(fmt)
-    module.weight_scale = torch.rand(128, 1, device=device) * 0.01
+    # d3's k_proj shape, activations with outlier channels
+    module = Float8Linear(nn.Linear(5120, 1024, bias=False)).to(device)
+    # within e4m3fnuz's range (240): larger values turn NaN on MI300
+    module.weight = (torch.randn(1024, 5120, device=device) * 30).to(fmt)
+    module.weight_scale = torch.rand(1024, 1, device=device) * 0.01
+    module.prepare()
     module.one = torch.ones((), device=device)
-    x = torch.randn(300, 256, device=device, dtype=torch.bfloat16)
-    scaled = module(x).float()
-    module.unscaled_product = True
-    unscaled = module(x).float()
-    assert ((unscaled - scaled).abs().max() / scaled.abs().max()).item() < 1e-2
+    x = torch.randn(UNSCALED_ROWS, 5120, device=device, dtype=torch.bfloat16)
+    x[:, :8] *= 30
+
+    def product(rows, unscaled):
+        module.unscaled_product = unscaled
+        return module(rows).float()
+
+    scaled = product(x, False)
+    difference = (product(x, True) - scaled).abs()
+    ulp = torch.finfo(torch.bfloat16).eps * scaled.abs()
+    # outputs near zero come from cancelling sums, whose relative error grows
+    away_from_zero = scaled.abs() > 1e-2 * scaled.abs().max()
+    assert (difference <= 4 * ulp)[away_from_zero].all()
+    # fewer rows keep the scaled product
+    few = x[: UNSCALED_ROWS - 1]
+    assert torch.equal(product(few, True), product(few, False))
+
+
+def test_only_approximate_kernels_take_the_unscaled_fp8_product(
+    device, tmp_path, d3_text_package
+):
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.engines.native import quantized
+    from vllm_srun.runtime import Runtime
+
+    if torch.version.hip or torch.cuda.get_device_capability(device) != (8, 9):
+        pytest.skip("only Ada takes the FP8 product unscaled")
+    packed = write_quantized_fixture(d3_text_package, tmp_path / "fp8", scheme="float8")
+    # an explicit --dtype other than the published one runs exact kernels only
+    for dtype, unscaled in (("auto", True), ("float16", False)):
+        runtime = Runtime(
+            ServeConfig(
+                models=(ModelConfig(model=str(packed), device="cuda:0", dtype=dtype),)
+            )
+        )
+        runtime.start(background=False)
+        try:
+            backbone = runtime.lookup(None).model.engine_model.backbone
+            layers = quantized.layers(backbone)
+            assert layers and {layer.unscaled_product for layer in layers} == {unscaled}
+        finally:
+            runtime.stop()
 
 
 def test_fp8_quantizes_rows_past_two_billion_elements(device):

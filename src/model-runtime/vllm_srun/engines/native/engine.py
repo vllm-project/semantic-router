@@ -113,6 +113,8 @@ class NativeEngineModel(EngineModel):
         for layer in self._quantized():
             if isinstance(layer, quantized.Int4Linear):
                 layer.fused = fused_int4 and self.device.type == "cuda"
+            else:
+                layer.unscaled_product &= self.kernels.allow_approximate
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
