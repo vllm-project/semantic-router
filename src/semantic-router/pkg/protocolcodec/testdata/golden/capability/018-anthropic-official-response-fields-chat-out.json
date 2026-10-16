@@ -448,10 +448,6 @@
         },
         "diagnostics": [
           {
-            "field": "usage.cache_creation",
-            "action": "dropped"
-          },
-          {
             "field": "usage.inference_geo",
             "action": "dropped"
           },
@@ -461,6 +457,10 @@
           },
           {
             "field": "usage.service_tier",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cache_creation",
             "action": "dropped"
           }
         ]

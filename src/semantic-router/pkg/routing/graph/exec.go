@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // Limits bound one run of a program; a zero field means no bound. A run that
@@ -75,7 +76,10 @@ type Outcome struct {
 	Results []*Result
 	Values  map[string]any
 	// Hops counts the hops sent; Usage and Cost add up their usage.
-	Hops            int
+	Hops int
+	// PhysicalCalls counts model exchanges reserved by this run, including
+	// retries and fallback attempts inside one logical hop.
+	PhysicalCalls   int
 	Usage           Usage
 	Cost            float64
 	Attempts        []Attempt
@@ -94,6 +98,8 @@ type Exec struct {
 	usage    Usage
 	cost     float64
 	evidence evidence
+	ledger   *budget.Ledger
+	ledgerAt int
 }
 
 // Run executes program for one request. ctx carries the request's deadline
@@ -115,7 +121,20 @@ func Run(ctx context.Context, program *Program, in Input, opts Options) (*Outcom
 		runCtx, stop = context.WithTimeoutCause(runCtx, program.Limits.Timeout, ErrDeadline)
 		defer stop()
 	}
-	x := &Exec{program: program, opts: opts, fail: fail}
+	// Install the physical-call ledger before any caller or nested transport
+	// starts. Existing ledgers are preserved, so a parent request budget remains
+	// authoritative when a graph runs inside another execution.
+	var ledger *budget.Ledger
+	if program.Limits.MaxHops > 0 {
+		runCtx, ledger = budget.WithLimit(runCtx, program.Limits.MaxHops)
+	} else {
+		ledger, _ = budget.Current(runCtx)
+	}
+	ledgerAt := 0
+	if ledger != nil {
+		ledgerAt = ledger.Used()
+	}
+	x := &Exec{program: program, opts: opts, fail: fail, ledger: ledger, ledgerAt: ledgerAt}
 	st := &State{Request: in.Request.Clone(), Values: cloneValues(in.Values)}
 
 	spanCtx, span := tracing.StartSpan(runCtx, "graph.run",
@@ -177,11 +196,19 @@ func (x *Exec) outcome(st *State) *Outcome {
 		Results:         st.Results,
 		Values:          st.Values,
 		Hops:            int(x.hops.Load()),
+		PhysicalCalls:   physicalCalls(x.ledger, x.ledgerAt),
 		Usage:           x.usage,
 		Cost:            x.cost,
 		Attempts:        attempts,
 		DroppedAttempts: dropped,
 	}
+}
+
+func physicalCalls(ledger *budget.Ledger, start int) int {
+	if ledger == nil {
+		return 0
+	}
+	return ledger.Used() - start
 }
 
 type stepKey struct{}

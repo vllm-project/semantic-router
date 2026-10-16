@@ -7,26 +7,26 @@ translation:
 
 # Decision 选模算法
 
-## 概述
+## 概述 {#overview}
 
 `decision` 向判断模型询问：当前路由决策的 `modelRefs` 中，哪个模型最适合回答请求？你用一句话描述每个候选模型；判断模型读取请求，为每个候选给出概率，再由概率最高的模型回答。
 
-## 主要优势
+## 主要优势 {#key-advantages}
 
 - 由能够理解整个请求的模型做选择。
 - 默认复用 Router 的判断模型，无需为选模再加载一份模型。
 - 为每个候选报告概率，可在选模轨迹中查看。
 - 判断模型未能及时给出答案时，回退到第一个 `modelRef`。
 
-## 解决什么问题？
+## 解决什么问题？ {#what-problem-does-it-solve}
 
 固定顺序不会考虑请求内容，而让 Chat 模型选模需要一次文本生成调用，还要解析输出。判断模型只需一次前向计算即可回答同样的问题，直接返回概率，无需生成文本。
 
-## 何时使用
+## 何时使用 {#when-to-use}
 
 当一个 decision 有两个或更多候选模型，能够用一句话描述各自优势，而且合适的选择取决于请求内容时，使用此算法。如果选择顺序始终不变，优先使用 `static`；如果主要依据成本、延迟或负载选模，则使用 `multi_factor`。
 
-## 配置
+## 配置 {#configuration}
 
 未指定 `deployment` 时，使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 2.0 0.3B，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。该模型已经负责请求的内置信号和未指定部署的 `decision` 问题，因此选模无需再加载第二份模型：
 

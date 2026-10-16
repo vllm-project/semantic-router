@@ -257,8 +257,9 @@ are rejected.
 the selected Kubernetes context. Choose `cpu`, `rocm` or `cuda` explicitly to
 select that backend. Kubernetes requires its device plugin and schedules GPU
 resources from canonical placement ordinals; physical `--device-ids` belongs
-to the Docker target. Deployment `--profile` and model `--runtime-profile`
-control different settings.
+to the Docker target. The Kubernetes target's `--profile` (`dev` or `prod`)
+selects Helm values; engine flags such as `--max-num-seqs` and `--dtype` set
+the model runtime's engine arguments.
 
 See [Kubernetes installation](https://vllm-sr.ai/docs/installation/k8s/) for
 gateway, profile, and production guidance.
