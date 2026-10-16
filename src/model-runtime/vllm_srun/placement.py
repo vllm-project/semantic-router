@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from . import dtypes
 from .errors import PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
@@ -106,6 +107,8 @@ def place(
     device: str,
     parameters: int,
     memory_budget_gib: float | None = None,
+    *,
+    dtype: str = "auto",
 ) -> Placement:
     kind, index = parse_device(device)
     budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
@@ -124,7 +127,8 @@ def place(
         if not accelerator.available():
             absent.append(f"{name}: not available on this host")
             continue
-        needed = estimate_bytes(spec, parameters, name)
+        candidate_spec = dtypes.apply(spec, dtype, name != "cpu")
+        needed = estimate_bytes(candidate_spec, parameters, name)
         if budget is not None and needed > budget:
             reasons.append(
                 f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "
@@ -142,7 +146,7 @@ def place(
                 if lacking:
                     unsupported += [accelerator.lacks(info, need) for need in lacking]
                     continue
-            if name != "cpu" and not info.bf16 and spec.dtype.needs_gpu_bf16:
+            if name != "cpu" and not info.bf16 and candidate_spec.dtype.needs_gpu_bf16:
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
             if (
