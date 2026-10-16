@@ -26,9 +26,14 @@ checkpoint's compressed tensors as they are stored:
   at half of it), so there approximate kernels take the product of
   ``UNSCALED_ROWS`` rows or more unscaled in FP32 and apply the scales after,
   as the per-row epilogue applies them; exact kernels keep the scaled product.
+  The scaled product writes BF16 whatever the dtype (hipBLASLt's row-wise
+  scaling writes nothing else), cast to the activation dtype after, and a cast
+  of the whole model to another dtype leaves the FP8 weight as stored.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import torch
 from torch import nn
@@ -192,6 +197,19 @@ class Float8Linear(nn.Module):
     def stored_bytes(self) -> int:
         return sum(b.numel() * b.element_size() for b in self.buffers(recurse=False))
 
+    def _apply(
+        self, fn: Callable[[torch.Tensor], torch.Tensor], recurse: bool = True
+    ) -> Float8Linear:
+        # A cast of the whole model (``Module.float()`` at --dtype float32) keeps
+        # the FP8 weight and its FP32 scales as stored; moves still apply.
+        weight, scale = self.weight, self.weight_scale
+        super()._apply(fn, recurse)  # type: ignore[no-untyped-call]  # torch leaves _apply unannotated
+        if self.weight.dtype != weight.dtype:
+            self.weight = weight.to(self.weight.device)
+        if self.weight_scale.dtype != scale.dtype:
+            self.weight_scale = scale.to(self.weight_scale.device)
+        return self
+
     def prepare(self) -> None:
         """Hold the weight in the format the device multiplies (``float8_format``)."""
         fmt = float8_format(self.weight.device)
@@ -235,13 +253,14 @@ class Float8Linear(nn.Module):
             )
             out = (out * scale * self.scale_t).to(x.dtype)
         else:
+            # row-wise scales write BF16 only (hipBLASLt refuses FP16 and FP32)
             out = torch._scaled_mm(
                 q,
                 self.weight_t,
                 scale_a=scale,
                 scale_b=self.scale_t,
-                out_dtype=x.dtype,
-            )
+                out_dtype=torch.bfloat16,
+            ).to(x.dtype)
         if self.bias is not None:
             out = out + self.bias
         return out.reshape(*shape[:-1], self.out_features)

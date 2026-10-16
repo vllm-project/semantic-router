@@ -103,7 +103,7 @@ def test_an_int4_package_answers_as_its_dequantized_weights_do(
     assert [body["answers"] for _, body in got] == [body["answers"] for _, body in want]
 
 
-def gpu_answers(package):
+def gpu_answers(package, dtype=None):
     from vllm_srun.config import ModelConfig, ServeConfig
     from vllm_srun.runtime import Runtime
 
@@ -111,7 +111,7 @@ def gpu_answers(package):
 
     name = "rocm:0" if torch.version.hip else "cuda:0"
     runtime = Runtime(
-        ServeConfig(models=(ModelConfig(model=str(package), device=name),))
+        ServeConfig(models=(ModelConfig(model=str(package), device=name, dtype=dtype),))
     )
     runtime.start(background=False)
     try:
@@ -155,6 +155,30 @@ def test_an_fp8_package_answers_close_to_its_weights_in_bf16(
     assert (numbers(got) - numbers(want)).abs().max() < 0.05
     assert numbers(gpu_answers(packed)[0]).equal(numbers(got))
     assert parameters == plain_parameters and size < plain_size
+
+
+@pytest.mark.parametrize("dtype", ["float16", "float32"])
+def test_an_fp8_package_answers_at_another_dtype(
+    device, tmp_path, d3_text_package, dtype
+):
+    from vllm_srun.engines.native import quantized
+
+    if quantized.float8_format(device) is None:
+        pytest.skip("needs FP8 matrix units")
+    packed = write_quantized_fixture(d3_text_package, tmp_path / "fp8", scheme="float8")
+    want = numbers(gpu_answers(packed)[0])
+    got = numbers(gpu_answers(packed, dtype)[0])
+    # the product is the same BF16 one; only the layers around it change dtype
+    assert (got - want).abs().max() < 0.05
+
+
+def test_a_whole_model_cast_keeps_the_fp8_weights(device):
+    from vllm_srun.engines.native.quantized import Float8Linear
+
+    module = Float8Linear(nn.Linear(64, 32, bias=False))
+    module.float().to(device)
+    assert module.weight.dtype == torch.float8_e4m3fn
+    assert module.weight_scale.dtype == torch.float32
 
 
 def test_mi300_reads_e4m3fn_weights_without_changing_a_value(device):
