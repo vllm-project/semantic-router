@@ -1,4 +1,4 @@
 {
-  "anthropic_stream": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"thinking_delta\",\"estimated_tokens\":8},\"usage\":{\"iterations\":[{\"type\":\"message\",\"input_tokens\":2}]},\"context_management\":{\"applied_edits\":[]}}\n\n",
+  "anthropic_stream": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"thinking_delta\",\"estimated_tokens\":8},\"usage\":{\"iterations\":[{\"type\":\"message\",\"input_tokens\":2}],\"cache_creation\":{\"ephemeral_5m_input_tokens\":1}},\"context_management\":{\"applied_edits\":[]}}\n\n",
   "chat_stream": "data: {\"id\":\"chatcmpl-real\",\"agent\":{\"pool\":\"a\"},\"choices\":[]}\n\n"
 }

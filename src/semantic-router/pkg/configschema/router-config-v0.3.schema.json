@@ -572,6 +572,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "openai_compat_gateway": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -876,16 +879,14 @@
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              },
-              "profile": "exact"
+              }
             },
             "primary": {
               "artifact": "vllm-sr/Vela-2.0-0.3B",
               "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
               "provider": "model_runtime",
               "device": "cpu",
-              "input": {},
-              "profile": "max_speed"
+              "input": {}
             }
           }
         },
@@ -3625,6 +3626,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4636,8 +4640,20 @@
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },
-        "profile": {
+        "max_num_seqs": {
+          "type": "integer"
+        },
+        "max_num_batched_tokens": {
+          "type": "integer"
+        },
+        "batch_window_ms": {
+          "type": "number"
+        },
+        "dtype": {
           "type": "string"
+        },
+        "enable_shared_context": {
+          "type": "boolean"
         },
         "endpoint": {
           "type": "string"
@@ -4700,6 +4716,9 @@
           "type": "number"
         },
         "cache_write_per_1m": {
+          "type": "number"
+        },
+        "cache_write_1h_per_1m": {
           "type": "number"
         }
       },
