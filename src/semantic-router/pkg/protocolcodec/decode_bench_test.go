@@ -117,3 +117,35 @@ func BenchmarkDecodeChatStreamChunk(b *testing.B) {
 		}
 	})
 }
+
+// agentChatResponse builds a buffered chat completion with an answer of about
+// `paragraphs` paragraphs and one tool call.
+func agentChatResponse(paragraphs int) []byte {
+	answer := strings.Repeat("The request body is decoded in handler.go and validated before routing. ", 12*paragraphs)
+	return []byte(fmt.Sprintf(`{"id":"chatcmpl-1","object":"chat.completion","created":1760000000,"model":"agent-model","choices":[{"index":0,"message":{"role":"assistant","content":%q,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"tool_1","arguments":%q}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":5210,"completion_tokens":%d,"total_tokens":%d}}`,
+		answer, `{"path":"src/server/handler.go","start_line":1,"end_line":200}`, 180*paragraphs, 5210+180*paragraphs))
+}
+
+func BenchmarkDecodeChatResponse(b *testing.B) {
+	azure := llmprotocol.DefaultPolicy()
+	azure.ResponseVendor = llmprotocol.ResponseVendorAzure
+	policies := []struct {
+		name   string
+		policy llmprotocol.Policy
+	}{{"default", llmprotocol.DefaultPolicy()}, {"azure", azure}}
+	for _, paragraphs := range []int{1, 8} {
+		body := agentChatResponse(paragraphs)
+		for _, policy := range policies {
+			b.Run(fmt.Sprintf("%dKB/%s", len(body)/1000, policy.name), func(b *testing.B) {
+				b.SetBytes(int64(len(body)))
+				b.ReportAllocs()
+				for b.Loop() {
+					var wire chatResponseWire
+					if _, _, err := decodeProviderWireVendorAware(body, &wire, policy.policy); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
