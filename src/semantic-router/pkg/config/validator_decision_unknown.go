@@ -61,6 +61,11 @@ func remoteConditionCanBeUnknown(cfg *RouterConfig, node *RuleNode) bool {
 		}
 		bindings = []string{"prompt_guard"}
 	case SignalTypeSafety:
+		for _, rule := range cfg.SafetyRules {
+			if rule.Name == node.Name && (rule.Model != "" || (rule.Hazard != nil && rule.Hazard.Model != "")) {
+				return true
+			}
+		}
 		bindings = []string{"safety." + node.Name, "safety." + node.Name + ".hazard"}
 	}
 	for _, name := range bindings {
