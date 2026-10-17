@@ -1018,7 +1018,7 @@ Print desired/observed mode and durable operation state.
 ## `vllm-sr logs` {#vllm-sr-logs}
 
 ```text
-Usage: vllm-sr logs [OPTIONS] {envoy|router|dashboard}
+Usage: vllm-sr logs [OPTIONS] {envoy|router|dashboard|model-runtime}
 ```
 
 Show logs from vLLM Semantic Router service.
@@ -1037,7 +1037,7 @@ vllm-sr logs router --target kubernetes -f  # Follow K8s logs
 
 | Parameter | Description |
 | --- | --- |
-| `SERVICE` | Required argument. Type: choice. Choices: envoy, router, dashboard. |
+| `SERVICE` | Required argument. Type: choice. Choices: envoy, router, dashboard, model-runtime. |
 | `-f, --follow` | Follow log output Default: false. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
@@ -1512,7 +1512,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--observability` | Also start Jaeger, Prometheus and Grafana when minimal (engine mode's default). Default: false. |
 | `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
-| `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
+| `--platform CHOICE` | Execution backend: auto (default), cpu, cuda, rocm; apple uses the experimental native MPS host bridge on Apple silicon. Choices: auto, cpu, cuda, rocm, apple. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
@@ -1535,7 +1535,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 ## `vllm-sr status` {#vllm-sr-status}
 
 ```text
-Usage: vllm-sr status [OPTIONS] [envoy|router|dashboard|all]
+Usage: vllm-sr status [OPTIONS] [envoy|router|dashboard|model-runtime|all]
 ```
 
 Show status of vLLM Semantic Router services.
@@ -1552,7 +1552,7 @@ vllm-sr status --target kubernetes  # Show Kubernetes status
 
 | Parameter | Description |
 | --- | --- |
-| `[SERVICE]` | Optional argument. Type: choice. Choices: envoy, router, dashboard, all. Default: all. |
+| `[SERVICE]` | Optional argument. Type: choice. Choices: envoy, router, dashboard, model-runtime, all. Default: all. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
 | `--context TEXT` | kubectl / Helm context (kubernetes target only) |

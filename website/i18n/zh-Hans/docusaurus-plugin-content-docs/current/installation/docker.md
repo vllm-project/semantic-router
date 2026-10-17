@@ -13,6 +13,10 @@ Docker 是从 Semantic Router 配置到运行中栈的最短路径。它适合�
 
 CLI 会管理 Router、控制面板，以及所选配置所需的支持服务；使用 `--gateway extproc` 时还会在 Router 前面放一个 Envoy 容器（见[网关模式](gateway-modes)）。Router 会为自己的分类器和嵌入模型启动[模型运行时](../model-runtime/overview.md)。模型服务器保持独立：健康的 Router 栈并不意味着其 provider 端点已安装、正在运行或能够生成。
 
+在 Apple silicon Mac 上，实验性的 [Apple GPU 宿主机桥接](apple-mps) 使用
+`--platform apple` 通过原生 MPS 运行支持的内部模型。Router 服务栈保留在
+Docker 中，仍需遵守模型验证和内存限制。
+
 ## 启动栈
 
 完成[快速开始](/zh-Hans/docs/installation)以安装 CLI 并创建配置，或从现有 canonical YAML 文件开始：

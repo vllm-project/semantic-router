@@ -140,11 +140,12 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    References are keyed by device class (``cpu``, ``rocm``, ``cuda``, ``npu``);
+    References are keyed by device class (``cpu``, ``rocm``, ``cuda``, ``npu``, ``mps``);
     answers must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on
     GPUs. Both runs are validated: each response is checked against the
     reference when one is recorded, so neither run can drift past the
     reference by leaning on the other.
+    MPS requires a per-model ``tolerances.mps`` alongside its recorded reference.
     """
     result = GoldenResult(status="unverified")
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
@@ -167,13 +168,28 @@ def golden_check(
                 status="failed", detail="golden answers are not deterministic"
             )
         reference = (golden.get("expected") or {}).get(device_class)
+        model_tolerance = tolerance
+        if device_class == "mps" and reference:
+            recorded = (golden.get("tolerances") or {}).get("mps")
+            if (
+                isinstance(recorded, bool)
+                or not isinstance(recorded, (int, float))
+                or not math.isfinite(recorded)
+                or recorded < 0
+            ):
+                return GoldenResult(
+                    status="failed",
+                    reference="mps",
+                    detail="MPS reference requires a recorded per-model tolerance",
+                )
+            model_tolerance = float(recorded)
         # The npu class's two runs drift independently, so both are checked
         # against the reference; on the other classes the second run equals
         # the first bitwise and checking it again would only double the
         # counts.
         runs = (first, second) if device_class == "npu" else (first,)
         for values in runs:
-            counts = compare(surface, values, reference or {}, tolerance)
+            counts = compare(surface, values, reference or {}, model_tolerance)
             if counts is None:
                 return GoldenResult(
                     status="failed", detail="golden answers are malformed"

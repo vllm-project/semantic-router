@@ -21,8 +21,9 @@ from starlette.testclient import TestClient
 from vllm_srun.api.app import create_app
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.errors import PlacementError, VerificationError
-from vllm_srun.placement import auto_order
+from vllm_srun.placement import auto_order, place
 from vllm_srun.plugins import registry
+from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
@@ -187,6 +188,29 @@ def test_a_third_party_accelerator_serves_a_model_with_its_engine_arguments(
         assert body["meta"]["dtype"] == "float32"
     finally:
         runtime.stop()
+
+
+@pytest.mark.parametrize(
+    ("dtype", "weight_bytes"),
+    [("auto", 4_000_000), ("float32", 4_000_000), ("bfloat16", 2_200_000)],
+)
+def test_cpu_plugin_placement_uses_its_execution_device(
+    example_plugin, dtype, weight_bytes
+):
+    spec = ModelSpec(
+        "cpu-plugin",
+        BackboneSpec("qwen3", {}, ()),
+        DtypePolicy(autocast=None, bf16_resident=False, gpu_weights="bfloat16"),
+        1024,
+    )
+    placement = place(spec, "example_host", parameters=1_000_000, dtype=dtype)
+    assert placement.device.accelerator == "example_host"
+    assert placement.accelerator.torch_device(placement.device).type == "cpu"
+    assert placement.estimated_bytes == weight_bytes + (2 << 30)
+    with pytest.raises(PlacementError, match="memory-budget"):
+        place(
+            spec, "example_host", parameters=1_000_000, dtype=dtype, memory_budget_gib=1
+        )
 
 
 def test_an_engine_that_runs_only_the_published_precision_refuses_another_dtype(

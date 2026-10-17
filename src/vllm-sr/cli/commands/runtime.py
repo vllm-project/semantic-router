@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 
+from cli.apple_runtime_environment import validate_apple_host, validate_local_docker
 from cli.bootstrap import (
     ensure_bootstrap_workspace,
     is_setup_mode_config,
@@ -54,6 +55,7 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.container_run_command import RESTART_POLICIES, RESTART_POLICY_ENV
+from cli.container_runtime import get_container_runtime
 from cli.deployment_backend import (
     DEFAULT_TARGET,
     TARGET_DOCKER,
@@ -272,9 +274,22 @@ def _execute_serve(
                 "--startup-timeout is supported only for local Docker deployments"
             )
     apply_container_runtime_override(runtime)
-    platform = resolve_execution_platform(
-        platform, target=resolved_target, context=context
-    )
+    if _platform_hint(platform) == "apple":
+        validate_apple_host(resolved_target, runtime or "docker")
+        if model_options and any(
+            key in model_options for key in ("data_parallel_size", "device_ids")
+        ):
+            raise click.UsageError(
+                "--platform apple does not support --data-parallel-size or --device-ids; "
+                "author deployment placement in --config"
+            )
+        validate_apple_host(resolved_target, get_container_runtime())
+        validate_local_docker()
+        platform = "apple"
+    else:
+        platform = resolve_execution_platform(
+            platform, target=resolved_target, context=context
+        )
     if engine and quiet_logs():
         artifact = (model_options or {}).get("artifact") or "the configured model"
         progress(f"Engine mode: serving {artifact} on the {platform} platform")
@@ -505,9 +520,9 @@ def _execute_serve(
 )
 @click.option(
     "--platform",
-    type=click.Choice(PLATFORMS),
+    type=click.Choice((*PLATFORMS, "apple")),
     default=None,
-    help="Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly.",
+    help="Execution backend: auto (default), cpu, cuda, rocm; apple uses the experimental native MPS host bridge on Apple silicon.",
 )
 @click.option(
     "--algorithm",
@@ -668,18 +683,24 @@ def serve(
     enable_shared_context: bool | None,
 ) -> None:
     ctx = click.get_current_context()
-    model_options = validate_model_options(
-        model=model,
-        revision=revision,
-        data_parallel_size=data_parallel_size,
-        device_ids=device_ids,
-        engine_args={
+    runtime = resolve_container_runtime(ctx, container_runtime, runtime)
+    engine_args = {
+        name: value
+        for name, value in {
             "max_num_seqs": max_num_seqs,
             "max_num_batched_tokens": max_num_batched_tokens,
             "batch_window_ms": batch_window_ms,
             "dtype": dtype,
             "enable_shared_context": enable_shared_context,
-        },
+        }.items()
+        if value is not None
+    }
+    model_options = validate_model_options(
+        model=model,
+        revision=revision,
+        data_parallel_size=data_parallel_size,
+        device_ids=device_ids,
+        engine_args=engine_args,
     )
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
@@ -719,7 +740,7 @@ def serve(
             context,
             profile,
             chart_dir,
-            resolve_container_runtime(ctx, container_runtime, runtime),
+            runtime,
             recipe_env_names,
             startup_timeout,
             gateway,
@@ -735,7 +756,7 @@ def serve(
 @click.command()
 @click.argument(
     "service",
-    type=click.Choice(["envoy", "router", "dashboard", "all"]),
+    type=click.Choice(["envoy", "router", "dashboard", "model-runtime", "all"]),
     default="all",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
@@ -771,11 +792,17 @@ def status(
         )
     )
     backend = _build_backend(target, namespace=namespace, context=context)
+    if service == "model-runtime" and resolve_target(target) != TARGET_DOCKER:
+        raise ValueError(
+            "model-runtime status is available only for the local Apple host service"
+        )
     backend.status(service)
 
 
 @click.command()
-@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
+@click.argument(
+    "service", type=click.Choice(["envoy", "router", "dashboard", "model-runtime"])
+)
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -813,6 +840,10 @@ def logs(
         )
     )
     backend = _build_backend(target, namespace=namespace, context=context)
+    if service == "model-runtime" and resolve_target(target) != TARGET_DOCKER:
+        raise ValueError(
+            "model-runtime logs are available only for the local Apple host service"
+        )
     backend.logs(service, follow=follow)
 
 

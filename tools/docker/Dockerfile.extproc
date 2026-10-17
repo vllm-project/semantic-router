@@ -193,6 +193,7 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 # release installs the same versions.
 FROM torch-${ACCELERATOR} AS runtime
 ARG MODEL_RUNTIME_EXTRAS=multimodal
+ENV VLLM_SRUN_EXTRAS=${MODEL_RUNTIME_EXTRAS}
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
     --mount=type=bind,source=src/model-runtime/requirements-lock.txt,target=/tmp/requirements-lock.txt \
     python - $MODEL_RUNTIME_EXTRAS >/tmp/runtime-requirements.txt <<'EOF' && \
