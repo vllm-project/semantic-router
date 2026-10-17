@@ -30,15 +30,62 @@ func TestValidateDecisionOnUnknown(t *testing.T) {
 	}
 }
 
-func TestUnguardedClassifierConditions(t *testing.T) {
+func TestUnguardedConditions(t *testing.T) {
 	rules := RuleNode{Operator: "AND", Conditions: []RuleNode{
 		{Type: SignalTypeClassifier, Name: "risk", Label: "RISKY"},
 		{Type: SignalTypeClassifier, Name: "safe", Label: "SAFE", OnError: "match"},
 		{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeClassifier, Name: "nested"}}},
 		{Type: SignalTypeKeyword, Name: "kw"},
 	}}
-	got := unguardedClassifierConditions(&rules)
-	if len(got) != 2 || got[0] != "risk" || got[1] != "nested" {
+	if got := unguardedConditionNames(&RouterConfig{}, &rules); strings.Join(got, ",") != "risk,nested" {
 		t.Fatalf("unguarded = %v", got)
 	}
+}
+
+func TestUnguardedRemoteConditions(t *testing.T) {
+	rules := RuleNode{Operator: "OR", Conditions: []RuleNode{
+		{Type: SignalTypeDomain, Name: "math"},
+		{Type: SignalTypeComplexity, Name: "reasoning:hard"},
+		{Type: SignalTypePII, Name: "pii"},
+		{Type: SignalTypeJailbreak, Name: "guard"},
+		{Type: SignalTypeSafety, Name: "unsafe"},
+		{Type: SignalTypeSafety, Name: "local"},
+		{Type: SignalTypeSafety, Name: "hazard"},
+		{Type: SignalTypeSafety, Name: "inline"},
+	}}
+	cfg := &RouterConfig{}
+	cfg.SafetyRules = []SafetyRule{{Name: "local"}, {Name: "inline", Hazard: &SafetyHazardRule{Model: "remote-hazard"}}}
+	cfg.ModelDeployments = map[string]ModelDeployment{
+		"remote": {Provider: "http"},
+		"local":  {Provider: ModelRuntimeProvider},
+	}
+	cfg.ModelBindings = map[string]ModelBinding{
+		"domain_classifier":    {Deployment: "remote"},
+		"complexity":           {Deployment: "remote"},
+		"pii_classifier":       {Deployment: "remote"},
+		"prompt_guard":         {Deployment: "remote"},
+		"safety.unsafe":        {Deployment: "remote"},
+		"safety.local":         {Deployment: "local"},
+		"safety.hazard.hazard": {Deployment: "remote"},
+	}
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,reasoning:hard,pii,guard,unsafe,hazard,inline" {
+		t.Fatalf("unguarded = %v", got)
+	}
+	cfg.PIIModel.OnError = OnErrorBlock
+	cfg.PromptGuard.OnError = OnErrorBlock
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,reasoning:hard,unsafe,hazard,inline" {
+		t.Fatalf("unguarded with block on_error = %v", got)
+	}
+	cfg.ModelBindings = nil
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "inline" {
+		t.Fatalf("unguarded without remote bindings = %v", got)
+	}
+}
+
+func unguardedConditionNames(cfg *RouterConfig, rules *RuleNode) []string {
+	var names []string
+	for _, node := range unguardedConditions(cfg, rules) {
+		names = append(names, node.Name)
+	}
+	return names
 }
