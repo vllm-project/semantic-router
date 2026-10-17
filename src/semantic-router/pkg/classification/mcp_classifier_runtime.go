@@ -66,7 +66,7 @@ func (c *Classifier) loadMCPCategoryMapping() error {
 }
 
 // classifyCategoryWithEntropyMCP performs category classification with entropy using MCP.
-func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float64, entropy.ReasoningDecision, error) {
+func (c *Classifier) classifyCategoryWithEntropyMCP(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
 	if !c.IsMCPCategoryEnabled() {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP category classification is not properly configured")
 	}
@@ -74,7 +74,7 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP category inference is not initialized")
 	}
 
-	result, err := c.classifyMCPWithProbabilities(text)
+	result, err := c.classifyMCPWithProbabilities(ctx, text)
 	if err != nil {
 		return "", 0.0, entropy.ReasoningDecision{}, err
 	}
@@ -107,8 +107,7 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 	return genericCategory, float64(result.Confidence), reasoningDecision, nil
 }
 
-func (c *Classifier) classifyMCPWithProbabilities(text string) (tasks.ClassResultWithProbs, error) {
-	ctx := context.Background()
+func (c *Classifier) classifyMCPWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
 	if c.Config.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.TimeoutSeconds)*time.Second)

@@ -15,8 +15,11 @@ import (
 // ClassifyCategoryWithEntropyContext preserves the caller lifecycle while
 // evaluating a category backend.
 func (c *Classifier) ClassifyCategoryWithEntropyContext(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
+	if err := ctx.Err(); err != nil {
+		return "", 0, entropy.ReasoningDecision{}, err
+	}
 	// Try keyword and embedding classifiers first
-	category, confidence, decision, matched, err := c.tryKeywordBasedClassification(text)
+	category, confidence, decision, matched, err := c.tryKeywordBasedClassification(ctx, text)
 	if err != nil {
 		return "", 0.0, entropy.ReasoningDecision{}, err
 	}
@@ -36,7 +39,7 @@ func (c *Classifier) ClassifyCategoryWithEntropyContext(ctx context.Context, tex
 
 	// Fall back to MCP
 	if c.IsMCPCategoryEnabled() && c.mcpCategoryInference != nil {
-		return c.classifyCategoryWithEntropyMCP(text)
+		return c.classifyCategoryWithEntropyMCP(ctx, text)
 	}
 
 	return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("no category classification method available")
@@ -44,23 +47,20 @@ func (c *Classifier) ClassifyCategoryWithEntropyContext(ctx context.Context, tex
 
 // tryKeywordBasedClassification attempts classification via keyword and embedding classifiers.
 // Returns matched=true if a classifier produced a result.
-func (c *Classifier) tryKeywordBasedClassification(text string) (string, float64, entropy.ReasoningDecision, bool, error) {
-	// Checked and appended one at a time rather than nil-checked inside a
-	// []interface{...} literal: a nil *KeywordClassifier or
-	// *EmbeddingClassifier placed directly into that slice becomes a non-nil
-	// interface value (it carries a concrete, non-nil type), so `clf == nil`
-	// never trips and Classify is called on a nil receiver.
-	var classifiers []interface {
-		Classify(string) (string, float64, error)
-	}
+func (c *Classifier) tryKeywordBasedClassification(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, bool, error) {
+	// Check concrete receivers before constructing callables. Embedding fallback
+	// is still request-time inference and must retain the caller's context.
+	var classifiers []func(string) (string, float64, error)
 	if c.keywordClassifier != nil {
-		classifiers = append(classifiers, c.keywordClassifier)
+		classifiers = append(classifiers, c.keywordClassifier.Classify)
 	}
 	if c.keywordEmbeddingClassifier != nil {
-		classifiers = append(classifiers, c.keywordEmbeddingClassifier)
+		classifiers = append(classifiers, func(text string) (string, float64, error) {
+			return c.keywordEmbeddingClassifier.ClassifyWithContext(ctx, text)
+		})
 	}
 	for _, clf := range classifiers {
-		category, confidence, err := clf.Classify(text)
+		category, confidence, err := clf(text)
 		if err != nil {
 			return "", 0.0, entropy.ReasoningDecision{}, false, err
 		}
