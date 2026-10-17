@@ -404,3 +404,174 @@ func FuzzSinglePassWireValidationMatchesTwoPass(f *testing.F) {
 		checkSinglePassMatchesTwoPass(t, body)
 	})
 }
+
+// twoPassDecodeProviderJSONCanonical is decodeProviderJSONCanonical as it was
+// before the walker checked member names.
+func twoPassDecodeProviderJSONCanonical(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]byte, []string, error) {
+	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit", "upstream response is empty or too large", nil)
+	}
+	if !utf8.Valid(body) {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_utf8", "upstream response JSON is not valid UTF-8", nil)
+	}
+	if err := validateJSONUnicodeEscapes(body); err != nil {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_unicode", "upstream response JSON contains an unpaired Unicode surrogate", err)
+	}
+	if requireObject && !hasJSONObjectEnvelope(body) {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response body must be a JSON object", nil)
+	}
+	if err := twoPassNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
+		if errors.Is(err, errDuplicateJSONField) {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_duplicate_json_field", "upstream response contains a duplicate field", err)
+		}
+		if errors.Is(err, errTrailingJSON) {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
+		}
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
+	}
+	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenAICompatGateway {
+		body = translateGatewayUsageCounters(body)
+	}
+	canonical := body
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	var dropped []string
+	if rejectUnknownFields(body, policy) {
+		if providerVendorExtensionsAllowed(policy) {
+			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
+		}
+		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+		}
+		decoder = json.NewDecoder(bytes.NewReader(canonical))
+		decoder.DisallowUnknownFields()
+	}
+	if err := decoder.Decode(target); err != nil {
+		return canonical, dropped, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
+	}
+	if err := requireEOF(decoder); err != nil {
+		return canonical, dropped, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
+	}
+	return canonical, dropped, nil
+}
+
+var differentialProviderTargets = []wireTarget{
+	{"chat response", func() any { return &chatResponseWire{} }, true},
+	{"chat chunk", func() any { return &chatChunkWire{} }, true},
+	{"responses response", func() any { return &responsesResponseWire{} }, true},
+	{"responses event", func() any { return &responsesEventWire{} }, true},
+	{"anthropic response", func() any { return &anthropicResponseWire{} }, true},
+	{"anthropic event", func() any { return &anthropicEventWire{} }, true},
+	{"event fields", func() any { return &map[string]json.RawMessage{} }, true},
+	{"output items", func() any { return &[]json.RawMessage{} }, false},
+}
+
+func differentialProviderPolicies() []llmprotocol.Policy {
+	policies := []llmprotocol.Policy{llmprotocol.DefaultPolicy(), shallowPolicy()}
+	for _, vendor := range []llmprotocol.ResponseVendor{
+		llmprotocol.ResponseVendorAzure,
+		llmprotocol.ResponseVendorCloudflare,
+		llmprotocol.ResponseVendorOpenAICompatGateway,
+		llmprotocol.ResponseVendorSnowflake,
+	} {
+		policy := llmprotocol.DefaultPolicy()
+		policy.ResponseVendor = vendor
+		policies = append(policies, policy)
+	}
+	return policies
+}
+
+func checkSinglePassProviderMatchesTwoPass(t *testing.T, body []byte) {
+	t.Helper()
+	for _, policy := range differentialProviderPolicies() {
+		for _, target := range differentialProviderTargets {
+			want := target.newValue()
+			wantCanonical, wantDropped, wantErr := twoPassDecodeProviderJSONCanonical(body, want, policy, target.requireObject)
+			got := target.newValue()
+			gotCanonical, gotDropped, gotErr := decodeProviderJSONCanonical(body, got, policy, target.requireObject)
+			wantOutcome := fmt.Sprintf("%s canonical=%q dropped=%q", outcome(want, wantErr), wantCanonical, wantDropped)
+			gotOutcome := fmt.Sprintf("%s canonical=%q dropped=%q", outcome(got, gotErr), gotCanonical, gotDropped)
+			if wantOutcome != gotOutcome {
+				t.Fatalf("%s (vendor %q, depth %d) diverged for %q\ntwo-pass:    %s\nsingle-pass: %s",
+					target.name, policy.ResponseVendor, policy.Limits.JSONDepth, body, wantOutcome, gotOutcome)
+			}
+		}
+	}
+}
+
+// differentialProviderSeedBodies returns upstream bodies from the response and
+// stream goldens and the recorded provider captures: whole responses, and the
+// data of every SSE event.
+func differentialProviderSeedBodies(t testing.TB) [][]byte {
+	t.Helper()
+	var bodies [][]byte
+	for _, pattern := range []string{"testdata/golden/response/*.json", "testdata/providers/*.json"} {
+		bodies = append(bodies, readFixtures(t, pattern)...)
+	}
+	var streams []string
+	for _, fixture := range readFixtures(t, "testdata/golden/stream/*-in.json") {
+		var stream struct {
+			Chunks []string `json:"chunks"`
+		}
+		if err := json.Unmarshal(fixture, &stream); err != nil {
+			t.Fatal(err)
+		}
+		streams = append(streams, strings.Join(stream.Chunks, ""))
+	}
+	for _, capture := range readFixtures(t, "testdata/providers/*.sse") {
+		streams = append(streams, string(capture))
+	}
+	for _, stream := range streams {
+		for _, line := range strings.Split(stream, "\n") {
+			data, ok := strings.CutPrefix(line, "data:")
+			data = strings.TrimSpace(data)
+			if ok && data != "" && data != "[DONE]" {
+				bodies = append(bodies, []byte(data))
+			}
+		}
+	}
+	for _, fixture := range readFixtures(t, "testdata/contracts/openrouter-*.json") {
+		var contract struct {
+			Chunks []json.RawMessage `json:"chunks"`
+		}
+		if json.Unmarshal(fixture, &contract) == nil {
+			for _, chunk := range contract.Chunks {
+				bodies = append(bodies, chunk)
+			}
+		}
+		bodies = append(bodies, fixture)
+	}
+	seen := make(map[string]struct{}, len(bodies))
+	unique := bodies[:0]
+	for _, body := range bodies {
+		if _, duplicate := seen[string(body)]; !duplicate {
+			seen[string(body)] = struct{}{}
+			unique = append(unique, body)
+		}
+	}
+	if len(unique) < 100 {
+		t.Fatalf("found only %d provider seed bodies", len(unique))
+	}
+	return unique
+}
+
+func TestSinglePassProviderValidationMatchesTwoPass(t *testing.T) {
+	checked := 0
+	for _, seed := range differentialProviderSeedBodies(t) {
+		checkSinglePassProviderMatchesTwoPass(t, seed)
+		checked++
+		for _, mutant := range mutateWireBody(seed) {
+			checkSinglePassProviderMatchesTwoPass(t, mutant)
+			checked++
+		}
+	}
+	t.Logf("compared %d bodies", checked)
+}
+
+func FuzzSinglePassProviderValidationMatchesTwoPass(f *testing.F) {
+	for _, seed := range differentialProviderSeedBodies(f) {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, body []byte) {
+		checkSinglePassProviderMatchesTwoPass(t, body)
+	})
+}
