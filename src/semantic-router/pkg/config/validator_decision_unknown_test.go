@@ -70,30 +70,34 @@ func TestUnguardedRemoteConditions(t *testing.T) {
 		{Type: SignalTypeJailbreak, Name: "guard"},
 		{Type: SignalTypeSafety, Name: "unsafe"},
 		{Type: SignalTypeSafety, Name: "local"},
+		{Type: SignalTypeSafety, Name: "hazard"},
+		{Type: SignalTypeSafety, Name: "inline"},
 	}}
 	cfg := &RouterConfig{}
+	cfg.SafetyRules = []SafetyRule{{Name: "local"}, {Name: "inline", Hazard: &SafetyHazardRule{Model: "remote-hazard"}}}
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"remote": {Provider: "http"},
 		"local":  {Provider: ModelRuntimeProvider},
 	}
 	cfg.ModelBindings = map[string]ModelBinding{
-		"domain_classifier": {Deployment: "remote"},
-		"complexity":        {Deployment: "remote"},
-		"pii_classifier":    {Deployment: "remote"},
-		"prompt_guard":      {Deployment: "remote"},
-		"safety.unsafe":     {Deployment: "remote"},
-		"safety.local":      {Deployment: "local"},
+		"domain_classifier":    {Deployment: "remote"},
+		"complexity":           {Deployment: "remote"},
+		"pii_classifier":       {Deployment: "remote"},
+		"prompt_guard":         {Deployment: "remote"},
+		"safety.unsafe":        {Deployment: "remote"},
+		"safety.local":         {Deployment: "local"},
+		"safety.hazard.hazard": {Deployment: "remote"},
 	}
-	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,reasoning:hard,pii,guard,unsafe" {
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,reasoning:hard,pii,guard,unsafe,hazard,inline" {
 		t.Fatalf("unguarded = %v", got)
 	}
 	cfg.PIIModel.OnError = OnErrorBlock
 	cfg.PromptGuard.OnError = OnErrorBlock
-	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,reasoning:hard,unsafe" {
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,reasoning:hard,unsafe,hazard,inline" {
 		t.Fatalf("unguarded with block on_error = %v", got)
 	}
 	cfg.ModelBindings = nil
-	if got := unguardedConditionNames(cfg, &rules); len(got) != 0 {
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "inline" {
 		t.Fatalf("unguarded without remote bindings = %v", got)
 	}
 }

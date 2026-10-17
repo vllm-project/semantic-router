@@ -69,7 +69,7 @@ When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
 `on_error` and prompt-guard `on_error` behavior is retained, and the router
 warns at startup about classifier conditions that set neither. It also warns
 about domain, complexity, PII, jailbreak, and safety conditions whose signal
-binds a remote `http` deployment; those conditions cannot set `on_error`, so
+reads a remote `http` model; those conditions cannot set `on_error`, so
 only `rules.on_unknown` covers them, or `on_error: block` on the PII or
 prompt-guard model. Applied policies
 appear in the `x-vsr-applied-unknown-policy` response header and the
