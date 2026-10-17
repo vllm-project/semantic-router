@@ -105,7 +105,7 @@ but do not affect AutoMix selection.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `verification_threshold` | float | `0.78` | Confidence threshold for self-verification (0–1) |
+| `verification_threshold` | float | `0.7` | Confidence threshold for self-verification (0–1) |
 | `max_escalations` | int | `2` | Maximum escalation attempts |
 | `cost_aware_routing` | bool | `true` | Enable cost-quality tradeoff optimization |
 | `cost_quality_tradeoff` | float | `0.3` | Cost-quality balance (0=quality, 1=cost) |
