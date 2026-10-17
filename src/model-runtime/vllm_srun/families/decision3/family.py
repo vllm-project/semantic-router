@@ -244,8 +244,10 @@ class Decision3Family(ModelFamily):
                 bf16_resident=False,
                 gpu_weights="bfloat16",
                 cpu_weights="bfloat16",
-                # docs/records/decision3-quantized.md: the fused int4 kernel keeps a
-                # quantized package's answers; BF16 packages keep exact kernels.
+                # docs/records/decision3-quantized.md: the fused int4 kernel and,
+                # in the FP8 d3-mini table, the fused element-wise kernels change
+                # few of a quantized package's answers; BF16 packages keep exact
+                # kernels.
                 approximate_kernels=quantized is not None,
             ),
             max_input_tokens=package.max_input_tokens,
