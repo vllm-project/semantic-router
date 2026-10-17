@@ -338,12 +338,14 @@ export function buildProviderModelPayload(
     typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
       ? data.provider_model_id.trim()
       : undefined
+  // A deployment-bound native alias has no upstream model identity of its own.
+  const fallbackProviderModelID =
+    catalog || existingModel?.deployment ? undefined : existingModel?.provider_model_id || name
   return {
     name,
     catalog,
     reasoning: catalog ? undefined : normalizeReasoning(data),
-    provider_model_id:
-      explicitProviderModelID || (catalog ? undefined : existingModel?.provider_model_id || name),
+    provider_model_id: explicitProviderModelID || fallbackProviderModelID,
     api_format:
       typeof data.api_format === 'string' && data.api_format.trim()
         ? data.api_format.trim()
