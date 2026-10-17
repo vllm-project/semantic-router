@@ -743,6 +743,28 @@ func TestMilvusStore_Store_Success(t *testing.T) {
 	assert.GreaterOrEqual(t, len(capturedColumns), 7, "Expected at least 7 columns for insert")
 }
 
+func TestMilvusStore_Store_RetryAfterTransientInsertUsesUpsert(t *testing.T) {
+	store, mockClient := setupTestStore()
+	store.retryBaseDelay = time.Millisecond
+
+	mockClient.InsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, errors.New("context deadline exceeded")
+	}
+	mockClient.UpsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, nil
+	}
+
+	err := store.Store(context.Background(), &Memory{
+		ID:      "test-mem-retry",
+		Content: "User prefers window seats",
+		UserID:  "user-123",
+		Type:    MemoryTypeSemantic,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockClient.InsertCallCount)
+	assert.Equal(t, 1, mockClient.UpsertCallCount)
+}
+
 func TestMilvusStore_Store_MissingRequiredFields(t *testing.T) {
 	store, _ := setupTestStore()
 	ctx := context.Background()
