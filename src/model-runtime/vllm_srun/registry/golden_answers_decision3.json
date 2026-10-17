@@ -47,6 +47,52 @@
      "type": "noul"
     }
    },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.6377870543924282,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.10887776361076679,
+      "1": 0.8813613101338802,
+      "2": 0.009760926255353027
+     },
+     "score": 0.9008831626445862,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9937456188893093,
+     "probabilities": {
+      "code": 0.9992227549377484,
+      "math": 0.0004490440476326694,
+      "other": 0.00032820101461898834
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.6711515873274349,
+     "probabilities": {
+      "blue": 0.016255903383497024,
+      "green": 0.07919121983680055,
+      "other": 0.8841967253313688,
+      "red": 0.02035615144833358
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.010297792781462834,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8112307078379815,
+     "type": "noul"
+    }
+   },
    "rocm": {
     "difficulty": {
      "confidence": 0.6371796660677074,
