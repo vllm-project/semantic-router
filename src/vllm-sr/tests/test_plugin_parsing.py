@@ -317,6 +317,34 @@ class TestToolsPluginConfig:
         assert dumped["dynamic_retrieval"]["history_window"] == 8
         assert dumped["dynamic_retrieval"]["weights"]["history"] == 0.7
 
+    def test_trusted_facts_round_trip(self):
+        trusted = {
+            "enabled": True,
+            "enforcement": "authoritative",
+            "trust_sources": ["operator-policy", "runtime-fresh"],
+            "freshness_seconds": 60,
+            "stage_roles": ["candidate", "final"],
+        }
+        config = ToolsPluginConfig.model_validate(
+            {"enabled": True, "mode": "passthrough", "trusted_facts": trusted}
+        )
+        assert config.model_dump(exclude_none=True)["trusted_facts"] == trusted
+
+    def test_trusted_facts_rejects_untrusted_vocabulary(self):
+        for field, value in (
+            ("trust_sources", ["client-metadata"]),
+            ("stage_roles", ["planner"]),
+            ("enforcement", "strict"),
+        ):
+            with pytest.raises(PydanticValidationError):
+                ToolsPluginConfig.model_validate(
+                    {
+                        "enabled": True,
+                        "mode": "passthrough",
+                        "trusted_facts": {"enabled": True, field: value},
+                    }
+                )
+
     def test_strip_history_requires_mode_none(self):
         with pytest.raises(
             PydanticValidationError, match="strip_tool_history requires mode=none"

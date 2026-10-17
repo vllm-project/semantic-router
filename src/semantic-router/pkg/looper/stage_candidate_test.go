@@ -176,10 +176,10 @@ func TestLooperCandidateStageOutputOverridesAndPolicyCap(t *testing.T) {
 			var err error
 			if stage == "fusion" {
 				l := newFusionLooper(&config.LooperConfig{}, borrowClient(client))
-				_, err = l.callFusionModel(context.Background(), base, base.OriginalRequest, fusionExecutionConfig{MaxCompletionTokens: 48}, "final", false, false, 1, config.FusionModelOverride{})
+				_, err = l.callFusionModel(context.Background(), base, base.OriginalRequest, fusionExecutionConfig{MaxCompletionTokens: 48}, "final", llmprotocol.TrustedStageAdvisor, false, 1, config.FusionModelOverride{})
 			} else {
 				l := newWorkflowsLooper(&config.LooperConfig{}, borrowClient(client))
-				_, err = l.callWorkflowModel(context.Background(), base.OriginalRequest, workflowsExecutionConfig{PlannerModel: "planner", PlannerMaxCompletionTokens: 64, MaxCompletionTokens: 48}, stage, false, 1, base)
+				_, err = l.callWorkflowModel(context.Background(), base.OriginalRequest, workflowsExecutionConfig{PlannerModel: "planner", PlannerMaxCompletionTokens: 64, MaxCompletionTokens: 48}, stage, llmprotocol.TrustedStageAdvisor, false, 1, base)
 			}
 			if err != nil {
 				t.Fatalf("stage failed: %v", err)
@@ -199,7 +199,7 @@ func TestLooperCandidateConfidenceRetainsNativeEvidenceAndRejectsLargeVerifier(t
 	client, calls, bodies := candidateStageClient(t)
 	base := candidateStageRequest()
 	l := newBaseLooper(&config.LooperConfig{}, borrowClient(client))
-	_, _, err := l.startConfidenceModelAttempt(context.Background(), base, base.OriginalRequest, "worker", "candidate", "worker", false, 1, &LogprobsConfig{Enabled: true, TopLogprobs: 9}, "")
+	_, _, err := l.startConfidenceModelAttempt(context.Background(), base, base.OriginalRequest, "worker", "candidate", "worker", llmprotocol.TrustedStageCandidate, false, 1, &LogprobsConfig{Enabled: true, TopLogprobs: 9}, "")
 	if err != nil {
 		t.Fatalf("native confidence evidence rejected: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestLooperCandidateConfidenceRetainsNativeEvidenceAndRejectsLargeVerifier(t
 	}
 	verifier := cloneRequest(base.OriginalRequest)
 	verifier.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage(strings.Repeat("review agenda ", 4096))}
-	_, _, err = l.startConfidenceModelAttempt(context.Background(), base, verifier, "worker", "self_verifier", "verifier", false, 2, nil, "")
+	_, _, err = l.startConfidenceModelAttempt(context.Background(), base, verifier, "worker", "self_verifier", "verifier", llmprotocol.TrustedStageVerifier, false, 2, nil, "")
 	if !errors.Is(err, selection.ErrNoEligibleCandidates) || calls.Load() != 1 {
 		t.Fatalf("large verifier dispatched: %v calls=%d", err, calls.Load())
 	}

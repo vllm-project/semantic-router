@@ -35,7 +35,7 @@ func FilterAndRankToolsWithConversation(
 		return selectTopKBySimilarity(candidates, topK)
 	}
 
-	filtered := applyAllowBlockFilters(candidates, advanced.AllowTools, advanced.BlockTools)
+	filtered := ApplyAllowBlockFilters(candidates, advanced.AllowTools, advanced.BlockTools)
 	filtered = applyCategoryFilter(filtered, advanced.UseCategoryFilter, selectedCategory)
 
 	if config.IsHybridHistoryRetrieval(advanced) {
@@ -218,7 +218,9 @@ func selectTopKBySimilarity(candidates []ToolSimilarity, topK int) []openai.Chat
 	return selected
 }
 
-func applyAllowBlockFilters(candidates []ToolSimilarity, allowList []string, blockList []string) []ToolSimilarity {
+// ApplyAllowBlockFilters keeps the candidates a non-empty allow list names and
+// the block list does not, matching tool names case-insensitively.
+func ApplyAllowBlockFilters(candidates []ToolSimilarity, allowList []string, blockList []string) []ToolSimilarity {
 	allowSet := normalizeNameSet(allowList)
 	blockSet := normalizeNameSet(blockList)
 

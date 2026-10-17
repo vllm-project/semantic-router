@@ -47,6 +47,7 @@ var (
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
+		ValidateStickyToolSelectionSupport,
 		logConfigWarnings,
 	}
 

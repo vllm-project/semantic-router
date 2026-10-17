@@ -40,6 +40,8 @@ var BaselineRouterContract = []string{
 	"plugin-request-mutations",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
+	// Session-scoped sticky tool selection across turns and principals (issue #4519)
+	"sticky-tool-selection",
 	"rule-condition-logic",
 	"decision-fallback-behavior",
 	"plugin-config-variations",

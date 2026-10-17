@@ -67,11 +67,11 @@ and
 
 `sticky` is an opt-in, bounded policy layered on top of either mode (issue
 [#3347](https://github.com/vllm-project/semantic-router/issues/3347)). A
-trusted session retains the exact order of previously selected tools, pins
-tools observed in assistant tool calls, and appends a bounded number of newly
-relevant tools per turn — reducing prompt churn across a multi-turn tool-use
-session without ever skipping current-turn authorization or availability
-checks.
+trusted session keeps the order of the tools it was given, pins tools its
+assistant called, and adds a bounded number of newly relevant tools per turn.
+Stable tool lists reduce prompt churn across a multi-turn tool-use session.
+Every request still rechecks current authorization, availability, and
+capability before a stored tool is emitted.
 
 ```yaml
 plugins:
@@ -81,33 +81,69 @@ plugins:
       mode: add
       top_k: 3
       sticky:
-        enabled: false
+        enabled: true
         max_tools: 16
         max_new_tools_per_turn: 2
         pin_called_tools: true
+  - type: tools
+    configuration:
+      enabled: true
+      mode: passthrough
+      trusted_facts:
+        enabled: true
+        enforcement: authoritative
+        trust_sources: [operator-policy]
+        stage_roles: [candidate, final]
 ```
 
-- `max_tools` (`1`-`128`, default `16`): hard bound on retained tools; once
-  full, only called or definitionally-changed tools are re-evaluated.
+- `max_tools` (`1`-`128`, default `16`): hard bound on the tools a session
+  keeps. Relevance never replaces a kept tool; a called tool can replace the
+  newest unpinned one.
 - `max_new_tools_per_turn` (`0`-`max_tools`, default `2`): how many newly
-  relevant tools may be appended in one turn. `0` disables relevance-driven
-  growth entirely (reuse and call-pinning only) — this is a valid explicit
-  setting, distinct from omitting the field.
-- `pin_called_tools` (default `true`): tools observed in an assistant tool
-  call are pinned and are not evicted by ordinary bounded growth.
+  relevant tools one turn may add. `0` keeps reuse and pinning only, which is
+  different from omitting the field.
+- `pin_called_tools` (default `true`): tools the assistant called in the
+  conversation history are pinned. More pins than `max_tools` restart the
+  session's selection.
 
-Sticky state is scoped to a trusted, authenticated session — it is never
-active for an anonymous or derived session identity — and every stored
-identity is re-authorized and re-validated against the current request's
-catalog, policy, and model/wire capabilities before use; a stored identity
-is never trusted blindly. **Runtime enablement remains unavailable:** `sticky.enabled: true` is rejected
-at both configuration admission and direct router construction.
-[Phase 2 (#4517)](https://github.com/vllm-project/semantic-router/issues/4517)
-adds a library planner and bounded state updates, without reading or writing
-sticky state in the request path. Runtime integration is
-[Phase 3 (#4519)](https://github.com/vllm-project/semantic-router/issues/4519),
-which keeps reuse, authorization, invalidation, recovery, and fallback together.
-The implementation sequence is recorded in
-[PL-0042](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/docs/plans/pl-0042-sticky-tool-selection.md).
-See the complete disabled example:
+Sticky selection is accepted only where the Router can recheck every reused
+tool, at both config admission and router construction:
+
+- the same decision enables the [`tools`](tools.md#trusted-tool-facts) plugin
+  with `trusted_facts.enforcement: authoritative`, an authorizing trust source
+  such as `operator-policy`, and `stage_roles` that include `candidate` and
+  `final`, and its mode is not `none`;
+- the decision dispatches to one model: Looper algorithms are rejected;
+- `global.stores.tool_sessions.backend` is `local`, the in-process store owned
+  by each router generation. A reload starts empty state and a restart loses
+  it. The Redis backend is not supported yet;
+- `USER_SCOPE_NAMESPACE_SECRET` is set.
+
+**Which requests use session state.** State is read and written only for a
+request with an authenticated principal and a session from the `x-session-id`
+header or a Responses API conversation, under an entrypoint recipe, when its
+trusted facts allow tool use for both stages and the target protocol can carry
+tools. State is partitioned by recipe, principal, and session; a session value
+from another principal never shares state. Everything else, and a request
+whose `tool_choice` is not `auto` or that has no text to rank against, uses
+ordinary selection without reading or writing state.
+
+**What a session can reuse.** In `add` mode, tools come from the current tools
+database; in `filter` mode, from the tools the current request offers. Only
+tools the decision's allow and block lists permit are eligible. A stored tool
+is emitted only with its current definition, so a tool that is removed,
+blocked, or changed disappears on the next request, even when pinned. Any
+change to the effective policy, the eligible catalog (including schema
+numbers), or the target's capabilities restarts the session's selection.
+
+**Failures.** If the store is unavailable, closed, or slow, the request uses
+the current ordinary selection. If tool retrieval fails and `fallback_to_empty`
+is not `true`, the request fails with
+[`tool_selection_unavailable`](../../api/router.md) rather than forwarding the
+tools it arrived with. Router response caching is skipped for sticky decisions;
+provider prompt caching is unaffected. Each request records a bounded receipt
+on its Router Replay record: an outcome, a reason, and counts, never tool
+names, prompts, or identities.
+
+See the complete example:
 [`sticky-add-from-database.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/sticky-add-from-database.yaml).

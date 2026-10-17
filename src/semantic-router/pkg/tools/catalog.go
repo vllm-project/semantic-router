@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/openai/openai-go"
 )
@@ -120,6 +121,8 @@ func (db *ToolsDatabase) appendEntries(entries []ToolEntry) error {
 	sort.Slice(db.entries, func(i, j int) bool {
 		return db.entries[i].Tool.Function.Name < db.entries[j].Tool.Function.Name
 	})
+	// Only a published batch is availability evidence; a rejected one returns above.
+	db.loadedAt = time.Now()
 	return nil
 }
 

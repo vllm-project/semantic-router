@@ -127,6 +127,8 @@ func (r *OpenAIRouter) startRouterReplay(
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
 	}
+	appendPendingTrustedFactsOutcomes(ctx, recorder)
+	appendPendingStickyToolOutcomes(ctx, recorder)
 }
 
 // populateReplayIdentity records the same explicit identity used by protection,

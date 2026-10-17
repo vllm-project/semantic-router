@@ -155,3 +155,21 @@ func TestCatalogIncrementalIsolationAndDistinctNumericFingerprints(t *testing.T)
 	require.Equal(t, []string{"original"}, results[0].Entry.Tags)
 	require.Equal(t, []float32{0, 0, 1}, results[0].Entry.Embedding)
 }
+
+// LoadedAt is runtime availability evidence, so only a published batch sets it.
+// A rejected file or AddTool leaves the catalog and the evidence unchanged.
+func TestCatalogLoadedAtRecordsOnlyPublishedBatches(t *testing.T) {
+	db := catalogDatabase(map[string][]float32{"bad": {float32(math.NaN())}})
+	require.True(t, db.LoadedAt().IsZero(), "an enabled database is not loaded until a batch publishes")
+	require.Error(t, db.LoadToolsFromFile(catalogFile(t, []byte(`[{"tool":{"function":{"name":"bad"}},"description":"bad"}]`))))
+	require.Error(t, db.AddTool(catalogTool("bad"), "bad", "", nil))
+	require.True(t, db.LoadedAt().IsZero(), "a rejected batch is not availability evidence")
+
+	require.NoError(t, db.LoadToolsFromFile(catalogFile(t, []byte(`[{"tool":{"function":{"name":"good"}},"description":"good"}]`))))
+	loaded := db.LoadedAt()
+	require.False(t, loaded.IsZero())
+	require.Error(t, db.AddTool(catalogTool("good"), "duplicate", "", nil))
+	require.Equal(t, loaded, db.LoadedAt(), "a rejected duplicate must not refresh the evidence")
+	require.NoError(t, db.AddTool(catalogTool("other"), "other", "", nil))
+	require.False(t, db.LoadedAt().Before(loaded))
+}

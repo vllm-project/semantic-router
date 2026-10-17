@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type fusionJudgeOutcome struct {
@@ -68,7 +69,7 @@ func (l *FusionLooper) runFusionSingleJudge(
 		finalReq,
 		cfg,
 		cfg.Model,
-		true,
+		llmprotocol.TrustedStageFinal,
 		false,
 		callOrdinal,
 		config.FusionModelOverride{},

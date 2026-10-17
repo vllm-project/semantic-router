@@ -57,6 +57,14 @@ func (r *OpenAIRouter) handleCaching(
 		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
 		return nil, false
 	}
+	// A sticky decision's tools depend on session state and current
+	// eligibility, which the response-cache identity does not include, so
+	// neither a read nor a write may serve or capture its response.
+	if stickyToolSelectionDecision(ctx) {
+		logging.Debugf("[Cache] Skipping cache for decision '%s': sticky tool selection enabled", categoryName)
+		applyRequestIdentityWithoutCache(ctx)
+		return nil, false
+	}
 
 	if !r.cacheBackendEnabled() {
 		applyRequestIdentityWithoutCache(ctx)
