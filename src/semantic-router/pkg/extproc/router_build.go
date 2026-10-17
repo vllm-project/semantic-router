@@ -57,6 +57,7 @@ type routerComponents struct {
 	recipeModelSelectors        map[config.RecipeName]*selection.Registry
 	lookupTable                 lookuptable.LookupTable
 	memoryStore                 memory.Store
+	memoryStatus                routerruntime.MemoryStatus
 	memoryExtractor             *memory.MemoryExtractor
 	memoryPersistence           *memory.PersistenceRunner
 	protocolCodecs              *protocolcodec.Registry
@@ -130,6 +131,10 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Pool) (*OpenAIRouter, error) {
+	native, nativeErr := prepareNativeExecutors(cfg)
+	if nativeErr != nil {
+		return nil, nativeErr
+	}
 	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
 		return nil, err
 	}
@@ -143,12 +148,18 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+	router := components.buildRouter()
+	router.nativeExecutors = native
+	return router, nil
 }
 
 // buildOpenAIRouterSharingSignals builds a router for cfg that shares signals,
 // the signal runtime of a generation built from the same signal resources.
 func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Pool, signals *signalRuntime) (*OpenAIRouter, error) {
+	native, nativeErr := prepareNativeExecutors(cfg)
+	if nativeErr != nil {
+		return nil, nativeErr
+	}
 	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
 		return nil, err
 	}
@@ -162,7 +173,9 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+	router := components.buildRouter()
+	router.nativeExecutors = native
+	return router, nil
 }
 
 // validateStickyToolSelectionPhaseSupport rejects any decision that enables
@@ -324,7 +337,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	components.memoryStore, components.memoryExtractor, components.memoryStatus, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
@@ -531,6 +544,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:             components.replayRecorders,
 		ShadowDispatcher:            components.shadowDispatcher,
 		MemoryStore:                 components.memoryStore,
+		MemoryStatus:                components.memoryStatus,
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,
 		ProtocolCodecs:              components.protocolCodecs,

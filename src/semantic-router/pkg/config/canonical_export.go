@@ -89,7 +89,10 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Actions:       append([]ActionRule(nil), signals.ActionRules...),
 		Decision:      append([]DecisionSignalRule(nil), signals.DecisionRules...),
+
+		TopicContinuity: append([]TopicContinuityRule(nil), signals.TopicContinuityRules...),
 	}
 }
 
@@ -471,6 +474,7 @@ func canonicalProviderModelFromRuntime(
 		return *authored
 	}
 	providerModel := CanonicalProviderModel{
+		Deployment:       params.Deployment,
 		Name:             name,
 		Catalog:          params.Catalog,
 		APIFormat:        params.APIFormat,
@@ -569,15 +573,16 @@ func canonicalProviderBackendRefs(
 func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
 		// Import adds exactly one model namespace; remove only that generated prefix.
-		Name:       strings.TrimPrefix(endpoint.Name, modelName+"_"),
-		Protocol:   endpoint.Protocol,
-		Weight:     endpoint.Weight,
-		Provider:   profile.Type,
-		BaseURL:    profile.BaseURL,
-		AuthHeader: profile.AuthHeader,
-		APIVersion: profile.APIVersion,
-		ChatPath:   profile.ChatPath,
-		APIKey:     endpoint.APIKey,
+		Name:                strings.TrimPrefix(endpoint.Name, modelName+"_"),
+		Protocol:            endpoint.Protocol,
+		Weight:              endpoint.Weight,
+		Provider:            profile.Type,
+		BaseURL:             profile.BaseURL,
+		AuthHeader:          profile.AuthHeader,
+		APIVersion:          profile.APIVersion,
+		ChatPath:            profile.ChatPath,
+		OpenAICompatGateway: profile.OpenAICompatGateway,
+		APIKey:              endpoint.APIKey,
 	}
 	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
 		prefix := profile.AuthPrefix

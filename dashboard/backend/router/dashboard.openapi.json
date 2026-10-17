@@ -738,6 +738,319 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/decision-model/routes": {
+      "get": {
+        "operationId": "listDecisionRoutes",
+        "summary": "List active System One routes",
+        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm execution deadline in the recipe; signals have separate timeouts.",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Frontend route inventory with available and routes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request wrapper or native request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The frontend endpoint or selected route is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request exceeds 2 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The frontend is unreachable or returned an invalid response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The frontend or selected algorithm deadline elapsed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      },
+      "post": {
+        "operationId": "runDecisionRoute",
+        "summary": "Run an active System One route",
+        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. The selected algorithm controls its execution deadline and physical call budget; signals use their own timeouts.",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "description": "An active route model alias and the original native request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "request": {
+                    "type": "object",
+                    "description": "System One request containing state and named questions; validated by the configured frontend",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "model",
+                  "request"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Selected native response with routing outcome: recipe, decision, algorithm, stage, selected_model, quality, and model_calls",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request wrapper or native request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The frontend endpoint or selected route is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request exceeds 2 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The frontend is unreachable or returned an invalid response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The frontend or selected algorithm deadline elapsed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "evaluation.run",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "evaluation",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/decision-model/tasks": {
       "get": {
         "operationId": "getApiDecisionModelTasks",
@@ -5543,8 +5856,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "nullable": true,
+                  "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
@@ -5558,8 +5871,8 @@
                         "type": "string"
                       },
                       "required_models": {
-                        "type": "array",
                         "nullable": true,
+                        "type": "array",
                         "items": {
                           "type": "object",
                           "properties": {
@@ -5645,8 +5958,8 @@
                 "type": "object",
                 "properties": {
                   "models": {
-                    "type": "array",
                     "nullable": true,
+                    "type": "array",
                     "items": {
                       "type": "string"
                     }
@@ -5672,15 +5985,15 @@
                   "type": "object",
                   "properties": {
                     "configured_models": {
-                      "type": "array",
                       "nullable": true,
+                      "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "missing_models": {
-                      "type": "array",
                       "nullable": true,
+                      "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -7447,6 +7760,85 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/tools/web-search/stats": {
+      "get": {
+        "operationId": "getWebSearchRateLimitStats",
+        "summary": "WebSearch rate-limit snapshot",
+        "tags": [
+          "tools"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Limiter counts for the current window and the fixed limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "global_limit": {
+                      "type": "integer"
+                    },
+                    "global_requests": {
+                      "type": "integer"
+                    },
+                    "per_client_limit": {
+                      "type": "integer"
+                    },
+                    "tracked_clients": {
+                      "type": "integer"
+                    },
+                    "window_seconds": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "tracked_clients",
+                    "global_requests",
+                    "window_seconds",
+                    "per_client_limit",
+                    "global_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "tools.use",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "tools",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/topology/test-query": {
       "post": {
         "operationId": "postApiTopologyTestQuery",
@@ -7545,6 +7937,847 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/training/v2/artifact-variants/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2ArtifactVariantsId",
+        "summary": "GET /api/training/v2/artifact-variants/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/artifacts/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2ArtifactsId",
+        "summary": "GET /api/training/v2/artifacts/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/artifacts/{id}/variants": {
+      "get": {
+        "operationId": "getApiTrainingV2ArtifactsIdVariants",
+        "summary": "GET /api/training/v2/artifacts/{id}/variants",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-assets": {
+      "post": {
+        "operationId": "postApiTrainingV2DataAssets",
+        "summary": "POST /api/training/v2/data-assets",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./data-assets",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-assets/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2DataAssetsId",
+        "summary": "GET /api/training/v2/data-assets/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-snapshots": {
+      "post": {
+        "operationId": "postApiTrainingV2DataSnapshots",
+        "summary": "POST /api/training/v2/data-snapshots",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./data-snapshots",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-snapshots/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2DataSnapshotsId",
+        "summary": "GET /api/training/v2/data-snapshots/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/evaluations/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2EvaluationsId",
+        "summary": "GET /api/training/v2/evaluations/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/experiments": {
+      "post": {
+        "operationId": "postApiTrainingV2Experiments",
+        "summary": "POST /api/training/v2/experiments",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./experiments",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/experiments/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2ExperimentsId",
+        "summary": "GET /api/training/v2/experiments/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/files/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2FilesId",
+        "summary": "GET /api/training/v2/files/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs": {
+      "get": {
+        "operationId": "getApiTrainingV2Runs",
+        "summary": "GET /api/training/v2/runs",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      },
+      "post": {
+        "operationId": "postApiTrainingV2Runs",
+        "summary": "POST /api/training/v2/runs",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training.submit",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/compare": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsCompare",
+        "summary": "POST /api/training/v2/runs/compare",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/compare",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/validate": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsValidate",
+        "summary": "POST /api/training/v2/runs/validate",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/validate",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2RunsId",
+        "summary": "GET /api/training/v2/runs/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}/cancel": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsIdCancel",
+        "summary": "POST /api/training/v2/runs/{id}/cancel",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/{id}/cancel",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}/events": {
+      "get": {
+        "operationId": "getApiTrainingV2RunsIdEvents",
+        "summary": "GET /api/training/v2/runs/{id}/events",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}/retry": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsIdRetry",
+        "summary": "POST /api/training/v2/runs/{id}/retry",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/{id}/retry",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/uploads": {
+      "post": {
+        "operationId": "postApiTrainingV2Uploads",
+        "summary": "POST /api/training/v2/uploads",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training.upload",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 67108864,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/v1/capabilities": {
+      "get": {
+        "operationId": "listCapabilities",
+        "summary": "Dashboard capability states for the caller",
+        "description": "state is the first failing dimension in the order enabled, configured, authorized, reachable, degraded; reason is a stable code for it. Health checks are cached, so checkedAt can lag by one refresh interval.",
+        "tags": [
+          "capabilities"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per capability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "capabilities": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "authorized": {
+                            "type": "boolean"
+                          },
+                          "checkedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "configured": {
+                            "type": "boolean"
+                          },
+                          "degraded": {
+                            "type": "boolean"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "reachable": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "setup_inactive",
+                              "config_unreadable",
+                              "permission_required",
+                              "serve_not_attached",
+                              "router_unreachable",
+                              "probe_pending",
+                              "server_readonly",
+                              "runtime_config_not_writable",
+                              "sr_bench_auth_unconfigured",
+                              "upstream_unreachable",
+                              "ml_pipeline_disabled",
+                              "ml_pipeline_unavailable",
+                              "mcp_disabled"
+                            ]
+                          },
+                          "remediation": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "disabled",
+                              "unconfigured",
+                              "unauthorized",
+                              "unreachable",
+                              "degraded",
+                              "available"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "enabled",
+                          "configured",
+                          "reachable",
+                          "authorized",
+                          "degraded",
+                          "state"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "capabilities"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "session.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/workflows/health": {
       "get": {
         "operationId": "getApiWorkflowsHealth",
@@ -7568,6 +8801,26 @@
         "x-vllm-sr-permission": "config.read",
         "x-vllm-sr-sensitivity": "operational",
         "x-vllm-sr-resource-owner": "workflow",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "GET /health",
+        "tags": [
+          "health"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": false,
         "x-vllm-sr-schema-status": "undocumented"
@@ -7640,8 +8893,8 @@
                       "type": "object",
                       "properties": {
                         "securitySchemes": {
-                          "type": "object",
                           "nullable": true,
+                          "type": "object",
                           "additionalProperties": {
                             "type": "object",
                             "properties": {
@@ -7697,14 +8950,14 @@
                       "type": "string"
                     },
                     "paths": {
-                      "type": "object",
                       "nullable": true,
+                      "type": "object",
                       "additionalProperties": {
-                        "type": "object",
                         "nullable": true,
+                        "type": "object",
                         "additionalProperties": {
-                          "type": "object",
                           "nullable": true,
+                          "type": "object",
                           "properties": {
                             "description": {
                               "type": "string"
@@ -7713,8 +8966,8 @@
                               "type": "string"
                             },
                             "parameters": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
                                 "type": "object",
                                 "properties": {
@@ -7733,13 +8986,16 @@
                                   "schema": {
                                     "type": "object",
                                     "properties": {
+                                      "$ref": {
+                                        "type": "string"
+                                      },
                                       "additionalProperties": {},
                                       "description": {
                                         "type": "string"
                                       },
                                       "enum": {
-                                        "type": "array",
                                         "nullable": true,
+                                        "type": "array",
                                         "items": {
                                           "type": "string"
                                         }
@@ -7748,29 +9004,33 @@
                                         "type": "string"
                                       },
                                       "items": {
-                                        "type": "object",
-                                        "nullable": true
+                                        "nullable": true,
+                                        "type": "object"
+                                      },
+                                      "minimum": {
+                                        "nullable": true,
+                                        "type": "integer"
                                       },
                                       "nullable": {
                                         "type": "boolean"
                                       },
                                       "oneOf": {
-                                        "type": "array",
                                         "nullable": true,
+                                        "type": "array",
                                         "items": {
                                           "type": "object"
                                         }
                                       },
                                       "properties": {
-                                        "type": "object",
                                         "nullable": true,
+                                        "type": "object",
                                         "additionalProperties": {
                                           "type": "object"
                                         }
                                       },
                                       "required": {
-                                        "type": "array",
                                         "nullable": true,
+                                        "type": "array",
                                         "items": {
                                           "type": "string"
                                         }
@@ -7790,26 +9050,29 @@
                               }
                             },
                             "requestBody": {
-                              "type": "object",
                               "nullable": true,
+                              "type": "object",
                               "properties": {
                                 "content": {
-                                  "type": "object",
                                   "nullable": true,
+                                  "type": "object",
                                   "additionalProperties": {
                                     "type": "object",
                                     "properties": {
                                       "schema": {
-                                        "type": "object",
                                         "nullable": true,
+                                        "type": "object",
                                         "properties": {
+                                          "$ref": {
+                                            "type": "string"
+                                          },
                                           "additionalProperties": {},
                                           "description": {
                                             "type": "string"
                                           },
                                           "enum": {
-                                            "type": "array",
                                             "nullable": true,
+                                            "type": "array",
                                             "items": {
                                               "type": "string"
                                             }
@@ -7818,29 +9081,33 @@
                                             "type": "string"
                                           },
                                           "items": {
-                                            "type": "object",
-                                            "nullable": true
+                                            "nullable": true,
+                                            "type": "object"
+                                          },
+                                          "minimum": {
+                                            "nullable": true,
+                                            "type": "integer"
                                           },
                                           "nullable": {
                                             "type": "boolean"
                                           },
                                           "oneOf": {
-                                            "type": "array",
                                             "nullable": true,
+                                            "type": "array",
                                             "items": {
                                               "type": "object"
                                             }
                                           },
                                           "properties": {
-                                            "type": "object",
                                             "nullable": true,
+                                            "type": "object",
                                             "additionalProperties": {
                                               "type": "object"
                                             }
                                           },
                                           "required": {
-                                            "type": "array",
                                             "nullable": true,
+                                            "type": "array",
                                             "items": {
                                               "type": "string"
                                             }
@@ -7866,28 +9133,31 @@
                               ]
                             },
                             "responses": {
-                              "type": "object",
                               "nullable": true,
+                              "type": "object",
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
                                   "content": {
-                                    "type": "object",
                                     "nullable": true,
+                                    "type": "object",
                                     "additionalProperties": {
                                       "type": "object",
                                       "properties": {
                                         "schema": {
-                                          "type": "object",
                                           "nullable": true,
+                                          "type": "object",
                                           "properties": {
+                                            "$ref": {
+                                              "type": "string"
+                                            },
                                             "additionalProperties": {},
                                             "description": {
                                               "type": "string"
                                             },
                                             "enum": {
-                                              "type": "array",
                                               "nullable": true,
+                                              "type": "array",
                                               "items": {
                                                 "type": "string"
                                               }
@@ -7896,29 +9166,33 @@
                                               "type": "string"
                                             },
                                             "items": {
-                                              "type": "object",
-                                              "nullable": true
+                                              "nullable": true,
+                                              "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
                                             },
                                             "oneOf": {
-                                              "type": "array",
                                               "nullable": true,
+                                              "type": "array",
                                               "items": {
                                                 "type": "object"
                                               }
                                             },
                                             "properties": {
-                                              "type": "object",
                                               "nullable": true,
+                                              "type": "object",
                                               "additionalProperties": {
                                                 "type": "object"
                                               }
                                             },
                                             "required": {
-                                              "type": "array",
                                               "nullable": true,
+                                              "type": "array",
                                               "items": {
                                                 "type": "string"
                                               }
@@ -7941,14 +9215,14 @@
                               }
                             },
                             "security": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
-                                "type": "object",
                                 "nullable": true,
+                                "type": "object",
                                 "additionalProperties": {
-                                  "type": "array",
                                   "nullable": true,
+                                  "type": "array",
                                   "items": {
                                     "type": "string"
                                   }
@@ -7959,15 +9233,15 @@
                               "type": "string"
                             },
                             "tags": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
                                 "type": "string"
                               }
                             },
                             "x-vllm-sr-additional-permissions": {
-                              "type": "array",
                               "nullable": true,
+                              "type": "array",
                               "items": {
                                 "type": "string"
                               }
@@ -8072,7 +9346,7 @@
         "operationId": "postV1Decisions",
         "summary": "POST /v1/decisions",
         "tags": [
-          "v1"
+          "decisions"
         ],
         "security": [],
         "responses": {
@@ -8092,7 +9366,7 @@
         "operationId": "postV1Systemone",
         "summary": "POST /v1/systemone",
         "tags": [
-          "v1"
+          "systemone"
         ],
         "security": [],
         "responses": {
@@ -8112,7 +9386,7 @@
         "operationId": "getV1SystemoneModels",
         "summary": "GET /v1/systemone/models",
         "tags": [
-          "v1"
+          "systemone"
         ],
         "security": [],
         "responses": {

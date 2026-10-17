@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
@@ -299,8 +300,54 @@ func (s *ClassificationAPIServer) extractRequestedResults(unifiedResults *servic
 		return piiBatchResults(unifiedResults)
 	case "security":
 		return securityBatchResults(unifiedResults)
+	case "all":
+		return allBatchResults(unifiedResults, options)
 	default:
 		return intentBatchResults(unifiedResults, options)
+	}
+}
+
+// allBatchResults keeps the intent projection and attaches the PII and security
+// outcome computed for the same text index. An object is omitted when the
+// unified response has no entry at that index.
+func allBatchResults(unifiedResults *services.UnifiedBatchResponse, options *ClassificationOptions) []BatchClassificationResult {
+	results := intentBatchResults(unifiedResults, options)
+	for i := range results {
+		if i < len(unifiedResults.PIIResults) {
+			results[i].PII = newBatchPIIResult(unifiedResults.PIIResults[i])
+		}
+		if i < len(unifiedResults.SecurityResults) {
+			results[i].Security = newBatchSecurityResult(unifiedResults.SecurityResults[i])
+		}
+	}
+	return results
+}
+
+// batchConfidence returns nil unless scores are explicitly available, matching
+// the null encoding in classification's unified_result_json.go.
+func batchConfidence(scoresAvailable *bool, confidence float32) *float32 {
+	if scoresAvailable == nil || !*scoresAvailable {
+		return nil
+	}
+	return &confidence
+}
+
+func newBatchPIIResult(r classification.PIIResult) *BatchPIIResult {
+	return &BatchPIIResult{
+		HasPII:          r.HasPII,
+		PIITypes:        r.PIITypes,
+		Confidence:      batchConfidence(r.ScoresAvailable, r.Confidence),
+		ScoresAvailable: r.ScoresAvailable,
+	}
+}
+
+func newBatchSecurityResult(r classification.SecurityResult) *BatchSecurityResult {
+	return &BatchSecurityResult{
+		IsJailbreak:     r.IsJailbreak,
+		ThreatType:      r.ThreatType,
+		Confidence:      batchConfidence(r.ScoresAvailable, r.Confidence),
+		ScoresAvailable: r.ScoresAvailable,
+		Decision:        r.Decision,
 	}
 }
 

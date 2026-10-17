@@ -264,6 +264,10 @@ const (
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
 
+	// VSRMatchedAction contains the single matched action signal name.
+	// Example: "explain"
+	VSRMatchedAction = "x-vsr-matched-action"
+
 	// VSRMatchedContext contains comma-separated list of matched context rule names.
 	// Example: "low_token_count,high_token_count"
 	VSRMatchedContext = "x-vsr-matched-context"
@@ -463,6 +467,9 @@ const (
 // is eligible for cross-model KV reuse. Consumed by the vLLM KVConnector plugin
 // on the target pod.
 const (
+	// VSRUpstreamHost carries Envoy's %UPSTREAM_HOST% for KV registry writes.
+	VSRUpstreamHost = "x-vsr-upstream-host"
+
 	// VSRKVSourcePod is the gRPC address of the pod holding the source model's KV cache.
 	// Example: "10.0.1.5:8000"
 	VSRKVSourcePod = "x-vsr-kv-source-pod"

@@ -134,7 +134,7 @@ reasons:
 | a file hash does not match | The download is damaged or the repository changed. Delete that model from the cache and start again. |
 | a revision is required | A repository that is not built in needs `revision` with a 40-character commit. |
 | access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. |
-| does not fit, out of memory | Use a smaller model, a GPU with more memory, or place replicas on separate GPUs. |
+| needs about X GiB, Y GiB free; out of memory | The GPU has less free memory than the model needs: its weights in the dtype the GPU holds them in (BF16 for Decision 3.0, plus 10%) and 2 GiB. Free memory on that GPU, choose another with `--device-ids`, use a smaller model, or place replicas on separate GPUs. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
 | no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
@@ -175,6 +175,7 @@ replace the recorded configurations.
 | Message mentions | Do this |
 | --- | --- |
 | `removed model execution fields`, `candle`, `ort`, `openvino`, `precision`, `variant`, `use_mmbert_32k`, `use_nli`, `polarity_guard` | Run `vllm-sr config migrate`. See [Migrate](model-runtime/migrate.md). |
+| `profile was removed`, and your `config.yaml` has no `profile` | The CLI wrote it: the router image is newer than the CLI. Reinstall the CLI from the same channel, or pass `--image` with the image built with your CLI; older development CLIs pull `:latest` instead of their own images. |
 | a binding does not match the model | The model has different labels, heads, dimensions or a smaller input limit than the feature needs. Bind a model made for that feature, or change `input`. |
 | `artifact must be a Hub repository ID or an absolute package path` | Use `owner/name` for a Hub model or an absolute path for a local copy. |
 | `revision must be a 40-hex commit` | Use the full commit hash, not a branch or tag. |
@@ -277,8 +278,10 @@ not finish its safety scan within it.
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on
   the same host: give the CPU models cores of their own.
-- Decision models on a GPU can use `shared_context` or `batching`; see
-  [Profiles](./profiles.md).
+- Concurrent requests already share forwards. For many questions about one
+  input, turn on `enable_shared_context` where it is off; to trade throughput
+  for latency, lower `batch_window_ms` or `max_num_seqs`. See
+  [Engine arguments](./engine-args.md).
 
 ## FAQ
 

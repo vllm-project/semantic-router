@@ -142,6 +142,7 @@ domains:
       - src/model-runtime/vllm_srun/families/decision1/family.py
       - src/model-runtime/vllm_srun/families/decision1/questions.py
       - src/model-runtime/vllm_srun/families/decision2/family.py
+      - src/model-runtime/vllm_srun/families/decision3/family.py
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
@@ -246,6 +247,7 @@ domains:
       - tools/dev/dsl/**
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
+      - tools/calibration/shadow-dataset/**
       - bench/grounded_fusion/fusioneval/**
       - bench/memory_coldstart/**
       - tools/make/go-tools.mk
@@ -257,6 +259,7 @@ domains:
     paths:
       - tools/calibration/recipe/**
       - tools/calibration/tuning/**
+      - tools/calibration/systemone_auto/**
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-metadata-v1.contract.yaml
       - config/schemas/recipe-probes-v1.schema.json
@@ -405,6 +408,24 @@ domains:
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
+  # The CLI unit suite checks the snippets of these pages, and that their
+  # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py).
+  # Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-docs:
+    owner: vllm-sr-cli
+    documentation_check: true
+    paths:
+      - website/docs/model-runtime/**
+      - website/docs/tutorials/global/model-runtime.md
+      - website/docs/tutorials/signal/learned/decision.md
+      - website/docs/tutorials/algorithm/selection/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/decision.md
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
   model-runtime:
     owner: model-runtime
     paths:
@@ -423,6 +444,8 @@ domains:
       - src/semantic-router/pkg/dsl/**
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
+      # The Dashboard OpenAPI document is generated with the shared schema package.
+      - src/semantic-router/pkg/openapischema/**
       - src/semantic-router/pkg/startupstatus/**
       - src/vllm-sr/cli/sr_bench/**
       - tools/make/dashboard.mk
@@ -461,7 +484,14 @@ domains:
 
   helm:
     owner: deployment
-    paths: [deploy/helm/**]
+    paths:
+      - deploy/helm/**
+      # These Grafana deployments share the offline render tests in the Helm gate.
+      - deploy/kubernetes/observability/grafana/**
+      - deploy/kubernetes/observability/README.md
+      - deploy/openshift/observability/grafana/**
+      - deploy/openshift/deploy-to-openshift.sh
+      - deploy/openshift/README.md
     checks: [make helm-lint]
     verify:
       - make helm-ci-validate HELM_REPO_UPDATE=false
@@ -570,6 +600,49 @@ domains:
       - bench/test_agentic_routing_experiment.py
     checks: [make test-learning-tools]
     verifications: [learning-tools]
+
+  grounded-fusion-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/grounded_fusion/*
+      - bench/grounded_fusion/testdata/**
+      - tools/make/tooling.mk
+    checks: [make test-grounded-fusion-bench]
+    verifications: [bench-tools]
+
+  hallucination-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/hallucination/**
+      - tools/make/tooling.mk
+    checks: [make test-hallucination-bench]
+    verifications: [bench-tools]
+
+  reasoning-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/reasoning/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-reasoning-bench]
+    verifications: [bench-tools]
+
+  router-flow-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/router_flow/**
+      - tools/make/tooling.mk
+    checks: [make test-router-flow-bench]
+    verifications: [bench-tools]
+
+  agent-crew-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_crew/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-agent-crew]
+    verifications: [bench-tools]
 
   paper:
     owner: paper
@@ -849,6 +922,7 @@ profiles:
       - e2e/profiles/pii-remote-backend/**
       - deploy/kubernetes/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+      - e2e/testcases/pii_repeated_value_masking.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e
@@ -869,6 +943,30 @@ profiles:
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  conversation-routing:
+    display_name: Conversation Routing
+    owner: e2e
+    coverage_role: conversation-routing
+    selection: pr
+    paths:
+      - e2e/profiles/conversation-routing/**
+      - e2e/testcases/conversation_routing.go
+      - src/semantic-router/pkg/classification/classifier_signal_conversation.go
+  complexity-routing:
+    display_name: Complexity Routing
+    owner: e2e
+    coverage_role: complexity-routing
+    selection: pr
+    paths:
+      - e2e/profiles/complexity-routing/**
+      - e2e/testcases/complexity_routing.go
+      - e2e/testcases/testdata/complexity_routing_cases.json
+      - src/semantic-router/pkg/classification/complexity_classifier.go
+      - src/semantic-router/pkg/classification/complexity_rule_scoring.go
+      - src/semantic-router/pkg/classification/complexity_candidate_embeddings.go
+      - src/semantic-router/pkg/classification/complexity_query_embeddings.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity_publish.go
   routing-errors:
     display_name: Routing Error Contracts
     owner: e2e
@@ -1164,6 +1262,10 @@ profiles:
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
       - dashboard/backend/router/router_replay*.go
+      - e2e/testcases/topic_continuity_replay.go
+      - src/semantic-router/pkg/topiccontinuity/**
+      - src/semantic-router/pkg/extproc/req_filter_topic_continuity*.go
+      - src/semantic-router/pkg/extproc/request_original_history.go
   dynamo:
     display_name: Dynamo Gateway
     owner: e2e

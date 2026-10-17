@@ -71,6 +71,10 @@ else
 fi
 echo ""
 
+log_info "Testing Grafana Live origins in Helm and static deployments (requires kubectl)..."
+python3 -m unittest discover -s deploy/helm -p test_grafana_live.py -v
+echo ""
+
 # A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
 # after rollout. The backup history needed for rollback must outlive that pod.
 log_info "Testing default Dashboard backup persistence..."

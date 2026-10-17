@@ -2,7 +2,7 @@
 translation:
   source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/global/model-runtime.md"
-  outdated: false
+  outdated: true
 ---
 
 # 内置模型运行时
@@ -47,6 +47,6 @@ global:
 - [快速开始](/model-runtime/quickstart.md)：启动模型并在 Router 中使用。
 - [选择模型、规模和硬件](/model-runtime/choose-a-model.md)。
 - [与 Router 一起运行](/model-runtime/deploy.md)：设备、进程、连接外部运行时和 Kubernetes。
-- [执行配置](/model-runtime/profiles.md)：精确答案或更快的近似设置。
+- [引擎参数](/model-runtime/engine-args.md)：批处理、精度和共享上下文。
 - [从原生绑定迁移](/model-runtime/migrate.md)。
 - [排障与常见问题](/model-runtime/troubleshooting.md)。

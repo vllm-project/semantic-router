@@ -50,6 +50,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.NgramArity != 0 {
 		fields["ngram_arity"] = IntValue{V: kw.NgramArity}
 	}
+	if kw.IncludeHistory {
+		fields["include_history"] = BoolValue{V: true}
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 
@@ -272,6 +275,9 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	}
 	if pii.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
+	}
+	if pii.Source != "" {
+		fields["source"] = StringValue{V: pii.Source}
 	}
 	if pii.Description != "" {
 		fields["description"] = StringValue{V: pii.Description}
