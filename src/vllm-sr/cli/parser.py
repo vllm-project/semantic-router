@@ -16,7 +16,11 @@ from cli.config_migration_looper import LOOPER_ENDPOINT_PATH
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
-from cli.model_runtime_retired import retired_model_fields
+from cli.model_runtime_retired import (
+    ENGINE_ARGUMENTS,
+    removed_deployment_profiles,
+    retired_model_fields,
+)
 from cli.models import UserConfig
 from cli.utils import get_logger
 
@@ -164,6 +168,15 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "session or conversation protection, and `routing.decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
+        )
+
+    profiles = removed_deployment_profiles(data)
+    if profiles:
+        raise ConfigParseError(
+            f"{', '.join(profiles)}: profile was removed; batching is on by default "
+            "and set by the deployment's engine arguments "
+            f"({', '.join(ENGINE_ARGUMENTS)}). Use "
+            f"`vllm-sr config migrate --config {config_path}`."
         )
 
     retired_fields = retired_model_fields(data)

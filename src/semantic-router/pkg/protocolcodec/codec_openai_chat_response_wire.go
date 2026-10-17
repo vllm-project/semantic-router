@@ -219,10 +219,10 @@ type chatCompletionTokensDetailsWire struct {
 }
 
 type chatErrorWire struct {
-	Message string `json:"message"`
-	Type    string `json:"type,omitempty"`
-	Param   string `json:"param,omitempty"`
-	Code    string `json:"code,omitempty"`
+	Message string          `json:"message"`
+	Type    string          `json:"type,omitempty"`
+	Param   string          `json:"param,omitempty"`
+	Code    openAIErrorCode `json:"code,omitempty"`
 }
 
 func validateChatExecutionMetadata(systemFingerprint *string) error {

@@ -37,7 +37,9 @@ front of it instead.
 
 Before committing to a path, check its project-maintained status, recurring
 test evidence, and external ownership boundary in the
-[Deployment Support](support-matrix).
+[Deployment Support](support-matrix). The responsibilities and versioning
+rules every path follows are defined in
+[Deployment Architecture](deployment-architecture).
 
 ## Choose the model backend
 

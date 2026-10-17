@@ -72,7 +72,58 @@ def test_decisions_response_matches_the_contract(client):
         client,
         {"state": STATE, "questions": QUESTIONS, "options": {"return_meta": True}},
     ).json()["meta"]
-    assert meta["profile"] == "exact" and meta["numerics"] == "exact"
+    check("ResponseMeta", meta)
+    assert meta["dtype"] == "float32" and meta["numerics"] == "approximate"
+
+
+def test_the_card_reports_the_configured_engine_arguments(qwen3_package):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(qwen3_package),
+                    device="cpu",
+                    max_num_seqs=1,
+                    enable_shared_context=False,
+                ),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        alone = TestClient(create_app(runtime))
+        card = alone.get("/v1/models").json()["data"][0]
+        assert card["numerics"] == "approximate"
+        assert card["engine_args"] == {
+            "max_num_seqs": 1,
+            "max_num_batched_tokens": 65_536,
+            "batch_window_ms": 2.0,
+            "dtype": "auto",
+            "enable_shared_context": False,
+        }
+        body = {
+            "state": STATE,
+            "questions": QUESTIONS,
+            "options": {"return_meta": True},
+        }
+        response = post(alone, body).json()
+        assert response["meta"]["numerics"] == "approximate"
+        assert list(response["answers"]) == list(QUESTIONS)
+    finally:
+        runtime.stop()
+
+
+def test_a_removed_request_option_names_its_replacement(client):
+    response = post(
+        client,
+        {"state": STATE, "questions": QUESTIONS, "options": {"profile": "exact"}},
+    )
+    error = response.json()["error"]
+    assert response.status_code == 400 and error["code"] == "invalid_request"
+    assert error["message"].startswith(
+        "options.profile was removed: batching and numerics are the deployment's "
+        "engine arguments"
+    )
 
 
 @pytest.mark.parametrize("repo_id", [None, "fixture-owner/Decision-2.0-Tiny-Qwen3"])
@@ -336,7 +387,7 @@ def test_deadline_exceeded_is_reported_per_question(client):
             {
                 "state": STATE,
                 "questions": QUESTIONS,
-                "options": {"profile": "max_speed"},
+                "options": {"return_meta": "yes"},
             },
             400,
             "invalid_request",
@@ -462,7 +513,7 @@ def test_surface_payloads_match_the_contract(name, body):
         ("Embedding", {"object": "embedding", "index": 0, "embedding": ["a"]}),
         (
             "RerankRequest",
-            {"query": "q", "documents": ["d"], "options": {"profile": "Fast!"}},
+            {"query": "q", "documents": ["d"], "options": {"stream": True}},
         ),
     ],
 )
@@ -478,6 +529,14 @@ def test_models_health_metrics_and_openapi(client):
     assert (
         card["ready"] and card["family"] == "decision2" and card["accelerator"] == "cpu"
     )
+    assert card["engine_args"] == {
+        "max_num_seqs": 8_192,
+        "max_num_batched_tokens": 65_536,
+        "batch_window_ms": 2.0,
+        "dtype": "auto",
+        "enable_shared_context": True,
+    }
+    assert card["numerics"] == "approximate" and "profile" not in card
     assert card["limits"]["max_options"] == 255 and card["limits"]["max_levels"] == 10
     assert {p["group"] for p in card["plugins"]} >= {
         "vllm_srun.families",
