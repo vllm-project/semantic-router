@@ -42,7 +42,7 @@ import torch
 from torch import nn
 
 from ...errors import PackageError
-from ...quantization import FLOAT8, PACK, QuantizedWeights
+from ...quantization import FLOAT8, FLOAT8_DEVICES, PACK, QuantizedWeights
 
 # e4m3fn negative zero, whose bits are NaN in e4m3fnuz.
 E4M3FN_NEGATIVE_ZERO = -128
@@ -222,10 +222,7 @@ class Float8Linear(nn.Module):
         """Hold the weight in the format the device multiplies (``float8_format``)."""
         fmt = float8_format(self.weight.device)
         if fmt is None:
-            raise ValueError(
-                "FP8 weights need an NVIDIA GPU of compute capability 8.9 or later "
-                "or an AMD Instinct MI300 or MI350 series GPU"
-            )
+            raise ValueError(FLOAT8_DEVICES)
         if torch.version.hip is None:
             capability = torch.cuda.get_device_capability(self.weight.device)
             self.ada = self.unscaled_product = capability == (8, 9)

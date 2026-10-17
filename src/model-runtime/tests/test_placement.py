@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 import torch
+from vllm_srun.accel import gpu
 from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.accel.cuda import CUDAAccelerator
 from vllm_srun.accel.rocm import ROCmAccelerator
@@ -14,6 +15,7 @@ from vllm_srun.placement import (
     place,
 )
 from vllm_srun.plugins.base import BackboneSpec, DeviceInfo, DtypePolicy, ModelSpec
+from vllm_srun.quantization import FLOAT8, FLOAT8_DEVICES, QuantizedWeights
 
 SPEC = ModelSpec("tiny", BackboneSpec("qwen3", {}, ()), DtypePolicy(), 1024)
 GPU = torch.cuda.is_available()
@@ -294,6 +296,21 @@ def test_a_full_gpu_states_need_and_free_memory_before_the_cpu(monkeypatch):
     )
     assert "built without LAPACK" in message
     assert "cuda" not in message
+
+
+def test_an_fp8_package_refuses_devices_without_fp8_units_before_loading(
+    monkeypatch,
+):
+    _one_rocm_device(monkeypatch, 70.2)
+    backbone = replace(D3.backbone, quantized=QuantizedWeights(FLOAT8, ("Linear",), ()))
+    fp8 = replace(D3, backbone=backbone, requires=backbone.requires)
+    monkeypatch.setattr(gpu, "float8_format", lambda device: torch.float8_e4m3fnuz)
+    assert place(fp8, "rocm:0", D3_PARAMETERS).device.label == "rocm:0"
+    monkeypatch.setattr(gpu, "float8_format", lambda device: None)
+    for device in ("rocm:0", "cpu"):
+        with pytest.raises(UnsupportedDeviceError) as refused:
+            place(fp8, device, D3_PARAMETERS)
+        assert f"{device}: {FLOAT8_DEVICES}" in str(refused.value)
 
 
 def test_a_host_without_gpus_still_names_the_accelerators_it_lacks(monkeypatch):

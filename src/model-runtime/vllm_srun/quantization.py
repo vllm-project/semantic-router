@@ -27,6 +27,10 @@ INT4_BITS = 4
 FLOAT8_BITS = 8
 INT4 = "int4"
 FLOAT8 = "float8"
+FLOAT8_DEVICES = (
+    "FP8 weights need an NVIDIA GPU of compute capability 8.9 or later "
+    "or an AMD Instinct MI300 or MI350 series GPU"
+)
 # Checkpoint tensors that describe a quantized weight rather than hold parameters.
 METADATA = ("weight_scale", "weight_shape", "weight_zero_point")
 

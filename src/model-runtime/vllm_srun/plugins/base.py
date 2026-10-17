@@ -31,6 +31,9 @@ from typing import (
     final,
 )
 
+from ..quantization import FLOAT8, FLOAT8_DEVICES
+from .registry import names
+
 if TYPE_CHECKING:
     import torch
 
@@ -221,8 +224,13 @@ class BackboneSpec:
         """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
 
         Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+        FP8 weights need FP8 matrix units, which every accelerator must report.
         """
-        return {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        requires = {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        if self.quantized is not None and self.quantized.scheme == FLOAT8:
+            for name in names("accelerators"):
+                requires[name] = (*requires.get(name, ()), "float8")
+        return requires
 
 
 @dataclass(frozen=True)
@@ -617,6 +625,8 @@ class Accelerator(ABC):
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        if capability == "float8":
+            return f"{device.label}: {FLOAT8_DEVICES}"
         return f"{device.label} lacks {capability}"
 
     def autocast(

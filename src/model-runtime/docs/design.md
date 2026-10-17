@@ -973,8 +973,11 @@ load. The Qwen3.5
 decoders require `lapack` on the CPU, since their gated-delta kernel solves
 triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
 refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
-CPU image, or a GPU device). When every device the model may use lacks a
-capability, the failure is final instead of retried.
+CPU image, or a GPU device). A package with FP8 weights requires `float8` on
+every accelerator, which a GPU reports when it has FP8 matrix units (an NVIDIA
+GPU of compute capability 8.9 or later, or an MI300 or MI350 series GPU), so
+any other device refuses it before its weights load. When every device the
+model may use lacks a capability, the failure is final instead of retried.
 
 ### 10.2 Readiness and health
 
