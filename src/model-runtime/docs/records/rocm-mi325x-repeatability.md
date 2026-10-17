@@ -39,7 +39,7 @@ The table therefore keeps its pins. Moving the default revision to the current
 
 Each run is a separate process. It loads the model as `vllm-srun serve`
 does (verification, the golden check, `--autotune-cache`) and answers the four
-scored panels (10,653 prompts, one request each, `exact`). It is then compared
+scored panels (10,653 prompts, one request each, each alone). It is then compared
 with a reference run prompt by prompt (`tools/cross_process.py`). Identical
 means every answer's JSON is byte-identical.
 
@@ -156,7 +156,7 @@ so the question is what the cap does once the cache is full
 (`tools/graph_cap_bench.py`; Eos at `4b8b4dc01`, Kai and the repeat at
 `2fce4fec1`, the same bench).
 
-- **Traffic:** 8,943 requests in stream order, on the exact profile, each
+- **Traffic:** 8,943 requests in stream order, each answered alone, each
   asking 1–8 questions (mean 2.6) about one css15 or hs1-dev state, which
   runs from a few dozen tokens to the input limit. That is 22,875 questions.
 - **Runs:** Eos-0.8B and Kai-0.6B, one process per cap, the caps split
@@ -211,7 +211,7 @@ GPUs, swapped against the first round:
 
 ## Batch-shape buckets under concurrency
 
-`batching` merges concurrent requests' questions into padded batches whose
+Batching merges concurrent requests' questions into padded batches whose
 shapes (rows, padded length) depend on the traffic, so a graph is replayed
 only when a later batch has the same shape. Buckets pad each batch up to a
 coarser shape, rows to a power of two and length to a multiple of 64, so
@@ -224,7 +224,7 @@ shapes repeat more often; the padding is extra compute
 - **Runs:** Eos-0.8B, one process per run. "Graphable only" buckets a batch
   only when the bucketed shape stays within the 4,096-token graph cap.
 
-| C | `batching` (req/s) | Buckets | Buckets, graphable only | Forwards replayed: `batching` → buckets |
+| C | Batched (req/s) | Buckets | Buckets, graphable only | Forwards replayed: batched → buckets |
 | --- | --- | --- | --- | --- |
 | 4 | 260.4 | 277.3 (+6.5%) | 270.0 (+3.7%) | 847 / 899 → 871 / 899 |
 | 16 | 378.3 | 360.9 (−4.6%) | 379.0 (±0) | 1 / 225 → 4 / 225 |
@@ -232,18 +232,19 @@ shapes repeat more often; the padding is extra compute
 
 A forward that captures a graph runs on it, so it counts as replayed.
 
-The exact profile does 154.6 requests/s at C = 16 (one request per forward).
+Answering each request alone does 154.6 requests/s at C = 16 (one request per
+forward).
 
 - **Accuracy:** every variant changes as many decisions against the exact
-  path as `batching` does, 6–11 of 3,594 requests, with median |Δp| 4·10⁻⁵.
-  That is the batching profile's known rounding noise; buckets add none.
+  path as batching does, 6–11 of 3,594 requests, with median |Δp| 4·10⁻⁵.
+  That is batching's known rounding noise; buckets add none.
 - **Where buckets help:** at C = 4, batches are small enough to be graphed, and
   buckets turn 25 captures and 52 eager forwards into 6 and 28.
 - **Where they cost:** from C = 16, almost every batch is above the graph cap.
   It runs eagerly either way, so bucketing only adds padding, unless it is
   limited to graphable batches.
 - **Decision:** no change. The gain is at most a few percent, at low
-  concurrency only. `batching` at low concurrency already replays most
+  concurrency only. Batching at low concurrency already replays most
   forwards, because its row count is the concurrency.
 
 ## Reproduce

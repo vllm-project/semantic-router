@@ -28,7 +28,8 @@ type ModelCard struct {
 	MaxInputTokens int
 	MaxScanTokens  int
 	MaxInputs      int
-	Profile        string
+	EngineArgs     EngineArgs
+	Numerics       string
 	Engine         string
 	Accelerator    string
 	Device         string
@@ -36,6 +37,16 @@ type ModelCard struct {
 	Ready          bool
 	Status         string
 	Reason         string
+}
+
+// EngineArgs are the engine arguments a served model's card reports: how it
+// batches requests and the precision it computes in.
+type EngineArgs struct {
+	MaxNumSeqs          int
+	MaxNumBatchedTokens int
+	BatchWindowMS       float64
+	Dtype               string
+	EnableSharedContext bool
 }
 
 // HeadCard is one classify head: its kind (sequence, scores or token), label
@@ -117,9 +128,15 @@ func decodeCard(card api.ModelCard) ModelCard {
 		ID: card.Id, Family: card.Family, Surfaces: append([]string(nil), card.Surfaces...), Ready: card.Ready,
 		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets),
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
-		ManifestSHA256: deref(card.ManifestSha256), Profile: deref(card.Profile), Engine: deref(card.Engine),
+		ManifestSHA256: deref(card.ManifestSha256), Numerics: string(deref(card.Numerics)), Engine: deref(card.Engine),
 		Accelerator: deref(card.Accelerator), Device: deref(card.Device), Dtype: deref(card.Dtype),
 		Status: string(deref(card.Status)), Reason: deref(card.Reason),
+	}
+	if args := card.EngineArgs; args != nil {
+		decoded.EngineArgs = EngineArgs{
+			MaxNumSeqs: args.MaxNumSeqs, MaxNumBatchedTokens: args.MaxNumBatchedTokens, BatchWindowMS: args.BatchWindowMs,
+			Dtype: string(args.Dtype), EnableSharedContext: args.EnableSharedContext,
+		}
 	}
 	if card.Limits != nil {
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)

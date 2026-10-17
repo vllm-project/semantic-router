@@ -134,6 +134,8 @@ class KeywordSignal(BaseModel):
     operator: str
     keywords: List[str]
     case_sensitive: bool = False
+    # Also match prior user messages; False keeps current-turn-only matching.
+    include_history: bool = False
 
 
 class EmbeddingSignal(BaseModel):
@@ -2141,6 +2143,9 @@ class ModelPricing(BaseModel):
     prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    cache_write_1h_per_1m: Optional[float] = Field(
+        default=None, ge=0, allow_inf_nan=False
+    )
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
@@ -2640,6 +2645,11 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # Opts a vLLM-type backend in to the OpenAI-compatible gateway response
+    # contract: the backend is a relay that injects its own usage metering
+    # fields, so the router decoder tolerates them. Mirrors the Go
+    # CanonicalBackendRef field of the same name.
+    openai_compat_gateway: bool = False
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:
