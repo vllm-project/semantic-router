@@ -1,0 +1,584 @@
+package extproc
+
+import (
+	"encoding/json"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+)
+
+func TestSuccessEstimateSeedOnlyIsInsufficientEvidence(t *testing.T) {
+	snap := newRouterLearningRuntime(nil, nil, nil).freezeEvidenceSnapshot("adaptive", 2, []string{"cheap"}, "")
+	got := estimateOneCandidateSuccess(snap, "cheap", successEstimateConfig{Now: snap.takenAt})
+
+	if got.Status != successEstimateInsufficient || got.FallbackReason != successFallbackSeedOnly {
+		t.Fatalf("expected seed-only insufficient_evidence, got %#v", got)
+	}
+	if got.Probability != 0 || got.CalibrationVersion != "" {
+		t.Fatalf("seed-only estimates must not report a probability, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateMissingCalibrationIsUnsupported(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+	if got.Status != successEstimateUnsupported || got.FallbackReason != successFallbackMissingCalibration {
+		t.Fatalf("expected missing calibration to be unsupported, got %#v", got)
+	}
+	if got.Probability != 0 || got.SampleCount != 10 || got.EvidenceScope != successEvidenceScopeDecision {
+		t.Fatalf("expected outcome counts without a calibrated probability, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateSparseDecisionFallsBackToBroaderScope(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeGoodFit, 8)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+	if got.Status != successEstimateUnsupported || got.EvidenceScope != successEvidenceScopeGlobal || got.SampleCount != 8 {
+		t.Fatalf("expected sparse decision to fall back to global evidence, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateSparseCohortFallsBackThenInsufficient(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "cohort-v1")
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+	if got.Status != successEstimateInsufficient {
+		t.Fatalf("expected empty cohort chain to stay insufficient, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateStaleEvidence(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 4)
+	key := modelExperienceKey("adaptive", 2, "frontier")
+	rt.shared.mu.Lock()
+	rt.shared.experience[key].LastUpdated = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	rt.shared.mu.Unlock()
+
+	now := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{
+		Now:        now,
+		StaleAfter: 24 * time.Hour,
+	})
+	if got.Status != successEstimateStale || got.FallbackReason != successFallbackStale || got.Probability != 0 {
+		t.Fatalf("expected stale evidence, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateMissingCalibrationRowIsUnsupported(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 4)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{
+		Now: snap.takenAt,
+		Artifact: &successCalibrationArtifact{
+			Version: "2026-08-01T00:00:00Z",
+			Models: map[string]successCalibrationRow{
+				"other": {Probability: 0.9, Coverage: 0.8},
+			},
+		},
+	})
+	if got.Status != successEstimateUnsupported || got.FallbackReason != successFallbackMissingModelRow {
+		t.Fatalf("expected missing calibration row to be unsupported, got %#v", got)
+	}
+	if got.Probability != 0 {
+		t.Fatalf("missing row must not invent a probability, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateInjectedArtifactIsCalibratedOnlyForListedModels(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 20)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{
+		Now: snap.takenAt,
+		Artifact: &successCalibrationArtifact{
+			Version: "2026-08-01T00:00:00Z",
+			Models: map[string]successCalibrationRow{
+				"frontier": {Probability: 0.91, Uncertainty: 0.06, Coverage: 0.82},
+			},
+		},
+	})
+	if got.Status != successEstimateCalibrated || got.Probability != 0.91 || got.Coverage != 0.82 {
+		t.Fatalf("expected injected calibration row, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateUncalibratedSignalsNeverBecomeProbability(t *testing.T) {
+	for _, signal := range []string{"classifier_confidence", "complexity_score", "similarity_score", "quality_score"} {
+		got := successEstimateFromUncalibratedSignal("frontier", signal, 0.99)
+		if got.Status == successEstimateCalibrated || got.Probability != 0 {
+			t.Fatalf("signal %q must never be a calibrated success probability, got %#v", signal, got)
+		}
+	}
+}
+
+func TestSuccessEstimateSnapshotIgnoresConcurrentOutcomeWrites(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 5)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+	before := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 1)
+		}()
+	}
+	wg.Wait()
+
+	after := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+	if after.SampleCount != before.SampleCount || after.Status != before.Status {
+		t.Fatalf("snapshot estimates must stay immutable, before=%#v after=%#v", before, after)
+	}
+	live := rt.experienceSnapshot("adaptive", 2, "frontier")
+	if live.GoodFitCount <= before.SampleCount {
+		t.Fatalf("expected live experience to move past the snapshot, snap=%d live=%d", before.SampleCount, live.GoodFitCount)
+	}
+}
+
+func TestSuccessEstimateConflictingScopesAreNotMerged(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 10)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+	if got.Status != successEstimateConflict || got.FallbackReason != successFallbackConflictingScopes || got.Probability != 0 {
+		t.Fatalf("expected conflicting scopes to stay unresolved, got %#v", got)
+	}
+}
+
+func TestMergeScopedExperienceReportsConflict(t *testing.T) {
+	hits := []scopedExperience{
+		{
+			scope: successEvidenceScopeDecision,
+			found: true,
+			exp:   routerLearningModelExperience{GoodFitCount: 20},
+		},
+		{
+			scope: successEvidenceScopeGlobal,
+			found: true,
+			exp:   routerLearningModelExperience{FailedCount: 20},
+		},
+	}
+	_, _, status, reason := mergeScopedExperience(hits)
+	if status != successEstimateConflict || reason != successFallbackConflictingScopes {
+		t.Fatalf("expected conflicting scopes, got status=%q reason=%q", status, reason)
+	}
+}
+
+func TestSuccessEstimateObserveWiringDoesNotChangeSelection(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("observe wiring must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)
+	if !ok || policy.Details.Adaptation == nil {
+		t.Fatalf("expected adaptation diagnostics, got %#v", ctx.VSRLearningPolicies)
+	}
+	assertObserveSuccessEstimates(t, policy)
+}
+
+func TestSuccessEstimateObservePathReportsStaleEvidence(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("stale observe path must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateStale || frontier.FallbackReason != successFallbackStale || frontier.Probability != 0 {
+		t.Fatalf("expected observe-path stale evidence, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathReportsConflictingScopes(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	router.Config.RouterLearning.Adaptation.CandidateSet = config.RouterLearningCandidateSetGlobal
+	ctx.VSRSelectedDecision.Adaptations.Adaptation = &config.DecisionLearningAdaptationConfig{
+		CandidateSet: config.RouterLearningCandidateSetGlobal,
+	}
+	rt := router.routerLearningRuntimeState()
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 10)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("conflict observe path must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateConflict || frontier.FallbackReason != successFallbackConflictingScopes || frontier.Probability != 0 {
+		t.Fatalf("expected observe-path conflicting scopes, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathUsesDecisionStaleHorizon(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	globalSeconds := 86400
+	decisionSeconds := 1
+	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
+	ctx.VSRSelectedDecision.Adaptations.Adaptation = &config.DecisionLearningAdaptationConfig{
+		Success: &config.RouterLearningSuccessConfig{StaleAfterSeconds: &decisionSeconds},
+	}
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("decision stale horizon must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateStale || frontier.FallbackReason != successFallbackStale || frontier.Probability != 0 {
+		t.Fatalf("expected decision-local stale horizon to mark evidence stale, got %#v", frontier)
+	}
+	if frontier.Outcome != config.RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected default success outcome on observe estimates, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathInheritsGlobalStaleHorizon(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	globalSeconds := 1
+	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
+
+	_, _, _, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied {
+		t.Fatal("global stale horizon must not change selection")
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateStale || frontier.FallbackReason != successFallbackStale {
+		t.Fatalf("expected global stale horizon to mark evidence stale, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathKeepsFreshEvidenceWhenHorizonDisabled(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	globalSeconds := 1
+	disabled := 0
+	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
+	ctx.VSRSelectedDecision.Adaptations.Adaptation = &config.DecisionLearningAdaptationConfig{
+		Success: &config.RouterLearningSuccessConfig{StaleAfterSeconds: &disabled},
+	}
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
+
+	_, _, _, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied {
+		t.Fatal("disabled stale horizon must not change selection")
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status == successEstimateStale {
+		t.Fatalf("decision-local zero horizon must keep evidence, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateCandidateNamesKeepLoRAIdentity(t *testing.T) {
+	got := successEstimateCandidateNames([]config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "frontier", LoRAName: "code-lora"},
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "cheap"},
+		{Model: " "},
+	})
+	want := []string{"math-lora", "code-lora", "cheap"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	}
+}
+
+func TestSuccessEstimateLooksUpSingleAdapterIdentity(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 7)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeFailed, 9)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"math-lora"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "math-lora", successEstimateConfig{Now: snap.takenAt})
+	if got.CandidateModel != "math-lora" || got.SampleCount != 7 || got.EvidenceScope != successEvidenceScopeDecision {
+		t.Fatalf("expected adapter evidence, not the base model row, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateKeepsDistinctAdaptersOnSharedBase(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 7)
+	recordScopedExperience(rt, "adaptive", 2, "code-lora", routerLearningOutcomeFailed, 5)
+	candidates := successEstimateCandidateNames([]config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "frontier", LoRAName: "code-lora"},
+	})
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, candidates, "")
+	got := estimateCandidateSuccess(snap, candidates, successEstimateConfig{Now: snap.takenAt})
+	byModel := estimatesByModel(got)
+	if len(byModel) != 2 {
+		t.Fatalf("expected one estimate per adapter, got %#v", got)
+	}
+	if mathEst := byModel["math-lora"]; mathEst.SampleCount != 7 || mathEst.CandidateModel != "math-lora" {
+		t.Fatalf("expected math-lora evidence, got %#v", mathEst)
+	}
+	if codeEst := byModel["code-lora"]; codeEst.SampleCount != 5 || codeEst.CandidateModel != "code-lora" {
+		t.Fatalf("expected code-lora evidence, got %#v", codeEst)
+	}
+}
+
+func TestSuccessEstimateObservePathLooksUpSingleAdapterIdentity(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	selCtx.CandidateModels = []config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+	}
+	baseResult.SelectedModel = "math-lora"
+	baseResult.LoRAName = "math-lora"
+	baseResult.AllScores = map[string]float64{"math-lora": 1}
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive",
+		2,
+		"math-lora",
+		routerLearningOutcomeGoodFit,
+		10,
+	)
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive",
+		2,
+		"frontier",
+		routerLearningOutcomeFailed,
+		4,
+	)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "frontier" || selected.LoRAName != "math-lora" || result.SelectedModel != "math-lora" {
+		t.Fatalf("adapter observe path must not change the selected adapter, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	got := observeEstimateByModel(t, ctx, "math-lora")
+	if got.Status != successEstimateUnsupported || got.SampleCount != 10 || got.Probability != 0 {
+		t.Fatalf("expected adapter evidence on the observe path, got %#v", got)
+	}
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)
+	if !ok || policy.Details.Adaptation == nil {
+		t.Fatalf("expected adaptation diagnostics, got %#v", ctx.VSRLearningPolicies)
+	}
+	if _, ok := estimatesByModel(policy.Details.Adaptation.successEstimates)["frontier"]; ok {
+		t.Fatalf("adapter observe diagnostics must not collapse onto the base model, got %#v", policy.Details.Adaptation.successEstimates)
+	}
+}
+
+func TestSuccessEstimateObservePathKeepsDistinctAdaptersOnSharedBase(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	selCtx.CandidateModels = []config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "frontier", LoRAName: "code-lora"},
+	}
+	baseResult.SelectedModel = "math-lora"
+	baseResult.LoRAName = "math-lora"
+	baseResult.AllScores = map[string]float64{"math-lora": 1, "code-lora": 0.4}
+	rt := router.routerLearningRuntimeState()
+	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "adaptive", 2, "code-lora", routerLearningOutcomeFailed, 6)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "frontier" || selected.LoRAName != "math-lora" || result.SelectedModel != "math-lora" {
+		t.Fatalf("shared-base adapter observe path must not change selection, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	mathEst := observeEstimateByModel(t, ctx, "math-lora")
+	codeEst := observeEstimateByModel(t, ctx, "code-lora")
+	if mathEst.SampleCount != 10 || mathEst.Status != successEstimateUnsupported {
+		t.Fatalf("expected math-lora observe estimate, got %#v", mathEst)
+	}
+	if codeEst.SampleCount != 6 || codeEst.Status != successEstimateUnsupported {
+		t.Fatalf("expected code-lora observe estimate, got %#v", codeEst)
+	}
+}
+
+func successEstimateObserveFixture() (*OpenAIRouter, *RequestContext, *selection.SelectionContext, *selection.SelectionResult) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive",
+		2,
+		"frontier",
+		routerLearningOutcomeGoodFit,
+		10,
+	)
+	return router, ctx, selCtx, baseResult
+}
+
+func successEstimateObserveFixtureWithoutExperience() (*OpenAIRouter, *RequestContext, *selection.SelectionContext, *selection.SelectionResult) {
+	router := &OpenAIRouter{Config: routerLearningAdaptationTestConfig()}
+	ctx := &RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name: "adaptive",
+			Tier: 2,
+			Adaptations: config.DecisionAdaptationsConfig{
+				Mode: config.DecisionAdaptationModeObserve,
+			},
+		},
+	}
+	selCtx := &selection.SelectionContext{
+		DecisionName: "adaptive",
+		CandidateModels: []config.ModelRef{
+			{Model: "cheap"},
+			{Model: "frontier"},
+		},
+	}
+	baseResult := &selection.SelectionResult{
+		SelectedModel: "cheap",
+		Score:         1,
+		Method:        selection.MethodStatic,
+		AllScores:     map[string]float64{"cheap": 1},
+	}
+	return router, ctx, selCtx, baseResult
+}
+
+func assertObserveSuccessEstimates(t *testing.T, policy routerLearningPolicy) {
+	t.Helper()
+	diag := policy.Details.Adaptation
+	if diag.snapshotIdentity == "" || len(diag.successEstimates) != 2 {
+		t.Fatalf("expected snapshot identity and per-candidate estimates, got %#v", diag)
+	}
+	assertConservativeObserveEstimates(t, estimatesByModel(diag.successEstimates))
+	assertObserveSuccessReplay(t, policy)
+}
+
+func estimatesByModel(estimates []successEstimate) map[string]successEstimate {
+	byModel := map[string]successEstimate{}
+	for _, estimate := range estimates {
+		byModel[estimate.CandidateModel] = estimate
+	}
+	return byModel
+}
+
+func assertConservativeObserveEstimates(t *testing.T, byModel map[string]successEstimate) {
+	t.Helper()
+	if cheap := byModel["cheap"]; cheap.Status != successEstimateInsufficient || cheap.Probability != 0 {
+		t.Fatalf("expected seed-only cheap estimate, got %#v", cheap)
+	}
+	if frontier := byModel["frontier"]; frontier.Status != successEstimateUnsupported || frontier.Probability != 0 || frontier.SampleCount != 10 {
+		t.Fatalf("expected unsupported frontier estimate, got %#v", frontier)
+	}
+}
+
+func assertObserveSuccessReplay(t *testing.T, policy routerLearningPolicy) {
+	t.Helper()
+	replay := policy.toReplayAdaptation()
+	if replay == nil || replay.SnapshotIdentity == "" || replay.SuccessEstimates["frontier"].Status != string(successEstimateUnsupported) {
+		t.Fatalf("expected replay success estimates, got %#v", replay)
+	}
+	if replay.SuccessEstimates["frontier"].Outcome != config.RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected replay success outcome identity, got %#v", replay)
+	}
+	if replay.SuccessEstimates["frontier"].Probability != nil ||
+		replay.SuccessEstimates["frontier"].Uncertainty != nil ||
+		replay.SuccessEstimates["frontier"].Coverage != nil {
+		t.Fatalf("unsupported replay estimate must omit calibrated metrics, got %#v", replay)
+	}
+	if _, ok := policy.ToMap()["success_estimates"]; ok {
+		t.Fatalf("compact policy map must not carry detailed success estimates, got %#v", policy.ToMap())
+	}
+}
+
+func TestReplaySuccessEstimatesJSONDistinguishesCalibratedZeros(t *testing.T) {
+	replay := replaySuccessEstimates([]successEstimate{
+		{
+			CandidateModel:     "zero-calibrated",
+			Status:             successEstimateCalibrated,
+			SampleCount:        12,
+			CalibrationVersion: "2026-08-01T00:00:00Z",
+		},
+		{
+			CandidateModel: "unsupported",
+			Status:         successEstimateUnsupported,
+			SampleCount:    10,
+			FallbackReason: successFallbackMissingCalibration,
+		},
+	})
+
+	raw, err := json.Marshal(replay)
+	if err != nil {
+		t.Fatalf("marshal replay estimates: %v", err)
+	}
+	var payload map[string]map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal replay estimates %s: %v", raw, err)
+	}
+
+	calibrated := payload["zero-calibrated"]
+	if calibrated["status"] != string(successEstimateCalibrated) {
+		t.Fatalf("expected calibrated status, got %#v", calibrated)
+	}
+	for _, field := range []string{"probability", "uncertainty", "coverage"} {
+		value, ok := calibrated[field]
+		if !ok {
+			t.Fatalf("calibrated replay JSON omitted %s: %s", field, raw)
+		}
+		got, ok := value.(float64)
+		if !ok || got != 0 {
+			t.Fatalf("calibrated replay %s = %#v, want 0: %s", field, value, raw)
+		}
+	}
+
+	unsupported := payload["unsupported"]
+	if unsupported["status"] != string(successEstimateUnsupported) {
+		t.Fatalf("expected unsupported status, got %#v", unsupported)
+	}
+	for _, field := range []string{"probability", "uncertainty", "coverage"} {
+		if _, ok := unsupported[field]; ok {
+			t.Fatalf("unsupported replay JSON included %s: %s", field, raw)
+		}
+	}
+}
+
+func observeEstimateByModel(t *testing.T, ctx *RequestContext, model string) successEstimate {
+	t.Helper()
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)
+	if !ok || policy.Details.Adaptation == nil {
+		t.Fatalf("expected adaptation diagnostics, got %#v", ctx.VSRLearningPolicies)
+	}
+	got, ok := estimatesByModel(policy.Details.Adaptation.successEstimates)[model]
+	if !ok {
+		t.Fatalf("expected estimate for %q, got %#v", model, policy.Details.Adaptation.successEstimates)
+	}
+	return got
+}
+
+func backdateObserveExperience(router *OpenAIRouter, decision string, tier int, model string, when time.Time) {
+	rt := router.routerLearningRuntimeState()
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
+	for _, key := range snapshotExperienceKeys(decision, tier, "", model) {
+		if exp := rt.shared.experience[key]; exp != nil {
+			exp.LastUpdated = when
+		}
+	}
+}
+
+func recordScopedExperience(
+	rt *routerLearningRuntime,
+	decision string,
+	tier int,
+	model string,
+	verdict routerLearningOutcomeVerdict,
+	score float64,
+) {
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
+	rt.recordModelExperienceLocked(decision, tier, model, verdict, score)
+}
