@@ -30,6 +30,39 @@ type TokenUsage struct {
 	Unreported        bool  `json:"-"`
 }
 
+// UsagePresence records which token fields were actually present in the
+// provider response. A zero token count is valid evidence, so callers must not
+// infer presence from TokenUsage values alone.
+type UsagePresence struct {
+	PromptTokens     bool
+	CompletionTokens bool
+	TotalTokens      bool
+}
+
+// Any reports whether the provider included at least one usage field.
+func (p UsagePresence) Any() bool {
+	return p.PromptTokens || p.CompletionTokens || p.TotalTokens
+}
+
+// UsageKnown reports whether a response has enough accounting data to charge
+// a provider total without falling back to its reservation estimate.
+func (r *ModelResponse) UsageKnown() bool {
+	if r == nil {
+		return false
+	}
+	if r.UsagePresent.TotalTokens ||
+		(r.UsagePresent.PromptTokens && r.UsagePresent.CompletionTokens) {
+		return true
+	}
+	// Responses assembled by existing unit tests predate UsagePresent. A
+	// non-zero usage value is still treated as known for compatibility; an all
+	// zero value remains unknown because zero is also the omitted-usage value.
+	if r.UsagePresent.Any() {
+		return false
+	}
+	return !r.Usage.Unreported && (r.Usage.PromptTokens != 0 || r.Usage.CompletionTokens != 0 || r.Usage.TotalTokens != 0)
+}
+
 // Add returns u with the usage of the given responses added to it. It is
 // nil-safe: nil responses contribute nothing, so callers can accumulate across
 // rounds or skip failed calls without guarding. The receiver is not mutated.

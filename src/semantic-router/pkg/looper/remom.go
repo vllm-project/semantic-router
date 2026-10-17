@@ -92,6 +92,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	req *Request,
 	messages *openai.ChatCompletionNewParams,
 	cfg *config.ReMoMAlgorithmConfig,
+	isFinalRound bool,
 	sem chan struct{},
 ) remomParallelResult {
 	modelName := mc.Model
@@ -125,7 +126,12 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		req,
 		msgCopy,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
-		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1},
+		CallOptions{
+			DecisionName: req.DecisionName,
+			Iteration:    idx + 1,
+			Stage:        remomCallStage(isFinalRound),
+			Role:         remomCallRole(isFinalRound),
+		},
 	)
 	elapsed := time.Since(startTime)
 
@@ -136,6 +142,20 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	}
 
 	return remomParallelResult{resp: resp, err: err, index: idx}
+}
+
+func remomCallStage(isFinalRound bool) string {
+	if isFinalRound {
+		return CallStageSynthesize
+	}
+	return CallStageGenerate
+}
+
+func remomCallRole(isFinalRound bool) string {
+	if isFinalRound {
+		return "synthesizer"
+	}
+	return "candidate"
 }
 
 func collectRemomParallelResults(
@@ -485,7 +505,7 @@ func (l *ReMoMLooper) executeReMoMRound(
 	if isFinalRound {
 		modelCalls = remomFinalRoundModelCalls(cfg, modelCalls, req.ModelRefs)
 	}
-	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages)
+	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages, isFinalRound)
 	execution.attemptedResponses = responses
 	if err != nil {
 		if cfg.OnError == "fail" {
@@ -562,6 +582,7 @@ func (l *ReMoMLooper) executeParallelCalls(
 	cfg *config.ReMoMAlgorithmConfig,
 	modelCalls []ModelCall,
 	messages *openai.ChatCompletionNewParams,
+	isFinalRound bool,
 ) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
 	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
@@ -578,7 +599,7 @@ func (l *ReMoMLooper) executeParallelCalls(
 
 	for i, call := range modelCalls {
 		go func(idx int, mc ModelCall) {
-			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, sem)
+			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, isFinalRound, sem)
 		}(i, call)
 	}
 

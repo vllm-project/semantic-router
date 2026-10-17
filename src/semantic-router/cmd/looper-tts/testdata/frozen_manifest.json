@@ -1,0 +1,203 @@
+{
+  "schema_version": "looper-tts.v1",
+  "experiment_id": "f48adc170bb5a1388e9da9df2f14b51b6888a65f01d968fba2d9979d9fe602b3",
+  "config_sha256": "6979aac76a9994efa1e7ff32ed7f9b3f704291bc946e3cf5e5004b061208fd66",
+  "config": {
+    "schema_version": "looper-tts.v1",
+    "id": "synthetic-contract",
+    "dataset": {
+      "id": "synthetic",
+      "revision": "fixture-v1",
+      "evidence_kind": "synthetic",
+      "items": [
+        {
+          "id": "q1",
+          "prompt": "Synthetic fixture: return the letter A.",
+          "prompt_sha256": "6b675da9d16d18c3d695b75ecee740022674f716bf964f10fe3ab488ee077ff8"
+        }
+      ],
+      "calibration_ids": [
+        "calibration-q1"
+      ]
+    },
+    "models": [
+      {
+        "id": "model-a",
+        "provider": "fixture",
+        "model": "synthetic-model",
+        "revision": "fixture-v1",
+        "sampling": {
+          "temperature": 0,
+          "top_p": 1
+        },
+        "pricing": {
+          "as_of": "2026-09-05",
+          "currency": "USD",
+          "input_per_million": null,
+          "output_per_million": null
+        }
+      }
+    ],
+    "arms": [
+      {
+        "id": "direct",
+        "algorithm": "direct",
+        "model_ids": [
+          "model-a"
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "confidence",
+        "algorithm": "confidence",
+        "model_ids": [
+          "model-a"
+        ],
+        "parameters": {
+          "threshold": 0.8,
+          "calibration_revision": "fixture-v1"
+        }
+      },
+      {
+        "id": "remom",
+        "algorithm": "remom",
+        "model_ids": [
+          "model-a"
+        ],
+        "parameters": {
+          "breadth": [
+            3,
+            2
+          ]
+        }
+      },
+      {
+        "id": "fusion",
+        "algorithm": "fusion",
+        "model_ids": [
+          "model-a"
+        ],
+        "parameters": {
+          "panel_model_ids": [
+            "model-a"
+          ],
+          "judge_model_id": "model-a",
+          "synthesis_model_id": "model-a"
+        }
+      }
+    ],
+    "budgets": [
+      {
+        "id": "small",
+        "max_calls": 8,
+        "max_total_tokens": 4096,
+        "exhaustion_policy": "stop_and_record"
+      },
+      {
+        "id": "large",
+        "max_calls": 16,
+        "max_total_tokens": 8192,
+        "exhaustion_policy": "stop_and_record"
+      }
+    ],
+    "scorer": {
+      "id": "synthetic-exact",
+      "revision": "fixture-v1",
+      "protocol_sha256": "e94a477184436fdf9da99b3d482880b02ebd998ac193125ad1adb53b2958d69d"
+    },
+    "seeds": [
+      7
+    ]
+  },
+  "code_revision": "fixture-revision",
+  "planner_sha256": "e56bf463cae3b74019ddf03af3bc846716fa4a6d412b72fc9cbc0e9afac60aac",
+  "command": [
+    "python",
+    "-m",
+    "bench.looper_tts",
+    "plan"
+  ],
+  "status": "planned",
+  "matrix": [
+    {
+      "id": "4019dfb6ed44c155bbc1e12020bf7c21b51709241a7a1bf8e08eaf9af05c24dd",
+      "arm_id": "direct",
+      "budget_id": "small",
+      "seed": 7,
+      "algorithm": "direct",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "f2ab049d2177bfdb383c89133a0d40dd33927ab83406a564ca8fc6b99dfbc3bd",
+      "arm_id": "direct",
+      "budget_id": "large",
+      "seed": 7,
+      "algorithm": "direct",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "dd555727cdee9a35cb269a57611d2331515ffe4aac13ec2266f01b4acdddcaa5",
+      "arm_id": "confidence",
+      "budget_id": "small",
+      "seed": 7,
+      "algorithm": "confidence",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "e419adc99a0270623c2bf35c98c9f720da2335209d170809287e5fa22f1c5331",
+      "arm_id": "confidence",
+      "budget_id": "large",
+      "seed": 7,
+      "algorithm": "confidence",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "091ccc8f29f1057f87574da14b6025ade0c4f80399ad72b487902716dd149686",
+      "arm_id": "remom",
+      "budget_id": "small",
+      "seed": 7,
+      "algorithm": "remom",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "d542ab071a5f29a899588f123f99f6b0a44204ad7b37ed3df563b4dc4cf028a2",
+      "arm_id": "remom",
+      "budget_id": "large",
+      "seed": 7,
+      "algorithm": "remom",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "f172bf5451a310ca8862408236c5751c0dc466e71c8e3f08ba5802464140eeed",
+      "arm_id": "fusion",
+      "budget_id": "small",
+      "seed": 7,
+      "algorithm": "fusion",
+      "item_ids": [
+        "q1"
+      ]
+    },
+    {
+      "id": "57938e86a991d94ad757ff4547c7bee7696c4d2eb5ebe28119bca91be0e6cb41",
+      "arm_id": "fusion",
+      "budget_id": "large",
+      "seed": 7,
+      "algorithm": "fusion",
+      "item_ids": [
+        "q1"
+      ]
+    }
+  ]
+}

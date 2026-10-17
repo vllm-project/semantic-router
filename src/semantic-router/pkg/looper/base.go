@@ -125,6 +125,8 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 				DecisionName: req.DecisionName,
 				Iteration:    iteration,
 				Mode:         responseMode(req.IsStreaming),
+				Stage:        CallStageGenerate,
+				Role:         "candidate",
 			},
 		)
 		if err != nil {

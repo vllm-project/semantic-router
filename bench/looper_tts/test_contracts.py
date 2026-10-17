@@ -177,6 +177,37 @@ class ContractTests(unittest.TestCase):
             self.assertIn("refusing to overwrite", error.getvalue())
             self.assertEqual(manifest, load_json(Path(directory) / "manifest.json"))
 
+    def test_cli_execute_fake_writes_valid_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan_directory = Path(directory) / "plan"
+            run_directory = Path(directory) / "run"
+            plan_args = [
+                "plan",
+                "--config",
+                str(EXAMPLE),
+                "--output",
+                str(plan_directory),
+                "--code-revision",
+                "fixture-revision",
+            ]
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(plan_args), 0)
+                self.assertEqual(
+                    main(
+                        [
+                            "execute",
+                            "--manifest",
+                            str(plan_directory / "manifest.json"),
+                            "--output",
+                            str(run_directory),
+                            "--fake",
+                        ]
+                    ),
+                    0,
+                )
+            records = load_json(run_directory / "records.json")
+            self.assertEqual(validate_records(records, self.plan), records)
+
 
 if __name__ == "__main__":
     unittest.main()

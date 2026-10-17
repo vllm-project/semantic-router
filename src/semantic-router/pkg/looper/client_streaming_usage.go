@@ -40,26 +40,65 @@ func sseDataPayload(line []byte) ([]byte, bool) {
 // stream_options.include_usage), so the last non-null usage block wins. Returns
 // unreported usage when none is present.
 func parseStreamingUsage(body []byte) TokenUsage {
+	usage, _ := parseStreamingUsageWithPresence(body)
+	return usage
+}
+
+func parseStreamingUsageWithPresence(body []byte) (TokenUsage, UsagePresence) {
 	usage := TokenUsage{Unreported: true}
+	var presence UsagePresence
 	for _, line := range bytes.Split(body, []byte("\n")) {
 		data, ok := sseDataPayload(line)
 		if !ok {
 			continue
 		}
-		data = bytes.TrimSpace(data)
-		if bytes.Equal(data, []byte("[DONE]")) {
-			continue
-		}
-
 		var chunk struct {
 			Usage json.RawMessage `json:"usage"`
 		}
-		if err := json.Unmarshal(data, &chunk); err != nil {
+		if json.Unmarshal(data, &chunk) != nil || len(chunk.Usage) == 0 || bytes.Equal(bytes.TrimSpace(chunk.Usage), []byte("null")) {
 			continue
 		}
-		if len(chunk.Usage) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Usage), []byte("null")) {
-			usage = parseResponseUsage(data)
+		usage, presence = parseResponseUsageWithPresence(data)
+	}
+	return usage, presence
+}
+
+// A present null, negative, fractional, or nonnumeric field is not token evidence.
+// Numeric zero is explicitly reported usage.
+func parseResponseUsagePresence(body []byte) UsagePresence {
+	var response struct {
+		Usage map[string]json.RawMessage `json:"usage"`
+	}
+	if json.Unmarshal(body, &response) != nil {
+		return UsagePresence{}
+	}
+	valid := func(key string) bool {
+		var value *int64
+		return json.Unmarshal(response.Usage[key], &value) == nil && value != nil && *value >= 0
+	}
+	return UsagePresence{PromptTokens: valid("prompt_tokens"), CompletionTokens: valid("completion_tokens"), TotalTokens: valid("total_tokens")}
+}
+
+// Retain upstream cache accounting while preserving individually reported counts.
+func parseResponseUsageWithPresence(body []byte) (TokenUsage, UsagePresence) {
+	usage := parseResponseUsage(body)
+	presence := parseResponseUsagePresence(body)
+	var fields struct {
+		Usage map[string]json.RawMessage `json:"usage"`
+	}
+	if json.Unmarshal(body, &fields) == nil {
+		if presence.PromptTokens {
+			_ = json.Unmarshal(fields.Usage["prompt_tokens"], &usage.PromptTokens)
+		}
+		if presence.CompletionTokens {
+			_ = json.Unmarshal(fields.Usage["completion_tokens"], &usage.CompletionTokens)
+		}
+		if presence.TotalTokens {
+			_ = json.Unmarshal(fields.Usage["total_tokens"], &usage.TotalTokens)
 		}
 	}
-	return usage
+	if !presence.PromptTokens || !presence.CompletionTokens || !presence.TotalTokens {
+		usage.Unreported = true
+	}
+	return usage, presence
 }
