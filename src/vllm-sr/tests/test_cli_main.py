@@ -963,3 +963,28 @@ def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
             "roles": [{"name": "worker", "models": ["worker-a"]}],
         },
     }
+
+
+def test_cli_modules_import_without_unconditional_fcntl():
+    """Verify that CLI modules and commands import cleanly even without fcntl."""
+    instance_controller = importlib.import_module("cli.instance_controller")
+    cli_main = importlib.import_module("cli.main")
+    dataset_io = importlib.import_module("cli.sr_bench.dataset_io")
+    service = importlib.import_module("cli.sr_bench.service")
+    bench_runtime = importlib.import_module("cli.sr_bench_runtime")
+
+    assert hasattr(cli_main, "main")
+    assert hasattr(instance_controller, "run")
+    assert hasattr(dataset_io, "publish_dataset")
+    assert hasattr(service, "serve")
+    assert hasattr(bench_runtime, "BenchRuntime")
+
+
+def test_instance_controller_run_rejects_non_posix_host_when_fcntl_missing(
+    monkeypatch, tmp_path
+):
+    ic = importlib.import_module("cli.instance_controller")
+
+    monkeypatch.setattr(ic, "fcntl", None)
+    with pytest.raises(RuntimeError, match="POSIX"):
+        ic.run(tmp_path)
