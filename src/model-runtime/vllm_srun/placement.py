@@ -88,8 +88,11 @@ def estimate_bytes(spec: ModelSpec, parameters: int, accelerator: str) -> int:
     """The weights in the dtype ``accelerator`` holds them in, plus an activation reserve.
 
     Weights a family holds in BF16 there (``gpu_weights`` / ``cpu_weights``)
-    count two bytes each plus ``RESIDENT_HEADROOM``; FP32 stays an upper bound
-    for the others (BF16-resident Linear weights only lower it). The reserve
+    count two bytes each plus ``RESIDENT_HEADROOM``; a ``bf16_resident`` family
+    that reports the checkpoint's BF16 share (``bf16_parameters``) holds those
+    weights at two bytes plus ``RESIDENT_HEADROOM`` and the rest of
+    ``parameters`` at four, on GPUs. FP32 stays the upper bound for the
+    others (BF16-resident Linear weights only lower it). The reserve
     covers loading and ordinary requests: inputs of tens of thousands of
     tokens need more, and a forward that runs out of device memory fails
     only its own requests.
@@ -98,6 +101,15 @@ def estimate_bytes(spec: ModelSpec, parameters: int, accelerator: str) -> int:
     weights = parameters * width
     if width < FP32_BYTES:
         weights += int(weights * RESIDENT_HEADROOM)
+    elif accelerator != "cpu" and spec.dtype.bf16_resident:
+        # A bf16_resident backbone keeps its BF16-stored Linear weights in
+        # BF16 (the dtype BF16 autocast multiplies with anyway) and holds
+        # everything else in FP32; an unknown share keeps the upper bound.
+        if (bf16 := spec.dtype.bf16_parameters) and bf16 <= parameters:
+            held = bf16 * DTYPE_BYTES["bfloat16"]
+            weights = (
+                held + int(held * RESIDENT_HEADROOM) + (parameters - bf16) * FP32_BYTES
+            )
     return weights + ACTIVATION_RESERVE
 
 

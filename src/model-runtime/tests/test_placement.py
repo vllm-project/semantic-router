@@ -1,4 +1,8 @@
+import json
+import math
+import struct
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 import torch
@@ -7,6 +11,7 @@ from vllm_srun.accel.cuda import CUDAAccelerator
 from vllm_srun.accel.rocm import ROCmAccelerator
 from vllm_srun.errors import PlacementError, UnsupportedDeviceError
 from vllm_srun.placement import (
+    RESIDENT_HEADROOM,
     auto_order,
     device_kind,
     estimate_bytes,
@@ -251,6 +256,110 @@ def test_the_estimate_counts_weights_in_the_dtype_the_device_holds():
     assert estimate_bytes(D3, billion, "cpu") == 2_200_000_000 + 2 * GIB
     fp32_on_cpu = replace(D3, dtype=replace(D3.dtype, cpu_weights=None))
     assert estimate_bytes(fp32_on_cpu, billion, "cpu") == 4 * billion + 2 * GIB
+
+
+# Decision-2.0-Lux-9B: 7.94B parameters of which 6.92B (the Linear weights)
+# are stored BF16 and held BF16 on a GPU; measured at 16.68 GiB held there
+# (issue #5062). A bf16_resident family that reports the share is estimated
+# from it instead of the FP32 upper bound.
+LUX_PARAMETERS = 7_940_895_744
+LUX_BF16 = 6_920_000_000
+LUX = ModelSpec(
+    "Decision-2.0-Lux-9B",
+    GATED_DELTA_BACKBONE,
+    DtypePolicy(bf16_parameters=LUX_BF16),
+    262_144,
+    requires=GATED_DELTA_BACKBONE.requires,
+)
+
+
+def test_the_estimate_counts_the_bf16_resident_weights_the_engine_holds():
+    bf16_bytes = LUX_BF16 * 2
+    expected = (
+        bf16_bytes
+        + int(bf16_bytes * RESIDENT_HEADROOM)
+        + (LUX_PARAMETERS - LUX_BF16) * 4
+        + 2 * GIB
+    )
+    assert estimate_bytes(LUX, LUX_PARAMETERS, "rocm") == expected
+    assert expected / GIB == pytest.approx(20.0, abs=0.1)
+    # Residency is a GPU layout: the CPU keeps every weight in FP32.
+    assert estimate_bytes(LUX, LUX_PARAMETERS, "cpu") == (4 * LUX_PARAMETERS + 2 * GIB)
+    # A policy without the share (and one claiming more BF16 than the model
+    # has parameters) stays on the FP32 upper bound.
+    unknown = replace(LUX, dtype=DtypePolicy())
+    assert estimate_bytes(unknown, LUX_PARAMETERS, "rocm") == (
+        4 * LUX_PARAMETERS + 2 * GIB
+    )
+    overcount = replace(LUX, dtype=DtypePolicy(bf16_parameters=LUX_PARAMETERS + 1))
+    assert estimate_bytes(overcount, LUX_PARAMETERS, "rocm") == (
+        4 * LUX_PARAMETERS + 2 * GIB
+    )
+
+
+def test_a_bf16_resident_nine_b_model_fits_a_24gb_card(monkeypatch):
+    _one_rocm_device(monkeypatch, 20.8)
+    placement = place(LUX, "auto", LUX_PARAMETERS)
+    assert placement.device.label == "rocm:0"
+    assert placement.estimated_bytes / GIB == pytest.approx(20.0, abs=0.1)
+    # Without the checkpoint's BF16 share the FP32 bound still refuses it,
+    # which is the issue's "needs about 31.6 GiB, 20.8 GiB free".
+    unknown = replace(LUX, dtype=DtypePolicy())
+    with pytest.raises(PlacementError) as refused:
+        place(unknown, "auto", LUX_PARAMETERS)
+    assert "needs about 31.6 GiB, 20.8 GiB free" in str(refused.value)
+
+
+def _header_bf16_elements(path: Path, prefix: str = "") -> int:
+    """BF16 element count straight from a safetensors header, without vllm_srun code."""
+    with open(path, "rb") as stream:
+        (size,) = struct.unpack("<Q", stream.read(8))
+        header = json.loads(stream.read(size))
+    return sum(
+        math.prod(meta["shape"])
+        for name, meta in header.items()
+        if name != "__metadata__"
+        and name.startswith(prefix)
+        and meta.get("dtype") == "BF16"
+    )
+
+
+def test_the_decision2_family_estimates_from_the_checkpoint_bf16_share(tmp_path):
+    from vllm_srun.plugins import registry
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.testing.fixtures import write_fixture
+
+    package = write_fixture(tmp_path / "package", family="decision2", variant="qwen3_5")
+    plugin = registry.plugin("families", "decision2").load()()
+    spec = plugin.describe(plugin.verify(PackageRef(package)))
+    stored = sum(
+        _header_bf16_elements(path, spec.backbone.weight_prefix)
+        for path in spec.backbone.weight_files
+    )
+    assert spec.dtype.bf16_resident is True
+    assert spec.dtype.bf16_parameters == stored > 0
+    assert estimate_bytes(spec, stored, "rocm") < 4 * stored + 2 * GIB
+    assert estimate_bytes(spec, stored, "cpu") == 4 * stored + 2 * GIB
+
+
+def test_the_vela2_decoder_family_estimates_from_the_checkpoint_bf16_share(
+    tmp_path,
+):
+    from vllm_srun.plugins import registry
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.testing.fixtures import write_fixture
+
+    package = write_fixture(tmp_path / "package", family="vela2", variant="decoder")
+    plugin = registry.plugin("families", "vela2").load()()
+    spec = plugin.describe(plugin.verify(PackageRef(package)))
+    stored = sum(
+        _header_bf16_elements(path, spec.backbone.weight_prefix)
+        for path in spec.backbone.weight_files
+    )
+    assert spec.dtype.bf16_resident is True
+    assert spec.dtype.bf16_parameters == stored > 0
+    assert estimate_bytes(spec, stored, "rocm") < 4 * stored + 2 * GIB
+    assert estimate_bytes(spec, stored, "cpu") == 4 * stored + 2 * GIB
 
 
 @pytest.mark.parametrize("model", sorted(DECISION3_PEAKS_GIB))

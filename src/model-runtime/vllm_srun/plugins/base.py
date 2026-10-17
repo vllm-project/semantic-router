@@ -146,6 +146,10 @@ class DtypePolicy:
     parameter in that dtype on GPUs, so the hidden-state stream follows it
     (released runtimes that load the backbone in BF16); CPU keeps ``weights``
     unless ``cpu_weights`` names the dtype a released runtime held there too.
+    ``bf16_parameters`` counts the parameters the released checkpoint stores
+    BF16 — the BF16-exact Linear weights a ``bf16_resident`` policy holds in
+    BF16 on GPUs — so placement can price those at two bytes and the rest of
+    the parameters at four; None keeps the FP32 upper bound.
     ``reduced_gpu`` / ``reduced_cpu`` consent to a faster copy of the
     backbone's linear layers, which the batches that merge requests run
     (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
@@ -165,6 +169,7 @@ class DtypePolicy:
     bf16_resident: bool = True
     gpu_weights: str | None = None
     cpu_weights: str | None = None
+    bf16_parameters: int | None = None
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False

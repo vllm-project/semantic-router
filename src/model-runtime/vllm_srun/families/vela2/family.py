@@ -30,6 +30,7 @@ from ...plugins.base import (
 )
 from ...plugins.decisions import DecisionModel, RequestPlan
 from ...registry import builtin, policy
+from ...registry.artifacts import safetensors_bf16_elements
 from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
 from .decoder_layout import DecoderTree
@@ -38,6 +39,22 @@ from .layout import Row, Tokens, fail_unscanned, read_parts, rows_for
 from .members import DecoderMember, EncoderMember
 from .package import DECODER, ENCODER, Vela2Package, member_of, verify
 from .request import QUESTION_TYPES, Plan, Question, QuestionReader
+
+
+def _bf16_parameters(backbone: BackboneSpec) -> int | None:
+    """The parameters the decoder checkpoint stores BF16: the Linear weights a GPU holds BF16.
+
+    Only tensors under the backbone's weight prefix count — the tensors its
+    runtime loads. None when no weight file stores BF16, which keeps
+    placement's FP32 upper bound for packages this family cannot
+    characterize.
+    """
+    stored = sum(
+        safetensors_bf16_elements(path, backbone.weight_prefix)
+        for path in backbone.weight_files
+    )
+    return stored or None
+
 
 TOKEN_CACHE = 8192
 # On CPU, sequences packed into one 0.3B forward cost more per token together
@@ -202,7 +219,9 @@ class Vela2Family(ModelFamily):
         return ModelSpec(
             name=package.model_name,
             backbone=backbone,
-            dtype=DtypePolicy(),
+            # The checkpoint's BF16 tensors are the Linear weights its
+            # runtime holds BF16 on a GPU; the broad head stays FP32.
+            dtype=DtypePolicy(bf16_parameters=_bf16_parameters(backbone)),
             max_input_tokens=details.max_input_tokens,
             requires=backbone.requires,
         )
