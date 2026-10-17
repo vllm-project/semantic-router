@@ -352,6 +352,38 @@ def test_the_kai_identity_survives_the_drift_check(tmp_path):
     assert registry_drift(inventory, registry) == []
 
 
+def test_a_registered_alias_keeps_its_registered_repo_id(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(MINIMAL_CONFIG))
+    # A deployment declaring vllm-sr/feedback-detector is rewritten to the
+    # local path the registry registers it under, and the Hub id has to
+    # survive the rewrite: the drift check compares it against the
+    # evaluation registry, and the revision lookup and baseline matching
+    # resolve through it. Inventing vllm-sr/mom-feedback-detector from the
+    # path reports a mismatch against a registry that measures the
+    # repository the deployment declared.
+    config["global"]["model_catalog"]["system"][
+        "prompt_guard"
+    ] = "models/mom-feedback-detector"
+    config["global"]["model_catalog"]["modules"]["prompt_guard"][
+        "model_id"
+    ] = "models/mom-feedback-detector"
+    config["global"]["model_catalog"]["system"][
+        "domain_classifier"
+    ] = "models/mom-halugate-detector"
+    config["global"]["model_catalog"]["modules"]["classifier"]["domain"][
+        "model_id"
+    ] = "models/mom-halugate-detector"
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    assert inventory["jailbreak"].hf_repo == "vllm-sr/feedback-detector"
+    # A registered artifact under a foreign org keeps that org too.
+    assert inventory["domain"].hf_repo == "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+    registry = {
+        "jailbreak": {"id": "vllm-sr/feedback-detector"},
+        "intent": {"id": "KRLabsOrg/lettucedect-base-modernbert-en-v1"},
+    }
+    assert registry_drift(inventory, registry) == []
+
+
 def test_an_unknown_model_ref_is_reported_and_not_served(tmp_path):
     config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
     config["global"]["model_catalog"]["modules"]["prompt_guard"][

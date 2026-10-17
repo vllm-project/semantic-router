@@ -201,6 +201,11 @@ _REGISTRY_LOCAL_PATHS = {
     "vllm-sr/multi-modal-embed-small": "models/mom-embedding-multimodal",
 }
 
+# The inverse: the Hub repo id each registered local path is registered
+# under. decisionModelSpec rewrites a served artifact to that path, so the
+# repo id has to be recoverable from the path alone.
+_REGISTRY_REPO_IDS = {path: repo for repo, path in _REGISTRY_LOCAL_PATHS.items()}
+
 # The built-in registry's repo-id form of each decision model, the shape
 # ServedModel returns for a managed deployment.
 DECISION_MODELS_BY_REPO = {
@@ -235,10 +240,12 @@ class ServedArtifact:
 
     @property
     def hf_repo(self) -> str:
-        """The Hub repository: a registered local path's org-qualified name,
-        or the repo-id an unregistered artifact's deployment declared."""
+        """The Hub repository: a registered local path's repo id, or the
+        repo-id an unregistered artifact's deployment declared."""
         if self.model_path.startswith(MODEL_PREFIX):
-            return f"{HF_ORG}/{self.artifact_name}"
+            return _REGISTRY_REPO_IDS.get(
+                self.model_path, f"{HF_ORG}/{self.artifact_name}"
+            )
         return self.model_path
 
     @property
