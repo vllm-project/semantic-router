@@ -90,6 +90,29 @@ func TestValkeyCacheIntegration_ExactMaxAge(t *testing.T) {
 }
 
 // StorageIntegration: valkey
+func TestValkeyCacheIntegration_ExactExpiredMetadataWithoutNativeTTL(t *testing.T) {
+	cache := setupValkeyCacheIntegration(t)
+	defer func() { _ = cache.Close() }()
+
+	ctx := context.Background()
+	fingerprint := fmt.Sprintf("exact-expired-no-ttl-%d", time.Now().UnixNano())
+	key := exactCacheStorageKey("tenant-expired", fingerprint)
+	expiredAt := time.Now().Add(-time.Minute).Unix()
+	_, err := cache.client.CustomCommand(ctx, []string{
+		"HSET", key,
+		"response_body", `{"answer":"stale"}`,
+		"timestamp", fmt.Sprintf("%d", expiredAt-60),
+		"expires_at", fmt.Sprintf("%d", expiredAt),
+		"ttl_seconds", "1",
+	})
+	require.NoError(t, err)
+
+	hit, err := cache.FindExact(ctx, "tenant-expired", fingerprint)
+	require.NoError(t, err)
+	assert.False(t, hit.Found, "expired logical metadata must be a miss without native TTL")
+}
+
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_LegacyStringOverwrite(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
