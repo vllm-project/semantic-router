@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -43,13 +44,33 @@ func extractSemanticPromptAndTools(request *llmprotocol.Request) (prompt string,
 // replaySafeSemanticRequest clones the request's message content while
 // removing tool-result payloads. Replay keeps the request shape and bounded
 // tool identifiers, but raw tool output can contain PII and must not be
-// persisted in either RequestBody or Prompt.
+// persisted in either RequestBody or Prompt. Context-recovery keys are removed
+// the same way: a key grants access to the stored content it names, so Replay
+// records that the retrieval tool was offered or called, never with which key.
 func replaySafeSemanticRequest(request llmprotocol.Request) llmprotocol.Request {
 	sanitized := request
 	sanitized.Messages = replaySafeMessages(request.Messages)
 	sanitized.Instructions = replaySafeInstructionBlocks(request.Instructions)
+	sanitized.Tools = replaySafeTools(request.Tools)
 	return sanitized
 }
+
+// replaySafeTools replaces the router-owned retrieval tool's schema, whose key
+// enum lists the issued recovery keys, with the same schema without them.
+func replaySafeTools(tools []llmprotocol.Tool) []llmprotocol.Tool {
+	if tools == nil {
+		return nil
+	}
+	sanitized := append([]llmprotocol.Tool(nil), tools...)
+	for i := range sanitized {
+		if sanitized[i].Name == contextcompression.RetrieveToolName {
+			sanitized[i].InputSchema = contextRecoveryReplaySchema
+		}
+	}
+	return sanitized
+}
+
+var contextRecoveryReplaySchema = []byte(`{"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"}`)
 
 func replaySafeMessages(messages []llmprotocol.Message) []llmprotocol.Message {
 	if messages == nil {
@@ -82,6 +103,13 @@ func replaySafeContents(contents []llmprotocol.Content) []llmprotocol.Content {
 	sanitized := make([]llmprotocol.Content, len(contents))
 	for i, content := range contents {
 		sanitized[i] = content
+		if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil &&
+			content.ToolCall.Name == contextcompression.RetrieveToolName {
+			call := *content.ToolCall
+			call.Arguments = ""
+			sanitized[i].ToolCall = &call
+			continue
+		}
 		if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
 			continue
 		}
@@ -202,10 +230,15 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 }
 
 func replayToolCallStep(source, role, apiType string, call llmprotocol.ToolCall) routerreplay.ToolTraceStep {
+	arguments := call.Arguments
+	if call.Name == contextcompression.RetrieveToolName {
+		// The arguments name an issued recovery key; see replaySafeSemanticRequest.
+		arguments = ""
+	}
 	return routerreplay.ToolTraceStep{
 		Type: replayToolStepAssistantToolCall, Source: source, Role: role,
 		ToolName: call.Name, ToolCallID: call.ID,
-		Arguments: call.Arguments, RawArguments: call.Arguments, APIType: apiType,
+		Arguments: arguments, RawArguments: arguments, APIType: apiType,
 	}
 }
 

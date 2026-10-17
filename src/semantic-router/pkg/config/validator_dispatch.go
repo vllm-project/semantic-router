@@ -61,6 +61,7 @@ var (
 		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
+		validateHistoryResetTriggerReferences,
 		validateDomainContracts,
 		validateStructureContracts,
 		validateReaskContracts,

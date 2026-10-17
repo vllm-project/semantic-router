@@ -77,6 +77,28 @@ config:
           - type: prompt_cache
             configuration:
               enabled: false
+      - name: history_reset_protocol_probe
+        description: Enabled history_reset across Chat, Anthropic Messages, and Responses ingress to the Anthropic backend (history-reset-protocols, issue #3343)
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_protocol_probe
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: true
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+                accepted_versions:
+                  - v1
+              scope: eligible_history
+              failure_mode: fail_open
       - name: route_to_anthropic_provider
         description: Route all requests to the native Anthropic provider fixture
         priority: 50
@@ -89,6 +111,11 @@ config:
           - model: MoM
             use_reasoning: false
     signals:
+      # Evidence for the history_reset probe route; evaluated for every
+      # request, read only by that route.
+      topic_continuity:
+        - name: topic_boundary
+          description: Whether the live turn still depends on retained history.
       keywords:
         - name: json_prompt_marker
           operator: OR
@@ -102,6 +129,10 @@ config:
           operator: OR
           keywords:
             - "__PROMPT_CACHE_DISABLED__"
+        - name: history_reset_protocol_probe
+          operator: OR
+          keywords:
+            - "__HISTORY_RESET_PROTOCOL_PROBE__"
         - name: all_requests
           operator: OR
           keywords:

@@ -43,6 +43,15 @@ var BaselineRouterContract = []string{
 	"rule-condition-logic",
 	"decision-fallback-behavior",
 	"plugin-config-variations",
+	// A configured but disabled history_reset forwards the complete
+	// conversation (issue #3343)
+	"history-reset-negative",
+	// An enabled history_reset acts on the topic_boundary rule: an explicit
+	// change removes the prior turn, a continuation keeps it (issue #3343)
+	"history-reset-topic-change",
+	// fail_closed rejects before dispatch and serves opening turns; unavailable
+	// recovery preserves or rejects per failure mode (issue #3343)
+	"history-reset-failure-modes",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
@@ -146,6 +155,9 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
 	"protocol-codec-anthropic-backend-agent-client-replay",
+	// history_reset removes or keeps prior turns, tool exchanges included, for
+	// Chat, Anthropic Messages, and Responses clients (issue #3343)
+	"history-reset-protocols",
 	// An empty POST fails closed at the Router before any dispatch (issue #4292)
 	"public-listener-empty-body-rejected",
 }

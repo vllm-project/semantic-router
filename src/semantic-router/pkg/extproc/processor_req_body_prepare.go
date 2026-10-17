@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -109,6 +110,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
+	r.bindContextPolicy(ctx)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
@@ -152,6 +154,33 @@ func (r *OpenAIRouter) respondSelectionRejected(
 	selectionErr error,
 ) *ext_proc.ProcessingResponse {
 	return r.respondRoutingRejected(ctx, originalModel, selectionErr, routingFailureNoEligibleModel, "selection_rejected")
+}
+
+// respondContextTransformationRejected answers a fail-closed context stage.
+// These are exactly the outcomes that most need an audit trail, so the
+// rejection is recorded through the same Replay lifecycle as a rejected
+// routing decision instead of returning before capture begins.
+func (r *OpenAIRouter) respondContextTransformationRejected(
+	ctx *RequestContext,
+	originalModel string,
+) *ext_proc.ProcessingResponse {
+	status, message := contextTransformationFailure(ctx)
+	terminalReason := "context_transformation_rejected"
+	if ctx.HistoryResetDiagnostics != nil && ctx.HistoryResetDiagnostics.Outcome == historyreset.OutcomeFailed {
+		terminalReason = "history_reset_" + ctx.HistoryResetDiagnostics.Reason
+	}
+	resp := r.encodeImmediateResponseForClient(r.createErrorResponse(status, message), ctx)
+	if r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
+	}
+	r.startRouterReplay(ctx, originalModel, ctx.VSRSelectedModel, ctx.VSRSelectedDecisionName)
+	r.updateRouterReplayStatus(ctx, status, false)
+	if immediate := resp.GetImmediateResponse(); immediate != nil {
+		r.attachRouterReplayResponse(ctx, immediate.Body, false)
+	}
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
+	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+	return resp
 }
 
 func (r *OpenAIRouter) respondRoutingRejected(
@@ -237,8 +266,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 	// Topic-continuity evidence reads the original history captured before RAG
 	// and Memory, and is ready before any context transformation reads it.
 	r.evaluateTopicContinuity(ctx)
-	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
-		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
+	r.prepareContextHistorySteps(ctx, request)
+	if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
+		return nil, r.respondContextTransformationRejected(ctx, ctx.RequestModel), nil
 	}
 	return request, nil, nil
 }

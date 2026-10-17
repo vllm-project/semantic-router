@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +52,9 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	}
 	policy := contextCompressionPolicy(pluginConfig, ctx.ContextCompressionTargetTokens)
 	policy = compressionPolicyForRequest(policy, ctx)
+	// Recovery bounds come from the request's merged contract, so a
+	// compression write cannot use looser bounds than reset agreed to.
+	applyContextRecoveryContract(&policy.Recovery, ctx.ContextRecovery)
 	// Live-user truncation belongs to the bounded overflow preparation stages.
 	policy.Targets.CurrentUser.Mode = contextcompression.TargetPreserve
 	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
@@ -77,13 +79,13 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	}
 	compressionRequest := contextcompression.Request{
 		Model:        model,
-		Scope:        r.contextCompressionScope(ctx),
+		Scope:        r.contextRecoveryScope(ctx),
 		Request:      requestIR,
 		Policy:       policy,
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
 		TokenCounter: counter,
 		Scorer:       r.contextCompressionScorer(callContext, pluginConfig, ctx),
-		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
+		Recovery:     ctx.ContextRecoveryStore,
 		Provenance:   provenance,
 	}
 	result := service.Apply(callContext, compressionRequest)
@@ -103,12 +105,9 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		recordContextCompressionStatus(ctx, status, time.Since(start).Seconds())
 		return nil
 	}
-	if len(result.RecoveryKeys) > 0 {
-		if err := injectSemanticContextRecoveryTool(request, result.RecoveryKeys); err != nil {
-			return semanticCompressionFailure(pluginConfig, err)
-		}
+	if err := registerContextRecoveryKeys(ctx, request, result.RecoveryKeys...); err != nil {
+		return semanticCompressionFailure(pluginConfig, err)
 	}
-	ctx.ContextCompressionRecoveryKeys = append(ctx.ContextCompressionRecoveryKeys[:0], result.RecoveryKeys...)
 	stats := contextCompressionStats{
 		appliedMessages: result.MessagesCompressed,
 		appliedBlocks:   result.BlocksCompressed,
@@ -154,30 +153,6 @@ func semanticContextCompressionCapabilities(
 		capabilities.RequestedOutput = int(*request.Sampling.MaxOutputTokens)
 	}
 	return capabilities
-}
-
-func injectSemanticContextRecoveryTool(request *llmprotocol.Request, keys []string) error {
-	for _, tool := range request.Tools {
-		if tool.Name == contextcompression.RetrieveToolName {
-			return fmt.Errorf("request defines reserved tool %q", contextcompression.RetrieveToolName)
-		}
-	}
-	schema, err := json.Marshal(map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"key": map[string]interface{}{"type": "string", "enum": keys},
-		},
-		"required": []string{"key"},
-	})
-	if err != nil {
-		return err
-	}
-	request.Tools = append(request.Tools, llmprotocol.Tool{
-		Name:        contextcompression.RetrieveToolName,
-		Description: "Retrieve original context omitted by vLLM Semantic Router compression.",
-		InputSchema: schema,
-	})
-	return nil
 }
 
 func (stats contextCompressionStats) format() string {

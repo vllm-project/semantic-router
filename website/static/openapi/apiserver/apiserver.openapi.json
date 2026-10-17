@@ -25086,6 +25086,56 @@
                               "hard_lock_reason": {
                                 "type": "string"
                               },
+                              "history_reset": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "examined_messages": {
+                                    "type": "integer"
+                                  },
+                                  "outcome": {
+                                    "type": "string"
+                                  },
+                                  "protected_messages": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "recovery_entries": {
+                                    "type": "integer"
+                                  },
+                                  "recovery_status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "not_required",
+                                      "stored",
+                                      "failed"
+                                    ]
+                                  },
+                                  "removed_messages": {
+                                    "type": "integer"
+                                  },
+                                  "removed_turns": {
+                                    "type": "integer"
+                                  },
+                                  "retained_messages": {
+                                    "type": "integer"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "signal": {
+                                    "type": "string"
+                                  },
+                                  "signal_version": {
+                                    "type": "string"
+                                  },
+                                  "trigger_class": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
                               "looper": {
                                 "nullable": true,
                                 "type": "object",
@@ -29836,6 +29886,56 @@
                         },
                         "hard_lock_reason": {
                           "type": "string"
+                        },
+                        "history_reset": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "examined_messages": {
+                              "type": "integer"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "protected_messages": {
+                              "type": "integer"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "recovery_entries": {
+                              "type": "integer"
+                            },
+                            "recovery_status": {
+                              "type": "string",
+                              "enum": [
+                                "not_required",
+                                "stored",
+                                "failed"
+                              ]
+                            },
+                            "removed_messages": {
+                              "type": "integer"
+                            },
+                            "removed_turns": {
+                              "type": "integer"
+                            },
+                            "retained_messages": {
+                              "type": "integer"
+                            },
+                            "scope": {
+                              "type": "string"
+                            },
+                            "signal": {
+                              "type": "string"
+                            },
+                            "signal_version": {
+                              "type": "string"
+                            },
+                            "trigger_class": {
+                              "type": "string"
+                            }
+                          }
                         },
                         "looper": {
                           "nullable": true,

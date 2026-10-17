@@ -141,6 +141,9 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
+	if err := verifyContextRecoveryAgreement(cfg); err != nil {
+		return nil, err
+	}
 	if err := validateStickyToolSelectionSecret(cfg); err != nil {
 		return nil, err
 	}
@@ -164,6 +167,9 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 		return nil, err
 	}
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
+		return nil, err
+	}
+	if err := verifyContextRecoveryAgreement(cfg); err != nil {
 		return nil, err
 	}
 	if err := validateStickyToolSelectionSecret(cfg); err != nil {
@@ -565,8 +571,8 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	}
 
 	components.resources.add(func() error {
-		if router.CompressionRecovery != nil {
-			return router.CompressionRecovery.Close()
+		if router.ContextRecoveryBackend != nil {
+			return router.ContextRecoveryBackend.Close()
 		}
 		return nil
 	})

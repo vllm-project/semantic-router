@@ -62,7 +62,7 @@ func buildReplayRouteDiagnostics(
 		ContextCompressionTokenSource:  ctx.ContextCompressionTokenSource,
 		ContextCompressionTrigger:      ctx.ContextCompressionTrigger,
 		ContextCompressionRevision:     ctx.ContextCompressionRevision,
-		ContextCompressionRecoveryKeys: len(ctx.ContextCompressionRecoveryKeys),
+		ContextCompressionRecoveryKeys: len(ctx.ContextRecoveryKeys),
 		ContextCompressionQuality:      ctx.ContextCompressionQuality,
 		ContextCompressionFallback:     ctx.ContextCompressionFallback,
 		ContextCompressionCostSaved:    ctx.ContextCompressionCostSaved,
@@ -75,6 +75,7 @@ func buildReplayRouteDiagnostics(
 		receipt := *ctx.preparedDispatchReceipt
 		diagnostics.PreparedDispatch = &receipt
 	}
+	diagnostics.HistoryReset = historyResetReplayDiagnostics(ctx)
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}
