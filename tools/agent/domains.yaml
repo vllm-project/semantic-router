@@ -601,6 +601,13 @@ domains:
     checks: [make test-learning-tools]
     verifications: [learning-tools]
 
+  rag-relevance-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/rag_relevance/**
+    checks: [make test-rag-relevance-bench]
+    verifications: [bench-tools]
+
   grounded-fusion-bench:
     owner: evaluation-quality
     paths:
