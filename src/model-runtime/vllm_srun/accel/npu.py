@@ -1,4 +1,4 @@
-"""Ascend NPU accelerator (``torch.npu``): pure-torch reference kernels. Unvalidated."""
+"""Ascend NPU accelerator (``torch.npu``): reference kernels plus measured fused ops. Unvalidated."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from typing import Any
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from .kernels import KernelSet, reference_kernels
+from . import npu_fused
+from .kernels import Kernel, KernelSet, reference_kernels
 
 # Errors after which the process's NPU context stays unusable (the gpu.py precedent).
 NPU_FAULT_MARKERS = (
@@ -67,7 +68,10 @@ class NPUAccelerator(Accelerator):
         return torch.device("npu", device.index or 0)
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
-        return reference_kernels(device.label)
+        kernels = reference_kernels(device.label)
+        for name, fn in npu_fused.available_wrappers().items():
+            kernels.register(Kernel(name, fn, "torch-npu-fused", exact=True))
+        return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {"bf16_autocast": True, "graphs": False, "triton": False}
