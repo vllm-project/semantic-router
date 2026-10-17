@@ -293,6 +293,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.OpenAIResponsesV1, nil
 	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
 		return llmprotocol.OpenAIImagesV1, nil
+	case config.APIFormatSpeech, "openai.speech", string(llmprotocol.OpenAISpeechV1):
+		return llmprotocol.OpenAISpeechV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}
@@ -555,14 +557,8 @@ func setProviderRequestPath(
 	profile *config.ProviderProfile,
 	format llmprotocol.WireFormat,
 ) {
-	requestPath := requestWirePath(format)
-	if profile != nil {
-		if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {
-			requestPath = configured
-		}
-	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: ":path", RawValue: []byte(requestPath),
+		Key: ":path", RawValue: []byte(providerEndpointPath(profile, format)),
 	}})
 }
 

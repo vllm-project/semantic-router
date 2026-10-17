@@ -31,7 +31,7 @@ export interface ProviderModel {
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'openai' | 'responses' | 'anthropic' | 'systemone'
+  api_format?: 'openai' | 'responses' | 'anthropic' | 'systemone' | 'speech'
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string

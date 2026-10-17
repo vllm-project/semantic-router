@@ -24,6 +24,17 @@ func TestRegistryCapabilitiesForResolvesBuiltinFormats(t *testing.T) {
 	if chat.Supports(llmprotocol.CapabilityImageGeneration) {
 		t.Fatalf("chat wire must not advertise image_generation capability")
 	}
+	if chat.Supports(llmprotocol.CapabilitySpeechGeneration) {
+		t.Fatalf("chat wire must not advertise speech_generation capability")
+	}
+
+	speech, ok := registry.CapabilitiesFor(llmprotocol.OpenAISpeechV1)
+	if !ok {
+		t.Fatalf("speech format did not resolve")
+	}
+	if !speech.Supports(llmprotocol.CapabilitySpeechGeneration) {
+		t.Fatalf("speech wire must advertise speech_generation capability")
+	}
 }
 
 func TestRegistryCapabilitiesForUnknownFormat(t *testing.T) {

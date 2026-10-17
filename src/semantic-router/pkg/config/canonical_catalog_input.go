@@ -82,7 +82,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, or systemone",
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, systemone, or speech",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -289,6 +289,8 @@ func catalogProtocolForAPIFormat(apiFormat string) string {
 		return "anthropic/messages@1"
 	case APIFormatOpenAI:
 		return "openai/chat-completions@1"
+	case APIFormatSpeech:
+		return "openai/audio-speech@1"
 	default:
 		return ""
 	}
