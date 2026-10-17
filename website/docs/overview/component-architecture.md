@@ -89,7 +89,7 @@ grants are separate from the listener's Chat `models` allowlist. See the
 
 ## Scale a deployment through replicas
 
-[![Deployment replica pools and the family, profile, execution engine, and accelerator inside a worker](/img/architecture/system-one/03-serving-engine-and-workers.svg)](/img/architecture/system-one/03-serving-engine-and-workers.svg)
+[![Deployment replica pools and the family, batch planning, execution engine, and accelerator inside a worker](/img/architecture/system-one/03-serving-engine-and-workers.svg)](/img/architecture/system-one/03-serving-engine-and-workers.svg)
 
 Model selection answers **which model should handle this task?** Replica
 dispatch answers **which ready worker of that deployment should execute it?**
@@ -97,7 +97,7 @@ They are separate decisions.
 
 Managed replicas have independent processes that vLLM-SR starts and supervises.
 Attached replicas point to independently operated runtimes. Compatible workers
-in a pool share model identity, revision, profile, and capabilities. The diagram's
+in a pool share model identity, revision, engine arguments, and capabilities. The diagram's
 GPU placement is an example; CPU workers are also supported.
 
 Current dispatch prefers the ready worker with the fewest outstanding request
@@ -106,8 +106,9 @@ bounded at 32 in-flight HTTP requests per worker; the pool reports overload
 instead of maintaining a waiting queue. These observations are not measured
 token counts or GPU-forward concurrency.
 
-Inside a worker, the model family defines inputs and typed outputs, the profile
-plans work and numerics, and the execution engine and accelerator run it.
+Inside a worker, the model family defines inputs and typed outputs, the batch
+planner forms forwards from the deployment's engine arguments, and the execution
+engine and accelerator run them.
 Several questions can share a request or compatible work, but one API call can
 still require multiple forwards. These are software interfaces, not neural
 network layers.
@@ -121,7 +122,7 @@ DP replicates the model; it does not shard weights through tensor or pipeline
 parallelism. Measure throughput and tail latency for your input lengths before
 adding replicas, especially when several workers share one GPU. See
 [Frontend and runtime deployments](../model-runtime/deploy.md) and
-[Profiles](../model-runtime/profiles.md).
+[Engine arguments](../model-runtime/engine-args.md).
 
 ## Route System One across decision models
 

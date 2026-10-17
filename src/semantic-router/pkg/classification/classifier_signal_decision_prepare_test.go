@@ -66,7 +66,7 @@ global:
     system:
       decision_model: {deployment: primary}
     deployments:
-      primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-4B, device: auto, profile: exact}
+      primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-4B, device: auto}
 `
 
 func preparedSetQuestion(t *testing.T, card modelservice.ModelCard) (*cardServices, error) {

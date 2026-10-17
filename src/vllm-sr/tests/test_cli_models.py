@@ -25,6 +25,30 @@ def _decision(**overrides):
     return decision
 
 
+def test_keyword_signal_include_history_parses_and_defaults_off():
+    config = UserConfig(
+        version="0.3",
+        routing={
+            "signals": {
+                "keywords": [
+                    {
+                        "name": "local_only_markers",
+                        "operator": "OR",
+                        "keywords": ["local model only"],
+                        "include_history": True,
+                    },
+                    {"name": "urgent", "operator": "OR", "keywords": ["urgent"]},
+                ]
+            },
+            "decisions": [_decision()],
+        },
+    )
+
+    opted_in, default = config.routing.signals.keywords
+    assert opted_in.include_history is True
+    assert default.include_history is False
+
+
 def test_decision_without_description_parses():
     config = UserConfig(version="0.3", routing={"decisions": [_decision()]})
 

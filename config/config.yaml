@@ -91,6 +91,19 @@ providers:
           chat_path: /chat/completions
           api_key: static-demo-key
           weight: 100
+    # A vLLM-type entry pointed at a relay opts in to the OpenAI-compatible
+    # gateway response contract; the plain vLLM backends above keep the
+    # strict one.
+    - name: remote-vllm-gateway-reference
+      provider_model_id: remote-vllm-gateway-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-gateway-primary
+          base_url: https://gateway.example.com/v1
+          provider: vllm
+          openai_compat_gateway: true
+          api_key: static-demo-key
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
@@ -288,6 +301,14 @@ routing:
         case_sensitive: false
         fuzzy_match: true
         fuzzy_threshold: 82
+      # include_history also matches earlier user messages in the conversation,
+      # so a constraint such as "local model only" stated in an earlier turn
+      # still applies. Omitted (false) evaluates only the current user message.
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        case_sensitive: false
+        include_history: true
 
     embeddings:
       - name: technical_support
@@ -2588,7 +2609,6 @@ global:
         public_name: decision-public
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
-        profile: exact
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
       # worker started elsewhere with `vllm-srun serve <hf-model>`.
@@ -2597,13 +2617,11 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
-        profile: exact
       content-risk:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: cpu
-        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
@@ -2612,7 +2630,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: cpu
-        profile: exact
         input:
           max_tokens: 4096
           overflow: reject
@@ -2622,7 +2639,6 @@ global:
         public_name: decision-replicas
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
-        profile: exact
         replicas:
           - device: cpu
           - endpoint: http://decision-worker:8100

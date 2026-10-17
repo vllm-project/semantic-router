@@ -191,6 +191,56 @@ func TestChatStreamAcceptsMistralPField(t *testing.T) {
 	assertDiagnosticFields(t, diagnostics, "stream.p", "stream.usage.service_tier")
 }
 
+// A provider field that rides every chunk is one omission, not one per chunk.
+// Each Push starts its diagnostic list empty, so before the once-per-stream
+// guard the repeats reached the caller's accumulation: one increment of
+// llm_translation_lossy_total and one structured event per chunk for a single
+// loss, and a Push carrying the whole stream spent the 64-entry budget on
+// repeats so the final chunk's usage omission was truncated away.
+func TestChatStreamReportsAChunkConstantFieldOnce(t *testing.T) {
+	repeated := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" hi\"}}],\"p\":\"abcdefghijklm\"}\n\n")
+	final := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1791279240,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" you today?\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":16,\"total_tokens\":26,\"completion_tokens\":10,\"prompt_tokens_details\":{\"cached_tokens\":0},\"service_tier\":\"standard\"},\"p\":\"abcdefghijklm\"}\n\n" +
+		"data: [DONE]\n\n")
+
+	t.Run("once across pushes", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		var accumulated llmprotocol.Diagnostics
+		for i := 0; i < 99; i++ {
+			_, diagnostics, err := decoder.Push(repeated)
+			if err != nil {
+				t.Fatalf("chunk %d was rejected: %v", i, err)
+			}
+			accumulated = append(accumulated, diagnostics...)
+		}
+		_, finalDiagnostics, err := decoder.Push(final)
+		if err != nil {
+			t.Fatalf("final chunk was rejected: %v", err)
+		}
+		assertDiagnosticFields(t, accumulated, "stream.p")
+		assertDiagnosticFields(t, finalDiagnostics, "stream.usage.service_tier")
+	})
+
+	t.Run("the budget keeps distinct losses", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		var payload []byte
+		for i := 0; i < 99; i++ {
+			payload = append(payload, repeated...)
+		}
+		payload = append(payload, final...)
+		_, diagnostics, err := decoder.Push(payload)
+		if err != nil {
+			t.Fatalf("stream was rejected: %v", err)
+		}
+		assertDiagnosticFields(t, diagnostics, "stream.p", "stream.usage.service_tier")
+	})
+}
+
 // p is accepted only as a string, and non-string types or other unknown fields are still
 // rejected.
 func TestChatStreamPFieldStaysStrict(t *testing.T) {
