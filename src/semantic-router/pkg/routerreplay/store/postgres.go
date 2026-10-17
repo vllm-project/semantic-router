@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,6 +39,14 @@ const postgresInsertQueryTemplate = `
 			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67)
 	`
+
+// Updating in place keeps columns outside the record, such as created_at.
+var postgresUpdateRecordQueryTemplate = func() string {
+	head, values, _ := strings.Cut(postgresInsertQueryTemplate, ") VALUES (")
+	_, columns, _ := strings.Cut(head, "INSERT INTO %s (")
+	values, _, _ = strings.Cut(values, ")")
+	return "UPDATE %s SET (" + columns + ") = ROW(" + values + ") WHERE id = $1"
+}()
 
 const postgresCreateTableQueryTemplate = `
 		CREATE TABLE IF NOT EXISTS {{table}} (
@@ -244,6 +251,9 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 		return "", err
 	}
 	defer release()
+	if _, err = encodeRecord(&record, MaxRecordBytes); err != nil {
+		return "", err
+	}
 	insertRecord, err := newPostgresInsertRecord(record)
 	if err != nil {
 		return "", err
@@ -297,6 +307,9 @@ func (p *PostgresStore) getRecord(ctx context.Context, id string) (Record, bool,
 	if err != nil {
 		return Record{}, false, fmt.Errorf("failed to query record: %w", err)
 	}
+	if isExpired(record, p.ttl) {
+		return Record{}, false, nil
+	}
 	return record, true, nil
 }
 
@@ -328,42 +341,14 @@ func (p *PostgresStore) listRecords(ctx context.Context) ([]Record, error) {
 
 // UpdateStatus updates the response status and flags for a record.
 func (p *PostgresStore) UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET response_status = CASE WHEN $2 != 0 THEN $2 ELSE response_status END,
-		    from_cache = from_cache OR $3,
-		    streaming = streaming OR $4
-		WHERE id = $1
-	`, p.tableName)
-
-	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, status, fromCache, streaming)
-		if err != nil {
-			return fmt.Errorf("failed to update status: %w", err)
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		if status != 0 {
+			rec.ResponseStatus = status
 		}
-
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
-		}
-
-		return nil
-	}
-
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-
-	return fn()
+		rec.FromCache = rec.FromCache || fromCache
+		rec.Streaming = rec.Streaming || streaming
+		return true
+	})
 }
 
 func (p *PostgresStore) UpdateLifecycle(
@@ -374,321 +359,143 @@ func (p *PostgresStore) UpdateLifecycle(
 	durationMS int64,
 	reason string,
 ) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	reason = sanitizePostgresText(reason)
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET lifecycle_state = $2,
-		    ended_at = $3,
-		    duration_ms = $4,
-		    terminal_reason = $5
-		WHERE id = $1
-		  AND lifecycle_state = $6
-	`, p.tableName)
-	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, state, endedAt, durationMS, reason, LifecycleInProgress)
-		if err != nil {
-			return fmt.Errorf("failed to update replay lifecycle: %w", err)
+	// Compare-and-set: a missing or already finished record is left alone.
+	_, err := p.updateRecord(ctx, id, func(rec *Record) bool {
+		if rec.LifecycleState != LifecycleInProgress {
+			return false
 		}
-		if _, err := result.RowsAffected(); err != nil {
-			return err
-		}
-		// Zero rows means another terminal transition already won. Lifecycle
-		// updates are compare-and-set and therefore idempotent.
-		return nil
-	}
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-	return fn()
+		rec.LifecycleState = state
+		rec.EndedAt = cloneTimePtr(&endedAt)
+		rec.DurationMS = durationMS
+		rec.TerminalReason = reason
+		return true
+	})
+	return err
 }
 
 // AttachRequest updates the request body for a record.
 func (p *PostgresStore) AttachRequest(ctx context.Context, id string, body string, truncated bool) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	body = sanitizePostgresText(body)
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET request_body = $2,
-		    request_body_truncated = request_body_truncated OR $3
-		WHERE id = $1
-	`, p.tableName)
-
-	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, body, truncated)
-		if err != nil {
-			return fmt.Errorf("failed to update request: %w", err)
-		}
-
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
-		}
-
-		return nil
-	}
-
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-
-	return fn()
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		rec.RequestBody = body
+		rec.RequestBodyTruncated = rec.RequestBodyTruncated || truncated
+		return true
+	})
 }
 
 // AttachResponse updates the response body for a record.
 func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body string, truncated bool) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	body = sanitizePostgresText(body)
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET response_body = $2,
-		    response_body_truncated = response_body_truncated OR $3
-		WHERE id = $1
-	`, p.tableName)
-
-	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, body, truncated)
-		if err != nil {
-			return fmt.Errorf("failed to update response: %w", err)
-		}
-
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
-		}
-
-		return nil
-	}
-
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-
-	return fn()
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		rec.ResponseBody = body
+		rec.ResponseBodyTruncated = rec.ResponseBodyTruncated || truncated
+		return true
+	})
 }
 
-// AppendOutcome links post-route feedback to a replay record.
+// AppendOutcome links post-route feedback to a record.
 func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	outcomeJSON, err := postgresOutcomeJSON(outcome)
-	if err != nil {
-		return fmt.Errorf("failed to marshal outcome: %w", err)
-	}
-
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET outcomes = COALESCE(outcomes, '[]'::jsonb) || $2::jsonb
-		WHERE id = $1
-	`, p.tableName)
-
-	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, outcomeJSON)
-		if err != nil {
-			return fmt.Errorf("failed to append outcome: %w", err)
-		}
-
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
-		}
-
-		return nil
-	}
-
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-
-	return fn()
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		rec.Outcomes = append(rec.Outcomes, cloneOutcome(outcome))
+		return true
+	})
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
 func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	spansJSON, spanDetailsJSON, err := postgresHallucinationJSON(spans, spanDetails)
-	if err != nil {
-		return err
-	}
-
-	availability := HallucinationScore{}
-	if len(score) > 0 {
-		availability = score[0]
-	}
-	scoreJSON, err := json.Marshal(map[string]interface{}{"hallucination_score_available": availability.Available, "hallucination_score_kind": availability.Kind})
-	if err != nil {
-		return err
-	}
-
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET hallucination_detected = $2,
-		    hallucination_confidence = $3,
-		    hallucination_spans = $4,
-		    hallucination_span_details = $5,
- safety_evidence = COALESCE(safety_evidence, '{}'::jsonb) || $6::jsonb
-		WHERE id = $1
-	`, p.tableName)
-
-	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, detected, confidence, spansJSON, spanDetailsJSON, scoreJSON)
-		if err != nil {
-			return fmt.Errorf("failed to update hallucination status: %w", err)
-		}
-
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
-		}
-
-		return nil
-	}
-
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-
-	return fn()
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		rec.HallucinationDetected = detected
+		rec.HallucinationConfidence = confidence
+		applyHallucinationScore(rec, score)
+		rec.HallucinationSpans = cloneStringSlice(spans)
+		rec.HallucinationSpanDetails = cloneHallucinationSpanDetails(spanDetails)
+		return true
+	})
 }
 
 // UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
 func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
-	}
-	defer release()
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET prompt_tokens = $2,
-		    cached_prompt_tokens = $3,
-		    cache_write_tokens = $4,
-		    completion_tokens = $5,
-		    total_tokens = $6,
-		    actual_cost = $7,
-		    baseline_cost = $8,
-		    cost_savings = $9,
-		    currency = $10,
-		    baseline_model = $11
-		WHERE id = $1
-	`, p.tableName)
-
-	fn := func() error {
-		result, err := p.db.ExecContext(
-			ctx,
-			query,
-			id,
-			nullableIntArg(usage.PromptTokens),
-			nullableIntArg(usage.CachedPromptTokens),
-			nullableIntArg(usage.CacheWriteTokens),
-			nullableIntArg(usage.CompletionTokens),
-			nullableIntArg(usage.TotalTokens),
-			nullableFloat64Arg(usage.ActualCost),
-			nullableFloat64Arg(usage.BaselineCost),
-			nullableFloat64Arg(usage.CostSavings),
-			nullableStringArg(usage.Currency),
-			nullableStringArg(usage.BaselineModel),
-		)
-		if err != nil {
-			return fmt.Errorf("failed to update usage cost: %w", err)
-		}
-
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
-		}
-
-		return nil
-	}
-
-	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
-	}
-
-	return fn()
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
+		rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+		rec.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
+		rec.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+		rec.TotalTokens = cloneIntPtr(usage.TotalTokens)
+		rec.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+		rec.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+		rec.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+		rec.Currency = cloneStringPtr(usage.Currency)
+		rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		return true
+	})
 }
 
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (p *PostgresStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
-	release, err := p.lifecycle.beginMutation()
-	if err != nil {
-		return err
+	return p.updateExistingRecord(ctx, id, func(rec *Record) bool {
+		rec.ToolTrace = cloneToolTrace(&trace)
+		return true
+	})
+}
+
+func (p *PostgresStore) updateExistingRecord(ctx context.Context, id string, mutate func(*Record) bool) error {
+	found, err := p.updateRecord(ctx, id, mutate)
+	if err == nil && !found {
+		err = fmt.Errorf("record with ID %s not found", id)
+	}
+	return err
+}
+
+// updateRecord rewrites the record in one transaction so every update is
+// size-checked. It reports whether the record exists; mutate returns false to
+// skip the write.
+func (p *PostgresStore) updateRecord(ctx context.Context, id string, mutate func(*Record) bool) (bool, error) {
+	release, beginErr := p.lifecycle.beginMutation()
+	if beginErr != nil {
+		return false, beginErr
 	}
 	defer release()
-	traceJSON, err := postgresToolTraceJSON(trace)
-	if err != nil {
-		return fmt.Errorf("failed to marshal tool trace: %w", err)
-	}
 
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		UPDATE %s
-		SET tool_trace = $2
-		WHERE id = $1
-	`, p.tableName)
-
+	found := false
 	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, traceJSON)
+		tx, err := p.db.BeginTx(ctx, nil)
 		if err != nil {
-			return fmt.Errorf("failed to update tool trace: %w", err)
+			return fmt.Errorf("failed to begin replay update: %w", err)
 		}
+		defer func() { _ = tx.Rollback() }()
 
-		rows, err := result.RowsAffected()
+		//nolint:gosec // tableName is validated during store creation
+		selectQuery := fmt.Sprintf(`SELECT %s FROM %s WHERE id = $1 FOR UPDATE`, postgresRecordSelectColumns, p.tableName)
+		record, err := scanPostgresRecord(tx.QueryRowContext(ctx, selectQuery, id))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to query record: %w", err)
+		}
+		found = true
+		if !mutate(&record) {
+			return nil
+		}
+		if _, err = encodeRecord(&record, MaxRecordBytes); err != nil {
+			return err
+		}
+		row, err := newPostgresInsertRecord(record)
 		if err != nil {
 			return err
 		}
-		if rows == 0 {
-			return fmt.Errorf("record with ID %s not found", id)
+		//nolint:gosec // tableName is validated during store creation
+		if _, err = tx.ExecContext(ctx, fmt.Sprintf(postgresUpdateRecordQueryTemplate, p.tableName), row.args()...); err != nil {
+			return fmt.Errorf("failed to update record: %w", err)
 		}
-
-		return nil
+		return tx.Commit()
 	}
 
+	var err error
 	if p.asyncWrites {
-		return p.runAsyncAndWait(ctx, fn)
+		err = p.runAsyncAndWait(ctx, fn)
+	} else {
+		err = fn()
 	}
-
-	return fn()
+	return found, err
 }
 
 // cleanupOldRecords removes records older than the TTL.
