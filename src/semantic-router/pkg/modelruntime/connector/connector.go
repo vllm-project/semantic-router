@@ -12,8 +12,11 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
@@ -43,6 +46,7 @@ type Options struct {
 	MaxResponseBytes int64
 	MaxErrorBytes    int64
 	TLSConfig        *tls.Config
+	CircuitBreaker   *CircuitBreakerOptions
 }
 
 // Request carries one operation payload plus headers that belong to that
@@ -68,6 +72,7 @@ type Client struct {
 	authorize func(context.Context, *http.Request) error
 	options   Options
 	http      *http.Client
+	breaker   *circuitBreaker
 }
 
 func New(
@@ -89,12 +94,17 @@ func New(
 		return nil, err
 	}
 
+	breaker, breakerErr := newCircuitBreaker(options.CircuitBreaker)
+	if breakerErr != nil {
+		return nil, breakerErr
+	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if options.TLSConfig != nil {
 		transport.TLSClientConfig = options.TLSConfig.Clone()
 	}
 	return &Client{
 		baseURL:   parsed,
+		breaker:   breaker,
 		authorize: authorize,
 		options:   options,
 		http: &http.Client{
@@ -180,7 +190,19 @@ func connectorOutcome(err error) string {
 // per-request headers is measured too.
 func (c *Client) DoRequest(ctx context.Context, operation Operation, request Request) (Result, error) {
 	start := time.Now()
+	var ticket breakerTicket
+	if c.breaker != nil {
+		var admitted bool
+		ticket, admitted = c.breaker.admit()
+		if !admitted {
+			metrics.RecordRemoteConnectorRequest(operation.Name, metrics.RemoteConnectorOutcomeCircuitOpen, time.Since(start).Seconds())
+			return Result{}, &Error{Kind: KindTransport, Operation: operation.Name, Cause: context.DeadlineExceeded}
+		}
+	}
 	result, err := c.doRequest(ctx, operation, request)
+	if c.breaker != nil {
+		c.breaker.complete(ticket, ctx, err)
+	}
 	metrics.RecordRemoteConnectorRequest(operation.Name, connectorOutcome(err), time.Since(start).Seconds())
 	return result, err
 }
@@ -211,10 +233,12 @@ func (c *Client) doRequest(ctx context.Context, operation Operation, request Req
 		}
 		if err := waitBeforeRetry(ctx, attempt); err != nil {
 			return Result{}, &Error{
-				Kind:      KindTransport,
-				Operation: operation.Name,
-				Attempt:   attempt,
-				Cause:     err,
+				// Backoff adds no backend evidence; preserve the preceding attempt's attribution.
+				availabilityNeutral: !connectorErr.isAvailabilityFailure(),
+				Kind:                KindTransport,
+				Operation:           operation.Name,
+				Attempt:             attempt,
+				Cause:               err,
 			}
 		}
 		// Counted only once the wait completed: a context cancelled during the
@@ -337,11 +361,12 @@ func (c *Client) readResponse(
 		errorBody, truncated, readErr := readBounded(response.Body, c.options.MaxErrorBytes)
 		if readErr != nil {
 			return Result{}, &Error{
-				Kind:      KindResponse,
-				Operation: operation.Name,
-				Attempt:   attempt,
-				Retryable: operation.RetrySafe && ctx.Err() == nil,
-				Cause:     readErr,
+				availabilityFailure: bodyReadAvailabilityFailure(readErr),
+				Kind:                KindResponse,
+				Operation:           operation.Name,
+				Attempt:             attempt,
+				Retryable:           operation.RetrySafe && ctx.Err() == nil,
+				Cause:               readErr,
 			}
 		}
 		return Result{}, &Error{
@@ -358,11 +383,12 @@ func (c *Client) readResponse(
 	responseBody, exceeded, err := readBounded(response.Body, c.options.MaxResponseBytes)
 	if err != nil {
 		return Result{}, &Error{
-			Kind:      KindResponse,
-			Operation: operation.Name,
-			Attempt:   attempt,
-			Retryable: operation.RetrySafe && ctx.Err() == nil,
-			Cause:     err,
+			availabilityFailure: bodyReadAvailabilityFailure(err),
+			Kind:                KindResponse,
+			Operation:           operation.Name,
+			Attempt:             attempt,
+			Retryable:           operation.RetrySafe && ctx.Err() == nil,
+			Cause:               err,
 		}
 	}
 	if exceeded {
@@ -406,6 +432,24 @@ func readBounded(reader io.Reader, limit int64) ([]byte, bool, error) {
 		return body, false, nil
 	}
 	return body[:limit], true, nil
+}
+
+// Encoded-body contract errors do not establish backend unavailability.
+func bodyReadAvailabilityFailure(err error) bool {
+	var reset http2.StreamError
+	var goAway http2.GoAwayError
+	if errors.As(err, &reset) || errors.As(err, &goAway) {
+		return true
+	}
+	// The standard library's bundled HTTP/2 errors use version-dependent unexported types.
+	for cause := err; cause != nil; cause = errors.Unwrap(cause) {
+		typ := reflect.TypeOf(cause)
+		if (typ.PkgPath() == "net/http" && (typ.Name() == "http2StreamError" || typ.Name() == "http2GoAwayError")) ||
+			(typ.PkgPath() == "net/http/internal/http2" && typ.Name() == "GoAwayError") {
+			return true
+		}
+	}
+	return retryableTransportError(err) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.ErrClosedPipe)
 }
 
 // Close releases idle connections owned by this client. In-flight requests

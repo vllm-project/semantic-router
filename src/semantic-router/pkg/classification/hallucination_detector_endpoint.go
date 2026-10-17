@@ -161,7 +161,7 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 		}
 		closer, infer = tokens, tokens.ClassifyGrounded
 	} else {
-		client, clientErr := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+		client, clientErr := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{CircuitBreaker: classifierCircuitBreaker(external, "hallucination"), AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
 		if clientErr != nil {
 			return nil, clientErr
 		}

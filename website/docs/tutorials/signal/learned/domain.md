@@ -94,7 +94,38 @@ global:
             contract: label_distribution.v1
             model: domain-service
             deadline_ms: 5000
+            circuit_breaker:
+              enabled: true
+              consecutive_failures: 3
+              open_interval_ms: 30000
 ```
+
+The opt-in `circuit_breaker` is off when omitted or disabled. Enabled defaults
+are 3 failures and 30000 ms open; validation requires positive explicit values
+when the breaker is enabled. Set it on remote classifier `backend` blocks or
+`global.model_catalog.external[]` entries; the backend `circuit_breaker` block
+replaces the catalog block, with omitted fields taking the enabled defaults.
+Enabling the breaker preserves the existing overall classifier deadline and
+retry budget. Transport failures, including timeouts and interrupted response
+bodies such as HTTP/2 stream resets or GOAWAY, and retryable unavailability
+count once after retries. Caller cancellation/deadlines, non-retryable 4xx
+status errors, and connector contract errors (such as response-size limits or
+invalid gzip bodies) are neutral. A deadline that expires during retry backoff
+retains the preceding attempt's availability classification. A failure while
+reading an error body follows the body-read classification. The breaker
+observes connector outcomes; adapter decoding and semantic-validation failures
+occur after the connector completes and do not undo a transport success.
+Success resets the streak. After cooldown, one probe runs: success closes,
+unavailability reopens, and neutral permits a replacement. Skips retain
+timeout/Unknown and `on_unknown`/`on_error`, including fail-closed
+jailbreak/PII policies. Local classifiers are unaffected. State is per
+connector instance.
+`llm_remote_connector_circuit_breaker_transitions_total{backend, state}` counts
+transitions to `closed`, `open` and `half_open` across connectors sharing a
+backend name. `llm_remote_connector_circuit_breaker_skipped_total{backend}`
+counts skipped calls. Skips also record the `circuit_open` outcome and latency
+in the existing connector request metrics. Each transition emits a structured
+log.
 
 ## Dependencies and Limitations
 
