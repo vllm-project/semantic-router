@@ -30,6 +30,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	}
 
 	detectSourceFormat(path, ctx)
+	if handoffResp := r.admitHandoffEnvelope(v, method, path, ctx); handoffResp != nil {
+		return handoffResp, nil
+	}
 	applyHeaderPassThroughPolicy(ctx)
 
 	// Router Replay contains captured request, response, and tool data. It is a
@@ -221,7 +224,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: requestHeadersForRemoval(),
 	}
 }
 

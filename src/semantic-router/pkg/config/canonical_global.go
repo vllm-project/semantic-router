@@ -29,6 +29,7 @@ type CanonicalRouterGlobal struct {
 	ClearRouteCache   bool                     `yaml:"clear_route_cache"`
 	StreamedBody      CanonicalStreamedBody    `yaml:"streamed_body"`
 	SkipProcessing    SkipProcessingConfig     `yaml:"skip_processing"`
+	Handoff           HandoffConfig            `yaml:"handoff"`
 	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
 	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
 	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
@@ -286,6 +287,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes
 	cfg.StreamedBodyTimeoutSec = router.StreamedBody.TimeoutSec
 	cfg.SkipProcessing = router.SkipProcessing
+	cfg.Handoff = router.Handoff
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
 	cfg.Fallback = router.Fallback.Clone()

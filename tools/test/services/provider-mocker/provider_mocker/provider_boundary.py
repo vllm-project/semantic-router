@@ -39,6 +39,9 @@ class RequestStore:
         header_values: dict[str, list[str]] = {}
         for name, value in (headers or {}).items():
             normalized = name.lower()
+            if normalized == "x-vsr-handoff-envelope":
+                observed_headers[normalized] = "[redacted]"
+                continue
             if (
                 normalized == SESSION_HEADER
                 or normalized.startswith(_OBSERVED_HEADER_PREFIX)

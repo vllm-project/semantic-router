@@ -228,6 +228,7 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
         "authorization": "Bearer must-not-be-recorded",
         "x-unrelated-header": "must-not-be-recorded",
         "x-vsr-e2e-added": "observable",
+        "x-vsr-handoff-envelope": "must-not-be-recorded",
         "x-vsr-test-session-id": session_id,
     }
     raw_body = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
@@ -247,6 +248,7 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
     assert observed.json()["body_bytes"] == len(raw_body)
     assert observed.json()["headers"] == {
         "x-vsr-e2e-added": "observable",
+        "x-vsr-handoff-envelope": "[redacted]",
         "x-vsr-test-session-id": session_id,
     }
 

@@ -140,6 +140,18 @@ Coordination with [#2546](https://github.com/vllm-project/semantic-router/issues
 - keep Router Memory receipts content-free in diagnostics;
 - defer deployment-specific transport semantics from the portable schema.
 
+#### Implemented version-1 envelope
+
+The first #3380 slice ships the portable envelope with identity, lineage,
+`active`/`cancelled` state, and expiry, plus separate `selection` and opaque
+`runtime` sections. The Router validates it, records handoff IDs in a bounded
+per-process ledger for idempotent retries, conflicts, and cancellation, strips
+the carrier before signal evaluation and provider dispatch, and returns
+content-free receipts. Selection facts are validated but reported as
+`partial` until the #3379 lineage contract consumes them. The operational
+contract is documented under
+[Handoff Envelope](../tutorials/global/api-and-observability#handoff-envelope).
+
 ## What stays unchanged in v0.3
 
 This proposal **does not** add:

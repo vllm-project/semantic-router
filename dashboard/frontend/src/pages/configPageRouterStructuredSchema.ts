@@ -193,6 +193,13 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   router_core: {
+    handoff: {
+      label: 'Handoff Envelope',
+      description: 'Admit trusted handoff envelopes from an authenticated gateway.',
+      schema: object('Handoff Envelope', {
+        enabled: boolean('Enabled'),
+      }),
+    },
     streamed_body: {
       label: 'Streamed Body',
       description: 'Limits for streamed ext-proc request bodies.',

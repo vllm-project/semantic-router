@@ -2,17 +2,18 @@
 
 ## Goal
 
-Land a maintainer-reviewed ownership boundary and bounded contract plan before any
-implementation PR. Epic #2994 lets external agent runtimes supply facts and handoff
+Land a maintainer-reviewed ownership boundary and bounded contracts in separate
+implementation slices. Epic #2994 lets external agent runtimes supply facts and handoff
 envelopes so the Router selects logical models safely without owning agent
 orchestration, invocation, or composition.
 
 ## Scope
 
-- Proposal-only PR: design document, proposals index, sidebar, and this execution
-  plan.
+- Maintain the ownership proposal and phase tracking while implementation slices
+  are active.
 - Align phased tracks with sub-issues #3379 (selection facts) and #3380 (handoff
   envelope).
+- Current slice: the #3380 version-1 handoff envelope (`PHASE-3A`).
 - Coordinate envelope overlap with #2546, session continuity with #2973, and
   keep model-only MoM work in #3037.
 
@@ -21,13 +22,13 @@ orchestration, invocation, or composition.
 - Adding `providers.agents`, `agentCards`, `targetRefs`, or mixed model/agent
   candidate pools.
 - Router-native agent invocation, discovery, or multi-agent composition.
-- Implementing config schema, signal projection, or handoff middleware in the
-  proposal PR.
+- Consuming handoff `selection` facts in model selection before the #3379
+  lineage contract defines that projection.
 - Extending Router Flow worker pools beyond model-only `modelRefs`.
 
 ## Exit Criteria
 
-- [ ] Proposal merged at `website/docs/proposals/agent-based-routing.md`.
+- [x] Proposal merged at `website/docs/proposals/agent-based-routing.md`.
 - [ ] Maintainers agree on ownership boundary and contract field baselines.
 - [ ] GitHub sub-issues under #2994 aligned to Phases 1–5 (or explicitly deferred).
 - [ ] Open questions in the proposal resolved or explicitly deferred.
@@ -42,13 +43,18 @@ orchestration, invocation, or composition.
 - [ ] `PHASE-1` Selection-facts schema, validation, and fail/degrade policy (blocked on PROP-04).
 - [ ] `PHASE-2` Signal projection, eligibility narrowing, Replay provenance (#3379).
 - [ ] `PHASE-3` Handoff envelope, receipts, idempotency, model-switch E2E (#3380).
+  - [ ] `PHASE-3A` Version-1 envelope, validation, per-process idempotency and
+    cancellation ledger, content-free receipts, carrier stripping, and
+    AgentGateway Chat E2E.
+  - [ ] `PHASE-3B` Consume `selection` facts through the #3379 contract and
+    revisit cross-replica idempotency if maintainers require it.
 - [ ] `PHASE-4` One external collaboration surface lifecycle and observability.
 - [ ] `PHASE-5` Evaluation graduation and unsupported-integration fallback.
 
 ## Next Action
 
-Update the open proposal PR for maintainer re-review after rebasing on `main`.
-Pause implementation until ownership boundary and envelope field baselines are agreed.
+Review and land `PHASE-3A`, then coordinate with the #3379 assignee on the
+selection-fact projection needed for `PHASE-3B`.
 
 ## Operating Rules
 

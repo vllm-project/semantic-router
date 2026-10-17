@@ -23,6 +23,7 @@ func (r *OpenAIRouter) requestHeadersReply(
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
+	appendHandoffReceiptToImmediateResponse(response, ctx)
 	return response, nil
 }
 
@@ -44,6 +45,7 @@ func (r *OpenAIRouter) requestBodyReply(
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
+	appendHandoffReceiptToImmediateResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
 	return response, nil
 }

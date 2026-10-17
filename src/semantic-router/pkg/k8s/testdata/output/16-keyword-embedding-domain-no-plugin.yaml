@@ -110,6 +110,8 @@ global:
       enabled: false
     skip_processing:
       enabled: false
+    handoff:
+      enabled: false
     model_selection: {}
   services:
     api:

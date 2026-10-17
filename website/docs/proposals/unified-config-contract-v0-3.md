@@ -129,6 +129,10 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
+`global.router.handoff.enabled` gates admission of trusted handoff envelopes
+and defaults to `false`. It is a router-wide ingress control, not a signal,
+decision, algorithm, or plugin setting, and it never relaxes recipe policy.
+
 Built-in model resources live in `global.model_catalog.deployments`; the default
 judgment deployment is selected by `system.decision_model`. Runtime modules own
 task policy, global bindings supply shared consumer defaults, and a recipe's

@@ -144,6 +144,7 @@ func (p *Profile) GetTestCases() []string {
 			"agentgateway-traffic-routing",
 			"agentgateway-full-duplex-multiturn",
 			"agentgateway-full-duplex-routing",
+			"agentgateway-handoff-envelope",
 		},
 	)
 }
