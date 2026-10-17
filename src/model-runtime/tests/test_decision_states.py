@@ -1,4 +1,9 @@
-"""A decisions request about several states: each state is read exactly as a request of its own."""
+"""A decisions request about several states: each state is read exactly as a request of its own.
+
+The runtimes run every row alone (``max_num_seqs`` 1), so a state's answers
+equal those of its own request bit for bit; forwards that merge rows move
+them only by rounding, as they move any concurrent requests'.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +33,11 @@ def runtimes(tmp_path_factory, qwen3_package):
     for name, package in packages.items():
         runtime = Runtime(
             ServeConfig(
-                models=(ModelConfig(model=str(package), name=name, device="cpu"),),
+                models=(
+                    ModelConfig(
+                        model=str(package), name=name, device="cpu", max_num_seqs=1
+                    ),
+                ),
                 result_cache_entries=0,
             )
         )

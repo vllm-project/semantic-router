@@ -7,6 +7,7 @@ import shutil
 
 import pytest
 import torch
+from vllm_srun import media
 from vllm_srun.accel import cpu
 from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3 import images as img
@@ -111,28 +112,39 @@ def test_images_reach_the_model_and_count_as_input_tokens(d3_runtime, png_url):
 
 
 @pytest.mark.parametrize(
-    "images,reason",
+    "images,message,reason",
     [
-        ("data:image/png;base64,AAAA", "images must be a list"),
+        ("data:image/png;base64,AAAA", "images must be a list", "image_format"),
         (
             ["https://example.com/a.png"],
             "images[0]: images must be base64 PNG, JPEG or WebP data URLs",
+            "image_format",
         ),
         (
             ["data:image/gif;base64,R0lGODlhAQABAAAAACw="],
             "images[0]: images must be base64 PNG, JPEG or WebP",
+            "image_format",
         ),
-        (["data:image/png;base64,not base64!"], "images[0]: invalid base64 image data"),
-        (["data:image/png;base64,iVBORw0KGgo="], "images[0]: invalid image data"),
+        (
+            ["data:image/png;base64,not base64!"],
+            "images[0]: invalid base64 image data",
+            "image_malformed",
+        ),
+        (
+            ["data:image/png;base64,iVBORw0KGgo="],
+            "images[0]: invalid image data",
+            "image_malformed",
+        ),
     ],
 )
-def test_malformed_images_fail_the_request(d3_runtime, images, reason):
+def test_malformed_images_fail_the_request(d3_runtime, images, message, reason):
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": images}
     )
     assert status == 400
     assert body["error"]["code"] == "invalid_request"
-    assert reason in body["error"]["message"]
+    assert message in body["error"]["message"]
+    assert body["error"]["reason"] == reason and "limit" not in body["error"]
 
 
 def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
@@ -141,11 +153,19 @@ def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": [huge]}
     )
     assert status == 400 and "8,000,000 bytes" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "image_too_large",
+        img.MAX_IMAGE_BYTES,
+    )
     status, body = call(
         d3_runtime,
         {"state": "x", "questions": QUESTIONS, "images": [png_url(2010, 10, 3)]},
     )
     assert status == 400 and "aspect ratio" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "image_aspect_ratio",
+        img.MAX_ASPECT_RATIO,
+    )
 
 
 def test_a_text_model_refuses_images(d3_text_package, png_url):
@@ -158,6 +178,7 @@ def test_a_text_model_refuses_images(d3_text_package, png_url):
             runtime, {"state": "x", "questions": QUESTIONS, "images": [png_url(64, 64)]}
         )
         assert status == 400 and "images are not supported" in body["error"]["message"]
+        assert body["error"]["reason"] == "image_unsupported"
         assert call(runtime, {"state": "x", "questions": QUESTIONS})[0] == 200
     finally:
         runtime.stop()
@@ -286,23 +307,36 @@ def test_videos_reach_the_model_and_count_as_input_tokens(d3_runtime, mp4_url, p
 
 
 @pytest.mark.parametrize(
-    "videos,reason",
+    "videos,message,reason",
     [
-        ("data:video/mp4;base64,AAAA", "videos must be a list"),
-        (["https://example.com/a.mp4"], "videos[0]: videos must be base64 MP4"),
-        (["data:video/avi;base64,AAAA"], "videos[0]: videos must be base64 MP4"),
-        (["data:video/mp4;base64,not base64!"], "videos[0]: invalid base64 video data"),
-        (["data:video/mp4;base64,AAAAAAAA"], "videos[0]: "),
+        ("data:video/mp4;base64,AAAA", "videos must be a list", "video_format"),
+        (
+            ["https://example.com/a.mp4"],
+            "videos[0]: videos must be base64 MP4",
+            "video_format",
+        ),
+        (
+            ["data:video/avi;base64,AAAA"],
+            "videos[0]: videos must be base64 MP4",
+            "video_format",
+        ),
+        (
+            ["data:video/mp4;base64,not base64!"],
+            "videos[0]: invalid base64 video data",
+            "video_malformed",
+        ),
+        (["data:video/mp4;base64,AAAAAAAA"], "videos[0]: ", "video_malformed"),
     ],
 )
-def test_malformed_videos_fail_the_request(d3_runtime, videos, reason):
+def test_malformed_videos_fail_the_request(d3_runtime, videos, message, reason):
     pytest.importorskip("cv2")
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": videos}
     )
     assert status == 400
     assert body["error"]["code"] == "invalid_request"
-    assert reason in body["error"]["message"]
+    assert message in body["error"]["message"]
+    assert body["error"]["reason"] == reason and "limit" not in body["error"]
 
 
 def test_oversized_videos_are_refused(d3_runtime):
@@ -312,6 +346,22 @@ def test_oversized_videos_are_refused(d3_runtime):
         d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": [huge]}
     )
     assert status == 400 and "32,000,000 bytes" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "video_too_large",
+        vid.MAX_VIDEO_BYTES,
+    )
+
+
+def test_videos_over_the_duration_limit_are_refused(d3_runtime, mp4_url):
+    clip = mp4_url(32, 32, frames=vid.MAX_SECONDS + 2, fps=1.0, seed=5)
+    status, body = call(
+        d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": [clip]}
+    )
+    assert status == 400 and "300 seconds" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "video_too_long",
+        vid.MAX_SECONDS,
+    )
 
 
 def test_a_text_model_refuses_videos(d3_text_package, mp4_url):
@@ -324,6 +374,7 @@ def test_a_text_model_refuses_videos(d3_text_package, mp4_url):
             {"state": "x", "questions": QUESTIONS, "videos": [mp4_url(32, 32, 4)]},
         )
         assert status == 400 and "reads no videos" in body["error"]["message"]
+        assert body["error"]["reason"] == "video_unsupported"
     finally:
         runtime.stop()
 
@@ -360,6 +411,38 @@ def test_score_levels_must_be_distinct(d3_runtime):
     assert status == 200
     assert body["answers"]["s"]["error"] == "invalid_question"
     assert "distinct" in body["answers"]["s"]["message"]
+
+
+def test_a_request_is_tokenized_at_once_and_reports_errors_in_question_order(
+    d3_runtime, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    short = {"type": "noul", "instructions": "Is it short?"}
+    long = {"type": "noul", "instructions": "word " * 400}
+    invalid = {
+        "type": "score",
+        "instructions": "How hard?",
+        "criteria": ["Easy", "Easy"],
+    }
+    alone = model.plan("state", {"a": short})
+    monkeypatch.setattr(model, "limit", len(alone.items[0].ids) + 50)
+    plan = model.plan("state", {"l": long, "a": short, "s": invalid})
+    assert [item.question_id for item in plan.items] == ["a"]
+    assert plan.items[0].ids == alone.items[0].ids
+    assert list(plan.errors) == ["l", "s"]
+    assert plan.errors["l"]["error"] == "max_length_exceeded"
+    assert plan.errors["s"]["error"] == "invalid_question"
+    text = prompt.render(
+        prompt.user_prompt(
+            "state",
+            short["instructions"],
+            prompt.option_texts("noul", None),
+            model.codes,
+        )
+    )
+    assert (
+        alone.items[0].ids == model.tokenizer.encode(text, add_special_tokens=False).ids
+    )
 
 
 def test_questions_run_eight_per_pass_in_request_order(d3_runtime):
@@ -558,3 +641,134 @@ def test_threads_stay_within_the_container_unless_configured(monkeypatch):
         assert cpu.cap_threads(None) is None
     finally:
         torch.set_num_threads(before)
+
+
+def test_repeated_media_are_processed_once_and_answer_alike(
+    d3_runtime, png_url, mp4_url, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    image, clip = png_url(120, 90, 7), mp4_url(96, 64, frames=12, fps=8.0, seed=7)
+    decoded = {"images": 0, "videos": 0}
+    image_decode, video_decode = img.decode, vid.decode
+
+    def count_image(value):
+        decoded["images"] += 1
+        return image_decode(value)
+
+    def count_video(value):
+        decoded["videos"] += 1
+        return video_decode(value)
+
+    monkeypatch.setattr(img, "decode", count_image)
+    monkeypatch.setattr(vid, "decode", count_video)
+    # with media workers (16 CPUs or more) the decoding is a load in a worker process
+    submit = media.submit
+
+    def count_submit(fn, *args):
+        decoded["images"] += fn is img.load
+        decoded["videos"] += fn is vid.load
+        return submit(fn, *args)
+
+    monkeypatch.setattr(media, "submit", count_submit)
+    body = {"state": "What is shown?", "questions": QUESTIONS, "images": [image]}
+    first, second = call(d3_runtime, body), call(d3_runtime, body)
+    assert first == second and first[0] == 200
+    assert decoded["images"] == 1
+    video = {"state": "What happens?", "questions": QUESTIONS, "videos": [clip]}
+    first, second = call(d3_runtime, video), call(d3_runtime, video)
+    assert first == second and first[0] == 200
+    assert decoded["videos"] == 1
+    assert model.media_cache.stats()["hits"] >= 2
+
+
+def test_passes_of_one_size_reuse_the_tower_features_of_their_images(
+    d3_runtime, png_url, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    questions = {f"q{i}": QUESTIONS["reasoning"] for i in range(2 * BATCH_SIZE)}
+    body = {
+        "state": "What is shown?",
+        "questions": questions,
+        "images": [png_url(80, 60, 9)],
+    }
+    model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
+    calls = []
+    tower = model.engine_model.tower_features
+
+    def counted(name, pixel_values, grids):
+        calls.append(len(grids))
+        return tower(name, pixel_values, grids)
+
+    monkeypatch.setattr(model.engine_model, "tower_features", counted)
+    served = d3_runtime.lookup(None)
+    cached = served.answer_alone("decisions", body)
+    assert calls == [BATCH_SIZE]
+    model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
+    again = served.answer_alone("decisions", body)
+    assert again == cached and calls == [BATCH_SIZE, BATCH_SIZE]
+
+
+def test_coalesced_batches_mix_requests_and_read_their_images_in_one_call(
+    d3_runtime, png_url, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    plans = [
+        model.plan_images("Shown?", QUESTIONS, [png_url(80, 60, 21)]),
+        model.plan("Merge two sorted lists.", QUESTIONS),
+        model.plan_images(
+            "Shown?", QUESTIONS, [png_url(64, 96, 22), png_url(64, 64, 23)]
+        ),
+    ]
+    items = [item for plan in plans for item in plan.items]
+    exact = [value for plan in plans for value in model.run(list(plan.items))]
+    calls = []
+    tower = model.engine_model.tower_features
+
+    def counted(name, pixel_values, grids, packed=False):
+        calls.append((len(grids), packed))
+        return tower(name, pixel_values, grids, packed=packed)
+
+    model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
+    monkeypatch.setattr(model.engine_model, "tower_features", counted)
+    mixed = model.run_approximate(items)
+    assert calls == [(3, model.packs_merged_rows)]
+    assert len(mixed) == len(exact)
+    for got, want in zip(mixed, exact, strict=True):
+        assert got is not None and want is not None
+        assert max(abs(a - b) for a, b in zip(got, want, strict=True)) < 0.05
+    # Features of a merged tower call never stand in for a request's own forwards,
+    # which still read one copy of its images per question.
+    calls.clear()
+    assert [model.run(list(plan.items)) for plan in plans] == [
+        exact[:3],
+        exact[3:6],
+        exact[6:],
+    ]
+    assert sorted(calls) == [(3, False), (6, False)]
+
+
+def test_coalesced_forwards_follow_the_measured_cost_per_token_of_their_lane(
+    d3_runtime, png_url
+):
+    from vllm_srun.families.decision3 import family
+
+    model = d3_runtime.lookup(None).model
+    saved = dict(model._token_seconds)
+    try:
+        model._token_seconds["text"] = family.COALESCED_FORWARD_SECONDS / 10_000
+        model._token_seconds["media"] = 1.0
+        limit = model.forward_token_budget()
+        assert model.coalesced_token_budget("text") == (
+            10_000 if limit is None else min(10_000, limit)
+        )
+        assert model.coalesced_token_budget("media") == family.MIN_COALESCED_TOKENS
+        text = model.plan("Merge two sorted lists.", QUESTIONS).items
+        image = model.plan_images("Shown?", QUESTIONS, [png_url(80, 60, 24)]).items
+        assert {model.lane(item) for item in text} == {"text"}
+        assert {model.lane(item) for item in image} == {"media"}
+        # A media pass moves the media lane's cost only.
+        model.run_approximate(list(image))
+        assert model._token_seconds["text"] == family.COALESCED_FORWARD_SECONDS / 10_000
+        assert model._token_seconds["media"] < 1.0
+    finally:
+        model._token_seconds = saved

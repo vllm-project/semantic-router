@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.3.0
+  version: 3.0.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
@@ -404,10 +404,6 @@ components:
         description:
           nullable: true
           description: Text, an object, an array or null.
-    ProfileName:
-      type: string
-      pattern: '^[a-z][a-z0-9_]*$'
-      description: exact, or a profile the server enabled for this model (its card's `profiles`).
     RequestOptions:
       type: object
       additionalProperties: false
@@ -418,8 +414,6 @@ components:
           exclusiveMinimum: true
           minimum: 0
           description: Work not started by the deadline is not run; its items return deadline_exceeded.
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -620,10 +614,13 @@ components:
           description: The 40-hex Hub revision; null for a local package directory.
         model_sha256:
           type: string
-        profile:
+        dtype:
           type: string
+          description: The precision the backbone computed in (float32, bfloat16 or float16).
         numerics:
           type: string
+          enum: [exact, approximate]
+          description: exact when the model's answers never depend on batching; see ModelCard.numerics.
         engine:
           type: string
         accelerator:
@@ -714,8 +711,6 @@ components:
           format: double
           exclusiveMinimum: true
           minimum: 0
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -953,8 +948,6 @@ components:
           format: double
           exclusiveMinimum: true
           minimum: 0
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -1053,8 +1046,6 @@ components:
           format: double
           exclusiveMinimum: true
           minimum: 0
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -1178,6 +1169,18 @@ components:
           enum: [invalid_request, model_not_found, request_too_large, unsupported_surface, overloaded, internal_error, not_ready]
         message:
           type: string
+        reason:
+          type: string
+          description: |
+            Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+            data, so a gateway may show them where it must not show `message`.
+          enum: [image_format, image_too_large, image_pixels, image_aspect_ratio, image_malformed, image_unsupported, video_format, video_too_large, video_too_long, video_pixels, video_aspect_ratio, video_malformed, video_tokens, video_unsupported]
+        limit:
+          type: integer
+          description: |
+            The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
+            for `video_too_long`, input tokens for `video_tokens` and the longer side over the shorter for
+            `*_aspect_ratio`.
     ModelList:
       type: object
       required: [object, data, api_version, limits]
@@ -1261,12 +1264,16 @@ components:
         licence:
           type: string
           nullable: true
-        profile:
+        engine_args:
+          $ref: '#/components/schemas/EngineArgs'
+        numerics:
           type: string
-        profiles:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProfileInfo'
+          enum: [exact, approximate]
+          description: |
+            exact when the model's answers never depend on batching: its rows answer the same alone or in
+            any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+            their references. approximate when the rows a forward holds, shared-context trees, another dtype
+            or approximate kernels can move answers by rounding.
         engine:
           type: string
         accelerator:
@@ -1448,17 +1455,36 @@ components:
         video_source_max_pixels:
           type: integer
           description: Models that read videos; the most pixels one frame of a supplied video may have.
-    ProfileInfo:
+    EngineArgs:
       type: object
-      required: [name, numerics]
+      description: How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+      required: [max_num_seqs, max_num_batched_tokens, batch_window_ms, dtype, enable_shared_context]
       properties:
-        name:
+        max_num_seqs:
+          type: integer
+          minimum: 1
+          description: |
+            The most rows one forward holds, across requests: one per question of a decision request, one per
+            input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+            one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+            budget, since a row costs at least 8 padded tokens).
+        max_num_batched_tokens:
+          type: integer
+          description: |
+            The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+            that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+            is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
+        batch_window_ms:
+          type: number
+          format: double
+          description: How long the scheduler waits after the first request to collect more (when `max_num_seqs` is above 1).
+        dtype:
           type: string
-        numerics:
-          type: string
-          enum: [exact, approximate]
-        description:
-          type: string
+          enum: [auto, float32, bfloat16, float16]
+          description: The configured precision; auto is the precision the model was published in.
+        enable_shared_context:
+          type: boolean
+          description: Whether a multi-question decision request computes its shared state once.
     GoldenStatus:
       type: object
       required: [status]
@@ -1490,9 +1516,9 @@ components:
         capabilities:
           type: object
           description: |
-            The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
-            and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
-            `auto_priority`, where `auto` tries them (lowest first; null: only when named).
+            The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures,
+            outputs and the `--dtype` values it runs (`dtypes`), an accelerator's validation status. Engines and
+            accelerators also list `auto_priority`, where `auto` tries them (lowest first; null: only when named).
           additionalProperties: true
     Health:
       type: object

@@ -161,6 +161,8 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
+	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded
 	// downstream to the client. Once true, response headers are committed and no
 	// subsequent replacement or fallback response may be attempted.
@@ -484,6 +486,11 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// PluginBackendModel is the model selected before plugins run, and
+	// PluginSkips lists the plugins that capability gating kept from running.
+	PluginBackendModel string
+	PluginSkips        []pluginSkip
 
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.

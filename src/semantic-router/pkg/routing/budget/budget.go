@@ -53,6 +53,12 @@ func Consume(ctx context.Context) error {
 	}
 }
 
+// Current returns the request ledger carried by ctx, when one is installed.
+func Current(ctx context.Context) (*Ledger, bool) {
+	ledger, ok := ctx.Value(contextKey{}).(*Ledger)
+	return ledger, ok
+}
+
 // Used reports the number of exchanges reserved in this execution so far.
 func (l *Ledger) Used() int { return int(l.used.Load()) }
 
