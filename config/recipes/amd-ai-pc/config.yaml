@@ -1,0 +1,197 @@
+version: v0.3
+listeners:
+  - address: 0.0.0.0
+    name: http-8899
+    port: 8899
+    timeout: 1200s
+providers:
+  defaults:
+    model: local/ai-pc
+  models:
+    - api_format: openai
+      backend_refs:
+        - endpoint: host.docker.internal:11434
+          name: local-ollama
+          protocol: http
+          provider: ollama
+          weight: 1
+      name: local/ai-pc
+      pricing:
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+        currency: USD
+        prompt_per_1m: 0
+      provider_model_id: llama3.2:3b
+    - api_format: openai
+      backend_refs:
+        - api_key_env: OPENROUTER_API_KEY
+          auth_header: Authorization
+          auth_prefix: Bearer
+          base_url: https://openrouter.ai/api/v1
+          name: openrouter
+          provider: openai
+          weight: 1
+      name: cloud/external-chat
+      pricing:
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+        currency: USD
+        prompt_per_1m: 0
+      provider_model_id: openai/gpt-5.5
+routing:
+  decisions:
+    - description: 'Decline image input: this profile has no qualified local vision path.'
+      name: unsupported_image_input
+      plugins:
+        - configuration:
+            message: Image input is not supported by the AMD AI PC profile. Send text only, or use a recipe with a vision backend.
+          type: fast_response
+      priority: 300
+      rules:
+        conditions:
+          - name: ai_pc_has_images
+            type: conversation
+        operator: AND
+    - description: Decline input that leaves the local model too little room to reply, instead of sending it out silently.
+      name: local_window_exceeded
+      plugins:
+        - configuration:
+            message: This input is too large for the local model's context window. Shorten it, or explicitly allow an external model in the request.
+          type: fast_response
+      priority: 250
+      rules:
+        conditions:
+          - name: ai_pc_exceeds_local_window
+            type: context
+          - conditions:
+              - name: ai_pc_local_only
+                type: keyword
+              - conditions:
+                  - name: ai_pc_external_ok
+                    type: keyword
+                operator: NOT
+            operator: OR
+        operator: AND
+    - algorithm:
+        type: static
+      description: Keep requests marked local-only on the local model.
+      modelRefs:
+        - model: local/ai-pc
+          use_reasoning: false
+      name: local_only
+      priority: 200
+      rules:
+        conditions:
+          - name: ai_pc_local_only
+            type: keyword
+          - conditions:
+              - name: ai_pc_exceeds_local_window
+                type: context
+            operator: NOT
+        operator: AND
+    - algorithm:
+        type: static
+      description: Use the external model only when the request allows it and does not ask to stay local.
+      modelRefs:
+        - model: cloud/external-chat
+          reasoning_effort: medium
+          use_reasoning: true
+      name: external_opt_in
+      priority: 150
+      rules:
+        conditions:
+          - name: ai_pc_external_ok
+            type: keyword
+          - conditions:
+              - name: ai_pc_local_only
+                type: keyword
+            operator: NOT
+        operator: AND
+    - algorithm:
+        type: static
+      description: Process every other request locally.
+      modelRefs:
+        - model: local/ai-pc
+          use_reasoning: false
+      name: local_default
+      priority: 10
+      rules:
+        operator: AND
+  modelCards:
+    - capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
+        - text
+      context_window_size: 1048576
+      description: External text model, used only when the request explicitly allows it.
+      modality: text
+      name: cloud/external-chat
+      tags:
+        - deployment:openrouter
+        - role:external
+    - capabilities:
+        - chat
+        - text
+      context_window_size: 8192
+      description: Small text model served on the AI PC's CPU through a local Ollama server.
+      modality: text
+      name: local/ai-pc
+      tags:
+        - deployment:self_hosted
+        - role:local
+  signals:
+    context:
+      - description: Input leaves too little room for a reply in the local model's window.
+        max_tokens: 1M
+        min_tokens: 6K
+        name: ai_pc_exceeds_local_window
+    conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: ai_pc_has_images
+    keywords:
+      - case_sensitive: false
+        keywords:
+          - keep this local
+          - local only
+          - on this device only
+          - do not send this to the cloud
+          - do not use an external model
+          - 仅在本地处理
+          - 不要发送到云端
+          - 不要使用外部模型
+        name: ai_pc_local_only
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - you may use a cloud model
+          - an external model is fine
+          - cloud processing is allowed
+          - 可以使用云端模型
+          - 允许使用外部模型
+        name: ai_pc_external_ok
+        operator: OR
+entrypoints:
+  - model_names:
+      - vllm-sr/auto
+    recipe: default
+global:
+  stores:
+    response_cache:
+      backend_type: memory
+      enabled: false
+evaluation:
+  records:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.6
+      model: local/ai-pc
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+      model: cloud/external-chat

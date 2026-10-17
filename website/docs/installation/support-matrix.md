@@ -99,7 +99,9 @@ choices.
 | Linux Arm64 CPU | Build-qualified | Release workflows publish multi-architecture images where declared. This does not qualify every integration or optional native dependency on Arm64. |
 | NVIDIA CUDA on Linux x86-64 | Supported integration | Follow [NVIDIA CUDA](nvidia-cuda) for supported Router-side models, or keep the Router on CPU and qualify a separate NVIDIA backend against vLLM's support matrix. |
 | AMD ROCm on Linux x86-64 | Supported integration | Follow [AMD ROCm](amd-rocm) for supported Router-side models and qualify the Router, vLLM, ROCm, and model revisions as one set. |
-| AMD AI PC/NPU | Experimental, not qualified | No maintained deployment contract yet; tracked by [issue #2373](https://github.com/vllm-project/semantic-router/issues/2373). |
+| AMD AI PC CPU | Experimental, untested | Follow [AMD AI PC](amd-ai-pc) for the maintained `amd-ai-pc` recipe. No AI PC owner has supplied reproducible probes yet; tracked by [issue #4932](https://github.com/vllm-project/semantic-router/issues/4932). |
+| AMD AI PC Radeon iGPU | Not qualified | No exercised runtime; tracked by [issue #4933](https://github.com/vllm-project/semantic-router/issues/4933). |
+| AMD AI PC Ryzen AI NPU | Not qualified | No exercised runtime; tracked by [issue #4934](https://github.com/vllm-project/semantic-router/issues/4934). |
 | NVIDIA DGX Spark Arm64 | Experimental, not qualified | Arm64 images do not qualify CUDA or end-to-end inference on this platform; tracked by [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374). |
 | Other accelerators and operating systems | Not qualified | No maintained profile. Open a qualification issue with reproducible hardware, software, image, and test evidence. |
 
