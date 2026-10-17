@@ -100,6 +100,7 @@ export interface ProjectionTrace {
 }
 
 export interface InsightsRecord {
+  provider_cache?: ProviderCacheAccounting
   conversation_id?: string
   id: string
   timestamp: string
@@ -186,6 +187,24 @@ export interface InsightsRecord {
   cost_savings?: number
   currency?: string
   baseline_model?: string
+}
+
+export interface TokenCostComponent {
+  tokens?: number
+  provenance: 'unknown' | 'estimated' | 'derived' | 'authoritative'
+  cost?: number
+}
+
+export interface ProviderCacheAccounting {
+  state: 'complete' | 'partial' | 'unavailable' | 'invalid'
+  uncached_input: TokenCostComponent
+  cache_read: TokenCostComponent
+  cache_write: TokenCostComponent
+  output: TokenCostComponent
+  cache_write_5m: TokenCostComponent
+  cache_write_1h: TokenCostComponent
+  no_cache_cost?: number
+  cache_savings?: number
 }
 
 export interface InsightsTrajectoryToolCall {

@@ -24793,6 +24793,146 @@
                           "prompt_truncated": {
                             "type": "boolean"
                           },
+                          "provider_cache": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "cache_read": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_savings": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "cache_write": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_write_1h": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_write_5m": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "no_cache_cost": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "output": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "uncached_input": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "uncached_input",
+                              "cache_read",
+                              "cache_write",
+                              "output",
+                              "cache_write_5m",
+                              "cache_write_1h"
+                            ]
+                          },
                           "rag_backend": {
                             "type": "string"
                           },
@@ -29543,6 +29683,146 @@
                     },
                     "prompt_truncated": {
                       "type": "boolean"
+                    },
+                    "provider_cache": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "cache_read": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_savings": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "cache_write": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_write_1h": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_write_5m": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "no_cache_cost": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "output": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "uncached_input": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "uncached_input",
+                        "cache_read",
+                        "cache_write",
+                        "output",
+                        "cache_write_5m",
+                        "cache_write_1h"
+                      ]
                     },
                     "rag_backend": {
                       "type": "string"
