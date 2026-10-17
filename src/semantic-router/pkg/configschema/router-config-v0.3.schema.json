@@ -2540,6 +2540,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "masking"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/MaskingPluginConfig"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -2551,6 +2570,7 @@
             "hallucination",
             "header_mutation",
             "history_reset",
+            "masking",
             "memory",
             "prompt_cache",
             "rag",
@@ -2906,7 +2926,7 @@
           "type": "string"
         },
         "llm_timeout_seconds": {
-          "type": "integer"
+          "type": "number"
         },
         "parser_type": {
           "type": "string"
@@ -4120,6 +4140,30 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "placeholders": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -7476,6 +7520,9 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        },
+        "trusted_facts": {
+          "$ref": "#/$defs/TrustedFactsConfig"
         }
       },
       "additionalProperties": false,
@@ -7587,6 +7634,33 @@
         },
         "rate": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TrustedFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "enforcement": {
+          "type": "string"
+        },
+        "trust_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness_seconds": {
+          "type": "integer"
+        },
+        "stage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -8553,6 +8627,12 @@
         "display_name": "History Reset",
         "description": "Remove eligible prior turns after an accepted topic change.",
         "schema_ref": "#/$defs/HistoryResetPluginConfig"
+      },
+      {
+        "type": "masking",
+        "display_name": "Masking",
+        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],
     "projections": [

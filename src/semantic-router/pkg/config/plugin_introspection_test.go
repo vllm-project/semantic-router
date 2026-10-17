@@ -81,6 +81,8 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetShadowDispatchConfig().Enabled
 				case *HistoryResetPluginConfig:
 					want = decision.GetHistoryResetConfig().IsEnabled()
+				case *MaskingPluginConfig:
+					want = decision.GetMaskingConfig().Enabled
 				default:
 					t.Fatalf("new plugin %q requires a runtime activation contract assertion", entry.Type)
 				}

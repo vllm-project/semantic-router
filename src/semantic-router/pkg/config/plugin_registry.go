@@ -191,5 +191,11 @@ func builtinDecisionPlugins() []DecisionPluginType {
 				return validateHistoryResetPlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace detected PII in the provider-bound request with placeholders."}, PluginOptions[MaskingPluginConfig]{
+			Strict: true,
+			Validate: func(at PluginAt, p *MaskingPluginConfig) error {
+				return validateMaskingPlugin(at.Decision, at.Index, at.Type, p)
+			},
+		}),
 	}
 }

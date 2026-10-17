@@ -42,6 +42,7 @@ var pluginTutorialBuckets = map[string]string{
 	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",
 	"history-reset":       "response-and-mutation",
+	"masking":             "response-and-mutation",
 	"memory":              "retrieval-and-memory",
 	"prompt-cache":        "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",

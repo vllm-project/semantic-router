@@ -179,6 +179,7 @@ spec:
                             - hallucination
                             - header_mutation
                             - history_reset
+                            - masking
                             - memory
                             - prompt_cache
                             - rag

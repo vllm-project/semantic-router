@@ -212,6 +212,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/context-compression',
                 'tutorials/plugin/history-reset',
+                'tutorials/plugin/masking',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tool-selection',

@@ -12,7 +12,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from vllm_srun.accel.gpu import _wrap_varlen  # noqa: E402
+from vllm_srun.accel.kernels import varlen_attention_ref  # noqa: E402
 from vllm_srun.config import ModelConfig, ServeConfig  # noqa: E402
+from vllm_srun.engines.native.models.packed import Packed  # noqa: E402
 from vllm_srun.runtime import Runtime  # noqa: E402
 from vllm_srun.scheduler import calibration  # noqa: E402
 from vllm_srun.testing.decision3 import write_fixture  # noqa: E402
@@ -20,6 +23,25 @@ from vllm_srun.testing.decision3 import write_fixture  # noqa: E402
 from .test_decision3_family import QUESTIONS  # noqa: E402
 
 pytestmark = pytest.mark.gpu
+
+
+@pytest.mark.parametrize("groups", [1, 2])
+def test_installed_varlen_api_matches_per_row_attention(groups):
+    """Exercise the installed torch interface and its real GPU GQA kernel."""
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA or ROCm GPU")
+    from torch.nn.attention.varlen import varlen_attn
+
+    torch.manual_seed(4)
+    packed = Packed([3, 7, 1], torch.device("cuda"))
+    q = torch.randn(11, 4, 64, device="cuda", dtype=torch.bfloat16)
+    k, v = (
+        torch.randn(11, 4 // groups, 64, device="cuda", dtype=torch.bfloat16)
+        for _ in range(2)
+    )
+    out = _wrap_varlen(varlen_attn)(q, k, v, packed, scale=64**-0.5, groups=groups)
+    want = varlen_attention_ref(q, k, v, packed, scale=64**-0.5, groups=groups)
+    torch.testing.assert_close(out, want, rtol=0.02, atol=0.02)
 
 
 @pytest.fixture(scope="module")
