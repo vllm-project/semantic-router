@@ -662,6 +662,18 @@ domains:
     checks: [make test-training-contracts]
     verifications: [training]
 
+  # Lockfile freshness stays off the broad training domain so a source-only
+  # change does not run uv, while a pyproject or lock change still runs both.
+  training-locks:
+    owner: training
+    paths:
+      - src/training/**/pyproject.toml
+      - src/training/**/uv.lock
+      - tools/ci/training_lock_check.py
+      - tools/ci/training_lock_contracts.py
+    checks: [make check-training-uv-lock]
+    verifications: [training-locks]
+
   model-selection-parity:
     owner: training
     paths:
@@ -719,7 +731,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, training, learning-tools, harness-tools, onnx-artifacts]
+    verifications: [cli-unit, training, training-locks, learning-tools, harness-tools, onnx-artifacts]
 
   runtime-evidence:
     owner: maintainers
