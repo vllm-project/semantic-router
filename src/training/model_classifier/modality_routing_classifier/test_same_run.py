@@ -71,13 +71,14 @@ def _run_fixture(
     forward_p99_ms: float,
     max_length: int = 256,
     warmup_n: int = 20,
+    binding: str = "hf",
 ) -> dict:
     host = {"cpu_model": "Intel", "core_count": 8, "ram_gb": 15.4}
     return {
         "host": host,
         "model": "stub-model",
         "run": {
-            "binding": "hf",
+            "binding": binding,
             "max_length": max_length,
             "batch_size": 1,
             "warmup_n": warmup_n,
@@ -250,6 +251,21 @@ class PairShapeTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             refuse_mismatched_shape(baseline, candidate)
         self.assertIn("missing", str(ctx.exception))
+
+    def test_mismatched_binding_refused(self) -> None:
+        """Regression (adaamko, 2026-10-16): hf's forward_ns is model-only
+        compute (tokenize measured separately), while model-runtime's
+        forward_ns is the whole HTTP round trip (tokenize + JSON + network,
+        no split available). Pairing an hf run against a model-runtime run
+        therefore reports a p99 delta that is mostly binding overhead, not
+        a real speed difference. binding was missing from RUN_SHAPE_KEYS,
+        so nothing stopped that cross-binding pairing from happening.
+        """
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0, binding="hf")
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0, binding="model-runtime")
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("different settings", str(ctx.exception))
 
 
 class PairLatencyTests(unittest.TestCase):
