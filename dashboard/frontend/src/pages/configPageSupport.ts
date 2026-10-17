@@ -179,6 +179,7 @@ export interface BackendRefEntry {
   chat_path?: string
   api_key?: string
   api_key_env?: string
+  openai_compat_gateway?: boolean
 }
 
 export interface ModelReasoningConfig {
