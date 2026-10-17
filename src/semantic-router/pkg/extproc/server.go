@@ -858,6 +858,7 @@ func publishSnapshotState(
 			ClassificationService: router.ClassificationService,
 			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,
+			MemoryStoreSlot:       router.memoryStore,
 			MemoryStatus:          router.MemoryStatus,
 			ModelSelector:         router.ModelSelector,
 			LearningRuntime:       router.routerLearningRuntimeState(),
