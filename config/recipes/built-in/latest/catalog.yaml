@@ -1361,6 +1361,16 @@ providers:
     id: MiniMax-M2.7
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object
+    reasoning_modes:
+    - enabled
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.3
+      cached_input_per_1m: 0.06
+      completion_per_1m: 1.2
+    restrictions:
+      context_window_size: 204800
     lifecycle: active
     verification:
       status: claimed
@@ -1375,7 +1385,13 @@ providers:
     reasoning_modes:
     - disabled
     - adaptive
-    - enabled
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.6
+      cached_input_per_1m: 0.12
+      completion_per_1m: 2.4
+    restrictions:
+      context_window_size: 1000000
     lifecycle: active
     verification:
       status: claimed
@@ -4476,6 +4492,12 @@ reasoning_families:
   - adaptive
   - enabled
   default_mode: adaptive
+- id: minimax-m2-always-on
+  type: reasoning_mode
+  parameter: thinking_mode
+  modes:
+  - enabled
+  default_mode: enabled
 - id: muse-glimmer
   type: reasoning_effort
   parameter: reasoning_strength
@@ -6808,6 +6830,7 @@ models:
     source: https://huggingface.co/MiniMaxAI/MiniMax-M2.7
     license: MiniMax-Community-License
   family: minimax-m2
+  reasoning_family: minimax-m2-always-on
   parameter_size: 230B
   lifecycle: active
   limits:

@@ -38,6 +38,16 @@ models:
   id: MiniMax-M2.7
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object
+  reasoning_modes:
+  - enabled
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.30
+    cached_input_per_1m: 0.06
+    completion_per_1m: 1.20
+  restrictions:
+    context_window_size: 204800
   lifecycle: active
   verification:
     status: claimed
@@ -52,7 +62,13 @@ models:
   reasoning_modes:
   - disabled
   - adaptive
-  - enabled
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.60
+    cached_input_per_1m: 0.12
+    completion_per_1m: 2.40
+  restrictions:
+    context_window_size: 1000000
   lifecycle: active
   verification:
     status: claimed

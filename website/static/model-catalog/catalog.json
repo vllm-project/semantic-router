@@ -63486,161 +63486,6 @@
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profiles": [
-            "independent-standard",
-            "published-standard"
-          ],
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 1.0
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/general@1.0.0",
-      "model": "minimax/minimax-m2.7",
-      "provenance": [],
-      "reasoning_effort": "default",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profiles": [
-            "independent-standard",
-            "published-standard"
-          ],
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.5
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profiles": [
-            "independent-text-only",
-            "text-only"
-          ],
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.5
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/reasoning@1.0.0",
-      "model": "minimax/minimax-m2.7",
-      "provenance": [],
-      "reasoning_effort": "default",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "livecodebench/livecodebench@6.0.0",
-          "benchmark_profiles": [
-            "independent-code-generation",
-            "published-code-generation"
-          ],
-          "metric": "pass_at_1",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.5
-        },
-        {
-          "benchmark": "scicode-bench/scicode@1.0.0",
-          "benchmark_profiles": [
-            "independent-test-288",
-            "published-standard"
-          ],
-          "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.5
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/coding@1.0.0",
-      "model": "minimax/minimax-m2.7",
-      "provenance": [],
-      "reasoning_effort": "default",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profiles": [
-            "independent-agent",
-            "published-agent"
-          ],
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 1.0
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/agentic@1.0.0",
-      "model": "minimax/minimax-m2.7",
-      "provenance": [],
-      "reasoning_effort": "default",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "index": "vllm-sr/general@1.0.0",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.4
-        },
-        {
-          "index": "vllm-sr/coding@1.0.0",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "index": "vllm-sr/agentic@1.0.0",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "minimax/minimax-m2.7",
-      "provenance": [],
-      "reasoning_effort": "default",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
           "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
@@ -99841,6 +99686,7 @@
         "monogram": "M"
       },
       "publisher": "MiniMax",
+      "reasoning_family": "minimax-m2-always-on",
       "released_at": "2026-03-18",
       "tags": [
         "open_weights",
@@ -105447,10 +105293,23 @@
           "catalog": "minimax/minimax-m2.7",
           "id": "MiniMax-M2.7",
           "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.06,
+            "completion_per_1m": 1.2,
+            "currency": "USD",
+            "prompt_per_1m": 0.3
+          },
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "reasoning_transport": "thinking_object",
           "relationship": "first_party",
+          "restrictions": {
+            "context_window_size": 204800
+          },
           "verification": {
             "source": "https://platform.minimax.io/docs/guides/models-intro",
             "status": "claimed",
@@ -105461,16 +105320,24 @@
           "catalog": "minimax/minimax-m3",
           "id": "MiniMax-M3",
           "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.12,
+            "completion_per_1m": 2.4,
+            "currency": "USD",
+            "prompt_per_1m": 0.6
+          },
           "protocols": [
             "openai/chat-completions@1"
           ],
           "reasoning_modes": [
             "disabled",
-            "adaptive",
-            "enabled"
+            "adaptive"
           ],
           "reasoning_transport": "thinking_object",
           "relationship": "first_party",
+          "restrictions": {
+            "context_window_size": 1000000
+          },
           "verification": {
             "source": "https://platform.minimax.io/docs/guides/models-intro",
             "status": "claimed",
@@ -109663,6 +109530,15 @@
       "modes": [
         "disabled",
         "adaptive",
+        "enabled"
+      ],
+      "parameter": "thinking_mode",
+      "type": "reasoning_mode"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "minimax-m2-always-on",
+      "modes": [
         "enabled"
       ],
       "parameter": "thinking_mode",
