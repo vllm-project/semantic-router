@@ -612,7 +612,10 @@ FLA_KERNELS = {
 
 @pytest.mark.parametrize("model", DECISION3_MODELS, ids=lambda model: model.repo_id)
 def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+    expected = {"cpu", "rocm"}
+    if model.repo_id == "vllm-sr/d3":
+        expected.add("cpu:x86_64:avx512:bf16_native")
+    assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {
             "difficulty",
