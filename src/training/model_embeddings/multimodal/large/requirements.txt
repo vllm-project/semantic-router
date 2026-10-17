@@ -1,14 +1,14 @@
 --extra-index-url https://download.pytorch.org/whl/rocm7.1
-torch>=2.10.0
+torch>=2.14.1
 torchvision>=0.25.0
 torchaudio>=2.10.0
-transformers>=4.56.0
-accelerate>=0.34.0
-sentence-transformers>=5.1.0
-datasets==2.21.0
+transformers>=5.18.0
+accelerate>=1.15.0
+sentence-transformers>=6.1.0
+datasets==5.0.1
 huggingface-hub>=0.25.0
 safetensors
-pillow>=10.0.0
+pillow>=12.3.0
 librosa>=0.10.0
 soundfile
 sentencepiece>=0.2.0
