@@ -17,7 +17,7 @@ from typing import Any
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from .kernels import Kernel, KernelSet, reference_kernels
+from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 
 _DEVICE_LOCKS: dict[int, Any] = {}
 _LOCKS = threading.Lock()
@@ -172,6 +172,11 @@ def _wrap_varlen(fn: Any) -> Any:
     """PyTorch's variable-length flash attention over packed rows, non-causal, keys with fewer heads in-kernel."""
 
     def attend(query, key, value, packed, *, scale, groups):
+        if query.dtype not in (torch.float16, torch.bfloat16):
+            # flash attention takes 16-bit inputs only (FP32 at --dtype float32)
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
         cu = packed.cu_seqlens_int32
         return fn(
             query,

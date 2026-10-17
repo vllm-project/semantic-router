@@ -48,6 +48,28 @@ def test_variable_length_attention_attends_within_each_row():
         start += n
 
 
+def test_pytorch_varlen_attention_takes_16_bit_inputs_and_fp32_takes_the_reference():
+    from vllm_srun.accel.gpu import _wrap_varlen
+
+    packed = Packed([3, 7, 1], CPU)
+    seen = []
+
+    def flash(query, key, value, *args, scale, enable_gqa):
+        seen.append(query.dtype)
+        return query
+
+    attend = _wrap_varlen(flash)
+    q, k, v = torch.randn(11, 4, 8), torch.randn(11, 2, 8), torch.randn(11, 2, 8)
+    out = attend(q, k, v, packed, scale=0.125, groups=2)
+    torch.testing.assert_close(
+        out, varlen_attention_ref(q, k, v, packed, scale=0.125, groups=2)
+    )
+    assert seen == []
+    half = [x.to(torch.bfloat16) for x in (q, k, v)]
+    assert attend(*half, packed, scale=0.125, groups=2) is half[0]
+    assert seen == [torch.bfloat16]
+
+
 def test_a_packed_gated_delta_layer_answers_each_row_as_alone():
     torch.manual_seed(1)
     config = {
