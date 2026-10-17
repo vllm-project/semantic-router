@@ -1034,6 +1034,10 @@ graph captures anyway, §9); a captured graph keeps the configurations it was
 captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
+The choices are recorded at the published precision, so a model served at
+another `--dtype` runs without them and its kernels tune their own: a BF16
+configuration can need more shared memory than an FP32 kernel has (d3 at
+`float32` on gfx942).
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 
