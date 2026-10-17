@@ -134,6 +134,8 @@ class KeywordSignal(BaseModel):
     operator: str
     keywords: List[str]
     case_sensitive: bool = False
+    # Also match prior user messages; False keeps current-turn-only matching.
+    include_history: bool = False
 
 
 class EmbeddingSignal(BaseModel):
