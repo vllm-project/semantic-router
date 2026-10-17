@@ -1,0 +1,46 @@
+{
+  "schema_version": "semantic-router.local-candle-qualification-suite/v1",
+  "label_parity": [
+    {
+      "name": "algebra",
+      "input": "Solve for x: 3x + 7 = 22",
+      "want_label": "math"
+    },
+    {
+      "name": "contract-law",
+      "input": "Is a verbal agreement to sell a house enforceable under the statute of frauds?",
+      "want_label": "law"
+    },
+    {
+      "name": "cell-biology",
+      "input": "Which organelle produces most of the ATP in a eukaryotic cell?",
+      "want_label": "biology"
+    },
+    {
+      "name": "sorting",
+      "input": "What is the average time complexity of quicksort?",
+      "want_label": "computer science"
+    },
+    {
+      "name": "french-revolution",
+      "input": "What were the main causes of the French Revolution of 1789?",
+      "want_label": "history"
+    }
+  ],
+  "input_bounds": [
+    {
+      "name": "empty",
+      "input": "",
+      "want_error": false
+    },
+    {
+      "name": "non-latin",
+      "input": "细胞中哪种细胞器产生大部分ATP？",
+      "want_error": false
+    }
+  ],
+  "deadline_behavior": {
+    "input": "deadline probe",
+    "max_duration_ms": 5000
+  }
+}
