@@ -302,6 +302,7 @@ the record maps each to every size (for example `mom-v1`'s `prompt_attack`
 | AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform rocm` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
 | NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform cuda` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
+| Ascend NPUs (910B, 950) | Works, not yet validated | `device: npu:0`, with the runtime installed next to torch_npu and the host CANN toolkit. See [Ascend NPU](../installation/ascend-npu.md). |
 | Apple silicon | CPU only in this release | On macOS the docker target runs the CPU image, because Docker's Linux VM gets no GPU. Host GPU support is tracked in [#4636](https://github.com/vllm-project/semantic-router/issues/4636). |
 
 On AMD GPUs the router images ship the stack the runtime is validated on:
@@ -319,6 +320,9 @@ says so and gives how often it agrees with the released answers.
 `device: auto` (the default) picks the first validated GPU with enough free
 memory and otherwise the CPU. A GPU you name explicitly must exist, or the
 model fails to load with a clear reason instead of quietly running on the CPU.
+Accelerators that are not yet validated (`xpu`, `npu`) are never picked by
+`auto` — on a host that has one, `auto` still selects the CPU; name the device
+explicitly to use it.
 
 ### How much memory
 
