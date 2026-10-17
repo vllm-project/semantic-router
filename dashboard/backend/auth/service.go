@@ -51,8 +51,10 @@ var ErrBootstrapClosed = errors.New("bootstrap is disabled")
 // ErrInvalidCredentials and ErrUserNotActive are returned by Login for user-visible
 // rejection cases; all other Login errors are store failures that handlers must not
 // echo to the client.
-var ErrInvalidCredentials = errors.New("invalid credentials")
-var ErrUserNotActive = errors.New("user is not active")
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserNotActive      = errors.New("user is not active")
+)
 
 type TokenClaims struct {
 	UserID string `json:"userId"`
