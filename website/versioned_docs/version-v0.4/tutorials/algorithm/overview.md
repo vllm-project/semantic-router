@@ -96,6 +96,9 @@ same final validation but are not replaced by another model.
 | `svm` | experimental | Apply a learned decision boundary | Trained selector artifact and embeddings | [SVM](./selection/svm) |
 | `mlp` | experimental | Apply a learned nonlinear classifier | Trained selector artifact | [MLP](./selection/mlp) |
 
+> [!NOTE]
+> **Migrating from v0.3 `session_aware`**: In v0.4, the legacy `session_aware` selection algorithm is retired (`algorithm.type=session_aware` is rejected by config validation). Session continuity and agent tool-loop stability are now decoupled from per-decision selection algorithms and managed globally via [Protection](../learning/protection). Decisions configure their base model selection method (e.g., `latency_aware`, `multi_factor`, or `hybrid`) and use `adaptations` for per-decision protection controls (`apply`, `observe`, or `bypass`). See [Migrating from v0.3 Session-Aware Algorithm](../learning/protection#migrating-from-v03-session-aware-algorithm).
+
 ### Looper Algorithms
 
 Looper algorithms make additional model calls through

@@ -262,3 +262,101 @@ bypassed".
 Router Replay stores the full protection trace: identity source and hash,
 protected model, base model, proposal model, final model, switch cost, cache
 evidence, tool-loop state, mode, scope, action, and reason.
+
+## Migrating from v0.3 Session-Aware Algorithm
+
+In v0.3, session continuity was implemented as a decision-level selector (`algorithm.type: session_aware`) that wrapped a base selection method (such as `hybrid` or `latency_aware`). This coupled route eligibility and scoring with multi-turn session state.
+
+In v0.4, **Session-Aware Agentic Routing is decoupled and elevated to Router Learning Protection**:
+
+1. **Global Lifecycle Management**: Continuity, session timeouts, and tool-loop stability are configured globally under `global.router.learning.protection` rather than duplicated across individual routing decisions.
+2. **Clean Base Selection**: Decisions declare standard stateless or evaluation algorithms (`multi_factor`, `latency_aware`, `hybrid`, `static`, etc.). When protection is enabled, it automatically guards continuity without changing the decision's underlying algorithm.
+3. **Decision-Level Policy**: Individual decisions can opt out or run diagnostics using `routing.decisions[].adaptations.mode: bypass | observe | apply`.
+
+### Configuration Comparison
+
+#### v0.3 Legacy Syntax (Retired)
+
+In v0.3, session awareness was configured inside the decision's algorithm:
+
+```yaml
+# DEPRECATED / INVALID IN v0.4
+routing:
+  decisions:
+    - name: agentic_chat
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: small-model
+        - model: large-model
+      algorithm:
+        type: session_aware
+        session_aware:
+          base_method: latency_aware
+          idle_timeout_seconds: 300
+          tool_loop_hard_lock: true
+          context_portability_hard_lock: true
+          switch_margin: 0.05
+```
+
+#### v0.4 Canonical Syntax
+
+In v0.4, configure protection globally and configure the base selector cleanly under the decision:
+
+```yaml
+global:
+  router:
+    learning:
+      enabled: true
+      adaptation:
+        enabled: false
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stability_weight: 1.0
+
+routing:
+  decisions:
+    - name: agentic_chat
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: small-model
+        - model: large-model
+      algorithm:
+        type: latency_aware
+        latency_aware:
+          tpot_percentile: 90
+          ttft_percentile: 95
+```
+
+### Parameter Mapping
+
+| v0.3 `algorithm.session_aware` Parameter | v0.4 Protection Equivalent | Notes |
+|---|---|---|
+| `base_method` | `routing.decisions[].algorithm.type` | Configured directly as the decision's algorithm (e.g. `latency_aware`, `multi_factor`). |
+| `idle_timeout_seconds` | `global.router.learning.protection.tuning.idle_timeout_seconds` | Global session inactivity threshold before re-evaluating model choice. |
+| `tool_loop_hard_lock` | Built-in | Hard-locks active tool loops automatically when tool calls are pending. |
+| `context_portability_hard_lock` | Built-in | Prevents model switching when provider-managed state (`previous_response_id`) is present. |
+| `switch_margin` | `global.router.learning.protection.tuning.switch_margin` | Score margin required for a new candidate to replace the protected model. |
+| `prefix_cache_weight` / `switch_history_weight` | `global.router.learning.protection.tuning.stability_weight` | Consolidated into tunable stability weight for switch economics. |
+| `decision_drift_reset` | Built-in | Re-evaluates routing when user intent drifts to a different decision rule. |
+| Per-decision bypass/observe | `routing.decisions[].adaptations.mode` | Set to `bypass` to disable protection, or `observe` to log traces without holding models. |
+
+### Validation Errors in v0.4
+
+If a legacy v0.3 configuration is loaded, `vllm-sr config validate` rejects `session_aware` with:
+
+```text
+decision '<name>': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm
+```
