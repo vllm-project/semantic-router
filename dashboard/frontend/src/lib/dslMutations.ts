@@ -690,15 +690,17 @@ function serializeInlineValue(value: DSLFieldValue): string {
   return typeof value === 'string' ? quoteDSLString(value) : String(value)
 }
 
-// The DSL lexer has no exponent form, so 1e-7 is written as 0.0000001.
+// The DSL lexer has no exponent form (1e-7 is written as 0.0000001) and reads a
+// number without a point as int64, so whole numbers beyond that range keep ".0".
 function formatDslNumber(value: number): string {
   const [mantissa, exponent] = String(value).split('e')
-  if (exponent === undefined) return mantissa
+  const floatSuffix = Math.abs(value) >= 2 ** 63 ? '.0' : ''
+  if (exponent === undefined) return mantissa + floatSuffix
   const sign = value < 0 ? '-' : ''
   const digits = mantissa.replace(/[-.]/g, '')
   const integerDigits = Number(exponent) + 1
   return integerDigits > 0
-    ? sign + digits.padEnd(integerDigits, '0')
+    ? sign + digits.padEnd(integerDigits, '0') + floatSuffix
     : `${sign}0.${'0'.repeat(-integerDigits)}${digits}`
 }
 

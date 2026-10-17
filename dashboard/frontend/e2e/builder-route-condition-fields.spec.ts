@@ -1,9 +1,9 @@
-import { expect, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import path from 'node:path'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { mockAuthenticatedAppShell, test } from './support/compiler'
 
-// Uses the real Go WASM compiler built by dashboard-build-wasm; only server data is a fixture.
+// Uses the production Go compiler through its HTTP handler; only server data is a fixture.
 const config = `version: v0.3
 providers:
   models:
@@ -48,7 +48,11 @@ routing:
 const condition =
   'classifier("safety-score", label: "unsafe", predicate: { gte: 0.5 }) AND keyword("urgent", predicate: { gt: 0.0000001 })'
 
-test('keeps condition fields when a Builder route is edited and saved', async ({ page }) => {
+type MonacoWindow = {
+  monaco: { editor: { getModels(): Array<{ getValue(): string; setValue(value: string): void }> } }
+}
+
+const openBuilder = async (page: Page) => {
   await mockAuthenticatedAppShell(page)
   // Serve the pinned editor dependency locally so DSL mode works without a CDN.
   await page.route('https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/**', async (route) => {
@@ -59,6 +63,16 @@ test('keeps condition fields when a Builder route is edited and saved', async ({
   })
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
+}
+
+const compiledRoute = async (page: Page) => {
+  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Compile', exact: true }).click()
+  return page.locator('pre').filter({ hasText: 'name: unsafe_prompts_route' })
+}
+
+test('keeps condition fields when a Builder route is edited and saved', async ({ page }) => {
+  await openBuilder(page)
 
   await page.getByRole('button', { name: /^Unsafe Prompts\b/ }).click()
   const result = page.locator('code').filter({ hasText: 'classifier(' })
@@ -76,10 +90,35 @@ test('keeps condition fields when a Builder route is edited and saved', async ({
   await expect(result).toHaveText(condition)
 
   await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Compile', exact: true }).click()
-  const compiled = page.locator('pre').filter({ hasText: 'name: unsafe_prompts_route' })
+  const compiled = await compiledRoute(page)
   await expect(compiled).toContainText('label: unsafe')
   await expect(compiled).toContainText('gte: 0.5')
   await expect(compiled).toContainText('gt: 1e-07')
+})
+
+test('keeps a whole number beyond int64 compilable when a Builder route is saved', async ({
+  page,
+}) => {
+  await openBuilder(page)
+  await expect(page.getByRole('button', { name: /^Unsafe Prompts\b/ })).toBeVisible()
+
+  // Author the value in DSL mode: the YAML decompiler writes it without a point.
+  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
+  const editDsl = () =>
+    page.evaluate(() => {
+      const model = (window as unknown as Partial<MonacoWindow>).monaco?.editor
+        .getModels()
+        .find((candidate) => candidate.getValue().includes('gt: 0.0000001'))
+      model?.setValue(model.getValue().replace('gt: 0.0000001', 'gt: 1234000000000000000000.0'))
+      return Boolean(model)
+    })
+  await expect.poll(editDsl).toBe(true)
+  await page.getByRole('button', { name: 'Visual', exact: true }).click()
+
+  await page.getByRole('button', { name: /^Unsafe Prompts\b/ }).click()
+  await expect(page.locator('code').filter({ hasText: 'classifier(' })).toContainText(
+    'keyword("urgent", predicate: { gt: 1234000000000000000000.0 })',
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(await compiledRoute(page)).toContainText('gt: 1.234e+21')
 })

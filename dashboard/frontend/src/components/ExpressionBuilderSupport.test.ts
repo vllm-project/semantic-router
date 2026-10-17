@@ -45,6 +45,24 @@ describe('expression builder condition fields', () => {
     expect(parseExprText(expected)).toEqual(tree)
   })
 
+  it('keeps whole numbers beyond int64 in float form that parses back', () => {
+    const when: BoolExprNode = {
+      type: 'signal_ref',
+      signalType: 'keyword',
+      signalName: 'urgent',
+      fields: { predicate: { gte: 1234000000000000000000.0, lt: -1e20, lte: 9007199254740991 } },
+      pos,
+    }
+    // The DSL lexer reads a literal without a point as int64, so gte and lt need ".0" to compile.
+    const expected =
+      'keyword("urgent", predicate: { gte: 1234000000000000000000.0, lt: -100000000000000000000.0, lte: 9007199254740991 })'
+
+    expect(serializeBoolExpr(when)).toBe(expected)
+    const tree = boolExprToRuleNode(when as unknown as Record<string, unknown>)
+    expect(tree && serializeNode(tree)).toBe(expected)
+    expect(parseExprText(expected)).toEqual(tree)
+  })
+
   it('reads condition fields from raw expression text', () => {
     const tree = parseExprText(
       'classifier("risk", label: "unsafe" predicate: {gte: 0.5, lt: 1}) OR keyword("urgent", terms: ["a", "b"], strict: true)',
