@@ -225,3 +225,23 @@ def test_an_fp8_package_needs_an_fp8_gpu(tmp_path, d3_text_package):
     packed = write_quantized_fixture(d3_text_package, tmp_path / "fp8", scheme="float8")
     with pytest.raises(Exception, match="FP8 weights need"):
         start_runtime(packed)
+
+
+@pytest.mark.parametrize(
+    "safe, ada, unscaled, captured",
+    [
+        (False, True, False, False),
+        (False, True, True, True),
+        (False, False, False, True),
+        (True, True, False, True),
+    ],
+)
+def test_graphs_skip_adas_per_row_fp8_product_before_pytorch_2_12(
+    monkeypatch, safe, ada, unscaled, captured
+):
+    from vllm_srun.engines.native import quantized
+
+    layer = quantized.Float8Linear(nn.Linear(16, 16, bias=False))
+    layer.ada, layer.unscaled_product = ada, unscaled
+    monkeypatch.setattr(quantized, "ROWWISE_CAPTURE_SAFE", safe)
+    assert quantized.capture_safe(nn.Sequential(layer)) is captured

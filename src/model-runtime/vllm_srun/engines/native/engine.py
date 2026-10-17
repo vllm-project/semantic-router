@@ -193,7 +193,9 @@ class NativeEngineModel(EngineModel):
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
             self.masks = fast.NoncausalMasks() if self.noncausal else fast.Masks()
-        if options.graphs:
+        if options.graphs and not quantized.capture_safe(backbone):
+            self.fast["graphs_skipped"] = "Ada's per-row FP8 product needs PyTorch 2.12 in a graph"
+        elif options.graphs:
             assert self.masks is not None
             self.graphs = fast.Graphs(backbone, self.masks)
 

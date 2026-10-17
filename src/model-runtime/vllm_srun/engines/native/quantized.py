@@ -26,6 +26,9 @@ checkpoint's compressed tensors as they are stored:
   at half of it), so there approximate kernels take the product of
   ``UNSCALED_ROWS`` rows or more unscaled in FP32 and apply the scales after,
   as the per-row epilogue applies them; exact kernels keep the scaled product.
+  Before PyTorch 2.12 Ada's per-row kernel cannot run in a graph, so approximate
+  kernels take every product unscaled there and exact kernels run without graphs
+  (``capture_safe``).
   The scaled product writes BF16 whatever the dtype (hipBLASLt's row-wise
   scaling writes nothing else), cast to the activation dtype after, and a cast
   of the whole model to another dtype leaves the FP8 weight as stored.
@@ -47,6 +50,9 @@ E4M3FN_NEGATIVE_ZERO = -128
 FUSED_ROWS = 256
 # Rows from which approximate kernels take the FP8 product unscaled on Ada, where the per-row scaled one turns slow.
 UNSCALED_ROWS = 256
+# PyTorch before 2.12 zeroes the stream-K workspace of Ada's per-row FP8 kernel on the
+# default stream (pytorch/pytorch#177573), so that product hangs in a graph or on another stream.
+ROWWISE_CAPTURE_SAFE = torch.torch_version.TorchVersion(torch.__version__) >= "2.12"
 # The FP8 format each ROCm architecture's matrix units multiply.
 ROCM_FLOAT8 = {"gfx942": torch.float8_e4m3fnuz, "gfx950": torch.float8_e4m3fn}
 
@@ -168,6 +174,8 @@ class Float8Linear(nn.Module):
     weight: torch.Tensor
     weight_scale: torch.Tensor
     unscaled_product: bool = False  # approximate kernels on Ada (``UNSCALED_ROWS``)
+    unscaled_rows = UNSCALED_ROWS
+    ada = False
 
     def __init__(self, linear: nn.Linear):
         super().__init__()
@@ -220,7 +228,8 @@ class Float8Linear(nn.Module):
             )
         if torch.version.hip is None:
             capability = torch.cuda.get_device_capability(self.weight.device)
-            self.unscaled_product = capability == (8, 9)
+            self.ada = self.unscaled_product = capability == (8, 9)
+            self.unscaled_rows = UNSCALED_ROWS if ROWWISE_CAPTURE_SAFE else 0
             self.one = torch.ones((), device=self.weight.device)
         if fmt == torch.float8_e4m3fnuz and self.weight.dtype == torch.float8_e4m3fn:
             # The same bits mean half the value in e4m3fnuz; -128 (negative zero in
@@ -243,7 +252,7 @@ class Float8Linear(nn.Module):
         if rows.stride(-1) != 1:
             rows = rows.contiguous()
         q, scale = self.quantize_rows(rows, self.weight.dtype)
-        if self.unscaled_product and rows.shape[0] >= UNSCALED_ROWS:
+        if self.unscaled_product and rows.shape[0] >= self.unscaled_rows:
             out = torch._scaled_mm(
                 q,
                 self.weight_t,
@@ -293,6 +302,14 @@ def layers(module: nn.Module) -> list[Int4Linear | Float8Linear]:
         for layer in module.modules()
         if isinstance(layer, (Int4Linear, Float8Linear))
     ]
+
+
+def capture_safe(module: nn.Module) -> bool:
+    """Whether graphs may capture ``module``: not with Ada's per-row FP8 product before PyTorch 2.12."""
+    return ROWWISE_CAPTURE_SAFE or not any(
+        isinstance(layer, Float8Linear) and layer.ada and not layer.unscaled_product
+        for layer in layers(module)
+    )
 
 
 def prepare(module: nn.Module) -> None:

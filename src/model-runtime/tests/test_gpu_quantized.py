@@ -53,16 +53,18 @@ def test_the_layer_multiplies_by_the_unpacked_weight(device):
 def test_the_layer_replays_in_a_graph(device):
     module = layer(64, 128, 32, symmetric=True).to(device)
     x = torch.randn(4, 128, device=device, dtype=torch.bfloat16)
-    eager = module(x)
-    graph = torch.cuda.CUDAGraph()
-    stream = torch.cuda.Stream()
-    stream.wait_stream(torch.cuda.current_stream())
-    with torch.cuda.stream(stream):
-        module(x)
-    torch.cuda.current_stream().wait_stream(stream)
-    with torch.cuda.graph(graph):
-        out = module(x)
-    graph.replay()
+    # captured in inference mode, as the engine captures its graphs
+    with torch.inference_mode():
+        eager = module(x)
+        graph = torch.cuda.CUDAGraph()
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream):
+            module(x)
+        torch.cuda.current_stream().wait_stream(stream)
+        with torch.cuda.graph(graph):
+            out = module(x)
+        graph.replay()
     torch.cuda.synchronize()
     assert torch.equal(out, eager)
 
@@ -259,9 +261,10 @@ def test_the_unscaled_fp8_product_stays_within_a_few_bf16_ulps(device):
     # outputs near zero come from cancelling sums, whose relative error grows
     away_from_zero = scaled.abs() > 1e-2 * scaled.abs().max()
     assert (difference <= 4 * ulp)[away_from_zero].all()
-    # fewer rows keep the scaled product
-    few = x[: UNSCALED_ROWS - 1]
-    assert torch.equal(product(few, True), product(few, False))
+    # fewer rows keep the scaled product where a graph can run it (PyTorch 2.12)
+    if module.unscaled_rows:
+        few = x[: module.unscaled_rows - 1]
+        assert torch.equal(product(few, True), product(few, False))
 
 
 def test_only_approximate_kernels_take_the_unscaled_fp8_product(
