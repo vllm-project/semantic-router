@@ -2886,7 +2886,7 @@
           "type": "string"
         },
         "llm_timeout_seconds": {
-          "type": "integer"
+          "type": "number"
         },
         "parser_type": {
           "type": "string"
