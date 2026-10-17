@@ -16,14 +16,18 @@ import (
 
 // SignalRoutingCase is a single request/expectation pair for a signal that is
 // evaluated from one standalone request (e.g. event, language): the signal
-// either matches a configured rule on that request or it doesn't.
+// either matches a configured rule on that request or it doesn't. A case
+// carries either Query (a single user prompt) or Messages (a full message
+// array, for signals that read message-envelope facts like role counts,
+// e.g. conversation) - never both.
 type SignalRoutingCase struct {
-	Name                  string `json:"name"`
-	Description           string `json:"description"`
-	Query                 string `json:"query"`
-	ExpectedDecision      string `json:"expected_decision"`
-	ExpectedMatchedSignal string `json:"expected_matched_signal"`
-	ShouldMatch           bool   `json:"should_match"`
+	Name                  string              `json:"name"`
+	Description           string              `json:"description"`
+	Query                 string              `json:"query,omitempty"`
+	Messages              []map[string]string `json:"messages,omitempty"`
+	ExpectedDecision      string              `json:"expected_decision"`
+	ExpectedMatchedSignal string              `json:"expected_matched_signal"`
+	ShouldMatch           bool                `json:"should_match"`
 }
 
 // SignalRoutingResult tracks the result of a single SignalRoutingCase.
@@ -133,7 +137,13 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 		ShouldMatch:           testCase.ShouldMatch,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
+	var response *localChatCompletionResponse
+	var err error
+	if len(testCase.Messages) > 0 {
+		response, err = sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", testCase.Messages, 30*time.Second)
+	} else {
+		response, err = sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
+	}
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -148,14 +158,18 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 	}
 
 	decision := response.Headers.Get("x-vsr-selected-decision")
-	result.ActualDecision = strings.TrimSuffix(decision, "_decision")
+	result.ActualDecision = decision
 	result.ActualMatchedSignal = response.Headers.Get(cfg.MatchedHeader)
 
 	if testCase.ShouldMatch {
 		result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
 		result.MatchCorrect = result.ActualMatchedSignal == testCase.ExpectedMatchedSignal
 	} else {
-		result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		if testCase.ExpectedDecision != "" {
+			result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
+		} else {
+			result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		}
 		result.MatchCorrect = result.ActualMatchedSignal == ""
 	}
 

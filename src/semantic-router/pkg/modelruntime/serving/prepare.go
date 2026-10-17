@@ -106,6 +106,16 @@ func (r *Runtime) DeploymentCard(ctx context.Context, name string, deployment co
 	return r.card(ctx, config.ResolvedModelBinding{Name: name, Binding: config.ModelBinding{Deployment: name}, Deployment: deployment.WithDefaults()})
 }
 
+// CurrentDeploymentCard reads this generation's observed ready metadata.
+// Attached services may recover independently of Router startup; consumers
+// can check their capabilities without waiting or discovering at request time.
+func (r *Runtime) CurrentDeploymentCard(name string) (modelservice.ModelCard, bool) {
+	if r.services == nil {
+		return modelservice.ModelCard{}, false
+	}
+	return r.services.CurrentCard(name)
+}
+
 // preparationContext bounds a preparation whose caller set no deadline, so a
 // runtime that never becomes ready fails the generation instead of blocking it.
 func preparationContext(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -144,8 +154,9 @@ func (r *Runtime) acquire(ctx context.Context, spec config.ResolvedModelBinding,
 		return nil, fmt.Errorf("%w: the card of deployment %q reports no device or dtype", binding.ErrCapability, spec.Binding.Deployment)
 	}
 	execution, _ := json.Marshal(struct {
-		Deployment, Model, Profile string
-	}{spec.Binding.Deployment, card.ID, card.Profile})
+		Deployment, Model string
+		EngineArgs        modelservice.EngineArgs
+	}{spec.Binding.Deployment, card.ID, card.EngineArgs})
 	identity := binding.ResourceIdentity{
 		Artifact: card.ModelSHA256, Revision: card.Revision, Provider: Provider,
 		Device: card.Device, Precision: card.Dtype, Execution: string(execution),

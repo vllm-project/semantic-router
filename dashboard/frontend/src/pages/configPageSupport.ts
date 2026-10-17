@@ -1,10 +1,11 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../modelCatalogDocument'
+import bundledCatalog from '../modelCatalogMetadata'
 import type {
   DecisionConditionType,
   DecisionModelSignal,
   Listener,
   SafetySignal,
+  TopicContinuitySignal,
 } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
@@ -114,6 +115,7 @@ export interface ModelPricing {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -374,6 +376,7 @@ export interface NormalizedModel {
     prompt_per_1m?: number
     cached_input_per_1m?: number
     cache_write_per_1m?: number
+    cache_write_1h_per_1m?: number
     completion_per_1m?: number
   }
   reliability?: ProviderReliability
@@ -428,6 +431,13 @@ export interface RouterReplayConfig {
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
+  capture_request_body?: boolean
+  capture_response_body?: boolean
+  capture_personal_data?: boolean
+  max_records?: number
+  max_body_bytes?: number
+  max_tool_trace_bytes?: number
+  max_tool_trace_steps?: number
 }
 
 export interface MemoryMilvusConfig {
@@ -701,7 +711,7 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
-  decision_model?: string
+  decision_model?: { deployment: string }
   safety?: string
   hazard?: string
   prompt_guard?: string
@@ -773,9 +783,7 @@ export interface CanonicalEmbeddingCatalogConfig {
 export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
-  auto_model_name?: string
-  auto_model_names?: string[]
-  include_config_models_in_list?: boolean
+  list_backend_models?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }
@@ -826,7 +834,23 @@ export interface CanonicalModelModulesConfig {
   modality_detector?: ModalityDetectorConfig
 }
 
+export interface CanonicalModelDeployment {
+  artifact?: string
+  revision?: string
+  external_model?: string
+  provider?: string
+  device?: string
+  input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
+  profile?: string
+  endpoint?: string
+  replicas?: Array<{ device?: string; endpoint?: string; served_name?: string }>
+  served_name?: string
+  public_name?: string
+}
+
 export interface CanonicalModelCatalogConfig {
+  bindings?: Record<string, { deployment: string; contract: string }>
+  deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
   external?: ExternalModelConfig[]
@@ -904,6 +928,7 @@ export interface ConfigSignals {
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
   decision?: DecisionModelSignal[]
+  topic_continuity?: TopicContinuitySignal[]
 }
 
 export interface ConfigProjections {
@@ -1313,6 +1338,7 @@ export interface JailbreakSignal {
 export interface PIISignal {
   name: string
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
   description?: string

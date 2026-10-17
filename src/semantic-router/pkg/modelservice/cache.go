@@ -150,6 +150,11 @@ func (w *keyWriter) question(question Question) {
 	w.string(question.Instructions)
 	w.string(question.Preset)
 	w.string(question.Head)
+	if question.RequireFullInput {
+		w.int(1)
+	} else {
+		w.int(0)
+	}
 	if question.Truncate {
 		w.int(1)
 	} else {

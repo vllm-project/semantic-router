@@ -94,10 +94,24 @@
     },
     {
       "package": "./pkg/classification",
+      "test": "TestVela2PublishedAnswers03BRealModel",
+      "source": "src/semantic-router/pkg/classification/vela2_published_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Asks the pinned Vela 2.0 0.3B, served on CPU by the published-model runner (VLLM_SRUN_VELA2_ENDPOINT), every built-in signal and decision question through the Router and checks the fused decisions call against its recorded answers; each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestVela2PublishedAnswers08BRealModel",
+      "source": "src/semantic-router/pkg/classification/vela2_published_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Asks the pinned Vela 2.0 0.8B, served on CPU by the published-model runner (VLLM_SRUN_VELA2_08B_ENDPOINT), the same questions on a shorter corpus; each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
       "test": "TestVela2RouterMatchesSystemOne",
       "source": "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
-      "profile": "external-vela2-runtime",
-      "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on a live runtime serving a Vela 2.0 model (VLLM_SRUN_VELA2_ENDPOINT); core CI serves no Vela 2.0 model, so core runs the fixture-backed set, span and binding tests instead."
+      "profile": "model-runtime",
+      "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on the pinned Vela 2.0 0.3B the published-model runner serves on CPU (VLLM_SRUN_VELA2_ENDPOINT); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/extproc",

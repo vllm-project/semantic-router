@@ -42,6 +42,9 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 
 	originalModel := strings.TrimSpace(snapshot.Model)
+	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
+		return rejected, nil
+	}
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -56,7 +59,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 
-	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
+	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, request, snapshot, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
@@ -175,13 +178,12 @@ func (r *OpenAIRouter) handleEntrypointRouting(
 	}
 
 	logging.ComponentWarnEvent("extproc", "entrypoint_routing_no_selection", map[string]interface{}{
-		"request_id":       ctx.RequestID,
-		"code":             routingFailureNoRoute.code,
-		"model":            originalModel,
-		"recipe":           ctx.Routing.RecipeName(),
-		"decision":         decisionName,
-		"looper_algorithm": r.looperAliasAlgorithm(originalModel),
-		"reason":           "the Entrypoint selected no model",
+		"request_id": ctx.RequestID,
+		"code":       routingFailureNoRoute.code,
+		"model":      originalModel,
+		"recipe":     ctx.Routing.RecipeName(),
+		"decision":   decisionName,
+		"reason":     "the Entrypoint selected no model",
 	})
 	metrics.RecordRequestError(originalModel, "no_model_selected")
 	return r.routingFailureResponse(ctx, routingFailureNoRoute), nil
@@ -212,7 +214,11 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		if err != nil {
 			return nil, err
 		}
-		r.dispatchShadowIfConfigured(ctx, dispatch)
+		// A rejected request (an immediate response) never goes upstream, so it is
+		// not mirrored to the shadow model either.
+		if finalized.GetImmediateResponse() == nil {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
 		return finalized, nil
 	}
 
@@ -259,7 +265,8 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	dispatched = true
+	// An immediate response rejects the request, so there is nothing to mirror.
+	dispatched = response.GetImmediateResponse() == nil
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

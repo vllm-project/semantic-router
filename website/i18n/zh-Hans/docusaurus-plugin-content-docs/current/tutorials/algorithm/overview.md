@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/algorithm/overview.md"
   outdated: false
 ---
@@ -67,6 +67,7 @@ routing:
 | `multi_factor` | 已支持 | 用可选 SLO 过滤器平衡质量、延迟、成本和负载 | 模型元数据和实时本地指标 | [Multi Factor](./selection/multi-factor) |
 | `hybrid` | 已支持 | 混合多个选择器分数 | 组件选择器输入 | [Hybrid](./selection/hybrid) |
 | `automix` | 实验性 | 优化估计的成本-质量值 | 候选定价和质量元数据 | [AutoMix](./selection/automix) |
+| `decision` | 支持 | 使用 choice 任务在当前决策的候选中选模 | 判断模型部署 | [Decision](./selection/decision) |
 | `prompt` | 实验性 | 让有界辅助模型从已声明候选中选择 | OpenAI 兼容辅助模型 | [Prompt](./selection/prompt) |
 | `knn` | 实验性 | 跟随相似的已标注示例 | 已训练的选择器产物和嵌入 | [KNN](./selection/knn) |
 | `kmeans` | 实验性 | 通过已学习的流量簇路由 | 已训练的选择器产物和嵌入 | [KMeans](./selection/kmeans) |

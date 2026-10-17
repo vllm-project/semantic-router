@@ -21,7 +21,7 @@ provider models.
 | [KNN](/docs/tutorials/algorithm/selection/knn) | Combines recorded quality and speed across similar queries | Similar requests tend to favor the same model and traceability matters |
 | [KMeans](/docs/tutorials/algorithm/selection/kmeans) | Maps a request to a learned cluster | The workload forms stable clusters and lookup cost matters |
 | [SVM](/docs/tutorials/algorithm/selection/svm) | Uses a learned decision boundary | Candidate models separate cleanly in feature space |
-| [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector and can operate its runtime dependency |
+| [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector; the Router evaluates the trained artifact on CPU |
 
 There is no universally best selector. Compare each candidate against simple
 baselines such as a fixed default, random choice, and the best single model on

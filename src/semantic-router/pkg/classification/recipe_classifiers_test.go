@@ -7,30 +7,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestUnreachableDefaultDoesNotPrepareRoutingArtifacts(t *testing.T) {
+func TestUnreachableNamedRecipeDoesNotPrepareRoutingArtifacts(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "unprovisioned")
 	defaultProfile := config.RoutingProfile{
 		Signals:       config.Signals{ClassifierRules: []config.ClassifierSignalRule{{Name: "risk", Type: config.ClassifierSignalTypeLocal, ModelPath: missing, UseCPU: true, Labels: []string{"safe", "unsafe"}}}},
 		ModelBindings: map[string]config.ModelBinding{"classifier.risk": {Deployment: "dormant", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution}},
 	}
 	cfg := &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: defaultProfile}, {Name: "active"}},
-		Entrypoints:   []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
+		Recipes:     []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "unmapped", Profile: defaultProfile}, {Name: "active"}},
+		Entrypoints: []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
 	}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: config.ModelRuntimeProvider, Device: "cpu"}}
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("unreachable default tried to load routing model: %v", err)
+		t.Fatalf("unreachable named recipe tried to load routing model: %v", err)
 	}
 	t.Cleanup(func() { _ = classifiers.Close() })
-	if len(classifiers.Default().genericClassifiers) != 0 {
+	unmapped, _ := classifiers.ForRecipe("unmapped")
+	if len(unmapped.genericClassifiers) != 0 {
 		t.Fatal("unreachable routing model was prepared")
 	}
 	if initErr := classifiers.InitializeRuntime(); initErr != nil {
 		t.Fatal(initErr)
 	}
-	if len(cfg.Recipes[0].Profile.Signals.ClassifierRules) != 1 {
+	if len(cfg.Recipes[1].Profile.Signals.ClassifierRules) != 1 {
 		t.Fatal("preparation mutated the canonical recipe")
 	}
 	invalid := *cfg
@@ -129,10 +129,9 @@ func TestBuildRecipeClassifiersKeepsUnreachableRecipeValidationButSkipsRuntimeLi
 	}
 }
 
-func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testing.T) {
+func TestBuildRecipeClassifiersKeepsImplicitDefaultEntrypoint(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
+		Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
 	}
 
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
@@ -143,7 +142,7 @@ func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testi
 		classifiers.runtimeOrder[0] != config.DefaultRecipeName {
 		t.Fatalf("default API lifecycle was lost: %v", classifiers.runtimeOrder)
 	}
-	if len(classifiers.routingOrder) != 0 {
-		t.Fatalf("disabled default routing remained reachable: %v", classifiers.routingOrder)
+	if len(classifiers.routingOrder) != 1 || classifiers.routingOrder[0] != config.DefaultRecipeName {
+		t.Fatalf("implicit default routing must remain reachable: %v", classifiers.routingOrder)
 	}
 }

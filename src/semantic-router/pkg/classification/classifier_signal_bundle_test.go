@@ -17,16 +17,18 @@ import (
 // runtime as one bundle as soon as they have all parked.
 func TestSignalStageSendsOneBundleWithoutWaitingForHeuristics(t *testing.T) {
 	runtime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{
-		"domain":   servingtest.Sequence("math", "law"),
-		"guard":    servingtest.Sequence("benign", "jailbreak"),
-		"feedback": servingtest.Sequence("satisfied", "wrong_answer"),
+		"signals": {Heads: []runtimetest.Head{
+			{Name: "domain", Kind: "sequence", Labels: []string{"math", "law"}},
+			{Name: "guard", Kind: "sequence", Labels: []string{"benign", "jailbreak"}},
+			{Name: "feedback", Kind: "sequence", Labels: []string{"satisfied", "wrong_answer"}},
+		}},
 	})
 	ctx := context.Background()
 	call := make(map[string]func(context.Context) error)
 	for _, deployment := range []string{"domain", "guard", "feedback"} {
 		spec := config.ResolvedModelBinding{
 			Recipe: config.DefaultRecipeName, Name: deployment + "_consumer",
-			Binding:    config.ModelBinding{Deployment: deployment, Contract: config.RemoteClassifierContractLabelDistribution},
+			Binding:    config.ModelBinding{Deployment: "signals", Head: deployment, Contract: config.RemoteClassifierContractLabelDistribution},
 			Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://fake", Input: config.ModelInputBudget{Overflow: "reject"}},
 		}
 		handle, err := runtime.Sequence(ctx, spec)

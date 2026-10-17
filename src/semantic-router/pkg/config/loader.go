@@ -115,8 +115,9 @@ func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
 // ValidateYAMLBytesDeferringEnv validates a config that another process will
 // load with its own environment, so it resolves no reference from this one:
 // references take their defaults, and the config passes if it is valid with
-// the other references either kept as written or empty. External assets are
-// checked as in ParseYAMLBytes.
+// each variable referenced without a default either kept as written or empty,
+// as that process reads an unset variable. External assets are checked as in
+// ParseYAMLBytes.
 func ValidateYAMLBytesDeferringEnv(data []byte) error {
 	_, err := deferredEnvExpander(data)
 	return err
@@ -152,10 +153,17 @@ func ParseYAMLBytesDeferringEnv(data []byte) (*RouterConfig, error) {
 var routingSections = map[string]bool{"routing": true, "entrypoints": true, "recipes": true}
 
 // deferredEnvExpander returns the expander with which data passes
-// ValidateYAMLBytesDeferringEnv.
+// ValidateYAMLBytesDeferringEnv. Each variable starts kept as written. A check
+// that rejects a value it parses, such as a token count or a duration, quotes
+// the value, and each variable it quotes is then read as empty. If no such mix
+// passes, every variable is tried empty.
 func deferredEnvExpander(data []byte) (*envExpander, error) {
-	keep := &envExpander{lookup: noEnv, keepUnset: true}
+	keep := &envExpander{lookup: noEnv, keepUnset: true, unset: map[string]bool{}, kept: map[string]string{}}
 	_, err := parseYAMLBytesWithOptions(data, "", keep)
+	keptErr := err
+	for err != nil && keep.unsetQuoted(err.Error()) {
+		_, err = parseYAMLBytesWithOptions(data, "", keep)
+	}
 	if err == nil {
 		return keep, nil
 	}
@@ -163,7 +171,7 @@ func deferredEnvExpander(data []byte) (*envExpander, error) {
 	if _, emptyErr := parseYAMLBytesWithOptions(data, "", empty); emptyErr == nil {
 		return empty, nil
 	}
-	return nil, err
+	return nil, keptErr
 }
 
 // parseYAMLBytesWithOptions keeps references as written and skips external
@@ -232,6 +240,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
+		rejectRemovedEntrypointFields,
 		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
@@ -239,6 +248,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		rejectRemovedRouterLearningFields,
 		rejectUnsupportedRouterLearningFields,
 		rejectRemovedModelExecutionFields,
+		rejectRemovedDeploymentProfile,
 	}
 	for _, validate := range validators {
 		if err := validate(raw); err != nil {
@@ -872,4 +882,24 @@ func nestedStringMap(raw interface{}) map[string]interface{} {
 	default:
 		return map[string]interface{}{}
 	}
+}
+
+func rejectRemovedEntrypointFields(raw map[string]interface{}) error {
+	global := nestedStringMap(raw["global"])
+	router := nestedStringMap(global["router"])
+	for _, name := range []string{"auto_model_name", "auto_model_names"} {
+		if _, exists := router[name]; exists {
+			return fmt.Errorf("global.router.%s was removed; configure entrypoints with recipe: default and model_names", name)
+		}
+	}
+	if _, exists := router["include_config_models_in_list"]; exists {
+		return fmt.Errorf("global.router.include_config_models_in_list was renamed to global.router.list_backend_models")
+	}
+	looper := nestedStringMap(nestedStringMap(global["integrations"])["looper"])
+	for _, algorithm := range []string{"remom", "fusion", "flow"} {
+		if _, exists := nestedStringMap(looper[algorithm])["model_names"]; exists {
+			return fmt.Errorf("global.integrations.looper.%s.model_names was removed; expose the algorithm through an explicit entrypoint and recipe", algorithm)
+		}
+	}
+	return nil
 }

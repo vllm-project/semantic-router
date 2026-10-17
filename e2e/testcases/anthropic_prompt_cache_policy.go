@@ -161,18 +161,20 @@ func validatePromptCachePolicyEmptyInstruction(
 	if err != nil {
 		return err
 	}
-	if len(providerRequest.System) != 3 ||
-		!matchesCacheControl(providerRequest.System[1].CacheControl, "ephemeral", "1h") ||
-		providerRequest.System[2].CacheControl != nil {
+	if len(providerRequest.System) != 2 ||
+		providerRequest.System[0].Text != "Stable preface" ||
+		providerRequest.System[1].Text != "Reusable instructions" ||
+		providerRequest.System[0].CacheControl != nil ||
+		!matchesCacheControl(providerRequest.System[1].CacheControl, "ephemeral", "1h") {
 		return fmt.Errorf("empty instruction marker mismatch: %s", truncateString(string(forwarded), 800))
 	}
 	if verbose {
 		fmt.Printf(
-			"[PromptCache] mode=empty-trailing action=%q inserted=%q instruction_markers=%d empty_marked=%t\n",
+			"[PromptCache] mode=empty-trailing action=%q inserted=%q instruction_markers=%d forwarded_blocks=%d\n",
 			response.Headers.Get("x-vsr-prompt-cache-action"),
 			response.Headers.Get("x-vsr-prompt-cache-inserted"),
 			promptCacheBlockMarkerCount(providerRequest.System),
-			providerRequest.System[2].CacheControl != nil,
+			len(providerRequest.System),
 		)
 	}
 	return nil
@@ -280,7 +282,7 @@ func validateDisabledPromptCachePolicy(
 
 func promptCachePolicyRequest(probe string, stream bool) map[string]any {
 	return map[string]any{
-		"model":      "MoM",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 16,
 		"stream":     stream,
 		"messages": []any{

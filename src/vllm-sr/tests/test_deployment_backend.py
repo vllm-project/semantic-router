@@ -57,9 +57,18 @@ class TestResolveTarget:
 
 
 class TestContainerBackend:
+    @pytest.fixture(autouse=True)
+    def isolate_instance_controller(self, monkeypatch):
+        for name in (
+            "attach_controller",
+            "stop_managed_controller",
+        ):
+            monkeypatch.setattr("cli.container_backend." + name, MagicMock())
+
     @pytest.mark.parametrize("startup_timeout", [None, 7200])
     def test_deploy_delegates_to_start_vllm_sr(self, monkeypatch, startup_timeout):
         captured = {}
+        monkeypatch.setattr("cli.container_backend.attach_controller", MagicMock())
         lifecycle_lock = MagicMock()
         monkeypatch.setattr(
             "cli.container_backend.start_vllm_sr",

@@ -114,7 +114,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-fail-open",
 		"model-runtime-supervision",
 		"model-runtime-load-retry",
-		"model-runtime-shared-load-retry",
+		"model-runtime-load-retry-isolation",
 	}
 }
 

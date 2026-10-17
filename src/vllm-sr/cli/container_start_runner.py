@@ -16,7 +16,7 @@ from cli.container_services import (
     container_status,
     container_stop_container,
 )
-from cli.sr_bench_runtime import reconcile_bench_container
+from cli.sr_bench_runtime import BenchWorkerKeptError, reconcile_bench_container
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -118,6 +118,9 @@ def _run_service_commands(
                     action = reconcile_bench_container(
                         cmd, container_name, bench_secret_values or {}
                     )
+                except BenchWorkerKeptError as kept:
+                    log.warning(f"{kept} Router and Dashboard start without it.")
+                    break
                 except (ValueError, subprocess.SubprocessError) as reconciliation_error:
                     return (1, "\n".join(stdout_chunks), str(reconciliation_error))
                 if action == "reuse":
@@ -127,7 +130,7 @@ def _run_service_commands(
                     continue
                 if action == "replace":
                     log.info(
-                        "Upgrading the idle sr-bench service; saved evidence is preserved"
+                        "Replacing the idle sr-bench service; saved evidence is preserved"
                     )
                     try:
                         result = subprocess.run(
@@ -141,7 +144,7 @@ def _run_service_commands(
                         return (
                             upgrade_error.returncode,
                             upgrade_error.stdout or "",
-                            upgrade_error.stderr or "sr-bench image upgrade failed",
+                            upgrade_error.stderr or "sr-bench replacement failed",
                         )
                     on_created()
                     stdout_chunks.append(result.stdout or "")

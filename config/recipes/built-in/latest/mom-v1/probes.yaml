@@ -219,7 +219,7 @@ decisions:
     notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
       licenses a complex or agent lane.
   - id: balance_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -1222,7 +1222,7 @@ decisions:
     - positive
     - context:over-240k
   - id: speed_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -2224,7 +2224,7 @@ decisions:
     - positive
     - context:over-240k
   - id: cost_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -3076,7 +3076,7 @@ decisions:
       conversation:
       - tool_loop
   - id: accuracy_text_tool_result_synthesis__text_tool_result_beyond_240k
-    display_prompt: Synthesize the verified text-tool result after a context longer than 240K tokens, preserving
+    display_prompt: Synthesize the verified text-tool result from this large generated context, preserving
       its sentinel and factual conclusion.
     playground:
       enabled: false
@@ -3111,6 +3111,9 @@ decisions:
         description: Retrieve audit evidence.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3124,6 +3127,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_image_tool_result_synthesis__image_tool_result_collision
     messages:
     - role: user
@@ -3211,7 +3218,7 @@ decisions:
       conversation:
       - tool_loop
   - id: accuracy_image_tool_result_synthesis__image_tool_result_beyond_240k
-    display_prompt: Synthesize the verified image-tool result after a context longer than 240K tokens, preserving
+    display_prompt: Synthesize the verified image-tool result from this large generated context, preserving
       its sentinel and visual finding.
     playground:
       enabled: false
@@ -3250,6 +3257,9 @@ decisions:
         description: Inspect an extended architecture diagram.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3264,6 +3274,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_confidence_escalation__confidence_over_multi_round_collision
     query: Fact-check and escalate if uncertain while exploring multiple reasoning paths recursively.
     tags:
@@ -3582,7 +3596,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
   - id: accuracy_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -3619,7 +3633,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
   - id: accuracy_image_from_120k_to_240k__image_context_boundary_en
-    display_prompt: Inspect the attached image within this 120K-to-240K context and summarize its primary architecture
+    display_prompt: Inspect the attached image within this large generated context and summarize its primary architecture
       flow.
     playground:
       enabled: false
@@ -3647,7 +3661,7 @@ decisions:
     - collision
     - priority
   - id: accuracy_image_from_120k_to_240k__image_context_tools_collision_zh
-    display_prompt: 请在这段 120K 到 240K 的长上下文中检查所附架构图，必要时调用查询工具，并总结关键数据流。
+    display_prompt: 请在这段生成的长上下文中检查所附架构图，必要时调用查询工具，并总结关键数据流。
     playground:
       enabled: false
       reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled

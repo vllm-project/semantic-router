@@ -27,7 +27,15 @@ import numpy as np
 
 from ...systemone import canonical
 from .dispatch import Dispatcher, SpanHead
-from .layout import Row, SchemaTooLongError, Tokens, fit, window_words, word_windows
+from .layout import (
+    Row,
+    SchemaTooLongError,
+    Tokens,
+    fit,
+    require_window_coverage,
+    window_words,
+    word_windows,
+)
 from .raw import RawRow, RawSpan
 from .request import Question
 
@@ -159,9 +167,11 @@ class DecoderLayout:
         trees: list[DecoderTree] = []
         plans: list[RowTrees | None] = []
         for row in rows:
+            start = len(trees)
             try:
                 plans.append(self._row(row, tokens, trees))
             except SchemaTooLongError:
+                del trees[start:]
                 plans.append(None)
         return trees, plans
 
@@ -204,6 +214,7 @@ class DecoderLayout:
     # -- internals -----------------------------------------------------------
 
     def _row(self, row: Row, tokens: Tokens, trees: list[DecoderTree]) -> RowTrees:
+        row.require_complete_parts()
         span = row.span
         routed = self.dispatcher.route(span) if span is not None else None
         questions = [
@@ -224,6 +235,7 @@ class DecoderLayout:
         span_block.read = False
         trees.append(DecoderTree(prefix, [*plan.blocks, span_block]))
         position = row.parts.index(target)
+        intervals = []
         for start, end in word_windows(
             target.words.first, len(target.ids), self.window, self.stride
         ):
@@ -238,6 +250,16 @@ class DecoderLayout:
             plan.windows.append(window_span)
             plan.tokens += window_tokens
             trees.append(DecoderTree(window_prefix, window_blocks, window=True))
+            intervals.append((start, end))
+        require_window_coverage(row, target, intervals)
+        if row.requires_full_input:
+            covered = {
+                int(index) for block in plan.windows for index in block.word_index
+            }
+            if covered != set(range(len(target.words))):
+                raise SchemaTooLongError(
+                    "full input has words outside the decoder windows"
+                )
         return plan
 
     def _render(
@@ -293,6 +315,16 @@ class DecoderLayout:
             row.read_roles(),
             row.shrink_role(),
         )
+        # Only a span's own windows prove its target coverage. A scalar block
+        # in the same row never inherits that proof from the span.
+        window_role = None
+        if (
+            span_question is not None
+            and not repeat
+            and all(q.type == "span" for q in row.questions)
+        ):
+            window_role = cast(str, span_question.over)
+        row.require_budget(budget, window_role=window_role)
         prefix = list(ids(PARTS_HEAD))
         for part in row.parts:
             prefix += ids(segment_open(part.role))

@@ -37,6 +37,46 @@ _LOCK = threading.Lock()
 _EXECUTOR: ThreadPoolExecutor | None = None
 
 
+def container_cpus() -> int | None:
+    """CPUs this process may use: the cgroup CPU quota (v2, then v1), else the affinity mask."""
+    try:
+        with open("/sys/fs/cgroup/cpu.max", encoding="utf-8") as stream:
+            quota, period = stream.read().split()[:2]
+        if quota != "max":
+            return max(1, int(quota) // int(period))
+    except (OSError, ValueError):
+        pass
+    try:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", encoding="utf-8") as stream:
+            v1_quota = int(stream.read())
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us", encoding="utf-8") as stream:
+            v1_period = int(stream.read())
+        if v1_quota > 0 and v1_period > 0:
+            return max(1, v1_quota // v1_period)
+    except (OSError, ValueError):
+        pass
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return None
+
+
+def cap_threads(configured: int | None) -> dict[str, int] | None:
+    """Keep PyTorch's intra-op threads within the container's CPUs when neither ``--threads`` nor ``OMP_NUM_THREADS`` sets them.
+
+    PyTorch sizes its pool by the host's cores. In a container with a smaller
+    quota the extra threads oversubscribe it: a GPU model's host work (image
+    preprocessing) then waits on spinning workers. Returns the change, if any.
+    """
+    if configured or "OMP_NUM_THREADS" in os.environ:
+        return None
+    limit, current = container_cpus(), torch.get_num_threads()
+    if limit is None or current <= limit:
+        return None
+    torch.set_num_threads(limit)
+    return {"from": current, "to": limit}
+
+
 def native_bf16() -> bool:
     """Whether the CPU computes BF16 natively (AVX-512 BF16 or AMX)."""
     probes = ("_is_avx512_bf16_supported", "_is_amx_tile_supported")

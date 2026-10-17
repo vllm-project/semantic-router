@@ -240,19 +240,31 @@ func memoryToPayload(mem *Memory) map[string]any {
 }
 
 func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
+	startTime := time.Now()
+	operation := "store"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if err := ctx.Err(); err != nil {
+		status = "error"
 		return err
 	}
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 	if mem.ID == "" {
+		status = "error"
 		return fmt.Errorf("memory ID is required")
 	}
 	if mem.Content == "" {
+		status = "error"
 		return fmt.Errorf("memory content is required")
 	}
 	if mem.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user ID is required")
 	}
 
@@ -261,6 +273,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		var err error
 		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
@@ -285,10 +298,9 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		}},
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant upsert failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "store", "success", 0)
 	return nil
 }
 
@@ -316,6 +328,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	if threshold <= 0 {
 		threshold = float32(s.config.DefaultSimilarityThreshold)
 	}
+	queryLimit, scoreThreshold := qdrantRetrieveQuery(limit, threshold, opts)
 
 	must := []*qdrant.Condition{
 		qdrant.NewMatchKeyword("user_id", opts.UserID),
@@ -334,8 +347,8 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	scored, err := s.client.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: s.collectionName,
 		Query:          qdrant.NewQueryDense(emb),
-		Limit:          qdrant.PtrOf(uint64(limit)), //nolint:gosec
-		ScoreThreshold: &threshold,
+		Limit:          qdrant.PtrOf(queryLimit),
+		ScoreThreshold: scoreThreshold,
 		WithPayload:    qdrant.NewWithPayload(true),
 		Filter:         &qdrant.Filter{Must: must},
 	})
@@ -347,6 +360,9 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	for _, sp := range scored {
 		m := payloadToMemory(sp.Payload)
 		results = append(results, &RetrieveResult{Memory: m, Score: sp.Score})
+	}
+	if opts.HybridSearch || opts.AdaptiveThreshold {
+		results = finalizePolicyRetrieve(results, opts, threshold, limit)
 	}
 
 	resultCount = len(results)
@@ -379,27 +395,41 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error {
+	startTime := time.Now()
+	operation := "update"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
-	if _, err := s.Get(ctx, id); err != nil {
+	existing, err := s.Get(ctx, id)
+	if err != nil {
+		status = "error"
 		return err
 	}
 
 	mem.ID = id
+	if mem.CreatedAt.IsZero() {
+		mem.CreatedAt = existing.CreatedAt
+	}
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
 		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
 	mem.UpdatedAt = time.Now()
 
 	wait := true
-	_, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
+	_, err = s.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -409,10 +439,9 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		}},
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant update failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "update", "success", 0)
 	return nil
 }
 
@@ -523,11 +552,20 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 }
 
 func (s *QdrantStore) Forget(ctx context.Context, id string) error {
+	startTime := time.Now()
+	operation := "forget"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
 	if _, err := s.Get(ctx, id); err != nil {
+		status = "error"
 		return err
 	}
 
@@ -538,18 +576,26 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 		Points:         qdrant.NewPointsSelectorIDs([]*qdrant.PointId{arbitraryIDToUUID(id)}),
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant delete failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "forget", "success", 0)
 	return nil
 }
 
 func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
+	startTime := time.Now()
+	operation := "forget_by_scope"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 	if scope.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user_id is required for ForgetByScope")
 	}
 
@@ -576,10 +622,9 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		}),
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant ForgetByScope failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "forget_by_scope", "success", 0)
 	return nil
 }
 

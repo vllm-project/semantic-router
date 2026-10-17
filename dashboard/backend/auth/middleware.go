@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
@@ -22,6 +21,9 @@ const (
 	authSessionCookieName = "vsr_session"
 	maxAccessTokenBytes   = 8192
 )
+
+// SessionCookieName is the browser session cookie, exported for the OpenAPI document.
+const SessionCookieName = authSessionCookieName
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
@@ -148,7 +150,6 @@ func requiredPermission(method, path string) string {
 		adminPermission,
 		settingsPermission,
 		routerPermission,
-		knowledgePermission,
 		toolsPermission,
 		observabilityPermission,
 		recipePermission,
@@ -291,15 +292,6 @@ func routerGatewayRequestAllowed(method, path string) bool {
 	return ok
 }
 
-func knowledgePermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
 func toolsPermission(method string, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/api/mcp/tools/execute"):
@@ -406,29 +398,6 @@ func Require(permission string, next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func AuditMiddleware(store *Store, action, resource string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		rw := &auditResponseWriter{ResponseWriter: w}
-		next(rw, r)
-		ac, ok := AuthFromContext(r)
-		uid := ""
-		if ok {
-			uid = ac.UserID
-		}
-		_ = store.AddAuditLog(r.Context(), AuditLog{
-			UserID:     uid,
-			Action:     action,
-			Resource:   resource,
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			IP:         r.RemoteAddr,
-			UserAgent:  r.UserAgent(),
-			StatusCode: rw.statusCodeOr200(),
-			CreatedAt:  time.Now().Unix(),
-		})
-	}
-}
-
 func extractBearer(raw string) string {
 	if raw == "" {
 		return ""
@@ -505,8 +474,6 @@ func requiresAuthentication(path string) bool {
 	case strings.HasPrefix(path, "/api/setup/state"):
 		return false
 	case path == "/api/status" || path == "/api/status/":
-		return false
-	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false
 	case strings.HasPrefix(path, "/api/"):
 		return true

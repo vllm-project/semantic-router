@@ -231,7 +231,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
 	for _, model := range append(append([]string{}, cfg.AnalysisModels...), cfg.Model) {
-		for _, fusionName := range l.cfg.Fusion.EffectiveModelNames() {
+		for _, fusionName := range l.cfg.EntrypointModels {
 			if model == fusionName {
 				return fmt.Errorf("fusion model %q cannot be used as a judge or analysis model", model)
 			}

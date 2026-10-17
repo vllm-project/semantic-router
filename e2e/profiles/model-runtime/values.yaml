@@ -3,7 +3,7 @@
 #
 # - managed: the Router starts runtime processes itself, the cpu device
 #   group (domain, PII, guard and modality classifiers, an embedder on device
-#   auto and a reranker) and the "decisions" process group (a Decision 2.0
+#   auto and a reranker), each in its own worker, plus a Decision 2.0
 #   model), through VLLM_SRUN_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
 #   classifier in one process, selected by served_name;
@@ -80,6 +80,10 @@ config:
         - name: rerank_probe
           operator: OR
           keywords: [vsr-rerank-probe]
+          case_sensitive: false
+        - name: portable_observation_probe
+          operator: OR
+          keywords: [vsr-portable-observation-probe]
           case_sensitive: false
       # testcases/decision_runtime_routing.go asks the runtimes these questions.
       decision:
@@ -160,6 +164,22 @@ config:
         deployment: vela-reranker
         contract: relevance_scores.v1
     decisions:
+      # A marker keeps this acceptance route isolated from the rest of the
+      # profile while the classifier predicate proves the portable observation
+      # reaches recipe decision evaluation. The seed-4 feedback fixture
+      # deterministically scores this marker as WRONG_ANSWER above 0.5.
+      - name: portable_observation_route
+        description: Classifier observation reaches a recipe condition
+        priority: 700
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - {type: keyword, name: portable_observation_probe}
+            - {type: classifier, name: user_reaction, label: WRONG_ANSWER, predicate: {gte: 0.5}}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
       # Keeps the reranker prepared: only reachable recipes with an enabled
       # rerank plugin load one. No case sends the keyword.
       - name: rerank_route
@@ -287,12 +307,11 @@ config:
             target_layer: 0
             target_dimension: 0
       deployments:
-        # Managed: the "decisions" process group.
+        # Managed: one independent decision-model worker.
         decision-fixture:
           provider: model_runtime
           artifact: /tmp/vsr-fixtures/decision
           device: cpu
-          process: decisions
         # Managed: the cpu device group.
         vela-domain:
           provider: model_runtime

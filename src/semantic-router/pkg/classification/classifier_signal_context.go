@@ -35,6 +35,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
 		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
+		config.SignalTypeAction:        len(c.Config.ActionRules) > 0,
 		config.SignalTypeDecision:      len(c.Config.DecisionRules) > 0,
 	}
 }
@@ -228,6 +229,16 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	runSignalDispatchers(stage, dispatchers, usedSignals, ready, bundle, asks, &wg)
 
 	wg.Wait()
+	originalText := input.Text
+	if input.UncompressedText != "" {
+		originalText = input.UncompressedText
+	}
+	if textForSignal(config.SignalTypePII) != originalText {
+		results.PIIContentVerified = false
+	}
+	if input.ImageURL != "" || input.Audio != "" {
+		results.PIIContentVerified = false
+	}
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
 	results = c.applySignalOutputPolicies(results)

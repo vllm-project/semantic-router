@@ -71,7 +71,7 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     target = tmp_path / "state" / "runtime-config.yaml"
 
     result = realize_runtime_config(
-        source, target, algorithm="multi_factor", platform="amd"
+        source, target, algorithm="multi_factor", platform="rocm"
     )
 
     assert result == target
@@ -82,6 +82,63 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
         realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"] is True
     )
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def test_realize_runtime_config_round_trips_gateway_opt_in(tmp_path: Path):
+    """A backend_ref carrying the OpenAI-compatible gateway opt-in passes the
+    strict CLI validation and survives realization unchanged (issue #5046
+    review: the field must round-trip through the supported entry point)."""
+
+    source = tmp_path / "raw.yaml"
+    source.write_bytes(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "providers": {
+                    "models": [
+                        {
+                            "name": "relay-model",
+                            "backend_refs": [
+                                {
+                                    "name": "relay",
+                                    "endpoint": "https://relay.example.com/v1",
+                                    "provider": "vllm",
+                                    "openai_compat_gateway": True,
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "routing": {
+                    "decisions": [
+                        {
+                            "name": "default",
+                            "priority": 0,
+                            "modelRefs": [{"model": "relay-model"}],
+                        }
+                    ]
+                },
+                "global": {
+                    "model_catalog": {
+                        "embeddings": {
+                            "semantic": {
+                                "use_cpu": True,
+                                "embedding_config": {"model_type": "mmbert"},
+                            }
+                        }
+                    }
+                },
+            },
+            sort_keys=False,
+        ).encode("utf-8")
+    )
+    target = tmp_path / "state" / "runtime-config.yaml"
+
+    realize_runtime_config(source, target)
+
+    realized = yaml.safe_load(target.read_text(encoding="utf-8"))
+    backend_ref = realized["providers"]["models"][0]["backend_refs"][0]
+    assert backend_ref["openai_compat_gateway"] is True
 
 
 def test_realize_runtime_config_strict_atomic_replace(tmp_path: Path, monkeypatch):
@@ -121,7 +178,7 @@ def test_runtime_materialize_module_cli(tmp_path: Path, capsys):
             "--algorithm",
             "multi_factor",
             "--platform",
-            "amd",
+            "rocm",
         ]
     )
 
@@ -138,7 +195,7 @@ def test_runtime_materialize_module_uses_current_runtime_env(
     _write_source(source)
     target = tmp_path / "state" / "runtime-config.yaml"
     monkeypatch.setenv("VLLM_SR_ALGORITHM_OVERRIDE", "multi_factor")
-    monkeypatch.setenv("DASHBOARD_PLATFORM", "amd")
+    monkeypatch.setenv("DASHBOARD_PLATFORM", "rocm")
 
     assert main(["--source", str(source), "--target", str(target)]) == 0
 
@@ -208,9 +265,9 @@ def test_managed_materialization_rejects_before_publishing(
 def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
     tmp_path: Path, monkeypatch
 ):
-    monkeypatch.setenv("DASHBOARD_PLATFORM", "amd")
-    monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
+    monkeypatch.setenv("DASHBOARD_PLATFORM", "rocm")
+    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
+    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     source = tmp_path / "raw.yaml"
     _write_source(source)
     document = yaml.safe_load(source.read_text())

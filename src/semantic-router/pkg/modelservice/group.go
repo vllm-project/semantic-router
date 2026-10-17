@@ -54,6 +54,7 @@ type group struct {
 // servedModel is one model of a process and the deployments that call it.
 // ready is read lock-free on every call.
 type servedModel struct {
+	load        replicaLoad
 	name        string
 	deployments []string
 	ready       atomic.Bool
@@ -72,8 +73,8 @@ func newGroup(plan *processPlan, client *Client, managed bool) *group {
 			served = &servedModel{name: model, state: "starting", cache: newResultCache(ResultCacheEntries())}
 			g.models[model] = served
 		}
-		served.deployments = append(served.deployments, deployment)
-		readyGauge.WithLabelValues(deployment).Set(0)
+		served.deployments = append(served.deployments, plan.logical)
+		g.recordReady(plan.logical, false)
 	}
 	return g
 }
@@ -111,7 +112,9 @@ func (g *group) stop() {
 	g.mu.Lock()
 	for _, served := range g.models {
 		served.ready.Store(false)
+		g.recordReady(g.plan.logical, false)
 		served.state = "stopped"
+		served.card = nil
 	}
 	g.broadcastLocked()
 	g.mu.Unlock()
@@ -180,8 +183,12 @@ func (g *group) refresh(ctx context.Context) {
 		if err == nil {
 			state, reason = health.stateOf(served.name, len(g.models))
 		}
-		if card, ok := cards[served.name]; ok {
+		if state != "ready" {
+			served.card = nil
+		} else if card, ok := cards[served.name]; ok {
 			served.card = &card
+		} else if !served.ready.Load() {
+			served.card = nil
 		}
 		ready := state == "ready" && served.card != nil
 		if ready != served.ready.Load() || state != served.state || reason != served.reason {
@@ -202,7 +209,7 @@ func (g *group) refresh(ctx context.Context) {
 			served.ready.Store(ready)
 			served.state, served.reason = state, reason
 			for _, deployment := range served.deployments {
-				readyGauge.WithLabelValues(deployment).Set(boolGauge(ready))
+				g.recordReady(deployment, ready)
 			}
 		}
 		if ready {
@@ -273,8 +280,9 @@ func (g *group) processExited(err error, ran time.Duration) {
 	for _, served := range g.models {
 		served.ready.Store(false)
 		served.state = "restarting"
+		served.card = nil
 		for _, deployment := range served.deployments {
-			readyGauge.WithLabelValues(deployment).Set(0)
+			g.recordReady(deployment, false)
 		}
 	}
 	var execErr *exec.Error
@@ -315,20 +323,9 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 			g.mu.Unlock()
 			return card, nil
 		}
-		if served.state == "failed" && !g.recyclesLocked() {
-			reason := served.reason
+		if err := g.cardFailureLocked(served); err != nil {
 			g.mu.Unlock()
-			return ModelCard{}, fmt.Errorf("%w: model %s failed to load: %s", ErrUnavailable, model, reason)
-		}
-		if served.state == "incompatible" {
-			reason := served.reason
-			g.mu.Unlock()
-			return ModelCard{}, fmt.Errorf("%w: model %s: %s", ErrUnavailable, model, reason)
-		}
-		if g.failure != nil {
-			err := g.failure
-			g.mu.Unlock()
-			return ModelCard{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+			return ModelCard{}, err
 		}
 		state, changed := served.state, g.changed
 		g.mu.Unlock()
@@ -338,6 +335,22 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 		case <-changed:
 		}
 	}
+}
+
+// cardFailureLocked reports preparation failures that waiting cannot repair.
+// The supervisor may retry for an already published generation, but a new
+// generation must release its worker references when all candidates fail.
+func (g *group) cardFailureLocked(served *servedModel) error {
+	if served.state == "failed" && !g.recyclesLocked() {
+		return fmt.Errorf("%w: model %s failed to load: %s", ErrUnavailable, served.name, served.reason)
+	}
+	if served.state == "incompatible" {
+		return fmt.Errorf("%w: model %s: %s", ErrUnavailable, served.name, served.reason)
+	}
+	if g.failure != nil {
+		return fmt.Errorf("%w: %w", ErrUnavailable, g.failure)
+	}
+	return nil
 }
 
 func (g *group) status() []DeploymentStatus {
@@ -370,4 +383,12 @@ func boolGauge(value bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func (g *group) recordReady(deployment string, ready bool) {
+	replicaReadyGauge.WithLabelValues(deployment, g.plan.replica).Set(boolGauge(ready))
+	if g.plan.pool {
+		return
+	}
+	readyGauge.WithLabelValues(deployment).Set(boolGauge(ready))
 }

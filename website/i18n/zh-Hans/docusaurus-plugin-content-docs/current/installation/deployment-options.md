@@ -2,7 +2,7 @@
 title: 选择部署方式
 description: 为部署 vLLM Semantic Router 选择 Docker、Kubernetes 或硬件专用路径。
 translation:
-  source_commit: "a565be11ad49666c149840c91134ad1e4678e49b"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/deployment-options.md"
   outdated: false
 ---
@@ -14,7 +14,7 @@ translation:
 1. Semantic Router 在哪里运行；以及
 2. 模型后端在哪里运行。
 
-Router 不会加载或预配自定义配置所引用的模型权重。它将请求发送到可到达的模型端点，这些端点可以运行在同一主机、集群中，或托管 API 之后。
+Chat 提供方模型运行在同一主机、集群或托管 API 的可达端点后，vLLM-SR 不负责创建这些生成后端。它自己的判断、分类、embedding 和重排序模型由受管或附加的[模型运行时部署](../model-runtime/deploy)提供。如果只需要判断服务、不需要 Chat 后端，可使用 [Engine 模式](../model-runtime/quickstart.md)。
 
 ## 选择 Router 拓扑
 

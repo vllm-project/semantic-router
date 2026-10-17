@@ -15,15 +15,21 @@ import { newModelFormData } from './configPageModelsSectionSupport'
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
     expectTypeOf<NonNullable<ProviderModel['api_format']>>().toEqualTypeOf<
-      'openai' | 'responses' | 'anthropic'
+      'openai' | 'responses' | 'anthropic' | 'systemone'
     >()
 
     const models = [
       { name: 'chat', api_format: 'openai' },
       { name: 'responses', api_format: 'responses' },
       { name: 'messages', api_format: 'anthropic' },
+      { name: 'decision', api_format: 'systemone' },
     ] satisfies ProviderModel[]
-    expect(models.map((model) => model.api_format)).toEqual(['openai', 'responses', 'anthropic'])
+    expect(models.map((model) => model.api_format)).toEqual([
+      'openai',
+      'responses',
+      'anthropic',
+      'systemone',
+    ])
   })
 
   it('preserves every canonical backend target field', () => {
@@ -91,6 +97,23 @@ describe('model form backend targets', () => {
   it('defaults the currency when the operator explicitly enters a zero rate', () => {
     expect(normalizeModelPricing({ prompt_per_1m: 0 })).toEqual({
       prompt_per_1m: 0,
+      currency: 'USD',
+    })
+  })
+
+  it('preserves cache_write_1h_per_1m on model save and defaults currency', () => {
+    const pricing = {
+      currency: 'USD',
+      prompt_per_1m: 3.0,
+      cached_input_per_1m: 0.3,
+      cache_write_per_1m: 3.75,
+      cache_write_1h_per_1m: 6.0,
+      completion_per_1m: 15.0,
+    }
+    expect(normalizeModelPricing(pricing)).toEqual(pricing)
+    expect(buildProviderModelPayload('claude-3-5-sonnet', { pricing }).pricing).toEqual(pricing)
+    expect(normalizeModelPricing({ cache_write_1h_per_1m: 6.0 })).toEqual({
+      cache_write_1h_per_1m: 6.0,
       currency: 'USD',
     })
   })

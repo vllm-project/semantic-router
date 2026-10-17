@@ -55,7 +55,6 @@ var ownedFields = map[string]bool{
 	"RouterConfig.Recipes":                     true, // programs
 	"RouterConfig.Entrypoints":                 true, // routes
 	"IntelligentRouting.CandidateRequirements": true, // the default program's flat mirror
-	"IntelligentRouting.DataPolicy":            true,
 	"IntelligentRouting.ModelBindings":         true,
 	"IntelligentRouting.Signals":               true,
 	"IntelligentRouting.Projections":           true,

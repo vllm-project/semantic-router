@@ -18,8 +18,8 @@ from contextlib import contextmanager, suppress
 import yaml
 
 from cli.consts import (
-    PLATFORM_AMD,
-    PLATFORM_NVIDIA,
+    PLATFORM_CUDA,
+    PLATFORM_ROCM,
     VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
 )
@@ -99,7 +99,11 @@ def translate_config_to_helm_values(
         image_overridden=image is not None,
     )
     _apply_gateway_and_platform(
-        values, gateway=gateway, platform=platform, image_overridden=image is not None
+        values,
+        gateway=gateway,
+        platform=platform,
+        image_overridden=image is not None,
+        config=user_config,
     )
 
     # The user-selected canonical config is authoritative over chart defaults and
@@ -291,8 +295,8 @@ def _apply_cli_deployment_overrides(
 
 # The image and the GPU resource each GPU --platform selects on Kubernetes.
 PLATFORM_HELM_VALUES = {
-    PLATFORM_AMD: (VLLM_SR_CONTAINER_IMAGE_ROCM, "amd.com/gpu"),
-    PLATFORM_NVIDIA: (VLLM_SR_CONTAINER_IMAGE_CUDA, "nvidia.com/gpu"),
+    PLATFORM_ROCM: (VLLM_SR_CONTAINER_IMAGE_ROCM, "amd.com/gpu"),
+    PLATFORM_CUDA: (VLLM_SR_CONTAINER_IMAGE_CUDA, "nvidia.com/gpu"),
 }
 
 
@@ -302,6 +306,7 @@ def _apply_gateway_and_platform(
     gateway: str | None,
     platform: str | None,
     image_overridden: bool,
+    config: dict | None = None,
 ) -> None:
     """Bind the chart's gateway mode, and a GPU platform's image and request."""
 
@@ -314,8 +319,23 @@ def _apply_gateway_and_platform(
     if not image_overridden:
         repository, _tag = _split_image_reference(image)
         values["image"] = {**_mapping(values, "image"), "repository": repository}
+    deployments = (((config or {}).get("global") or {}).get("model_catalog") or {}).get(
+        "deployments"
+    ) or {}
+    count = 1
+    for deployment in deployments.values():
+        if deployment.get("provider") != "model_runtime":
+            continue
+        for placement in deployment.get("replicas") or [deployment]:
+            if placement.get("endpoint"):
+                continue
+            device = placement.get("device") or "auto"
+            if device.startswith(platform + ":"):
+                count = max(count, int(device.split(":", 1)[1]) + 1)
     resources = _mapping(values, "resources")
-    resources["limits"] = {**_mapping(resources, "limits"), resource: 1}
+    count = max(count, int(_mapping(resources, "limits").get(resource, 0)))
+    resources["limits"] = {**_mapping(resources, "limits"), resource: count}
+    resources["requests"] = {**_mapping(resources, "requests"), resource: count}
     values["resources"] = resources
 
 

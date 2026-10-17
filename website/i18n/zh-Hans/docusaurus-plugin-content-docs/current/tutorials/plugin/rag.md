@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "a40f020886bccb76b38e5e598b37b0b83910bc3b"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/rag.md"
-  outdated: true
+  outdated: false
 ---
 
 # RAG
@@ -135,6 +135,6 @@ plugins:
 
 模型使用 tokenizer 的 query/document 配对模板。token 预算包含两段文本及特殊 token；超出预算会被拒绝，不会截断任一文本。加载时会校验所选层和维度是否经过训练；设为零时使用模型实际的完整深度或宽度。CPU 开销随候选数量和文本对长度增加，应显式设置部署预算。
 
-重排序模型运行在[模型运行时](model-runtime/guides/rerank.md)中。启动时路由器会检查模型是否声明了所选的出口，因此模型未训练过的 `pair_scorer` 会在流量到达前被拒绝。
+重排序模型运行在[模型运行时](../../model-runtime/guides/rerank)中。启动时路由器会检查模型是否声明了所选的出口，因此模型未训练过的 `pair_scorer` 会在流量到达前被拒绝。
 
 只有可达且启用了 `rerank` 插件的 recipe 才会加载模型。模型缺失、无效分数和输入超限均遵循 RAG 的 `on_failure` 策略。缓存上下文按 recipe、embedding 身份和重排序模型身份隔离。运行时 trace 记录实际重排序延迟和分数；路由 preview 不执行检索，也不生成重排序耗时。其他 RAG 后端目前不支持 `rerank`，需先提供结构化候选结果。

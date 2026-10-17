@@ -192,7 +192,8 @@ func (d *deadlineDecider) Decide(ctx context.Context, deployment string, request
 
 func TestADecisionQuestionWithoutDeploymentJoinsTheDecisionModelsCall(t *testing.T) {
 	decider := &deadlineDecider{deadlines: map[string]bool{}, states: map[string]string{}}
-	cfg := &config.RouterConfig{}
+	defaults := config.DefaultGlobalConfig()
+	cfg := &defaults
 	cfg.DecisionRules = []config.DecisionSignalRule{
 		{Name: "tools", Question: config.DecisionQuestion{Type: "noul", Instructions: "Tools?"}},
 		{Name: "hard", Deployment: "kai", Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"}},
@@ -202,10 +203,10 @@ func TestADecisionQuestionWithoutDeploymentJoinsTheDecisionModelsCall(t *testing
 	used := map[string]bool{"decision:tools": true, "decision:hard": true}
 	classifier.evaluateDecisionModelSignals(context.Background(), newSignalResults(), &sync.Mutex{}, "short", "the whole text", used)
 
-	if decider.states["@Vela-2.0-0.3B"] != "the whole text" || decider.states["kai"] != "short" {
-		t.Fatalf("the decision model's question reads the request as it came, a declared one its signal text: %v", decider.states)
+	if decider.states[config.DefaultDecisionDeployment] != "the whole text" || decider.states["kai"] != "the whole text" {
+		t.Fatalf("every decision question reads the same authored input: %v", decider.states)
 	}
-	if decider.deadlines["@Vela-2.0-0.3B"] || !decider.deadlines["kai"] {
+	if decider.deadlines[config.DefaultDecisionDeployment] || !decider.deadlines["kai"] {
 		t.Fatalf("only a declared deployment's call takes the default timeout: %v", decider.deadlines)
 	}
 }

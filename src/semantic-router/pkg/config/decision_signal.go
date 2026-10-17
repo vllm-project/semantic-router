@@ -83,9 +83,11 @@ type DecisionChoice struct {
 
 // DecisionSelectionConfig asks a decision model to choose one of a routing
 // decision's modelRefs. Options are the candidate model names; descriptions
-// come from Candidates, then the model's configured description.
+// come from Candidates, then the model's configured description. Without a
+// Deployment the Router's decision model chooses, on the deployment that
+// already answers the request's signals.
 type DecisionSelectionConfig struct {
-	Deployment   string            `yaml:"deployment"`
+	Deployment   string            `yaml:"deployment,omitempty"`
 	Instructions string            `yaml:"instructions"`
 	Candidates   map[string]string `yaml:"candidates,omitempty"`
 	TimeoutMs    int               `yaml:"timeout_ms,omitempty"`
