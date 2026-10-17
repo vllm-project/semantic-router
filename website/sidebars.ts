@@ -499,6 +499,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'training/mmbert-32k-models',
             'training/multimodal-embeddings',
+            'training/router-embeddings-huggingface',
           ],
         },
         {
