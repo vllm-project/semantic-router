@@ -20,6 +20,19 @@ export type EntityKind =
 export interface Selection {
   kind: EntityKind;
   name: string;
+  // Signal names are unique per signal type, not across types.
+  signalType?: string;
+}
+
+export function isSelectedSignal(
+  selection: Selection | null,
+  signal: Pick<ASTSignalDecl, "name" | "signalType">,
+): boolean {
+  return (
+    selection?.kind === "signal" &&
+    selection.name === signal.name &&
+    selection.signalType === signal.signalType
+  );
 }
 
 export interface SectionState {
