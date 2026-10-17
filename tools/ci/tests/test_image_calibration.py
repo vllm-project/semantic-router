@@ -1,6 +1,7 @@
 """Reject incomplete or relabeled evidence from the real image calibration tool."""
 
 import copy
+import hashlib
 import json
 import sys
 import tempfile
@@ -23,6 +24,18 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
     def test_file_digest_matches_go_report_wire_format(self):
         path = self.root / "known.txt"
         path.write_bytes(b"abc")
+        self.assertEqual(
+            image_calibration.file_sha(path),
+            "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        )
+
+    def test_file_digest_fallback_without_hashlib_file_digest(self):
+        path = self.root / "known_fallback.txt"
+        path.write_bytes(b"abc")
+        original = getattr(hashlib, "file_digest", None)
+        if original is not None:
+            self.addCleanup(setattr, hashlib, "file_digest", original)
+            del hashlib.file_digest
         self.assertEqual(
             image_calibration.file_sha(path),
             "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
