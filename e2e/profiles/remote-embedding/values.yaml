@@ -34,6 +34,22 @@ config:
         modelRefs:
           - model: base-model
             use_reasoning: false
+        plugins:
+          - type: context_compression
+            configuration:
+              enabled: true
+              mode: always
+              budget:
+                target_tokens: 128
+              targets:
+                history:
+                  mode: extractive
+                  min_tokens: 32
+                  target_tokens: 16
+              scoring:
+                method: embedding
+                embedding_model_ref: remote
+              failure_mode: fail_closed
       - name: default-route
         description: Fallback when the remote embedding signal does not match
         priority: 10
@@ -66,7 +82,8 @@ config:
             backend: openai_compatible
             model_type: remote
             preload_embeddings: false
-            target_dimension: 4
+            # Use the endpoint's full vectors so provider views preserve batching.
+            target_dimension: 0
             top_k: 1
             min_score_threshold: 0.9
           endpoint:
