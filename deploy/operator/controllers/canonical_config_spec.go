@@ -10,6 +10,20 @@ import (
 )
 
 func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	resource := &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: spec}}
+	if err := resource.ValidateDecisionRuleLimits(); err != nil {
+		return err
+	}
+	if spec.DecisionRuleLimits != nil {
+		limits := routerconfig.DecisionRuleLimits{
+			MaxDepth: spec.DecisionRuleLimits.MaxDepth,
+			MaxNodes: spec.DecisionRuleLimits.MaxNodes,
+		}
+		if _, _, err := limits.Effective(); err != nil {
+			return err
+		}
+		canonical.Global.Router.DecisionRuleLimits = limits
+	}
 	if err := r.applyOperatorModelCatalog(canonical, spec); err != nil {
 		return err
 	}

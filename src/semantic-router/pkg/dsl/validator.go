@@ -96,7 +96,12 @@ type SymbolTable struct {
 // It first parses the input; Level 1 errors come from the parser.
 // Then it runs Level 2 (reference checks) and Level 3 (constraint checks) on the AST.
 func Validate(input string) ([]Diagnostic, []error) {
-	diags, _, errs := ValidateWithSymbols(input)
+	return ValidateWithLimits(input, config.DecisionRuleLimits{})
+}
+
+// ValidateWithLimits validates source using the enclosing configuration budget.
+func ValidateWithLimits(input string, limits config.DecisionRuleLimits) ([]Diagnostic, []error) {
+	diags, _, errs := ValidateWithSymbolsAndLimits(input, limits)
 	return diags, errs
 }
 
@@ -105,6 +110,12 @@ func Validate(input string) ([]Diagnostic, []error) {
 // populated, even when there are parse errors, because the parser recovers and
 // successfully parsed declarations still appear in the AST.
 func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
+	return ValidateWithSymbolsAndLimits(input, config.DecisionRuleLimits{})
+}
+
+// ValidateWithSymbolsAndLimits checks the budget before recursive diagnostics
+// and symbol extraction for both standalone and full-document callers.
+func ValidateWithSymbolsAndLimits(input string, limits config.DecisionRuleLimits) ([]Diagnostic, *SymbolTable, []error) {
 	prog, parseErrors := Parse(input)
 	if len(parseErrors) > 0 {
 		var diags []Diagnostic
@@ -119,6 +130,9 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 		if prog == nil {
 			return diags, &SymbolTable{}, parseErrors
 		}
+	}
+	if err := ValidateProgramRuleLimits(prog, limits); err != nil {
+		return []Diagnostic{{Level: DiagConstraint, Message: err.Error()}}, &SymbolTable{}, append(parseErrors, err)
 	}
 
 	v := newValidator(prog)
@@ -153,6 +167,14 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 // ValidateAST performs Level 2 and Level 3 validation on an existing AST.
 func ValidateAST(prog *Program) []Diagnostic {
+	return ValidateASTWithLimits(prog, config.DecisionRuleLimits{})
+}
+
+// ValidateASTWithLimits protects programmatic callers before recursive checks.
+func ValidateASTWithLimits(prog *Program, limits config.DecisionRuleLimits) []Diagnostic {
+	if err := ValidateProgramRuleLimits(prog, limits); err != nil {
+		return []Diagnostic{{Level: DiagConstraint, Message: err.Error()}}
+	}
 	v := newValidator(prog)
 	v.buildSymbolTable()
 	v.checkReferences()

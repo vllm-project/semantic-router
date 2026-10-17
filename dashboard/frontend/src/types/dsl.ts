@@ -277,13 +277,13 @@ export interface WasmBridge {
   /** Load and initialize the WASM module */
   init(): Promise<void>
   /** Compile DSL → YAML + CRD + AST + diagnostics */
-  compile(dsl: string): CompileResult
+  compile(dsl: string, baseYaml?: string): CompileResult
   /** Validate DSL (fast, no compile) */
-  validate(dsl: string): ValidateResult
+  validate(dsl: string, baseYaml?: string): ValidateResult
   /** Parse DSL → AST + diagnostics + symbols (no compile, for Visual Builder) */
-  parseAST(dsl: string): ParseASTResult
+  parseAST(dsl: string, baseYaml?: string): ParseASTResult
   /** Decompile YAML → DSL */
   decompile(yaml: string): DecompileResult
   /** Format DSL source */
-  format(dsl: string): FormatResult
+  format(dsl: string, baseYaml?: string): FormatResult
 }

@@ -17,18 +17,32 @@ type Compiler struct {
 // Compile parses a DSL source string and compiles it to a RouterConfig.
 
 func Compile(input string) (*config.RouterConfig, []error) {
+	return CompileWithLimits(input, config.DecisionRuleLimits{})
+}
+
+// CompileWithLimits uses an enclosing document's rule budget.
+func CompileWithLimits(input string, limits config.DecisionRuleLimits) (*config.RouterConfig, []error) {
 	prog, parseErrors := Parse(input)
 	if len(parseErrors) > 0 {
 		return nil, parseErrors
 	}
-	return CompileAST(prog)
+	return CompileASTWithLimits(prog, limits)
 }
 
 func CompileAST(prog *Program) (*config.RouterConfig, []error) {
+	return CompileASTWithLimits(prog, config.DecisionRuleLimits{})
+}
+
+// CompileASTWithLimits validates the lowered shape before recursive lowering.
+func CompileASTWithLimits(prog *Program, limits config.DecisionRuleLimits) (*config.RouterConfig, []error) {
+	if err := ValidateProgramRuleLimits(prog, limits); err != nil {
+		return nil, []error{err}
+	}
 	defaults := config.DefaultGlobalConfig()
 	c := &Compiler{
 		prog: prog,
 		config: &config.RouterConfig{
+			DecisionRuleLimits: limits,
 			IntelligentRouting: config.IntelligentRouting{
 				ModelSelection: defaults.ModelSelection,
 			},
@@ -42,6 +56,9 @@ func CompileAST(prog *Program) (*config.RouterConfig, []error) {
 	c.compileScopes()
 	if len(c.errors) > 0 {
 		return nil, c.errors
+	}
+	if err := config.ValidateDecisionRuleLimits(c.config); err != nil {
+		return nil, []error{err}
 	}
 	return c.config, nil
 }

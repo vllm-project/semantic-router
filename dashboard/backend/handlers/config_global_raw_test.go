@@ -9,6 +9,39 @@ import (
 	"testing"
 )
 
+func TestGlobalRuleLimitsRoundTripAndRejectedSave(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+	save := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/api/router/config/global/raw/update", strings.NewReader(body))
+		request.Header.Set("Content-Type", "text/yaml")
+		UpdateGlobalConfigYAMLHandler(configPath, false, tempDir)(response, request)
+		return response
+	}
+	settings := "router:\n  decision_rule_limits:\n    max_depth: 32\n    max_nodes: 512\n"
+	if response := save(settings); response.Code != http.StatusOK {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	GlobalConfigYAMLHandler(configPath)(response, httptest.NewRequest(http.MethodGet, "/api/router/config/global/raw", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "max_nodes: 512") {
+		t.Fatal("custom limits were not preserved", response.Body.String())
+	}
+	if response := save(strings.Replace(settings, "max_nodes: 512", "max_nodes: 1", 1)); response.Code == http.StatusOK || !strings.Contains(response.Body.String(), "max_nodes=1") {
+		t.Fatal("oversized candidate was not rejected", response.Code, response.Body.String())
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil || string(after) != string(before) {
+		t.Fatal("rejected update replaced the saved configuration", err)
+	}
+}
+
 func TestGlobalConfigYAMLHandler_ReturnsEffectiveGlobalConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)

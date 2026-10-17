@@ -78,20 +78,39 @@ type ParseASTResult struct {
 // compile implements signalCompile(dslSource: string) → string (JSON).
 // Full pipeline: DSL → parse → validate → compile → emit YAML + CRD.
 func Compile(dslSource string) CompileResult {
+	return CompileWithLimits(dslSource, config.DecisionRuleLimits{})
+}
+
+// CompileWithBase preserves the rule budget of a full document being edited.
+func CompileWithBase(dslSource, baseYAML string) CompileResult {
+	limits, err := config.DecisionRuleLimitsFromYAML([]byte(baseYAML))
+	if err != nil {
+		return CompileResult{Error: err.Error()}
+	}
+	return CompileWithLimits(dslSource, limits)
+}
+
+// CompileWithLimits applies the enclosing config budget in both editor transports.
+func CompileWithLimits(dslSource string, limits config.DecisionRuleLimits) CompileResult {
 	// 1. Parse → AST (for Visual Builder consumption).
 	prog, parseErrs := dsl.Parse(dslSource)
+	if prog != nil {
+		if err := dsl.ValidateProgramRuleLimits(prog, limits); err != nil {
+			return CompileResult{Error: err.Error()}
+		}
+	}
 	var astJSON interface{}
 	if prog != nil {
 		astJSON = dsl.ProgramToJSON(prog)
 	}
 
 	// 2. Validate (includes lex + parse + reference + constraint checks).
-	diags, valErrs := dsl.Validate(dslSource)
+	diags, valErrs := dsl.ValidateWithLimits(dslSource, limits)
 	diagnostics := convertDiagnostics(diags)
 	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	// 3. Compile DSL → RouterConfig.
-	cfg, compileErrs := dsl.Compile(dslSource)
+	cfg, compileErrs := dsl.CompileWithLimits(dslSource, limits)
 	if len(compileErrs) > 0 {
 		_ = parseErrs // already captured in diagnostics
 		// Still return diagnostics and partial AST even on compile errors.
@@ -137,8 +156,27 @@ func Compile(dslSource string) CompileResult {
 // Incremental validation only — faster than full compile.
 // Also returns the symbol table extracted from the AST for editor completions.
 func Validate(dslSource string) ValidateResult {
+	return ValidateWithLimits(dslSource, config.DecisionRuleLimits{})
+}
+
+// ValidateWithBase applies the full document's limits to editor diagnostics.
+func ValidateWithBase(dslSource, baseYAML string) ValidateResult {
+	limits, err := config.DecisionRuleLimitsFromYAML([]byte(baseYAML))
+	if err != nil {
+		return ValidateResult{Error: err.Error(), ErrorCount: 1}
+	}
+	return ValidateWithLimits(dslSource, limits)
+}
+
+// ValidateWithLimits checks budgets before recursive AST diagnostics.
+func ValidateWithLimits(dslSource string, limits config.DecisionRuleLimits) ValidateResult {
 	prog, _ := dsl.Parse(dslSource)
-	diags, symbols, valErrs := dsl.ValidateWithSymbols(dslSource)
+	if prog != nil {
+		if err := dsl.ValidateProgramRuleLimits(prog, limits); err != nil {
+			return ValidateResult{Error: err.Error(), ErrorCount: 1}
+		}
+	}
+	diags, symbols, valErrs := dsl.ValidateWithSymbolsAndLimits(dslSource, limits)
 	diagnostics := convertDiagnostics(diags)
 	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
@@ -196,7 +234,16 @@ func Decompile(yamlSource string) DecompileResult {
 // format implements signalFormat(dslSource: string) → string (JSON).
 // Canonical formatting via compile→decompile round-trip.
 func Format(dslSource string) FormatResult {
-	formatted, err := dsl.Format(dslSource)
+	return FormatWithBase(dslSource, "")
+}
+
+// FormatWithBase uses the same enclosing limits as compilation and validation.
+func FormatWithBase(dslSource, baseYAML string) FormatResult {
+	limits, err := config.DecisionRuleLimitsFromYAML([]byte(baseYAML))
+	if err != nil {
+		return FormatResult{Error: err.Error()}
+	}
+	formatted, err := dsl.FormatWithLimits(dslSource, limits)
 	if err != nil {
 		return FormatResult{Error: err.Error()}
 	}
@@ -208,11 +255,30 @@ func Format(dslSource string) FormatResult {
 // Parse + validate only (no compile), returns the full AST with positions
 // and symbol table. This is the primary API for the Visual Builder.
 func Parse(dslSource string) ParseASTResult {
+	return ParseWithLimits(dslSource, config.DecisionRuleLimits{})
+}
+
+// ParseWithBase carries the full document budget into visual-builder analysis.
+func ParseWithBase(dslSource, baseYAML string) ParseASTResult {
+	limits, err := config.DecisionRuleLimitsFromYAML([]byte(baseYAML))
+	if err != nil {
+		return ParseASTResult{Error: err.Error(), ErrorCount: 1}
+	}
+	return ParseWithLimits(dslSource, limits)
+}
+
+// ParseWithLimits protects the visual builder's recursive AST serialization.
+func ParseWithLimits(dslSource string, limits config.DecisionRuleLimits) ParseASTResult {
 	// Parse → AST
 	prog, parseErrs := dsl.Parse(dslSource)
+	if prog != nil {
+		if err := dsl.ValidateProgramRuleLimits(prog, limits); err != nil {
+			return ParseASTResult{Error: err.Error(), ErrorCount: 1}
+		}
+	}
 
 	// Validate (includes reference + constraint checks) + symbol table
-	diags, symbols, valErrs := dsl.ValidateWithSymbols(dslSource)
+	diags, symbols, valErrs := dsl.ValidateWithSymbolsAndLimits(dslSource, limits)
 	diagnostics := convertDiagnostics(diags)
 	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 

@@ -22,16 +22,17 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	Enabled           *bool                    `yaml:"enabled,omitempty"`
-	ConfigSource      ConfigSource             `yaml:"config_source,omitempty"`
-	Strategy          RoutingStrategy          `yaml:"strategy,omitempty"`
-	ListBackendModels bool                     `yaml:"list_backend_models"`
-	ClearRouteCache   bool                     `yaml:"clear_route_cache"`
-	StreamedBody      CanonicalStreamedBody    `yaml:"streamed_body"`
-	SkipProcessing    SkipProcessingConfig     `yaml:"skip_processing"`
-	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
-	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
-	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	DecisionRuleLimits DecisionRuleLimits       `yaml:"decision_rule_limits,omitempty"`
+	Enabled            *bool                    `yaml:"enabled,omitempty"`
+	ConfigSource       ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy           RoutingStrategy          `yaml:"strategy,omitempty"`
+	ListBackendModels  bool                     `yaml:"list_backend_models"`
+	ClearRouteCache    bool                     `yaml:"clear_route_cache"`
+	StreamedBody       CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing     SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection     ModelSelectionConfig     `yaml:"model_selection"`
+	Learning           RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback           *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -275,6 +276,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 }
 
 func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal) {
+	cfg.DecisionRuleLimits = router.DecisionRuleLimits
 	cfg.RoutingDefaults = RoutingDefaults{Strategy: router.Strategy, Fallback: router.Fallback.Clone()}
 	cfg.ConfigSource = router.ConfigSource
 	cfg.Strategy = router.Strategy

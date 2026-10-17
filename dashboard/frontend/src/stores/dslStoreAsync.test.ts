@@ -31,6 +31,26 @@ describe('asynchronous compiler ordering', () => {
   })
   afterEach(() => useDSLStore.getState().reset())
 
+  it('keeps enclosing rule limits on imported drafts in every editor mode', async () => {
+    const baseYaml = 'global:\n  router:\n    decision_rule_limits:\n      max_depth: 32\n'
+    vi.mocked(dslCompiler.decompile).mockResolvedValue({ dsl: 'imported DSL' })
+    vi.mocked(dslCompiler.validate).mockResolvedValue({ diagnostics: [], errorCount: 0 })
+    vi.mocked(dslCompiler.parseAST).mockResolvedValue({ diagnostics: [], errorCount: 0 })
+    vi.mocked(dslCompiler.compile).mockResolvedValue({ yaml: '', diagnostics: [] })
+    vi.mocked(dslCompiler.format).mockResolvedValue({ dsl: 'imported DSL' })
+
+    await useDSLStore.getState().importYaml(baseYaml)
+    await useDSLStore.getState().validate()
+    await useDSLStore.getState().parseAST()
+    await useDSLStore.getState().compile()
+    await useDSLStore.getState().format()
+
+    expect(dslCompiler.validate).toHaveBeenLastCalledWith('imported DSL', baseYaml)
+    expect(dslCompiler.parseAST).toHaveBeenLastCalledWith('imported DSL', baseYaml)
+    expect(dslCompiler.compile).toHaveBeenLastCalledWith('imported DSL', baseYaml)
+    expect(dslCompiler.format).toHaveBeenLastCalledWith('imported DSL', baseYaml)
+  })
+
   it('does not publish or preview an old compilation after an A → B → A edit', async () => {
     const result = deferred<CompileResult>()
     vi.mocked(dslCompiler.compile).mockReturnValue(result.promise)

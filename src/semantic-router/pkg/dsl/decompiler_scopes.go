@@ -14,6 +14,9 @@ func DecompileConfig(cfg *config.RouterConfig) (string, error) {
 	if cfg == nil {
 		return "", fmt.Errorf("cannot decompile a nil config")
 	}
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return "", err
+	}
 	base, err := DecompileRouting(cfg)
 	if err != nil {
 		return "", err
