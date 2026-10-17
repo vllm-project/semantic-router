@@ -133,8 +133,12 @@ def _discard(pool: ProcessPoolExecutor | None) -> None:
 
 
 def stop() -> None:
-    """Stop the workers; later decoding starts them again if workers are configured."""
+    """Stop the workers and wait for them to exit; later decoding starts them again if workers are configured.
+
+    The server re-raises its stop signal right after the runtime stops, so a
+    worker still exiting then outlives it as an orphan.
+    """
     with _state.lock:
         pool, _state.pool = _state.pool, None
     if pool is not None:
-        pool.shutdown(wait=False, cancel_futures=True)
+        pool.shutdown(wait=True, cancel_futures=True)
