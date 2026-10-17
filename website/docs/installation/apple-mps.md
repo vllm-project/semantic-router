@@ -139,6 +139,8 @@ The host GPU shares system memory with macOS, applications, and the Docker VM.
 FP32 weights alone are roughly 16 GB for a 4B model and 36 GB for a 9B model,
 before activations and temporary allocations. Moving out of Docker removes the
 VM model-memory limit; it does not remove the Mac's total memory limit.
+Explicit `device: cpu` deployments stay inside Docker and remain subject to
+the VM's memory allocation, even when other deployments use the host GPU.
 
 `status all` also reports the host supervisor when one is recorded. A supervisor
 running does not mean every model is ready; model health remains in the runtime
