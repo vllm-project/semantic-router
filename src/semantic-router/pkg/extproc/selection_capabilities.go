@@ -54,7 +54,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 	}
 	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(ref.Model))
 	if err != nil {
-		return err
+		return selection.NewEligibilityError(selection.EligibilityReasonUnsupportedProtocol, ref.Model, err)
 	}
 	preview := *request
 	if decision != nil && !preserveExplicitAnthropicReasoning(&preview, format) {
@@ -92,7 +92,10 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 	if err := r.validateModelDemand(requirements, ref.Model, demand); err != nil {
 		return err
 	}
-	return r.providerCapabilityMismatch(ref.Model, format, demand.Capabilities)
+	if err := r.providerCapabilityMismatch(ref.Model, format, demand.Capabilities); err != nil {
+		return selection.NewEligibilityError(selection.EligibilityReasonUnsupportedProtocol, ref.Model, err)
+	}
+	return nil
 }
 
 func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*selection.SelectionContext, error) {
@@ -129,6 +132,7 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 			continue
 		}
 		if err := r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands); err != nil {
+			selection.RecordEligibilityExclusion(input.DecisionName, selection.EligibilityReasonOf(err))
 			var protocolErr *llmprotocol.ProtocolError
 			if !errors.As(err, &protocolErr) || protocolErr.Category != llmprotocol.ErrorUnsupportedFeature {
 				onlyUnsupported = false
