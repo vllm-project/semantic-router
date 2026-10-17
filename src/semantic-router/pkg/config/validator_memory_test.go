@@ -68,6 +68,46 @@ func TestValidateMemoryNilConfig(t *testing.T) {
 	}
 }
 
+func TestValidateMemoryBackend(t *testing.T) {
+	tests := []struct {
+		name    string
+		backend string
+		setup   func(*MemoryConfig)
+		wantErr string
+	}{
+		{name: "default backend", backend: ""},
+		{name: "milvus", backend: "milvus"},
+		{name: "qdrant", backend: "qdrant", setup: func(cfg *MemoryConfig) {
+			cfg.Qdrant = &MemoryQdrantConfig{Host: "localhost"}
+		}},
+		{name: "valkey", backend: "valkey", setup: func(cfg *MemoryConfig) {
+			cfg.Valkey = &MemoryValkeyConfig{Host: "localhost"}
+		}},
+		{name: "unknown backend", backend: "qdrnt", wantErr: "not supported"},
+		{name: "qdrant block missing", backend: "qdrant", wantErr: "qdrant must be configured"},
+		{name: "valkey block missing", backend: "valkey", wantErr: "valkey must be configured"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &MemoryConfig{Backend: tc.backend}
+			if tc.setup != nil {
+				tc.setup(cfg)
+			}
+			err := validateMemoryContracts(&RouterConfig{Memory: *cfg})
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("valid backend rejected: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestValidateMemoryGlobalRetrievalLimit(t *testing.T) {
 	cases := []struct {
 		name    string

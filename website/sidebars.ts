@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/deployment-architecture',
             'installation/gateway-modes',
             'installation/support-matrix',
           ],
@@ -382,6 +383,7 @@ const sidebars: SidebarsConfig = {
               items: [
                 'installation/amd-rocm',
                 'installation/nvidia-cuda',
+                'installation/ascend-npu',
               ],
             },
           ],
@@ -432,6 +434,7 @@ const sidebars: SidebarsConfig = {
             'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
+            'proposals/success-constrained-selection',
             'proposals/prompt-classification-routing',
           ],
         },
