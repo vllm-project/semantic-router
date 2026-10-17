@@ -176,7 +176,7 @@ func resolveMemoryRewriteServiceConfig(routerCfg *config.RouterConfig) *memoryRe
 		Endpoint:         endpoint,
 		Model:            externalCfg.ModelName,
 		AccessKey:        externalCfg.AccessKey,
-		TimeoutSeconds:   externalCfg.TimeoutSeconds,
+		TimeoutSeconds:   int(externalCfg.TimeoutSeconds),
 		MaxTokens:        externalCfg.MaxTokens,
 		Temperature:      externalCfg.Temperature,
 		MaxResponseBytes: maxResponseBytes,

@@ -71,12 +71,13 @@ func TestVLLMClientTimeoutDefaultsWhenUnset(t *testing.T) {
 func TestGetTimeoutCoversCallers(t *testing.T) {
 	cases := []struct {
 		name    string
-		seconds int
+		seconds float64
 		want    time.Duration
 	}{
 		{"unset_uses_default", 0, 30 * time.Second},
 		{"configured_passes_through", 60, 60 * time.Second},
 		{"negative_uses_default", -1, 30 * time.Second},
+		{"sub_second_passes_through", 0.8, 800 * time.Millisecond},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

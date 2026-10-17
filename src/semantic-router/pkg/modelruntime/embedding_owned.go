@@ -153,7 +153,7 @@ func prepareExplicitEmbedding(ctx context.Context, cfg *config.RouterConfig, run
 		}
 		address = protocol + "://" + address
 	}
-	return runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{BaseURL: address, Model: external.ModelName, APIKey: external.AccessKey, TimeoutSeconds: external.TimeoutSeconds, MaxResponseBytes: external.MaxResponseBytes, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
+	return runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{BaseURL: address, Model: external.ModelName, APIKey: external.AccessKey, TimeoutSeconds: int(external.TimeoutSeconds), MaxResponseBytes: external.MaxResponseBytes, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
 }
 
 // implicitEmbeddingSpec is the module-default deployment of an embedding model
