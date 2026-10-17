@@ -57,6 +57,62 @@ func twoPassDecodeWireJSON(body []byte, target any, policy llmprotocol.Policy, r
 	return nil
 }
 
+// validateExactJSONFieldNames is the recursive name check both decode paths
+// used before the walker took it over.
+func validateExactJSONFieldNames(body []byte, targetType reflect.Type) error {
+	return validateExactJSONValue(body, dereferenceJSONType(targetType))
+}
+
+func validateExactJSONValue(body []byte, targetType reflect.Type) error {
+	if targetType == nil || bytes.Equal(bytes.TrimSpace(body), []byte("null")) ||
+		reflect.PointerTo(targetType).Implements(jsonUnmarshalerType) {
+		return nil
+	}
+	switch targetType.Kind() {
+	case reflect.Struct:
+		return validateExactJSONObject(body, targetType)
+	case reflect.Slice, reflect.Array:
+		return validateExactJSONArray(body, targetType)
+	case reflect.Map, reflect.Interface:
+		return nil
+	}
+	return nil
+}
+
+func validateExactJSONObject(body []byte, targetType reflect.Type) error {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return err
+	}
+	fields := exactJSONStructFields(targetType)
+	for name, value := range object {
+		fieldType, found := fields[name]
+		if !found {
+			return fmt.Errorf("unknown field %q", name)
+		}
+		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
+			return fmt.Errorf("field %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateExactJSONArray(body []byte, targetType reflect.Type) error {
+	if targetType.Elem() == jsonRawMessageType {
+		return nil
+	}
+	var elements []json.RawMessage
+	if err := json.Unmarshal(body, &elements); err != nil {
+		return err
+	}
+	for index, element := range elements {
+		if err := validateExactJSONValue(element, dereferenceJSONType(targetType.Elem())); err != nil {
+			return fmt.Errorf("element %d: %w", index, err)
+		}
+	}
+	return nil
+}
+
 // twoPassNoDuplicateKeys and the consume functions below are the token walk
 // as it was before it learned member names, kept here so the reference does
 // not share code with the walker under test.
