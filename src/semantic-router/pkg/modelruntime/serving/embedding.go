@@ -33,10 +33,16 @@ const (
 )
 
 // sharedVectors is the process-wide content-hash embedding cache. Its keys
-// carry the served model's package digest and numerics, so consumers,
-// deployments and router generations that serve the same representation share
-// vectors, and a changed model never reuses another model's vectors.
+// carry a package digest or preparation namespace plus numerics. Digest-backed
+// models serving the same representation share vectors across consumers,
+// deployments and router generations; unhashed models share only within one
+// preparation, so a changed model never reuses another model's vectors.
 var sharedVectors = embedding.NewVectorCache(embeddingCacheBytes())
+
+// Without a digest, isolate every preparation: matching card IDs, revisions
+// and dimensions cannot identify replacements. The counter is process-local,
+// like the vector and request caches.
+var unhashedEmbeddingNamespace atomic.Uint64
 
 func embeddingCacheBytes() int {
 	megabytes := defaultEmbeddingCacheMB
@@ -157,6 +163,9 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 			Layers: slices.Clone(card.Embedding.Layers), MaxTokens: capability.Limits.EffectiveTokens(), Pooling: card.Embedding.Pooling,
 			Normalization: normalization(card), Modalities: modalities(card), Audio: capability.Embedding.Audio,
 		},
+	}
+	if card.ModelSHA256 == "" {
+		provider.numerics += fmt.Sprintf(":unhashed=%d", unhashedEmbeddingNamespace.Add(1))
 	}
 	return provider, nil
 }
