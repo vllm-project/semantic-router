@@ -1,12 +1,15 @@
+import json
 import sys
 import unittest
 from pathlib import Path
 
+from jsonschema import ValidationError
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
+from src.training.control_plane.contracts import CONTRACT_ROOT
 from src.training.model_classifier.sequence_repair.promotion_gate import (
-    RECEIPT_SCHEMA,
-    REQUIRED_CHECKS,
+    RUNTIME,
     decide,
 )
 
@@ -35,15 +38,14 @@ BASELINE = evaluation(0.80, {"en": 0.82, "fr": 0.78})
 SAME = {"a": 1, "b": 2, "c": 3, "d": 4}
 
 
-def conformance(passed, failed=()):
-    return {
-        "schema_version": RECEIPT_SCHEMA,
-        "checks": [{"name": name, "passed": True} for name in passed]
-        + [{"name": name, "passed": False} for name in failed],
-    }
+NEURAL = json.loads((CONTRACT_ROOT / "testdata/neural.json").read_text())
 
 
-PASSED = conformance(REQUIRED_CHECKS)
+def qualification(runtime=RUNTIME, compatible=True):
+    return {**NEURAL["qualification"], "runtime": runtime, "compatible": compatible}
+
+
+PASSED = qualification()
 
 
 class PromotionGateTests(unittest.TestCase):
@@ -66,33 +68,21 @@ class PromotionGateTests(unittest.TestCase):
         self.assertEqual(receipt["decision"], "reject")
         self.assertEqual(receipt["failures"], ["language:fr"])
 
-    def test_rejects_a_failed_runtime_check(self):
-        failed = conformance(REQUIRED_CHECKS - {"label_parity"}, ["label_parity"])
-        receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, failed)
-        self.assertEqual(receipt["decision"], "reject")
-        self.assertEqual(receipt["failures"], ["conformance:label_parity"])
-
-    def test_rejects_missing_runtime_checks(self):
-        receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, conformance([]))
-        self.assertEqual(receipt["decision"], "reject")
-        self.assertEqual(
-            receipt["failures"],
-            [f"conformance:{name}" for name in sorted(REQUIRED_CHECKS)],
+    def test_rejects_an_incompatible_qualification(self):
+        receipt = decide(
+            GATE, BASELINE, BASELINE, SAME, SAME, qualification(compatible=False)
         )
-        partial = conformance(["label_parity"])
-        receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, partial)
         self.assertEqual(receipt["decision"], "reject")
-        self.assertEqual(
-            receipt["failures"],
-            [
-                "conformance:deadline_behavior",
-                "conformance:input_bounds",
-                "conformance:unavailable_behavior",
-            ],
-        )
+        self.assertEqual(receipt["failures"], ["qualification:compatible"])
 
-    def test_refuses_a_conformance_file_that_is_not_a_receipt(self):
-        with self.assertRaisesRegex(ValueError, "not a compatibility receipt"):
+    def test_rejects_a_qualification_on_another_runtime(self):
+        other = qualification({"name": "router", "version": "1"})
+        receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, other)
+        self.assertEqual(receipt["decision"], "reject")
+        self.assertEqual(receipt["failures"], ["qualification:runtime"])
+
+    def test_refuses_a_file_that_is_not_a_qualification(self):
+        with self.assertRaises(ValidationError):
             decide(GATE, BASELINE, BASELINE, SAME, SAME, {"checks": []})
 
     def test_reports_prediction_agreement(self):

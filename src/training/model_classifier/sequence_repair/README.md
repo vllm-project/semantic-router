@@ -343,24 +343,27 @@ baseline, the test split, and the minimum macro-F1 deltas:
 ```
 
 Evaluate the pinned baseline and the frozen candidate on the same test file,
-and run `make qualify-candle-cpu` on the frozen candidate with the task's
-qualification suite. Then decide. The gate refuses evaluations of different
-data or rows, accepts only a compatibility receipt, rejects any failed or
-missing runtime check, and records the agreement between the two prediction
-sets:
+and qualify the frozen candidate on the model runtime. Then decide. The gate
+refuses evaluations of different data or rows, accepts only a `Qualification`
+from the training contract, rejects one that is incompatible or names another
+runtime than `model-runtime` 1, and records the agreement between the two
+prediction sets:
 
 ```bash
 python -m src.training.model_classifier.sequence_repair.promotion_gate \
   --gate artifacts/vela/domain-gate.json \
   --candidate artifacts/vela/evidence/domain-final.json \
   --baseline artifacts/vela/evidence/domain-baseline.json \
-  --conformance artifacts/vela/evidence/domain-candle-receipt.json \
+  --qualification artifacts/vela/evidence/domain-qualification.json \
   --output artifacts/vela/evidence/domain-decision.json
 ```
 
 A promoted candidate is published to a
 new repository and becomes active when its repository and revision replace the
-entry in `src/semantic-router/pkg/config/registry.go`. Roll back by restoring
+Domain entry in `src/model-runtime/vllm_srun/registry/tables/vela1.py` and
+`src/semantic-router/pkg/config/registry.go`, and
+`src/model-runtime/tools/golden_answers.py --family task_heads --record`
+records its golden answers. Roll back by restoring
 the previous repository and revision, which the decision receipt names as the
 baseline. A rejected candidate leaves the pin unchanged.
 
