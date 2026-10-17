@@ -1173,6 +1173,18 @@ profiles:
       - e2e/testcases/full_duplex_routing.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+  trusted-gateway:
+    display_name: Trusted Gateway Credential
+    owner: e2e
+    coverage_role: deployment-injected-gateway-credential-forwarding-and-rejection
+    selection: pr
+    paths:
+      - e2e/profiles/trusted-gateway/**
+      - e2e/testcases/trusted_gateway_credential.go
+      - src/semantic-router/pkg/extproc/gateway_credential*.go
+      - src/semantic-router/pkg/extproc/processor_req_body_routing.go
+      - src/semantic-router/pkg/extproc/processor_req_header.go
+      - src/semantic-router/pkg/authz/**
   provider-protocols:
     display_name: Provider Protocols
     owner: e2e

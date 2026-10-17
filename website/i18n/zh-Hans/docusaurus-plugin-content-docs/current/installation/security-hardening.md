@@ -4,7 +4,7 @@ description: 保护推理监听器、控制面板、凭据、回放数据、存�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/security-hardening.md"
-  outdated: false
+  outdated: true
 ---
 
 # 安全加固
