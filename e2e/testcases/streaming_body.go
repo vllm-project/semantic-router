@@ -21,7 +21,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("streaming-keyword-routing", pkgtestcases.TestCase{
-		Description: "Verify keyword routing works identically with streamed request body mode",
+		Description: "Verify every keyword routing case selects its decision when the request body arrives in several streamed chunks",
 		Tags:        []string{"streaming", "routing", "keyword"},
 		Fn:          testStreamingKeywordRouting,
 	})
@@ -31,7 +31,7 @@ func init() {
 		Fn:          testStreamingCacheRoundtrip,
 	})
 	pkgtestcases.Register("streaming-large-body", pkgtestcases.TestCase{
-		Description: "Verify large request bodies (multiple Envoy chunks) are reassembled correctly",
+		Description: "Verify a large request body written in several chunks is reassembled and answered by the upstream, not rejected by the router",
 		Tags:        []string{"streaming", "large-body"},
 		Fn:          testStreamingLargeBody,
 	})
@@ -78,12 +78,17 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 
 	passed := 0
 	for _, tc := range cases {
-		resp, err := sendNonStreamingRequest(ctx, tc.query, "vllm-sr/auto", localPort)
+		resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(tc.query, "vllm-sr/auto", false), streamedBodyWrites)
 		if err != nil {
 			fmt.Printf("[Streaming] FAIL %s: %v\n", tc.name, err)
 			continue
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("[Streaming] FAIL %s: status %d: %s\n", tc.name, resp.StatusCode, truncateString(string(body), 200))
+			continue
+		}
 
 		decision := resp.Header.Get("x-vsr-selected-decision")
 		actualDec := strings.TrimSuffix(decision, "_decision")
@@ -108,8 +113,8 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 		})
 	}
 
-	if passed == 0 {
-		return fmt.Errorf("streaming keyword routing: 0/%d passed", len(cases))
+	if passed != len(cases) {
+		return fmt.Errorf("streaming keyword routing: %d/%d passed", passed, len(cases))
 	}
 	return nil
 }
@@ -211,9 +216,9 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	}
 	defer stop()
 
-	// Build a long system prompt + user message that is large enough to be
-	// split across multiple Envoy ext_proc chunks (Envoy default chunk size
-	// is ~64 KiB, so anything > 64 KiB guarantees multi-chunk delivery).
+	// Body size alone does not guarantee multiple ext_proc chunks: an 80 KiB
+	// body written at once can reach the Router as one chunk. The body is
+	// therefore written in several pieces with a pause between them.
 	longContext := strings.Repeat("This is padding context to make the body large enough for multi-chunk delivery. ", 1000)
 	userMsg := "Given all that context, please implement a function to sort a linked list."
 
@@ -235,15 +240,7 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 		fmt.Printf("[Streaming] Sending large body: %d KiB\n", bodySizeKB)
 	}
 
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	resp, err := httpClient.Do(req)
+	resp, err := sendChunkedChatRequest(ctx, localPort, jsonData, streamedBodyWrites)
 	if err != nil {
 		return fmt.Errorf("large body request failed: %w", err)
 	}
@@ -251,31 +248,34 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	resp.Body.Close()
 
 	decision := resp.Header.Get("x-vsr-selected-decision")
+	responsePath := resp.Header.Get("x-vsr-response-path")
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"body_size_kb":    bodySizeKB,
 			"status_code":     resp.StatusCode,
+			"response_path":   responsePath,
 			"response_length": len(respBody),
 			"decision":        decision,
 		})
 	}
 
-	// A 400 from the upstream mock (context length exceeded) is acceptable —
-	// it proves the router successfully reassembled the multi-chunk body and
-	// forwarded it. Only true failures (502 from Envoy, no routing headers)
-	// indicate a streaming body problem.
+	// The backend may reject a body this large for context length. That 400
+	// still proves reassembly, but only if the upstream produced it: a body the
+	// Router could not decode is answered by the Router itself with
+	// x-vsr-response-path: error.
 	switch {
 	case resp.StatusCode == http.StatusOK:
 		if opts.Verbose {
 			fmt.Printf("[Streaming] PASS: large body accepted by upstream (status 200)\n")
 		}
-	case resp.StatusCode == http.StatusBadRequest:
+	case resp.StatusCode == http.StatusBadRequest && responsePath == "upstream":
 		if opts.Verbose {
-			fmt.Printf("[Streaming] PASS: large body forwarded to upstream, rejected due to context length (expected for %d KiB body)\n", bodySizeKB)
+			fmt.Printf("[Streaming] PASS: large body reassembled and forwarded; upstream rejected it (status 400, %d KiB body)\n", bodySizeKB)
 		}
 	default:
-		return fmt.Errorf("large body returned unexpected status %d: %s", resp.StatusCode, truncateString(string(respBody), 200))
+		return fmt.Errorf("large body returned status %d with x-vsr-response-path=%q, want 200, or 400 from the upstream: %s",
+			resp.StatusCode, responsePath, truncateString(string(respBody), 200))
 	}
 
 	if decision != "" {
@@ -391,18 +391,83 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-func sendNonStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
+// streamedBodyWrites and streamedWritePause make the client write a request
+// body in several pieces, so Envoy hands it to the Router in STREAMED mode as
+// more than one ext_proc chunk.
+const (
+	streamedBodyWrites = 3
+	streamedWritePause = 500 * time.Millisecond
+)
+
+// chatRequestBody returns a one-message Chat Completions request.
+func chatRequestBody(question, model string, stream bool) []byte {
 	body := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
 			{"role": "user", "content": question},
 		},
 	}
-
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
+	if stream {
+		body["stream"] = true
 	}
+	data, _ := json.Marshal(body)
+	return data
+}
+
+// splitBody cuts body into n contiguous pieces of near-equal size.
+func splitBody(body []byte, n int) []string {
+	if n < 1 {
+		n = 1
+	}
+	if n > len(body) {
+		n = len(body)
+	}
+	pieces := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		pieces = append(pieces, string(body[i*len(body)/n:(i+1)*len(body)/n]))
+	}
+	return pieces
+}
+
+// sendChunkedChatRequest posts body as a chunked upload written in the given
+// number of pieces with streamedWritePause between them. The caller owns the
+// response and checks its status.
+func sendChunkedChatRequest(ctx context.Context, localPort string, body []byte, writes int) (*http.Response, error) {
+	reader, writer := io.Pipe()
+	go func() {
+		for i, piece := range splitBody(body, writes) {
+			if i > 0 {
+				select {
+				case <-time.After(streamedWritePause):
+				case <-ctx.Done():
+					writer.CloseWithError(ctx.Err())
+					return
+				}
+			}
+			if _, err := io.WriteString(writer, piece); err != nil {
+				return
+			}
+		}
+		writer.Close()
+	}()
+
+	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reader)
+	if err != nil {
+		reader.Close()
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do: %w", err)
+	}
+	return resp, nil
+}
+
+func sendNonStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
+	jsonData := chatRequestBody(question, model, false)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
@@ -427,18 +492,7 @@ func sendNonStreamingRequest(ctx context.Context, question, model, localPort str
 }
 
 func sendStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
-	body := map[string]interface{}{
-		"model":  model,
-		"stream": true,
-		"messages": []map[string]string{
-			{"role": "user", "content": question},
-		},
-	}
-
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
-	}
+	jsonData := chatRequestBody(question, model, true)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
