@@ -316,7 +316,12 @@ class ServedModel:
 
     # -- lifecycle -----------------------------------------------------------
 
-    def load(self) -> None:
+    def prepare(self) -> tuple[ModelFamily, VerifiedPackage, ModelSpec, Placement]:
+        """Verify the package and check placement without loading an engine.
+
+        Host bridges use this same preparation path before starting a worker,
+        so unsupported devices fail once with the deployment's actual policy.
+        """
         process = self.runtime.config
         config = self.config
         check_device(config.model, config.device)
@@ -341,7 +346,15 @@ class ServedModel:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
-        placement = place(spec, config.device, parameters, budget)
+        placement = place(
+            spec, config.device, parameters, budget, dtype=self.requested_args.dtype
+        )
+        return family, package, spec, placement
+
+    def load(self) -> None:
+        process = self.runtime.config
+        family, package, spec, placement = self.prepare()
+        config = self.config
         device = placement.device
         self.args, self.limits_source = calibration.resolve(self.requested_args, device)
         # The dtype policy a device follows is its torch device's, as the engines read it.
