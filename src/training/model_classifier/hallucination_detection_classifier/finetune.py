@@ -35,7 +35,7 @@ Usage:
         --learning-rate 1e-5
 
 Dependencies:
-    pip install torch transformers scikit-learn tqdm
+    uv sync --locked  (from this directory; see README.md)
 """
 
 import argparse

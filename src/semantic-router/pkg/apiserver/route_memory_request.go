@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 const maxMemoryListLimit = 100
@@ -30,12 +32,34 @@ func (s *ClassificationAPIServer) acquireMemoryStore(w http.ResponseWriter) (mem
 		if ok {
 			return store, release, true
 		}
+		status := s.runtimeRegistry.MemoryStatus()
+		s.writeMemoryUnavailableResponse(w, status)
+		return nil, nil, false
 	} else if s != nil && s.memoryStore != nil {
 		return s.memoryStore, func() {}, true
 	}
 	s.writeErrorResponse(w, http.StatusServiceUnavailable, "MEMORY_NOT_AVAILABLE",
 		"Memory store is not configured or not yet initialized. Enable memory in configuration.")
 	return nil, nil, false
+}
+
+func (s *ClassificationAPIServer) writeMemoryUnavailableResponse(w http.ResponseWriter, status routerruntime.MemoryStatus) {
+	var msg string
+	switch status.Reason {
+	case routerruntime.MemoryReasonDisabledByConfig:
+		msg = "Memory store is disabled in configuration. Enable memory in configuration."
+	case routerruntime.MemoryReasonBackendUnavailable:
+		if status.Backend != "" {
+			msg = fmt.Sprintf("Memory backend %q is unavailable. Check backend connectivity.", status.Backend)
+		} else {
+			msg = "Memory backend is unavailable. Check backend connectivity."
+		}
+	case routerruntime.MemoryReasonStarting:
+		msg = "Memory store is not yet initialized. Router is still starting."
+	default:
+		msg = "Memory store is not configured or not yet initialized. Enable memory in configuration."
+	}
+	s.writeErrorResponse(w, http.StatusServiceUnavailable, "MEMORY_NOT_AVAILABLE", msg)
 }
 
 // extractUserID extracts the user_id with priority: auth header > query param fallback.

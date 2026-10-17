@@ -11,6 +11,7 @@ import pytest
 import torch
 from vllm_srun.accel import onednn
 from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.config import EngineArgs
 from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.errors import PackageError
 from vllm_srun.families.task_heads.family import (
@@ -27,7 +28,7 @@ from vllm_srun.plugins.base import (
     SurfaceRequest,
     UnsupportedSurfaceError,
 )
-from vllm_srun.profiles.exact import ExactProfile
+from vllm_srun.scheduler.batching import Batcher
 from vllm_srun.testing import embed_packages
 
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
@@ -49,7 +50,7 @@ def load(root, engine=None, **model_options):
 
 
 def serve(model, surface, body):
-    request = SurfaceRequest(surface, body, None, "exact", True, time.monotonic())
+    request = SurfaceRequest(surface, body, None, True, time.monotonic())
     plan = model.plan_surface(surface, request)
     return plan, model.finish_surface(plan, model.run(plan.items))
 
@@ -98,14 +99,14 @@ def test_native_embedder_serves_every_exit_from_one_forward(embedder):
     with pytest.raises(UnsupportedSurfaceError):
         model.plan_surface(
             "classify",
-            SurfaceRequest("classify", {"input": "x"}, None, "exact", True, 0.0),
+            SurfaceRequest("classify", {"input": "x"}, None, True, 0.0),
         )
     (golden,) = family.golden(package)
     assert golden["surface"] == "embeddings"
 
 
 def embeddings_request(body):
-    return SurfaceRequest("embeddings", body, None, "exact", True, 0.0)
+    return SurfaceRequest("embeddings", body, None, True, 0.0)
 
 
 def test_bundled_exits_share_the_packed_forward(embedder):
@@ -146,7 +147,7 @@ def test_native_reranker_serves_every_trained_exit(reranker):
         load(reranker, pair_scorer=[{"layer": 2}])
 
 
-def test_exact_merges_native_cpu_embedders_and_rerankers_where_the_probe_holds(
+def test_native_cpu_embedders_and_rerankers_merge_exactly_where_the_probe_holds(
     embedder, reranker
 ):
     if not onednn.available():
@@ -164,16 +165,16 @@ def test_exact_merges_native_cpu_embedders_and_rerankers_where_the_probe_holds(
     }
     for root, surface in ((embedder, "embeddings"), (reranker, "rerank")):
         _, _, model = load(root)
-        profile = ExactProfile()
-        profile.bind(model)
-        assert profile.merge == model.batch_invariant
-        assert model.packs_rows and not profile.banded
+        batcher = Batcher(EngineArgs())
+        batcher.bind(model)
+        assert batcher.coalesces is not model.batch_invariant
+        assert model.packs_rows
         if not model.batch_invariant:
             continue
         plans = [
             model.plan_surface(
                 surface,
-                SurfaceRequest(surface, body, None, "exact", True, time.monotonic()),
+                SurfaceRequest(surface, body, None, True, time.monotonic()),
             )
             for body in bodies[surface]
         ]
