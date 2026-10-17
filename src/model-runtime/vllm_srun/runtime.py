@@ -139,6 +139,25 @@ def planned_engine(config: ModelConfig) -> str:
     return engines[0] if len(engines) == 1 else AUTO_ENGINE
 
 
+def _empty_device_caches() -> None:
+    """Release unused blocks from the CUDA / HIP caching allocator.
+
+    A failed GPU model load may have placed tensors in device memory before
+    the load raised. ``gc.collect()`` in ``freeze_heap`` collects the Python
+    objects that held those tensors, but the caching allocator still keeps
+    the underlying blocks and ``mem_get_info`` reports the driver's count —
+    which the next retry reads as 0.0 GiB free. Emptying the allocator
+    after collection makes the driver's count match what is actually free.
+    """
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def freeze_heap() -> None:
     """Collect once, then leave every object that exists now out of later collections.
 
@@ -146,8 +165,14 @@ def freeze_heap() -> None:
     behind. A full collection walks all of them (83-131 ms in a process that
     serves Omni Nano and Mini) and stalls whichever request triggers it; once
     they are frozen it walks only what requests allocated since.
+
+    On GPU processes, this also empties the CUDA / HIP caching allocator so
+    that ``mem_get_info`` reports the driver's true free count on the next
+    load attempt (a failed prior load may have left caching-allocator blocks
+    whose Python holders ``gc.collect`` just released).
     """
     gc.collect()
+    _empty_device_caches()
     gc.freeze()
 
 
