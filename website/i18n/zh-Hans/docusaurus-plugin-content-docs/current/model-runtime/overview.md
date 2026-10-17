@@ -72,7 +72,7 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 ## 硬件 {#hardware}
 
 CPU 和 AMD GPU（MI300X、MI325X）已经验证。NVIDIA GPU 可用但尚未验证；
-Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
+Intel GPU（`xpu`）、昇腾 NPU（`npu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
 AMD 和 NVIDIA 镜像（`vllm-sr serve --platform rocm` 或 `--platform cuda`）还能在 GPU 上运行它们。
 
 ## 从旧版本升级？ {#coming-from-an-older-release}
