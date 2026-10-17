@@ -76,6 +76,12 @@ type KeywordRule struct {
 	BM25Threshold  float32  `yaml:"bm25_threshold,omitempty"`
 	NgramThreshold float32  `yaml:"ngram_threshold,omitempty"`
 	NgramArity     int      `yaml:"ngram_arity,omitempty"`
+	// IncludeHistory widens the text this rule matches. When false (the
+	// default), only the current user message is evaluated, preserving existing
+	// behavior. When true, recent prior user messages are also evaluated,
+	// so a marker stated earlier in the conversation still matches.
+	// Assistant and system messages are never included.
+	IncludeHistory bool `yaml:"include_history,omitempty"`
 }
 
 type AggregationMethod string

@@ -40,7 +40,7 @@ is_mtpe: true
 | `MODEL ...` | | Hub 仓库、内置模型名或本地包目录。多个模型共用一个进程。`MODEL@REVISION` 钉 revision。 |
 | `--models FILE` | | 用 models 文件代替 `MODEL` 参数。 |
 | `--revision SHA` | | 要加载的 40 位 commit，对一个 `MODEL` 生效。 |
-| `--device` | `auto` | `auto`，或带可选索引的加速器：`cpu`、`cuda[:N]`、`rocm[:N]`、`xpu[:N]`、`mps`，或插件加的。 |
+| `--device` | `auto` | `auto`，或带可选索引的加速器：`cpu`、`cuda[:N]`、`rocm[:N]`、`xpu[:N]`、`npu[:N]`、`mps`，或插件加的。 |
 | `--host` | `127.0.0.1` | 监听地址。 |
 | `--port` | `8100` | 监听端口。 |
 | `--uds PATH` | | 监听 Unix socket，不走 TCP。 |
