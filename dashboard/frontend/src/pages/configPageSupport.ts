@@ -208,6 +208,7 @@ export interface EvaluationRecordConfig {
 export interface ProviderModelConfig {
   name: string
   catalog?: string
+  deployment?: string
   reasoning?: ModelReasoningConfig
   /** @deprecated Use reasoning. */
   reasoning_family?: string
