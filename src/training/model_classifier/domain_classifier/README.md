@@ -73,14 +73,3 @@ academic score. Long context variants mark the requested task within independent
 authored background narratives; they are controlled stress tests, not natural
 long-document estimates. Independent test evaluation occurs only after the
 candidate and base lineage are frozen.
-
-Check a frozen candidate in the router's Candle runtime with the Domain
-qualification suite before a promotion decision:
-
-```bash
-make qualify-candle-cpu \
-  CANDLE_MODEL_PATH=artifacts/vela/frozen/domain \
-  CANDLE_ARTIFACT_REVISION=<candidate revision> \
-  CANDLE_COMPAT_SUITE=../training/model_classifier/domain_classifier/qualification-suite.json \
-  CANDLE_COMPAT_LABELS="biology,business,chemistry,computer science,economics,engineering,health,history,law,math,other,philosophy,physics,psychology"
-```

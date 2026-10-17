@@ -3,13 +3,9 @@ import hashlib
 import json
 from pathlib import Path
 
-RECEIPT_SCHEMA = "semantic-router.compatibility-receipt/v1"
-REQUIRED_CHECKS = {
-    "label_parity",
-    "input_bounds",
-    "deadline_behavior",
-    "unavailable_behavior",
-}
+from src.training.control_plane.contracts import validate
+
+RUNTIME = {"name": "model-runtime", "version": "1"}
 
 
 def read_predictions(evaluation_path):
@@ -21,14 +17,18 @@ def read_predictions(evaluation_path):
 
 
 def decide(
-    gate, candidate, baseline, candidate_predictions, baseline_predictions, conformance
+    gate,
+    candidate,
+    baseline,
+    candidate_predictions,
+    baseline_predictions,
+    qualification,
 ):
     if candidate["data_files"] != baseline["data_files"]:
         raise ValueError("Candidate and baseline were evaluated on different data")
     if candidate_predictions.keys() != baseline_predictions.keys():
         raise ValueError("Candidate and baseline predictions cover different rows")
-    if conformance.get("schema_version") != RECEIPT_SCHEMA:
-        raise ValueError("Conformance is not a compatibility receipt")
+    validate(qualification, "Qualification")
     rules = gate["promote_if"]
     macro_delta = candidate["macro_f1"] - baseline["macro_f1"]
     language_deltas = {
@@ -42,10 +42,10 @@ def decide(
         for language, delta in language_deltas.items()
         if delta < rules["per_language_macro_f1_min_delta"]
     ]
-    checks = conformance["checks"]
-    failed = {check["name"] for check in checks if not check["passed"]}
-    missing = REQUIRED_CHECKS - {check["name"] for check in checks}
-    failures += [f"conformance:{name}" for name in sorted(failed | missing)]
+    if qualification["runtime"] != RUNTIME:
+        failures.append("qualification:runtime")
+    if not qualification["compatible"]:
+        failures.append("qualification:compatible")
     agreement = sum(
         candidate_predictions[key] == baseline_predictions[key]
         for key in baseline_predictions
@@ -66,7 +66,7 @@ def main():
     parser.add_argument("--gate", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--baseline", type=Path, required=True)
-    parser.add_argument("--conformance", type=Path, required=True)
+    parser.add_argument("--qualification", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -77,7 +77,7 @@ def main():
         json.loads(args.baseline.read_text()),
         read_predictions(args.candidate),
         read_predictions(args.baseline),
-        json.loads(args.conformance.read_text()),
+        json.loads(args.qualification.read_text()),
     )
     receipt["inputs_sha256"] = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -85,7 +85,7 @@ def main():
             ("gate", args.gate),
             ("candidate", args.candidate),
             ("baseline", args.baseline),
-            ("conformance", args.conformance),
+            ("qualification", args.qualification),
         ]
     }
     args.output.write_text(json.dumps(receipt, indent=2) + "\n")
