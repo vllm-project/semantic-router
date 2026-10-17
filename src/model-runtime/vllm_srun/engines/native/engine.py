@@ -32,7 +32,7 @@ from ...plugins.base import (
     TreeOutput,
 )
 from ...scheduler.planner import padded
-from . import fast, models
+from . import fast, models, quantized
 from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
@@ -113,6 +113,12 @@ class NativeEngineModel(EngineModel):
             not options.exact_kernels_only and spec.dtype.approximate_kernels
         )
         self.kernels.use_variants(spec.kernel_variants)
+        fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
+        for layer in self._quantized():
+            if isinstance(layer, quantized.Int4Linear):
+                layer.fused = fused_int4 and self.device.type == "cuda"
+            else:
+                layer.unscaled_product &= self.kernels.allow_approximate
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
@@ -187,7 +193,11 @@ class NativeEngineModel(EngineModel):
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
             self.masks = fast.NoncausalMasks() if self.noncausal else fast.Masks()
-        if options.graphs:
+        if options.graphs and not quantized.capture_safe(backbone):
+            self.fast["graphs_skipped"] = (
+                "Ada's per-row FP8 product needs PyTorch 2.12 in a graph"
+            )
+        elif options.graphs:
             assert self.masks is not None
             self.graphs = fast.Graphs(backbone, self.masks)
 
@@ -737,6 +747,11 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
+    def _quantized(self) -> list[quantized.Int4Linear | quantized.Float8Linear]:
+        return [
+            layer for module in self._modules() for layer in quantized.layers(module)
+        ]
+
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
@@ -758,6 +773,7 @@ class NativeEngineModel(EngineModel):
 
     def parameter_count(self) -> int:
         packed = sum(layer.weight_elements for layer in self._packed())
+        packed += sum(layer.weight_elements for layer in self._quantized())
         return packed + sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
@@ -766,6 +782,7 @@ class NativeEngineModel(EngineModel):
             layer.packed.numel() * layer.packed.element_size()
             for layer in self._packed()
         )
+        packed += sum(layer.stored_bytes() for layer in self._quantized())
         return (
             copy_bytes
             + packed
@@ -876,6 +893,10 @@ class NativeEngine(Engine):
         dtype = getattr(torch, held) if held else torch.float32
         backbone_spec = spec.backbone
         backbone = build_on_meta(backbone_spec)
+        if backbone_spec.quantized is not None:
+            quantized.install(
+                backbone, backbone_spec.quantized, backbone_spec.weight_prefix
+            )
         load_backbone(
             backbone,
             backbone_spec.weight_files,
@@ -935,6 +956,7 @@ class NativeEngine(Engine):
             *stacks.towers.values(),
         ):
             module.to(target).eval()
+            quantized.prepare(module)
         kind = (
             spec.dtype.reduced_cpu if target.type == "cpu" else spec.dtype.reduced_gpu
         )

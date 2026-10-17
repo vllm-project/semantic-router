@@ -52,10 +52,11 @@ def set_parameter(
 
 
 def set_buffer(root: nn.Module, name: str, tensor: torch.Tensor) -> None:
-    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating."""
+    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating (FP8 weights stay FP8)."""
     owner_name, _, leaf = name.rpartition(".")
     owner = root.get_submodule(owner_name) if owner_name else root
-    dtype = torch.float32 if tensor.is_floating_point() else tensor.dtype
+    widen = tensor.is_floating_point() and tensor.element_size() > 1
+    dtype = torch.float32 if widen else tensor.dtype
     owner._buffers[leaf] = tensor.to(dtype, copy=True).contiguous()
 
 
