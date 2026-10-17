@@ -1326,6 +1326,14 @@ spec:
                               items:
                                 type: string
                               type: array
+                            image_candidates:
+                              description: |-
+                                ImageCandidates are example phrases scored against the image side of a
+                                multimodal request. Read only by the local path, like Candidates; a
+                                rule with none keeps text-only scoring.
+                              items:
+                                type: string
+                              type: array
                           required:
                           - candidates
                           type: object
@@ -1350,6 +1358,14 @@ spec:
                           properties:
                             candidates:
                               description: List of candidate phrases or examples
+                              items:
+                                type: string
+                              type: array
+                            image_candidates:
+                              description: |-
+                                ImageCandidates are example phrases scored against the image side of a
+                                multimodal request. Read only by the local path, like Candidates; a
+                                rule with none keeps text-only scoring.
                               items:
                                 type: string
                               type: array
