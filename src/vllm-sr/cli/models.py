@@ -2155,7 +2155,7 @@ class ProviderReliability(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    lb_policy: Literal["round_robin", "least_request", "load_aware"] = "round_robin"
     retry_count: int = Field(default=0, ge=0, le=5)
     retry_on: str = "connect-failure,refused-stream"
     consecutive_5xx: int = Field(default=0, ge=0)
@@ -2627,6 +2627,15 @@ class ReasoningFamily(BaseModel):
     disabled: Optional[str] = None
 
 
+class BackendMetrics(BaseModel):
+    """Where a backend's serving engine exposes metrics (default: its port, /metrics)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    port: Optional[int] = Field(default=None, ge=1, le=65535)
+    path: Optional[str] = Field(default=None, pattern=r"^/[^?# ]*$")
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
@@ -2650,6 +2659,15 @@ class BackendRef(BaseModel):
     # fields, so the router decoder tolerates them. Mirrors the Go
     # CanonicalBackendRef field of the same name.
     openai_compat_gateway: bool = False
+    # Serving engine whose load metrics backend telemetry reads.
+    engine: Optional[Literal["vllm", "sglang", "atom", "tensorrt-llm"]] = None
+    metrics: Optional[BackendMetrics] = None
+
+    @model_validator(mode="after")
+    def _metrics_require_engine(self) -> "BackendRef":
+        if self.metrics is not None and self.engine is None:
+            raise ValueError("metrics requires engine")
+        return self
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

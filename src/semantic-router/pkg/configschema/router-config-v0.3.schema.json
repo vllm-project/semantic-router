@@ -305,6 +305,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "BackendTelemetryConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "poll_interval": {
+          "type": "string"
+        },
+        "request_timeout": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "BatchClassificationConfig": {
       "properties": {
         "max_batch_size": {
@@ -529,6 +547,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CanonicalBackendMetrics": {
+      "properties": {
+        "port": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalBackendRef": {
       "properties": {
         "name": {
@@ -575,6 +605,12 @@
         },
         "openai_compat_gateway": {
           "type": "boolean"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/CanonicalBackendMetrics"
         }
       },
       "additionalProperties": false,
@@ -5108,6 +5144,9 @@
         },
         "profiling": {
           "$ref": "#/$defs/ProfilingConfig"
+        },
+        "backend_telemetry": {
+          "$ref": "#/$defs/BackendTelemetryConfig"
         }
       },
       "additionalProperties": false,

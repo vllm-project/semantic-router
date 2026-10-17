@@ -229,3 +229,38 @@ def test_custom_evaluation_requires_versioned_namespace():
                 },
             }
         )
+
+
+def _backend_ref(**overrides):
+    backend_ref = importlib.import_module("cli.models").BackendRef
+    ref = {"name": "gpu-a", "endpoint": "10.0.0.1:8000", "provider": "vllm"}
+    ref.update(overrides)
+    return backend_ref.model_validate(ref)
+
+
+def test_backend_ref_accepts_engine_and_metrics():
+    ref = _backend_ref(
+        engine="tensorrt-llm", metrics={"port": 8002, "path": "/metrics"}
+    )
+
+    assert ref.engine == "tensorrt-llm"
+    assert ref.metrics.port == 8002
+    assert ref.model_dump(exclude_none=True)["metrics"] == {
+        "port": 8002,
+        "path": "/metrics",
+    }
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"engine": "triton"},
+        {"metrics": {"port": 9000}},
+        {"engine": "vllm", "metrics": {"port": 70000}},
+        {"engine": "vllm", "metrics": {"path": "metrics"}},
+        {"engine": "vllm", "metrics": {"unknown": 1}},
+    ],
+)
+def test_backend_ref_rejects_invalid_telemetry(overrides):
+    with pytest.raises(ValueError):
+        _backend_ref(**overrides)

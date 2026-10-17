@@ -68,12 +68,20 @@ providers:
           weight: 80
           provider: vllm
           api_key_env: VLLM_SR_PRIMARY_API_KEY
+          # engine names the serving engine so backend telemetry can read its
+          # load metrics; metrics overrides where it exposes them (default:
+          # the endpoint's port and /metrics).
+          engine: vllm
+          metrics:
+            port: 8000
+            path: /metrics
         - name: local-secondary
           endpoint: 127.0.0.1:8004
           protocol: http
           provider: vllm
           api_key_env: VLLM_SR_PRIMARY_API_KEY
           weight: 20
+          engine: vllm
     # Keep remote-provider access fields visible without mixing incompatible
     # request semantics into the weighted qwen3-8b replica pool above.
     - name: remote-openai-reference
@@ -2223,6 +2231,14 @@ global:
         enabled: false
         port: 6060
         bind: 127.0.0.1
+      # Reads serving-engine load metrics from every backend_ref that names an
+      # engine, off the request path. Disabled by default; collecting changes
+      # no routing unless a model opts into reliability.lb_policy: load_aware.
+      backend_telemetry:
+        enabled: false
+        poll_interval: 2s
+        request_timeout: 1s
+        ttl: 6s
     authz:
       fail_open: false
       identity:
