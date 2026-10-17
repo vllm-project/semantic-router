@@ -438,6 +438,11 @@ class Scheduler:
             else:
                 work = partial(self.model.run, items)
             values = self.execute(work)
+            # Validate the whole forward before publishing any job's results.
+            if len(values) != len(items):
+                raise RuntimeError(
+                    f"model result count mismatch: expected {len(items)}, got {len(values)}"
+                )
         except Exception as exc:
             _timed(members, sequence, started, time.monotonic())
             if self.device_fault(exc):
