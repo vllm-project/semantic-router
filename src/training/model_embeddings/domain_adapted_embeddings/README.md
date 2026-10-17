@@ -23,18 +23,27 @@ truth. It does not call an LLM judge.
 
 ## Start Here
 
-Install the local requirements, prepare Q&A data, and run a small training job:
+Create the environment from this folder. `pyproject.toml` bounds the
+dependencies and `uv.lock` pins them:
 
 ```bash
-cd src/training/model_embeddings/domain_adapted_embeddings
-pip install -r requirements.txt
+uv sync --locked
+```
 
-python prepare_data.py \
+`requirements.txt` stays for anyone who installs with `pip`.
+
+Prepare Q&A data and run a small training job with `uv run`. From the
+repository root:
+
+```bash
+uv run --project src/training/model_embeddings/domain_adapted_embeddings \
+  python src/training/model_embeddings/domain_adapted_embeddings/prepare_data.py \
   --source jsonl \
   --input-file domain_qa.jsonl \
   --output-dir data
 
-python train.py \
+uv run --project src/training/model_embeddings/domain_adapted_embeddings \
+  python src/training/model_embeddings/domain_adapted_embeddings/train.py \
   --data-dir data \
   --output-dir models/domain-adapted \
   --num-queries 500
