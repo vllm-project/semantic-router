@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
+import { ROUTER_CONFIG_SCHEMA } from '../generated/routerConfigContract'
 import type { ProviderModel } from '../types/config'
 
 import {
@@ -47,8 +48,12 @@ describe('model form backend targets', () => {
       chat_path: '/chat/completions',
       api_key: 'test-only-key',
       api_key_env: 'PROVIDER_API_KEY',
+      openai_compat_gateway: true,
     } as const
 
+    expect(Object.keys(backend).sort()).toEqual(
+      Object.keys(ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties).sort(),
+    )
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
   })
 

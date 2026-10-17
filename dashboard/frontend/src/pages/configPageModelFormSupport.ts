@@ -72,6 +72,7 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
         normalized.api_key = entry.api_key.trim()
       if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
         normalized.api_key_env = entry.api_key_env.trim()
+      if (entry.openai_compat_gateway === true) normalized.openai_compat_gateway = true
       return normalized
     })
 }
