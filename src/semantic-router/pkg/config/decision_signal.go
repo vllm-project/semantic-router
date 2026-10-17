@@ -29,12 +29,15 @@ const (
 	// DefaultDecisionTimeoutMs bounds one decision call when a rule sets none.
 	DefaultDecisionTimeoutMs = 1000
 	MaxDecisionTimeoutMs     = 60000
-	MinDecisionChoices       = 2
-	MaxDecisionChoices       = 255
-	MinDecisionLevels        = 2
-	MaxDecisionLevels        = 10
-	MinDecisionLabels        = 1
-	MaxDecisionLabels        = 255
+	// MaxDecisionPriorUserTurns bounds how many earlier user turns a decision
+	// question reads before the current one.
+	MaxDecisionPriorUserTurns = 8
+	MinDecisionChoices        = 2
+	MaxDecisionChoices        = 255
+	MinDecisionLevels         = 2
+	MaxDecisionLevels         = 10
+	MinDecisionLabels         = 1
+	MaxDecisionLabels         = 255
 	// DefaultDecisionNoulThreshold is the P(true) a Noul answer needs to match
 	// when its rule declares no predicate.
 	DefaultDecisionNoulThreshold = 0.5
@@ -58,6 +61,11 @@ type DecisionSignalRule struct {
 	Question    DecisionQuestion  `yaml:"question"`
 	Predicate   *NumericPredicate `yaml:"predicate,omitempty"`
 	TimeoutMs   int               `yaml:"timeout_ms,omitempty"`
+	// PriorUserTurns puts up to this many of the conversation's earlier user
+	// turns, oldest first, before the current one in the question's state,
+	// so a follow-up such as "now make it shorter" is read with what it
+	// follows.
+	PriorUserTurns int `yaml:"prior_user_turns,omitempty"`
 }
 
 // DecisionQuestion is a System One question with ordered options. Choice and
