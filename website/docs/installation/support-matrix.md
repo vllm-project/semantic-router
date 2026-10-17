@@ -10,7 +10,9 @@ project maintains. It does not certify every platform, model server, model, or
 accelerator combination.
 
 If you are still choosing a topology, start with
-[Choose a Deployment](deployment-options). For wire formats and endpoint
+[Choose a Deployment](deployment-options). For the component
+responsibilities, configuration ownership, and versioning rules behind
+these classifications, see [Deployment Architecture](deployment-architecture). For wire formats and endpoint
 configuration, use [Protocol Compatibility](protocol-compatibility) and
 [Backend Target Compatibility](backend-target-compatibility).
 

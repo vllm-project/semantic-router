@@ -2906,7 +2906,7 @@
           "type": "string"
         },
         "llm_timeout_seconds": {
-          "type": "integer"
+          "type": "number"
         },
         "parser_type": {
           "type": "string"
@@ -3646,6 +3646,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -7440,6 +7443,9 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        },
+        "trusted_facts": {
+          "$ref": "#/$defs/TrustedFactsConfig"
         }
       },
       "additionalProperties": false,
@@ -7551,6 +7557,33 @@
         },
         "rate": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TrustedFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "enforcement": {
+          "type": "string"
+        },
+        "trust_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness_seconds": {
+          "type": "integer"
+        },
+        "stage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

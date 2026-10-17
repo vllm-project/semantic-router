@@ -416,6 +416,10 @@ type RequestContext struct {
 	// separately checks stage-specific evidence and the resolved capture policy.
 	RouterReplayContentOmitted bool
 
+	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
+	// before Replay created its record; startRouterReplay appends them.
+	pendingTrustedFactsOutcomes []routerreplay.Outcome
+
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
@@ -491,6 +495,11 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// PluginBackendModel is the model selected before plugins run, and
+	// PluginSkips lists the plugins that capability gating kept from running.
+	PluginBackendModel string
+	PluginSkips        []pluginSkip
 
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.
