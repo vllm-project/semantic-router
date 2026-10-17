@@ -66,6 +66,31 @@ func TestResolveResponseVendorSnowflake(t *testing.T) {
 	}
 }
 
+// The gateway allowance is opt-in per profile: a vLLM-type profile earns it
+// only by declaring the relay, and a plain vLLM keeps the strict contract.
+func TestResolveResponseVendorOpenAICompatGateway(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile *config.ProviderProfile
+		vendor  llmprotocol.ResponseVendor
+	}{
+		{
+			name:    "vllm profile with the gateway opt-in",
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://relay.example.com/v1", OpenAICompatGateway: true},
+			vendor:  llmprotocol.ResponseVendorOpenAICompatGateway,
+		},
+		{
+			name:    "plain vllm profile without the opt-in",
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://vllm.example.com/v1"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.vendor, resolveResponseVendor(tt.profile))
+		})
+	}
+}
+
 // Every other backend keeps the strict contract: no vendor allowance at all.
 func TestResolveResponseVendorGrantsNoAllowanceByDefault(t *testing.T) {
 	tests := []struct {
@@ -77,6 +102,8 @@ func TestResolveResponseVendorGrantsNoAllowanceByDefault(t *testing.T) {
 		{name: "official deepseek", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com/v1"}},
 		{name: "openrouter", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"}},
 		{name: "generic openai compatible", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://llm.example.com/v1"}},
+		// A vLLM profile without the gateway opt-in keeps the strict contract.
+		{name: "vllm without the gateway opt-in", profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://vllm.example.com/v1"}},
 		// A host that merely mentions azure is not an Azure endpoint.
 		{name: "azure lookalike host", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://azure.example.com/v1"}},
 		// Suffix matching must not fire on a bare label match either.

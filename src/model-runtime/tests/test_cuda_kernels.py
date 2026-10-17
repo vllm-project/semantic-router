@@ -1,4 +1,4 @@
-"""The CUDA accelerator offers the fused element-wise kernels to max_speed only.
+"""The CUDA accelerator offers the fused element-wise kernels only where approximate kernels are allowed.
 
 The kernel module is replaced by a stand-in so the registration runs without Triton or a GPU.
 """
@@ -47,7 +47,7 @@ def test_exact_kernels_never_select_the_fused_kernels(fused_module):
     assert fused_sources(kernels) == set()
 
 
-def test_max_speed_selects_the_fused_kernels(fused_module):
+def test_allowed_approximate_kernels_select_the_fused_kernels(fused_module):
     kernels = cuda.CUDAAccelerator().kernels(device("sm_100"))
     kernels.allow_approximate = True
     assert fused_sources(kernels) == set(FUSED)
@@ -61,7 +61,7 @@ def test_gpus_before_ampere_get_no_fused_kernels(fused_module):
     assert fused_sources(kernels) == set()
 
 
-def test_the_receipt_lists_only_the_kernels_the_profile_can_select(fused_module):
+def test_the_receipt_lists_only_the_kernels_the_model_may_select(fused_module):
     kernels = cuda.CUDAAccelerator().kernels(device("sm_89"))
     assert "add_rmsnorm" not in kernels.describe()
     kernels.allow_approximate = True
