@@ -551,7 +551,6 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-4B
         device: rocm
-        profile: exact
     system:
       decision_model:
         deployment: primary
