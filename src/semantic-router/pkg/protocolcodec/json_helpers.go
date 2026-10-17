@@ -19,6 +19,7 @@ var (
 	errDuplicateJSONField = errors.New("duplicate JSON field")
 	errInvalidJSONUnicode = errors.New("invalid JSON Unicode escape")
 	errTrailingJSON       = errors.New("trailing JSON document")
+	errNonCanonicalField  = errors.New("non-canonical JSON field")
 )
 
 func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
@@ -34,14 +35,15 @@ func decodeWireValue(body []byte, target any, policy llmprotocol.Policy) error {
 }
 
 func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
-	if err := validateClientJSONDocument(body, policy, requireObject); err != nil {
+	var exactType reflect.Type
+	if rejectUnknownFields(body, policy) {
+		exactType = reflect.TypeOf(target)
+	}
+	if err := validateClientJSONDocument(body, policy, requireObject, exactType); err != nil {
 		return err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
-	if rejectUnknownFields(body, policy) {
-		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
-		}
+	if exactType != nil {
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(target); err != nil {
@@ -53,7 +55,9 @@ func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireO
 	return nil
 }
 
-func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool) error {
+// validateClientJSONDocument also checks member names against exactType when
+// it is non-nil; see validateExactJSONFieldNames.
+func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool, exactType reflect.Type) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "body_limit", "request body is empty or exceeds the configured limit", nil)
 	}
@@ -66,12 +70,15 @@ func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireO
 	if requireObject && !hasJSONObjectEnvelope(body) {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request body must be a JSON object", nil)
 	}
-	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
+	if err := walkJSONDocument(body, policy.Limits.JSONDepth, exactType); err != nil {
 		if errors.Is(err, errDuplicateJSONField) {
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "duplicate_json_field", "JSON contains a duplicate field", err)
 		}
 		if errors.Is(err, errTrailingJSON) {
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "trailing_json", "request body contains trailing JSON", err)
+		}
+		if errors.Is(err, errNonCanonicalField) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
 	}
@@ -222,7 +229,7 @@ func validateExactJSONObject(body []byte, targetType reflect.Type) error {
 }
 
 func validateExactJSONArray(body []byte, targetType reflect.Type) error {
-	if targetType.Elem() == reflect.TypeOf(json.RawMessage{}) {
+	if targetType.Elem() == jsonRawMessageType {
 		return nil
 	}
 	var elements []json.RawMessage
@@ -421,15 +428,22 @@ func requireEOF(decoder *json.Decoder) error {
 }
 
 func validateNoDuplicateKeys(body []byte, maximumDepth int) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := consumeJSONValue(decoder, 0, maximumDepth); err != nil {
+	return walkJSONDocument(body, maximumDepth, nil)
+}
+
+// walkJSONDocument checks duplicate keys, depth and trailing data in one token
+// pass, plus validateExactJSONFieldNames when exactType is set. A name error
+// is only returned once the rest of the document passes, as before.
+func walkJSONDocument(body []byte, maximumDepth int, exactType reflect.Type) error {
+	walker := jsonWalker{decoder: json.NewDecoder(bytes.NewReader(body)), maximumDepth: maximumDepth}
+	walker.decoder.UseNumber()
+	if err := walker.value(0, exactJSONShape(exactType)); err != nil {
 		return err
 	}
-	if err := requireEOF(decoder); err != nil {
+	if err := requireEOF(walker.decoder); err != nil {
 		return fmt.Errorf("%w: %w", errTrailingJSON, err)
 	}
-	return nil
+	return walker.fieldErr
 }
 
 // isJSONObject accepts exactly one top-level JSON object. Streamed tool
@@ -440,32 +454,73 @@ func isJSONObject(body []byte, maximumDepth int) bool {
 	return llmprotocol.ValidateJSONObject(body, maximumDepth) == nil
 }
 
-func consumeJSONValue(decoder *json.Decoder, depth, maximumDepth int) error {
-	if maximumDepth <= 0 || depth > maximumDepth {
+var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+
+// exactJSONShape returns the struct, slice or array type whose member names
+// validateExactJSONValue would check, or nil when it would accept any value.
+func exactJSONShape(targetType reflect.Type) reflect.Type {
+	targetType = dereferenceJSONType(targetType)
+	if targetType == nil || reflect.PointerTo(targetType).Implements(jsonUnmarshalerType) {
+		return nil
+	}
+	switch targetType.Kind() {
+	case reflect.Struct:
+		return targetType
+	case reflect.Slice, reflect.Array:
+		if targetType.Elem() == jsonRawMessageType {
+			return nil
+		}
+		return targetType
+	}
+	return nil
+}
+
+type jsonWalker struct {
+	decoder      *json.Decoder
+	maximumDepth int
+	fieldErr     error
+}
+
+func (walker *jsonWalker) value(depth int, shape reflect.Type) error {
+	if walker.maximumDepth <= 0 || depth > walker.maximumDepth {
 		return fmt.Errorf("JSON nesting exceeds the configured limit")
 	}
-	token, err := decoder.Token()
+	token, err := walker.decoder.Token()
 	if err != nil {
 		return err
 	}
 	delimiter, ok := token.(json.Delim)
+	if shape != nil && token != nil {
+		want := json.Delim('[')
+		if shape.Kind() == reflect.Struct {
+			want = '{'
+		}
+		if !ok || delimiter != want {
+			walker.fieldError(fmt.Errorf("%w: %s value is not %q", errNonCanonicalField, shape, want))
+			shape = nil
+		}
+	}
 	if !ok {
 		return nil
 	}
 	switch delimiter {
 	case '{':
-		return consumeJSONObject(decoder, depth, maximumDepth)
+		return walker.object(depth, shape)
 	case '[':
-		return consumeJSONArray(decoder, depth, maximumDepth)
+		return walker.array(depth, shape)
 	default:
 		return fmt.Errorf("unexpected delimiter %q", delimiter)
 	}
 }
 
-func consumeJSONObject(decoder *json.Decoder, depth, maximumDepth int) error {
+func (walker *jsonWalker) object(depth int, shape reflect.Type) error {
+	var fields map[string]reflect.Type
+	if shape != nil {
+		fields = exactJSONStructFields(shape)
+	}
 	seen := make(map[string]struct{})
-	for decoder.More() {
-		keyToken, err := decoder.Token()
+	for walker.decoder.More() {
+		keyToken, err := walker.decoder.Token()
 		if err != nil {
 			return err
 		}
@@ -481,28 +536,47 @@ func consumeJSONObject(decoder *json.Decoder, depth, maximumDepth int) error {
 			return fmt.Errorf("%w %q", errDuplicateJSONField, key)
 		}
 		seen[canonicalKey] = struct{}{}
-		if err := consumeJSONValue(decoder, depth+1, maximumDepth); err != nil {
+		var memberShape reflect.Type
+		if fields != nil {
+			memberType, known := fields[key]
+			if known {
+				memberShape = exactJSONShape(memberType)
+			} else {
+				walker.fieldError(fmt.Errorf("%w: unknown field %q", errNonCanonicalField, key))
+			}
+		}
+		if err := walker.value(depth+1, memberShape); err != nil {
 			return err
 		}
 	}
-	closing, err := decoder.Token()
+	closing, err := walker.decoder.Token()
 	if err != nil || closing != json.Delim('}') {
 		return fmt.Errorf("unterminated object")
 	}
 	return nil
 }
 
-func consumeJSONArray(decoder *json.Decoder, depth, maximumDepth int) error {
-	for decoder.More() {
-		if err := consumeJSONValue(decoder, depth+1, maximumDepth); err != nil {
+func (walker *jsonWalker) array(depth int, shape reflect.Type) error {
+	var elementShape reflect.Type
+	if shape != nil {
+		elementShape = exactJSONShape(shape.Elem())
+	}
+	for walker.decoder.More() {
+		if err := walker.value(depth+1, elementShape); err != nil {
 			return err
 		}
 	}
-	closing, err := decoder.Token()
+	closing, err := walker.decoder.Token()
 	if err != nil || closing != json.Delim(']') {
 		return fmt.Errorf("unterminated array")
 	}
 	return nil
+}
+
+func (walker *jsonWalker) fieldError(err error) {
+	if walker.fieldErr == nil {
+		walker.fieldErr = err
+	}
 }
 
 func requestEnvelope(format llmprotocol.WireFormat, body []byte, generation uint64, policy llmprotocol.Policy) llmprotocol.Envelope {
