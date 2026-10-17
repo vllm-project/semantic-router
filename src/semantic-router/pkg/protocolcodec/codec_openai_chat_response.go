@@ -223,6 +223,14 @@ func decodeChatTokenLogprobs(wire *chatLogprobsWire) []llmprotocol.TokenLogprob 
 }
 
 func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
+	promptDetails := wire.PromptTokensDetails
+	if promptDetails == nil && wire.CachedTokens != nil {
+		promptDetails = &chatPromptTokensDetailsWire{CachedTokens: wire.CachedTokens}
+	}
+	completionDetails := wire.CompletionTokensDetails
+	if completionDetails == nil && wire.ReasoningTokens != nil {
+		completionDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: *wire.ReasoningTokens}
+	}
 	usage := llmprotocol.Usage{
 		State:           llmprotocol.UsageAvailable,
 		InputUncached:   unknownCount(),
@@ -234,14 +242,14 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 		OutputTotal:     authoritative(wire.CompletionTokens),
 		Total:           authoritative(wire.TotalTokens),
 	}
-	if wire.PromptTokensDetails != nil {
-		details := wire.PromptTokensDetails
+	if promptDetails != nil {
+		details := promptDetails
 		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
 		}
 	}
-	if wire.CompletionTokensDetails != nil {
-		reasoning := wire.CompletionTokensDetails.ReasoningTokens
+	if completionDetails != nil {
+		reasoning := completionDetails.ReasoningTokens
 		other := wire.CompletionTokens - reasoning
 		if reasoning < 0 || wire.CompletionTokens < reasoning {
 			other = -1
