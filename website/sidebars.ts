@@ -95,6 +95,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
                 'tutorials/signal/heuristic/topic-continuity',
+                'tutorials/signal/heuristic/agentic-facts',
               ],
             },
             {

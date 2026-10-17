@@ -25,10 +25,16 @@ func (r *OpenAIRouter) candidateRequirements(ctx *RequestContext) *config.Candid
 	return r.Config.CandidateRequirements
 }
 
-func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequirements, model string, demand selection.CandidateDemand) error {
+// validateModelDemand qualifies one model against the strict candidate
+// requirements. caller holds the capabilities an accepted agentic facts
+// envelope requires. They join the capabilities derived from the request, so
+// a model card must declare both. This only removes candidates; it never adds
+// one.
+func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequirements, model string, demand selection.CandidateDemand, caller llmprotocol.CapabilitySet) error {
 	if !selection.CandidateRequirementsEnabled(requirements) {
 		return nil
 	}
+	demand.ModelCapabilities = demand.ModelCapabilities.Union(caller)
 	params, _ := selection.CandidateModelParams(r.Config.ModelConfig, nil, model)
 	requirementErr := selection.ValidateCandidateRequirements(requirements, model, params, demand)
 	var budgetError *selection.RequestBudgetError
@@ -50,19 +56,29 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 	return requirementErr
 }
 
-func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand) ([]config.ModelRef, error) {
+func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand, caller llmprotocol.CapabilitySet) ([]config.ModelRef, error) {
 	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
-		return r.validateModelDemand(requirements, ref.Model, demand)
+		return r.validateModelDemand(requirements, ref.Model, demand, caller)
 	})
 }
 
 // Strict live selection must qualify each model against the wire request it
 // would actually receive. Anthropic-only controls can be safely projected for
 // one backend format and unsupported for another.
-func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision) ([]config.ModelRef, error) {
+func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision, caller llmprotocol.CapabilitySet) ([]config.ModelRef, error) {
 	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
-		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil)
+		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil, caller)
 	})
+}
+
+// callerCapabilities returns the capabilities an accepted agentic facts
+// envelope requires for this request. It is empty when the contract is
+// disabled, no envelope arrived, or the envelope was rejected.
+func callerCapabilities(ctx *RequestContext) llmprotocol.CapabilitySet {
+	if ctx == nil {
+		return llmprotocol.CapabilitySet{}
+	}
+	return ctx.AgenticFacts.Accepted.Capabilities()
 }
 
 func eligibleModelRefsByDemand(refs []config.ModelRef, admit func(config.ModelRef) error) ([]config.ModelRef, error) {
@@ -105,7 +121,7 @@ func (r *OpenAIRouter) decisionEligibleModelRefs(decision *config.Decision, ctx 
 	if !selection.CandidateRequirementsEnabled(requirements) {
 		return r.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx)
 	}
-	eligible, err := r.eligibleRequestModelRefs(requirements, decision.ModelRefs, ctx.SemanticRequest, decision)
+	eligible, err := r.eligibleRequestModelRefs(requirements, decision.ModelRefs, ctx.SemanticRequest, decision, callerCapabilities(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -163,13 +179,13 @@ func (r *OpenAIRouter) validateDispatchRequirements(request *llmprotocol.Request
 			}
 		}
 	}
-	return r.validateModelDemand(requirements, model, selection.DemandForRequest(request))
+	return r.validateModelDemand(requirements, model, selection.DemandForRequest(request), callerCapabilities(ctx))
 }
 
-func (r *OpenAIRouter) strictRouteActionDestination(decision *config.Decision, demand selection.CandidateDemand, requirements *config.CandidateRequirements) (string, error) {
+func (r *OpenAIRouter) strictRouteActionDestination(decision *config.Decision, demand selection.CandidateDemand, requirements *config.CandidateRequirements, caller llmprotocol.CapabilitySet) (string, error) {
 	refs := []config.ModelRef{{Model: strings.TrimSpace(decision.Action.Destination)}}
 	refs = append(refs, decision.ModelRefs...)
-	eligible, err := r.eligibleDemandModelRefs(requirements, refs, demand)
+	eligible, err := r.eligibleDemandModelRefs(requirements, refs, demand, caller)
 	if err != nil {
 		return "", err
 	}

@@ -636,6 +636,38 @@ class ActionRule(BaseModel):
     description: Optional[str] = None
 
 
+class AgenticFactsPredicate(BaseModel):
+    """Comparator for one validated agentic facts field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    equals: Optional[str] = None
+    in_: Optional[List[str]] = Field(default=None, alias="in")
+
+    @model_validator(mode="after")
+    def validate_comparator(self):
+        if (self.equals is not None) + bool(self.in_) != 1:
+            raise ValueError("predicate must set exactly one of equals or in")
+        return self
+
+
+class AgenticFactsRule(BaseModel):
+    """Matches trusted caller facts accepted from the agentic facts envelope."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    field: Literal["delegated_role", "task_phase"]
+    predicate: AgenticFactsPredicate
+
+    @model_validator(mode="after")
+    def validate_canonical_name(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("agentic_facts signal name must be nonempty and trimmed")
+        return self
+
+
 class TopicContinuityThresholds(BaseModel):
     """Continuation and change score bounds; the gap is the unknown band."""
 
@@ -834,6 +866,7 @@ class Signals(BaseModel):
     input_modality: Optional[List[InputModalityRule]] = []
     actions: Optional[List[ActionRule]] = []
     decision: Optional[List[DecisionSignalRule]] = []
+    agentic_facts: Optional[List[AgenticFactsRule]] = []
     topic_continuity: Optional[List[TopicContinuityRule]] = []
 
     @model_validator(mode="after")
@@ -845,7 +878,14 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers", "input_modality", "safety"}
+                    if family
+                    in {
+                        "metadata",
+                        "classifiers",
+                        "input_modality",
+                        "safety",
+                        "agentic_facts",
+                    }
                     else signal.name
                 )
                 if name in seen:

@@ -54,8 +54,12 @@ func (r *OpenAIRouter) SelectModelForEval(
 	}
 	requirements := r.candidateRequirements(requestContext)
 	strict := selection.CandidateRequirementsEnabled(requirements)
+	// The eval API reads no agentic facts envelope, so this is always empty.
+	// It is passed rather than omitted so every strict seam states its caller
+	// capabilities explicitly.
+	caller := callerCapabilities(requestContext)
 	if strict && decision.Action != nil && decision.Action.Type == config.DecisionActionRoute && strings.TrimSpace(decision.Action.Destination) != "" {
-		model, err := r.strictRouteActionDestination(decision, input.Demand, requirements)
+		model, err := r.strictRouteActionDestination(decision, input.Demand, requirements, caller)
 		if err != nil {
 			return evalSelectionUnavailable(err.Error())
 		}
@@ -65,7 +69,7 @@ func (r *OpenAIRouter) SelectModelForEval(
 	var excluded int
 	if strict {
 		var err error
-		eligibleModelRefs, err = r.eligibleDemandModelRefs(requirements, decision.ModelRefs, input.Demand)
+		eligibleModelRefs, err = r.eligibleDemandModelRefs(requirements, decision.ModelRefs, input.Demand, caller)
 		if err != nil {
 			return evalSelectionUnavailable(err.Error())
 		}

@@ -19,6 +19,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateMetadataContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateAgenticFactsSignalContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateClassifierSignalContracts(cfg); err != nil {
 		return err
 	}
@@ -106,6 +109,14 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
+	if strings.EqualFold(node.Type, SignalTypeAgenticFacts) &&
+		agenticFactsRuleByName(cfg.AgenticFactsRules, node.Name) == nil {
+		return fmt.Errorf(
+			"decision '%s': agentic_facts condition references unknown signal %q",
+			decisionName,
+			node.Name,
+		)
+	}
 	if node.OnError != "" && node.OnError != "no_match" && node.OnError != "match" {
 		return fmt.Errorf(
 			"decision '%s': condition %s(%q) on_error must be no_match or match",
@@ -123,6 +134,15 @@ func validateDecisionLeafNode(
 		)
 	}
 	return validateDecisionLeafPredicate(decisionName, node)
+}
+
+func agenticFactsRuleByName(rules []AgenticFactsRule, name string) *AgenticFactsRule {
+	for i := range rules {
+		if rules[i].Name == name {
+			return &rules[i]
+		}
+	}
+	return nil
 }
 
 func metadataRuleByName(rules []MetadataRule, name string) *MetadataRule {
