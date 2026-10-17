@@ -20,6 +20,7 @@ type CanonicalProviderDefaults struct {
 type CanonicalProviderModel struct {
 	Name             string                `yaml:"name"`
 	Catalog          string                `yaml:"catalog,omitempty"`
+	Deployment       string                `yaml:"deployment,omitempty"`
 	Reasoning        *CanonicalReasoning   `yaml:"reasoning,omitempty"`
 	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
 	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
@@ -111,6 +112,11 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
+	// OpenAICompatGateway opts a vLLM-type backend in to the OpenAI-compatible
+	// gateway response contract: the backend is a relay that injects its own
+	// usage metering fields, so the decoder tolerates them. A plain vLLM
+	// backend must leave it unset.
+	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

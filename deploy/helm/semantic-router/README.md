@@ -227,6 +227,7 @@ the locked chart dependencies.
 | gateway.tls.secretName | string | `""` | Standalone only. A `kubernetes.io/tls` Secret mounted at `/app/config/certs`, for listeners whose `tls` names `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is mounted as a volume, so a rotated certificate reaches new connections without a restart. |
 | global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
 | global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
+| grafana."grafana.ini".live.allowed_origins | string | `""` | Comma-separated trusted Dashboard origins (scheme://host[:port], no path). Empty preserves Grafana's default origin checks; do not use "*" to bypass validation. |
 | grafana.image.tag | string | `"11.5.1"` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/vllm-project/semantic-router/vllm-sr"` | Image repository: `vllm-sr` (CPU), `vllm-sr-rocm` (AMD GPUs) or `vllm-sr-cuda` (NVIDIA GPUs). |

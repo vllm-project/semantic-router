@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -10,9 +9,20 @@ import secrets
 import sqlite3
 import stat
 import subprocess
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - managed packages are Linux-only today.
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore[assignment]
 
 from cli.container_services import _is_port_in_use
 from cli.runtime_env_names import runtime_env_name_is_allowed
@@ -44,11 +54,17 @@ def _private_token(path: Path) -> str:
     flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags, 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        elif msvcrt is not None:
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        if not stat.S_ISREG(info.st_mode) or (
+            hasattr(info, "st_nlink") and info.st_nlink != 1
+        ):
             raise ValueError("sr-bench credential must be a regular private file")
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "r+", encoding="utf-8", closefd=False) as stream:
             token = stream.read().strip()
             if not token:
@@ -62,6 +78,10 @@ def _private_token(path: Path) -> str:
                 )
             return token
     finally:
+        if msvcrt is not None:
+            with suppress(OSError):
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
         os.close(fd)
 
 
@@ -197,6 +217,7 @@ def reconcile_bench_container(
     result = subprocess.run(
         [
             command[0],
+            "container",
             "inspect",
             "--format",
             '{"id":{{json .Id}},"status":{{json .State.Status}},'

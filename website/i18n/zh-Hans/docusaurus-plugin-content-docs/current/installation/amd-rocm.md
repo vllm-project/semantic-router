@@ -2,9 +2,9 @@
 title: AMD ROCm 部署
 description: 连接 AMD vLLM 后端，并在 AMD GPU 上运行 Vela 路由模型。
 translation:
-  source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/amd-rocm.md"
-  outdated: true
+  outdated: false
 ---
 
 # 使用 AMD ROCm 部署
@@ -119,10 +119,10 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
   bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-对于简单的单模型部署，启动栈。`vllm-sr serve` 自动检测执行后端；`--platform rocm` 显式选择 ROCm 镜像与设备访问，显式配置的模型放置保持不变（见[在 AMD 上运行 Vela 路由模型](#run-vela-routing-models-on-amd)）：
+对于简单的单模型部署，以下命令让 Router 使用 CPU，为聊天后端保留 GPU。`vllm-sr serve` 自动检测执行后端；`--platform rocm` 显式选择 ROCm 镜像与设备访问，显式配置的模型放置保持不变（见[在 AMD 上运行 Vela 路由模型](#run-vela-routing-models-on-amd)）：
 
 ```bash
-vllm-sr serve
+vllm-sr serve --platform cpu
 ```
 
 然后打开 `http://localhost:8700` 的控制面板，以 vLLM 为提供方、填入 served model name 和地址 `vllm:8000` 接入模型，并激活生成的配置。

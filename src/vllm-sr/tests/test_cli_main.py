@@ -342,6 +342,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "--topology" not in result.output
     assert "--log-level" in result.output
     assert "latency_aware" in result.output
+    assert "random" in result.output
     assert "session_aware" not in result.output
     assert "--sim-image" not in result.output
     assert "--recipe-env NAME" in result.output
@@ -962,3 +963,37 @@ def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
             "roles": [{"name": "worker", "models": ["worker-a"]}],
         },
     }
+
+
+_GUARDED_FCNTL_MODULES = (
+    "cli.instance_controller",
+    "cli.runtime_config_lock",
+    "cli.runtime_lifecycle_lock",
+    "cli.sr_bench.dataset_io",
+    "cli.sr_bench.service",
+    "cli.sr_bench_runtime",
+)
+
+
+def test_guarded_imports_survive_fcntl_absence():
+    """Verify that guarded CLI modules survive fcntl absence in an isolated subprocess."""
+    program = (
+        "import importlib, sys; sys.modules['fcntl'] = None; "
+        + "; ".join(
+            f"m = importlib.reload(importlib.import_module('{name}')); "
+            f"assert m.fcntl is None, '{name}'"
+            for name in _GUARDED_FCNTL_MODULES
+        )
+        + "; import cli.main; assert hasattr(cli.main, 'main')"
+    )
+    subprocess.run([sys.executable, "-c", program], check=True, cwd=PROJECT_ROOT)
+
+
+def test_instance_controller_run_rejects_non_posix_host_when_fcntl_missing(
+    monkeypatch, tmp_path
+):
+    ic = importlib.import_module("cli.instance_controller")
+
+    monkeypatch.setattr(ic, "fcntl", None)
+    with pytest.raises(RuntimeError, match="POSIX"):
+        ic.run(tmp_path)

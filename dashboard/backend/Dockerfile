@@ -75,18 +75,25 @@ COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
+COPY src/semantic-router/pkg/consts/ /app/src/semantic-router/pkg/consts/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
 COPY src/semantic-router/pkg/extension/ /app/src/semantic-router/pkg/extension/
 COPY src/semantic-router/pkg/fallback/ /app/src/semantic-router/pkg/fallback/
 COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
+COPY src/semantic-router/pkg/inflight/ /app/src/semantic-router/pkg/inflight/
 COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
 COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/modelservice/ /app/src/semantic-router/pkg/modelservice/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+COPY src/semantic-router/pkg/openapischema/ /app/src/semantic-router/pkg/openapischema/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
+COPY src/semantic-router/pkg/routing/ /app/src/semantic-router/pkg/routing/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trainingcontract/
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
+COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
+COPY src/semantic-router/pkg/topiccontinuity/ /app/src/semantic-router/pkg/topiccontinuity/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
 
 # Copy go.mod and go.sum first for better caching
@@ -135,6 +142,7 @@ COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
+COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 COPY config/knowledge_bases/ /app/config/knowledge_bases/

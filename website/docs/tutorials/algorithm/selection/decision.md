@@ -30,7 +30,7 @@ choice is about cost, latency or load.
 
 Without a `deployment`, the Router's decision model chooses
 (`global.model_catalog.system.decision_model`, Vela 2.0 0.3B unless you
-[choose a size](model-runtime/choose-a-model.md#choose-a-size)). It is the
+[choose a size](../../../model-runtime/choose-a-model.md#choose-a-size)). It is the
 model that already answers the request's built-in signals and its `decision`
 questions that name no deployment, so choosing the model needs no second copy
 of it:

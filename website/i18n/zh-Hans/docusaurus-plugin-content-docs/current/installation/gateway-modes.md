@@ -2,14 +2,14 @@
 title: Gateway 模式
 description: 选择客户端流量从哪里进入 Router：standalone 直接服务，或放在基于 Envoy 的网关之后；适用于 docker 和 kubernetes 两种目标。
 translation:
-  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/gateway-modes.md"
   outdated: false
 ---
 
 # Gateway 模式
 
-`vllm-sr serve` 做两个选择：**gateway 模式**，即客户端流量从哪里进入；以及**目标**，即整套服务在哪里运行。
+**gateway 模式**决定客户端流量从哪里进入，**目标**决定整套服务在哪里运行。它们与 `--engine` 是不同的选择：`--engine` 提供原生判断请求，不启用 Chat 路由；省略时启动 Router 模式。共用的前端与模型运行时见[组件架构](../overview/component-architecture)。
 
 | 模式 | 客户端流量进入 | 适用场景 |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ vllm-sr serve --target kubernetes --config config.yaml
 `x-envoy-*` header。
 
 :::note 升级
-以前的版本总是在 Router 前面放 Envoy。现在默认是 standalone；`vllm-sr serve --gateway extproc` 会完全恢复以前的部署。
+以前的版本总是在 Router 前面放 Envoy。现在默认是 standalone；`vllm-sr serve --gateway extproc` 会恢复 Envoy 入口。
 参见[发布说明](../release-notes/standalone-mode)。
 :::
 
@@ -164,11 +164,11 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 `vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
 两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
 不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
-profile 和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
+引擎参数和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
 
 | 范围 | 选项 |
 | --- | --- |
-| 模型与运行 | `MODEL`、`--engine`、`--revision`、`--runtime-profile`、`--data-parallel-size` / `-dp` |
+| 模型与运行 | `MODEL`、`--engine`、`--revision`、`--data-parallel-size` / `-dp`，以及引擎参数 `--max-num-seqs`、`--max-num-batched-tokens`、`--batch-window-ms`、`--dtype`、`--enable-shared-context` |
 | 平台 | `--platform auto/cpu/cuda/rocm`，auto 检查实际 Docker 主机或目标 Kubernetes 集群 |
 | Docker 设备 | `--device-ids` 使用主机编号，按已有可见掩码映射；一个编号允许同卡多副本，N 个编号对应 N 个副本 |
 | 配置 | `--config`、`--target`、`--gateway`、`--minimal`、`--readonly`、`--algorithm` |
@@ -176,7 +176,7 @@ profile 和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
 | Kubernetes 部署 | `--namespace`、`--context`、`--profile`、`--chart-dir` |
 
 Kubernetes 使用 pod 分配后的设备序号，通过 canonical replicas 请求 GPU 资源，
-不接受物理主机 `--device-ids`。模型 `--runtime-profile` 与部署 `--profile` 独立。
+不接受物理主机 `--device-ids`。模型运行时的引擎参数与 Kubernetes 部署的 `--profile` 相互独立。
 `--revision` 可填分支、tag 或 commit，启动前只解析一次并记录不可变 SHA；内置模型
 省略时使用发布 pin。监听地址、端口和公开模型授权始终通过 config 控制。
 完整参数以 [CLI 参考](/docs/api/cli) 为准。

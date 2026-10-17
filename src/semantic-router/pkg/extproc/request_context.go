@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -22,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/topiccontinuity"
 )
 
 // EnhancedHallucinationSpan is one unsupported span with its offsets, score,
@@ -160,6 +162,8 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
+	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded
 	// downstream to the client. Once true, response headers are committed and no
 	// subsequent replacement or fallback response may be attempted.
@@ -303,6 +307,7 @@ type RequestContext struct {
 	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
 	VSRMatchedPreference      []string // Matched preference signals
 	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
 	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
@@ -411,6 +416,10 @@ type RequestContext struct {
 	// separately checks stage-specific evidence and the resolved capture policy.
 	RouterReplayContentOmitted bool
 
+	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
+	// before Replay created its record; startRouterReplay appends them.
+	pendingTrustedFactsOutcomes []routerreplay.Outcome
+
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
@@ -438,7 +447,17 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	SemanticResponse         *llmprotocol.Response
+	// originalConversation memoizes one decode of OriginalContextHistory for
+	// the request. It is read-only by contract: consumers must not mutate it.
+	originalConversation       *contextcompression.ConversationHistory
+	originalConversationLoaded bool
+	// TopicContinuityEvaluations holds the selected recipe's topic-continuity
+	// results in rule declaration order, with content-free cost receipts.
+	TopicContinuityEvaluations []topiccontinuity.RuleEvaluation
+	// TopicContinuityResults indexes the same results by rule name. Values are
+	// plain structs, so reads are detached copies.
+	TopicContinuityResults map[string]topiccontinuity.Result
+	SemanticResponse       *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
@@ -454,6 +473,10 @@ type RequestContext struct {
 	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
+
+	// Masking is the request-scoped placeholder allocator: created on the
+	// first masked dispatch, never persisted, logged or shared (D5).
+	Masking *masking.Allocator
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin
@@ -472,6 +495,11 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// PluginBackendModel is the model selected before plugins run, and
+	// PluginSkips lists the plugins that capability gating kept from running.
+	PluginBackendModel string
+	PluginSkips        []pluginSkip
 
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.

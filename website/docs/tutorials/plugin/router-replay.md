@@ -128,7 +128,7 @@ a `reason` stating the values compared. A replayed request therefore explains
 its route the same way the eval API does.
 
 Detail responses can also include `route_diagnostics.prepared_dispatch`, a
-versioned receipt for the exact primary provider-bound body returned to Envoy
+versioned receipt for the exact primary provider-bound body prepared for primary dispatch
 after protocol encoding and provider adaptation. It records the wire format,
 SHA-256 digest, and encoded byte length without retaining another copy of the
 body. Internal Looper calls and response-time fallback attempts are not part of

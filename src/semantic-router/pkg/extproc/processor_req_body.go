@@ -59,7 +59,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 
-	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
+	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, request, snapshot, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
@@ -214,7 +214,11 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		if err != nil {
 			return nil, err
 		}
-		r.dispatchShadowIfConfigured(ctx, dispatch)
+		// A rejected request (an immediate response) never goes upstream, so it is
+		// not mirrored to the shadow model either.
+		if finalized.GetImmediateResponse() == nil {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
 		return finalized, nil
 	}
 
@@ -261,7 +265,8 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	dispatched = true
+	// An immediate response rejects the request, so there is nothing to mirror.
+	dispatched = response.GetImmediateResponse() == nil
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

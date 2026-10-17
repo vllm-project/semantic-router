@@ -82,7 +82,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, or anthropic",
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, or systemone",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -131,6 +131,7 @@ func catalogProviderBinding(
 		Credentials: modelcatalog.CredentialsRef{APIKey: backend.APIKey, APIKeyEnv: backend.APIKeyEnv},
 		Headers:     copyStringMap(backend.ExtraHeaders), APIVersion: backend.APIVersion,
 		AuthHeader: backend.AuthHeader, ChatPath: backend.ChatPath,
+		OpenAICompatGateway: backend.OpenAICompatGateway,
 	}
 	if backend.AuthPrefix != nil {
 		instance.AuthPrefix = *backend.AuthPrefix
@@ -280,6 +281,8 @@ func canonicalBackendURL(backend CanonicalBackendRef) string {
 
 func catalogProtocolForAPIFormat(apiFormat string) string {
 	switch apiFormat {
+	case APIFormatSystemOne:
+		return "vllm-sr/systemone@1"
 	case APIFormatResponses:
 		return "openai/responses@1"
 	case APIFormatAnthropic:
@@ -295,7 +298,8 @@ func catalogPricing(value ModelPricing) modelcatalog.Pricing {
 	return modelcatalog.Pricing{
 		Currency: value.Currency, PromptPer1M: value.PromptPer1M,
 		CompletionPer1M: value.CompletionPer1M, CachedInputPer1M: value.CachedInputPer1M,
-		CacheWritePer1M: value.CacheWritePer1M,
+		CacheWritePer1M:   value.CacheWritePer1M,
+		CacheWrite1hPer1M: value.CacheWrite1hPer1M,
 	}
 }
 

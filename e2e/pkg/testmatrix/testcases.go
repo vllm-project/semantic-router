@@ -72,6 +72,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Action signal rule matching and routing
+	"action-routing",
 	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
 	"context-safety-overlap",
 }
@@ -81,6 +83,10 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2794: OpenAPI rendered from the route registration.
+	"dashboard-openapi",
+	// Issue #2794: per-caller capability states with cached dependency probes.
+	"dashboard-capabilities",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints
@@ -92,6 +98,12 @@ var DashboardContract = []string{
 	"dashboard-deploy-safe-failure",
 	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
 	"dashboard-deploy-rollback",
+	// The active projection names the served config by version and hash after deploy and rollback (issue #3233)
+	"dashboard-status-active-config",
+	// Logs state their deployment contract and the audit trail records a rejected deploy (issue #3233)
+	"dashboard-logs-diagnostics",
+	// Anonymous and forged sessions are rejected on logs and deploy without touching state (issue #3233)
+	"dashboard-anonymous-access-denied",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
@@ -112,6 +124,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-chat-cache-control",
 	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
+	// A stop_sequence terminal must project to the generic Chat stop for
+	// clients that cannot carry the matched string (issue #4892)
+	"anthropic-chat-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
 	"anthropic-response-api-buffered",

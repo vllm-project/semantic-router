@@ -5,8 +5,11 @@ description: Choose where client traffic enters the Router, standalone or behind
 
 # Gateway Modes
 
-`vllm-sr serve` makes two choices: the **gateway mode**, which is where client
-traffic enters, and the **target**, which is where the stack runs.
+Gateway mode chooses where client traffic enters; the target chooses where
+the stack runs. These are separate from `--engine`, which serves native
+judgment requests without Chat routing. Omitting `--engine` starts Router
+mode. See [component architecture](../overview/component-architecture) for
+the shared frontend and model runtime.
 
 | Mode | Client traffic enters at | Use it for |
 | --- | --- | --- |
@@ -37,7 +40,7 @@ deliberate differences, such as the `x-envoy-*` headers that only Envoy adds.
 
 :::note Upgrading
 Earlier releases always put Envoy in front of the Router. Standalone is now the
-default; `vllm-sr serve --gateway extproc` restores the previous stack exactly.
+default; `vllm-sr serve --gateway extproc` restores Envoy ingress.
 See the [release note](../release-notes/standalone-mode).
 :::
 
@@ -217,7 +220,7 @@ management, Dashboard and the explicitly published System One API.
 
 | Group | Applies to | Options |
 | --- | --- | --- |
-| Instance and models | docker, kubernetes | `MODEL`, `--engine`, `--revision`, `--data-parallel-size`, `--runtime-profile`, `--platform`, `--image`, `--log-level` |
+| Instance and models | docker, kubernetes | `MODEL`, `--engine`, `--revision`, `--data-parallel-size`, `--max-num-seqs`, `--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`, `--enable-shared-context`, `--platform`, `--image`, `--log-level` |
 | Instance configuration | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm` |
 | Container options | docker | `--image-pull-policy`, `--container-runtime` |
 | Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env`, `--device-ids` |

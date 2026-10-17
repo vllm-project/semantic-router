@@ -7,7 +7,7 @@ sidebar_label: Restricted Networks
 
 Semantic Router may need network access for three different reasons:
 
-1. the container runtime pulls Router, Dashboard, Envoy, and supporting images;
+1. the container runtime pulls Router, Dashboard and supporting images (plus Envoy for `--gateway extproc`);
 2. the Router downloads classifier or embedding artifacts; and
 3. routed requests call your configured model providers.
 
@@ -23,14 +23,14 @@ Start the stack and inspect its status and component logs:
 vllm-sr serve --config config.yaml
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy  # --gateway extproc only
 ```
 
 | Symptom | Likely layer |
 |---------|--------------|
 | Image pull or registry authentication error | Container registry |
 | Router starts but waits while loading a model artifact | Hugging Face or local model path |
-| Router and Envoy are ready, but completions return connection errors | Provider endpoint or firewall |
+| The serving stack is ready, but completions return connection errors | Provider endpoint or firewall |
 | Kubernetes pod remains in `ImagePullBackOff` | Cluster node registry access |
 
 ## Container images

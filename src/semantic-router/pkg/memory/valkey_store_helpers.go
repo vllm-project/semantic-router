@@ -2,7 +2,9 @@ package memory
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -14,6 +16,79 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
+
+const valkeyStoreOperationIDField = "__store_operation_id"
+
+// valkeyAtomicStoreScript checks uniqueness and writes every field in one HSET.
+// Keeping the operation ID on the hash lets a retried EVAL identify a write
+// whose response was lost, without overwriting a different existing record.
+const valkeyAtomicStoreScript = `
+if #ARGV < 3 or ((#ARGV - 1) % 2 ~= 0) then
+	return redis.error_reply("invalid atomic memory store arguments")
+end
+
+local operationID = ARGV[1]
+local existingOperationID = redis.call("HGET", KEYS[1], "__store_operation_id")
+if existingOperationID then
+	if existingOperationID == operationID then
+		return "stored"
+	end
+	return "duplicate"
+end
+
+if redis.call("EXISTS", KEYS[1]) == 1 then
+	return "duplicate"
+end
+
+redis.call("HSET", KEYS[1], "__store_operation_id", operationID, unpack(ARGV, 2))
+return "stored"
+`
+
+// valkeyNewStoreOperationID returns a random token reused across retries of one
+// Store call. It is persisted with the hash to distinguish retries from new
+// attempts to create an existing memory ID.
+func valkeyNewStoreOperationID() (string, error) {
+	var operationID [16]byte
+	if _, err := rand.Read(operationID[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(operationID[:]), nil
+}
+
+func valkeyBuildAtomicStoreCommand(key string, fields map[string]string, operationID string) []string {
+	fieldNames := make([]string, 0, len(fields))
+	for field := range fields {
+		fieldNames = append(fieldNames, field)
+	}
+	sort.Strings(fieldNames)
+
+	command := []string{"EVAL", valkeyAtomicStoreScript, "1", key, operationID}
+	for _, field := range fieldNames {
+		command = append(command, field, fields[field])
+	}
+	return command
+}
+
+func valkeyAtomicStoreResult(result any, memoryID string) error {
+	var response string
+	switch value := result.(type) {
+	case string:
+		response = value
+	case []byte:
+		response = string(value)
+	default:
+		return fmt.Errorf("unexpected atomic Valkey store response type %T for memory id=%s", result, memoryID)
+	}
+
+	switch response {
+	case "stored":
+		return nil
+	case "duplicate":
+		return fmt.Errorf("%w: memory id=%s", errValkeyMemoryAlreadyExists, memoryID)
+	default:
+		return fmt.Errorf("unexpected atomic Valkey store response %q for memory id=%s", response, memoryID)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Background access tracking
@@ -32,33 +107,61 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 	}
 }
 
+// valkeyAtomicRecordRetrievalScript conditionally increments access_count and updates
+// updated_at only if the memory hash key already exists. If the memory was deleted
+// (e.g. via Forget) before or during background access tracking, the script returns
+// "missing" without recreating the key or leaving partial/orphan records.
+const valkeyAtomicRecordRetrievalScript = `
+if redis.call("EXISTS", KEYS[1]) == 0 then
+	return "missing"
+end
+
+redis.call("HINCRBY", KEYS[1], "access_count", 1)
+redis.call("HSET", KEYS[1], "updated_at", ARGV[1])
+return "updated"
+`
+
+func valkeyBuildAtomicRecordRetrievalCommand(key string, nowUnix string) []string {
+	return []string{"EVAL", valkeyAtomicRecordRetrievalScript, "1", key, nowUnix}
+}
+
+func valkeyAtomicRecordRetrievalResult(result any, memoryID string) error {
+	var response string
+	switch value := result.(type) {
+	case string:
+		response = value
+	case []byte:
+		response = string(value)
+	default:
+		return fmt.Errorf("unexpected atomic Valkey record retrieval response type %T for memory id=%s", result, memoryID)
+	}
+
+	switch response {
+	case "updated", "missing":
+		return nil
+	default:
+		return fmt.Errorf("unexpected atomic Valkey record retrieval response %q for memory id=%s", response, memoryID)
+	}
+}
+
 // recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
 //
 // The authoritative access_count and updated_at live as top-level HASH fields and are updated
-// atomically via HINCRBY / HSET. Do not rewrite duplicated values inside the metadata JSON blob
-// here: a separate read-modify-write of metadata can race with concurrent retrievals and move
-// access_count / last_accessed backwards. Callers should use the top-level HASH fields as the
-// source of truth for these mutable values.
+// atomically via an EVAL script only if the hash key exists. If the memory was deleted (e.g. via Forget)
+// before or during background access tracking, the script safely returns "missing" to avoid resurrecting
+// deleted memories as orphan records with partial fields.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
 	now := time.Now()
 	nowUnix := strconv.FormatInt(now.UnixMilli(), 10)
 
-	// Increment access_count atomically.
-	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
+	command := valkeyBuildAtomicRecordRetrievalCommand(key, nowUnix)
+	result, err := v.client.CustomCommand(ctx, command)
 	if err != nil {
-		return fmt.Errorf("HINCRBY access_count failed: %w", err)
+		return fmt.Errorf("atomic access tracking failed for memory id=%s: %w", id, err)
 	}
 
-	// Update timestamps.
-	_, err = v.client.HSet(ctx, key, map[string]string{
-		"updated_at": nowUnix,
-	})
-	if err != nil {
-		return fmt.Errorf("HSET timestamps failed: %w", err)
-	}
-
-	return nil
+	return valkeyAtomicRecordRetrievalResult(result, id)
 }
 
 // ---------------------------------------------------------------------------
@@ -358,14 +461,7 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	projectID := memory.ProjectID
-	if projectID == "" {
-		projectID = "default"
-	}
-	source := memory.Source
-	if source == "" {
-		source = "extraction"
-	}
+	projectID, source := normalizedMemoryScopeFields(memory)
 
 	return map[string]string{
 		"id":           memory.ID,
