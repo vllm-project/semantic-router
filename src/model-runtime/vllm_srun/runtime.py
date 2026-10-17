@@ -503,6 +503,7 @@ class ServedModel:
             model.golden_compare,
             goldens,
             placement.device.accelerator,
+            placement.accelerator.golden_reference(placement.device),
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(
