@@ -58,7 +58,7 @@ func newLLMLabelClassifier(
 	if client.initErr != nil {
 		return nil, client.initErr
 	}
-	timeout := time.Duration(external.TimeoutSeconds) * time.Second
+	timeout := config.DurationFromSeconds(external.TimeoutSeconds)
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}

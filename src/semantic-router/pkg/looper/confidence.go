@@ -32,6 +32,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
@@ -678,6 +679,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			modelName,
 			"candidate",
 			"generator",
+			llmprotocol.TrustedStageCandidate,
 			confidenceModelCallStreaming(req.IsStreaming, evaluator),
 			attempts,
 			logprobsCfg,
@@ -956,7 +958,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 
 	// Call the same model to evaluate its answer
 	verifyResp, attempt, err := l.startConfidenceModelAttempt(
-		ctx, req, verifyRequest, modelName, "self_verifier", "verifier", false, iteration, nil, accessKey,
+		ctx, req, verifyRequest, modelName, "self_verifier", "verifier", llmprotocol.TrustedStageVerifier, false, iteration, nil, accessKey,
 	)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
