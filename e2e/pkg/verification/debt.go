@@ -46,10 +46,6 @@ var KnownUnreachableDebt = map[string]UnreachableDebt{
 	"mcp-probability-distribution": {Issue: 3178},
 	"authz-rbac-routing":           {Issue: 3178},
 
-	// #3180 — decision plugin coverage owns disposition of the legacy
-	// OpenAI-backed RAG case.
-	"rag-openai": {Issue: 3180},
-
 	// Documented manual-only rationale: mirrors the authz-rbac profile
 	// contract, where direct client identity headers are stripped by the
 	// production anti-spoofing path.
