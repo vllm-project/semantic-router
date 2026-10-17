@@ -371,6 +371,14 @@ func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.Tok
 		return existing, nil
 	}
 	if existing.Value != nil && *existing.Value > *incoming.Value {
+		if *incoming.Value == 0 {
+			// A zero cannot decrease positive cumulative evidence: cumulative
+			// -usage upstreams emit all-zero placeholder snapshots between real
+			// cumulative frames, so that zero carries no evidence of its own
+			// and the running evidence keeps. A zero beside unknown counters
+			// still merges below as new settled evidence.
+			return existing, nil
+		}
 		return llmprotocol.TokenCount{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "usage_decreased", "upstream streaming usage counter decreased", nil)
 	}
 	if existing.Value != nil && usageEvidenceRank(incoming.Provenance) < usageEvidenceRank(existing.Provenance) {
