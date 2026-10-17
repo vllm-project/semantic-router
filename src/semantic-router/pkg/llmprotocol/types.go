@@ -11,6 +11,13 @@ import (
 // WireFormat is a stable wire contract identifier, not a provider product.
 type WireFormat string
 
+// Values of Request.Truncation. Only TruncationAuto needs the target to keep
+// conversation state; TruncationDisabled is the default and drops nothing.
+const (
+	TruncationDisabled = "disabled"
+	TruncationAuto     = "auto"
+)
+
 const (
 	OpenAIChatV1        WireFormat = "openai.chat.v1"
 	OpenAIResponsesV1   WireFormat = "openai.responses.v1"

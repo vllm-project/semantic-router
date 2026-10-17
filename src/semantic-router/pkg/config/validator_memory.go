@@ -41,6 +41,9 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
+	if err := validateMemoryBackend(cfg.Memory); err != nil {
+		return err
+	}
 	if err := validateMemorySimilarityThreshold(
 		cfg.Memory.DefaultSimilarityThreshold,
 		"global memory default_similarity_threshold",
@@ -57,6 +60,26 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 		return err
 	}
 	return validateMemoryPersistence(cfg.Memory.Persistence)
+}
+
+// validateMemoryBackend rejects unknown backends and incomplete backend
+// configuration before runtime construction can silently disable memory.
+func validateMemoryBackend(cfg MemoryConfig) error {
+	switch cfg.Backend {
+	case "", "milvus":
+		return nil
+	case "qdrant":
+		if cfg.Qdrant == nil {
+			return fmt.Errorf("global.stores.memory.qdrant must be configured when backend is %q", cfg.Backend)
+		}
+	case "valkey":
+		if cfg.Valkey == nil {
+			return fmt.Errorf("global.stores.memory.valkey must be configured when backend is %q", cfg.Backend)
+		}
+	default:
+		return fmt.Errorf("global.stores.memory.backend %q is not supported (milvus, qdrant, valkey)", cfg.Backend)
+	}
+	return nil
 }
 
 // Zero values use runtime defaults. Reject invalid resource bounds before any
