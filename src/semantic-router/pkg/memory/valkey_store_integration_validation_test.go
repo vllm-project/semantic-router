@@ -142,3 +142,18 @@ func TestValkeyStoreInteg_TLS_BadCAPathConfig(t *testing.T) {
 	assert.True(t, vc.TLSEnabled)
 	assert.NotEmpty(t, vc.TLSCAPath)
 }
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_CloseReleasesClient(t *testing.T) {
+	store, client := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	_, _ = client.CustomCommand(ctx, []string{"FT.DROPINDEX", store.indexName})
+
+	require.NoError(t, store.Close())
+	require.NoError(t, store.Close())
+	assert.False(t, store.IsEnabled())
+	_, err := store.Get(ctx, "any")
+	require.ErrorIs(t, err, ErrStoreClosed)
+	_, err = client.Ping(ctx)
+	require.Error(t, err, "Close must release the Valkey client it owns")
+}

@@ -21,6 +21,7 @@ type QdrantStore struct {
 	qdrantConfig    *config.MemoryQdrantConfig
 	enabled         bool
 	embeddingConfig EmbeddingConfig
+	life            storeLifecycle
 }
 
 type QdrantStoreOptions struct {
@@ -251,10 +252,12 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		status = "error"
 		return err
 	}
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	if mem.ID == "" {
 		status = "error"
 		return fmt.Errorf("memory ID is required")
@@ -305,9 +308,11 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 }
 
 func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
-	if !s.enabled {
-		return nil, nil
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	start := time.Now()
 	status := "error"
 	resultCount := -1
@@ -375,9 +380,11 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 }
 
 func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
-	if !s.enabled {
-		return nil, fmt.Errorf("qdrant store is not enabled")
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 
 	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: s.collectionName,
@@ -402,10 +409,12 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
 	}()
 
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 
 	existing, err := s.Get(ctx, id)
 	if err != nil {
@@ -446,9 +455,11 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 }
 
 func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	if !s.enabled {
-		return nil, fmt.Errorf("qdrant store is not enabled")
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	if opts.UserID == "" {
 		return nil, fmt.Errorf("user ID is required for listing memories")
 	}
@@ -559,10 +570,12 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
 	}()
 
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 
 	if _, err := s.Get(ctx, id); err != nil {
 		status = "error"
@@ -590,10 +603,12 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
 	}()
 
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	if scope.UserID == "" {
 		status = "error"
 		return fmt.Errorf("user_id is required for ForgetByScope")
@@ -628,9 +643,14 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 	return nil
 }
 
-func (s *QdrantStore) IsEnabled() bool { return s.enabled }
+func (s *QdrantStore) IsEnabled() bool { return s.enabled && !s.life.isClosed() }
 
 func (s *QdrantStore) CheckConnection(ctx context.Context) error {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return fmt.Errorf("qdrant: %w", gateErr)
+	}
+	defer release()
 	_, err := s.client.ListCollections(ctx)
 	if err != nil {
 		return fmt.Errorf("qdrant connection check failed: %w", err)
@@ -638,9 +658,13 @@ func (s *QdrantStore) CheckConnection(ctx context.Context) error {
 	return nil
 }
 
+// Close releases the client once. The Qdrant client panics if used after its
+// own Close, so every method checks the lifecycle gate before touching it.
 func (s *QdrantStore) Close() error {
-	if s.client != nil {
+	return s.life.close("qdrant", func() error {
+		if s.client == nil {
+			return nil
+		}
 		return s.client.Close()
-	}
-	return nil
+	})
 }
