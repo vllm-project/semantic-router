@@ -130,22 +130,26 @@ accuracy 0.812 against 0.820).
 
 On Ada, approximate kernels (`--dtype auto` for a quantized package) take the
 FP8 product of 256 rows or more unscaled; exact kernels only
-(`EngineOptions.exact_kernels_only`) keep the per-row scaled product. One
+(`EngineOptions.exact_kernels_only`) keep the per-row scaled product. Before
+PyTorch 2.12 the per-row kernel cannot run in a graph (its stream-K workspace
+is zeroed on the default stream, pytorch/pytorch#177573), so there approximate
+kernels take every product unscaled and exact kernels run without graphs. One
 `k_proj`-shaped layer (5,120 to 1,024, 256 rows, activations with outlier
 channels) gives bit-identical outputs for 91.5% of its elements unscaled, and
 every output above 1% of the largest stays within 2.53 BF16 ulps of the scaled
 one. An FP8 `vllm-sr/d3-mini` (made as the FP8 package above) on the RTX 4070
-Ti SUPER, the first 500 of the 1,000 train rows (210 of them 256 tokens or
-longer), each answered a third time, each setting loaded alone:
+Ti SUPER with PyTorch 2.10, the first 500 of the 1,000 train rows (210 of them
+256 tokens or longer), each answered a third time, each setting loaded alone
+(the scaled product forced under approximate kernels runs without graphs):
 
 | Kernels | Changed against exact kernels | Largest probability change | Accuracy | Median latency |
 | --- | --- | --- | --- | --- |
-| Exact kernels only | | | 0.826 | 49.5 ms |
+| Exact kernels only | | | 0.826 | 50.5 ms |
 | Approximate, scaled product | 8 of 500 | 0.176 | 0.824 | 39.6 ms |
-| Approximate (the default) | 7 of 500 | 0.176 | 0.826 | 40.7 ms |
+| Approximate (the default) | 5 of 500 | 0.142 | 0.822 | 38.4 ms |
 
-The unscaled product itself changes 1 of the 500 answers against the
+The unscaled product itself changes 3 of the 500 answers against the
 approximate kernels with the scaled product (largest probability change
-0.087); the other changes come from the fused element-wise kernels. One
-request at a time it saves no latency at these lengths; the gain is the
+0.109); the other changes come from the fused element-wise kernels. One
+request at a time it saves little latency at these lengths; the gain is the
 kernel table's, at 256 rows and more, as batches of concurrent requests reach.

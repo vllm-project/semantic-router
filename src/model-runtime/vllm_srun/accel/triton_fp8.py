@@ -62,12 +62,19 @@ def quantize_rows(
     # every argument Triton specializes on: integer values and pointer alignment
     key = (x.device, x.dtype, dtype, cols, x.stride(0), x.data_ptr() % 16)
     kernel = _launches.get(key)
+    # Triton before 3.4 has no knobs; its launches take the JIT path only
+    knobs = getattr(triton, "knobs", None)
     hooks = (
-        triton.knobs.runtime.launch_enter_hook,
-        triton.knobs.runtime.launch_exit_hook,
+        None
+        if knobs is None
+        else (knobs.runtime.launch_enter_hook, knobs.runtime.launch_exit_hook)
     )
     # a hook (a profiler's) wants the launch metadata only the JIT path builds
-    if kernel is not None and not any(getattr(h, "calls", h) for h in hooks):
+    if (
+        kernel is not None
+        and hooks is not None
+        and not any(getattr(h, "calls", h) for h in hooks)
+    ):
         _launch(kernel, rows, (*args, block))
         return q, scale
     compiled = _quantize_rows[(rows,)](*args, BLOCK=block, num_warps=8)

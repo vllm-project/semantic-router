@@ -325,3 +325,20 @@ def test_later_calls_launch_the_compiled_kernel_and_write_the_same_bytes(device)
     later = triton_fp8.quantize_rows(x, dtype)
     assert torch.equal(later[0].view(torch.uint8), first[0].view(torch.uint8))
     assert torch.equal(later[1], first[1])
+
+
+def test_a_triton_without_knobs_launches_through_the_jit(device, monkeypatch):
+    import triton
+    from vllm_srun.accel import triton_fp8
+    from vllm_srun.engines.native.quantized import float8_format
+
+    dtype = float8_format(device)
+    if dtype is None:
+        pytest.skip("needs FP8 matrix units")
+    x = torch.randn(37, 2 * 1024 + 16, device=device, dtype=torch.bfloat16)
+    first = triton_fp8.quantize_rows(x, dtype)
+    monkeypatch.delattr(triton, "knobs")
+    monkeypatch.setattr(triton_fp8, "_launch", None)  # the direct launch is not taken
+    later = triton_fp8.quantize_rows(x, dtype)
+    assert torch.equal(later[0].view(torch.uint8), first[0].view(torch.uint8))
+    assert torch.equal(later[1], first[1])
