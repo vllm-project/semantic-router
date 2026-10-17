@@ -2,7 +2,7 @@
 title: 模型性能评测
 sidebar_label: 模型评测
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "13bd272651ff0ac75e7be8d739f4d7f71bc2b793"
   source_file: "docs/training/model-performance-eval.md"
   outdated: false
 ---
@@ -31,14 +31,14 @@ translation:
 - 脚本使用的 Hugging Face 数据集所需的网络和数据集访问
 - 足够的 provider 容量和预算，以便将每个所选问题发送给每个候选模型
 
-从仓库根目录创建隔离环境：
+从仓库根目录创建锁定环境：
 
 ```bash
 cd src/training/model_eval
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+uv sync --locked
 ```
+
+`uv run python` 在该环境中运行脚本。
 
 脚本会保存提示词、模型响应、正确性标签和计时数据。
 选择对所评测内容有合适保留和访问控制的输出目录。
@@ -48,7 +48,7 @@ python -m pip install -r requirements.txt
 先用小样本验证模型 ID 和响应格式：
 
 ```bash
-python mmlu_pro_vllm_eval.py \
+uv run python mmlu_pro_vllm_eval.py \
   --endpoint http://localhost:8000/v1 \
   --models phi4 qwen3-0.6B \
   --samples-per-category 10 \
@@ -77,7 +77,7 @@ python mmlu_pro_vllm_eval.py \
 将 ARC 用作第二个数据集，而不是领域分数来源：
 
 ```bash
-python arc_challenge_vllm_eval.py \
+uv run python arc_challenge_vllm_eval.py \
   --endpoint http://localhost:8000/v1 \
   --models phi4 qwen3-0.6B \
   --samples 100 \
@@ -91,7 +91,7 @@ python arc_challenge_vllm_eval.py \
 绘图器递归读取 MMLU-Pro `analysis.json` 文件：
 
 ```bash
-python plot_category_accuracies.py \
+uv run python plot_category_accuracies.py \
   --results-dir results/mmlu-smoke \
   --plot-type heatmap \
   --output-file results/mmlu-smoke/category-accuracy.png
@@ -102,7 +102,7 @@ python plot_category_accuracies.py \
 ## 生成配置脚手架 {#generate-a-configuration-scaffold}
 
 ```bash
-python result_to_config.py \
+uv run python result_to_config.py \
   --results-dir results/mmlu-smoke \
   --output-file config.eval.yaml \
   --backend-endpoint 127.0.0.1:8000 \
