@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
@@ -103,12 +102,7 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 		if _, err := svc.store.GetUserByID(r.Context(), req.UserID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "user not found", http.StatusNotFound)
-			} else {
-				log.Printf("failed to load user for password update: %v", err)
-				http.Error(w, "failed to load user", http.StatusInternalServerError)
-			}
+			writeUserLookupError(w, err)
 			return
 		}
 

@@ -125,7 +125,7 @@ func TestInvitationValidationErrorsKeepSafeMessages(t *testing.T) {
 	} {
 		t.Run(validationErr.Error(), func(t *testing.T) {
 			response := httptest.NewRecorder()
-			writeInvitationError(response, fmt.Errorf("internal details: %w", validationErr))
+			writeInvitationError(response, fmt.Errorf("internal details: %w", validationErr), "failed to process invitation")
 			if response.Code != http.StatusBadRequest || response.Body.String() != validationErr.Error()+"\n" {
 				t.Fatalf("status = %d, body = %q; want 400 with %q", response.Code, response.Body.String(), validationErr)
 			}

@@ -177,3 +177,44 @@ func TestAdminUserLookupKeepsNotFoundResponse(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminUserMutationsKeepLastManagerConflict(t *testing.T) {
+	for _, test := range []struct{ method, body string }{
+		{http.MethodPatch, `{"role":"read"}`},
+		{http.MethodPatch, `{"status":"inactive"}`},
+		{http.MethodDelete, ""},
+	} {
+		t.Run(test.method+test.body, func(t *testing.T) {
+			svc := newTestAuthService(t)
+			user := newStoreErrorTestUser(t, svc, "active")
+			mux := AuthRoutes(svc)
+			RegisterAdminRoutes(mux, svc)
+			request := httptest.NewRequest(test.method, "/api/admin/users/"+user.ID, strings.NewReader(test.body))
+			request = request.WithContext(WithAuthContext(request.Context(), AuthContext{
+				UserID: "operator", Perms: map[string]bool{PermUsersManage: true},
+			}))
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != http.StatusConflict || response.Body.String() != "cannot remove the last active user manager\n" {
+				t.Fatalf("status = %d, body = %q; want 409 with last-manager message", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestLoginHandlerHidesStoreErrorsMatchingBusinessMessages(t *testing.T) {
+	for _, test := range []struct{ message, failureSQL string }{
+		{"invalid credentials", "CREATE TRIGGER fail_login BEFORE UPDATE ON users BEGIN SELECT RAISE(FAIL, 'invalid credentials'); END"},
+		{"user is not active", "CREATE TRIGGER fail_login BEFORE UPDATE ON users BEGIN SELECT RAISE(FAIL, 'user is not active'); END"},
+	} {
+		t.Run(test.message, func(t *testing.T) {
+			svc := newTestAuthService(t)
+			newStoreErrorTestUser(t, svc, "active")
+			if _, err := svc.store.db.Exec(test.failureSQL); err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"admin@example.com","password":"secret-password"}`))
+			assertAuthStoreError(t, AuthRoutes(svc), request, http.StatusUnauthorized, "authentication failed", test.message)
+		})
+	}
+}

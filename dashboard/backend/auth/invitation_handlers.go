@@ -58,14 +58,7 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				Kind: request.Kind, Email: request.Email, Name: request.Name, Role: request.Role, MaxUses: request.Capacity,
 			}, ac.UserID, ac)
 			if err != nil {
-				if writeAdminMutationAuthorizationError(w, err) {
-					return
-				}
-				if writeInvitationValidationError(w, err) {
-					return
-				}
-				log.Printf("failed to create invitation: %v", err)
-				http.Error(w, "failed to create invitation", http.StatusInternalServerError)
+				writeInvitationError(w, err, "failed to create invitation")
 				return
 			}
 			writeAudit(r, svc, "invitation.create", "dashboard-invitations", ac.UserID)
@@ -99,7 +92,7 @@ func adminInvitationItemHandler(svc *Service) http.HandlerFunc {
 			}
 			item, token, err := svc.RotateInvitation(r.Context(), id, ac)
 			if err != nil {
-				writeInvitationError(w, err)
+				writeInvitationError(w, err, "failed to process invitation")
 				return
 			}
 			writeAudit(r, svc, "invitation.rotate", "dashboard-invitations/"+id, ac.UserID)
@@ -109,7 +102,7 @@ func adminInvitationItemHandler(svc *Service) http.HandlerFunc {
 				return
 			}
 			if err := svc.store.RevokeInvitation(r.Context(), id, ac); err != nil {
-				writeInvitationError(w, err)
+				writeInvitationError(w, err, "failed to process invitation")
 				return
 			}
 			writeAudit(r, svc, "invitation.revoke", "dashboard-invitations/"+id, ac.UserID)
@@ -133,7 +126,7 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 		case r.Method == http.MethodGet && len(parts) == 1:
 			item, err := svc.InvitationInfo(r.Context(), token)
 			if err != nil {
-				writeInvitationError(w, err)
+				writeInvitationError(w, err, "failed to process invitation")
 				return
 			}
 			respondJSON(w, publicInvitationInfo{
@@ -156,7 +149,7 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 					writePasswordHashError(w, err)
 					return
 				}
-				writeInvitationError(w, err)
+				writeInvitationError(w, err, "failed to process invitation")
 				return
 			}
 			perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
@@ -173,7 +166,7 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 	}
 }
 
-func writeInvitationError(w http.ResponseWriter, err error) {
+func writeInvitationError(w http.ResponseWriter, err error, message string) {
 	if writeAdminMutationAuthorizationError(w, err) {
 		return
 	}
@@ -181,22 +174,15 @@ func writeInvitationError(w http.ResponseWriter, err error) {
 		http.Error(w, "invitation is no longer available", http.StatusGone)
 		return
 	}
-	if writeInvitationValidationError(w, err) {
-		return
-	}
-	log.Printf("failed to process invitation: %v", err)
-	http.Error(w, "failed to process invitation", http.StatusInternalServerError)
-}
-
-func writeInvitationValidationError(w http.ResponseWriter, err error) bool {
 	for _, validationErr := range []error{
 		ErrInvalidInvitationEmail, ErrInvalidInvitationName, ErrInvitationUserExists,
 		ErrInvalidInvitationKind, ErrInvalidInvitationUses, errInvalidRole,
 	} {
 		if errors.Is(err, validationErr) {
 			http.Error(w, validationErr.Error(), http.StatusBadRequest)
-			return true
+			return
 		}
 	}
-	return false
+	log.Printf("%s: %v", message, err)
+	http.Error(w, message, http.StatusInternalServerError)
 }
