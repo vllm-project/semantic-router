@@ -874,6 +874,8 @@ class NativeEngine(Engine):
             spec.dtype.cpu_weights if target.type == "cpu" else spec.dtype.gpu_weights
         )
         dtype = getattr(torch, held) if held else torch.float32
+        # A GPU model keeps checkpoint tensors in their file mapping until placed.
+        private = target.type == "cpu"
         backbone_spec = spec.backbone
         backbone = build_on_meta(backbone_spec)
         load_backbone(
@@ -881,6 +883,7 @@ class NativeEngine(Engine):
             backbone_spec.weight_files,
             backbone_spec.weight_prefix,
             dtype=dtype,
+            private=private,
         )
         lora = backbone_spec.lora
         if lora is not None:
@@ -897,10 +900,13 @@ class NativeEngine(Engine):
                 )
             load_adapter(backbone, lora.weight_files)
         branches = {
-            name: load_branch(backbone, backbone_spec, name)
+            name: load_branch(backbone, backbone_spec, name, private)
             for name in backbone_spec.branches
         }
-        towers = {name: load_tower(tower, dtype) for name, tower in spec.towers.items()}
+        towers = {
+            name: load_tower(tower, dtype, private)
+            for name, tower in spec.towers.items()
+        }
         modules = (backbone, *branches.values(), *towers.values())
         leftovers = [
             name
@@ -1001,16 +1007,25 @@ def bf16_resident_parameters(spec: BackboneSpec) -> int:
     return count
 
 
-def load_tower(spec: BackboneSpec, dtype: torch.dtype = torch.float32) -> nn.Module:
+def load_tower(
+    spec: BackboneSpec, dtype: torch.dtype = torch.float32, private: bool = True
+) -> nn.Module:
     """A tower (``ModelSpec.towers``): every tensor under its prefix must belong to it."""
     tower = build_on_meta(spec)
     load_backbone(
-        tower, spec.weight_files, spec.weight_prefix, strict=True, dtype=dtype
+        tower,
+        spec.weight_files,
+        spec.weight_prefix,
+        strict=True,
+        dtype=dtype,
+        private=private,
     )
     return tower
 
 
-def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module:
+def load_branch(
+    backbone: nn.Module, spec: BackboneSpec, name: str, private: bool = True
+) -> nn.Module:
     """A branch of a branched encoder: its own layer stack and final norm over the backbone's embedding."""
     branch = spec.branches[name]
     with torch.device("meta"):
@@ -1025,6 +1040,7 @@ def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module
             f"{branch.layers}.": "layers.",
             f"{branch.final_norm}.": "final_norm.",
         },
+        private=private,
     )
     view.embeddings = backbone.embeddings
     view.rotary_emb = backbone.rotary_emb
