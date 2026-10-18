@@ -156,6 +156,45 @@ def test_another_dtype_is_served_and_named_without_golden_references(
         runtime.stop()
 
 
+@pytest.mark.parametrize("override", ["none", "model", "process"])
+def test_placement_estimates_the_dtype_a_model_or_the_process_asks_for(
+    qwen3_package, monkeypatch, override
+):
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.accel.cuda import CUDAAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
+    from vllm_srun.errors import PlacementError
+    from vllm_srun.placement import ACTIVATION_RESERVE, place
+    from vllm_srun.plugins.base import DeviceInfo
+
+    gpu = DeviceInfo("rocm", 0, "AMD Instinct MI300X", 192 << 30, 180 << 30, True)
+    monkeypatch.setattr(ROCmAccelerator, "available", lambda self: True)
+    monkeypatch.setattr(ROCmAccelerator, "devices", lambda self: [gpu])
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: False)
+    placed = []
+
+    def placing(spec, device, parameters, *args):
+        placed.append((parameters, place(spec, device, parameters, *args)))
+        raise PlacementError("placed")  # this host has no GPU to load the weights on
+
+    monkeypatch.setattr(runtime_module, "place", placing)
+    model = ModelConfig(
+        model=str(qwen3_package),
+        device="rocm:0",
+        dtype="float32" if override == "model" else None,
+    )
+    process = EngineArgs(dtype="float32" if override == "process" else "auto")
+    runtime = Runtime(ServeConfig(models=(model,), engine_args=process))
+    with pytest.raises(PlacementError, match="placed"):
+        runtime.load()
+    ((parameters, placement),) = placed
+    fp32 = 4 * parameters + ACTIVATION_RESERVE
+    if override == "none":
+        assert placement.estimated_bytes < fp32
+    else:
+        assert placement.estimated_bytes == fp32
+
+
 def test_float16_needs_a_gpu(qwen3_package):
     runtime = Runtime(
         ServeConfig(
