@@ -70,6 +70,21 @@ log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
 
 
+def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
+    """The backbone parameters the native engine holds in BF16 on a GPU at ``dtype`` (``DtypePolicy.bf16_resident``)."""
+    policy = dtypes.apply(spec, dtype, True).dtype
+    if (
+        not policy.bf16_resident
+        or policy.gpu_weights
+        or config.engine not in (AUTO_ENGINE, "native")
+        or device_kind(config.device) == "cpu"
+    ):
+        return 0
+    from .engines.native.engine import bf16_resident_parameters
+
+    return bf16_resident_parameters(spec.backbone)
+
+
 def _auto_rank(engine: str, preferred: str | None) -> tuple[int, int, str]:
     """Where ``auto`` tries an engine: ``preferred``, then by ``Engine.auto_priority``, then by name.
 
@@ -350,7 +365,15 @@ class ServedModel:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
-        placement = place(spec, config.device, parameters, budget)
+        dtype = self.requested_args.dtype
+        placement = place(
+            spec,
+            config.device,
+            parameters,
+            budget,
+            _bf16_parameters(spec, config, dtype),
+            dtype,
+        )
         device = placement.device
         self.args, self.limits_source = calibration.resolve(self.requested_args, device)
         # The dtype policy a device follows is its torch device's, as the engines read it.
