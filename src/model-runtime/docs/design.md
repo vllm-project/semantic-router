@@ -426,6 +426,8 @@ A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
+A forward out of device memory is 413 `request_too_large` for a request that
+had it alone and 429 `overloaded` for one that shared it (`scheduler.py`).
 Item-level failures (`max_length_exceeded`, `invalid_input`,
 `invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
 place and never fail sibling items.
