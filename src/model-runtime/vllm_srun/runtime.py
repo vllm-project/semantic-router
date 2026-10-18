@@ -27,7 +27,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
-from . import dtypes
+from . import dtypes, media
 from .accel.autotune import KernelChoices, freeze_autotune
 from .accel.cpu import cap_threads
 from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
@@ -59,6 +59,7 @@ from .plugins.base import (
 from .plugins.decisions import join_states, split_states
 from .registry import builtin
 from .registry.resolve import resolve
+from .scheduler import calibration
 from .scheduler.batching import Batcher, SharedContext
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
@@ -150,12 +151,21 @@ def freeze_heap() -> None:
     gc.freeze()
 
 
+def release_device_cache() -> None:
+    """Hand a failed attempt's cached GPU blocks back to the driver, whose free memory the next placement reads."""
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 __all__ = [
     "DEADLINE",
     "Runtime",
     "ServedModel",
     "freeze_heap",
     "planned_engine",
+    "release_device_cache",
     "with_overrides",
 ]
 
@@ -276,7 +286,10 @@ class ServedModel:
         self.model: LoadedModel[Any, Any] | None = None
         self.placement: Placement | None = None
         self.engine = config.engine
-        self.args = config.engine_args(runtime.config.engine_args)
+        # The engine arguments as configured, and as resolved for the model's device.
+        self.requested_args = config.engine_args(runtime.config.engine_args)
+        self.args = self.requested_args
+        self.limits_source = "the engine arguments"
         # The dtype the model runs: "auto" (its published precision) or an explicit one.
         self.dtype = "auto"
         self.precision = "float32"
@@ -339,6 +352,7 @@ class ServedModel:
         budget = config.memory_budget_gib or process.memory_budget_gib
         placement = place(spec, config.device, parameters, budget)
         device = placement.device
+        self.args, self.limits_source = calibration.resolve(self.requested_args, device)
         # The dtype policy a device follows is its torch device's, as the engines read it.
         gpu = placement.accelerator.torch_device(device).type != "cpu"
         self.dtype = dtypes.resolve(self.args.dtype, spec.dtype, gpu)
@@ -346,11 +360,17 @@ class ServedModel:
             dtypes.published(spec.dtype, gpu) if self.dtype == "auto" else self.dtype
         )
         spec = dtypes.apply(spec, self.args.dtype, gpu)
+        # Choices are recorded at the published precision; another dtype's kernels
+        # tune their own (a BF16 block can need more shared memory than FP32 has).
         self._pin(
-            builtin.kernel_choices(
-                package.model_sha256, device.accelerator, device.arch
+            (
+                builtin.kernel_choices(
+                    package.model_sha256, device.accelerator, device.arch
+                )
+                or family.kernel_choices(package, device)
             )
-            or family.kernel_choices(package, device)
+            if self.dtype == "auto"
+            else {}
         )
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
@@ -435,12 +455,13 @@ class ServedModel:
         )
         self.health.set("ready", self.unpinned)
         log.info(
-            "serving %s on %s (max_num_seqs %d, max_num_batched_tokens %d, "
+            "serving %s on %s (max_num_seqs %d, max_num_batched_tokens %d from %s, "
             "batch_window_ms %g, dtype %s, shared context %s, %s numerics)",
             self.label,
             placement.device.label,
             self.args.max_num_seqs,
             self.args.max_num_batched_tokens,
+            self.limits_source,
             self.args.batch_window_ms,
             self.precision,
             "on" if self.shared else "off",
@@ -497,6 +518,7 @@ class ServedModel:
             model.golden_compare,
             goldens,
             placement.device.accelerator,
+            placement.accelerator.golden_reference(placement.device),
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(
@@ -509,6 +531,26 @@ class ServedModel:
             self.health.golden = replace(
                 self.health.golden, status="unverified", detail=self.unpinned
             )
+        if (
+            self.requested_args.max_num_batched_tokens is None
+            and calibration.device_class(placement.device) is not None
+        ):
+            self.health.set("warming", "calibrating the token budget")
+            torch_device = placement.accelerator.torch_device(placement.device)
+            chosen = calibration.calibrate(
+                model,
+                execute,
+                batcher.max_num_batched_tokens,
+                calibration.gpu_memory(torch_device),
+            )
+            if chosen is not None:
+                self.args = replace(
+                    self.args, max_num_batched_tokens=chosen.max_num_batched_tokens
+                )
+                batcher.max_num_batched_tokens = chosen.max_num_batched_tokens
+                self.limits_source = f"{self.limits_source}, calibrated"
+                log.info("calibrated %s: %s", self.label, chosen.describe())
+        model.engine_model.begin_traffic()
 
     def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
         """How a model without a device thread runs its batches on the CPU: inline, in its choice scope if pinned."""
@@ -791,6 +833,7 @@ class Runtime:
                 capped["from"],
                 capped["to"],
             )
+        media.configure(self.config.media_workers)
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True
@@ -808,6 +851,7 @@ class Runtime:
         self._stopping.set()
         for served in self.served:
             served.stop()
+        media.stop()
 
     def load(self) -> None:
         """Load every model in order, then ``freeze_heap``; the first failure is raised (foreground start)."""
@@ -863,6 +907,7 @@ class Runtime:
             freeze_heap()
             if not retry:
                 return
+            release_device_cache()
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
             if self._stopping.wait(delay):
                 return

@@ -96,6 +96,7 @@ const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   context_compression: 'CC',
   prompt_cache: 'PC',
   shadow_dispatch: 'SD',
+  masking: 'MSK',
 }
 
 export const PLUGIN_ICONS = Object.fromEntries(
@@ -120,6 +121,7 @@ const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; b
     context_compression: { background: '#606c7a', border: '#3d4a59' },
     prompt_cache: { background: '#6b7280', border: '#4b5563' },
     shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
+    masking: { background: '#4f6a7a', border: '#374d59' },
   }
 
 export const PLUGIN_COLORS = Object.fromEntries(

@@ -284,7 +284,11 @@ class EngineModel(ABC):
 ```
 
 `ForwardBatch` carries padded token IDs, the attention mask, the gathered
-positions (decision endpoints and query rows) and the shared-context prefix.
+positions (decision endpoints and query rows) and the shared-context prefix;
+with `packed`, an engine that `supports_packed` runs the rows back to back in
+one row instead (`engines/native/models/packed.py`: variable-length attention,
+the chunked gated delta rule over `cu_seqlens`, each causal convolution from a
+zero history), which only merged forwards ask for.
 `EncoderBatch` carries padded token IDs, the mask, the layer exits the readout
 needs and, for engines that run a graph, named graph inputs; `EncoderOutput`
 returns hidden states by layer or named graph outputs. Readouts stay in the
@@ -320,6 +324,17 @@ only for a family that consents to approximate kernels
 (`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
+`Accelerator.golden_reference(device)` names an optional hardware-qualified
+golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
+instruction set and native or emulated BF16 capability, for example
+`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+
+`tools/golden_answers.py --record` writes both the generic device-class baseline
+and any qualified reference. The first generic baseline is preserved within a
+revision; later hardware runs update only their qualified entries. A revision
+change clears all old references. Record the new revision on the intended
+baseline device before adding other hardware classes.
+
 ### 5.4 Engine arguments
 
 A served model batches and computes as its engine arguments say (`EngineArgs`,
@@ -327,17 +342,36 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 
 | Argument | Default | What it does |
 | --- | --- | --- |
-| `max_num_seqs` | 8192 | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise. At the default token budget it never binds (a row costs at least 8 padded tokens); 1 runs every row alone |
-| `max_num_batched_tokens` | 65,536 | Padded tokens one forward may hold: its rows times its longest row, counted so also for models that pack rows |
+| `max_num_seqs` | by device | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone |
+| `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
 | `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
 | `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0) |
 
+Limits left unset take the device's memory class (`scheduler/calibration.py`:
+32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
+8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU and a device that reports no
+memory, such as MPS or a plugin's accelerator, keep 65,536 / 8,192). On a
+GPU the runtime then calibrates the token budget after the golden check, from
+merged forwards of the model's calibration rows (`calibration_items`) at
+doubling budgets: the largest budget whose cost per token is within 2% of
+the cheapest timed (on a flat curve the smallest would follow timing noise),
+but never more than one forward does in 0.3 s (interpolated between the timed
+forwards) nor than 85% of the free device memory holds. It logs the chosen
+values and their source, and `engine_args` reports them.
+
 The batcher (`scheduler/batching.py`) plans the rows of every queued request
-together, longest first (`coalesced`): a row's padding and GEMM shapes then
-depend on the rows beside it, so an answer can move by rounding. vLLM has no
-batching window because each decode step is a point where new sequences join;
-a request here is one forward, so the window is what lets a burst share it. A
+together (`coalesced`), one lane at a time (`LoadedModel.lane`; Decision 3.0:
+text rows and rows that read media), with a token budget per lane
+(`coalesced_token_budget(lane)`). Padded forwards take rows longest first; a
+model that packs merged rows fills forwards in arrival order and counts their
+summed length. The n-th batches of the lanes share one turn (`Batch.sub`): the
+scheduler runs each as its own forward, the one expected to take least first,
+and answers its rows as soon as it ran, so a planning round adds as many turns
+as its busiest lane needs. A row's padding, neighbours and GEMM shapes depend
+on the rows beside it, so an answer can move by rounding. A request here is one
+forward, with no later step where it could join others, so the batching window
+is what lets a burst share it. A
 batch-invariant model (`LoadedModel.batch_invariant`, set at load from a test
 that every row answers the same alone or in any batch) merges the requests
 already queued without waiting and keeps forwards within 512 padded tokens
@@ -403,6 +437,8 @@ A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
+A forward out of device memory is 413 `request_too_large` for a request that
+had it alone and 429 `overloaded` for one that shared it (`scheduler.py`).
 Item-level failures (`max_length_exceeded`, `invalid_input`,
 `invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
 place and never fail sibling items.
@@ -566,8 +602,8 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
 HTTP, whatever its models' states. All three report `api_version`, the
-contract version (`info.version`); a client refuses a runtime of another
-major version.
+contract version (`info.version`). A router and its runtime come from one
+release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 
@@ -835,11 +871,16 @@ changing an answer: image and video data URLs are keyed by the SHA-256 of their 
 and a hit reuses the processed patch rows; the tower's features of a
 request's images are kept by the images' digests and the number of copies
 one tower call holds, which is what a pass of that many rows runs, so later
-passes of that size reuse them. Batched, text rows of concurrent
-requests share a pass, media rows of any requests share another, each
-request's images go through the tower once, and a coalesced forward is sized
-to about 0.3 seconds of device time at the measured cost per token
-([record](records/decision3-batching.md)).
+passes of that size reuse them. Batched, text rows and media rows of
+concurrent requests are planned in lanes of their own, each sized to about 0.3
+seconds of device time at its own measured cost per token
+([record](records/decision3-batching.md)). Where the engine packs rows, the
+tower reads the images of every request of a media forward in one call with
+one variable-length attention per block (features cached apart from the exact
+path's), and a merged pass runs its rows packed when left-padding them would
+add more than 10% to its tokens ([record](records/decision3-lanes-packing.md)).
+Request images and videos are decoded in the process's media worker processes
+(`vllm_srun/media.py`, `--media-workers`).
 
 ## 9. Scheduler and planner
 
@@ -870,8 +911,8 @@ items are answered from the model's result cache (`--result-cache-entries`,
 keyed by content).
 
 The worker runs planned batches in order of their jobs' expected finish: the
-time a job was queued plus its tokens at the measured cost per token (a running
-average of recent forwards). Short work goes first, and a long job still runs
+time a job was queued plus its tokens at the measured cost per token of their
+lane (a running average of that lane's recent forwards). Short work goes first, and a long job still runs
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
@@ -939,7 +980,11 @@ Per model: `loading` (resolve, verify, load, identity) → `warming` (golden
 answers) → `ready`, or `failed` with a reason. Readiness is gated on golden
 answers per surface: every built-in revision carries golden requests with
 reference answers per device class (1e-3 on CPU, 0.02 on GPUs; encoder
-embeddings compare by cosine). Every golden request runs through its
+embeddings compare by cosine). A recorded hardware-qualified key takes
+precedence over the device-class reference; otherwise the existing device-class
+reference is used. A selected reference that fails is never replaced by another
+candidate. The tolerance is selected by device class, not reference key.
+Every golden request runs through its
 surface the same way: the loaded model's `golden_values` and `golden_compare`
 say what to compare and how, so decisions count questions and the other
 surfaces count values. Without a reference the runtime checks
@@ -1006,6 +1051,10 @@ graph captures anyway, §9); a captured graph keeps the configurations it was
 captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
+The choices are recorded at the published precision, so a model served at
+another `--dtype` runs without them and its kernels tune their own: a BF16
+configuration can need more shared memory than an FP32 kernel has (d3 at
+`float32` on gfx942).
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 
@@ -1436,7 +1485,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 
 | Where | Technique | Records |
 | --- | --- | --- |
-| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md`, `decision3-graphs.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on the CPU reference path, batch-invariant as probed at load, so concurrent requests merge without a window; dynamic cross-request batching (the default); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced copies in merged forwards only where the records show no decision changed (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
 | Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; independent deployment/replica workers with a stable CPU thread budget; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md` (historical process layout), `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |

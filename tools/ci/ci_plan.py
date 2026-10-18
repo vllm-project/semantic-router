@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from classify_pr_changes import (
+    CLI_RUNTIME_IMAGES,
     NIGHTLY_IMAGES,
     PRODUCTION_RELEASE_IMAGES,
     classify,
@@ -175,9 +176,16 @@ def make_plan(
         record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
+    publish_python = profile == "release" or (
+        profile == "main"
+        and bool({"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains))
+    )
     publish_images = []
     if profile == "main":
         publish_images = list(selection.publish_images)
+        if publish_python:
+            # The development CLI defaults to the images of its own commit.
+            publish_images = sorted({*publish_images, *CLI_RUNTIME_IMAGES})
     elif profile == "nightly":
         publish_images = list(NIGHTLY_IMAGES)
     elif profile == "release":
@@ -217,13 +225,7 @@ def make_plan(
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
-        "publish_python": profile == "release"
-        or (
-            profile == "main"
-            and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
-            )
-        ),
+        "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
         "quality_context": dict(selection.signals),
