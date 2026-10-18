@@ -19,6 +19,7 @@ CONFIG_SCHEMA_PATH = f"{CONFIG_PATH}/schema"
 RECIPES_PATH = f"{CONFIG_PATH}/recipes"
 ROUTING_PREVIEW_PATH = f"{API_ROOT}/routing/preview"
 OBSERVABILITY_REPLAYS_PATH = f"{API_ROOT}/observability/replays"
+RESPONSE_CACHE_PATH = f"{API_ROOT}/storage/response-cache"
 
 
 def default_management_base_url() -> str:
@@ -221,6 +222,38 @@ class RouterManagementClient:
             f"{RECIPES_PATH}/{quote(name, safe='')}",
             etag=etag,
         )
+
+    def get_response_cache_capabilities(self) -> RouterResponse:
+        return self.request("GET", f"{RESPONSE_CACHE_PATH}/capabilities")
+
+    def get_response_cache_stats(self) -> RouterResponse:
+        return self.request("GET", f"{RESPONSE_CACHE_PATH}/stats")
+
+    def get_response_cache_health(self) -> RouterResponse:
+        return self.request("GET", f"{RESPONSE_CACHE_PATH}/health")
+
+    def invalidate_response_cache(
+        self,
+        selector: dict[str, Any] | None = None,
+        *,
+        dry_run: bool = True,
+    ) -> RouterResponse:
+        payload: dict[str, Any] = {"dry_run": dry_run}
+        if selector is not None:
+            payload["selector"] = selector
+        return self.request(
+            "POST", f"{RESPONSE_CACHE_PATH}/invalidate", payload=payload
+        )
+
+    def flush_response_cache(
+        self,
+        confirm: str = "flush response cache",
+        selector: dict[str, Any] | None = None,
+    ) -> RouterResponse:
+        payload: dict[str, Any] = {"confirm": confirm}
+        if selector is not None:
+            payload["selector"] = selector
+        return self.request("POST", f"{RESPONSE_CACHE_PATH}/flush", payload=payload)
 
 
 def _error_code_and_detail(payload: Any) -> tuple[str, str]:
