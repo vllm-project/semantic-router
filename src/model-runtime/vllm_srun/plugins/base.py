@@ -31,10 +31,14 @@ from typing import (
     final,
 )
 
+from ..quantization import FLOAT8, FLOAT8_DEVICES
+from .registry import names
+
 if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
+    from ..quantization import QuantizedWeights
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -203,7 +207,8 @@ class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
-    batch selects one with ``EncoderBatch.branch``.
+    batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
+    layers the checkpoint holds as int4 or FP8 weights (``quantization.py``).
     """
 
     model_type: str
@@ -212,14 +217,20 @@ class BackboneSpec:
     weight_prefix: str = ""
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
+    quantized: QuantizedWeights | None = None
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
         """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
 
         Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+        FP8 weights need FP8 matrix units, which every accelerator must report.
         """
-        return {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        requires = {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        if self.quantized is not None and self.quantized.scheme == FLOAT8:
+            for name in names("accelerators"):
+                requires[name] = (*requires.get(name, ()), "float8")
+        return requires
 
 
 @dataclass(frozen=True)
@@ -612,8 +623,14 @@ class Accelerator(ABC):
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
 
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        """Optional hardware reference key; callers own device-class fallback."""
+        return f"{self.name}:{device.arch}" if device.arch else None
+
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        if capability == "float8":
+            return f"{device.label}: {FLOAT8_DEVICES}"
         return f"{device.label} lacks {capability}"
 
     def autocast(
