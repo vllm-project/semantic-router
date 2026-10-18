@@ -16,12 +16,13 @@ import (
 type openContractStore func(t *testing.T, ttlSeconds int) Storage
 
 // runStoreContract checks the paging, retention and size behavior every
-// replay backend shares.
-func runStoreContract(t *testing.T, open openContractStore, records int) {
+// replay backend shares. dense records go into one second.
+func runStoreContract(t *testing.T, open openContractStore, records, dense int) {
 	t.Run("pages", func(t *testing.T) { checkContractPages(t, open(t, 0), records) })
 	t.Run("ttl", func(t *testing.T) { checkContractTTL(t, open(t, 60)) })
 	t.Run("size", func(t *testing.T) { checkContractSize(t, open(t, 0)) })
 	t.Run("subsecond", func(t *testing.T) { checkContractSubsecond(t, open(t, 0)) })
+	t.Run("dense", func(t *testing.T) { checkContractDense(t, open(t, 0), dense) })
 }
 
 func checkContractPages(t *testing.T, s Storage, records int) {
@@ -123,6 +124,48 @@ func checkContractSubsecond(t *testing.T, s Storage) {
 	}
 }
 
+// denseRecords returns records that all fall in one second, out of order.
+func denseRecords(records int) []Record {
+	base := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	out := make([]Record, 0, records)
+	for _, i := range rand.New(rand.NewPCG(3, 4)).Perm(records) {
+		out = append(out, Record{ID: fmt.Sprintf("dense-%05d", i), Timestamp: base.Add(time.Duration(i) * time.Microsecond)})
+	}
+	return out
+}
+
+func checkContractDense(t *testing.T, s Storage, records int) {
+	for _, record := range denseRecords(records) {
+		if _, err := s.Add(context.Background(), record); err != nil {
+			t.Fatalf("add %s: %v", record.ID, err)
+		}
+	}
+	checkDensePages(t, s, records)
+}
+
+// A second holding more records than a store reads at once still pages in
+// order and scans whole.
+func checkDensePages(t *testing.T, s Storage, records int) {
+	ctx := context.Background()
+	for _, offset := range []int{0, records / 2, records - 1} {
+		page, err := s.QueryPage(ctx, QueryFilters{}, 1, offset, false)
+		if err != nil {
+			t.Fatalf("page at %d: %v", offset, err)
+		}
+		want := fmt.Sprintf("dense-%05d", records-1-offset)
+		if page.Total != records || len(page.Records) != 1 || page.Records[0].ID != want {
+			t.Fatalf("page at %d: total %d, records %d, want %s first", offset, page.Total, len(page.Records), want)
+		}
+	}
+	scanned := 0
+	if err := s.ScanMetadata(ctx, func(Record) error { scanned++; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if scanned != records {
+		t.Fatalf("scanned %d records, want %d", scanned, records)
+	}
+}
+
 func checkContractTTL(t *testing.T, s Storage) {
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -213,7 +256,7 @@ func checkContractSize(t *testing.T, s Storage) {
 func TestMemoryStoreContract(t *testing.T) {
 	runStoreContract(t, func(t *testing.T, ttlSeconds int) Storage {
 		return NewMemoryStore(5000, ttlSeconds)
-	}, 2500)
+	}, 2500, 1000)
 }
 
 func TestCollectPageStopsAfterThePage(t *testing.T) {

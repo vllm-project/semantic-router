@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
@@ -54,7 +56,7 @@ func TestPostgresStoreContractIntegration(t *testing.T) {
 			_ = s.Close()
 		})
 		return s
-	}, 2500)
+	}, 2500, 300)
 }
 
 // StorageIntegration: redis
@@ -73,7 +75,7 @@ func TestRedisStoreContractIntegration(t *testing.T) {
 			_ = s.Close()
 		})
 		return s
-	}, 2500)
+	}, 2500, 300)
 }
 
 // StorageIntegration: redis
@@ -129,7 +131,7 @@ func TestQdrantStoreContractIntegration(t *testing.T) {
 			_ = s.Close()
 		})
 		return s
-	}, 1000)
+	}, 1000, 300)
 }
 
 // StorageIntegration: milvus
@@ -150,5 +152,48 @@ func TestMilvusStoreContractIntegration(t *testing.T) {
 			_ = s.Close()
 		})
 		return s
-	}, 30)
+	}, 30, 10)
+}
+
+// StorageIntegration: milvus
+func TestMilvusStorePagesASecondFullerThanAQuery(t *testing.T) {
+	storagetest.Require(t, "milvus")
+	host, port := contractEndpoint(t, "MILVUS_HOST", "MILVUS_PORT", 19530)
+	s, err := NewMilvusStore(&MilvusConfig{
+		Address:        fmt.Sprintf("%s:%d", host, port),
+		CollectionName: contractName(),
+		// Strong waits on every read, and this test reads a few hundred times.
+		ConsistencyLevel: "Session",
+	}, 0, false)
+	if err != nil {
+		storagetest.Unavailable(t, "milvus", err)
+	}
+	ctx := context.Background()
+	t.Cleanup(func() {
+		_ = s.client.DropCollection(ctx, s.collectionName)
+		_ = s.Close()
+	})
+	// Add flushes every record, so write the second in one insert.
+	records := milvusWindowRows + 100
+	var ids, data []string
+	var timestamps []int64
+	var vectors [][]float32
+	for _, record := range denseRecords(records) {
+		encoded, encodeErr := encodeRecord(&record, milvusMaxRecordBytes)
+		if encodeErr != nil {
+			t.Fatal(encodeErr)
+		}
+		ids, data = append(ids, record.ID), append(data, string(encoded))
+		timestamps, vectors = append(timestamps, record.Timestamp.Unix()), append(vectors, []float32{0, 0})
+	}
+	if _, err = s.client.Insert(ctx, s.collectionName, "",
+		entity.NewColumnVarChar("id", ids), entity.NewColumnInt64("timestamp", timestamps),
+		entity.NewColumnVarChar("data", data), entity.NewColumnFloatVector("vector", 2, vectors)); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.client.Flush(ctx, s.collectionName, false); err != nil {
+		t.Fatal(err)
+	}
+	s.wrote.Store(true)
+	checkDensePages(t, s, records)
 }
