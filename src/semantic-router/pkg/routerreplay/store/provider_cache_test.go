@@ -30,7 +30,7 @@ func TestProviderCacheAccountingPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := memory.UpdateUsageCost(context.Background(), id, UsageCost{ProviderCache: accounting}); err != nil {
+	if err = memory.UpdateUsageCost(context.Background(), id, UsageCost{ProviderCache: accounting}); err != nil {
 		t.Fatal(err)
 	}
 	*accounting.CacheRead.Tokens = 999
