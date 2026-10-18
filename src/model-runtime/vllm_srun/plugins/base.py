@@ -255,8 +255,7 @@ class ModelSpec:
     run; the engine may shorten it beside other engines' CPU models. ``requires``
     names, per accelerator, the capabilities its devices must report
     (``Accelerator.capabilities``) to serve the model; placement refuses a
-    device that lacks one, and ``"*"`` names those of every accelerator
-    without an entry of its own. ``towers`` are a multimodal model's other
+    device that lacks one. ``towers`` are a multimodal model's other
     backbones by name (an image or audio encoder next to the text backbone),
     each its own architecture and weights; an encoder batch runs one with
     ``EncoderBatch.tower``.

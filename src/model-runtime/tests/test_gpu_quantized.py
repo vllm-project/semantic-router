@@ -414,6 +414,19 @@ def test_later_nvfp4_calls_launch_the_compiled_kernel_and_write_the_same_bytes(
     assert len([k for k in triton_nvfp4._launches if k[2] == 2048]) == 1
 
 
+def test_a_triton_without_knobs_launches_nvfp4_through_the_jit(blackwell, monkeypatch):
+    import triton
+    from vllm_srun.accel import triton_nvfp4
+
+    x = torch.randn(37, 2048, device=blackwell, dtype=torch.bfloat16)
+    first = triton_nvfp4.quantize(x, 100.0)
+    monkeypatch.delattr(triton, "knobs")
+    monkeypatch.setattr(triton_nvfp4, "_launch", None)  # the direct launch is not taken
+    later = triton_nvfp4.quantize(x, 100.0)
+    assert later[0].equal(first[0])
+    assert later[1].view(torch.uint8).equal(first[1].view(torch.uint8))
+
+
 @pytest.mark.parametrize(
     "shape", [(32, 64, 1), (256, 512, 37), (5120, 17408, 300), (1024, 2048, 9000)]
 )

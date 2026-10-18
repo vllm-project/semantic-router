@@ -119,13 +119,20 @@ def quantize(x: torch.Tensor, global_scale: float) -> tuple[torch.Tensor, torch.
         s.data_ptr() % 16,
     )
     kernel = _launches.get(key)
+    # Triton before 3.4 has no knobs; its launches take the JIT path only
+    knobs = getattr(triton, "knobs", None)
     hooks = (
-        triton.knobs.runtime.launch_enter_hook,
-        triton.knobs.runtime.launch_exit_hook,
+        None
+        if knobs is None
+        else (knobs.runtime.launch_enter_hook, knobs.runtime.launch_exit_hook)
     )
     # a hook (a profiler's) wants the launch metadata only the JIT path builds
     constants = (k, groups, padded, BLOCKS)  # the launcher takes the constexprs too
-    if kernel is not None and not any(getattr(h, "calls", h) for h in hooks):
+    if (
+        kernel is not None
+        and hooks is not None
+        and not any(getattr(h, "calls", h) for h in hooks)
+    ):
         _launch(kernel, grid, (*args, *constants))
         return q, s
     compiled = _quantize[(grid,)](
