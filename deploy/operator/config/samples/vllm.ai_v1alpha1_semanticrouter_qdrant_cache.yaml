@@ -48,7 +48,7 @@ spec:
       backend_type: qdrant
       similarity_threshold: "0.90"
       ttl_seconds: 7200
-      embedding_model: bert
+      embedding_model: mmbert
 
       # Qdrant configuration
       # NOTE: Update host to match your Qdrant deployment namespace
