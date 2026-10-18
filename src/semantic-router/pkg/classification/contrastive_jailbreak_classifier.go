@@ -71,6 +71,13 @@ type contrastiveJailbreakMessageResult struct {
 // classifier for a single contrastive JailbreakRule. KB embeddings are computed
 // eagerly using a worker pool (same approach as ComplexityClassifier).
 func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, defaultModelType string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
+	if !hasUsableContrastivePattern(rule.JailbreakPatterns) {
+		return nil, fmt.Errorf("contrastive jailbreak rule %q requires at least one non-blank jailbreak pattern", rule.Name)
+	}
+	if !hasUsableContrastivePattern(rule.BenignPatterns) {
+		return nil, fmt.Errorf("contrastive jailbreak rule %q requires at least one non-blank benign pattern", rule.Name)
+	}
+
 	modelType := defaultModelType
 	if modelType == "" {
 		modelType = "qwen3"
@@ -120,6 +127,14 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 			result.ProcessingTime = time.Since(start)
 			return result
 		}
+	}
+
+	// A contrastive score requires both sides of the comparison. Without
+	// either knowledge base, its maximum similarity remains the -1 sentinel;
+	// subtracting that sentinel would manufacture an artificially high score.
+	if len(c.jailbreakEmbeddings) == 0 || len(c.benignEmbeddings) == 0 {
+		result.ProcessingTime = time.Since(start)
+		return result
 	}
 
 	embeddings, failed := c.embedMessages(messages)
@@ -213,6 +228,15 @@ func normalizeContrastivePattern(text string) string {
 	return strings.ToLower(strings.Join(strings.Fields(text), " "))
 }
 
+func hasUsableContrastivePattern(patterns []string) bool {
+	for _, pattern := range patterns {
+		if normalizeContrastivePattern(pattern) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *ContrastiveJailbreakClassifier) matchesExplicitJailbreak(text string) bool {
 	normalized := normalizeContrastivePattern(text)
 	for pattern := range c.exactJailbreaks {
@@ -280,9 +304,15 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 func (c *ContrastiveJailbreakClassifier) contrastiveJailbreakEmbeddingTasks() []contrastiveJailbreakEmbeddingTask {
 	tasks := make([]contrastiveJailbreakEmbeddingTask, 0, len(c.rule.JailbreakPatterns)+len(c.rule.BenignPatterns))
 	for _, pattern := range c.rule.JailbreakPatterns {
+		if normalizeContrastivePattern(pattern) == "" {
+			continue
+		}
 		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern, isJailbreak: true})
 	}
 	for _, pattern := range c.rule.BenignPatterns {
+		if normalizeContrastivePattern(pattern) == "" {
+			continue
+		}
 		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern})
 	}
 	return tasks
