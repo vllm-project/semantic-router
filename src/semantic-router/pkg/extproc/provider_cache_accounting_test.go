@@ -46,9 +46,13 @@ func TestProviderCacheAccountingBufferedStreamingReplay(t *testing.T) {
 			got  *float64
 			want float64
 		}{
-			{accounting.UncachedInput.Cost, .00002}, {accounting.CacheRead.Cost, .00001},
-			{accounting.CacheWrite.Cost, .00052}, {accounting.Output.Cost, .00002},
-			{accounting.NoCacheCost, .00022}, {accounting.CacheSavings, -.00035}, {snapshot.ActualCost, .00057},
+			{accounting.UncachedInput.Cost, .00002},
+			{accounting.CacheRead.Cost, .00001},
+			{accounting.CacheWrite.Cost, .00052},
+			{accounting.Output.Cost, .00002},
+			{accounting.NoCacheCost, .00022},
+			{accounting.CacheSavings, -.00035},
+			{snapshot.ActualCost, .00057},
 		} {
 			if pair.got == nil || math.Abs(*pair.got-pair.want) > 1e-12 {
 				t.Fatalf("cost=%v, want %v", pair.got, pair.want)
@@ -62,7 +66,7 @@ func TestProviderCacheAccountingBufferedStreamingReplay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := memory.UpdateUsageCost(context.Background(), id, snapshot); err != nil {
+		if err = memory.UpdateUsageCost(context.Background(), id, snapshot); err != nil {
 			t.Fatal(err)
 		}
 		record, _, err := memory.Get(context.Background(), id)

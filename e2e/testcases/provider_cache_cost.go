@@ -94,7 +94,7 @@ func waitProviderCacheReplay(ctx context.Context, session *fixtures.ServiceSessi
 			return providerCacheReplayRecord{}, err
 		}
 		if response.StatusCode != http.StatusOK {
-			return providerCacheReplayRecord{}, fmt.Errorf("Replay HTTP %d", response.StatusCode)
+			return providerCacheReplayRecord{}, fmt.Errorf("replay HTTP %d", response.StatusCode)
 		}
 		var list struct {
 			Data []providerCacheReplayRecord `json:"data"`
@@ -131,8 +131,10 @@ func assertProviderCacheCosts(record providerCacheReplayRecord, tiers bool) erro
 		tokens    int
 		cost      float64
 	}{
-		{accounting.UncachedInput, 10, .00002}, {accounting.CacheRead, 10, .00001},
-		{accounting.CacheWrite, 80, writeCost}, {accounting.Output, 2, .00002},
+		{accounting.UncachedInput, 10, .00002},
+		{accounting.CacheRead, 10, .00001},
+		{accounting.CacheWrite, 80, writeCost},
+		{accounting.Output, 2, .00002},
 	} {
 		if check.component.Tokens == nil || *check.component.Tokens != check.tokens {
 			return fmt.Errorf("unexpected component tokens: %v", check.component.Tokens)
@@ -150,8 +152,10 @@ func assertProviderCacheCosts(record providerCacheReplayRecord, tiers bool) erro
 		got  *float64
 		want float64
 	}{
-		{"actual", record.ActualCost, actual}, {"no-cache", accounting.NoCacheCost, .00022},
-		{"cache savings", accounting.CacheSavings, .00022 - actual}, {"routing savings", record.RoutingSavings, 0},
+		{"actual", record.ActualCost, actual},
+		{"no-cache", accounting.NoCacheCost, .00022},
+		{"cache savings", accounting.CacheSavings, .00022 - actual},
+		{"routing savings", record.RoutingSavings, 0},
 	} {
 		if check.got == nil || math.Abs(*check.got-check.want) > 1e-12 {
 			return fmt.Errorf("%s=%v, want %g", check.name, check.got, check.want)

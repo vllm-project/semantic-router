@@ -67,8 +67,10 @@ func buildProviderCacheAccounting(ctx *RequestContext, pricing *config.ModelPric
 		component *store.TokenCostComponent
 		rate      float64
 	}{
-		{&result.UncachedInput, rates.PromptPer1M}, {&result.CacheRead, rates.CachedInputPer1M},
-		{&result.Output, rates.CompletionPer1M}, {&result.CacheWrite5m, rates.EffectiveCacheWritePer1M()},
+		{&result.UncachedInput, rates.PromptPer1M},
+		{&result.CacheRead, rates.CachedInputPer1M},
+		{&result.Output, rates.CompletionPer1M},
+		{&result.CacheWrite5m, rates.EffectiveCacheWritePer1M()},
 		{&result.CacheWrite1h, rates.EffectiveCacheWrite1hPer1M()},
 	} {
 		if priceableProviderComponent(*field.component) {
@@ -90,8 +92,10 @@ func buildProviderCacheAccounting(ctx *RequestContext, pricing *config.ModelPric
 	}
 	input := *result.UncachedInput.Tokens + *result.CacheRead.Tokens + *result.CacheWrite.Tokens
 	noCache := modelpricing.Cost(modelpricing.Usage{PromptTokens: input, CompletionTokens: *result.Output.Tokens}, rates)
-	observed := modelpricing.Usage{PromptTokens: input, CachedInputTokens: *result.CacheRead.Tokens,
-		CacheWriteTokens: *result.CacheWrite.Tokens, CompletionTokens: *result.Output.Tokens}
+	observed := modelpricing.Usage{
+		PromptTokens: input, CachedInputTokens: *result.CacheRead.Tokens,
+		CacheWriteTokens: *result.CacheWrite.Tokens, CompletionTokens: *result.Output.Tokens,
+	}
 	if priceableProviderComponent(result.CacheWrite5m) {
 		observed.CacheWrite5mTokens = *result.CacheWrite5m.Tokens
 	}
