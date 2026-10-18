@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"slices"
 	"strings"
@@ -444,11 +446,14 @@ func (m *MilvusStore) scan(ctx context.Context) recordScan {
 				return err
 			}
 			if len(rows) >= milvusWindowRows {
-				if min(hi, top)-lo <= 1 {
-					return fmt.Errorf("more than %d replay records share one second", milvusWindowRows)
+				if min(hi, top)-lo > 1 {
+					width = (min(hi, top) - lo) / 2
+					continue
 				}
-				width = (min(hi, top) - lo) / 2
-				continue
+				// One second fills the window, so page through it instead.
+				if rows, err = m.iterateRows(ctx, lo, hi); err != nil {
+					return err
+				}
 			}
 			var more bool
 			from, more, err = m.visitSeconds(ctx, rows, from, visit)
@@ -500,16 +505,49 @@ func (m *MilvusStore) visitSeconds(ctx context.Context, rows []milvusRow, from i
 	return from, true, nil
 }
 
-func (m *MilvusStore) queryRows(ctx context.Context, lo, hi int64) ([]milvusRow, error) {
+func rangeExpr(lo, hi int64) string {
 	expr := fmt.Sprintf("timestamp >= %d", lo)
 	if hi != math.MaxInt64 {
 		expr += fmt.Sprintf(" && timestamp < %d", hi)
 	}
-	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp"},
+	return expr
+}
+
+func (m *MilvusStore) queryRows(ctx context.Context, lo, hi int64) ([]milvusRow, error) {
+	result, err := m.client.Query(ctx, m.collectionName, nil, rangeExpr(lo, hi), []string{"id", "timestamp"},
 		client.WithLimit(milvusWindowRows), client.WithSearchQueryConsistencyLevel(m.readLevel()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query records: %w", err)
 	}
+	return milvusRows(result)
+}
+
+// iterateRows reads every row in [lo, hi) with a query iterator, which pages
+// past the window that a single query is limited to.
+func (m *MilvusStore) iterateRows(ctx context.Context, lo, hi int64) ([]milvusRow, error) {
+	itr, err := m.client.QueryIterator(ctx, client.NewQueryIteratorOption(m.collectionName).
+		WithExpr(rangeExpr(lo, hi)).WithOutputFields("id", "timestamp").WithBatchSize(milvusWindowRows))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query records: %w", err)
+	}
+	var rows []milvusRow
+	for {
+		result, err := itr.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			return rows, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to query records: %w", err)
+		}
+		batch, err := milvusRows(result)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, batch...)
+	}
+}
+
+func milvusRows(result client.ResultSet) ([]milvusRow, error) {
 	ids, okIDs := result.GetColumn("id").(*entity.ColumnVarChar)
 	timestamps, okTimestamps := result.GetColumn("timestamp").(*entity.ColumnInt64)
 	if result.Len() == 0 {
