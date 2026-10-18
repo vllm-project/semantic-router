@@ -337,7 +337,10 @@ class ServedModel:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
-        placement = place(spec, config.device, parameters, budget)
+        # The requested dtype prices the estimate: an explicit --dtype holds
+        # every weight in itself, which placement must not discount as the
+        # BF16 residency the engine only lays out at the published precision.
+        placement = place(spec, config.device, parameters, budget, self.args.dtype)
         device = placement.device
         # The dtype policy a device follows is its torch device's, as the engines read it.
         gpu = placement.accelerator.torch_device(device).type != "cpu"

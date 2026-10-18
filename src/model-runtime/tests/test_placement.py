@@ -310,6 +310,19 @@ def test_a_bf16_resident_nine_b_model_fits_a_24gb_card(monkeypatch):
     assert "needs about 31.6 GiB, 20.8 GiB free" in str(refused.value)
 
 
+def test_a_requested_dtype_is_priced_before_the_estimate(monkeypatch):
+    """An explicit ``--dtype`` holds every weight in itself; the estimate may not discount BF16 residency the engine will not lay out (a model's own or the process-level override reaches ``place`` as the same requested dtype)."""
+    _one_rocm_device(monkeypatch, 20.8)
+    with pytest.raises(PlacementError) as refused:
+        place(LUX, "auto", LUX_PARAMETERS, memory_budget_gib=20.5, dtype="float32")
+    # FP32 pricing, like main without the share: no BF16 discount.
+    assert "needs about 31.6 GiB, above --memory-budget 20.5 GiB" in str(refused.value)
+    # The published precision keeps the discount.
+    assert place(LUX, "auto", LUX_PARAMETERS, memory_budget_gib=20.5).device.label == (
+        "rocm:0"
+    )
+
+
 def _header_bf16_elements(path: Path, prefix: str = "") -> int:
     """BF16 element count straight from a safetensors header, without vllm_srun code."""
     with open(path, "rb") as stream:
@@ -321,6 +334,55 @@ def _header_bf16_elements(path: Path, prefix: str = "") -> int:
         if name != "__metadata__"
         and name.startswith(prefix)
         and meta.get("dtype") == "BF16"
+    )
+
+
+def test_an_all_bf16_stock_checkpoint_counts_only_the_retained_linear_weights(
+    tmp_path,
+):
+    """A stock all-BF16 backbone stores embeddings, norms and convolutions in BF16 too.
+
+    The native engine upcasts those to FP32 and ``keep_linear_bf16`` only
+    reduces the eligible Linear weights, so the share the family reports is
+    the Linear parameters the loader actually retains in BF16 — fewer than
+    every stored BF16 tensor, and exactly the tensors the engine keeps.
+    """
+    from vllm_srun.engines.native.engine import build_on_meta
+    from vllm_srun.engines.native.weights import (
+        checkpoint_bf16_resident,
+        keep_linear_bf16,
+        load_backbone,
+    )
+    from vllm_srun.testing.fixtures import (
+        qwen3_5_config,
+        random_backbone,
+        save,
+        tiny_tokenizer,
+    )
+
+    vocab = tiny_tokenizer(tmp_path)
+    config = qwen3_5_config(vocab)
+    state = {
+        name: value.to(torch.bfloat16)
+        for name, value in random_backbone("qwen3_5", config, 0).items()
+    }
+    path = tmp_path / "model.safetensors"
+    save(state, path)
+    backbone = BackboneSpec(config["model_type"], config, (path,))
+    stored = _header_bf16_elements(path)
+    reported = checkpoint_bf16_resident(
+        backbone.model_type, backbone.config, backbone.weight_files
+    )
+    assert stored > reported > 0
+    # What the loader actually holds: an FP32 read, then keep_linear_bf16.
+    module = build_on_meta(backbone)
+    load_backbone(module, backbone.weight_files, backbone.weight_prefix)
+    module.float()
+    keep_linear_bf16(module)
+    assert reported == sum(
+        parameter.numel()
+        for parameter in module.parameters()
+        if parameter.dtype == torch.bfloat16
     )
 
 

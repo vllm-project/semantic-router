@@ -12,10 +12,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
+from typing import Any
 
 import torch
 from torch import nn
 
+from .models import build
 from .models.lora import adapter_key
 
 
@@ -191,3 +193,49 @@ def keep_linear_bf16(module: nn.Module) -> dict[str, int]:
             "linear_bf16" if layer.weight.dtype == torch.bfloat16 else "linear_fp32"
         ] += 1
     return counts
+
+
+def retained_bf16_names(module: nn.Module) -> set[str]:
+    """The parameter names ``keep_linear_bf16`` may hold in BF16, from the architecture alone.
+
+    Linear weights and biases only — embeddings, norms and convolutions stay
+    FP32, and so does a parameter shared with a module of another kind (a
+    tied head, for example). Tensors stored BF16 reload BF16-exactly, so a
+    checkpoint's retained share is its BF16 tensors among these names.
+    """
+    shared = {
+        id(parameter)
+        for layer in module.modules()
+        if not isinstance(layer, nn.Linear)
+        for parameter in layer.parameters(recurse=False)
+    }
+    names = set()
+    for layer_name, layer in module.named_modules():
+        if not isinstance(layer, nn.Linear):
+            continue
+        for suffix in ("weight", "bias"):
+            parameter = getattr(layer, suffix, None)
+            if parameter is None or id(parameter) in shared:
+                continue
+            names.add(f"{layer_name}.{suffix}" if layer_name else suffix)
+    return names
+
+
+def checkpoint_bf16_resident(
+    model_type: str,
+    config: dict[str, Any],
+    files: Iterable[Path],
+    prefix: str = "",
+) -> int:
+    """The parameters of ``files`` the native engine holds BF16 on a GPU.
+
+    Of the tensors under ``prefix``, only those the architecture places on an
+    ``nn.Linear`` count (``keep_linear_bf16`` leaves the rest FP32), which
+    placement prices at two bytes. The headers are read; weights never are.
+    """
+    from ...registry.artifacts import safetensors_bf16_elements
+
+    with torch.device("meta"):
+        retained = retained_bf16_names(build(model_type, config))
+    names = {f"{prefix}{name}" for name in retained}
+    return sum(safetensors_bf16_elements(path, prefix, names) for path in files)

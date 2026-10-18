@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from . import dtypes
 from .errors import PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
@@ -118,7 +119,15 @@ def place(
     device: str,
     parameters: int,
     memory_budget_gib: float | None = None,
+    dtype: str = "auto",
 ) -> Placement:
+    """Choose a device whose estimate fits; ``dtype`` is the requested ``--dtype``.
+
+    The effective dtype is resolved per candidate accelerator before the
+    estimate: an explicit ``--dtype`` prices its own weights, so a requested
+    ``float32`` cannot take the BF16 residency discount the engine will not
+    apply (``ServedModel.load`` only applies the dtype after placement).
+    """
     kind, index = parse_device(device)
     budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
     candidates = auto_order() if kind == "auto" else [kind]
@@ -136,7 +145,8 @@ def place(
         if not accelerator.available():
             absent.append(f"{name}: not available on this host")
             continue
-        needed = estimate_bytes(spec, parameters, name)
+        requested = dtypes.apply(spec, dtype, name != "cpu")
+        needed = estimate_bytes(requested, parameters, name)
         if budget is not None and needed > budget:
             reasons.append(
                 f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "

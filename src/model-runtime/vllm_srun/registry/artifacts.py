@@ -201,17 +201,23 @@ def safetensors_elements(path: Path) -> int:
     return total
 
 
-def safetensors_bf16_elements(path: Path, prefix: str = "") -> int:
+def safetensors_bf16_elements(
+    path: Path, prefix: str = "", names: set[str] | None = None
+) -> int:
     """BF16 tensor element count from the header only; weights are never read.
 
     Only tensors named ``prefix`` count, matching what ``iter_tensors`` loads
-    for a backbone. The released decision and Vela checkpoints store the
-    Linear weights their runtime holds BF16 on a GPU as BF16 tensors, so this
-    is the share ``DtypePolicy.bf16_parameters`` reports.
+    for a backbone; ``names``, when given, narrows that further to exact
+    tensor names. The released decision and Vela checkpoints store the
+    Linear weights their runtime holds BF16 on a GPU as BF16 tensors, so the
+    share ``DtypePolicy.bf16_parameters`` reports passes the Linear names
+    ``keep_linear_bf16`` retains.
     """
     total = 0
     for name, meta in safetensors_header(path).items():
         if name == "__metadata__" or (prefix and not name.startswith(prefix)):
+            continue
+        if names is not None and name not in names:
             continue
         if not isinstance(meta, dict) or meta.get("dtype") != "BF16":
             continue

@@ -173,6 +173,51 @@ def test_float16_needs_a_gpu(qwen3_package):
     runtime.stop()
 
 
+@pytest.mark.parametrize("override", ["model", "process"])
+def test_a_requested_float32_dtype_reaches_placement_from_both_overrides(
+    qwen3_package, override
+):
+    """Both ``--dtype float32`` override paths hand placement the same requested dtype.
+
+    ``ServedModel.load`` passes that dtype to ``place``, which resolves the
+    effective policy per candidate device before its estimate — a
+    ``bf16_resident`` family's BF16 discount cannot leak into an FP32 run
+    (the engine then receives ``bf16_resident=False`` and loads FP32).
+    """
+    if override == "model":
+        runtime = Runtime(
+            ServeConfig(
+                models=(
+                    ModelConfig(
+                        model=str(qwen3_package),
+                        device="cpu",
+                        dtype="float32",
+                        memory_budget_gib=64,
+                    ),
+                ),
+                result_cache_entries=0,
+            )
+        )
+    else:
+        runtime = Runtime(
+            ServeConfig(
+                models=(
+                    ModelConfig(
+                        model=str(qwen3_package), device="cpu", memory_budget_gib=64
+                    ),
+                ),
+                engine_args=EngineArgs(dtype="float32"),
+                result_cache_entries=0,
+            )
+        )
+    runtime.start(background=False)
+    try:
+        (served,) = runtime.served
+        assert served.args.dtype == "float32"
+    finally:
+        runtime.stop()
+
+
 def test_a_models_own_engine_arguments_reach_its_batcher_and_scheduler(qwen3_package):
     runtime = Runtime(
         ServeConfig(

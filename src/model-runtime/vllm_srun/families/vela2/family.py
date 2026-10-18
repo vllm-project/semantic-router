@@ -28,9 +28,9 @@ from ...plugins.base import (
     SurfacePlan,
     VerifiedPackage,
 )
+from ...engines.native.weights import checkpoint_bf16_resident
 from ...plugins.decisions import DecisionModel, RequestPlan
 from ...registry import builtin, policy
-from ...registry.artifacts import safetensors_bf16_elements
 from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
 from .decoder_layout import DecoderTree
@@ -42,16 +42,20 @@ from .request import QUESTION_TYPES, Plan, Question, QuestionReader
 
 
 def _bf16_parameters(backbone: BackboneSpec) -> int | None:
-    """The parameters the decoder checkpoint stores BF16: the Linear weights a GPU holds BF16.
+    """The parameters the decoder engine holds BF16 on a GPU: the checkpoint's Linear weights.
 
     Only tensors under the backbone's weight prefix count — the tensors its
-    runtime loads. None when no weight file stores BF16, which keeps
-    placement's FP32 upper bound for packages this family cannot
-    characterize.
+    runtime loads — and only the ones ``keep_linear_bf16`` retains there
+    (embeddings, norms and shared parameters stay FP32 even when the
+    checkpoint stores them BF16; the broad head is a different module). None
+    when no weight file holds a retained BF16 tensor, which keeps placement's
+    FP32 upper bound for packages this family cannot characterize.
     """
-    stored = sum(
-        safetensors_bf16_elements(path, backbone.weight_prefix)
-        for path in backbone.weight_files
+    stored = checkpoint_bf16_resident(
+        backbone.model_type,
+        backbone.config,
+        backbone.weight_files,
+        backbone.weight_prefix,
     )
     return stored or None
 
