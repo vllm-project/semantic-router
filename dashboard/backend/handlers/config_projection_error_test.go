@@ -72,9 +72,53 @@ func TestConfigProjectionHandlersHideStoreErrors(t *testing.T) {
 
 func TestConfigDeploymentDetailNotFoundHidesRequestedVersion(t *testing.T) {
 	setupTestConfigProjectionStore(t)
+	var logs bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&logs)
+	defer log.SetOutput(previous)
 	response := httptest.NewRecorder()
 	ConfigDeploymentDetailHandler()(response, httptest.NewRequest(http.MethodGet, "/api/router/config/deployments/private-version", nil))
 	if response.Code != http.StatusNotFound || response.Body.String() != "deployment not found\n" {
 		t.Fatalf("status = %d, body = %q; want 404 with fixed message", response.Code, response.Body.String())
+	}
+	if logs.Len() != 0 {
+		t.Errorf("missing deployment produced diagnostic log: %q", logs.String())
+	}
+}
+
+func TestConfigDeploymentDetailLogsStoreErrorsContainingNotFound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "projection.sqlite")
+	store, err := configprojection.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := configProjectionStore
+	SetConfigProjectionStore(store)
+	t.Cleanup(func() { SetConfigProjectionStore(previous); _ = store.Close() })
+	if refreshErr := store.RefreshFromCanonical(configprojection.RefreshInput{
+		Version: "version", Source: configprojection.SourceManual,
+		YAMLBytes: []byte(testCanonicalYAMLForProjection()),
+	}); refreshErr != nil {
+		t.Fatal(refreshErr)
+	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("UPDATE config_deployments SET created_at = ? WHERE version = ?", "not found", "version"); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	previousLog := log.Writer()
+	log.SetOutput(&logs)
+	defer log.SetOutput(previousLog)
+	response := httptest.NewRecorder()
+	ConfigDeploymentDetailHandler()(response, httptest.NewRequest(http.MethodGet, "/api/router/config/deployments/version", nil))
+	if response.Code != http.StatusInternalServerError || response.Body.String() != "failed to load deployment\n" {
+		t.Errorf("status = %d, body = %q; want 500 with fixed message", response.Code, response.Body.String())
+	}
+	if !strings.Contains(logs.String(), "not found") || !strings.Contains(logs.String(), "parse created_at") {
+		t.Errorf("log = %q, want underlying timestamp parse error", logs.String())
 	}
 }

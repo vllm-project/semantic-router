@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 )
 
 // ConfigDeploymentsHandler lists persisted deployment projections.
@@ -55,11 +58,11 @@ func ConfigDeploymentDetailHandler() http.HandlerFunc {
 
 		deployment, err := configProjectionStore.GetDeployment(version)
 		if err != nil {
-			log.Printf("failed to load deployment: %v", err)
-			if strings.Contains(err.Error(), "not found") {
+			if errors.Is(err, configprojection.ErrDeploymentNotFound) {
 				http.Error(w, "deployment not found", http.StatusNotFound)
 				return
 			}
+			log.Printf("failed to load deployment: %v", err)
 			http.Error(w, "failed to load deployment", http.StatusInternalServerError)
 			return
 		}

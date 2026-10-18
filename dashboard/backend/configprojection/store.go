@@ -4,6 +4,7 @@ package configprojection
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,6 +17,9 @@ import (
 )
 
 const currentSchemaVersion = 1
+
+// ErrDeploymentNotFound is returned when a requested deployment does not exist.
+var ErrDeploymentNotFound = errors.New("deployment not found")
 
 // parseProjectionTime accepts timestamps from both the Go writers and SQLite's
 // schema seed, which uses a space instead of the RFC3339 T separator.
@@ -372,7 +376,7 @@ func scanDeploymentRow(row *sql.Row, version string) (*DeploymentRecord, error) 
 		&projectionsRaw,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("configprojection: deployment %q not found", version)
+			return nil, fmt.Errorf("configprojection: deployment %q: %w", version, ErrDeploymentNotFound)
 		}
 		return nil, fmt.Errorf("configprojection: scan deployment: %w", err)
 	}
