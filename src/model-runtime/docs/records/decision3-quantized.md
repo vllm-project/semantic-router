@@ -178,14 +178,19 @@ them on this GPU:
 Two calibration states are also the states of 2 of these requests.
 
 Median latency as above (the first 500 of the 1,000 train rows answered a
-third time with graphs; all 1,000 answered a second time without):
+third time with graphs; all 1,000 answered a second time without), with exact
+kernels only and at `--dtype auto`, the default of `vllm-srun serve`. At
+`--dtype auto` a quantized package also runs the fused element-wise kernels the
+decision3 family allows it (norms, residual adds and gates; approximate on
+CUDA, `docs/records/cuda-fused-approximate.md`); the agreement above was
+answered so. A BF16 package keeps exact kernels at every dtype.
 
-| Package | With graphs | Without graphs |
-| --- | --- | --- |
-| BF16 | 62.6 ms | 63.1 ms |
-| NVFP4, the JIT launch and torch scale layout | 30.2 ms | 60.0 ms |
-| NVFP4 | 28.5 ms | 48.0 ms |
-| NVFP4 AWQ | 28.5 ms | 47.7 ms |
+| Package | Exact, graphs | Exact, without graphs | `--dtype auto`, graphs | `--dtype auto`, without graphs |
+| --- | --- | --- | --- | --- |
+| BF16 | 62.6 ms | 63.1 ms | as exact | as exact |
+| NVFP4, the JIT launch and torch scale layout | 30.2 ms | 60.0 ms | | |
+| NVFP4 | 28.5 ms | 48.0 ms | 23.2 ms | 37.4 ms |
+| NVFP4 AWQ | 28.5 ms | 47.7 ms | 23.2 ms | 37.8 ms |
 
 Without graphs an NVFP4 forward is host-bound: it launched 7,196 kernels, and
 the GPU was busy 46% of the time. Each layer now launches two of them. The
