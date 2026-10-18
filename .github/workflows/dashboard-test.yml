@@ -91,6 +91,16 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
+      - name: Upload Dashboard test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-framework-evidence
+          path: .agent-harness/dashboard/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload WASM test evidence
         if: always()
         uses: actions/upload-artifact@v4
