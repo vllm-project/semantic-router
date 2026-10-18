@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
-	"time"
 )
 
 const RetrieveToolName = "vsr_context_retrieve"
@@ -443,20 +442,12 @@ func applyRecoverableCandidate(
 		*recoveryBytes+originalBytes > request.Policy.Recovery.MaxBytesPerRequest {
 		return false, compressed, "", fmt.Errorf("recovery request byte limit exceeded")
 	}
-	key := recoveryKey(request.Scope, block.Text)
 	ttl := request.Policy.Recovery.TTL
 	if ttl <= 0 {
-		ttl = 15 * time.Minute
+		ttl = DefaultRecoveryTTL
 	}
-	now := time.Now().UTC()
-	entry := RecoveryEntry{
-		Key:       key,
-		Scope:     request.Scope,
-		Content:   block.Text,
-		CreatedAt: now,
-		ExpiresAt: now.Add(ttl),
-	}
-	if err := request.Recovery.Put(ctx, entry, ttl); err != nil {
+	key, err := StoreRecoveryContent(ctx, request.Recovery, request.Scope, block.Text, ttl)
+	if err != nil {
 		return false, compressed, "", fmt.Errorf("store recovery content: %w", err)
 	}
 	*recoveryBytes += originalBytes

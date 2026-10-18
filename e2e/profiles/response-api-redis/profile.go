@@ -24,7 +24,8 @@ func NewProfile() *Profile {
 	}
 }
 
-// GetTestCases returns the test cases for response-api-redis, including workflow resume restart recovery.
+// GetTestCases returns the test cases for response-api-redis, including workflow resume restart recovery
+// and history-reset recovery into this profile's Redis.
 func (p *Profile) GetTestCases() []string {
-	return append(p.RedisProfile.GetTestCases(), "workflow-resume-restart-recovery")
+	return append(p.RedisProfile.GetTestCases(), "workflow-resume-restart-recovery", "history-reset-recovery")
 }

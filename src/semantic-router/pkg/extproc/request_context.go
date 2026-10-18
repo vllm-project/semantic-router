@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -457,7 +458,15 @@ type RequestContext struct {
 	// TopicContinuityResults indexes the same results by rule name. Values are
 	// plain structs, so reads are detached copies.
 	TopicContinuityResults map[string]topiccontinuity.Result
-	SemanticResponse       *llmprotocol.Response
+
+	// History reset state. HistoryResetTrigger holds the evidence resolved for
+	// this request; the action treats an absent result as missing evidence.
+	HistoryResetPolicy      *config.HistoryResetPluginConfig
+	HistoryResetBlocked     string
+	HistoryResetTrigger     *historyreset.TriggerResult
+	HistoryResetAction      *historyreset.Action
+	HistoryResetDiagnostics *historyreset.Diagnostics
+	SemanticResponse        *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
@@ -506,15 +515,23 @@ type RequestContext struct {
 	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
-	ContextCompressionRecoveryKeys []string
-	ContextCompressionStrategy     string
-	ContextCompressionBudgetMode   string
-	ContextCompressionTokenSource  string
-	ContextCompressionTrigger      string
-	ContextCompressionRevision     string
-	ContextCompressionQuality      string
-	ContextCompressionFallback     string
-	ContextCompressionCostSaved    float64
+	ContextRecoveryKeys            []string
+	// ContextRecoveryToolOwned records that the router installed the reserved
+	// retrieval tool itself, rather than the caller declaring one.
+	ContextRecoveryToolOwned bool
+	// ContextRecovery is the request's effective recovery contract and
+	// ContextRecoveryStore the store every recovery writer and the retrieval
+	// path use; it enforces the request's shared byte budget.
+	ContextRecovery               *contextRecoveryContract
+	ContextRecoveryStore          contextcompression.RecoveryStore
+	ContextCompressionStrategy    string
+	ContextCompressionBudgetMode  string
+	ContextCompressionTokenSource string
+	ContextCompressionTrigger     string
+	ContextCompressionRevision    string
+	ContextCompressionQuality     string
+	ContextCompressionFallback    string
+	ContextCompressionCostSaved   float64
 
 	// RateLimitCtx is retained for the existing optional data-plane limiter.
 	// Protocol codecs never read or mutate admission state.

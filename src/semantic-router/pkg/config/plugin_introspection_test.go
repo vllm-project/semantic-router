@@ -79,6 +79,8 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetPromptCacheConfig().Enabled
 				case *ShadowDispatchPluginConfig:
 					want = decision.GetShadowDispatchConfig().Enabled
+				case *HistoryResetPluginConfig:
+					want = decision.GetHistoryResetConfig().IsEnabled()
 				case *MaskingPluginConfig:
 					want = decision.GetMaskingConfig().Enabled
 				default:

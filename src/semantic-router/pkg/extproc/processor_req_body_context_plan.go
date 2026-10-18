@@ -34,7 +34,12 @@ func (r *OpenAIRouter) applyContextTransformationPlan(ctx *RequestContext, reque
 	if callContext == nil {
 		callContext = context.Background()
 	}
-	if err := ir.ApplySteps(callContext, ctx.ContextHistorySteps); err != nil {
+	err := ir.ApplySteps(callContext, ctx.ContextHistorySteps)
+	finalizeHistoryResetDiagnostics(ctx, ir)
+	if err != nil {
+		return err
+	}
+	if err := finalizeHistoryResetRecovery(ctx, request); err != nil {
 		return err
 	}
 	if err := r.applySemanticContextCompression(ctx, request); err != nil {

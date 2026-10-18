@@ -68,6 +68,10 @@ var (
 // to an API package.
 type jsonWireRepresentation interface{ JSONWire() any }
 
+// jsonEnumValues is implemented by named string types whose wire values are a
+// closed set, so the generated schema can list them.
+type jsonEnumValues interface{ JSONEnumValues() []string }
+
 // For derives the schema of T, the type a handler encodes or decodes.
 func For[T any](overrides Overrides) Schema {
 	return FromType(reflect.TypeFor[T](), overrides)
@@ -129,6 +133,9 @@ func (g generator) schema(valueType reflect.Type) Schema {
 	case reflect.Float32, reflect.Float64:
 		return Schema{Type: "number"}
 	case reflect.String:
+		if values, ok := reflect.Zero(valueType).Interface().(jsonEnumValues); ok {
+			return Schema{Type: "string", Enum: values.JSONEnumValues()}
+		}
 		return Schema{Type: "string"}
 	default:
 		return Schema{}
