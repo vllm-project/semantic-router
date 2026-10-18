@@ -16,6 +16,7 @@ from typing import Any
 
 import torch
 
+from ..engines.native.quantized import float8_format
 from ..plugins.base import Accelerator, DeviceInfo
 from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 
@@ -125,6 +126,7 @@ class GPUAccelerator(Accelerator):
             "fla": _optional("fla.ops.gated_delta_rule", "chunk_gated_delta_rule")
             is not None,
             "causal_conv1d": _optional("causal_conv1d", "causal_conv1d_fn") is not None,
+            "float8": float8_format(self.torch_device(device)) is not None,
         }
 
     def autocast(
