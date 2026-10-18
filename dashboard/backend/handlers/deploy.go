@@ -87,8 +87,7 @@ func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc
 		}
 
 		var req DeployRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if !decodeLimitedJSON(w, r, &req) {
 			return
 		}
 
@@ -158,8 +157,7 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 		}
 
 		var req DeployRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if !decodeLimitedJSON(w, r, &req) {
 			return
 		}
 
@@ -197,8 +195,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 		var rollbackReq struct {
 			Version string `json:"version"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&rollbackReq); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		if !decodeLimitedJSON(w, r, &rollbackReq) {
 			return
 		}
 		if rollbackReq.Version == "" {
