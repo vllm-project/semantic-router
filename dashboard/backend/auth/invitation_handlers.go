@@ -34,6 +34,7 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 		case http.MethodGet:
 			items, err := svc.store.ListInvitations(r.Context())
 			if err != nil {
+				log.Printf("failed to list invitations: %v", err)
 				http.Error(w, "failed to list invitations", http.StatusInternalServerError)
 				return
 			}
@@ -60,7 +61,11 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				if writeAdminMutationAuthorizationError(w, err) {
 					return
 				}
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				if writeInvitationValidationError(w, err) {
+					return
+				}
+				log.Printf("failed to create invitation: %v", err)
+				http.Error(w, "failed to create invitation", http.StatusInternalServerError)
 				return
 			}
 			writeAudit(r, svc, "invitation.create", "dashboard-invitations", ac.UserID)
@@ -156,6 +161,7 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 			}
 			perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
 			if err != nil {
+				log.Printf("failed to load invitation session permissions: %v", err)
 				http.Error(w, "failed to open session", http.StatusInternalServerError)
 				return
 			}
@@ -175,12 +181,22 @@ func writeInvitationError(w http.ResponseWriter, err error) {
 		http.Error(w, "invitation is no longer available", http.StatusGone)
 		return
 	}
-	for _, validationErr := range []error{ErrInvalidInvitationEmail, ErrInvalidInvitationName, ErrInvitationUserExists} {
-		if errors.Is(err, validationErr) {
-			http.Error(w, validationErr.Error(), http.StatusBadRequest)
-			return
-		}
+	if writeInvitationValidationError(w, err) {
+		return
 	}
 	log.Printf("failed to process invitation: %v", err)
 	http.Error(w, "failed to process invitation", http.StatusInternalServerError)
+}
+
+func writeInvitationValidationError(w http.ResponseWriter, err error) bool {
+	for _, validationErr := range []error{
+		ErrInvalidInvitationEmail, ErrInvalidInvitationName, ErrInvitationUserExists,
+		ErrInvalidInvitationKind, ErrInvalidInvitationUses, errInvalidRole,
+	} {
+		if errors.Is(err, validationErr) {
+			http.Error(w, validationErr.Error(), http.StatusBadRequest)
+			return true
+		}
+	}
+	return false
 }

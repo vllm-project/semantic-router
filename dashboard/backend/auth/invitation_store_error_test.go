@@ -119,13 +119,59 @@ func TestPublicInvitationRoutesKeepUnavailableResponse(t *testing.T) {
 }
 
 func TestInvitationValidationErrorsKeepSafeMessages(t *testing.T) {
-	for _, validationErr := range []error{ErrInvalidInvitationEmail, ErrInvalidInvitationName, ErrInvitationUserExists} {
+	for _, validationErr := range []error{
+		ErrInvalidInvitationEmail, ErrInvalidInvitationName, ErrInvitationUserExists,
+		ErrInvalidInvitationKind, ErrInvalidInvitationUses, errInvalidRole,
+	} {
 		t.Run(validationErr.Error(), func(t *testing.T) {
 			response := httptest.NewRecorder()
 			writeInvitationError(response, fmt.Errorf("internal details: %w", validationErr))
 			if response.Code != http.StatusBadRequest || response.Body.String() != validationErr.Error()+"\n" {
 				t.Fatalf("status = %d, body = %q; want 400 with %q", response.Code, response.Body.String(), validationErr)
 			}
+		})
+	}
+}
+
+func TestAdminInvitationCreationKeepsValidationResponses(t *testing.T) {
+	svc := newTestAuthService(t)
+	mux := AuthRoutes(svc)
+	RegisterAdminRoutes(mux, svc)
+	for _, test := range []struct {
+		body string
+		err  error
+	}{
+		{`{"kind":"unknown"}`, ErrInvalidInvitationKind},
+		{`{"kind":"shared","role":"unknown","capacity":2}`, errInvalidRole},
+		{`{"kind":"shared","capacity":1}`, ErrInvalidInvitationUses},
+		{`{"email":"invalid","name":"New User"}`, ErrInvalidInvitationEmail},
+		{`{"email":"new@example.com","name":""}`, ErrInvalidInvitationName},
+	} {
+		t.Run(test.err.Error(), func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/admin/invitations", strings.NewReader(test.body))
+			request = request.WithContext(WithAuthContext(request.Context(), AuthContext{UserID: "admin", Perms: map[string]bool{PermUsersManage: true}}))
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || response.Body.String() != test.err.Error()+"\n" {
+				t.Fatalf("status = %d, body = %q; want 400 with %q", response.Code, response.Body.String(), test.err)
+			}
+		})
+	}
+}
+
+func TestInvitationAcceptanceHidesLaterStoreFailures(t *testing.T) {
+	for _, test := range []struct{ table, message string }{
+		{"users", "failed to process invitation"},
+		{"auth_sessions", "failed to process invitation"},
+		{"role_permissions", "failed to open session"},
+	} {
+		t.Run(test.table, func(t *testing.T) {
+			svc, _, token := newStoreErrorTestInvitation(t)
+			if _, err := svc.store.db.Exec("DROP TABLE " + test.table); err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/invitations/"+token+"/accept", strings.NewReader(`{"password":"secret-password"}`))
+			assertAuthStoreError(t, AuthRoutes(svc), request, http.StatusInternalServerError, test.message, "no such table: "+test.table)
 		})
 	}
 }
