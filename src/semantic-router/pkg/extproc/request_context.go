@@ -146,6 +146,8 @@ type RequestContext struct {
 	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
 	// Arrival diagnostics, set at end of stream in STREAMED modes only.
 	StreamedBodyStats StreamedBodyStats
+	// A guard rejection ends the request even after its handler returns to the pool.
+	streamedBodyRejected bool
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold

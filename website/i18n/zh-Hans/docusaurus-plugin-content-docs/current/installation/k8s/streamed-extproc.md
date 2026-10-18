@@ -20,6 +20,8 @@ translation:
 
 Semantic Router 是 Envoy External Processor。在缓冲模式下，网关在一条 ExtProc 消息中发送完整请求体。在流式模式下，网关发送多个 body 分片。Semantic Router 的流式 body 处理程序累积这些分片，在流结束时应用相同的路由和改写流水线，然后发出一份完整的已改写请求体或立即响应。
 
+每个分片在复制进请求体缓冲区之前都会检查剩余的 `max_bytes` 预算；请求体恰好达到限额时允许通过。如果大小或超时守卫拒绝请求，Semantic Router 只发送一次立即响应（413 或 408），释放请求体 handler 并结束 ExtProc 流。后续分片或 trailers 不会恢复路由处理，也不会调用请求体插件。
+
 对于流式 Chat Completions 响应，立即响应保持 OpenAI 兼容行为：
 
 - 当原始请求带有 `"stream": true` 时，looper 算法返回 `Content-Type: text/event-stream`；
