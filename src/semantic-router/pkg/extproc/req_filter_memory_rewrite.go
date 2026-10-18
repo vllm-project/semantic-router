@@ -31,7 +31,7 @@ type memoryRewriteServiceConfig struct {
 	Endpoint         string
 	Model            string
 	AccessKey        string
-	TimeoutSeconds   int
+	Timeout          time.Duration
 	MaxTokens        int
 	Temperature      float64
 	MaxResponseBytes int64
@@ -98,8 +98,8 @@ func getTemperature(resolved *memoryRewriteServiceConfig, defaultValue float64) 
 }
 
 func getTimeout(resolved *memoryRewriteServiceConfig) time.Duration {
-	if resolved != nil && resolved.TimeoutSeconds > 0 {
-		return time.Duration(resolved.TimeoutSeconds) * time.Second
+	if resolved != nil && resolved.Timeout > 0 {
+		return resolved.Timeout
 	}
 	return 5 * time.Second
 }
@@ -176,7 +176,7 @@ func resolveMemoryRewriteServiceConfig(routerCfg *config.RouterConfig) *memoryRe
 		Endpoint:         endpoint,
 		Model:            externalCfg.ModelName,
 		AccessKey:        externalCfg.AccessKey,
-		TimeoutSeconds:   externalCfg.TimeoutSeconds,
+		Timeout:          config.DurationFromSeconds(externalCfg.TimeoutSeconds),
 		MaxTokens:        externalCfg.MaxTokens,
 		Temperature:      externalCfg.Temperature,
 		MaxResponseBytes: maxResponseBytes,

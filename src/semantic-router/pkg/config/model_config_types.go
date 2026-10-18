@@ -240,7 +240,7 @@ type ExternalModelConfig struct {
 	ModelRole        string                        `yaml:"model_role"`
 	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
 	ModelName        string                        `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   int                           `yaml:"llm_timeout_seconds,omitempty"`
+	TimeoutSeconds   float64                       `yaml:"llm_timeout_seconds,omitempty"`
 	ParserType       string                        `yaml:"parser_type,omitempty"`
 	Threshold        float32                       `yaml:"threshold,omitempty"`
 	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
