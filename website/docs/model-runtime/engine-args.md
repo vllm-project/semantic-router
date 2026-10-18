@@ -13,36 +13,40 @@ runtime's default.
 
 | Argument | Deployment field | Default | Meaning |
 | --- | --- | --- | --- |
-| `--max-num-seqs` | `max_num_seqs` | `8192` | Most rows one forward holds, across requests. `1` runs every row alone. |
-| `--max-num-batched-tokens` | `max_num_batched_tokens` | `65536` | Padded tokens one forward may hold: its rows times its longest row. |
+| `--max-num-seqs` | `max_num_seqs` | by device ([below](#batch-limits-by-device)) | Most rows one forward holds, across requests. `1` runs every row alone. |
+| `--max-num-batched-tokens` | `max_num_batched_tokens` | by device, calibrated at startup | Tokens one forward may hold: the sum of its rows for a model that packs merged rows, else its rows times its longest row. |
 | `--batch-window-ms` | `batch_window_ms` | `2.0` | How long the scheduler waits after the first request to collect more. |
 | `--dtype` | `dtype` | `auto` | Precision the model computes in: `auto`, `float32`, `bfloat16` or `float16`. |
 | `--enable-shared-context`, `--no-enable-shared-context` | `enable_shared_context` | the model family's | Compute the shared state of a multi-question decision request once. |
 
 ## Batching
 
-Every row of every queued request is planned together, longest first: a
-decision request takes one row per question (a request with 10 questions
-takes 10 rows), a classify, embeddings or rerank request one per input or
-window. A forward holds at most `--max-num-seqs` rows and
-`--max-num-batched-tokens` padded tokens; a row longer than the token budget
-runs alone. This is vLLM's batching with one difference in what a row is: the
-runtime's models answer a row in one forward, where vLLM's sequences take one
-decode step after another.
+Every row of every queued request is planned together: a decision request
+takes one row per question (a request with 10 questions takes 10 rows), a
+classify, embeddings or rerank request one per input or window. A forward
+holds at most `--max-num-seqs` rows and `--max-num-batched-tokens` tokens; a
+row longer than the token budget runs alone. The runtime's models answer a
+row in one forward, so a forward's rows are the unit of batching.
 
 - **`--max-num-seqs`** counts rows, as vLLM's `--max-num-seqs` counts the
-  sequences of one step. The default never binds at the default token budget:
-  a row costs at least 8 padded tokens, so a 65,536-token forward holds at most
-  8,192 rows anyway. Lower it to keep forwards small; `1` runs every row in a
-  forward of its own.
-- **`--max-num-batched-tokens`** counts padded tokens: the rows of a forward
-  times its longest row, rounded up to a multiple of 8. It counts them so also
-  for models that lay rows back to back without padding (the Vela 1.0 task
-  models on the native engine), for which it overstates what a forward
-  computes. Some families keep forwards shorter on their own: Decision 3.0
-  sizes a merged forward to about 0.3 s of device time at the measured cost per
-  token, and Vela 2.0 0.3B and the Decision 1.0 encoder sizes stay within 2,048
-  and 1,024 padded tokens on a CPU.
+  sequences of one step. Lower it to keep forwards small; `1` runs every row
+  in a forward of its own.
+- **`--max-num-batched-tokens`** counts the tokens a forward computes. Rows
+  are padded to the forward's longest row, so a padded forward counts its rows
+  times its longest row, rounded up to a multiple of 8. A model that lays the
+  rows of a merged forward back to back without padding (Decision 3.0 on GPUs
+  with variable-length kernels) counts the sum of its rows, each rounded up to
+  8, and fills the forward in arrival order. The Vela 1.0 task models also pack
+  their rows but count padded tokens. Some families keep forwards shorter on
+  their own: Decision 3.0 sizes a merged forward to about 0.3 s of device time
+  at the measured cost per token, and Vela 2.0 0.3B and the Decision 1.0
+  encoder sizes stay within 2,048 and 1,024 padded tokens on a CPU.
+- **Lanes.** A model can sort its rows into lanes that never share a forward
+  and keep their own cost per token: Decision 3.0 puts rows that read images
+  or videos in one lane and text rows in another. A text row is then never
+  padded to the width of an image row, an image forward's time never makes text
+  forwards look slow, and the batches of both lanes that one planning round
+  makes run in one turn, the cheaper first, each answered as soon as it ran.
 - **`--batch-window-ms`** is how long the scheduler waits after the first
   request arrives before it plans the queue. vLLM has no such setting: a
   generation request runs one decode step after another, and every step is a
@@ -75,6 +79,39 @@ Responses that ask for `meta` (`"options": {"return_meta": true}`) carry
 `numerics`: `exact` for a model whose answers never depend on batching,
 `approximate` otherwise. `GET /v1/models` reports each model's `engine_args`
 and `numerics`.
+
+### Batch limits by device
+
+A deployment that leaves `max_num_seqs` or `max_num_batched_tokens` unset gets
+the limits of its device's memory class:
+
+| Device memory | `max_num_batched_tokens` | `max_num_seqs` |
+| --- | ---: | ---: |
+| 160 GB and more (MI300X, MI325X, B200) | 32,768 | 256 |
+| 64 to 160 GB | 16,384 | 128 |
+| 32 to 64 GB | 8,192 | 64 |
+| under 32 GB | 4,096 | 32 |
+| CPU, or a device that reports no memory (MPS, a plugin's accelerator) | 65,536 | 8,192 |
+
+On a GPU the runtime then calibrates the token budget once the model passed
+its readiness check, in a few seconds: it times merged forwards of 4,096
+tokens up to the class's budget and keeps the largest budget whose cost per
+token is within 2% of the cheapest it timed (the efficiency knee), but never
+more than one forward does in about 0.3 s, nor than what fits the device's
+free memory with 15% to spare. On an MI325X that is 32,768 tokens for d3-edge,
+about 19,000 for d3-mini (its 0.3 s cap) and 3,328 for d3.
+The worker logs the values it chose and where they came
+from, and `GET /v1/models` reports them in `engine_args`. A value you set is
+never changed.
+
+### Media decoding
+
+`vllm-srun serve --media-workers N` decodes and resizes request images and
+videos in `N` worker processes, off the threads that plan requests next to
+the device worker. The default is one worker per 16 CPUs the process may use
+(its container's CPU quota), at most 4, started when a model that reads media
+loads; `0` decodes in the request threads. The decoded pixels are the same
+either way.
 
 ## Precision
 

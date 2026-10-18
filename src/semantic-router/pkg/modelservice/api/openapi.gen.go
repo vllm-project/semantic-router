@@ -638,12 +638,15 @@ type EngineArgs struct {
 	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
 	EnableSharedContext bool `json:"enable_shared_context"`
 
-	// MaxNumBatchedTokens The most padded tokens (rows times the longest row) one merged forward holds.
+	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
 	MaxNumBatchedTokens int `json:"max_num_batched_tokens"`
 
 	// MaxNumSeqs The most rows one forward holds, across requests: one per question of a decision request, one per
-	// input or window otherwise; 1 runs every row alone. The default never binds at the default
-	// `max_num_batched_tokens`, since a row costs at least 8 padded tokens.
+	// input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+	// one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+	// budget, since a row costs at least 8 padded tokens).
 	MaxNumSeqs int `json:"max_num_seqs"`
 }
 
@@ -682,8 +685,10 @@ type FloatVector = []float32
 
 // GoldenStatus defines model for GoldenStatus.
 type GoldenStatus struct {
-	Checked   *int               `json:"checked,omitempty"`
-	Matched   *int               `json:"matched,omitempty"`
+	Checked *int `json:"checked,omitempty"`
+	Matched *int `json:"matched,omitempty"`
+
+	// Reference Recorded golden reference key. A hardware-qualified key is preferred when present; otherwise the device-class reference is used.
 	Reference *string            `json:"reference"`
 	Status    GoldenStatusStatus `json:"status"`
 }
