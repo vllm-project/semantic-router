@@ -27,7 +27,7 @@ vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 `--platform rocm` or `--platform cuda` runs the `vllm-sr-rocm` or
 `vllm-sr-cuda` image with the GPUs passed through. The images carry the
 release's pinned PyTorch build. Numerical equivalence depends on the model,
-profile and hardware; validate it before changing precision or execution settings. See the
+its engine arguments and the hardware; validate it before changing precision or execution settings. See the
 [model runtime Quickstart](../model-runtime/quickstart).
 
 Builds of `main` between
@@ -38,7 +38,7 @@ named the runtime `vllm-sr-runtime`. If you used one, rename what you set:
 | --- | --- |
 | `vllm-sr-runtime` (package and command) | `vllm-srun` |
 | `vllm_sr_runtime` (module) | `vllm_srun` |
-| `vllm_sr_runtime.families`, `.engines`, `.accelerators`, `.profiles` (plugin entry-point groups) | `vllm_srun.families`, `.engines`, `.accelerators`, `.profiles` |
+| `vllm_sr_runtime.families`, `.engines`, `.accelerators` (plugin entry-point groups) | `vllm_srun.families`, `.engines`, `.accelerators` |
 | `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
 | `VLLM_SR_RUNTIME_CPU_PROCESSES` or `VLLM_SRUN_CPU_PROCESSES` | Removed. Set `VLLM_SRUN_CPU_THREADS` to choose threads per managed CPU worker; process counts do not translate directly to thread counts. |
 | `VLLM_SR_RUNTIME_PREPARED_DIR` | removed: Vela Omni downloads like every model (below) |
@@ -52,7 +52,7 @@ Managed CPU workers now default to half the router's available CPU budget,
 rounded down, with a minimum of one thread and a maximum of 16. The thread count
 stays independent of the number of active models; attached runtimes keep their
 own settings. See
-[CPU threads](../model-runtime/deploy.md#cpu-threads) before choosing an override.
+[CPU threads](model-runtime/deploy.md) before choosing an override.
 
 ## Breaking changes
 
@@ -88,9 +88,19 @@ own settings. See
   `/opt/router-model-artifacts/vela-1.0-omni-*` paths. ONNX Runtime is the
   optional `onnx` extra of `vllm-srun`, for ONNX packages and prepared Omni
   bundles (`engine: onnxruntime`).
-- **Runtime contract 2.0.0.** The router treats an attached runtime that
-  doesn't serve contract 2.x, such as the 1.0.0 runtime of #4481, as
-  incompatible. Upgrade attached runtimes together with the router.
+- **A router and its runtime come from one release.** The router accepts only
+  a runtime that serves exactly its contract version (3.0.0 in this release)
+  and reports any other, another 3.x included, as `incompatible`, with both
+  versions in the reason. Upgrade attached runtimes together with the router.
+- **System One requests lose `options.profile`**
+  ([#5071](https://github.com/vllm-project/semantic-router/pull/5071)). A
+  request that sets it returns `400` (`invalid_request`): it runs with its
+  deployment's [engine arguments](model-runtime/engine-args.md). A
+  `return_meta` answer reports `dtype` and `numerics` (`exact` or
+  `approximate`) instead of `profile`. The router checks `options` itself and
+  refuses any option the
+  [public System One API](api/router.md#system-one-api-stability) does not
+  define.
 - **Long inputs cost what their model reads**
   ([#4654](https://github.com/vllm-project/semantic-router/issues/4654)). The
   runtime tokenizes an input only as far as its token budget decides the
@@ -103,7 +113,7 @@ own settings. See
   CPU. Contract 2.1.0 adds `scan_budget_exceeded`, the usage flag
   `tokens_lower_bound`, the model limits `max_scan_tokens` and
   `truncate_tokens`, the decisions option `max_tokens` and the question field
-  `overflow` ([Long inputs](../model-runtime/reference.md#long-inputs)).
+  `overflow` ([Long inputs](model-runtime/reference.md#long-inputs)).
 - **Routing reads a long request's beginning, safety reads it whole.** Through
   Vela 2.0, routing questions truncate. Safety questions (prompt guard,
   safety, PII, hallucination) read a long request whole up to the scan budget,
@@ -128,8 +138,7 @@ own settings. See
   read as a request of its own. Once the call is sent, every question in it
   waits for it as long as the latest of them, so a decision question's
   `timeout_ms` no longer drops an answer that shares the call. Contract 2.2.0
-  adds the decisions field `states`; an attached runtime on 2.1 gets one call
-  per text in the same bundle.
+  adds the decisions field `states`.
 - **Training contract `semantic-router.training/v2`.** One
   `runtime/model-runtime@v1` capability replaces `runtime/candle@v1` and
   `runtime/onnxruntime@v1`. BERT and RoBERTa (`architecture/hf-bert@v1`), the

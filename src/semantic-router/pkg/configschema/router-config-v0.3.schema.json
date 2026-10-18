@@ -181,6 +181,7 @@
             "mlp",
             "multi_factor",
             "prompt",
+            "random",
             "ratings",
             "remom",
             "router_dc",
@@ -571,6 +572,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "openai_compat_gateway": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -875,16 +879,14 @@
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              },
-              "profile": "exact"
+              }
             },
             "primary": {
               "artifact": "vllm-sr/Vela-2.0-0.3B",
               "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
               "provider": "model_runtime",
               "device": "cpu",
-              "input": {},
-              "profile": "max_speed"
+              "input": {}
             }
           }
         },
@@ -1489,6 +1491,12 @@
         "decision": {
           "items": {
             "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
+        },
+        "topic_continuity": {
+          "items": {
+            "$ref": "#/$defs/TopicContinuityRule"
           },
           "type": "array"
         }
@@ -2513,6 +2521,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "masking"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/MaskingPluginConfig"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -2523,6 +2550,7 @@
             "fast_response",
             "hallucination",
             "header_mutation",
+            "masking",
             "memory",
             "prompt_cache",
             "rag",
@@ -2878,7 +2906,7 @@
           "type": "string"
         },
         "llm_timeout_seconds": {
-          "type": "integer"
+          "type": "number"
         },
         "parser_type": {
           "type": "string"
@@ -3618,6 +3646,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4032,6 +4063,30 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "placeholders": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -4629,8 +4684,20 @@
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },
-        "profile": {
+        "max_num_seqs": {
+          "type": "integer"
+        },
+        "max_num_batched_tokens": {
+          "type": "integer"
+        },
+        "batch_window_ms": {
+          "type": "number"
+        },
+        "dtype": {
           "type": "string"
+        },
+        "enable_shared_context": {
+          "type": "boolean"
         },
         "endpoint": {
           "type": "string"
@@ -4693,6 +4760,9 @@
           "type": "number"
         },
         "cache_write_per_1m": {
+          "type": "number"
+        },
+        "cache_write_1h_per_1m": {
           "type": "number"
         }
       },
@@ -5189,6 +5259,9 @@
         },
         "include_history": {
           "type": "boolean"
+        },
+        "source": {
+          "type": "string"
         },
         "description": {
           "type": "string"
@@ -7370,6 +7443,57 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        },
+        "trusted_facts": {
+          "$ref": "#/$defs/TrustedFactsConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityEvidenceLimits": {
+      "properties": {
+        "max_prior_turns": {
+          "type": "integer"
+        },
+        "max_turn_bytes": {
+          "type": "integer"
+        },
+        "max_input_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "include_assistant": {
+          "type": "boolean"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/TopicContinuityThresholds"
+        },
+        "limits": {
+          "$ref": "#/$defs/TopicContinuityEvidenceLimits"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityThresholds": {
+      "properties": {
+        "continuation": {
+          "type": "number"
+        },
+        "change": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -7433,6 +7557,33 @@
         },
         "rate": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TrustedFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "enforcement": {
+          "type": "string"
+        },
+        "trust_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness_seconds": {
+          "type": "integer"
+        },
+        "stage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -8133,6 +8284,13 @@
         "decision_referenceable": true,
         "reference_qualifier": "label",
         "schema_ref": "#/$defs/DecisionSignalRule"
+      },
+      {
+        "type": "topic_continuity",
+        "display_name": "Topic Continuity",
+        "collection": "topic_continuity",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/TopicContinuityRule"
       }
     ],
     "algorithms": [
@@ -8217,6 +8375,13 @@
         "execution": "selector",
         "config_field": "multi_factor",
         "schema_ref": "#/$defs/MultiFactorSelectionConfig"
+      },
+      {
+        "type": "random",
+        "display_name": "Random",
+        "description": "Select uniformly from the eligible candidate models.",
+        "tier": "supported",
+        "execution": "selector"
       },
       {
         "type": "ratings",
@@ -8379,6 +8544,12 @@
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
         "schema_ref": "#/$defs/ShadowDispatchPluginConfig"
+      },
+      {
+        "type": "masking",
+        "display_name": "Masking",
+        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],
     "projections": [

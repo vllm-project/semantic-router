@@ -28,6 +28,7 @@ from .common import (
     recurrent_mask,
 )
 from .forest import Forest, ForestShape, forest_attention, forest_gated_delta
+from .packed import Packed, is_packed, packed_gated_delta
 from .tree import Tree, is_tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
@@ -68,11 +69,13 @@ class GatedDeltaNet(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        mask: torch.Tensor | Tree | None,
+        mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         if is_tree(mask):
             return tree_gated_delta(self, hidden_states, mask, kernels)
+        if is_packed(mask):
+            return packed_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
             hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
@@ -148,7 +151,7 @@ class GatedAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        mask: torch.Tensor | Tree | None,
+        mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
@@ -195,8 +198,8 @@ class Qwen3_5Layer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        full_mask: torch.Tensor | Tree | None,
-        linear_mask: torch.Tensor | Tree | None,
+        full_mask: torch.Tensor | Tree | Packed | None,
+        linear_mask: torch.Tensor | Tree | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         residual = hidden_states
@@ -297,19 +300,27 @@ def rope_index(
     grids: list[tuple[int, int, int]],
     image_token_id: int,
     merge: int,
+    video_grids: list[tuple[int, int, int]] | None = None,
+    video_token_id: int | None = None,
 ) -> torch.Tensor:
-    """``Qwen3_5Model.get_rope_index`` for image prompts: rotary positions ``[3, B, L]``, 0 on padding.
+    """``Qwen3_5Model.get_rope_index`` for image and video prompts: rotary positions ``[3, B, L]``, 0 on padding.
 
     Over each row's real tokens, text runs count on from the position reached and
     each image's tokens take (t, row, column) positions offset by it; the image
-    then advances the position by its longer merged side. Images are consumed in
-    row order.
+    then advances the position by its longer merged side. A video is split into
+    its frame pairs, each an image of one temporal patch (timestamps separate
+    them). Images and videos are consumed in row order.
     """
     positions = torch.zeros(
         3, *input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
     )
     types = (input_ids == image_token_id).to(torch.int32)
-    images = iter(grids)
+    pending = {1: iter(grids)}
+    if video_token_id is not None:
+        types[input_ids == video_token_id] = 2
+        pending[2] = iter(
+            [(1, h, w) for t, h, w in video_grids or [] for _ in range(t)]
+        )
     device = input_ids.device
     for row in range(input_ids.shape[0]):
         keep = attention_mask[row].bool()
@@ -326,7 +337,7 @@ def rope_index(
                 )
                 current += span
                 continue
-            t, h, w = next(images)
+            t, h, w = next(pending[kind])
             grid_t, grid_h, grid_w = t, h // merge, w // merge
             temporal = torch.arange(grid_t, device=device) * 1
             rows = torch.arange(grid_h, device=device) + current
@@ -404,8 +415,8 @@ class Qwen3_5Backbone(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rope_positions: torch.Tensor,
-        full_mask: torch.Tensor | Tree | None,
-        linear_mask: torch.Tensor | Tree | None,
+        full_mask: torch.Tensor | Tree | Packed | None,
+        linear_mask: torch.Tensor | Tree | Packed | None,
     ) -> torch.Tensor:
         """Every layer and the final norm over input embeddings, with rotary positions ``[3, B, L]``."""
         assert self.kernels is not None, "bind kernels before running the backbone"
@@ -425,15 +436,52 @@ class Qwen3_5Backbone(nn.Module):
         image_token_id: int,
         positions: torch.Tensor,
         padded: bool,
+        videos: tuple[torch.Tensor, int] | None = None,
     ) -> torch.Tensor:
-        """A noncausal image prompt: image features in place of the placeholder tokens, rotary ``positions`` (``rope_index``)."""
+        """A noncausal image prompt: image (then video) features in place of their placeholder tokens, rotary
+        ``positions`` (``rope_index``)."""
         embeds = self.embed_tokens(input_ids)
         embeds = embeds.masked_scatter(
             (input_ids == image_token_id).unsqueeze(-1),
             features.to(embeds.device, embeds.dtype),
         )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
         full_mask, linear_mask = noncausal_masks(attention_mask, padded)
         return self.forward_embeds(embeds, positions, full_mask, linear_mask)
+
+    def forward_packed(self, input_ids: torch.Tensor, packed: Packed) -> torch.Tensor:
+        """Packed text rows (``[1, T]`` ids, ``packed.py``) through every layer; ``[1, T, hidden]``."""
+        embeds = self.embed_tokens(input_ids)
+        positions = packed.positions[None, None].expand(3, 1, -1)
+        return self.forward_embeds(embeds, positions, packed, packed)
+
+    def forward_images_packed(
+        self,
+        input_ids: torch.Tensor,
+        packed: Packed,
+        features: torch.Tensor,
+        image_token_id: int,
+        positions: torch.Tensor,
+        videos: tuple[torch.Tensor, int] | None = None,
+    ) -> torch.Tensor:
+        """``forward_images`` over packed rows: ``[1, T]`` ids, rotary ``positions`` ``[3, 1, T]`` (each row's ``rope_index``)."""
+        embeds = self.embed_tokens(input_ids)
+        embeds = embeds.masked_scatter(
+            (input_ids == image_token_id).unsqueeze(-1),
+            features.to(embeds.device, embeds.dtype),
+        )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
+        return self.forward_embeds(embeds, positions, packed, packed)
 
     def forward_forest(
         self,
