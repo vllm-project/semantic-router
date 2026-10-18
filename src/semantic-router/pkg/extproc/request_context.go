@@ -146,6 +146,8 @@ type RequestContext struct {
 	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
 	// Arrival diagnostics, set at end of stream in STREAMED modes only.
 	StreamedBodyStats StreamedBodyStats
+	// HandoffReceipt is set only when the handoff carrier was present.
+	HandoffReceipt handoffReceipt
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold

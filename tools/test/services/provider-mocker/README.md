@@ -39,6 +39,9 @@ a SHA-256 digest of the `Authorization` header (not the credential) and only the
 parameter and otherwise share `__global__`. Observation and cache state are bounded
 and local to the single service worker.
 
+Observation also records the presence of `x-vsr-handoff-envelope`, with its value
+redacted, so handoff E2E can detect a leaked carrier without exposing its contents.
+
 ## Scenarios
 
 Set `PROVIDER_MOCKER_SCENARIO` before starting the process:
