@@ -37,7 +37,14 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	if resp == nil || reqCtx == nil {
 		return nil, nil, nil, fmt.Errorf("looper response context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	// Looper responses keep the closed field contract on every path: the
+	// router's evidence extraction must not depend on the preserve switch.
+	// AllowedLossyTranslation still applies, matching every other decode path.
+	var looperLossy []string
+	if r.Config != nil {
+		looperLossy = r.Config.AllowLossyTranslation
+	}
+	engine, err := protocolEngineFor(r.ProtocolCodecs, looperLossy)
 	if err != nil {
 		return nil, nil, nil, err
 	}

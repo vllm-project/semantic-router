@@ -95,6 +95,8 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 
 // protocolEngineFor serves callers that hold only the registry and the
 // accepted losses, such as detached work that must not capture the router.
+// It keeps the strict unknown-fields contract: passthrough capture is a
+// router-level decision that detached work must not make.
 func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []string) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
@@ -114,6 +116,13 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
 	policy := llmprotocol.DefaultPolicy()
+	// preserve_unknown_chat_fields covers both directions: strict response
+	// decoding would reject the very fields the request side just forwarded
+	// (logprobs, audio, provider extensions) after the provider already did
+	// the work. Same-format forwarding keeps them.
+	if r.Config != nil && r.Config.RouterOptions.PreserveUnknownChatFields {
+		policy.UnknownFields = llmprotocol.UnknownPreserveSameFormat
+	}
 	policy.ResponseVendor = vendor
 	if r.Config != nil {
 		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
@@ -143,6 +152,23 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
+	}
+	if ctx.LooperRequest {
+		// Looper internal requests keep the closed field contract: decode
+		// them with the strict engine so passthrough capture never replaces
+		// the logprobs evidence extraction. A strict engine that cannot be
+		// built fails closed rather than degrading to the loose policy.
+		// AllowedLossyTranslation still applies: it is a separate, explicit
+		// router setting the looper shares with every other decode path.
+		var looperLossy []string
+		if r.Config != nil {
+			looperLossy = r.Config.AllowLossyTranslation
+		}
+		strictEngine, strictErr := protocolEngineFor(r.ProtocolCodecs, looperLossy)
+		if strictErr != nil {
+			return nil, r.createErrorResponse(503, "protocol runtime unavailable")
+		}
+		engine = strictEngine
 	}
 	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {

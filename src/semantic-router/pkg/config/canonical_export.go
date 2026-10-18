@@ -309,6 +309,9 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
 				TimeoutSec: cfg.StreamedBodyTimeoutSec,
 			},
+			Protocol: CanonicalProtocol{
+				PreserveUnknownChatFields: cfg.PreserveUnknownChatFields,
+			},
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
