@@ -57,14 +57,18 @@ func (wire chatResponseWire) hasLegacyKVTransferMetadata() bool {
 }
 
 type chatChoiceWire struct {
-	Index              int                 `json:"index"`
-	Message            chatMessageWire     `json:"message"`
-	FinishReason       *string             `json:"finish_reason"`
-	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
-	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs           []int64             `json:"token_ids,omitempty"`
-	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int               `json:"index"`
+	Message            chatMessageWire   `json:"message"`
+	FinishReason       *string           `json:"finish_reason"`
+	NativeFinishReason *string           `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire `json:"logprobs,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on each choice. The content is opaque provider
+	// metadata and is not replayed to the client.
+	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
+	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs               []int64             `json:"token_ids,omitempty"`
+	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string

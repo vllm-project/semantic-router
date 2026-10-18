@@ -62,7 +62,7 @@ a frontend attaches to, or for direct runtime development:
 | `MODEL ...` | | Hub repositories, built-in model names or local package directories. Several models share one process. `MODEL@REVISION` pins a revision. |
 | `--models FILE` | | A models file instead of `MODEL` arguments. |
 | `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
-| `--device` | `auto` | `auto`, or an accelerator with an optional index: `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]`, `mps`, or one a plugin adds. |
+| `--device` | `auto` | `auto`, or an accelerator with an optional index: `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]`, `npu[:N]`, `mps`, or one a plugin adds. |
 | `--host` | `127.0.0.1` | Address to listen on. |
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
@@ -181,7 +181,9 @@ A request that cannot be served at all returns an HTTP error with
 model does not serve that endpoint), 429 `overloaded`, 503 `not_ready`. A
 rejected image or video adds its `reason` (for example `video_too_long`,
 `image_too_large` or `video_malformed`) and, when it broke a limit, the
-`limit`. These fixed words never carry request data, so the Router's public
+`limit`. A forward that runs out of device memory answers 413
+`request_too_large` when the request had the forward to itself and 429
+`overloaded` when it shared it with other requests. These fixed words never carry request data, so the Router's public
 System One API answers with them and keeps the runtime's message private: it
 says `video longer than 300 s` where the runtime says why in its own words.
 The Router answers a deployment whose workers are all busy the same way, 429

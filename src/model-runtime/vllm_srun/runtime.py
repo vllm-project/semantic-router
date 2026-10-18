@@ -70,6 +70,21 @@ log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
 
 
+def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
+    """The backbone parameters the native engine holds in BF16 on a GPU at ``dtype`` (``DtypePolicy.bf16_resident``)."""
+    policy = dtypes.apply(spec, dtype, True).dtype
+    if (
+        not policy.bf16_resident
+        or policy.gpu_weights
+        or config.engine not in (AUTO_ENGINE, "native")
+        or device_kind(config.device) == "cpu"
+    ):
+        return 0
+    from .engines.native.engine import bf16_resident_parameters
+
+    return bf16_resident_parameters(spec.backbone)
+
+
 def _auto_rank(engine: str, preferred: str | None) -> tuple[int, int, str]:
     """Where ``auto`` tries an engine: ``preferred``, then by ``Engine.auto_priority``, then by name.
 
@@ -151,12 +166,21 @@ def freeze_heap() -> None:
     gc.freeze()
 
 
+def release_device_cache() -> None:
+    """Hand a failed attempt's cached GPU blocks back to the driver, whose free memory the next placement reads."""
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 __all__ = [
     "DEADLINE",
     "Runtime",
     "ServedModel",
     "freeze_heap",
     "planned_engine",
+    "release_device_cache",
     "with_overrides",
 ]
 
@@ -341,7 +365,15 @@ class ServedModel:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
-        placement = place(spec, config.device, parameters, budget)
+        dtype = self.requested_args.dtype
+        placement = place(
+            spec,
+            config.device,
+            parameters,
+            budget,
+            _bf16_parameters(spec, config, dtype),
+            dtype,
+        )
         device = placement.device
         self.args, self.limits_source = calibration.resolve(self.requested_args, device)
         # The dtype policy a device follows is its torch device's, as the engines read it.
@@ -351,11 +383,17 @@ class ServedModel:
             dtypes.published(spec.dtype, gpu) if self.dtype == "auto" else self.dtype
         )
         spec = dtypes.apply(spec, self.args.dtype, gpu)
+        # Choices are recorded at the published precision; another dtype's kernels
+        # tune their own (a BF16 block can need more shared memory than FP32 has).
         self._pin(
-            builtin.kernel_choices(
-                package.model_sha256, device.accelerator, device.arch
+            (
+                builtin.kernel_choices(
+                    package.model_sha256, device.accelerator, device.arch
+                )
+                or family.kernel_choices(package, device)
             )
-            or family.kernel_choices(package, device)
+            if self.dtype == "auto"
+            else {}
         )
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
@@ -503,6 +541,7 @@ class ServedModel:
             model.golden_compare,
             goldens,
             placement.device.accelerator,
+            placement.accelerator.golden_reference(placement.device),
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(
@@ -534,6 +573,7 @@ class ServedModel:
                 batcher.max_num_batched_tokens = chosen.max_num_batched_tokens
                 self.limits_source = f"{self.limits_source}, calibrated"
                 log.info("calibrated %s: %s", self.label, chosen.describe())
+        model.engine_model.begin_traffic()
 
     def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
         """How a model without a device thread runs its batches on the CPU: inline, in its choice scope if pinned."""
@@ -890,6 +930,7 @@ class Runtime:
             freeze_heap()
             if not retry:
                 return
+            release_device_cache()
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
             if self._stopping.wait(delay):
                 return
