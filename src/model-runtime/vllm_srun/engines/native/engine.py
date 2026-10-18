@@ -968,6 +968,45 @@ def build_on_meta(spec: BackboneSpec) -> nn.Module:
     return module
 
 
+def bf16_resident_parameters(spec: BackboneSpec) -> int:
+    """How many backbone parameters ``keep_linear_bf16`` holds in BF16 on a GPU, read from the checkpoint headers.
+
+    Counts the Linear weights the checkpoint stores in BF16; FP32-stored ones
+    that happen to be BF16-exact count as FP32, so the count never exceeds
+    what the engine holds.
+    """
+    from safetensors import safe_open
+
+    if spec.model_type not in models.ARCHITECTURES:
+        return 0
+    module = build_on_meta(spec)
+    shared = {
+        id(parameter)
+        for layer in module.modules()
+        if not isinstance(layer, nn.Linear)
+        for parameter in layer.parameters(recurse=False)
+    }
+    linear = {
+        f"{owner}.{leaf}" if owner else leaf: parameter.numel()
+        for owner, layer in module.named_modules()
+        if isinstance(layer, nn.Linear)
+        for leaf, parameter in layer.named_parameters(recurse=False)
+        if id(parameter) not in shared
+    }
+    prefix = spec.weight_prefix
+    count = 0
+    for path in spec.weight_files:
+        with safe_open(str(path), framework="pt", device="cpu") as handle:
+            names = handle.keys()
+            for name in names:
+                if not name.startswith(prefix):
+                    continue
+                numel = linear.pop(name[len(prefix) :], 0)
+                if numel and handle.get_slice(name).get_dtype() == "BF16":
+                    count += numel
+    return count
+
+
 def load_tower(
     spec: BackboneSpec, dtype: torch.dtype = torch.float32, private: bool = True
 ) -> nn.Module:
