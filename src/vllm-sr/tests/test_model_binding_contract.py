@@ -207,7 +207,11 @@ def test_classification_budget_is_checked_against_actual_loaded_checkpoint(limit
     [
         ({"provider": "unknown"}, "Unsupported provider"),
         ({"device": "rocm:x"}, "device must be"),
-        ({"profile": "Fastest"}, "profile must be"),
+        ({"max_num_seqs": 0}, "max_num_seqs must be"),
+        ({"max_num_batched_tokens": 4}, "max_num_batched_tokens must be"),
+        ({"batch_window_ms": True}, "batch_window_ms must be"),
+        ({"dtype": "fp16"}, "dtype must be"),
+        ({"enable_shared_context": "yes"}, "enable_shared_context must be"),
         ({"input": {"max_tokens": -1}}, "negative"),
         ({"external_model": "remote"}, "cannot set external_model"),
     ],

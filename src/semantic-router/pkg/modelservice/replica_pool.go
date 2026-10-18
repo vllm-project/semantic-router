@@ -71,7 +71,6 @@ func newReplicaPool(manager *Manager, name string, declaration config.ModelDeplo
 	generated, _ := api.NewClientWithResponses("http://model-runtime", api.WithHTTPClient(p))
 	p.client = &Client{endpoint: "pool", base: "http://model-runtime", httpClient: p, api: generated}
 	p.client.bundleTasks.Store(DefaultBundleTasks)
-	p.client.apiMinor.Store(-1)
 	// A single worker reuses its existing result cache. Multi-worker output
 	// equivalence is not inferred from structural capabilities, so those pools
 	// bypass the Router result cache.
@@ -97,8 +96,8 @@ func (p *replicaPool) workerCard(w replicaWorker) (ModelCard, error) {
 		if p.declaration.Revision != "" && card.Revision != p.declaration.Revision {
 			return ModelCard{}, fmt.Errorf("replica revision does not match deployment")
 		}
-		if card.Profile != p.declaration.Profile {
-			return ModelCard{}, fmt.Errorf("replica profile does not match deployment")
+		if field := engineArgsMismatch(p.declaration, card.EngineArgs); field != "" {
+			return ModelCard{}, fmt.Errorf("replica %s does not match deployment", field)
 		}
 		if card.ModelSHA256 == "" {
 			return ModelCard{}, fmt.Errorf("replica does not report model identity")
@@ -107,9 +106,14 @@ func (p *replicaPool) workerCard(w replicaWorker) (ModelCard, error) {
 	return card, nil
 }
 
+// comparableReplicaCard leaves out what may differ between the replicas of one
+// deployment. Batch limits the deployment leaves unset are each worker's own (a
+// GPU worker calibrates its token budget on its device at startup); limits it
+// sets are checked against every replica by engineArgsMismatch.
 func comparableReplicaCard(card ModelCard) ModelCard {
 	card.ID, card.Device, card.Accelerator, card.Engine, card.Dtype, card.Status, card.Reason = "", "", "", "", "", "", ""
 	card.Ready = false
+	card.EngineArgs.MaxNumSeqs, card.EngineArgs.MaxNumBatchedTokens = 0, 0
 	return card
 }
 
@@ -120,7 +124,7 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 	defer p.mu.Unlock()
 	var ready []replicaWorker
 	reasons := make(map[string]string)
-	limit, minor := int64(0), int64(-1)
+	limit := int64(0)
 	for _, w := range p.workers {
 		card, err := p.workerCard(w)
 		if err != nil {
@@ -148,14 +152,9 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 		if limit == 0 || current < limit {
 			limit = current
 		}
-		current = w.member.group.client.apiMinor.Load()
-		if minor < 0 || current < minor {
-			minor = current
-		}
 	}
 	if len(ready) > 0 {
 		p.client.bundleTasks.Store(limit)
-		p.client.apiMinor.Store(minor)
 		inputs := map[string]int{p.name: p.baseline.MaxInputs}
 		scanning := map[string]bool{p.name: p.baseline.MaxScanTokens > 0}
 		p.client.maxInputs.Store(&inputs)
@@ -394,4 +393,22 @@ func (l *Lease) assemblePools(declarations map[string]config.ModelDeployment) {
 		}
 		l.members[name] = newReplicaPool(l.manager, name, declaration, workers).poolMember()
 	}
+}
+
+// engineArgsMismatch names the first engine argument the deployment declares
+// that a replica's card reports otherwise, or "" when every declared one matches.
+func engineArgsMismatch(declaration config.ModelDeployment, args EngineArgs) string {
+	switch {
+	case declaration.MaxNumSeqs != nil && *declaration.MaxNumSeqs != args.MaxNumSeqs:
+		return "max_num_seqs"
+	case declaration.MaxNumBatchedTokens != nil && *declaration.MaxNumBatchedTokens != args.MaxNumBatchedTokens:
+		return "max_num_batched_tokens"
+	case declaration.BatchWindowMS != nil && *declaration.BatchWindowMS != args.BatchWindowMS:
+		return "batch_window_ms"
+	case declaration.Dtype != "" && declaration.Dtype != args.Dtype:
+		return "dtype"
+	case declaration.EnableSharedContext != nil && *declaration.EnableSharedContext != args.EnableSharedContext:
+		return "enable_shared_context"
+	}
+	return ""
 }

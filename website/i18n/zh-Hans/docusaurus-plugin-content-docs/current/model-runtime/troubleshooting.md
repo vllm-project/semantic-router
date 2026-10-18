@@ -110,6 +110,7 @@ curl -s localhost:8080/startup-status
 | does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或把副本分配到不同 GPU。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
+| FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | 该包的权重为 FP8，而当前设备没有 FP8 矩阵单元。请在这类 GPU 上运行，或改用该模型的 BF16 或 int4 包。运行时不会重试。 |
 | no family recognizes the package | 不支持该模型的架构。见[选择模型](model-runtime/choose-a-model.md#your-own-models)。 |
 | a licence must be accepted | 该模型的许可证限制了使用。确认你可以使用后，传入 `--accept-licence <id>`。 |
 
@@ -140,6 +141,7 @@ curl -s localhost:8080/startup-status
 | 消息提到 | 处理方法 |
 | --- | --- |
 | `removed model execution fields`、`candle`、`ort`、`openvino`、`precision`、`variant`、`use_mmbert_32k`、`use_nli`、`polarity_guard` | 运行 `vllm-sr config migrate`。见[迁移](model-runtime/migrate.md)。 |
+| `profile was removed`，而你的 `config.yaml` 里没有 `profile` | 这是 CLI 写入的：路由器镜像比 CLI 新。从同一渠道重新安装 CLI，或用 `--image` 指定与你的 CLI 一起构建的镜像；较早的开发版 CLI 拉取 `:latest`，而不是它们自己的镜像。 |
 | a binding does not match the model | 模型的标签、头、维度与该功能所需不同，或输入上限更小。绑定为该功能训练的模型，或修改 `input`。 |
 | `artifact must be a Hub repository ID or an absolute package path` | Hub 模型用 `owner/name`，本地副本用绝对路径。 |
 | `revision must be a 40-hex commit` | 使用完整的 commit 哈希，而不是分支或标签。 |
@@ -220,7 +222,7 @@ global:
   `--threads` 设置，同一进程中的模型共享这些线程。
 - 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
   的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
-- GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
+- 并发请求本来就共用前向。对同一输入问很多问题时，在默认关闭的地方打开 `enable_shared_context`；想用吞吐换延迟，就调低 `batch_window_ms` 或 `max_num_seqs`。见[引擎参数](model-runtime/engine-args.md)。
 
 ## 常见问题 {#faq}
 
