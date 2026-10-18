@@ -290,7 +290,8 @@ class DeploymentResultsTests(unittest.TestCase):
         self.assertNotIn("strategy", runtime["integration-test"])
         steps = source["checks"]["steps"]
         self.assertEqual(
-            sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
+            sum(step.get("uses") == "./.github/actions/setup-go-ci" for step in steps),
+            1,
         )
         self.assertFalse(
             any(

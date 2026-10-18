@@ -42,11 +42,8 @@ jobs:
           cache-dependency-path: |
             tools/agent/requirements.txt
             tools/docs/requirements.txt
-      - uses: actions/setup-go@v5
+      - uses: ./.github/actions/setup-go-ci
         if: ${{ !inputs.docs_only }}
-        with:
-          go-version: "1.25"
-          cache-dependency-path: '**/go.sum'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
