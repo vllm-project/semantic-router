@@ -460,6 +460,105 @@ def test_the_nvfp4_layer_replays_in_a_graph(blackwell):
     assert got.equal(want)
 
 
+def test_projections_of_one_input_scale_share_its_quantization(blackwell):
+    from vllm_srun.accel import triton_nvfp4
+    from vllm_srun.engines.native.quantized import project
+
+    gate, _ = nvfp4_layer(256, 512, blackwell, seed=1)
+    up, _ = nvfp4_layer(128, 512, blackwell, seed=2)
+    other, _ = nvfp4_layer(64, 512, blackwell, seed=3)
+    other.input_global = gate.input_global / 2  # another input global scale
+    other.input_decode = 1.0 / other.input_global * torch.ones(1, device=blackwell)
+    plain = nn.Linear(512, 32, bias=False).to(blackwell, torch.bfloat16)
+    x = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    alone = [layer(x) for layer in (gate, up, other, plain)]
+    calls = []
+
+    def counted(rows, global_scale):
+        calls.append(global_scale)
+        return triton_nvfp4.quantize(rows, global_scale)
+
+    for layer in (gate, up, other):
+        layer.quantize = counted
+    shared = project(x, gate, up, other, plain)
+    assert calls == [gate.input_global, other.input_global]
+    assert all(got.equal(want) for got, want in zip(shared, alone, strict=True))
+
+
+def sibling_layers(shapes, device):
+    """NVFP4 layers of one input under one weight global scale, as a package's q / k / v or gate / up are."""
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    torch.manual_seed(0)
+    weights = [torch.randn(rows, columns) * 0.05 for rows, columns in shapes]
+    global_ = nvfp4.global_scale(torch.cat(weights))
+    layers = []
+    for weight in weights:
+        layer = NVFP4Linear(nn.Linear(weight.shape[1], weight.shape[0], bias=False))
+        packed, scale = nvfp4.quantize(weight, global_)
+        layer.weight_packed.copy_(packed)
+        layer.weight_scale.copy_(scale)
+        layer.weight_global_scale.copy_(global_)
+        layer.input_global_scale.fill_(448 * 6 / 5.0)
+        layers.append(layer.to(device))
+    return layers
+
+
+def test_sibling_nvfp4_layers_merge_into_one_product_with_the_same_outputs(
+    blackwell,
+):
+    from vllm_srun.engines.native import quantized
+
+    q, k, v = sibling_layers([(512, 256), (128, 256), (128, 256)], blackwell)
+    attention = nn.Module()
+    attention.q_proj, attention.k_proj, attention.v_proj = q, k, v
+    for layer in (q, k, v):
+        layer.prepare()
+    xs = [
+        torch.randn(rows, 256, device=blackwell).to(torch.bfloat16)
+        for rows in (1, 37, 300)
+    ]
+    before = [[layer(x) for layer in (q, k, v)] for x in xs]
+    stored = torch.cuda.memory_allocated(blackwell)
+
+    assert quantized.merge_siblings(attention) == 1
+    group = q.merged
+    assert group is not None and group.parts == (q, k, v)
+    # the parts hold views of the merged weight: no second copy (only its few global-scale scalars)
+    weights = sum(layer.stored_bytes() for layer in (q, k, v))
+    assert torch.cuda.memory_allocated(blackwell) - stored < weights / 10
+    base = group.layer.weight_packed.untyped_storage().data_ptr()
+    assert all(
+        layer.weight_packed.untyped_storage().data_ptr() == base for layer in (q, k, v)
+    )
+    for x, want in zip(xs, before, strict=True):
+        merged = quantized.project(x, q, k, v)
+        assert all(got.equal(w) for got, w in zip(merged, want, strict=True))
+        assert all(layer(x).equal(w) for layer, w in zip((q, k, v), want, strict=True))
+
+
+def test_siblings_of_other_global_scales_stay_apart(blackwell):
+    from vllm_srun.engines.native import quantized
+
+    gate, up = sibling_layers([(256, 256), (256, 256)], blackwell)
+    up.weight_global_scale.mul_(2)
+    mlp = nn.Module()
+    mlp.gate_proj, mlp.up_proj = gate, up
+    quantized.prepare(mlp)
+    assert gate.merged is None and up.merged is None
+
+
+def test_silu_mul_reads_column_slices_as_it_reads_contiguous_rows(device):
+    pytest.importorskip("triton")
+    from vllm_srun.accel import triton_gfx942
+
+    both = torch.randn(3, 37, 2 * 1040, device=device).to(torch.bfloat16)
+    gate, up = torch.split(both, 1040, dim=-1)
+    want = triton_gfx942.silu_mul(gate.contiguous(), up.contiguous())
+    assert triton_gfx942.silu_mul(gate, up).equal(want)
+
+
 def test_a_whole_model_cast_keeps_the_nvfp4_weights(device):
     from vllm_srun.engines.native.quantized import NVFP4Linear
 
@@ -512,13 +611,15 @@ def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
         )
         prepare(self)
 
-    def emulated(self, rows):
-        codes, scales = nvfp4.quantize(rows, self.input_global_scale)
-        x = nvfp4.dequantize(codes, scales, self.input_global_scale)
-        return (x @ self.reference.T).to(torch.bfloat16)
+    def emulated(self, x, codes):
+        # each layer from its own input, so the layers sharing one quantization are checked too
+        rows = x.reshape(-1, x.shape[-1]).to(torch.bfloat16)
+        q, scales = nvfp4.quantize(rows, self.input_global_scale)
+        out = nvfp4.dequantize(q, scales, self.input_global_scale) @ self.reference.T
+        return out.to(torch.bfloat16).to(x.dtype).reshape(*x.shape[:-1], -1)
 
     monkeypatch.setattr(NVFP4Linear, "prepare", keep_weight)
-    monkeypatch.setattr(NVFP4Linear, "_product", emulated)
+    monkeypatch.setattr(NVFP4Linear, "multiply", emulated)
     want = gpu_answers(packed)[0]
     # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
     assert (numbers(got) - numbers(want)).abs().max() < 0.02

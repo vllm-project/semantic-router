@@ -222,23 +222,31 @@ def residual_add(residual: Any, delta: Any) -> Any:
 
 
 @triton.jit
-def _silu_mul_kernel(g_ptr, u_ptr, out_ptr, n_cols, BLOCK: tl.constexpr):
+def _silu_mul_kernel(
+    g_ptr, u_ptr, out_ptr, n_cols, g_stride, u_stride, BLOCK: tl.constexpr
+):
     row = tl.program_id(0).to(tl.int64)
     cols = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     mask = cols < n_cols
-    g = tl.load(g_ptr + row * n_cols + cols, mask=mask, other=0.0).to(tl.float32)
-    u = tl.load(u_ptr + row * n_cols + cols, mask=mask, other=0.0).to(tl.float32)
+    g = tl.load(g_ptr + row * g_stride + cols, mask=mask, other=0.0).to(tl.float32)
+    u = tl.load(u_ptr + row * u_stride + cols, mask=mask, other=0.0).to(tl.float32)
     s = (g / (1.0 + libdevice.exp(-g))).to(tl.bfloat16).to(tl.float32)
     tl.store(out_ptr + row * n_cols + cols, (s * u).to(tl.bfloat16), mask=mask)
 
 
+def _rows(t: Any, n: int) -> Any:
+    """``t`` as rows of ``n`` contiguous values a row stride apart (a view where it is one)."""
+    rows = t.reshape(-1, n)
+    return rows if rows.stride(-1) == 1 else rows.contiguous()
+
+
 def silu_mul(gate: Any, up: Any) -> Any:
-    """``silu(gate) * up`` of two contiguous BF16 tensors of one shape."""
+    """``silu(gate) * up`` of two BF16 tensors of one shape, whose rows may be column slices of wider ones."""
     n = gate.shape[-1]
-    rows = gate.numel() // n
+    g, u = (_rows(t, n) for t in (gate, up))
     out = torch.empty(gate.shape, dtype=torch.bfloat16, device=gate.device)
-    _silu_mul_kernel[(rows, triton.cdiv(n, 1024))](
-        gate, up, out, n, BLOCK=1024, num_warps=4, **EXACT
+    _silu_mul_kernel[(g.shape[0], triton.cdiv(n, 1024))](
+        g, u, out, n, g.stride(0), u.stride(0), BLOCK=1024, num_warps=4, **EXACT
     )
     return out
 

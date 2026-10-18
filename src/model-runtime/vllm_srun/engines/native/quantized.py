@@ -50,6 +50,8 @@ checkpoint's compressed tensors as they are stored:
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import cast
 
 import torch
 from torch import nn
@@ -68,6 +70,8 @@ UNSCALED_ROWS = 256
 ROWWISE_CAPTURE_SAFE = torch.torch_version.TorchVersion(torch.__version__) >= "2.12"
 # Rows per NVFP4 product: longer inputs multiply in slices (their FP4 copy and output stay bounded).
 NVFP4_ROWS = 8192
+# Sibling projections that read one input: merged into one NVFP4 product where their global scales agree.
+SIBLINGS = (("q_proj", "k_proj", "v_proj"), ("gate_proj", "up_proj"))
 # The FP8 format each ROCm architecture's matrix units multiply.
 ROCM_FLOAT8 = {"gfx942": torch.float8_e4m3fnuz, "gfx950": torch.float8_e4m3fn}
 
@@ -355,12 +359,18 @@ class NVFP4Linear(nn.Module):
         )
         if reason:
             raise ValueError(f"NVFP4 weights: {reason}")
-        from torch.nn.functional import ScalingType, SwizzleType
-
         from ...accel.nvfp4 import swizzle
-        from ...accel.triton_nvfp4 import quantize
 
         self.weight_scale = swizzle(self.weight_scale)
+        self.merged: Merged | None = None
+        self._bind()
+
+    def _bind(self) -> None:
+        """The tensors a call reads, from the stored ones (the weight scales already in cuBLAS's layout)."""
+        from torch.nn.functional import ScalingType, SwizzleType
+
+        from ...accel.triton_nvfp4 import quantize
+
         self.input_global = float(self.input_global_scale.float().item())
         self.input_decode = (1.0 / self.input_global_scale.float()).reshape(1)
         self.weight_decode = (1.0 / self.weight_global_scale.float()).reshape(1)
@@ -369,9 +379,8 @@ class NVFP4Linear(nn.Module):
         self.swizzling = [SwizzleType.SWIZZLE_32_4_4, SwizzleType.NO_SWIZZLE]
         self.quantize = quantize
 
-    def _product(self, rows: torch.Tensor) -> torch.Tensor:
+    def _product(self, q: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
         # the kernel writes the activation scales in cuBLAS's layout already
-        q, scale = self.quantize(rows, self.input_global)
         return nn.functional.scaled_mm(
             q.view(torch.float4_e2m1fn_x2),
             self.weight_fp4,
@@ -384,23 +393,61 @@ class NVFP4Linear(nn.Module):
             output_dtype=torch.bfloat16,
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        shape = x.shape
-        rows = x.reshape(-1, shape[-1])
+    def quantize_input(
+        self, x: torch.Tensor
+    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """``x``'s rows in FP4 with their scales, one pair per slice of ``NVFP4_ROWS``; ``multiply`` takes them."""
+        rows = x.reshape(-1, x.shape[-1])
         if rows.dtype != torch.bfloat16:
             rows = rows.to(torch.bfloat16)
         if not rows.is_contiguous():
             rows = rows.contiguous()
-        if rows.shape[0] > NVFP4_ROWS:
-            parts = torch.split(rows, NVFP4_ROWS)
-            out = torch.cat([self._product(part) for part in parts])
-        else:
-            out = self._product(rows)
+        if rows.shape[0] <= NVFP4_ROWS:  # a split costs host time on every call
+            return [self.quantize(rows, self.input_global)]
+        return [
+            self.quantize(part, self.input_global)
+            for part in torch.split(rows, NVFP4_ROWS)
+        ]
+
+    def multiply(
+        self, x: torch.Tensor, codes: list[tuple[torch.Tensor, torch.Tensor]]
+    ) -> torch.Tensor:
+        """The layer's output for ``x``, from ``quantize_input(x)`` (of this layer or one of its input global scale)."""
+        products = [self._product(q, scale) for q, scale in codes]
+        out = products[0] if len(products) == 1 else torch.cat(products)
         if out.dtype != x.dtype:
             out = out.to(x.dtype)
         if self.bias is not None:
             out = out + self.bias
-        return out.reshape(*shape[:-1], self.out_features)
+        return out.reshape(*x.shape[:-1], self.out_features)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.multiply(x, self.quantize_input(x))
+
+
+def project(x: torch.Tensor, *projections: nn.Module) -> list[torch.Tensor]:
+    """``[projection(x) for projection in projections]``, quantizing ``x`` once per NVFP4 input global scale.
+
+    Projections that read one input (q / k / v, gate / up) hold one input
+    global scale in the NVFP4 packages compressed-tensors writes, so their FP4
+    activations are the same bytes: quantized once, each product is the one its
+    own call gives. Other layers, and NVFP4 layers of another scale, run alone.
+    """
+    first = projections[0] if projections else None
+    group = first.merged if isinstance(first, NVFP4Linear) else None
+    if group is not None and projections == group.parts:
+        return list(torch.split(group.layer(x), list(group.sizes), dim=-1))
+    shared: dict[float, list[tuple[torch.Tensor, torch.Tensor]]] = {}
+    out = []
+    for projection in projections:
+        if isinstance(projection, NVFP4Linear):
+            codes = shared.get(projection.input_global)
+            if codes is None:
+                codes = shared[projection.input_global] = projection.quantize_input(x)
+            out.append(projection.multiply(x, codes))
+        else:
+            out.append(projection(x))
+    return out
 
 
 def install(module: nn.Module, weights: QuantizedWeights, prefix: str = "") -> int:
@@ -442,8 +489,72 @@ def capture_safe(module: nn.Module) -> bool:
     )
 
 
+@dataclass(frozen=True, eq=False)
+class Merged:
+    """Sibling NVFP4 layers held as one weight: ``layer`` multiplies ``parts`` at once, ``sizes`` its columns per part."""
+
+    layer: NVFP4Linear
+    parts: tuple[NVFP4Linear, ...]
+    sizes: tuple[int, ...]
+
+
+def _mergeable(parts: list[NVFP4Linear]) -> bool:
+    first = parts[0]
+    return all(
+        p.merged is None
+        and p.bias is None
+        and p.in_features == first.in_features
+        and p.out_features % 128 == 0  # whole 128-row tiles of the swizzled scales
+        and p.input_global == first.input_global
+        and torch.equal(p.weight_global_scale, first.weight_global_scale)
+        for p in parts
+    )
+
+
+def _merge(parts: list[NVFP4Linear]) -> None:
+    """Concatenate ``parts``' weights into one layer; each part keeps views of its rows, so memory stays the same."""
+    first = parts[0]
+    total = sum(p.out_features for p in parts)
+    layer = NVFP4Linear(nn.Linear(first.in_features, total, bias=False, device="meta"))
+    layer.weight_packed = torch.cat([p.weight_packed for p in parts])
+    # the swizzled layout stores 128-row tiles one after another, so the parts' scales concatenate
+    layer.weight_scale = torch.cat([p.weight_scale for p in parts])
+    layer.weight_global_scale = first.weight_global_scale.clone()
+    layer.input_global_scale = first.input_global_scale.clone()
+    layer.merged = None
+    layer._bind()
+    group = Merged(layer, tuple(parts), tuple(p.out_features for p in parts))
+    row = scale = 0
+    for p in parts:
+        width = p.weight_scale.numel()
+        p.weight_packed = layer.weight_packed[row : row + p.out_features]
+        p.weight_scale = layer.weight_scale[scale : scale + width]
+        p._bind()
+        p.merged = group
+        row, scale = row + p.out_features, scale + width
+
+
+def merge_siblings(module: nn.Module) -> int:
+    """Merge the NVFP4 projections of one input whose global scales agree (``SIBLINGS``); how many groups merged.
+
+    ``project`` then multiplies a group in one product. The FP4 product is the
+    same per column whatever the other columns, so answers do not change.
+    """
+    merged = 0
+    for owner in module.modules():
+        for names in SIBLINGS:
+            parts = [getattr(owner, name, None) for name in names]
+            if all(isinstance(p, NVFP4Linear) for p in parts) and _mergeable(
+                cast(list[NVFP4Linear], parts)
+            ):
+                _merge(cast(list[NVFP4Linear], parts))
+                merged += 1
+    return merged
+
+
 def prepare(module: nn.Module) -> None:
-    """Ready the placed layers for their device (``Float8Linear.prepare``, ``NVFP4Linear.prepare``)."""
+    """Ready the placed layers for their device (``Float8Linear.prepare``, ``NVFP4Linear.prepare``, ``merge_siblings``)."""
     for layer in layers(module):
         if isinstance(layer, (Float8Linear, NVFP4Linear)):
             layer.prepare()
+    merge_siblings(module)
