@@ -391,9 +391,7 @@ def test_nvfp4_activations_quantize_as_the_reference_does(blackwell, shape):
 def test_later_nvfp4_calls_launch_the_compiled_kernel_and_write_the_same_bytes(
     blackwell,
 ):
-    from vllm_srun.accel import triton_nvfp4
-
-    from vllm_srun.accel import nvfp4
+    from vllm_srun.accel import nvfp4, triton_nvfp4
 
     torch.manual_seed(0)
     x = torch.randn(300, 2048, device=blackwell, dtype=torch.bfloat16)

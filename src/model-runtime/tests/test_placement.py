@@ -147,12 +147,11 @@ def test_a_cpu_without_lapack_refuses_models_that_require_it(monkeypatch, lapack
 
 
 def test_nvfp4_weights_require_fp4_tensor_cores_everywhere():
+    from vllm_srun.plugins.registry import names
     from vllm_srun.quantization import NVFP4, QuantizedWeights
 
-    from vllm_srun.plugins.registry import names
-
     nvfp4 = QuantizedWeights(NVFP4, targets=("Linear",), ignore=(), group_size=16)
-    everywhere = {name: ("nvfp4",) for name in names("accelerators")}
+    everywhere = dict.fromkeys(names("accelerators"), ("nvfp4",))
     assert BackboneSpec("qwen3_5_text", {}, (), quantized=nvfp4).requires == {
         **everywhere,
         "cpu": ("lapack", "nvfp4"),
