@@ -523,6 +523,9 @@ class EngineModel(ABC):
     def close(self) -> None:  # noqa: B027 - optional hook
         """Release device memory."""
 
+    def begin_traffic(self) -> None:  # noqa: B027 - optional hook
+        """The startup verification has passed; serving traffic may begin."""
+
 
 class Engine(ABC):
     """Runs backbones that ``supports`` accepts on an accelerator's devices.
@@ -608,6 +611,10 @@ class Accelerator(ABC):
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
+
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        """Optional hardware reference key; callers own device-class fallback."""
+        return f"{self.name}:{device.arch}" if device.arch else None
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""

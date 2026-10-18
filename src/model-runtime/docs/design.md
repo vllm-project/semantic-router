@@ -324,6 +324,17 @@ only for a family that consents to approximate kernels
 (`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
+`Accelerator.golden_reference(device)` names an optional hardware-qualified
+golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
+instruction set and native or emulated BF16 capability, for example
+`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+
+`tools/golden_answers.py --record` writes both the generic device-class baseline
+and any qualified reference. The first generic baseline is preserved within a
+revision; later hardware runs update only their qualified entries. A revision
+change clears all old references. Record the new revision on the intended
+baseline device before adding other hardware classes.
+
 ### 5.4 Engine arguments
 
 A served model batches and computes as its engine arguments say (`EngineArgs`,
@@ -426,6 +437,8 @@ A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
+A forward out of device memory is 413 `request_too_large` for a request that
+had it alone and 429 `overloaded` for one that shared it (`scheduler.py`).
 Item-level failures (`max_length_exceeded`, `invalid_input`,
 `invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
 place and never fail sibling items.
@@ -967,7 +980,11 @@ Per model: `loading` (resolve, verify, load, identity) → `warming` (golden
 answers) → `ready`, or `failed` with a reason. Readiness is gated on golden
 answers per surface: every built-in revision carries golden requests with
 reference answers per device class (1e-3 on CPU, 0.02 on GPUs; encoder
-embeddings compare by cosine). Every golden request runs through its
+embeddings compare by cosine). A recorded hardware-qualified key takes
+precedence over the device-class reference; otherwise the existing device-class
+reference is used. A selected reference that fails is never replaced by another
+candidate. The tolerance is selected by device class, not reference key.
+Every golden request runs through its
 surface the same way: the loaded model's `golden_values` and `golden_compare`
 say what to compare and how, so decisions count questions and the other
 surfaces count values. Without a reference the runtime checks
@@ -1034,6 +1051,10 @@ graph captures anyway, §9); a captured graph keeps the configurations it was
 captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
+The choices are recorded at the published precision, so a model served at
+another `--dtype` runs without them and its kernels tune their own: a BF16
+configuration can need more shared memory than an FP32 kernel has (d3 at
+`float32` on gfx942).
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 
@@ -1464,7 +1485,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 
 | Where | Technique | Records |
 | --- | --- | --- |
-| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md`, `decision3-graphs.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on the CPU reference path, batch-invariant as probed at load, so concurrent requests merge without a window; dynamic cross-request batching (the default); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced copies in merged forwards only where the records show no decision changed (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
 | Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; independent deployment/replica workers with a stable CPU thread budget; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md` (historical process layout), `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |

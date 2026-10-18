@@ -56,7 +56,7 @@ global:
 | `provider` | 对 runtime 服务的模型来说，永远是 `model_runtime`。 |
 | `artifact` | Hugging Face 仓库，或本地副本的绝对路径。 |
 | `revision` | 要加载的 40 位 commit。内置模型已钉好版本；其他仓库需要指定。 |
-| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`mps`，或插件添加的加速器。 |
+| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`npu:N`、`mps`，或插件添加的加速器。 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 引擎参数：worker 怎么对请求做批处理、用什么精度计算。不写就用 runtime 的默认值。见[引擎参数](./engine-args.md)。 |
 | `input` | 对任务模型：最长输入（`max_tokens`，token 数），以及超长输入怎么办（`overflow`：`reject`、`truncate` 或 `window`）。 |
 | `replicas` | 给这个模型显式指定受管 `device`，或挂接的 `endpoint`/`served_name` 放置。省略时只有一个 worker。 |

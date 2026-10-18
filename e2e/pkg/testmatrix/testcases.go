@@ -125,6 +125,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-chat-cache-control",
 	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
+	// A stop_sequence terminal must project to the generic Chat stop for
+	// clients that cannot carry the matched string (issue #4892)
+	"anthropic-chat-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
 	"anthropic-response-api-buffered",

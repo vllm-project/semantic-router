@@ -116,6 +116,12 @@ func decodeProviderJSONCanonical(body []byte, target any, policy llmprotocol.Pol
 	if err := validateProviderJSONDocument(body, policy, requireObject); err != nil {
 		return nil, nil, err
 	}
+	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenAICompatGateway {
+		// Anthropic-style usage counters ride inside an otherwise canonical
+		// usage object; map them onto the canonical names before the strict
+		// decode so the totals check sees a consistent usage object.
+		body = translateGatewayUsageCounters(body)
+	}
 	canonical := body
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	var dropped []string
