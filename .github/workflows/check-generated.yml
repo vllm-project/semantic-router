@@ -14,14 +14,20 @@ permissions:
 jobs:
   generated:
     name: Generated Contracts
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.verifications != '[]' && fromJSON(inputs.verifications)[0].runner || 'ubuntu-24.04' }}
     env:
       CI: "true"
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+          cache-dependency-path: '**/go.sum'
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -38,6 +44,7 @@ jobs:
             --output .agent-harness/generated-contracts-result.json
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-result-generated-contracts
           path: .agent-harness/generated-contracts-result.json
           include-hidden-files: true
