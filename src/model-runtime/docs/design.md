@@ -886,13 +886,19 @@ A package may hold its projections quantized, declared by a compressed-tensors
 `quantization_config` in `config.json` (`quantization.py`): FP8 weights with
 one scale per output channel and FP8 activations per token (`float-quantized`,
 FP8_DYNAMIC), or 4-bit integer weights in groups, symmetric (GPTQ) or with
-zero points (AWQ), and BF16 activations (`pack-quantized`). Any other scheme is
-refused. The targeted layers become `Float8Linear` or `Int4Linear` on the meta
-backbone and load the stored tensors as they are
-(`engines/native/quantized.py`): FP8 runs `torch._scaled_mm` after one Triton
-kernel quantizes the activations per row, and needs FP8 matrix units; int4
-unpacks its weights to BF16 with one Triton kernel per call (plain torch on a
-CPU) and multiplies in BF16, which keeps the memory but not the time. A
+zero points (AWQ), and BF16 activations (`pack-quantized`), or NVFP4 weights
+and activations: FP4 in groups of 16 with FP8 block scales under a global
+scale, activations quantized per request (`nvfp4-pack-quantized`). Any other
+scheme, including every other FP4 variant, is refused. The targeted layers
+become `Float8Linear`, `Int4Linear` or `NVFP4Linear` on the meta backbone and
+load the stored tensors as they are (`engines/native/quantized.py`): FP8 runs
+`torch._scaled_mm` after one Triton kernel quantizes the activations per row,
+and needs FP8 matrix units; int4 unpacks its weights to BF16 with one Triton
+kernel per call (plain torch on a CPU) and multiplies in BF16, which keeps the
+memory but not the time; NVFP4 quantizes the activations with one Triton kernel
+that writes their scales in cuBLAS's layout and multiplies in
+`torch.nn.functional.scaled_mm` with 1x16 block scales, which needs FP4 tensor
+cores (a Blackwell GPU). A
 quantized package is its own model: its manifest's parameter counts are the
 logical ones, placement counts its files, and its answers are compared with
 the BF16 package's in `docs/records/decision3-quantized.md`.
@@ -991,7 +997,9 @@ refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
 CPU image, or a GPU device). A package with FP8 weights requires `float8` on
 every accelerator, which a GPU reports when it has FP8 matrix units (an NVIDIA
 GPU of compute capability 8.9 or later, or an MI300 or MI350 series GPU), so
-any other device refuses it before its weights load. When every device the
+any other device refuses it before its weights load. A package with NVFP4
+weights likewise requires `nvfp4`, which a GPU of compute capability 10.x or
+12.x (Blackwell) reports. When every device the
 model may use lacks a capability, the failure is final instead of retried.
 
 ### 10.2 Readiness and health
