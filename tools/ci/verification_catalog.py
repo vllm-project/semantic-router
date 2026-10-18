@@ -9,6 +9,8 @@ from typing import Any
 
 import yaml
 
+from ci_policy import LAYERS
+
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = ROOT / "tools/ci/verification_catalog.yaml"
 
@@ -68,6 +70,8 @@ def verification_records(registry: dict) -> dict[str, dict]:
         records[f"e2e.{name}"] = {
             **defaults,
             "activity": "test",
+            "layer": "integrations",
+            "execution": "approved",
             "display_name": profile.get("display_name", ""),
             "category": "e2e",
             "boundary": ["e2e"],
@@ -101,6 +105,10 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"full CPU inventory references missing verification {name}")
     display_names = set()
     for name, record in records.items():
+        if record.get("layer") not in LAYERS:
+            errors.append(f"verification {name} has no product layer")
+        if record.get("execution") not in {"automatic", "approved"}:
+            errors.append(f"verification {name} has no reviewed execution policy")
         label = record.get("display_name")
         if not isinstance(label, str) or not label.strip() or label == name:
             errors.append(f"verification {name} must declare a readable display_name")

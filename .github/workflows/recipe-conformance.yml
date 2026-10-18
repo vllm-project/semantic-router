@@ -45,6 +45,7 @@ jobs:
         run: |
           python tools/calibration/recipe/recipe_conformance.py \
             plan-all \
+            --shards 3 \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Publish static coverage summary
@@ -56,6 +57,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: recipe-conformance-inventory
           path: .agent-harness/recipe-conformance/
           include-hidden-files: true
@@ -107,7 +109,7 @@ jobs:
         with:
           images: '["vllm-sr"]'
       - name: Allocate CPUs for serial long-context probes
-        if: matrix.shard == 'built-in-latest-mom-v1'
+        if: matrix.source == 'built-in-latest' && matrix.recipes == 'mom-v1'
         run: |
           # This shard runs one probe at a time, including full-context embeddings.
           cpu_threads="$(nproc)"
@@ -143,6 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: recipe-conformance-live-${{ matrix.shard }}
           path: .agent-harness/recipe-conformance/
           include-hidden-files: true
@@ -166,10 +169,16 @@ jobs:
       - name: Install report dependencies
         run: python -m pip install -r tools/agent/requirements.txt
 
-      - name: Download inventory and live reports
+      - name: Download inventory
         uses: actions/download-artifact@v4
         with:
-          pattern: recipe-conformance-*
+          name: recipe-conformance-inventory
+          path: .agent-harness/recipe-conformance
+      - name: Download live reports
+        uses: actions/download-artifact@v4
+        with:
+          # A previous attempt's aggregate must never overwrite fresh probes.
+          pattern: recipe-conformance-live-*
           path: .agent-harness/recipe-conformance
           merge-multiple: true
 
@@ -186,6 +195,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.verification).id }}
           path: .agent-harness/recipe-result.json
           include-hidden-files: true
@@ -202,6 +212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: recipe-conformance-report
           path: .agent-harness/recipe-conformance/
           include-hidden-files: true

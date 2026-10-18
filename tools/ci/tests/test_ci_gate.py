@@ -454,10 +454,25 @@ class GateTransportTests(unittest.TestCase):
                         }
                     )
                 )
+            artifacts = {
+                record["id"]: f"ci-result-{record['id']}"
+                for record in plan["verifications"]
+            }
+            for field, prefix in (
+                ("component_batches", "ci-result-components-"),
+                ("platform_batches", "ci-result-"),
+                ("e2e_batches", "ci-result-"),
+            ):
+                for batch in plan[field]:
+                    for record in batch["verifications"]:
+                        artifacts[record["id"]] = prefix + batch["id"]
+            receipt_paths = {}
             for receipt in receipts:
-                output = results / f"ci-result-{receipt['id']}"
-                output.mkdir()
-                (output / "result.json").write_text(json.dumps(receipt))
+                output = results / artifacts[receipt["id"]]
+                output.mkdir(exist_ok=True)
+                receipt_path = output / f"{receipt['id']}.json"
+                receipt_path.write_text(json.dumps(receipt))
+                receipt_paths[receipt["id"]] = receipt_path
             plan_path = directory / "plan.json"
             plan_path.write_text(json.dumps(plan))
             self.assertGreater(plan_path.stat().st_size, 128 * 1024)
@@ -488,7 +503,7 @@ class GateTransportTests(unittest.TestCase):
             self.assertIn("plan schema or content digest is invalid", run().stdout)
             plan["paths"].pop()
             plan_path.write_text(json.dumps(plan))
-            (results / f"ci-result-{receipts[-1]['id']}" / "result.json").unlink()
+            receipt_paths[receipts[-1]["id"]].unlink()
             actual = run()
             self.assertEqual(actual.returncode, 1)
             self.assertIn(

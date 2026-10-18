@@ -1155,6 +1155,7 @@ profiles:
     coverage_role: trusted-identity-routing-contracts
     selection: pr
     paths:
+      - e2e/testcases/authz*.go
       - e2e/profiles/authz-rbac/**
       - e2e/config/config.authz-rbac.yaml
       - src/semantic-router/pkg/classification/authz*.go

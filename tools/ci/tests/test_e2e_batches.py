@@ -1,4 +1,4 @@
-"""Independent Kubernetes workers retain profile evidence and teardown boundaries."""
+"""Shared Kubernetes workers retain profile evidence and teardown boundaries."""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ class E2EBatchTests(unittest.TestCase):
                 {"image:vllm-sr", "image:provider-mocker"},
             )
             self.assertIn(receipt["id"] + "/test-report.json", result["raw"])
-        self.assertEqual(len(result["summaries"]), len(PROFILES))
+        self.assertEqual(len(result["summaries"]), 1)
         self.assertTrue(all(summary["failed"] == [] for summary in result["summaries"]))
 
     def test_failed_or_missing_profile_does_not_skip_independent_sibling(self):
@@ -146,17 +146,20 @@ class E2EBatchTests(unittest.TestCase):
                 )
                 self.assertEqual(len(result["summary"]["failed"]), len(PROFILES))
 
-    def test_teardown_failure_cannot_contaminate_independent_profile(self):
+    def test_teardown_failure_stops_remaining_profiles_in_shared_worker(self):
         result = self.execute(condition="leaked-cluster")
         self.assertFalse(result["passed"])
+        self.assertEqual(result["receipts"], [])
         self.assertEqual(
-            [row["id"] for row in result["receipts"]], ["e2e." + PROFILES[1]]
+            len([row for row in result["calls"] if row["kind"] == "profile"]), 1
         )
         self.assertEqual(
-            len([row for row in result["calls"] if row["kind"] == "profile"]), 2
+            result["summary"]["failed"], ["e2e." + profile for profile in PROFILES]
         )
-        self.assertEqual(result["summary"]["failed"], ["e2e." + PROFILES[0]])
-        self.assertNotIn("e2e." + PROFILES[1] + "/failure.txt", result["raw"])
+        self.assertIn(
+            "previous profile teardown failed",
+            result["raw"]["e2e." + PROFILES[1] + "/failure.txt"],
+        )
         self.assertEqual(result["after_retry_clusters"], [])
         self.assertEqual(result["after_retry_states"], [])
 
@@ -264,8 +267,10 @@ class E2EBatchTests(unittest.TestCase):
     def execute(self, *, outcomes=None, condition="", profiles=PROFILES, full=False):
         plan = self.plan(profiles, full=full)
         batches = plan["e2e_batches"]
-        self.assertEqual(len(batches), len(profiles))
-        self.assertTrue(all(len(batch["verifications"]) == 1 for batch in batches))
+        self.assertEqual(
+            sum(len(batch["verifications"]) for batch in batches), len(profiles)
+        )
+        self.assertTrue(all(len(batch["verifications"]) <= 3 for batch in batches))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "bin").mkdir()

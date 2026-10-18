@@ -133,8 +133,7 @@ func (p *Profile) GetTestCases() []string {
 		testmatrix.RouterSmoke,
 		[]string{
 			"istio-sidecar-health-check",
-			"istio-mtls-verification",
-			"istio-tracing-observability",
+			"istio-proxy-metrics",
 		},
 	)
 }

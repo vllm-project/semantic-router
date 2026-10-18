@@ -7,6 +7,9 @@ import json
 from collections import defaultdict
 
 MAX_CONTRACT_MINUTES = 330
+MAX_BATCH_MINUTES = 270
+MAX_BATCH_CONTRACTS = 3
+MAX_COMPONENT_CONTRACTS = 4
 
 IMAGE_PRODUCERS = {
     "image-router": ("vllm-sr",),
@@ -113,8 +116,7 @@ def _batch(records: list[dict], shard: int) -> dict:
         if extra:
             label += " / " + " + ".join(extra)
     if executor == "platform":
-        # Platform contracts run in separate workers; their runtime label alone
-        # would collide in the Actions matrix.
+        # Distinguish compatible groups with the same runtime label.
         label += f" / {identity[:6]}"
     minutes = sum(
         record.get("timeout_minutes", 90 if executor == "e2e" else 120)
@@ -138,14 +140,86 @@ def execution_batches(records: list[dict], executor: str) -> list[dict]:
             groups[json.dumps(_compatibility(record), sort_keys=True)].append(record)
     result = []
     for key in sorted(groups):
-        for shard, record in enumerate(groups[key], 1):
+        pending, minutes, shard = [], 0, 1
+        for record in groups[key]:
             budget = record.get("timeout_minutes", 90 if executor == "e2e" else 120)
             if budget <= 0 or budget > MAX_CONTRACT_MINUTES:
                 raise ValueError(f"invalid worker time budget for {record['id']}")
-            # One isolated Actions worker per contract lets compatible checks
-            # run at the same time while retaining their existing receipts.
-            result.append(_batch([record], shard))
+            limit = (
+                1 if record.get("resource_class") == "model" else MAX_BATCH_CONTRACTS
+            )
+            if pending and (
+                len(pending) >= limit or minutes + budget > MAX_BATCH_MINUTES
+            ):
+                result.append(_batch(pending, shard))
+                pending, minutes, shard = [], 0, shard + 1
+            pending.append(record)
+            minutes += budget
+        if pending:
+            result.append(_batch(pending, shard))
     return result
+
+
+def _component_group(record: dict) -> tuple[str, str]:
+    # The runtime installs a separate set of engine extras. Keep that dependency
+    # environment apart from training/export tools sharing the lightweight worker.
+    environment = "runtime" if record["target"] == "model-runtime-test" else "tools"
+    return record["worker"], environment
+
+
+def _component_batch(records: list[dict], workers: dict, shard: int) -> dict:
+    worker = records[0]["worker"]
+    spec = workers[worker]
+    identity = content_digest([record["id"] for record in records])[:12]
+    single = len(records) == 1
+    return {
+        **spec,
+        "id": records[0]["id"] if single else f"components-{worker}-{identity}",
+        "worker": worker,
+        "shard": shard,
+        "display_name": (
+            records[0]["display_name"]
+            if single
+            else f"{spec['display_name']} / Batch {shard}"
+        ),
+        "job_timeout_minutes": 15 + 45 * len(records),
+        "verifications": records,
+    }
+
+
+def component_batches(records: list[dict], workers: dict) -> list[dict]:
+    """Share setup across bounded, compatible component contracts."""
+    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for record in sorted(records, key=lambda row: row["id"]):
+        if record["executor"] == "tools":
+            groups[_component_group(record)].append(record)
+    result = []
+    for key in sorted(groups):
+        selected = groups[key]
+        for index in range(0, len(selected), MAX_COMPONENT_CONTRACTS):
+            result.append(
+                _component_batch(
+                    selected[index : index + MAX_COMPONENT_CONTRACTS],
+                    workers,
+                    index // MAX_COMPONENT_CONTRACTS + 1,
+                )
+            )
+    return result
+
+
+def validate_component_batch(batch: dict, workers: dict) -> None:
+    records = batch.get("verifications", [])
+    if not records or len({row["id"] for row in records}) != len(records):
+        raise ValueError("component worker requires unique verification contracts")
+    expected = component_batches(records, workers)
+    shard = batch.get("shard")
+    if (
+        len(expected) != 1
+        or not isinstance(shard, int)
+        or shard <= 0
+        or batch != _component_batch(expected[0]["verifications"], workers, shard)
+    ):
+        raise ValueError("component worker contains incompatible or altered metadata")
 
 
 def e2e_batches(records: list[dict]) -> list[dict]:

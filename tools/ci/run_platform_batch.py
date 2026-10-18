@@ -4,34 +4,17 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
-import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 from execution_batches import validate_execution_batch
+from worker_process import run_command
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def run_command(command: list[str], *, cwd: Path, env: dict, check: bool, timeout: int):
-    process = subprocess.Popen(command, cwd=cwd, env=env, start_new_session=True)
-    try:
-        status = process.wait(timeout=timeout)
-    finally:
-        # A completed or timed-out contract must not leave compiler/test children
-        # running in the next contract's worker. Kill the whole private group.
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
-        process.wait()
-    result = subprocess.CompletedProcess(command, status)
-    if check:
-        result.check_returncode()
-    return result
 
 
 def run_batch(batch: dict, output: Path, *, run=run_command) -> bool:

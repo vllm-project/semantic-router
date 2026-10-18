@@ -86,6 +86,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
         with:
+          overwrite: true
           name: ci-result-dashboard
           path: .agent-harness/dashboard/result.json
           include-hidden-files: true
@@ -105,6 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: dashboard-wasm-evidence
           path: .agent-harness/dashboard/wasm/
           include-hidden-files: true
@@ -115,6 +117,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: evaluation-browser-diagnostics
           path: |
             dashboard/frontend/playwright-report

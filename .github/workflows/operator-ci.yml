@@ -90,6 +90,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: operator-unit
           path: .agent-harness/operator-unit/
           include-hidden-files: true
@@ -166,6 +167,7 @@ jobs:
         run: cp "$CI_IMAGE_RECEIPTS" artifacts.json
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: operator-bundle
           path: deploy/operator/artifacts.json
           if-no-files-found: error
@@ -973,6 +975,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: operator-request-${{ matrix.cache-backend }}
           path: |
             operator-request.json
@@ -1005,6 +1008,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: operator-integration-logs-${{ matrix.cache-backend }}
           path: /tmp/operator-logs/
           retention-days: 7
@@ -1036,6 +1040,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.verification).id }}
           path: operator-result.json
           if-no-files-found: error

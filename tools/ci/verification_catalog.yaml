@@ -9,7 +9,7 @@ defaults:
   images: []
   services: []
 component_workers:
-  # These select per-contract setup; each selected verification gets its own job.
+  # Compatible contracts share bounded workers and retain independent evidence.
   cli:
     display_name: CLI
     go: false
@@ -21,6 +21,8 @@ component_workers:
     go: true
 verifications:
   quality:
+    layer: source
+    execution: automatic
     display_name: Source Quality
     activity: quality
     boundary: []
@@ -30,6 +32,8 @@ verifications:
     always: true
     inventory: changed-source-format-lint-v1
   generated-contracts:
+    layer: source
+    execution: automatic
     display_name: Generated Contracts
     activity: quality
     boundary: []
@@ -38,6 +42,8 @@ verifications:
     workflow: .github/workflows/check-generated.yml
     inventory: canonical-generated-contracts-v1
   security:
+    layer: source
+    execution: automatic
     display_name: Security Checks
     activity: quality
     boundary: []
@@ -46,6 +52,8 @@ verifications:
     workflow: .github/workflows/security-scan.yml
     inventory: trusted-ast-and-rendered-iac-v1
   soak-tools:
+    layer: router
+    execution: automatic
     display_name: Soak Tools
     activity: test
     boundary: [unit, integration]
@@ -56,6 +64,8 @@ verifications:
     target: soak-test
     inventory: soak-client-and-fault-proxy-framework-discovery
   core:
+    layer: router
+    execution: automatic
     display_name: Core Tests
     activity: test
     boundary: [unit, integration]
@@ -64,6 +74,8 @@ verifications:
     workflow: .github/workflows/test-and-build.yml
     inventory: go-core-and-selector-parity
   storage:
+    layer: runtime
+    execution: approved
     display_name: Storage Integration
     activity: test
     boundary: [integration]
@@ -73,6 +85,8 @@ verifications:
     services: [milvus, redis, qdrant, valkey, postgres]
     inventory: required-storage-framework-discovery
   dashboard:
+    layer: product
+    execution: automatic
     display_name: Dashboard Tests
     activity: test
     boundary: [unit, integration]
@@ -81,6 +95,8 @@ verifications:
     workflow: .github/workflows/dashboard-test.yml
     inventory: dashboard-go-vitest-and-controlled-api-browser
   operator:
+    layer: integrations
+    execution: approved
     display_name: Kubernetes Operator
     activity: test
     boundary: [unit, integration, e2e]
@@ -93,6 +109,8 @@ verifications:
     device: cpu
     inventory: operator-unit-generated-olm-reconcile-and-routed-request
   local.cli:
+    layer: product
+    execution: approved
     display_name: Stack Lifecycle and Routing
     activity: test
     boundary: [e2e]
@@ -106,6 +124,8 @@ verifications:
     device: cpu
     inventory: cli-live-lifecycle
   local.memory:
+    layer: product
+    execution: approved
     display_name: Memory Contracts
     activity: test
     boundary: [e2e]
@@ -119,6 +139,8 @@ verifications:
     device: cpu
     inventory: memory-15-required-cases-v1
   recipe-conformance:
+    layer: product
+    execution: approved
     display_name: Recipe Preview
     activity: test
     boundary: [integration]
@@ -131,6 +153,8 @@ verifications:
     device: cpu
     inventory: maintained-recipe-source-aware-shards
   platform.image-calibration-cpu:
+    layer: runtime
+    execution: approved
     display_name: Image Routing Conformance
     activity: test
     boundary: [unit, integration]
@@ -144,6 +168,8 @@ verifications:
     inventory: image-routing-calibration-source-fixtures-and-thresholds
     evidence: image-calibration
   platform.models-cpu:
+    layer: runtime
+    execution: approved
     display_name: Published Models
     activity: test
     boundary: [integration]
@@ -157,6 +183,8 @@ verifications:
     inventory: published-vela-models-through-the-managed-runtime
     evidence: models
   performance:
+    layer: performance
+    execution: approved
     display_name: Production Benchmarks
     activity: performance
     boundary: [integration]
@@ -167,6 +195,8 @@ verifications:
     device: cpu
     inventory: production-benchmark-and-paired-model-inventory
   cli-package:
+    layer: product
+    execution: automatic
     display_name: CLI Package
     activity: package
     boundary: [integration]
@@ -175,6 +205,8 @@ verifications:
     workflow: .github/workflows/package-check.yml
     inventory: catalog-snapshot-and-installed-wheel
   cli-unit:
+    layer: product
+    execution: automatic
     display_name: CLI Unit Tests
     activity: test
     boundary: [unit]
@@ -185,6 +217,8 @@ verifications:
     target: vllm-sr-test
     inventory: cli-unittest-discovery
   model-runtime:
+    layer: runtime
+    execution: approved
     display_name: Model Runtime
     activity: test
     boundary: [unit, integration]
@@ -195,6 +229,8 @@ verifications:
     target: model-runtime-test
     inventory: model-runtime-pytest-discovery
   training:
+    layer: runtime
+    execution: approved
     display_name: Training Contracts
     activity: test
     boundary: [unit, integration]
@@ -205,6 +241,8 @@ verifications:
     target: test-training-contracts
     inventory: training-contracts-and-tiny-model-cpu-inference
   onnx-artifacts:
+    layer: runtime
+    execution: approved
     display_name: ONNX Artifacts
     activity: test
     boundary: [integration]
@@ -214,17 +252,9 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: onnx-artifact-test
     inventory: external-onnx-weight-packing-cpu-inference
-  ck-rewrite:
-    display_name: Attention Graph Rewriter
-    activity: test
-    boundary: [unit]
-    executor: tools
-    category: components
-    worker: model
-    workflow: .github/workflows/test-tools.yml
-    target: ck-rewrite-test
-    inventory: attention-graph-rewriter-contracts
   mock-provider:
+    layer: router
+    execution: automatic
     display_name: Provider Simulator
     activity: test
     boundary: [unit]
@@ -235,6 +265,8 @@ verifications:
     target: test-provider-mocker
     inventory: provider-mocker-native-protocol-and-scenario-discovery
   learning-tools:
+    layer: router
+    execution: automatic
     display_name: Routing Tools
     activity: test
     boundary: [unit]
@@ -245,6 +277,8 @@ verifications:
     target: test-learning-tools
     inventory: routing-authoring-calibration-and-learning-tools-framework-discovery
   bench-tools:
+    layer: router
+    execution: automatic
     display_name: Benchmark Tools
     activity: test
     boundary: [unit]
@@ -256,6 +290,8 @@ verifications:
     inventory: bench-research-tools-pytest-discovery
 
   harness-tools:
+    layer: source
+    execution: automatic
     display_name: CI Harness
     activity: test
     boundary: [unit, integration]
@@ -266,6 +302,8 @@ verifications:
     target: harness-check
     inventory: ci-and-agent-framework-discovery
   e2e-unit:
+    layer: integrations
+    execution: automatic
     display_name: E2E Framework
     activity: test
     boundary: [unit]
@@ -276,10 +314,10 @@ verifications:
     target: test-e2e-unit
     inventory: e2e-go-helper-and-profile-discovery
 
-# Versioned required inventory, shared by ci/full, nightly and release. A new
+# Versioned required inventory, shared by /ci run full, weekly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 full_cpu:
-  version: 4
+  version: 5
   required:
     - quality
     - generated-contracts
@@ -297,9 +335,10 @@ full_cpu:
     - performance
     - cli-package
     - cli-unit
+    - model-runtime
+    - bench-tools
     - training
     - onnx-artifacts
-    - ck-rewrite
     - mock-provider
     - learning-tools
     - harness-tools

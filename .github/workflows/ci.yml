@@ -16,6 +16,9 @@ on:
       full:
         type: boolean
         default: false
+      publish:
+        type: boolean
+        default: false
       draft:
         type: boolean
         default: false
@@ -38,6 +41,8 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: read
+  pull-requests: read
 
 jobs:
   plan:
@@ -45,6 +50,7 @@ jobs:
     uses: ./.github/workflows/ci-changes.yml
     with:
       profile: ${{ inputs.profile || 'pr' }}
+      publish: ${{ inputs.publish || false }}
       full: ${{ inputs.full || false }}
       draft: ${{ inputs.draft || false }}
       verification: ${{ github.event_name == 'workflow_dispatch' && inputs.verification || '' }}

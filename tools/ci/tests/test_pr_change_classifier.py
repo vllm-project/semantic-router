@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -12,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import (  # noqa: E402
     github_outputs,
+    main as plan_main,
     make_plan,
     performance_base,
     previous_release,
@@ -198,6 +204,7 @@ class SelectionTests(unittest.TestCase):
                 "storage"
             },
             "e2e/testcases/istio_routes_test.go": {"e2e.istio"},
+            "e2e/testcases/authz_header_spoofing_test.go": {"e2e.authz-rbac"},
         }
         for path, expected in cases.items():
             self.assertTrue(classify([path]).test_only)
@@ -230,7 +237,12 @@ class SelectionTests(unittest.TestCase):
         for path in paths:
             for profile in ("pr", "main"):
                 with self.subTest(path=path, profile=profile):
-                    plan = make_plan([path], source_sha=SHA, profile=profile)
+                    plan = make_plan(
+                        [path],
+                        source_sha=SHA,
+                        profile=profile,
+                        publish=profile == "main",
+                    )
                     self.assertIn("local.cli", plan["expected_verification_ids"])
                     self.assertTrue({"vllm-sr", "dashboard"} <= set(plan["images"]))
         for path in (
@@ -339,17 +351,18 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("e2e.dynamo", plans[0]["expected_verification_ids"])
         self.assertNotIn("e2e.router-replay", plans[0]["expected_verification_ids"])
 
-    def test_full_cpu_never_removes_affected_pr_verifications(self):
+    def test_full_cpu_preserves_affected_pr_and_publication_verifications(self):
         for path in (
             "e2e/profiles/route-action/profile.go",
             "tools/test/services/provider-mocker/provider_mocker/app.py",
         ):
             affected = make_plan([path], source_sha=SHA)
-            for profile in ("pr", "nightly", "release"):
-                with self.subTest(path=path, profile=profile):
-                    complete = make_plan(
-                        [path], source_sha=SHA, profile=profile, full=True
-                    )
+            for options in (
+                {"profile": "pr", "full": True},
+                {"profile": "main", "publish": True},
+            ):
+                with self.subTest(path=path, options=options):
+                    complete = make_plan([path], source_sha=SHA, **options)
                     self.assertTrue(
                         set(affected["expected_verification_ids"])
                         <= set(complete["expected_verification_ids"])
@@ -358,6 +371,52 @@ class SelectionTests(unittest.TestCase):
                     self.assertNotIn(
                         "e2e.response-api-redis", complete["expected_verification_ids"]
                     )
+
+    def test_no_base_qualification_does_not_treat_all_files_as_changes(self):
+        for profile, flags in (
+            ("nightly", []),
+            ("release", []),
+            ("main", ["--publish"]),
+        ):
+            with self.subTest(
+                profile=profile
+            ), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "plan.json"
+                argv = [
+                    "ci_plan.py",
+                    "--profile",
+                    profile,
+                    "--head",
+                    SHA,
+                    "--output",
+                    str(output),
+                    *flags,
+                ]
+                with patch.object(sys, "argv", argv), patch(
+                    "ci_plan.git_changed_files",
+                    return_value=["e2e/profiles/production-stack/profile.go"],
+                ) as changed, patch(
+                    "ci_plan.resolve_image_sources"
+                ), contextlib.redirect_stdout(
+                    io.StringIO()
+                ):
+                    self.assertEqual(plan_main(), 0)
+                changed.assert_not_called()
+                plan = json.loads(output.read_text())
+                self.assertEqual(
+                    set(plan["expected_verification_ids"]), set(full_cpu_ids())
+                )
+                self.assertEqual(plan["paths"], [])
+
+    def test_experimental_profile_remains_available_for_changes_and_manual_runs(self):
+        identity = "e2e.production-stack"
+        self.assertNotIn(identity, full_cpu_ids())
+        affected = make_plan(
+            ["e2e/profiles/production-stack/profile.go"], source_sha=SHA
+        )
+        self.assertIn(identity, affected["expected_verification_ids"])
+        manual = make_plan([], source_sha=SHA, requested=(identity,))
+        self.assertEqual(manual["expected_verification_ids"], [identity])
 
     def test_local_classifier_backend_is_a_required_cpu_product_contract(self):
         identity = "e2e.local-classifier-backend"
@@ -396,35 +455,36 @@ class SelectionTests(unittest.TestCase):
         baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
         self.assertIn("provider-mocker", baseline["images"])
 
-    def test_main_only_publishes_affected_inputs(self):
-        docs = make_plan(["README.md"], source_sha=SHA, profile="main")
-        self.assertFalse(docs["publish_python"])
-        self.assertFalse(docs["publish_images"])
-        cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
-        self.assertTrue(cli["publish_python"])
-        self.assertIn("cli-package", cli["expected_verification_ids"])
-
-    def test_main_publishes_every_image_its_dev_cli_defaults_to(self):
-        # The second path is outside every image's own publication paths.
+    def test_main_push_runs_source_checks_without_republishing_artifacts(self):
         for path in (
+            "README.md",
             "src/vllm-sr/cli/core.py",
             "e2e/testing/vllm-sr-cli/test_unit_serve.py",
+            "src/semantic-router/pkg/config/loader.go",
         ):
             with self.subTest(path=path):
                 plan = make_plan([path], source_sha=SHA, profile="main")
-                self.assertTrue(plan["publish_python"])
-                self.assertLessEqual(
-                    set(CLI_RUNTIME_IMAGES), set(plan["publish_images"])
-                )
-                self.assertLessEqual(set(plan["publish_images"]), set(plan["images"]))
-                self.assertTrue(plan["multiarch"])
-        router = make_plan(
-            ["src/semantic-router/pkg/config/loader.go"], source_sha=SHA, profile="main"
-        )
-        self.assertFalse(router["publish_python"])
-        self.assertNotIn("dashboard", router["publish_images"])
-        pr = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA)
-        self.assertEqual(pr["publish_images"], [])
+                self.assertFalse(plan["publish_python"])
+                self.assertEqual(plan["publish_images"], [])
+                self.assertEqual(plan["images"], [])
+                self.assertFalse(plan["publish_helm"])
+                self.assertEqual(plan["deferred_verifications"], [])
+                self.assertFalse(plan["approval_required"])
+
+    def test_explicit_main_publication_qualifies_all_commit_addressed_images(self):
+        plan = make_plan(["README.md"], source_sha=SHA, profile="main", publish=True)
+        self.assertTrue(plan["publish_python"])
+        self.assertTrue(plan["publish_helm"])
+        self.assertTrue(plan["full_cpu"])
+        self.assertLessEqual(set(CLI_RUNTIME_IMAGES), set(plan["publish_images"]))
+        self.assertLessEqual(set(plan["publish_images"]), set(plan["images"]))
+        self.assertTrue(plan["multiarch"])
+        self.assertIn("cli-package", plan["expected_verification_ids"])
+        self.assertIn("local.cli", plan["expected_verification_ids"])
+        self.assertIn("recipe-conformance", plan["expected_verification_ids"])
+        self.assertIn("model-runtime", plan["expected_verification_ids"])
+        with self.assertRaisesRegex(ValueError, "main"):
+            make_plan(["README.md"], source_sha=SHA, publish=True)
 
     def test_cli_runtime_images_are_the_first_party_images_the_cli_pulls(self):
         consts = (ROOT / "src/vllm-sr/cli/consts.py").read_text(encoding="utf-8")

@@ -48,6 +48,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/results/*.json
           include-hidden-files: true
@@ -56,6 +57,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: platform-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/
           include-hidden-files: true

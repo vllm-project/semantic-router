@@ -52,12 +52,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.verification).id }}
           path: .agent-harness/package/result.json
           include-hidden-files: true
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: vllm-sr-dist
           path: .agent-harness/package/dist/
           include-hidden-files: true

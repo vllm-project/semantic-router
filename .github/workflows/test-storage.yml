@@ -113,6 +113,7 @@ jobs:
             --evidence .agent-harness/core/storage/evidence.json --output .agent-harness/core/storage/result.json
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-result-storage
           path: .agent-harness/core/storage/result.json
           include-hidden-files: true
@@ -144,6 +145,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: storage-framework-evidence
           path: .agent-harness/core/storage/
           include-hidden-files: true

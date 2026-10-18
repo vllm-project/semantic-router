@@ -118,6 +118,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
         with:
+          overwrite: true
           name: ci-result-performance
           path: reports/ci-result.json
           if-no-files-found: error
@@ -203,6 +204,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: performance-results-${{ github.run_number }}
           path: |
             reports/
