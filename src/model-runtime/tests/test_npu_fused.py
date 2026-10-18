@@ -15,7 +15,9 @@ from vllm_srun.accel.npu import NPUAccelerator
 HAS_TORCH_NPU = importlib.util.find_spec("torch_npu") is not None
 
 
-def fake_rotary_mul(inp: torch.Tensor, r1: torch.Tensor, r2: torch.Tensor, rotary_mode: str = "half"):
+def fake_rotary_mul(
+    inp: torch.Tensor, r1: torch.Tensor, r2: torch.Tensor, rotary_mode: str = "half"
+):
     """The op's documented half-mode algebra, in eager ops (its doc's formula)."""
     assert rotary_mode == "half"
     half = inp.shape[-1] // 2
@@ -46,7 +48,9 @@ def test_rotary_half_registers_as_an_exact_fused_kernel(fake_torch_npu):
 
 def test_rotary_half_stays_reference_without_the_op(monkeypatch):
     """A torch_npu without the op leaves the reference kernel in the slot."""
-    monkeypatch.setitem(sys.modules, "torch_npu", SimpleNamespace(__version__="2.10.0.test"))
+    monkeypatch.setitem(
+        sys.modules, "torch_npu", SimpleNamespace(__version__="2.10.0.test")
+    )
     accelerator = NPUAccelerator()
     kernels = accelerator.kernels(SimpleNamespace(label="npu:0"))
     assert kernels.select("rotary_half").source == "torch-reference"
@@ -91,7 +95,11 @@ def test_rotary_half_wrapper_promotes_the_tables(fake_torch_npu, cos_dtype):
 
 def test_available_wrappers_track_the_op_set(monkeypatch):
     """A torch_npu lacking npu_rotary_mul exposes no wrappers at all."""
-    monkeypatch.setitem(sys.modules, "torch_npu", SimpleNamespace(__version__="2.10.0.test"))
+    monkeypatch.setitem(
+        sys.modules, "torch_npu", SimpleNamespace(__version__="2.10.0.test")
+    )
     assert npu_fused.available_wrappers() == {}
-    monkeypatch.setitem(sys.modules, "torch_npu", SimpleNamespace(npu_rotary_mul=fake_rotary_mul))
+    monkeypatch.setitem(
+        sys.modules, "torch_npu", SimpleNamespace(npu_rotary_mul=fake_rotary_mul)
+    )
     assert set(npu_fused.available_wrappers()) == {"rotary_half"}
