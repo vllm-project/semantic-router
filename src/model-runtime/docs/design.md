@@ -882,6 +882,21 @@ add more than 10% to its tokens ([record](records/decision3-lanes-packing.md)).
 Request images and videos are decoded in the process's media worker processes
 (`vllm_srun/media.py`, `--media-workers`).
 
+A package may hold its projections quantized, declared by a compressed-tensors
+`quantization_config` in `config.json` (`quantization.py`): FP8 weights with
+one scale per output channel and FP8 activations per token (`float-quantized`,
+FP8_DYNAMIC), or 4-bit integer weights in groups, symmetric (GPTQ) or with
+zero points (AWQ), and BF16 activations (`pack-quantized`). Any other scheme is
+refused. The targeted layers become `Float8Linear` or `Int4Linear` on the meta
+backbone and load the stored tensors as they are
+(`engines/native/quantized.py`): FP8 runs `torch._scaled_mm` after one Triton
+kernel quantizes the activations per row, and needs FP8 matrix units; int4
+unpacks its weights to BF16 with one Triton kernel per call (plain torch on a
+CPU) and multiplies in BF16, which keeps the memory but not the time. A
+quantized package is its own model: its manifest's parameter counts are the
+logical ones, placement counts its files, and its answers are compared with
+the BF16 package's in `docs/records/decision3-quantized.md`.
+
 ## 9. Scheduler and planner
 
 ```text
@@ -973,8 +988,11 @@ load. The Qwen3.5
 decoders require `lapack` on the CPU, since their gated-delta kernel solves
 triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
 refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
-CPU image, or a GPU device). When every device the model may use lacks a
-capability, the failure is final instead of retried.
+CPU image, or a GPU device). A package with FP8 weights requires `float8` on
+every accelerator, which a GPU reports when it has FP8 matrix units (an NVIDIA
+GPU of compute capability 8.9 or later, or an MI300 or MI350 series GPU), so
+any other device refuses it before its weights load. When every device the
+model may use lacks a capability, the failure is final instead of retried.
 
 ### 10.2 Readiness and health
 

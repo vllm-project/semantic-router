@@ -96,13 +96,18 @@ def estimate_bytes(
     BF16-stored Linear weights (docs/records/bf16-resident-device-memory.md);
     the rest count as FP32. The reserve covers loading and ordinary requests:
     inputs of tens of thousands of tokens need more, and a forward that runs
-    out of device memory fails only its own requests.
+    out of device memory fails only its own requests. A quantized checkpoint
+    counts its files instead.
     """
     width = DTYPE_BYTES.get(resident_dtype(spec, accelerator), FP32_BYTES)
     held = parameters if width < FP32_BYTES else 0
     if width == FP32_BYTES and accelerator != "cpu" and spec.dtype.bf16_resident:
         width, held = DTYPE_BYTES["bfloat16"], min(bf16_parameters, parameters)
     weights = held * width
+    if spec.backbone.quantized is not None:
+        # Quantized weights load as stored; the files bound them (the rest is BF16).
+        weights = sum(path.stat().st_size for path in spec.backbone.weight_files)
+        held = parameters
     weights += int(weights * RESIDENT_HEADROOM)
     return weights + (parameters - held) * FP32_BYTES + ACTIVATION_RESERVE
 
