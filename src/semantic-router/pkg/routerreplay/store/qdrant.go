@@ -269,8 +269,8 @@ func (q *QdrantStore) waitForWrites(ctx context.Context) error {
 	return runAsyncOp(ctx, q.asyncChan, func() error { return nil })
 }
 
-// The timestamp payload holds whole seconds, so each second is loaded whole
-// and ordered by its full timestamps.
+// The timestamp payload holds whole seconds, so each second is ordered by its
+// full timestamps in visitBucket.
 func (q *QdrantStore) scan(ctx context.Context) recordScan {
 	return func(from int, visit func(Record) bool) error {
 		var group []string
@@ -282,15 +282,12 @@ func (q *QdrantStore) scan(ctx context.Context) recordScan {
 				group = group[:0]
 				return true, nil
 			}
-			var records []Record
-			_, err := q.visitIDs(ctx, group, func(record Record) bool {
-				records = append(records, record)
-				return true
-			})
-			skip := from
+			more, err := visitBucket(group, from, qdrantScanBatch, func(ids []string) ([]Record, error) {
+				return q.fetch(ctx, ids)
+			}, visit)
 			from = 0
 			group = group[:0]
-			return err == nil && visitGroup(records, skip, visit), err
+			return more, err
 		}
 		for {
 			filter := q.liveFilter()
@@ -328,34 +325,26 @@ func (q *QdrantStore) scan(ctx context.Context) recordScan {
 	}
 }
 
-func (q *QdrantStore) visitIDs(ctx context.Context, ids []string, visit func(Record) bool) (bool, error) {
-	for start := 0; start < len(ids); start += qdrantScanBatch {
-		batch := ids[start:min(start+qdrantScanBatch, len(ids))]
-		pointIDs := make([]*qdrant.PointId, len(batch))
-		for i, id := range batch {
-			pointIDs[i] = arbitraryIDToUUID(id)
-		}
-		points, err := q.client.Get(ctx, &qdrant.GetPoints{
-			CollectionName: q.collectionName,
-			Ids:            pointIDs,
-			WithPayload:    qdrant.NewWithPayloadInclude("data"),
-		})
-		if err != nil {
-			return false, fmt.Errorf("failed to get records: %w", err)
-		}
-		byID := make(map[string]Record, len(points))
-		for _, point := range points {
-			if record, ok, err := q.decodePoint(point); err == nil && ok {
-				byID[record.ID] = record
-			}
-		}
-		for _, id := range batch {
-			if record, ok := byID[id]; ok && !visit(record) {
-				return false, nil
-			}
+func (q *QdrantStore) fetch(ctx context.Context, ids []string) ([]Record, error) {
+	pointIDs := make([]*qdrant.PointId, len(ids))
+	for i, id := range ids {
+		pointIDs[i] = arbitraryIDToUUID(id)
+	}
+	points, err := q.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: q.collectionName,
+		Ids:            pointIDs,
+		WithPayload:    qdrant.NewWithPayloadInclude("data"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get records: %w", err)
+	}
+	records := make([]Record, 0, len(points))
+	for _, point := range points {
+		if record, ok, err := q.decodePoint(point); err == nil && ok {
+			records = append(records, record)
 		}
 	}
-	return true, nil
+	return records, nil
 }
 
 func (q *QdrantStore) liveFilter() *qdrant.Filter {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 )
 
 // QueryFilters is the metadata-only filter contract shared by replay lists and
@@ -129,13 +130,64 @@ func newestFirst(a, b Record) int {
 	return cmp.Compare(b.ID, a.ID)
 }
 
-// visitGroup sorts records into page order and visits them from position from.
-func visitGroup(records []Record, from int, visit func(Record) bool) bool {
-	slices.SortFunc(records, newestFirst)
-	for _, record := range records[min(from, len(records)):] {
-		if !visit(record) {
-			return false
+// fetchRecords reads the records for ids, in any order, leaving out missing ones.
+type fetchRecords func(ids []string) ([]Record, error)
+
+// visitBucket visits the records with ids in page order from position from.
+// Stores that index whole seconds call it for each second. A second larger than
+// one batch is read twice, first for the full timestamps and then for the
+// records it visits, so its bodies are never held all at once.
+func visitBucket(ids []string, from, batch int, fetch fetchRecords, visit func(Record) bool) (bool, error) {
+	if len(ids) <= batch {
+		records, err := fetch(ids)
+		if err != nil {
+			return false, err
+		}
+		slices.SortFunc(records, newestFirst)
+		for _, record := range records[min(from, len(records)):] {
+			if !visit(record) {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	type key struct {
+		id        string
+		timestamp time.Time
+	}
+	keys := make([]key, 0, len(ids))
+	for start := 0; start < len(ids); start += batch {
+		records, err := fetch(ids[start:min(start+batch, len(ids))])
+		if err != nil {
+			return false, err
+		}
+		for _, record := range records {
+			keys = append(keys, key{record.ID, record.Timestamp})
 		}
 	}
-	return true
+	slices.SortFunc(keys, func(a, b key) int {
+		return newestFirst(Record{ID: a.id, Timestamp: a.timestamp}, Record{ID: b.id, Timestamp: b.timestamp})
+	})
+	keys = keys[min(from, len(keys)):]
+	for start := 0; start < len(keys); start += batch {
+		page := keys[start:min(start+batch, len(keys))]
+		pageIDs := make([]string, len(page))
+		for i, k := range page {
+			pageIDs[i] = k.id
+		}
+		records, err := fetch(pageIDs)
+		if err != nil {
+			return false, err
+		}
+		byID := make(map[string]Record, len(records))
+		for _, record := range records {
+			byID[record.ID] = record
+		}
+		for _, k := range page {
+			if record, ok := byID[k.id]; ok && !visit(record) {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
