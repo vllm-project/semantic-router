@@ -127,6 +127,13 @@ class CPUAccelerator(Accelerator):
     def torch_device(self, device: DeviceInfo) -> torch.device:
         return torch.device("cpu")
 
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        if not device.arch:
+            return None
+        capability = torch.backends.cpu.get_cpu_capability().lower().replace(" ", "_")
+        bf16 = "bf16_native" if device.bf16 else "bf16_emulated"
+        return f"cpu:{device.arch}:{capability}:{bf16}"
+
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = reference_kernels("cpu")
         kernels.register(

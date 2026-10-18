@@ -7,6 +7,7 @@ import shutil
 
 import pytest
 import torch
+from vllm_srun import media
 from vllm_srun.accel import cpu
 from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3 import images as img
@@ -610,8 +611,15 @@ FLA_KERNELS = {
 
 
 @pytest.mark.parametrize("model", DECISION3_MODELS, ids=lambda model: model.repo_id)
-def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+def test_every_model_records_goldens_and_kernel_choices(model):
+    expected = {"cpu", "rocm"}
+    devices = {"rocm:gfx942"}
+    if model.repo_id == "vllm-sr/d3-edge":
+        expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
+        devices.add("cuda:sm_89")
+    elif model.repo_id == "vllm-sr/d3":
+        expected.add("cpu:x86_64:avx512:bf16_native")
+    assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {
             "difficulty",
@@ -620,10 +628,13 @@ def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
             "image_colour",
             "image_photo",
         }
-    assert set(model.kernel_choices) == {"rocm:gfx942"}
-    choices = model.kernel_choices["rocm:gfx942"]
-    assert choices["fla"] == "0.5.2"
-    assert set(choices["kernels"]) == FLA_KERNELS
+    assert set(model.kernel_choices) == devices
+    for device in devices:
+        choices = model.kernel_choices[device]
+        assert choices["fla"] == "0.5.2"
+        assert set(choices["kernels"]) == FLA_KERNELS
+    if "cuda:sm_89" in devices:
+        assert model.kernel_choices["cuda:sm_89"]["triton"] == "3.6.0"
 
 
 def test_threads_stay_within_the_container_unless_configured(monkeypatch):
@@ -660,6 +671,15 @@ def test_repeated_media_are_processed_once_and_answer_alike(
 
     monkeypatch.setattr(img, "decode", count_image)
     monkeypatch.setattr(vid, "decode", count_video)
+    # with media workers (16 CPUs or more) the decoding is a load in a worker process
+    submit = media.submit
+
+    def count_submit(fn, *args):
+        decoded["images"] += fn is img.load
+        decoded["videos"] += fn is vid.load
+        return submit(fn, *args)
+
+    monkeypatch.setattr(media, "submit", count_submit)
     body = {"state": "What is shown?", "questions": QUESTIONS, "images": [image]}
     first, second = call(d3_runtime, body), call(d3_runtime, body)
     assert first == second and first[0] == 200

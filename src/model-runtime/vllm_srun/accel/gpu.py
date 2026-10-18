@@ -16,8 +16,9 @@ from typing import Any
 
 import torch
 
+from ..engines.native.quantized import float8_format
 from ..plugins.base import Accelerator, DeviceInfo
-from .kernels import Kernel, KernelSet, reference_kernels
+from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 
 _DEVICE_LOCKS: dict[int, Any] = {}
 _LOCKS = threading.Lock()
@@ -125,6 +126,7 @@ class GPUAccelerator(Accelerator):
             "fla": _optional("fla.ops.gated_delta_rule", "chunk_gated_delta_rule")
             is not None,
             "causal_conv1d": _optional("causal_conv1d", "causal_conv1d_fn") is not None,
+            "float8": float8_format(self.torch_device(device)) is not None,
         }
 
     def autocast(
@@ -170,8 +172,24 @@ def _wrap_conv(fn: Any) -> Any:
 
 def _wrap_varlen(fn: Any) -> Any:
     """PyTorch's variable-length flash attention over packed rows, non-causal, keys with fewer heads in-kernel."""
+    accepted = set(inspect.signature(fn).parameters)
 
     def attend(query, key, value, packed, *, scale, groups):
+        if query.dtype not in (torch.float16, torch.bfloat16):
+            # flash attention takes 16-bit inputs only (FP32 at --dtype float32)
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
+        # Torch 2.10 uses the default scale and infers GQA from the head counts.
+        if "scale" not in accepted and scale != query.shape[-1] ** -0.5:
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
+        extra = {}
+        if "scale" in accepted:
+            extra["scale"] = scale
+        if "enable_gqa" in accepted:
+            extra["enable_gqa"] = groups > 1
         cu = packed.cu_seqlens_int32
         return fn(
             query,
@@ -181,8 +199,7 @@ def _wrap_varlen(fn: Any) -> Any:
             cu,
             packed.max_length,
             packed.max_length,
-            scale=scale,
-            enable_gqa=groups > 1,
+            **extra,
         )
 
     return attend
