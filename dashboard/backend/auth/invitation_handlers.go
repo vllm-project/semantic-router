@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -174,5 +175,12 @@ func writeInvitationError(w http.ResponseWriter, err error) {
 		http.Error(w, "invitation is no longer available", http.StatusGone)
 		return
 	}
-	http.Error(w, err.Error(), http.StatusBadRequest)
+	for _, validationErr := range []error{ErrInvalidInvitationEmail, ErrInvalidInvitationName, ErrInvitationUserExists} {
+		if errors.Is(err, validationErr) {
+			http.Error(w, validationErr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	log.Printf("failed to process invitation: %v", err)
+	http.Error(w, "failed to process invitation", http.StatusInternalServerError)
 }
