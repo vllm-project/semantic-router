@@ -92,6 +92,7 @@ func TestServingOverALeaseBundlesEverySignalOfAStage(t *testing.T) {
 	for i := range calls {
 		leaves[i] = bundle.Join()
 	}
+	started := time.Now()
 	for i, call := range calls {
 		wg.Add(1)
 		go func() {
@@ -101,6 +102,9 @@ func TestServingOverALeaseBundlesEverySignalOfAStage(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	if elapsed := time.Since(started); elapsed >= 5*time.Second {
+		t.Fatalf("the stage waited for its window instead of sending once every participant parked: %v", elapsed)
+	}
 	for _, err := range errs {
 		if err != nil {
 			t.Fatal(err)

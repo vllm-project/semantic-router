@@ -91,6 +91,19 @@ providers:
           chat_path: /chat/completions
           api_key: static-demo-key
           weight: 100
+    # A vLLM-type entry pointed at a relay opts in to the OpenAI-compatible
+    # gateway response contract; the plain vLLM backends above keep the
+    # strict one.
+    - name: remote-vllm-gateway-reference
+      provider_model_id: remote-vllm-gateway-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-gateway-primary
+          base_url: https://gateway.example.com/v1
+          provider: vllm
+          openai_compat_gateway: true
+          api_key: static-demo-key
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
@@ -243,6 +256,8 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
+        - name: business-adapter
+          description: Adapter specialized for business strategy and operations prompts.
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -288,6 +303,14 @@ routing:
         case_sensitive: false
         fuzzy_match: true
         fuzzy_threshold: 82
+      # include_history also matches earlier user messages in the conversation,
+      # so a constraint such as "local model only" stated in an earlier turn
+      # still applies. Omitted (false) evaluates only the current user message.
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        case_sensitive: false
+        include_history: true
 
     embeddings:
       - name: technical_support
@@ -888,6 +911,12 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+        # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
+        - model: qwen3-32b
+          lora_name: business-adapter
+          use_reasoning: true
+          reasoning_mode: enabled
+          reasoning_effort: low
       candidateIterations:
         - variable: candidate
           source: models
@@ -1022,6 +1051,16 @@ routing:
               max_tools: 16
               max_new_tools_per_turn: 2
               pin_called_tools: true
+        - type: masking
+          configuration:
+            enabled: true
+            threshold: 0.85
+            entity_types:
+              - EMAIL_ADDRESS
+              - PHONE_NUMBER
+            placeholders:
+              EMAIL_ADDRESS: "[EMAIL_{index}]"
+              PHONE_NUMBER: "[PHONE_{index}]"
       emits:
         - kind: retention
           retention:
