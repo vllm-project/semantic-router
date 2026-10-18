@@ -427,7 +427,7 @@ type milvusRow struct {
 
 // Milvus queries cannot sort, so scan walks timestamp ranges newest first,
 // reading IDs before bodies. The timestamp column holds whole seconds, so each
-// second is loaded whole and ordered by its full timestamps.
+// second is ordered by its full timestamps in visitBucket.
 func (m *MilvusStore) scan(ctx context.Context) recordScan {
 	return func(from int, visit func(Record) bool) error {
 		floor := int64(math.MinInt64)
@@ -485,15 +485,15 @@ func (m *MilvusStore) visitSeconds(ctx context.Context, rows []milvusRow, from i
 			from -= len(second)
 			continue
 		}
-		var records []Record
-		if _, err := m.visitIDs(ctx, second, func(record Record) bool {
-			records = append(records, record)
-			return true
-		}); err != nil {
-			return 0, false, err
+		ids := make([]string, len(second))
+		for i, row := range second {
+			ids[i] = row.id
 		}
-		if !visitGroup(records, from, visit) {
-			return 0, false, nil
+		more, err := visitBucket(ids, from, milvusScanBatch, func(ids []string) ([]Record, error) {
+			return m.fetch(ctx, ids)
+		}, visit)
+		if err != nil || !more {
+			return 0, false, err
 		}
 		from = 0
 	}
@@ -525,35 +525,27 @@ func (m *MilvusStore) queryRows(ctx context.Context, lo, hi int64) ([]milvusRow,
 	return rows, nil
 }
 
-func (m *MilvusStore) visitIDs(ctx context.Context, rows []milvusRow, visit func(Record) bool) (bool, error) {
-	for start := 0; start < len(rows); start += milvusScanBatch {
-		batch := rows[start:min(start+milvusScanBatch, len(rows))]
-		quoted := make([]string, len(batch))
-		for i, row := range batch {
-			quoted[i] = fmt.Sprintf("'%s'", row.id)
-		}
-		expr := fmt.Sprintf("id in [%s]", strings.Join(quoted, ","))
-		result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "data"},
-			client.WithSearchQueryConsistencyLevel(m.readLevel()))
-		if err != nil {
-			return false, fmt.Errorf("failed to query records: %w", err)
-		}
-		byID := make(map[string]Record, result.Len())
-		if data, ok := result.GetColumn("data").(*entity.ColumnVarChar); ok {
-			for _, raw := range data.Data() {
-				var record Record
-				if json.Unmarshal([]byte(raw), &record) == nil {
-					byID[record.ID] = record
-				}
-			}
-		}
-		for _, row := range batch {
-			if record, ok := byID[row.id]; ok && !visit(record) {
-				return false, nil
+func (m *MilvusStore) fetch(ctx context.Context, ids []string) ([]Record, error) {
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		quoted[i] = fmt.Sprintf("'%s'", id)
+	}
+	expr := fmt.Sprintf("id in [%s]", strings.Join(quoted, ","))
+	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "data"},
+		client.WithSearchQueryConsistencyLevel(m.readLevel()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query records: %w", err)
+	}
+	var records []Record
+	if data, ok := result.GetColumn("data").(*entity.ColumnVarChar); ok {
+		for _, raw := range data.Data() {
+			var record Record
+			if json.Unmarshal([]byte(raw), &record) == nil {
+				records = append(records, record)
 			}
 		}
 	}
-	return true, nil
+	return records, nil
 }
 
 func (m *MilvusStore) count(ctx context.Context, expr string) (int, error) {

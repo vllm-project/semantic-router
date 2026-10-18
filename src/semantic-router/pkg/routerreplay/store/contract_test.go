@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -233,5 +234,35 @@ func TestCollectPageStopsAfterThePage(t *testing.T) {
 	}
 	if visited != 10 || page.Total != 1000 || page.Records[0].ID != "500" {
 		t.Fatalf("visited %d records for a 10-record page at offset 500", visited)
+	}
+}
+
+func TestVisitBucketReadsOnlyTheVisitedBodies(t *testing.T) {
+	base := time.Now().UTC().Truncate(time.Second)
+	ids := make([]string, 300)
+	for i, n := range rand.New(rand.NewPCG(5, 6)).Perm(len(ids)) {
+		ids[i] = fmt.Sprintf("rec-%03d", n)
+	}
+	largest, read := 0, 0
+	fetch := func(ids []string) ([]Record, error) {
+		largest, read = max(largest, len(ids)), read+len(ids)
+		records := make([]Record, len(ids))
+		for i, id := range ids {
+			n, _ := strconv.Atoi(strings.TrimPrefix(id, "rec-"))
+			records[i] = Record{ID: id, Timestamp: base.Add(time.Duration(n) * time.Microsecond)}
+		}
+		return records, nil
+	}
+	var got []string
+	_, err := visitBucket(ids, 1, 100, fetch, func(record Record) bool {
+		got = append(got, record.ID)
+		return false
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One pass for the timestamps, then one batch for the visited record.
+	if !slices.Equal(got, []string{"rec-298"}) || largest > 100 || read != 400 {
+		t.Fatalf("visited %v, read %d bodies, at most %d at once", got, read, largest)
 	}
 }
