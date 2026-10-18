@@ -93,16 +93,32 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	return protocolEngineFor(r.ProtocolCodecs)
+	// preserve_unknown_chat_fields mirrors streamed_body_mode: a router-level
+	// option, defaulting to the strict request contract when unset. A router
+	// without a config (unit-test harnesses) keeps the same default.
+	passthrough := r.Config != nil && r.Config.RouterOptions.PreserveUnknownChatFields
+	return protocolEngineForPolicy(r.ProtocolCodecs, passthrough)
 }
 
 // protocolEngineFor serves callers that hold only the registry, such as
-// detached work that must not capture the router.
+// detached work that must not capture the router. They keep the strict policy.
 func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
+	return protocolEngineForPolicy(registry, false)
+}
+
+func protocolEngineForPolicy(registry *protocolcodec.Registry, passthroughUnknown bool) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
-	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+	policy := llmprotocol.DefaultPolicy()
+	if passthroughUnknown {
+		// Forward top-level OpenAI Chat fields the neutral contract does not
+		// model instead of rejecting them at the gateway. Only same-format
+		// requests can carry them; cross-format translation and looper
+		// requests remain strict.
+		policy.UnknownFields = llmprotocol.UnknownPreserveSameFormat
+	}
+	return protocolcodec.NewEngine(registry, policy)
 }
 
 // protocolEngineForVendor creates an engine with the specified response vendor policy.
@@ -115,6 +131,13 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
 	policy := llmprotocol.DefaultPolicy()
+	// preserve_unknown_chat_fields covers both directions: strict response
+	// decoding would reject the very fields the request side just forwarded
+	// (logprobs, audio, provider extensions) after the provider already did
+	// the work. Same-format forwarding keeps them.
+	if r.Config != nil && r.Config.RouterOptions.PreserveUnknownChatFields {
+		policy.UnknownFields = llmprotocol.UnknownPreserveSameFormat
+	}
 	policy.ResponseVendor = vendor
 	return protocolcodec.NewEngine(registry, policy)
 }
@@ -141,6 +164,17 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
+	}
+	if ctx.LooperRequest {
+		// Looper internal requests keep the closed field contract: decode
+		// them with the strict engine so passthrough capture never replaces
+		// the logprobs evidence extraction. A strict engine that cannot be
+		// built fails closed rather than degrading to the loose policy.
+		strictEngine, strictErr := protocolEngineFor(r.ProtocolCodecs)
+		if strictErr != nil {
+			return nil, r.createErrorResponse(503, "protocol runtime unavailable")
+		}
+		engine = strictEngine
 	}
 	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {

@@ -28,6 +28,7 @@ type CanonicalRouterGlobal struct {
 	ListBackendModels bool                     `yaml:"list_backend_models"`
 	ClearRouteCache   bool                     `yaml:"clear_route_cache"`
 	StreamedBody      CanonicalStreamedBody    `yaml:"streamed_body"`
+	Protocol          CanonicalProtocol        `yaml:"protocol"`
 	SkipProcessing    SkipProcessingConfig     `yaml:"skip_processing"`
 	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
 	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
@@ -39,6 +40,18 @@ type CanonicalStreamedBody struct {
 	Enabled    bool  `yaml:"enabled"`
 	MaxBytes   int64 `yaml:"max_bytes,omitempty"`
 	TimeoutSec int   `yaml:"timeout_sec,omitempty"`
+}
+
+// CanonicalProtocol groups wire-protocol handling controls.
+type CanonicalProtocol struct {
+	// PreserveUnknownChatFields keeps OpenAI Chat fields the neutral
+	// contract does not model, in both directions: unknown request fields
+	// (top-level and per-message) travel to a same-format backend and
+	// survive router mutations, and provider response fields (streamed
+	// logprobs, audio, execution fields, vendor extensions) travel back to
+	// a same-format client. Unset keeps the default behavior of rejecting
+	// such requests at ingress and such responses after decode.
+	PreserveUnknownChatFields bool `yaml:"preserve_unknown_chat_fields,omitempty"`
 }
 
 // CanonicalServiceGlobal groups shared runtime services exposed by the router.
@@ -285,6 +298,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.StreamedBodyMode = router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes
 	cfg.StreamedBodyTimeoutSec = router.StreamedBody.TimeoutSec
+	cfg.PreserveUnknownChatFields = router.Protocol.PreserveUnknownChatFields
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning

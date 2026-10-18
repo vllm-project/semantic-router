@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -102,6 +103,31 @@ type chatMessageWire struct {
 	ToolCallID             string               `json:"tool_call_id,omitempty"`
 	Annotations            []chatAnnotationWire `json:"annotations,omitempty"`
 	Name                   json.RawMessage      `json:"name,omitempty"`
+	// Unknown holds preserve-mode passthrough fields for the encoder. It is
+	// not a wire field of its own; MarshalJSON merges it after the modelled
+	// fields so an encoder-produced field always wins.
+	Unknown map[string]json.RawMessage `json:"-"`
+}
+
+// MarshalJSON appends preserved unknown fields after the modelled wire
+// fields. Modelled output wins over the captured input, so a semantic
+// mutation is never overwritten by the original request bytes.
+func (wire chatMessageWire) MarshalJSON() ([]byte, error) {
+	type chatMessageWireModelled chatMessageWire
+	base, err := json.Marshal(chatMessageWireModelled(wire))
+	if err != nil || len(wire.Unknown) == 0 {
+		return base, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(base, &fields); err != nil {
+		return nil, err
+	}
+	for name, value := range wire.Unknown {
+		if _, exists := fields[name]; !exists {
+			fields[name] = value
+		}
+	}
+	return json.Marshal(fields)
 }
 
 type chatAudioOutputWire struct {
@@ -194,14 +220,18 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeWire(body, &wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := validateChatRequestWire(wire); err != nil {
+	if err := validateChatRequestWire(wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeChatBaseRequest(wire)
 	if err := decodeTextVerbosity(wire.Verbosity, &request.TextVerbosity); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := decodeChatMessages(wire.Messages, &request, policy); err != nil {
+	messagePassthrough, err := captureChatMessagePassthrough(body, policy)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	if err = decodeChatMessages(wire.Messages, &request, policy, messagePassthrough); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := decodeChatTools(wire.Tools, &request); err != nil {
@@ -210,20 +240,30 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeChatRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
+	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
+	passthrough, err := captureChatPassthrough(body, policy)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	if len(passthrough) > 0 {
+		envelope.RequestPassthrough = passthrough
+	}
+	return request, envelope, nil, nil
 }
 
-func validateChatRequestWire(wire chatRequestWire) error {
-	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"prompt_cache_retention": wire.PromptCacheRetention,
-		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
-		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
-		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
-		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
-		"top_logprobs":       wire.TopLogprobs,
-		"web_search_options": wire.WebSearchOptions,
-	}); err != nil {
-		return err
+func validateChatRequestWire(wire chatRequestWire, policy llmprotocol.Policy) error {
+	if policy.UnknownFields == llmprotocol.UnknownReject {
+		if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+			"prompt_cache_retention": wire.PromptCacheRetention,
+			"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
+			"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
+			"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
+			"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
+			"top_logprobs":       wire.TopLogprobs,
+			"web_search_options": wire.WebSearchOptions,
+		}); err != nil {
+			return err
+		}
 	}
 	if len(wire.Messages) == 0 {
 		return llmprotocol.NewError(
@@ -251,6 +291,117 @@ func validateChatRequestWire(wire chatRequestWire) error {
 		)
 	}
 	return nil
+}
+
+// chatWireFields is the set of top-level names modelled by chatRequestWire.
+// Fields outside this set are provider extensions the neutral contract does
+// not understand. Fields in chatPassthroughFields are modelled only so the
+// strict decoder can reject them; they still pass through unchanged.
+var chatWireFields = exactJSONStructFields(reflect.TypeOf(chatRequestWire{}))
+
+var chatPassthroughFields = map[string]struct{}{
+	"prompt_cache_retention": {},
+	"prompt_cache_options":   {},
+	"safety_identifier":      {},
+	"audio":                  {},
+	"function_call":          {},
+	"functions":              {},
+	"logit_bias":             {},
+	"logprobs":               {},
+	"modalities":             {},
+	"moderation":             {},
+	"prediction":             {},
+	"service_tier":           {},
+	"top_logprobs":           {},
+	"web_search_options":     {},
+}
+
+// captureChatPassthrough returns the top-level fields a same-format backend
+// must receive even though the neutral contract does not model them. Only the
+// preserve-same-format policy opts in; strict callers keep the rejection path.
+// Preserved bytes are bounded by SourceEnvelopeBytes like the per-message
+// capture, so preservation degrades to an explicit error instead of
+// unbounded memory growth.
+func captureChatPassthrough(body []byte, policy llmprotocol.Policy) (map[string]json.RawMessage, error) {
+	if policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat {
+		return nil, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return nil, err
+	}
+	out := make(map[string]json.RawMessage)
+	total := 0
+	for name, raw := range fields {
+		if _, modeled := chatWireFields[name]; modeled {
+			if _, passthrough := chatPassthroughFields[name]; !passthrough {
+				continue
+			}
+		}
+		total += len(raw)
+		if total > policy.Limits.SourceEnvelopeBytes {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				"chat_passthrough_budget_exceeded",
+				"preserved unknown request fields exceed the source envelope budget; resend without them or raise limits.source_envelope_bytes",
+				nil,
+			)
+		}
+		out[name] = append(json.RawMessage(nil), raw...)
+	}
+	return out, nil
+}
+
+// chatMessageWireFields names the request-message keys the wire contract
+// models; anything else inside messages[i] is passthrough state.
+var chatMessageWireFields = exactJSONStructFields(reflect.TypeOf(chatMessageWire{}))
+
+// captureChatMessagePassthrough records unknown fields of every request
+// message, index-parallel to the client's wire messages slice. The captured
+// maps are attached to the neutral messages during decode so they travel
+// with their message across router reordering mutations. The total
+// preserved bytes stay bounded by SourceEnvelopeBytes: beyond that limit
+// preservation degrades to an explicit error instead of unbounded memory
+// growth.
+func captureChatMessagePassthrough(body []byte, policy llmprotocol.Policy) ([]map[string]json.RawMessage, error) {
+	if policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat {
+		return nil, nil
+	}
+	var wire struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		return nil, err
+	}
+	var captured []map[string]json.RawMessage
+	total := 0
+	for _, raw := range wire.Messages {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, err
+		}
+		unknown := make(map[string]json.RawMessage)
+		for name, value := range fields {
+			if _, modeled := chatMessageWireFields[name]; modeled {
+				continue
+			}
+			total += len(value)
+			if total > policy.Limits.SourceEnvelopeBytes {
+				return nil, llmprotocol.NewError(
+					llmprotocol.ErrorUnsupportedFeature,
+					"chat_passthrough_budget_exceeded",
+					"preserved unknown message fields exceed the source envelope budget; resend without them or raise limits.source_envelope_bytes",
+					nil,
+				)
+			}
+			unknown[name] = append(json.RawMessage(nil), value...)
+		}
+		if len(unknown) == 0 {
+			unknown = nil
+		}
+		captured = append(captured, unknown)
+	}
+	return captured, nil
 }
 
 func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
@@ -282,14 +433,19 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 	return request
 }
 
-func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request, policy llmprotocol.Policy, passthrough []map[string]json.RawMessage) error {
 	for index, messageWire := range messages {
 		message, err := decodeChatRequestMessage(messageWire, index, policy)
 		if err != nil {
 			return err
 		}
+		if index < len(passthrough) {
+			message.Unknown = passthrough[index]
+		}
 		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
-			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: message.Role, Content: message.Content})
+			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
+				Role: message.Role, Content: message.Content, Unknown: message.Unknown,
+			})
 		} else {
 			request.Messages = append(request.Messages, message)
 		}

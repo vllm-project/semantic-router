@@ -2064,6 +2064,8 @@ global:
       enabled: true
       max_bytes: 1048576
       timeout_sec: 15
+    protocol:
+      preserve_unknown_chat_fields: false
     skip_processing:
       enabled: false
     model_selection:
