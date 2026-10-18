@@ -209,8 +209,6 @@ jobs:
     uses: ./.github/workflows/operator-ci.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.operator)[0]) }}
-      run_integration: true
-      integration_matrix: ${{ toJSON(fromJSON(needs.plan.outputs.operator)[0].integration_matrix) }}
     secrets: inherit
 
   local:

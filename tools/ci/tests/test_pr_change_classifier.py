@@ -226,7 +226,6 @@ class SelectionTests(unittest.TestCase):
             "src/semantic-router/pkg/cache/redis_exact_cache_integration_test.go": {
                 "storage"
             },
-            "e2e/testcases/istio_routes_test.go": {"e2e.istio"},
             "e2e/testcases/authz_header_spoofing_test.go": {"e2e.authz-rbac"},
         }
         for path, expected in cases.items():
@@ -369,10 +368,32 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(
             set(full_cpu_ids()) <= set(plans[0]["expected_verification_ids"])
         )
-        for profile in ("agentgateway", "aibrix", "istio", "llm-d", "streaming"):
+        for profile in ("standalone", "envoy-ai-gateway", "streaming"):
             self.assertIn(profile, full_e2e_profiles())
         self.assertNotIn("e2e.dynamo", plans[0]["expected_verification_ids"])
         self.assertNotIn("e2e.router-replay", plans[0]["expected_verification_ids"])
+
+    def test_retired_gateway_profiles_have_no_live_selection_entrypoint(self):
+        records = verification_records(load_domain_registry())
+        full = make_plan([], source_sha=SHA, full=True)
+        for profile in ("agentgateway", "aibrix", "dynamo", "istio", "llm-d"):
+            identity = f"e2e.{profile}"
+            with self.subTest(profile=profile):
+                self.assertNotIn(profile, profile_records())
+                self.assertNotIn(identity, records)
+                self.assertNotIn(identity, full["expected_verification_ids"])
+                self.assertNotIn(
+                    identity,
+                    classify([f"e2e/profiles/{profile}/profile.go"]).selected_jobs,
+                )
+                with self.assertRaisesRegex(ValueError, "unknown or duplicated"):
+                    make_plan([], source_sha=SHA, requested=(identity,))
+        for path in (
+            "e2e/testcases/full_duplex_routing.go",
+            "src/semantic-router/pkg/extproc/processor_req_body_full_duplex.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.streaming", classify([path]).selected_jobs)
 
     def test_authoring_contracts_remain_affected_and_manual_without_full_obligation(
         self,
@@ -386,7 +407,7 @@ class SelectionTests(unittest.TestCase):
         }
         baseline = make_plan([], source_sha=SHA, full=True)
         self.assertTrue(set(cases).isdisjoint(baseline["expected_verification_ids"]))
-        self.assertEqual(len(baseline["verifications"]), 35)
+        self.assertEqual(len(baseline["verifications"]), 31)
         self.assertEqual(len(baseline["component_batches"]), 5)
         for identity, path in cases.items():
             with self.subTest(identity=identity):
@@ -434,11 +455,7 @@ class SelectionTests(unittest.TestCase):
                 "Helm chart",
                 "Local deployment",
                 "Kubernetes Operator",
-                "agentgateway",
                 "Agent Router",
-                "AIBrix",
-                "Istio Gateway",
-                "llm-d",
                 "Streaming with Agent Router",
             },
         )

@@ -170,28 +170,6 @@ def make_plan(
             if requested
             else reasons or ["always" if record.get("always") else "explicit-consumer"]
         )
-        if record["executor"] == "operator":
-            variants = (
-                (
-                    "memory",
-                    "redis",
-                    "milvus",
-                    "qdrant",
-                    "hybrid",
-                )
-                if full
-                else ("memory",)
-            )
-            record["integration_matrix"] = [
-                {
-                    "cache-backend": backend,
-                    "deploy-redis": backend == "redis",
-                    "deploy-milvus": backend in {"milvus", "hybrid"},
-                    "deploy-qdrant": backend == "qdrant",
-                    "router-name": f"test-router-{backend}",
-                }
-                for backend in variants
-            ]
         if record["executor"] == "e2e":
             record["baseline_suite"] = "full" if full else "standard"
         if waiver := planned_waiver(profile, name):

@@ -148,7 +148,7 @@ verifications:
     services: [kind]
     runtime: model-runtime
     device: cpu
-    inventory: operator-reconcile-and-routed-request
+    inventory: operator-memory-reconcile-and-routed-request
   local.cli:
     layer: product
     execution: approved
@@ -388,10 +388,6 @@ full_cpu:
     - e2e.local-classifier-backend
     - e2e.dashboard
     - e2e.remote-embedding
-    - e2e.agentgateway
-    - e2e.aibrix
-    - e2e.istio
-    - e2e.llm-d
     - e2e.streaming
     - e2e.vela-omni
     - e2e.vela-halu
@@ -401,11 +397,7 @@ full_cpu:
     Helm chart: [core, e2e.standalone]
     Local deployment: [local.cli]
     Kubernetes Operator: [operator]
-    agentgateway: [e2e.agentgateway]
     Agent Router: [e2e.envoy-ai-gateway]
-    AIBrix: [e2e.aibrix]
-    Istio Gateway: [e2e.istio]
-    llm-d: [e2e.llm-d]
     Streaming with Agent Router: [e2e.streaming]
   excluded:
     cuda: No CUDA runner is declared in this CPU inventory; image build is not device qualification.

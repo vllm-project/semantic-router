@@ -83,16 +83,19 @@ there was no diff base. At the exact audit baseline, that expanded the plan to
 profiles, including optional deployments outside the versioned full CPU
 inventory. Without an explicit comparison base or supplied changed paths,
 weekly, release qualification, and Main publication now select the versioned
-baseline: 35 contracts and 15 E2E profiles after retiring CK, adding the
+baseline: 31 contracts and 11 E2E profiles after retiring CK, adding the
 model-runtime contract, separating Operator source qualification from deployment,
-and moving five authoring contracts to affected/manual selection. The release publication workflow
-does not itself invoke that test-plan mode. Experimental profiles remain
-available through affected PR changes and explicit manual selection. A full PR
+moving five authoring contracts to affected/manual selection, and retiring four
+full-inventory external gateways. Dynamo also retires from optional selection.
+The release publication workflow does not itself invoke that test-plan mode.
+Other cataloged experimental profiles remain available through affected PR
+changes and explicit manual selection. The five
+retired external integrations have no runnable CI profile. A full PR
 run and explicit Main publication still retain affected-path additions.
 
 Counts below compare the actual old and new versioned full CPU inventories.
-The old inventory has 38 contracts; the new one has 35. The table below counts
-physical workers, not assertions. The complete physical job count is 64 → 45.
+The old inventory has 38 contracts; the new one has 31. The table below counts
+physical workers, not assertions. The complete physical job count is 64 → 40.
 See [the job and cost audit](ci-job-cost-audit.md)
 for all expanded jobs, representative PR/Main plans, measured setup, transfer
 estimates, and the cost of rerunning approved work.
@@ -100,10 +103,10 @@ estimates, and the cost of rerunning approved work.
 | Boundary | Old baseline workers | Final workers | What remains independent |
 | --- | ---: | ---: | --- |
 | Component contracts | 9 | 5 | One job per selected contract; five authoring contracts run when affected/manual, CK retires, model-runtime joins full qualification |
-| Kubernetes E2E profiles | 15 | 7 | All 15 profiles, clusters, teardown, and receipts |
+| Kubernetes E2E profiles | 15 | 6 | Eleven maintained profiles, each with isolated clusters, teardown and receipts; four external gateway profiles retire |
 | Platform contracts | 2 | 1 | Model and image-routing reports and receipts |
 | Recipe workflow, including inventory/results | 10 | 6 | All 8 live CPU recipes and every authored probe |
-| Operator source and deployment | 10 | 8 | One source job, bundle-image inspection, five live variants, and runtime results |
+| Operator source and deployment | 10 | 4 | One source job, bundle-image inspection, one memory-backed live deployment and results |
 
 The initial component batching proposal was withdrawn after examining setup
 cost, dependency isolation, and retry granularity. Components default to one
@@ -118,13 +121,13 @@ All ten component contracts remain available. `training`, `onnx-artifacts`,
 `bench-tools`, `learning-tools`, and `soak-tools` check authoring/tooling surfaces
 rather than every product deployment, so they are not unconditional full CPU
 obligations. Their own paths still select them; shared component execution,
-bootstrap, planner, and catalog changes select all ten. No published
-`support_contracts` mapping is removed. This refactor's broad changed paths
-therefore select 51 contracts and 53 jobs, including 26 E2E profiles after
-repairing missing shared-helper consumer mappings. The old selector on the
-same diff selected only 19 E2E profiles and 70 jobs; those counts are not a
-same-coverage cost comparison. The [cost audit](ci-job-cost-audit.md) separately
-aligns the profile inventory. Ordinary core changes still select six automatic
+bootstrap, planner, and catalog changes select all ten. The public support
+matrix now limits recurring gateway qualification to Envoy AI Gateway ExtProc
+and standalone; agentgateway, AIBrix, Istio, llm-d and Dynamo become experimental
+examples without runnable CI profiles. Shared-helper consumer mappings still
+select every retained live consumer. The [cost audit](ci-job-cost-audit.md)
+separates the expanded coverage from retired integrations when comparing this
+broad PR with the old planner. Ordinary core changes still select six automatic
 jobs or nine jobs after affected approval.
 
 [execution_batches.py](../../ci/execution_batches.py) retains bounded batching
@@ -178,7 +181,7 @@ or complete weekly/explicit publication qualification.
 | [recipe-conformance.yml](../../../.github/workflows/recipe-conformance.yml) | `inventory`, `live-cpu` matrix, `report` | Validates maintained assets and authored Preview acceptance/probe coverage across standalone and built-in latest sources. | Approved/full. Reduce 8 live workers to 4 through weighted grouping; keep inventory/report, serial long-context handling, and all probes. It does not replace a routed upstream-request assertion. |
 | [integration-test-k8s.yml](../../../.github/workflows/integration-test-k8s.yml) | `integration-test`, expanded from E2E batches | Actual Kubernetes profiles consume qualified images, run isolated cases, and publish complete framework evidence. | Approved/full. Reduce 15 profile workers to 7 bounded compatible workers; set up Kind/load images/build the runner once per batch. Preserve the separate model-heavy worker and per-profile teardown. |
 | [operator-source.yml](../../../.github/workflows/operator-source.yml) | `checks` | Unit/race, lint, generated drift, OLM bundle generation/validation, and sample-to-router configuration contracts. | Automatic affected work in one shared setup, independent of images or live deployment approval. |
-| [operator-ci.yml](../../../.github/workflows/operator-ci.yml) | `bundle-image`, `integration-test` matrix, `result` | Qualified bundle image inspection plus Operator reconciliation and an observed routed request. | Approved/full. Keep the affected memory variant; reduce full live variants from seven to five. The full source plus runtime expansion is 8 jobs, down from 10. |
+| [operator-ci.yml](../../../.github/workflows/operator-ci.yml) | `bundle-image`, `integration-test`, `result` | Qualified bundle image inspection plus one memory-backed Operator reconciliation and an observed routed request. | Approved/full. Retire all deployment-matrix parameters and external-storage installation branches. Source plus runtime expands to 4 jobs, down from 10. |
 | [performance-test.yml](../../../.github/workflows/performance-test.yml) | `component-benchmarks` | Checks measurement contracts and runs real component/model/Looper benchmarks against baselines. | Approved/full. Repair benchmark compilation and retain evidence completeness. Numerical regressions remain advisory; shared hosted timing is not a reliable automatic PR veto. Execution failure or absent inventory still fails the contract. |
 
 ### Build and publication
@@ -211,44 +214,40 @@ untrusted PR test execution, even when they are small.
 | [community-labels.yml](../../../.github/workflows/community-labels.yml) | `pull-request-state`, `pull-request-sweep`, `issue-sweep` | Trusted post-check PR reconciliation and hourly repair of labels missed by events. | Retain current event/hourly behavior in this change. Measure API/runtime cost before reducing the repair frequency; these jobs are not redundant product tests. |
 | [netlify-preview.yml](../../../.github/workflows/netlify-preview.yml) | `authorize`, `build`, `publish` | Authorizes `/netlify`, builds the requested commit, then publishes a preview under a separate permission boundary. | Retain explicit requested previews. A deployed preview has different value from the automatic website build; do not make it an unconditional PR job. |
 
-## Operator: reducing seven configurations to five live workers
+## Operator: one reconciliation and request-path contract
 
 The old full plan selected `memory`, `redis`, `milvus`, `qdrant`, `hybrid`,
-`mmbert`, and `complexity`. An affected non-full deployment selected only
-`memory`. The YAML's `cache-backend` name covered both storage backends and
-model/configuration variants, not seven independent cache implementations.
+`mmbert`, and `complexity`. Every variant repeated cluster creation, CRD and
+controller installation, image loading, reconciliation and the same nonce
+request. None asserted backend-specific cache hits, TTL, persistence, hybrid
+tiers or complexity-dependent selection.
 
-Every retained matrix entry creates a fresh Kind cluster, installs CRDs and the
-operator, loads qualified request-path images, applies a SemanticRouter
-configuration, waits for reconciliation/readiness, and sends a nonce request.
-[check_operator_request.py](../../ci/check_operator_request.py) checks the
-selected `operator_ci_route`, selected model, upstream response path, and echoed
-nonce. This is a real request assertion. However, it sends no repeated cache
-request and uses no feature-specific expected route. Complete receipt inventory
-does not create cache-hit or complexity-selection coverage.
+The maintained live contract now uses one memory-backed deployment.
+[check_operator_request.py](../../ci/check_operator_request.py) requires the
+selected `operator_ci_route`, selected model, upstream response path and echoed
+nonce. This proves that the controller's reconciled resources can carry a real
+request through Envoy and the Router. It does not qualify memory-cache behavior.
+The workflow has no deployment matrix, optional bypass input, Redis/Milvus/Qdrant
+installation steps or unused Secret setup.
 
-| Old variant | Distinct configuration | Evidence limit | Final decision |
-| --- | --- | --- | --- |
-| `memory` | Basic CPU embedding deployment and in-memory cache configuration | No cache-hit or eviction assertion | Keep the minimal affected live deploy-to-request path. |
-| `redis` | Redis service, password Secret reference, index/connection configuration | No hit, TTL, or reconnect assertion | Keep distinct backend wiring and authenticated startup in full qualification. |
-| `milvus` | Milvus service, authentication Secret, collection/index configuration | No persistence or query-result assertion | Keep distinct rendered/authentication/startup coverage; Storage integration owns data behavior. |
-| `qdrant` | Qdrant service and connection/collection configuration | No hit or persistence assertion | Keep distinct backend wiring, without claiming data-plane equivalence to Storage tests. |
-| `hybrid` | Hybrid cache/Milvus configuration and capacity/index settings | No hot/cold tier or failover assertion | Keep this distinct startup combination; require stronger assertions before claiming hybrid behavior. |
-| `mmbert` | Memory cache and mmbert embedding options; basic memory already uses that embedding family | No additional model-behavior assertion | Retire the dedicated live cluster. Add actual sample CR → canonical configuration → router-loader assertions for target layer/dimension, cache threshold, size, and TTL. |
-| `complexity` | Complexity rules/candidates plus memory cache | Common unconditional route did not demonstrate complexity-dependent selection | Retire the dedicated live cluster. Add sample round-trip assertions for all three rules, hard/easy candidates, threshold, and medical AND composition. |
+| Configuration | Final verification boundary |
+| --- | --- |
+| `memory` | One live reconciliation and provider-observed request, plus source tests. |
+| `redis`, `milvus`, `qdrant`, `hybrid` | Actual sample CR to canonical configuration and Router-loader assertions. External storage deployment and startup are no longer Operator CI obligations; storage tests own their declared data behavior. |
+| `mmbert`, `complexity` | Actual sample conversion and Router-loader assertions for embedding options, cache parameters, rules and model candidates. No duplicate live cluster. |
 
-The new [sample tests](../../../deploy/operator/controllers/canonical_config_sample_variants_test.go)
-check the actual conversion and loader boundary. They do not claim runtime
-model or cache behavior. In particular, the legacy `response_cache.hnsw` sample
-field has no matching router store field and was ignored by the old conversion;
-neither the retired live worker nor the new source test qualifies it.
+[Model sample tests](../../../deploy/operator/controllers/canonical_config_sample_variants_test.go)
+and [storage sample tests](../../../deploy/operator/controllers/canonical_config_sample_storage_test.go)
+exercise the configuration boundary. They do not claim runtime model or cache
+behavior. The legacy `response_cache.hnsw` sample field has no matching Router
+store field and was ignored by the old conversion; no removed worker qualified
+it.
 
-`operator-source.yml` now runs unit/race, generated drift, and OLM bundle
-validation in one automatic source job with shared tooling. It has no image
-dependency. The approved deployment workflow retains a bundle-image inspection
-job, five independent full-matrix clusters, and result aggregation: seven jobs,
-or eight including source qualification. The affected non-full path remains
-four total jobs. No long shared cluster session replaces the removed variants.
+`operator-source.yml` runs unit/race, generated drift and OLM bundle validation
+in one automatic source job. The approved deployment contract adds bundle-image
+inspection, one live worker and result aggregation: four jobs including source
+qualification. The receipt requires the unique `memory/operator-routed-request`
+case and exact consumed images. It cannot accept an omitted or stale result.
 
 ## Acceptance and subsequent measurement
 
@@ -256,9 +255,9 @@ The restructuring must preserve source/artifact identity, required case
 inventories, failure propagation, and stale-approval rejection. Worker-count
 tests are insufficient on their own: the regression tests also exercise failed
 siblings, missing evidence, timeouts, leftover subprocesses, and failed cluster
-teardown. Performance compilation and the Istio prerequisite path receive
-specific correctness fixes rather than being hidden by moving them to manual
-execution.
+teardown. Performance compilation and acceptance oracles receive specific correctness
+fixes. Retired integrations lose both execution entries and public qualification
+claims.
 
 After comparable workloads have run, measure runner-minutes by phase, queue and
 end-to-end latency, setup versus test time, retry rates, and approved/deferred

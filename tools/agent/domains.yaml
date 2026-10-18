@@ -499,6 +499,20 @@ domains:
       - make helm-safety-validate HELM_REPO_UPDATE=false
     verifications: [core]
 
+  experimental-gateway-examples:
+    owner: deployment
+    paths:
+      - deploy/kubernetes/agentgateway/**
+      - deploy/kubernetes/aibrix/**
+      - deploy/kubernetes/dynamo/**
+      - deploy/kubernetes/istio/**
+      - deploy/kubernetes/llm-d/**
+      - deploy/kubernetes/llmd-base/**
+    # Changed-file YAML/format checks remain; these examples have no live
+    # qualification contract or automatic external-platform deployment.
+    checks: []
+    verifications: [quality]
+
   maintained-recipes:
     owner: router-core
     paths:
@@ -858,25 +872,6 @@ profiles:
       - deploy/helm/semantic-router/values.yaml
       - src/semantic-router/pkg/gateway/**
       - src/semantic-router/cmd/native_gateway*.go
-  istio:
-    display_name: Istio Gateway
-    owner: e2e
-    coverage_role: istio-service-mesh-contracts
-    selection: pr
-    paths:
-      - e2e/profiles/istio/**
-      - e2e/testcases/istio_*.go
-      - deploy/kubernetes/istio/**
-  agentgateway:
-    display_name: Agent Gateway
-    owner: e2e
-    coverage_role: agentgateway-integration
-    selection: pr
-    paths:
-      - e2e/profiles/agentgateway/**
-      - deploy/kubernetes/agentgateway/**
-      - e2e/testcases/full_duplex_routing.go
-      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
   envoy-ai-gateway:
     display_name: Envoy AI Gateway
     owner: e2e
@@ -1065,12 +1060,6 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_req_body_external_gateway.go
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/router_build.go
-  aibrix:
-    display_name: AIBrix
-    owner: e2e
-    coverage_role: aibrix-control-plane-and-gateway
-    selection: pr
-    paths: [e2e/profiles/aibrix/**, deploy/kubernetes/aibrix/**]
   dashboard:
     display_name: Dashboard E2E
     owner: e2e
@@ -1129,12 +1118,6 @@ profiles:
     paths:
       - e2e/profiles/remote-embedding/**
       - e2e/testcases/remote_embedding_routing.go
-  llm-d:
-    display_name: LLM-D Gateway
-    owner: e2e
-    coverage_role: llm-d-inference-gateway-health
-    selection: pr
-    paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
   looper:
     display_name: Looping Algorithms
     owner: e2e
@@ -1323,12 +1306,6 @@ profiles:
       - src/semantic-router/pkg/topiccontinuity/**
       - src/semantic-router/pkg/extproc/req_filter_topic_continuity*.go
       - src/semantic-router/pkg/extproc/request_original_history.go
-  dynamo:
-    display_name: Dynamo Gateway
-    owner: e2e
-    coverage_role: dynamo-deployment-smoke
-    selection: manual
-    paths: [e2e/profiles/dynamo/**]
   vectorstore-registry:
     display_name: Vector Store Registry
     owner: e2e

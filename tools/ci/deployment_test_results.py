@@ -104,26 +104,21 @@ def operator_source(unit: dict, steps: dict) -> dict:
     return {"cases": cases, "expected_cases": expected}
 
 
-def operator(directory: Path, variants: list[dict], jobs: dict) -> dict:
+def operator(directory: Path, jobs: dict) -> dict:
     for job in ("bundle-image", "integration-test"):
         if jobs.get(job, {}).get("result") != "success":
             raise ValueError(f"operator prerequisite did not succeed: {job}")
-    names = [row["cache-backend"] for row in variants]
-    if not names or len(names) != len(set(names)):
-        raise ValueError("operator variant inventory is empty or duplicated")
-    cases, expected = [], []
     artifacts = json.loads(
         (directory / "operator-bundle" / "artifacts.json").read_text()
     )
-    for name in names:
-        base = directory / f"operator-request-{name}"
-        report = json.loads((base / "operator-request.json").read_text())
-        require_complete(report["cases"], ["operator-routed-request"])
-        if report["expected_cases"] != ["operator-routed-request"]:
-            raise ValueError("unexpected operator request contract")
-        cases.extend({**row, "id": name + "/" + row["id"]} for row in report["cases"])
-        expected.append(name + "/operator-routed-request")
-        artifacts.extend(json.loads((base / "artifacts.json").read_text()))
+    base = directory / "operator-request"
+    report = json.loads((base / "operator-request.json").read_text())
+    require_complete(report["cases"], ["operator-routed-request"])
+    if report["expected_cases"] != ["operator-routed-request"]:
+        raise ValueError("unexpected operator request contract")
+    cases = [{**row, "id": "memory/" + row["id"]} for row in report["cases"]]
+    expected = ["memory/operator-routed-request"]
+    artifacts.extend(json.loads((base / "artifacts.json").read_text()))
     require_complete(cases, expected)
     return {
         "cases": cases,
@@ -146,7 +141,6 @@ def main() -> int:
     parser.add_argument("--discovery", type=Path)
     parser.add_argument("--events", type=Path)
     parser.add_argument("--directory", type=Path)
-    parser.add_argument("--variants")
     parser.add_argument("--jobs")
     parser.add_argument("--steps")
     parser.add_argument("--output", type=Path, required=True)
@@ -161,9 +155,7 @@ def main() -> int:
                 json.loads(args.report.read_text()), json.loads(args.steps)
             )
         else:
-            evidence = operator(
-                args.directory, json.loads(args.variants), json.loads(args.jobs)
-            )
+            evidence = operator(args.directory, json.loads(args.jobs))
         evidence.update(
             runtime=(
                 "none"

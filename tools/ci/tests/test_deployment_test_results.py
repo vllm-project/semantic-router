@@ -37,17 +37,10 @@ class DeploymentResultsTests(unittest.TestCase):
         self.assertEqual(jobs["operator-source"]["needs"], "plan")
         self.assertIn("operator-source", jobs["gate"]["needs"])
 
-    def test_operator_full_inventory_keeps_distinct_storage_deployments(self):
+    def test_operator_full_and_affected_plans_use_one_deployment_contract(self):
         plan = make_plan([], source_sha="a" * 40, full=True)
         contracts = {record["id"]: record for record in plan["verifications"]}
         self.assertIn("operator.source", contracts)
-        self.assertEqual(
-            [
-                row["cache-backend"]
-                for row in contracts["operator"]["integration_matrix"]
-            ],
-            ["memory", "redis", "milvus", "qdrant", "hybrid"],
-        )
         affected = make_plan(
             ["deploy/operator/controllers/canonical_config_builder.go"],
             source_sha="a" * 40,
@@ -55,9 +48,12 @@ class DeploymentResultsTests(unittest.TestCase):
         runtime = next(
             row for row in affected["verifications"] if row["id"] == "operator"
         )
-        self.assertEqual(
-            [row["cache-backend"] for row in runtime["integration_matrix"]], ["memory"]
-        )
+        for record in (contracts["operator"], runtime):
+            self.assertNotIn("integration_matrix", record)
+            self.assertEqual(
+                record["inventory"], "operator-memory-reconcile-and-routed-request"
+            )
+            self.assertEqual(record["executor"], "operator")
 
     def test_release_guard_case_remains_failed_and_other_cases_are_required(self):
         report = {
@@ -186,28 +182,24 @@ class DeploymentResultsTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 go_unit(discovery, mutation)
 
-    def test_operator_requires_every_variant_job_and_image_identity(self):
+    def test_operator_requires_the_memory_request_prerequisites_and_images(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
             request = {
                 "cases": [{"id": "operator-routed-request", "status": "passed"}],
                 "expected_cases": ["operator-routed-request"],
             }
-            for name in (
-                "operator-bundle",
-                "operator-request-memory",
-                "operator-request-redis",
-            ):
+            for name in ("operator-bundle", "operator-request"):
                 (directory / name).mkdir()
             (directory / "operator-bundle/artifacts.json").write_text(
                 json.dumps([{"id": "image:operator-bundle", "sha256": "a" * 64}])
             )
-            for name in ("memory", "redis"):
-                base = directory / f"operator-request-{name}"
-                (base / "operator-request.json").write_text(json.dumps(request))
-                (base / "artifacts.json").write_text(
-                    json.dumps([{"id": "image:operator", "sha256": "b" * 64}])
-                )
+            base = directory / "operator-request"
+            report = base / "operator-request.json"
+            report.write_text(json.dumps(request))
+            (base / "artifacts.json").write_text(
+                json.dumps([{"id": "image:operator", "sha256": "b" * 64}])
+            )
             jobs = {
                 name: {"result": "success"}
                 for name in (
@@ -215,9 +207,11 @@ class DeploymentResultsTests(unittest.TestCase):
                     "integration-test",
                 )
             }
-            variants = [{"cache-backend": name} for name in ("memory", "redis")]
-            result = operator(directory, variants, jobs)
-            self.assertEqual(len(result["cases"]), 2)
+            result = operator(directory, jobs)
+            self.assertEqual(
+                result["cases"],
+                [{"id": "memory/operator-routed-request", "status": "passed"}],
+            )
             self.assertEqual(len(result["artifacts"]), 2)
             for job in jobs:
                 for state in ("skipped", "cancelled", "failure", "missing"):
@@ -232,12 +226,20 @@ class DeploymentResultsTests(unittest.TestCase):
                             ValueError, f"prerequisite did not succeed: {job}"
                         ),
                     ):
-                        operator(directory, variants, bad)
-            with self.assertRaises(ValueError):
-                operator(directory, variants * 2, jobs)
-            (directory / "operator-request-redis/operator-request.json").unlink()
+                        operator(directory, bad)
+            for mutation in (
+                {"cases": []},
+                {"cases": request["cases"] * 2},
+                {"cases": [{"id": "operator-routed-request", "status": "skipped"}]},
+                {"expected_cases": []},
+                {"expected_cases": ["different-contract"]},
+            ):
+                report.write_text(json.dumps({**request, **mutation}))
+                with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                    operator(directory, jobs)
+            report.unlink()
             with self.assertRaises(FileNotFoundError):
-                operator(directory, variants, jobs)
+                operator(directory, jobs)
 
     def test_operator_source_requires_each_section_and_complete_unit_inventory(self):
         unit = {
@@ -285,7 +287,7 @@ class DeploymentResultsTests(unittest.TestCase):
         self.assertEqual(
             runtime["result"]["needs"], ["bundle-image", "integration-test"]
         )
-        self.assertNotIn("max-parallel", runtime["integration-test"]["strategy"])
+        self.assertNotIn("strategy", runtime["integration-test"])
         steps = source["checks"]["steps"]
         self.assertEqual(
             sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1

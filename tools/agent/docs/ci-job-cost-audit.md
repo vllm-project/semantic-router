@@ -46,11 +46,11 @@ that qualified fixture exists.
 | Documentation PR | 1 | 1 / 1 | 4 | 4 | Quality plus three control jobs; no runtime saving claimed. |
 | Core PR, automatic run | 5 | 3 / 5 | 10 | 6 | Two E2E contracts and their images await approval. The Gate fails while required evidence is deferred. |
 | Same core PR, approved affected run | 5 | 5 / 5 | 10 | 9 | Two images remain; two compatible E2E profiles use one worker. |
-| Versioned full CPU PR, approved | 38 | 35 / 35 | 64 | 45 | Product qualification retains supported boundaries; five authoring contracts run when affected or explicitly selected. |
-| No-base daily Nightly versus weekly qualification | 64 | 35 / 35 | 100 | 54 | Qualification is 92 versus 46; eight success-only image/Helm publication jobs are included in each total. |
+| Versioned full CPU PR, approved | 38 | 31 / 31 | 64 | 40 | Keep maintained product boundaries; retire four gateway qualifications, use one Operator deployment, and select five authoring contracts only when affected or requested. |
+| No-base daily Nightly versus weekly qualification | 64 | 31 / 31 | 100 | 49 | Qualification is 92 versus 41; eight success-only image/Helm publication jobs are included in each total. |
 | Main push, core input | 5 | 3 / 3 | 14 | 5 | Before: four image producers and three image publishers. After: automatic source/component evidence only. |
 | Main push, CLI input | 4 | 4 / 4 | 15 | 6 | Before: four image producers, four image publishers, one CLI publisher. Those nine jobs move out of routine pushes. |
-| Explicit Main publication | Not available | 35 / 35 | Not available | 55 | Full qualification, six image publishers, two Helm jobs, one development CLI publisher. |
+| Explicit Main publication | Not available | 31 / 31 | Not available | 50 | Full qualification, six image publishers, two Helm jobs, one development CLI publisher. |
 
 Approval reruns the original PR workflow. The automatic six-job core attempt
 and the approved nine-job attempt can both consume resources: **6 + 9 is 15
@@ -69,45 +69,48 @@ Five authoring contracts (`training`, `onnx-artifacts`, `bench-tools`,
 `learning-tools`, `soak-tools`) now run only when affected or explicitly selected;
 they are absent from the fixed product inventory. Full CPU component jobs are
 therefore **9 → 5**, from scope selection, not batching. The complete full
-contract inventory is **38 → 35**, including the new `operator.source` contract.
+contract inventory is **38 → 31**, including the new `operator.source` contract
+and retiring the four required gateway integrations. Dynamo also leaves the
+available manual inventory; it was never in this fixed full baseline.
 
 Shared component runner, bootstrap, planner, and catalog changes explicitly
 select all ten components through the changed-path registry. Python observation
 changes select its eight component consumers. These changes still exercise the
 authoring tests; `/ci run full` does not discard affected additions. This CI
-refactor's final audited diff selects **51 contracts and 53 physical jobs**,
-including all ten components and 26 E2E profiles. That exceptional diff is not
-the fixed 35-contract, 45-job product baseline. Shared signal, corpus-loader,
-Responses and failover changes select their affected integration consumers.
+refactor's audited diff selects **47 contracts and 48 physical jobs**, including
+all ten components and 22 E2E profiles. That exceptional diff is not the fixed
+31-contract, 40-job product baseline. Shared signal, corpus-loader, Responses
+and failover changes select their affected integration consumers.
 
 The same changed paths through the old planner's full entrypoint select
 44 contracts, 19 E2E profiles and 70 physical jobs. The new registry repairs
 seven missing affected-profile mappings: complexity, conversation, long-context,
-learned model selection, preference, production stack and structure. Therefore
-**70 → 53 jobs** is a same-input allocation comparison with broader selected
-coverage; it is not a controlled same-inventory cost measurement.
+learned model selection, preference, production stack and structure. It also
+retires four previously required gateway profiles. Therefore **70 → 48 jobs**
+is a same-input allocation comparison with a changed coverage mix; it is not a
+controlled same-inventory cost measurement.
 
-For a separate inventory-aligned comparison, explicitly requesting those seven
-profiles from the old planner produces 26 E2E workers versus ten now. Holding
-these 26 profile identities fixed removes **21 worker allocations through setup
-sharing**: 16 E2E, four recipe workers and one platform worker. The complete
-old execution shape with this profile inventory has 77 jobs versus 53 now;
-the remaining three reductions are the two retired Operator live variants and
-obsolete CK. The new Operator source contract replaces an embedded source job,
-so logical contract identity is not unchanged. Retired weak testcase corpora
-also differ; profile identity does not imply identical request workload. These
-are planned allocations, not measured runner-minute savings.
+For a separate inventory-aligned comparison, explicitly selecting the current
+22 E2E profiles in the old planner produces 22 workers versus nine now. Holding
+these profile identities fixed removes **18 worker allocations through setup
+sharing**: 13 E2E, four recipe workers and one platform worker. The complete old
+execution shape with this profile inventory has 73 jobs versus 48 now; the
+remaining seven reductions are six retired Operator live variants and obsolete
+CK. The new Operator source contract replaces an embedded source job, so logical
+contract identity is not unchanged. Retired weak testcase corpora also differ;
+profile identity does not imply identical request workload. These are planned
+allocations, not measured runner-minute savings.
 
 | This refactor's approved full plan | Contracts | E2E profiles | E2E workers | Physical jobs |
 | --- | ---: | ---: | ---: | ---: |
 | Old selector, same changed paths | 44 | 19 | 19 | 70 |
-| Old execution shape, explicitly aligned profiles | 51 | 26 | 26 | 77 |
-| Current selector and execution shape | 51 | 26 | 10 | 53 |
+| Old execution shape, explicitly aligned profiles | 47 | 22 | 22 | 73 |
+| Current selector and execution shape | 47 | 22 | 9 | 48 |
 
 ## Every physical job in the versioned full CPU PR
 
 Each row expands a real workflow job or a clearly enumerated matrix. The
-before column sums to 64 and the after column to 45.
+before column sums to 64 and the after column to 40.
 
 | Physical job or matrix | Before | After | Scope and reason for the decision |
 | --- | ---: | ---: | --- |
@@ -119,14 +122,14 @@ before column sums to 64 and the after column to 45.
 | `test-and-build.test-and-build` | 1 | 1 | Router Go/race contracts and selector parity. Keep automatic; installed CLI smoke belongs in the CLI integration contract. |
 | `test-storage.storage` | 1 | 1 | Real storage services and their data assertions; approval/full qualification. |
 | `dashboard-test.dashboard-test` | 1 | 1 | Frontend/backend application contracts. Keep an independent product boundary. |
-| Operator source and deployment jobs | 10 | 8 | Old source + bundle + seven live variants + results. New combined source job + image-bundle inspection + five live variants + results. |
+| Operator source and deployment jobs | 10 | 4 | Old source + bundle + seven live variants + results. New combined source job + image-bundle inspection + one memory-backed deployment + results. Storage engines retain separate storage contracts. |
 | `test-local.integration`, matrix `local.cli`, `local.memory` | 2 | 2 | Separate local product boundaries; preserve real lifecycle/routed-request assertions. |
 | `recipe-conformance.inventory`, `live-cpu`, `report` | 10 | 6 | Inventory + eight recipe jobs + report becomes inventory + four source-aware live shards + report. |
 | `performance-test.component-benchmarks` | 1 | 1 | Real benchmark execution and complete measurement evidence; numerical regressions remain advisory on shared hosted hardware. |
 | `package-check.package` | 1 | 1 | Installed wheel and source/package identity; distinct from unit tests. |
 | `test-tools.tests`, component matrix | 9 | 5 | Full selects CLI, model-runtime, E2E framework, CI harness, and provider simulator. Five authoring contracts remain affected/manual, each in its own job. Retire obsolete CK. |
 | `test-platform.contracts`, platform matrix | 2 | 1 | Share the same runtime/model preparation for two CPU contracts; retain separate reports. |
-| `integration-test-k8s.integration-test`, E2E matrix | 15 | 7 | Reuse image loading and binary setup within bounded compatibility groups; retain fresh clusters. |
+| `integration-test-k8s.integration-test`, E2E matrix | 15 | 6 | Retire four external gateway integrations; batch the remaining 11 profiles with fresh clusters and independent receipts. |
 
 For scheduled/publication plans the image set adds CUDA and ROCm router images.
 The old no-base scheduled plan additionally selected the model-runtime fixture,
@@ -170,17 +173,21 @@ measurement case is established. No current component opts into that grouping.
 
 ### E2E and platform mapping
 
-The same 15 versioned E2E profiles become seven jobs:
+The versioned E2E inventory changes from 15 profiles to 11 in six jobs.
+Agentgateway, AIBrix, Istio, and llm-d deployments leave maintained qualification;
+Envoy AI Gateway remains the representative third-party ExtProc gateway,
+beside standalone and the focused streaming profile. This is an explicit
+support-scope reduction, not equivalent cross-gateway coverage. Dynamo loses
+its optional manual profile and does not affect this fixed baseline.
 
 | Job | Exact profiles |
 | --- | --- |
 | Model-heavy singleton | `vela-omni` |
 | Dashboard lane | `dashboard` |
-| Provider fixture batch 1 | `agentgateway`, `envoy-ai-gateway`, `local-classifier-backend` |
-| Provider fixture batch 2 | `routing-errors`, `standalone`, `streaming` |
-| Provider fixture batch 3 | `vela-halu`, `vela-shield` |
-| Router-only batch 1 | `aibrix`, `istio`, `llm-d` |
-| Router-only batch 2 | `multimodal-routing`, `remote-embedding` |
+| Provider fixture batch 1 | `envoy-ai-gateway`, `local-classifier-backend`, `routing-errors` |
+| Provider fixture batch 2 | `standalone`, `streaming`, `vela-halu` |
+| Provider fixture batch 3 | `vela-shield` |
+| Router-only batch | `multimodal-routing`, `remote-embedding` |
 
 Each job has at most three profiles and at most 270 minutes of declared profile
 budget. The model-heavy profile remains alone. Compatible placement, runtime,
@@ -233,6 +240,39 @@ entire figure Kubernetes-profile time would overstate its scope. All five
 Nightly runs failed; publication jobs did not execute, and one run stopped
 much earlier. These are observed costs, not successful-run budgets.
 
+### Measured work retired after the first successful revision
+
+The [successful full run at `7c18a160`](https://github.com/vllm-project/semantic-router/actions/runs/39120541417)
+preceded the gateway and Operator scope reduction. It allocated 53 jobs; it is
+not validation of the later 48-job plan. Its API job timestamps show the four
+Operator deployments now removed consumed the following time:
+
+| Removed Operator deployment | Completed job time |
+| --- | ---: |
+| [Milvus](https://github.com/vllm-project/semantic-router/actions/runs/39120541417/job/117656582749) | 6m47s |
+| [Hybrid](https://github.com/vllm-project/semantic-router/actions/runs/39120541417/job/117656582788) | 6m25s |
+| [Redis](https://github.com/vllm-project/semantic-router/actions/runs/39120541417/job/117656582877) | 6m43s |
+| [Qdrant](https://github.com/vllm-project/semantic-router/actions/runs/39120541417/job/117656582918) | 6m03s |
+| Total | 25m58s |
+
+The same run's raw E2E reports record separate profile intervals:
+
+| Retired gateway profile | Cases | Profile interval |
+| --- | ---: | ---: |
+| agentgateway | 4 | 4m03.38s |
+| AIBrix | 2 | 6m28.40s |
+| Istio | 3 | 6m17.15s |
+| llm-d | 3 | 3m57.70s |
+| Total | 12 | 20m46.63s |
+
+The Operator figures include each job's setup; the gateway intervals exclude
+shared worker preparation and include the profile's own deployment work. The
+12 gateway case durations themselves sum to only 32.69 seconds. All passed on
+their first attempt in that run. These are measurements of work in the previous
+implementation that is now removed. They must not be subtracted from that run's
+total or combined into a promised after-change saving: batch composition,
+remaining setup, cache state, scheduling and the code under test also change.
+
 ### Measured setup within one old run
 
 The public [October 18 Nightly run](https://github.com/vllm-project/semantic-router/actions/runs/39089835076)
@@ -278,15 +318,22 @@ fixture **101,232,180 bytes**, and Dashboard **308,545,737 bytes**.
 [load-ci-images](../../../.github/actions/load-ci-images/action.yml) downloads
 the selected immutable artifacts separately on each worker.
 
-Holding those artifact sizes fixed, the same 15 versioned E2E profiles change
-from 15 CPU-router + 9 provider + 1 Dashboard downloads to 7 + 4 + 1.
+Holding those artifact sizes fixed, the original 15 versioned E2E profiles
+use 15 CPU-router + 9 provider + 1 Dashboard downloads. The remaining 11
+profiles would use 11 + 8 + 1 without batching, and use 6 + 4 + 1 with batching.
 The eight recipe workers become four CPU-router downloads. This yields:
 
-| Consumers | Before calculated archive payload | After calculated archive payload | Avoided repeated payload |
-| --- | ---: | ---: | ---: |
-| Same 15 E2E profiles | 17.83 GiB | 8.45 GiB | 9.37 GiB |
-| Same 8 live recipes | 8.90 GiB | 4.45 GiB | 4.45 GiB |
-| These two consumer groups | 26.73 GiB | 12.91 GiB | 13.82 GiB |
+| Consumers | Before calculated archive payload | After calculated archive payload | Reduction and cause |
+| --- | ---: | ---: | --- |
+| Original 15 versus retained 11 E2E profiles | 17.83 GiB | 7.34 GiB | 10.49 GiB: 4.55 from retiring integrations, 5.94 from batching retained profiles. |
+| Same 8 live recipes | 8.90 GiB | 4.45 GiB | 4.45 GiB from batching. |
+| These two consumer groups | 26.73 GiB | 11.79 GiB | 14.94 GiB with both scope and execution changes. |
+
+The follow-up change from five Operator deployments to one removes four
+consumers of the Operator, CPU-router, and provider archives. At the same
+historical sizes, including the **196,515,397-byte** Operator archive, this
+removes another calculated **5.56 GiB** of repeated payload. It is a reduced
+live-deployment scope, not setup sharing or measured network savings.
 
 These are calculated artifact payloads at fixed historical sizes, not measured
 after-change network traffic. They exclude other consumers, transport overhead,
@@ -297,9 +344,9 @@ consumer downloads does not by itself reduce retained artifact size.
 
 ## What can be claimed about savings
 
-The versioned full PR budget falls from 64 to 45 physical jobs: 19 fewer
-allocations, or 29.7%. The scheduled successful-run budget falls from 100 to 54:
-46 fewer allocations. These are structural counts, **not runner-minute or
+The versioned full PR budget falls from 64 to 40 physical jobs: 24 fewer
+allocations, or 37.5%. The scheduled successful-run budget falls from 100 to 49:
+51 fewer allocations. These are structural counts, **not runner-minute or
 wall-clock reductions**.
 
 Changing daily scheduled qualification to weekly removes six of seven scheduled
@@ -307,7 +354,7 @@ launches. If the same run cost were held constant, that cadence alone would
 reduce scheduled runner use by 85.7%. The actual change also alters inventory,
 batching, caches, and failure paths, so the historic average must not be
 presented as measured future usage. With no manual dispatches and all
-prerequisites succeeding, the planned job-launch budget is 700 versus 54 per
+prerequisites succeeding, the planned job-launch budget is 700 versus 49 per
 week; that combined count also must not be translated into a cost percentage.
 
 Routine Main source/component qualification remains. Expensive qualification
@@ -326,10 +373,11 @@ required PR Gate.
 The evidence supports the bounded E2E/recipe/platform groups, not unbounded
 serial suites. Keep long model/CLI work independent. All component contracts
 retain independent jobs after reviewing their smaller shared setup benefit and
-dependency/rerun costs. Do not merge all Operator variants
-into one cluster or add unrelated component packages just to reduce the UI
-count. Further splits should follow observed queue/critical-path and rerun
-costs; collect at least setup/execution/post durations, approved-attempt counts,
+dependency/rerun costs. The Operator now exercises one supported memory-backed
+deployment; deleted external-storage topologies are not silently merged into
+that case. Do not add unrelated component packages just to reduce the UI count.
+Further splits should follow observed queue/critical-path and rerun costs;
+collect at least setup/execution/post durations, approved-attempt counts,
 cache-hit state, and source-bound inventory for comparable runs first.
 
 ## Reproducing the count
@@ -356,8 +404,10 @@ For each plan, sum:
 3. One job per selected ordinary executor contract, including each local
    contract. Count `operator.source` in its source workflow.
 4. The lengths of `component_batches`, `platform_batches`, and `e2e_batches`.
-5. Operator runtime's non-matrix jobs plus its actual `integration_matrix`
-   length; read the selected revision's workflow, not a hard-coded seven.
+5. Operator runtime jobs: the old non-matrix jobs plus its actual
+   `integration_matrix` length; the current workflow has one memory-backed
+   deployment, one image-bundle inspection, and one result job. Read each
+   revision's workflow instead of assuming the old matrix still exists.
 6. Recipe inventory + live source-matrix length + report. Before uses
    `source_matrix_payload(inventories, None, root)`; after uses three shards
    per source. Obtain inventories with `discover_source_inventories` and

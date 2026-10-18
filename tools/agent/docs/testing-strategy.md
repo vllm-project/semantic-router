@@ -106,8 +106,14 @@ availability is assumed.
 | Router | Deterministic routing logic, parser/selector parity, protocol/tool units | Automatic affected checks |
 | Runtime | Real model answers, image calibration, training/artifact tools, databases | Affected qualification after committer authorization |
 | Product | CLI/package/dashboard units; live serve/stop, memory, recipe behavior | Units automatic; live stacks and recipes approved |
-| Integrations | E2E framework units; routed requests through supported gateways and operator | Units automatic; live deployments approved |
+| Integrations | E2E framework units; routed requests through Envoy AI Gateway, standalone and one Operator deployment | Units automatic; live deployments approved |
 | Performance | Paired benchmark execution and comparable model identity | Approved; numerical trends are advisory on hosted CPUs |
+
+A new external platform profile is a separate maintenance commitment. Router
+behavior shared by gateways belongs in the existing ExtProc contract; a new
+platform profile must justify its distinct assertion and public support claim.
+Storage backend semantics belong in their storage contracts, while Operator
+qualification owns configuration conversion, reconciliation and a routed request.
 
 A layer is not a dependency rule: a configuration change can require checks in
 several layers. `domains.yaml` remains the only changed-path selector. Tests do
@@ -154,19 +160,21 @@ Scheduled runs select this explicit inventory; an absent comparison base does
 not mean every optional profile changed. Real PR changes still add affected
 profiles beyond the full baseline.
 
-The fixed CPU product inventory contains 35 contracts and expands to 45 physical
+The fixed CPU product inventory contains 31 contracts and expands to 40 physical
 PR jobs, including planning, images, and result gates. This is exceptional full
 qualification; a representative core change selects six automatic jobs and nine
 after affected approval. Five authoring contracts (`training`, `onnx-artifacts`,
 `bench-tools`, `learning-tools`, `soak-tools`) remain available on affected paths
 or explicit manual selection. They do not run unconditionally in full product
 qualification. Shared component runner, bootstrap, planner, and catalog changes
-select all ten component contracts; each still has an independent job. Published
-deployment support mappings and real-model/runtime qualification remain in full.
-Shared signal and corpus-loader changes also select their integration consumers;
-this refactor's broad diff therefore selects 51 contracts, 26 E2E profiles and
-53 physical jobs. Counts vary with the actual diff and do not measure
-runner-minute savings.
+select all ten component contracts; each still has an independent job. Real-model/runtime qualification remains
+in full. Envoy AI Gateway is the maintained external ExtProc integration;
+standalone qualifies the Router's own listener. Agentgateway, AIBrix, Istio,
+llm-d and Dynamo retain experimental deployment examples but no runnable E2E
+profile or manual CI target. Shared signal and corpus-loader changes still
+select their retained integration consumers. Counts vary with the actual diff;
+the [cost audit](ci-job-cost-audit.md) records the expanded plan and does not
+equate job counts with runner-minute savings.
 
 The full CPU inventory lives in
 [`verification_catalog.yaml`](../../ci/verification_catalog.yaml). See the
@@ -198,8 +206,17 @@ dependencies fail the suite.
 
 Kubernetes baseline inventory comes from `e2e/pkg/testmatrix/testcases.go`.
 Regular runs exclude the two declared stress cases; full runs include them.
-Case counts are discovered from the registry, rather than duplicated here. Operator integration sends a real routed request after reconciliation;
-resource readiness alone is insufficient.
+Case counts are discovered from the registry, rather than duplicated here.
+Operator integration uses one memory-backed deployment and sends a real routed
+request after reconciliation. Other storage configurations are protected by
+source conversion tests, while storage contracts own data semantics. Resource
+readiness alone is insufficient.
+
+Standalone has seven Kubernetes cases covering chart defaults, actual provider
+requests, model inventory, backend fallback, Router-origin errors, decision-model
+propagation and configuration rollout. The CLI also starts standalone explicitly
+and proves no Envoy container is present. These cases do not currently qualify
+standalone SSE; the streaming profile exercises the maintained Envoy ExtProc path.
 
 E2E framework units run once in the component executor, independently of the
 selected Kind profiles. Their Go inventory and execution report must agree;
