@@ -700,6 +700,43 @@ def test_a_failed_load_is_retried_unless_the_answers_are_wrong(
         runtime.stop()
 
 
+def test_a_retry_first_returns_the_failed_attempts_cached_gpu_memory(
+    example_plugin, keyword_package, monkeypatch
+):
+    import torch
+    import vllm_srun.runtime as runtime_module
+
+    load = runtime_module.ServedModel.load
+    events = []
+
+    def flaky(self):
+        events.append("load")
+        if len(events) == 1:
+            # the attempt's tensors are freed, but PyTorch keeps their blocks cached
+            raise RuntimeError("out of memory in the golden check")
+        return load(self)
+
+    monkeypatch.setattr(runtime_module.ServedModel, "load", flaky)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: events.append("empty"))
+    models = (
+        ModelConfig(
+            model=str(keyword_package),
+            name="flaky",
+            device="cpu",
+            engine="example_counts",
+        ),
+    )
+    runtime = Runtime(ServeConfig(models=models, load_retry_seconds=0.01))
+    runtime.start(background=True)
+    try:
+        runtime.wait(timeout=60)
+        assert runtime.lookup("flaky").health.ready
+        assert events[:3] == ["load", "empty", "load"]
+    finally:
+        runtime.stop()
+
+
 @pytest.mark.parametrize("background", [False, True])
 def test_loading_freezes_the_heap(example_plugin, keyword_package, background):
     import gc
