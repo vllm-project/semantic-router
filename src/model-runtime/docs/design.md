@@ -426,6 +426,8 @@ A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
+A forward out of device memory is 413 `request_too_large` for a request that
+had it alone and 429 `overloaded` for one that shared it (`scheduler.py`).
 Item-level failures (`max_length_exceeded`, `invalid_input`,
 `invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
 place and never fail sibling items.
@@ -1034,6 +1036,10 @@ graph captures anyway, §9); a captured graph keeps the configurations it was
 captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
+The choices are recorded at the published precision, so a model served at
+another `--dtype` runs without them and its kernels tune their own: a BF16
+configuration can need more shared memory than an FP32 kernel has (d3 at
+`float32` on gfx942).
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 

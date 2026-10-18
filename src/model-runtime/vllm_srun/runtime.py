@@ -151,12 +151,21 @@ def freeze_heap() -> None:
     gc.freeze()
 
 
+def release_device_cache() -> None:
+    """Hand a failed attempt's cached GPU blocks back to the driver, whose free memory the next placement reads."""
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 __all__ = [
     "DEADLINE",
     "Runtime",
     "ServedModel",
     "freeze_heap",
     "planned_engine",
+    "release_device_cache",
     "with_overrides",
 ]
 
@@ -351,11 +360,17 @@ class ServedModel:
             dtypes.published(spec.dtype, gpu) if self.dtype == "auto" else self.dtype
         )
         spec = dtypes.apply(spec, self.args.dtype, gpu)
+        # Choices are recorded at the published precision; another dtype's kernels
+        # tune their own (a BF16 block can need more shared memory than FP32 has).
         self._pin(
-            builtin.kernel_choices(
-                package.model_sha256, device.accelerator, device.arch
+            (
+                builtin.kernel_choices(
+                    package.model_sha256, device.accelerator, device.arch
+                )
+                or family.kernel_choices(package, device)
             )
-            or family.kernel_choices(package, device)
+            if self.dtype == "auto"
+            else {}
         )
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
@@ -891,6 +906,7 @@ class Runtime:
             freeze_heap()
             if not retry:
                 return
+            release_device_cache()
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
             if self._stopping.wait(delay):
                 return

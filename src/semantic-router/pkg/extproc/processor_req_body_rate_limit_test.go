@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
 
 func TestApplyRateLimitEnforcesRequestRulesAndRetainsSettlementContext(t *testing.T) {
@@ -40,5 +43,37 @@ func TestApplyRateLimitEnforcesRequestRulesAndRetainsSettlementContext(t *testin
 	}
 	if second.RateLimitCtx != nil {
 		t.Fatalf("denied request retained settlement context: %+v", second.RateLimitCtx)
+	}
+}
+
+// Retry-After is a whole number of seconds, so a fractional wait rounds up: a
+// client that waits the advertised time must not be rejected by the same window.
+func TestRateLimitResponseRoundsRetryAfterUp(t *testing.T) {
+	cases := []struct {
+		retryAfter time.Duration
+		want       string
+	}{
+		{500 * time.Millisecond, "1"},
+		{time.Second, "1"},
+		{1500 * time.Millisecond, "2"},
+		{3 * time.Second, "3"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.retryAfter.String(), func(t *testing.T) {
+			response := (&OpenAIRouter{}).createRateLimitResponse(&ratelimit.Decision{RetryAfter: tc.retryAfter})
+			immediate := response.GetImmediateResponse()
+			var header string
+			for _, option := range immediate.GetHeaders().GetSetHeaders() {
+				if option.GetHeader().GetKey() == "retry-after" {
+					header = string(option.GetHeader().GetRawValue())
+				}
+			}
+			if header != tc.want {
+				t.Errorf("retry-after = %q, want %q", header, tc.want)
+			}
+			if want := "Retry after " + tc.want + " seconds."; !strings.Contains(string(immediate.GetBody()), want) {
+				t.Errorf("body = %s, want it to contain %q", immediate.GetBody(), want)
+			}
+		})
 	}
 }
