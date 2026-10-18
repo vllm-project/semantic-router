@@ -41,10 +41,19 @@ replay.
   requests of distinct lengths on the 0.8B left 87 forest graphs and 2,822 MiB
   more in use than before them (26 MiB with graphs off), about 32 MiB a graph
   against 0.5 MiB of output. So captures stop at `MAX_GRAPHS` or once the
-  device's used memory has grown since the first capture by `MAX_GRAPH_BYTES`
-  (4 GiB) or by half of what was free then, whichever is less. With the budget
-  set to 1 GiB the same run stopped at 21 graphs and 968 MiB. With the card
-  filled to leave 3,071 MiB free, it stopped at 29 graphs and 1,332 MiB.
+  captures have taken `MAX_GRAPH_BYTES` (4 GiB) of device memory or half of
+  what was free at the first, whichever is less. Each capture is charged what
+  it takes with the allocator's cache emptied before and after it (torch
+  empties the cache when a capture begins), so the cache that eager forwards
+  grow between captures is not charged to the graphs. With the budget set to
+  1 GiB the same run stopped at 22 graphs, charged 1,070 MiB against 980 MiB
+  of measured growth. With the card filled to leave 3,071 MiB free, it stopped
+  at 30 graphs and 1,357 MiB.
+- Counting the device's whole growth since the first capture instead, as the
+  budget first did, charged eager forwards to the graphs: a `batching` server
+  of Decision 3.0 d3-flash on an MI300X stopped capturing after 16 graphs,
+  with the cache 5.8 GiB above the first capture, and one-question requests
+  ran eagerly at 38 ms instead of 16 ms from then on.
 
 ## Exactness
 

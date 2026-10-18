@@ -31,10 +31,14 @@ from typing import (
     final,
 )
 
+from ..quantization import FLOAT8, FLOAT8_DEVICES
+from .registry import names
+
 if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
+    from ..quantization import QuantizedWeights
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -203,7 +207,8 @@ class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
-    batch selects one with ``EncoderBatch.branch``.
+    batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
+    layers the checkpoint holds as int4 or FP8 weights (``quantization.py``).
     """
 
     model_type: str
@@ -212,14 +217,20 @@ class BackboneSpec:
     weight_prefix: str = ""
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
+    quantized: QuantizedWeights | None = None
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
         """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
 
         Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+        FP8 weights need FP8 matrix units, which every accelerator must report.
         """
-        return {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        requires = {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        if self.quantized is not None and self.quantized.scheme == FLOAT8:
+            for name in names("accelerators"):
+                requires[name] = (*requires.get(name, ()), "float8")
+        return requires
 
 
 @dataclass(frozen=True)
@@ -349,7 +360,10 @@ class ForwardBatch:
     ``shared_prefix`` > 0 asks an engine that ``supports_shared_context`` to run the
     rows as one shared-context tree whose first ``shared_prefix`` tokens (common to
     every row, before any endpoint) are computed once. ``images`` are the rows'
-    image inputs, for a backbone that reads them.
+    image inputs, for a backbone that reads them. ``packed`` asks an engine that
+    ``supports_packed`` to run the rows back to back with no padding:
+    ``input_ids`` is then ``[1, sum(lengths)]``, the rows in order, and ``gather``
+    and ``query`` index that one row.
     """
 
     input_ids: torch.Tensor
@@ -359,6 +373,7 @@ class ForwardBatch:
     lengths: list[int]
     shared_prefix: int = 0
     images: ImageInputs | None = None
+    packed: bool = False
 
 
 @dataclass
@@ -477,10 +492,24 @@ class EngineModel(ABC):
         """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
         raise NotImplementedError(f"{type(self).__name__} has no tree forward")
 
+    @property
+    def supports_packed(self) -> bool:
+        """Whether ``forward`` runs ``ForwardBatch.packed`` rows back to back (the device's kernels allow it)."""
+        return False
+
     def tower_features(
-        self, name: str, pixel_values: torch.Tensor, grids: list[tuple[int, int, int]]
+        self,
+        name: str,
+        pixel_values: torch.Tensor,
+        grids: list[tuple[int, int, int]],
+        packed: bool = False,
     ) -> torch.Tensor:
-        """A tower's merged features for its inputs (``ImageInputs.features``), on the device."""
+        """A tower's merged features for its inputs (``ImageInputs.features``), on the device.
+
+        ``packed`` lets an engine that ``supports_packed`` attend over all the
+        inputs in one variable-length call instead of one call per input, which
+        rounds differently: only forwards that merge requests ask for it.
+        """
         raise NotImplementedError(f"{type(self).__name__} has no {name} tower")
 
     @abstractmethod
@@ -504,6 +533,9 @@ class EngineModel(ABC):
 
     def close(self) -> None:  # noqa: B027 - optional hook
         """Release device memory."""
+
+    def begin_traffic(self) -> None:  # noqa: B027 - optional hook
+        """The startup verification has passed; serving traffic may begin."""
 
 
 class Engine(ABC):
@@ -591,8 +623,14 @@ class Accelerator(ABC):
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
 
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        """Optional hardware reference key; callers own device-class fallback."""
+        return f"{self.name}:{device.arch}" if device.arch else None
+
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        if capability == "float8":
+            return f"{device.label}: {FLOAT8_DEVICES}"
         return f"{device.label} lacks {capability}"
 
     def autocast(
@@ -754,6 +792,12 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     waiting for the batching window, and their answers never change.
     ``packs_rows`` says ``run`` lays rows back to back with no padding, so
     rows of any lengths share those batches at no extra cost.
+    ``packs_merged_rows`` says the same of ``run_approximate``: a forward that
+    merges requests then costs the sum of its rows, not its rows times its
+    longest, and the planner fills it in arrival order instead of grouping
+    rows of like lengths. ``lane`` sorts items into lanes the planner never
+    mixes in one merged forward and the scheduler prices apart (text rows and
+    rows that read images, say).
     ``shared_context_default`` is whether the model runs shared-context trees
     when the engine arguments leave ``enable_shared_context`` unset: on only
     where the family's records show no accuracy loss.
@@ -772,6 +816,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     shared_context_default: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
+    packs_merged_rows: bool = False
 
     @abstractmethod
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:
@@ -840,11 +885,24 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         """Most padded tokens one forward may hold; None when nothing limits it."""
         return None
 
-    def coalesced_token_budget(self) -> int | None:
-        """Most padded tokens a forward that merges requests should hold; None leaves it to ``--max-num-batched-tokens``.
+    def lane(self, item: ItemT) -> str:
+        """The lane of an item: merged forwards hold one lane's rows, and each lane keeps its own cost per token."""
+        return "text"
+
+    def coalesced_token_budget(self, lane: str = "text") -> int | None:
+        """Most tokens a forward that merges requests of ``lane`` should hold; None leaves it to ``--max-num-batched-tokens``.
 
         A family whose forwards take long per token keeps merged forwards short this way, so a full queue is
         answered over several forwards in expected-finish order instead of in one long one.
+        """
+        return None
+
+    def calibration_items(self, rows: int, row_tokens: int) -> list[ItemT] | None:
+        """``rows`` text items of about ``row_tokens`` tokens each that ``run_approximate`` can time, or None.
+
+        The startup calibration (``scheduler.calibration``) times merged
+        forwards of these to choose the batch limits a model leaves to the
+        runtime; a model that returns None keeps its device class's limits.
         """
         return None
 
@@ -967,11 +1025,17 @@ class Batch:
 
     ``shared_prefix`` > 0 (shared context): the items' common prefix length, run once.
     ``exact`` False marks a batch that merges concurrent requests (``LoadedModel.run_approximate``).
+    ``lane`` is the ``LoadedModel.lane`` of its items when it merges requests.
+    ``sub`` holds the batches of a turn that merges several lanes (``parts`` is
+    then their union): each runs as its own forward and its rows are answered
+    as soon as it ran.
     """
 
     parts: list[tuple[Job, list[int]]]
     shared_prefix: int = 0
     exact: bool = True
+    lane: str = "text"
+    sub: tuple[Batch, ...] = ()
 
     def items(self) -> list[WorkItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]

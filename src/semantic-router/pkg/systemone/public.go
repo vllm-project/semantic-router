@@ -70,11 +70,12 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, 400, "invalid_request")
 			return
 		}
-		model, valid := requestModel(body)
+		request, valid := scanRequest(body)
 		if !valid {
 			publicSystemOneError(w, 400, "invalid_request")
 			return
 		}
+		model := request.model
 		if model == "" {
 			publicSystemOneError(w, 400, "model_required")
 			return
@@ -82,6 +83,18 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 		if !slices.Contains(listener.SystemOne.Models, model) {
 			publicSystemOneError(w, 403, "model_not_allowed")
 			return
+		}
+		if request.repeatedOptions {
+			publicSystemOneErrorMessage(w, 400, "invalid_request", "options may appear only once")
+			return
+		}
+		if request.options != nil {
+			options, problem := publicOptions(request.options)
+			if problem != "" {
+				publicSystemOneErrorMessage(w, 400, "invalid_request", problem)
+				return
+			}
+			body = request.withOptions(body, options)
 		}
 		_, routed := config.ResolveEntrypoint(routerconfig.SystemOneAPI, model)
 		if routed && !config.RoutingEnabled() {

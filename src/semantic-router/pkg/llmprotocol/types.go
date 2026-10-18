@@ -11,6 +11,13 @@ import (
 // WireFormat is a stable wire contract identifier, not a provider product.
 type WireFormat string
 
+// Values of Request.Truncation. Only TruncationAuto needs the target to keep
+// conversation state; TruncationDisabled is the default and drops nothing.
+const (
+	TruncationDisabled = "disabled"
+	TruncationAuto     = "auto"
+)
+
 const (
 	OpenAIChatV1        WireFormat = "openai.chat.v1"
 	OpenAIResponsesV1   WireFormat = "openai.responses.v1"
@@ -325,15 +332,17 @@ type TokenCount struct {
 }
 
 type Usage struct {
-	State           UsageState
-	InputUncached   TokenCount
-	InputCacheRead  TokenCount
-	InputCacheWrite TokenCount
-	OutputReasoning TokenCount
-	OutputOther     TokenCount
-	InputTotal      TokenCount
-	OutputTotal     TokenCount
-	Total           TokenCount
+	State             UsageState
+	InputUncached     TokenCount
+	InputCacheRead    TokenCount
+	InputCacheWrite   TokenCount
+	InputCacheWrite5m TokenCount
+	InputCacheWrite1h TokenCount
+	OutputReasoning   TokenCount
+	OutputOther       TokenCount
+	InputTotal        TokenCount
+	OutputTotal       TokenCount
+	Total             TokenCount
 }
 
 type UsageState string

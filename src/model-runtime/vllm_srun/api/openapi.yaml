@@ -1465,11 +1465,15 @@ components:
           minimum: 1
           description: |
             The most rows one forward holds, across requests: one per question of a decision request, one per
-            input or window otherwise; 1 runs every row alone. The default never binds at the default
-            `max_num_batched_tokens`, since a row costs at least 8 padded tokens.
+            input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+            one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+            budget, since a row costs at least 8 padded tokens).
         max_num_batched_tokens:
           type: integer
-          description: The most padded tokens (rows times the longest row) one merged forward holds.
+          description: |
+            The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+            that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+            is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
         batch_window_ms:
           type: number
           format: double
@@ -1495,6 +1499,7 @@ components:
         reference:
           type: string
           nullable: true
+          description: Recorded golden reference key. A hardware-qualified key is preferred when present; otherwise the device-class reference is used.
     PluginInfo:
       type: object
       required: [group, name]

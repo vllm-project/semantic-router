@@ -356,6 +356,90 @@ func TestDiagnosticsDroppedVendorExtensions(t *testing.T) {
 	}
 }
 
+// Issue #5046: an aggregating gateway fronting Anthropic channels reports
+// usage with Anthropic-style counter names. The opt-in gateway vendor maps
+// them onto the canonical names before the strict decode, so the totals
+// check sees a consistent usage object and the aliases surface as dropped
+// metadata.
+const gatewayChatCompletion = `{
+  "id": "chatcmpl-gw-1",
+  "object": "chat.completion",
+  "created": 1,
+  "model": "claude-channel-x",
+  "choices": [{
+    "index": 0,
+    "finish_reason": "stop",
+    "message": {"role": "assistant", "content": "hi"}
+  }],
+  "usage": {
+    "input_tokens": 12,
+    "output_tokens": 178,
+    "total_tokens": 190
+  }
+}`
+
+func TestDecodeProviderWireMapsGatewayUsageCounters(t *testing.T) {
+	var target azureTarget
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.ResponseVendorOpenAICompatGateway
+
+	canonical, dropped, err := decodeProviderWireVendorAware([]byte(gatewayChatCompletion), &target, policy)
+	if err != nil {
+		t.Fatalf("decodeProviderWireVendorAware() error = %v, want nil", err)
+	}
+	if target.Usage.PromptTokens != 12 || target.Usage.CompletionTokens != 178 || target.Usage.TotalTokens != 190 {
+		t.Errorf("usage = %d/%d/%d, want 12/178/190",
+			target.Usage.PromptTokens, target.Usage.CompletionTokens, target.Usage.TotalTokens)
+	}
+	want := []string{"usage.input_tokens", "usage.output_tokens"}
+	if !reflect.DeepEqual(dropped, want) {
+		t.Errorf("dropped = %v, want %v", dropped, want)
+	}
+	if strings.Contains(string(canonical), "input_tokens") ||
+		strings.Contains(string(canonical), "output_tokens") {
+		t.Error("canonical body still carries the gateway counter aliases")
+	}
+}
+
+func TestDecodeProviderWireGatewayUsageKeepsCanonicalPrecedence(t *testing.T) {
+	var target azureTarget
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.ResponseVendorOpenAICompatGateway
+
+	body := `{"id":"chatcmpl-gw-2","object":"chat.completion","created":1,"model":"m",` +
+		`"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"hi"}}],` +
+		`"usage":{"prompt_tokens":5,"input_tokens":12,"completion_tokens":6,` +
+		`"output_tokens":178,"total_tokens":11}}`
+
+	_, dropped, err := decodeProviderWireVendorAware([]byte(body), &target, policy)
+	if err != nil {
+		t.Fatalf("decodeProviderWireVendorAware() error = %v, want nil", err)
+	}
+	if target.Usage.PromptTokens != 5 || target.Usage.CompletionTokens != 6 || target.Usage.TotalTokens != 11 {
+		t.Errorf("usage = %d/%d/%d, want the canonical fields to win (5/6/11)",
+			target.Usage.PromptTokens, target.Usage.CompletionTokens, target.Usage.TotalTokens)
+	}
+	want := []string{"usage.input_tokens", "usage.output_tokens"}
+	if !reflect.DeepEqual(dropped, want) {
+		t.Errorf("dropped = %v, want the aliases reported as metadata %v", dropped, want)
+	}
+}
+
+// The strict contract regression for the reported relay payload: before the
+// mapping, DecodeResponse dropped input_tokens/output_tokens, leaving
+// total_tokens=190 against zero input/output, and the usage totals check
+// rejected the response with usage_total_mismatch.
+func TestGatewayDecodeResponseRetainsRelayUsageTotals(t *testing.T) {
+	vendorPolicy := llmprotocol.DefaultPolicy()
+	vendorPolicy.ResponseVendor = llmprotocol.ResponseVendorOpenAICompatGateway
+
+	// Before the mapping this exact payload failed with usage_total_mismatch.
+	_, _, _, err := OpenAIChatCodec{}.DecodeResponse([]byte(gatewayChatCompletion), vendorPolicy)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v, want nil", err)
+	}
+}
+
 // The cache write/read contract, at the codec level: re-encoding a decorated
 // response yields bytes a strict decoder accepts, while the original upstream
 // bytes are rejected. This is what makes the miss-to-hit path survivable.

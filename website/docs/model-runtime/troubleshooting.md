@@ -137,6 +137,7 @@ reasons:
 | needs about X GiB, Y GiB free; out of memory | The GPU has less free memory than the model needs: its weights in the dtype the GPU holds them in (BF16 for Decision 3.0, plus 10%) and 2 GiB. Free memory on that GPU, choose another with `--device-ids`, use a smaller model, or place replicas on separate GPUs. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
+| FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | The package holds FP8 weights and the device has no FP8 matrix units. Serve it on such a GPU, or serve the BF16 or int4 package of the model instead. The runtime does not retry it. |
 | no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
 | a licence must be accepted | The model's licence restricts use. Pass `--accept-licence <id>` after you checked that you may use it. |
 
@@ -147,16 +148,26 @@ serving.
 
 `GET /v1/models` shows each model's self-check under `golden`. `matched`
 means its answers equal the released answers for that kind of device.
+`golden.reference` identifies the recorded reference that was checked. When a
+hardware reference is recorded, it takes precedence over the device-class
+reference: for example `cpu:x86_64:avx2:bf16_emulated` or `cuda:sm_89`. Other
+hardware keeps using the existing `cpu`, `rocm` or `cuda` reference when available.
+CPU keys use PyTorch's selected instruction set and native or emulated BF16
+capability. A mismatching selected reference still fails startup; the runtime
+does not try another reference or relax the tolerance.
+
 `unverified` means the model serves, but the runtime can't vouch for that:
 
 - **No `reason`, and `golden.reference` is empty:** there are no released
   answers for this device, for example for a model that is not built in or a
-  GPU without a validated record (CUDA). The runtime checked only that the
+  GPU architecture without a recorded reference. The runtime checked only that the
   answers are well formed and the same on every run.
-- **`reason` starts with `kernel choices not applied`:** on AMD Instinct
-  MI300X and MI325X GPUs, Decision 2.0 and Vela 2.0 run their kernels with
-  the configurations their release recorded with FLA 0.5.2, so every process
-  gives the same answers. When those can't run here, the model still loads,
+- **`reason` starts with `kernel choices not applied`:** models with recorded
+  GPU kernel choices run with those configurations so restarts reproduce
+  the recorded answers. The records also name the dependency versions used
+  for qualification. These include Decision 2.0 and
+  Vela 2.0 on AMD Instinct MI300X/MI325X, and D3-edge on NVIDIA L4.
+  When those can't run here, the model still loads,
   the log says `... runs without its recorded kernel choices: ...`, and its
   answers may differ from the released ones.
 
@@ -175,6 +186,7 @@ replace the recorded configurations.
 | Message mentions | Do this |
 | --- | --- |
 | `removed model execution fields`, `candle`, `ort`, `openvino`, `precision`, `variant`, `use_mmbert_32k`, `use_nli`, `polarity_guard` | Run `vllm-sr config migrate`. See [Migrate](model-runtime/migrate.md). |
+| `profile was removed`, and your `config.yaml` has no `profile` | The CLI wrote it: the router image is newer than the CLI. Reinstall the CLI from the same channel, or pass `--image` with the image built with your CLI; older development CLIs pull `:latest` instead of their own images. |
 | a binding does not match the model | The model has different labels, heads, dimensions or a smaller input limit than the feature needs. Bind a model made for that feature, or change `input`. |
 | `artifact must be a Hub repository ID or an absolute package path` | Use `owner/name` for a Hub model or an absolute path for a local copy. |
 | `revision must be a 40-hex commit` | Use the full commit hash, not a branch or tag. |
