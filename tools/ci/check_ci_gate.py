@@ -20,6 +20,7 @@ from execution_batches import (
     image_producers,
     platform_batches,
 )
+from execution_targets import TARGET_FIELDS, target_errors
 from provider_mocker_image import validate_acquisition
 from release_guard_waiver import planned_waiver
 from verification_catalog import full_cpu_ids, load_catalog
@@ -41,6 +42,7 @@ def evaluate_gate(
     *,
     builds: list[dict] | None = None,
     jobs: dict | None = None,
+    require_actions: bool = False,
 ) -> GateVerdict:
     errors: list[str] = []
     required = plan.get("expected_verification_ids", [])
@@ -85,6 +87,11 @@ def evaluate_gate(
     ):
         errors.append("plan records do not exactly match expected verification IDs")
     for name, record in planned.items():
+        errors.extend(f"{name}: {error}" for error in target_errors(record))
+        if record.get("contract_sha256") != digest(
+            {key: value for key, value in record.items() if key != "contract_sha256"}
+        ):
+            errors.append(f"{name}: verification contract digest differs")
         if record.get("known_issue_waiver") != planned_waiver(
             plan.get("profile", ""), name
         ):
@@ -176,7 +183,7 @@ def evaluate_gate(
             "inventory",
             "runtime",
             "device",
-            "platform",
+            *TARGET_FIELDS,
         ):
             if receipt.get(key) != record.get(key):
                 errors.append(f"{name}: {key} differs from plan")
@@ -192,7 +199,12 @@ def evaluate_gate(
                 errors.append(f"{name}: evidence {key} differs from plan")
         errors.extend(
             f"{name}: {error}"
-            for error in execution_errors(record, receipt.get("platform"))
+            for error in execution_errors(
+                record,
+                receipt.get("platform"),
+                receipt.get("execution"),
+                require_actions=require_actions,
+            )
         )
         consumed = receipt.get("artifacts", [])
         consumed_ids = [item.get("id") for item in consumed]
@@ -302,7 +314,11 @@ def main() -> int:
             else None
         )
         verdict = evaluate_gate(
-            plan, receipts, builds=load_builds(args.results, plan["images"]), jobs=jobs
+            plan,
+            receipts,
+            builds=load_builds(args.results, plan["images"]),
+            jobs=jobs,
+            require_actions=os.environ.get("GITHUB_ACTIONS") == "true",
         )
     except (ValueError, TypeError, KeyError, OSError) as exc:
         verdict = GateVerdict((), (str(exc),))

@@ -4,7 +4,6 @@ import contextlib
 import io
 import json
 import re
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -17,10 +16,12 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import (  # noqa: E402
     github_outputs,
-    main as plan_main,
     make_plan,
     performance_base,
     previous_release,
+)
+from ci_plan import (  # noqa: E402
+    main as plan_main,
 )
 from classify_pr_changes import (  # noqa: E402
     CLI_RUNTIME_IMAGES,

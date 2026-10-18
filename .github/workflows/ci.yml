@@ -188,6 +188,15 @@ jobs:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.dashboard)[0]) }}
     secrets: inherit
 
+  operator-source:
+    name: Tests / Source / Operator
+    needs: plan
+    if: needs.plan.outputs.operator-source != '[]'
+    uses: ./.github/workflows/operator-source.yml
+    with:
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.operator-source)[0]) }}
+    secrets: inherit
+
   operator:
     name: Tests / E2E / Operator
     needs: [plan, image-router, image-operator, image-fixtures]
@@ -347,7 +356,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
+    needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator-source, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -382,6 +391,7 @@ jobs:
               "core": {"result": "${{ needs.core.result }}"},
               "storage": {"result": "${{ needs.storage.result }}"},
               "dashboard": {"result": "${{ needs.dashboard.result }}"},
+              "operator-source": {"result": "${{ needs.operator-source.result }}"},
               "operator": {"result": "${{ needs.operator.result }}"},
               "local": {"result": "${{ needs.local.result }}"},
               "recipes": {"result": "${{ needs.recipes.result }}"},

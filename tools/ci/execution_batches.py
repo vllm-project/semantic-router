@@ -6,10 +6,10 @@ import hashlib
 import json
 from collections import defaultdict
 
-MAX_CONTRACT_MINUTES = 330
-MAX_BATCH_MINUTES = 270
-MAX_BATCH_CONTRACTS = 3
-MAX_COMPONENT_CONTRACTS = 4
+from execution_targets import TARGET_FIELDS, target_errors
+from verification_catalog import load_catalog
+
+MAX_JOB_MINUTES = 360
 
 IMAGE_PRODUCERS = {
     "image-router": ("vllm-sr",),
@@ -29,6 +29,7 @@ EXECUTOR_JOBS = (
     "storage",
     "dashboard",
     "operator",
+    "operator-source",
     "local",
     "recipes",
     "platform",
@@ -86,9 +87,18 @@ def expected_dispatch_jobs(plan: dict) -> list[str]:
 
 
 def _compatibility(record: dict) -> dict:
+    if errors := target_errors(record):
+        raise ValueError("; ".join(errors))
     common = {
         key: record[key]
-        for key in ("executor", "runner", "runtime", "device", "platform")
+        for key in (
+            "executor",
+            "runtime",
+            "device",
+            "setup_environment",
+            "batch_policy",
+            *TARGET_FIELDS,
+        )
     }
     common.update(images=sorted(record["images"]), dispatch_job=dispatch_job(record))
     if record["executor"] == "platform":
@@ -98,10 +108,53 @@ def _compatibility(record: dict) -> dict:
     return common
 
 
+def batch_policy(record: dict) -> dict:
+    policy = load_catalog()["batching"]["policies"].get(record.get("batch_policy"))
+    if not isinstance(policy, dict) or any(
+        type(policy.get(key)) is not int or policy[key] <= 0
+        for key in ("max_contracts", "max_minutes", "overhead_minutes")
+    ):
+        raise ValueError(f"invalid batch policy for {record['id']}")
+    if policy["max_minutes"] + policy["overhead_minutes"] > MAX_JOB_MINUTES:
+        raise ValueError("batch policy exceeds the supported worker deadline")
+    return policy
+
+
+def contract_minutes(record: dict) -> int:
+    policy = batch_policy(record)
+    budget = record.get("timeout_minutes")
+    if (
+        type(budget) is not int
+        or budget <= 0
+        or budget + policy["overhead_minutes"] > MAX_JOB_MINUTES
+    ):
+        raise ValueError(f"invalid worker time budget for {record['id']}")
+    return budget
+
+
+def _pack(records: list[dict]) -> list[list[dict]]:
+    """Policy controls packing only; each contract keeps its own deadline."""
+    policy = batch_policy(records[0])
+    result, pending, minutes = [], [], 0
+    for record in records:
+        budget = contract_minutes(record)
+        if pending and (
+            len(pending) >= policy["max_contracts"]
+            or minutes + budget > policy["max_minutes"]
+        ):
+            result.append(pending)
+            pending, minutes = [], 0
+        pending.append(record)
+        minutes += budget
+    if pending:
+        result.append(pending)
+    return result
+
+
 def _batch(records: list[dict], shard: int) -> dict:
     common = _compatibility(records[0])
     executor = common["executor"]
-    identity = content_digest([record["id"] for record in records])[:12]
+    identity = content_digest([common, [record["id"] for record in records]])[:12]
     architecture = common["platform"].split("/")[-1]
     runtime = {"model-runtime": "Model Runtime"}.get(
         common["runtime"], common["runtime"]
@@ -109,7 +162,7 @@ def _batch(records: list[dict], shard: int) -> dict:
     label = f"{runtime} / {common['device'].upper()} / {architecture}"
     if executor == "e2e":
         resource = "Large" if common["resource_class"] == "model" else "Standard"
-        label += f" / {resource} {shard}"
+        label += f" / {resource} {shard} / {identity[:6]}"
         # A fixture beyond the lane's own images forms a separate compatibility
         # group whose shards restart at 1 in the same Actions matrix.
         extra = [image for image in common["images"] if image not in LANE_IMAGES]
@@ -118,17 +171,14 @@ def _batch(records: list[dict], shard: int) -> dict:
     if executor == "platform":
         # Distinguish compatible groups with the same runtime label.
         label += f" / {identity[:6]}"
-    minutes = sum(
-        record.get("timeout_minutes", 90 if executor == "e2e" else 120)
-        for record in records
-    )
+    minutes = sum(contract_minutes(record) for record in records)
     return {
         **common,
         "id": f"{executor}-{identity}",
         "display_name": label,
         "shard": shard,
         "timeout_minutes": minutes,
-        "job_timeout_minutes": minutes + 30,
+        "job_timeout_minutes": minutes + batch_policy(records[0])["overhead_minutes"],
         "verifications": records,
     }
 
@@ -140,70 +190,47 @@ def execution_batches(records: list[dict], executor: str) -> list[dict]:
             groups[json.dumps(_compatibility(record), sort_keys=True)].append(record)
     result = []
     for key in sorted(groups):
-        pending, minutes, shard = [], 0, 1
-        for record in groups[key]:
-            budget = record.get("timeout_minutes", 90 if executor == "e2e" else 120)
-            if budget <= 0 or budget > MAX_CONTRACT_MINUTES:
-                raise ValueError(f"invalid worker time budget for {record['id']}")
-            limit = (
-                1 if record.get("resource_class") == "model" else MAX_BATCH_CONTRACTS
-            )
-            if pending and (
-                len(pending) >= limit or minutes + budget > MAX_BATCH_MINUTES
-            ):
-                result.append(_batch(pending, shard))
-                pending, minutes, shard = [], 0, shard + 1
-            pending.append(record)
-            minutes += budget
-        if pending:
-            result.append(_batch(pending, shard))
+        result.extend(
+            _batch(selected, shard)
+            for shard, selected in enumerate(_pack(groups[key]), 1)
+        )
     return result
-
-
-def _component_group(record: dict) -> tuple[str, str]:
-    # The runtime installs a separate set of engine extras. Keep that dependency
-    # environment apart from training/export tools sharing the lightweight worker.
-    environment = "runtime" if record["target"] == "model-runtime-test" else "tools"
-    return record["worker"], environment
 
 
 def _component_batch(records: list[dict], workers: dict, shard: int) -> dict:
     worker = records[0]["worker"]
     spec = workers[worker]
-    identity = content_digest([record["id"] for record in records])[:12]
+    common = _compatibility(records[0])
+    identity = content_digest([common, [record["id"] for record in records]])[:12]
     single = len(records) == 1
     return {
         **spec,
+        **common,
         "id": records[0]["id"] if single else f"components-{worker}-{identity}",
         "worker": worker,
         "shard": shard,
         "display_name": (
             records[0]["display_name"]
             if single
-            else f"{spec['display_name']} / Batch {shard}"
+            else f"{spec['display_name']} / Batch {shard} / {identity[:6]}"
         ),
-        "job_timeout_minutes": 15 + 45 * len(records),
+        "job_timeout_minutes": sum(contract_minutes(record) for record in records)
+        + batch_policy(records[0])["overhead_minutes"],
         "verifications": records,
     }
 
 
 def component_batches(records: list[dict], workers: dict) -> list[dict]:
     """Share setup across bounded, compatible component contracts."""
-    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    groups: dict[str, list[dict]] = defaultdict(list)
     for record in sorted(records, key=lambda row: row["id"]):
         if record["executor"] == "tools":
-            groups[_component_group(record)].append(record)
+            common = {**_compatibility(record), "worker": record["worker"]}
+            groups[json.dumps(common, sort_keys=True)].append(record)
     result = []
     for key in sorted(groups):
-        selected = groups[key]
-        for index in range(0, len(selected), MAX_COMPONENT_CONTRACTS):
-            result.append(
-                _component_batch(
-                    selected[index : index + MAX_COMPONENT_CONTRACTS],
-                    workers,
-                    index // MAX_COMPONENT_CONTRACTS + 1,
-                )
-            )
+        for shard, selected in enumerate(_pack(groups[key]), 1):
+            result.append(_component_batch(selected, workers, shard))
     return result
 
 

@@ -5,11 +5,17 @@ the 2026-10-18 baseline `1c629c80b383d7e53e01f266430d0fa41c5d9bf6` with the
 CI consolidation change. It is evidence about test value, not a second
 execution allowlist.
 
-The canonical baseline, Dashboard and provider groups were inspected case by
-case, including their acceptance wrappers and provider-observation helpers.
-Other profile families below have representative assertion reviews and a full
-runtime inventory. Their registration alone is **not** evidence that every
-assertion in all 274 registered cases has been audited.
+The canonical baseline, Dashboard and provider groups are reviewed below.
+Companion audits cover every remaining registered case, including its helpers,
+acceptance wrapper, limitations and disposition:
+
+- [Protocol, Responses and streaming cases](ci-protocol-testcase-audit.md)
+- [Routing and deployment cases](ci-routing-testcase-audit.md)
+- [Runtime, state and model cases](ci-runtime-testcase-audit.md)
+
+Together these reviews cover all 271 surviving registrations and the retired
+cases. A static assertion review is not a live passing result. Seventeen
+unreachable registrations are explicitly identified as debt, not CI coverage.
 
 ## Sources and counts
 
@@ -29,7 +35,7 @@ go run ./cmd/e2e-audit > /tmp/e2e-inventory.json
 | Dashboard | 16 | 16 | Product API/state/recovery contracts |
 | Provider protocols | 25 | 25 | Native Anthropic backend and client conversion contracts |
 | Unique cases across those three groups | 83 | 80 | 82 final group entries; two intentional cross-backend repeats |
-| Global testcase registrations | 278 | 274 | Three legacy removals, plus two misleading Istio cases replaced by one metrics smoke |
+| Global testcase registrations | 278 | 271 | Six legacy removals, plus two misleading Istio cases replaced by one metrics smoke |
 
 `RouterSmoke` contains only `chat-completions-request`, already counted above.
 `chat-completions-request` and `anthropic-messages-streaming` run in both baseline
@@ -38,7 +44,7 @@ not a request count, assertion count, Go subtest count or number of jobs per PR.
 
 ## Expanded profile inventory
 
-The runtime graph after consolidation contains **47 profiles and 274 registered
+The runtime graph after consolidation contains **47 profiles and 271 registered
 cases**. Every selected name is registered. Seventeen registered cases remain
 unreachable under the existing bounded [debt registry](../../../e2e/pkg/verification/debt.go);
 they are not added to the CI qualification claim. Profile selections overlap,
@@ -56,7 +62,7 @@ so this table must not be summed as unique coverage. It is a dated audit snapsho
 | `conversation-routing` | 1 |
 | `dashboard` | 16 |
 | `dynamic-config` | 4 |
-| `dynamo` | 6 |
+| `dynamo` | 3 |
 | `envoy-ai-gateway` | 41 |
 | `external-gateway-responses` | 3 |
 | `hallucination` | 2 |
@@ -124,9 +130,28 @@ own calibrated acceptance policy before being advertised as equivalent gates.
 | `istio-tracing-observability` | No collector/span acceptance; generic metric text and unchecked request outcomes were insufficient. | [istio-proxy-metrics](../../../e2e/testcases/istio_proxy_metrics.go) requires HTTP 200 and a parsed `envoy_server_live 1` sample. It is explicitly exporter smoke, not tracing or mTLS qualification. |
 | `authz-header-spoofing` | An absent model counted as correct, the fallback read a nonstandard nested model field, and only one case needed to pass. A greeting also selected 7B for a spoofed premium identity. | Require every probe, a nonempty matching top-level model/selected-model header and consistent evidence. A code-request prompt selects 14B if premium headers leak through, making the expected default 7B discriminating. Parser, failure aggregation and probe tests cover these checks. |
 
-The three legacy implementations, their private JSON fixtures, acceptance entries
-and profile selections are removed together. This removes redundant weak
+The three legacy plugin/rule implementations, their private JSON fixtures,
+acceptance entries and profile selections are removed together. Dynamo's
+report-only batching, performance and GPU-utilization cases are also retired:
+request failures or absent workers could still pass, and they did not measure
+the advertised behavior. The retained Dynamo cases are accurately described as
+health/inference smoke in the routing audit. This removes redundant weak
 oracles rather than the provider, routing or security boundaries listed above.
+
+The streamed-body safety probes now require the specific PII/jailbreak decision
+and refusal text, plus a benign request that reaches the general decision.
+The SSE-cache probe now requires an actual cache hit, SSE content type, complete
+Chat stream terminal and exact replay of the primed output. A failed streaming
+request can no longer pass on an unrelated non-streaming cache hit. Negative
+unit cases exercise wrong blockers, universal blocking, invalid bodies,
+truncated/duplicate terminals and altered replay text.
+
+## Repaired integration cases
+
+| Case | Effective assertion and disposition |
+| --- | --- |
+| [authz-header-spoofing](../../../e2e/testcases/authz_header_spoofing.go) | All four probes require the observed default model, reject missing/conflicting evidence and use a prompt that would select the premium model if identity spoofing succeeded. Keep the trust-boundary regression. |
+| [istio-proxy-metrics](../../../e2e/testcases/istio_proxy_metrics.go) | HTTP 200 and a valid live Envoy gauge from the actual proxy metrics endpoint. Keep exporter smoke; it makes no TLS or trace-collection claim. |
 
 ## Canonical cases
 
@@ -233,20 +258,20 @@ when sharing execution setup.
 
 ## Other profile families
 
-The following are family-level findings with representative implementation
-checks. They do not claim that every registered case has been reviewed.
+The following summarize the companion per-case reviews linked above. Those
+reviews retain the individual assertions and limitations behind each family.
 
 | Family | Actual boundary and disposition |
 | --- | --- |
 | Model runtime: 12 fixture cases, 1 published-model case | [Tiny random-weight packages](../../../e2e/profiles/model-runtime/runtime_with_fixtures.py) exercise readiness ordering, independent workers, RPC outputs, bundles, supervision and load-retry isolation without downloads. [Real routing](../../../e2e/testcases/model_runtime_real.go) checks five clear requests with published Kai/Vela and compares Router signals to Kai's own answer. Keep both; fixtures qualify process integration, not model accuracy. |
 | Published Vela: Shield, Halu, Omni | [Shield](../../../e2e/testcases/vela_shield.go) requires unsafe/benign/over-refusal verdicts. [Halu](../../../e2e/testcases/vela_halu.go) checks supported/contradictory answers, Unicode spans and input-budget rejection. [Omni](../../../e2e/testcases/vela_omni.go) checks dimensions, normalized vectors, reference cosines, invalid input and recipe isolation. Keep real-model qualification separate from fast units. |
 | Responses and protocol extensions | [response-api](../../../e2e/profiles/response-api/profile.go) selects CRUD, chaining, failure, image and multi-client protocol cases. The reviewed [backend matrix helpers](../../../e2e/testcases/protocol_codec_responses_backend.go) check provider requests, client output and incomplete/midstream failures; reuse across Chat, Responses and Anthropic is intentional. Redis variants add persistence/restart boundaries. |
-| Streaming and privacy | [Body limits](../../../e2e/testcases/streaming_body_limits.go) check 413/408 and exact error codes before routing. [Masking](../../../e2e/testcases/masking_cross_protocol.go) observes provider input without raw PII, requires placeholders and rejects unavailable classifiers with 503. Streamed safety checks the fast-response header; it does not independently prove no backend dispatch. Preserve stronger no-dispatch cases alongside it. |
+| Streaming and privacy | [Body limits](../../../e2e/testcases/streaming_body_limits.go) check 413/408 and exact error codes before routing. [Masking](../../../e2e/testcases/masking_cross_protocol.go) observes provider input without raw PII, requires placeholders and rejects unavailable classifiers with 503. Streamed safety now checks the exact decision/refusal and a benign control; no-dispatch is still owned by the separate provider-observation cases. |
 | Routing and selection | Signal families compare positive/negative matched rules and decisions. [Decision-scoped multi-factor](../../../e2e/testcases/decision_scoped_multi_factor.go) requires distinct quality/cost model choices. [Random](../../../e2e/testcases/decision_scoped_random.go) checks eligible candidates and algorithm wiring; statistical uniformity belongs in selector units. Shared selection infrastructure does not make these distinct policy boundaries redundant. |
 | Replay, shadow and state | [Replay restart recovery](../../../e2e/testcases/router_replay_restart_recovery.go) confirms a record in Postgres and provider-observed dispatch hash/length, then preserves it after restart. [Shadow capture](../../../e2e/testcases/shadow_dispatch_capture.go) checks candidate metadata, disabled response-body capture and failure reasons. Keep stateful receipts; do not substitute generic HTTP smoke. |
 | Deployment adapters | Shared chat smoke is appropriate for distinct gateway environments. Istio now has three cases, dynamic-config four and AIBrix two. Preserve adapter-specific data/control-plane assertions while batching only compatible workers with separate cluster lifecycles. |
 | Production stack: 10 cases | Failover deletes a real backend pod and requires a backend success floor. Load balancing requires endpoints and backend-routed requests, not uniform distribution. [Resource monitoring](../../../e2e/testcases/resource_utilization_monitoring.go) proves a nonempty Prometheus series; [throughput](../../../e2e/testcases/performance_throughput.go) rejects request errors without a comparative performance threshold. Use full/manual qualification and describe the limits accurately. |
-| Dynamo: 6 cases | [Dynamic batching](../../../e2e/testcases/dynamo_dynamic_batching.go) reports five concurrent requests without a pass threshold; [performance comparison](../../../e2e/testcases/dynamo_performance_comparison.go) reports ten requests and computes percentiles from unsorted samples; [GPU utilization](../../../e2e/testcases/dynamo_gpu_utilization.go) accepts missing workers. No Dynamo acceptance wrapper repairs these. They remain documented debt, not evidence of batching efficiency or GPU/performance qualification. |
+| Dynamo: 3 retained cases | Retire the report-only dynamic batching, performance comparison and GPU-utilization cases. Health, successful inference and output-shape smoke remain; these do not qualify batching efficiency, category accuracy or GPU utilization. |
 | Local product and benchmark contracts | The development launcher smoke now shares the existing CLI worker, but its separate receipt must be present and passed. Benchmark units check fixture independence, timers, cleanup and model identity without checkpoint inference. Identity now includes engine arguments, preventing unlike executions from sharing a baseline. Live inference and pressure belong in explicit qualification. |
 
 ### Remaining work
@@ -256,8 +281,10 @@ checks. They do not claim that every registered case has been reviewed.
   assertions before treating them as pricing correctness tests.
 - Give non-baseline reuse an explicit acceptance policy; do not silently apply a
   baseline model-quality threshold to a different deployment or model.
-- Replace or retire Dynamo's report-only qualification claims. A manual trigger
-  changes execution frequency, not assertion quality.
+- Address the remaining weak oracles documented per case: fallback method
+  inference, missing routing evidence, fault injection that can be skipped and
+  model-selection empty-input handling. Manual execution alone does not improve
+  assertion quality.
 - Keep the distinction between deleting a redundant oracle, sharing a worker,
   and moving expensive qualification to full/manual execution. Per-case missing,
   failed and skipped results must remain visible in the Gate.

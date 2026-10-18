@@ -24,6 +24,7 @@ SCOPES = frozenset(
     {"affected", "models", "storage", "product", "e2e", "operator", "performance"}
 )
 SHA = re.compile(r"[0-9a-f]{40}")
+PINNED_REVISION_COUNT = 3
 NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
 AUTHORIZATION_LIMIT = 65536
@@ -59,8 +60,13 @@ def parse_command(body: str) -> dict | None:
         return None
     tokens = body.split(" ")[2:]
     pinned = None
-    if len(tokens) >= 4 and all(SHA.fullmatch(value) for value in tokens[-3:]):
-        pinned, tokens = tokens[-3:], tokens[:-3]
+    if len(tokens) > PINNED_REVISION_COUNT and all(
+        SHA.fullmatch(value) for value in tokens[-PINNED_REVISION_COUNT:]
+    ):
+        pinned, tokens = (
+            tokens[-PINNED_REVISION_COUNT:],
+            tokens[:-PINNED_REVISION_COUNT],
+        )
         if tokens not in (["full"], ["affected"]):
             return None
     full = tokens == ["full"]

@@ -153,9 +153,12 @@ class ExecutionBatchTests(unittest.TestCase):
         self.assertTrue(any(label.endswith(" / model-runtime") for label in labels))
         display_dispatch(plan)
 
-    def test_large_resource_class_profiles_get_separate_workers(self):
+    def test_explicit_exclusive_profiles_get_separate_workers(self):
         plan = make_plan([], source_sha="a" * 40, requested=("e2e.vela-omni",))
         record = plan["verifications"][0]
+        self.assertEqual(record["batch_policy"], "exclusive")
+        # Presentation metadata does not decide packing policy.
+        record = {**record, "resource_class": "standard"}
         records = []
         for i in range(3):
             candidate = {**record, "id": f"e2e.model-{i}", "profile": f"model-{i}"}

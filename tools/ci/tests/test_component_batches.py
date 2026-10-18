@@ -29,6 +29,7 @@ SHA = "a" * 40
 class ComponentBatchTests(unittest.TestCase):
     def test_component_workers_have_bounded_inventory_and_reject_metadata_changes(self):
         row = make_plan([], source_sha=SHA, requested=("cli-unit",))["verifications"][0]
+        row = {**row, "batch_policy": "shared-components"}
         workers = {"cli": {"display_name": "CLI", "go": False}}
         records = [{**row, "id": f"cli-{index}"} for index in range(9)]
         batches = component_batches(records, workers)
@@ -41,15 +42,17 @@ class ComponentBatchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_component_batch(changed, workers)
 
-    def test_compatible_contracts_share_bounded_workers_without_changing_selection(
+    def test_component_contracts_default_to_independent_workers_without_changing_selection(
         self,
     ):
         full = make_plan([], source_sha=SHA, full=True)
         batches = full["component_batches"]
         rows = [row for batch in batches for row in batch["verifications"]]
         selected = [row for row in full["verifications"] if row["executor"] == "tools"]
-        self.assertLess(len(batches), len(selected))
-        self.assertTrue(all(1 <= len(batch["verifications"]) <= 4 for batch in batches))
+        self.assertEqual(len(batches), len(selected))
+        for batch in batches:
+            self.assertGreaterEqual(len(batch["verifications"]), 1)
+            self.assertEqual(len(batch["verifications"]), 1)
         self.assertEqual(
             sorted(row["id"] for row in rows), sorted(row["id"] for row in selected)
         )

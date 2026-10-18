@@ -46,15 +46,22 @@ The PR, main, weekly, and explicit qualification entrypoints share one verificat
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.
-Compatible component checks share a bounded worker (at most four contracts),
-while retaining separate inventories, logs, receipts, and failure status. The
-model runtime uses an isolated dependency environment. A failed contract does
-not suppress its independent siblings. Each contract has a cumulative timeout;
-child processes are terminated before the next contract starts.
+Component checks default to one contract per job for independent dependencies,
+parallel feedback and targeted retries. The catalog offers an explicit
+`shared-components` policy (at most four compatible contracts) when measured
+setup cost justifies sharing. Every contract retains its inventory, logs,
+receipt and failure status. The model runtime declares its own setup
+environment. A failed contract does not suppress independent siblings. Each
+contract has a cumulative timeout; child processes are terminated before the
+next contract starts.
 
-Platform and Kubernetes contracts share workers only when their runtime, device,
-platform, image dependencies, and resource class are compatible. A worker runs
-at most three contracts within its declared time budget. Each Kubernetes profile
+Platform and Kubernetes contracts share workers only when their execution
+target, runtime, device, platform, setup environment, batch policy, image
+dependencies and resource class are compatible. The `integration` policy runs
+at most three contracts within its declared time budget; `exclusive` keeps a
+contract alone. Vela Omni explicitly selects exclusive execution. Batch limits
+and setup allowances live in the catalog, and total job deadlines cannot exceed
+360 minutes. Each Kubernetes profile
 creates and destroys its own cluster. Teardown failure stops the worker, since
 its remaining contracts could otherwise run against contaminated state.
 Heavy model profiles remain isolated. Recipes use three balanced standalone
@@ -237,6 +244,56 @@ CPU success does not qualify CUDA or ROCm. Accelerator image builds are reported
 as builds. Device qualification requires actual inference on the declared
 hardware, with its own supported verification entry and evidence.
 
+## Execution targets and hardware extensions
+
+Contracts, placement and batching have separate owners:
+
+| Concern | Owner | Meaning |
+| --- | --- | --- |
+| Verification contract | [verification catalog](../../ci/verification_catalog.yaml) and the test framework | Required cases, runtime/device contract, inputs and acceptance |
+| Execution target | [target registry](../../ci/execution_targets.yaml) and its [adapter](../../ci/execution_targets.py) | Reviewed runner selection, host platform and supported executors/runtime/device combinations |
+| Batch policy | Catalog `batching` policies and each contract's `batch_policy` | Independent job or compatible shared job, count/time bounds and setup allowance |
+
+Only `linux-amd64-cpu` is enabled today. It selects GitHub-hosted
+`ubuntu-24.04` through the `cpu-v1` adapter. Source, component and heavy reusable
+workflows read resolved placement from their planned contracts. The target ID,
+registry digest, adapter, runner and platform enter the contract digest and
+receipt; the Gate checks them again. Workflows bind the observed runner
+environment from `runner.environment`, and receipts compare the actual host
+platform. Local harness checks are allowed but recorded as local; local
+receipts cannot qualify a GitHub Actions run.
+
+The CPU adapter establishes host placement. It does **not** attest a model's
+accelerator by copying a planned `device` string into the result. Existing
+published-model launchers explicitly select CPU, and CPU Kubernetes profiles
+use their declared fixtures. Some E2E receipt metadata still describes the
+authored CPU configuration rather than independently observing every loaded
+model. Consequently, the adapter rejects GPU device declarations; moving a job
+to a GPU-labeled runner does not create GPU qualification.
+
+A future self-hosted CPU target can reuse this adapter once its Linux platform,
+dependencies, isolation and runner access are established. Register the reviewed
+runner placement and update the relevant contract references; assertion code
+and receipt identity need not be redesigned. Shared self-hosted machines must
+not inherit disposable-runner cleanup: the disk-reclamation action runs only
+on GitHub-hosted runners. No self-hosted target is enabled by this change.
+
+A CUDA or ROCm target requires a concrete adapter before enabling its registry
+entry. That adapter must observe the actual accelerator and device architecture,
+runtime/engine version, model revision or model digest, and inference output;
+the model-runtime model cards and response metadata already expose useful
+identity fields. It must own a nonempty required inventory for that hardware and
+fail on missing or skipped required cases. Existing GPU tests have different
+requirements: ROCm fast-path tests require `gfx942`, whereas CUDA graph tests
+require CUDA. `make model-runtime-test-gpu` alone can skip unavailable hardware
+and is not a qualification adapter. CPU fixture tests exclude both `gpu` and
+`prod_weights` and remain automatic source validation.
+
+Use distinct verification IDs when qualifying the same semantic contract on
+multiple targets so one CPU receipt cannot satisfy a GPU requirement. Keep
+disabled or unsupported targets out of required CPU inventory; unknown targets,
+unsupported adapters and mismatched placement fail planning or receipt checks.
+
 ## Diagnose a failure
 
 Start with the plan and the failing verification's receipt, then its original
@@ -259,10 +316,12 @@ see [`perf/README.md`](../../../perf/README.md).
    [`domains.yaml`](../domains.yaml). This is the only changed-path registry.
 2. Add or extend a verification in
    [`verification_catalog.yaml`](../../ci/verification_catalog.yaml). Declare
-   its product layer, automatic/approved policy, logical category, executor, inventory, runtime/device,
-   services, and build dependencies. Kubernetes profiles also declare runtime,
-   device, and resource class in the domain registry. Compatible cases join
-   an existing worker; keep concrete case discovery in its testing framework.
+   its product layer, automatic/approved policy, logical category, executor,
+   inventory, runtime/device, execution target, services and build dependencies.
+   Choose a batch policy independently; the default component policy is one
+   contract per job. Kubernetes profiles can declare execution target, runtime,
+   device, setup environment and batch policy in the domain registry. Keep
+   concrete case discovery in its testing framework.
 3. Extend the executor only when the new check has different execution needs.
    Emit actual case outcomes and consumed artifact identities. Add negative
    coverage proving that missing cases or dependencies cannot pass.

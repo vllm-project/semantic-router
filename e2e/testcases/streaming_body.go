@@ -36,7 +36,7 @@ func init() {
 		Fn:          testStreamingLargeBody,
 	})
 	pkgtestcases.Register("streaming-sse-cache", pkgtestcases.TestCase{
-		Description: "Verify SSE streaming responses are cached and replayed correctly",
+		Description: "Verify a cached Chat response is replayed as a complete SSE stream",
 		Tags:        []string{"streaming", "cache", "sse"},
 		Fn:          testStreamingSSECache,
 	})
@@ -304,86 +304,96 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 	defer stop()
 
 	question := "What is the speed of light in a vacuum?"
-
-	// 1) Send a non-streaming request to prime the cache (more reliable than
-	//    SSE since the mock backend may not support streaming responses).
-	resp1, err := sendNonStreamingRequest(ctx, question, "vllm-sr/auto", localPort)
+	resp, err := sendNonStreamingRequest(ctx, question, "vllm-sr/auto", localPort)
 	if err != nil {
-		return fmt.Errorf("first request failed: %w", err)
+		return fmt.Errorf("prime cache: %w", err)
 	}
-	body1, _ := io.ReadAll(resp1.Body)
-	resp1.Body.Close()
-
-	if opts.Verbose {
-		fmt.Printf("[Streaming] First response: status=%d, len=%d, decision=%s\n",
-			resp1.StatusCode, len(body1), resp1.Header.Get("x-vsr-selected-decision"))
+	body, readErr := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if readErr != nil {
+		return fmt.Errorf("read priming response: %w", readErr)
+	}
+	wantText, err := decodeStructuredChatText(body)
+	if err != nil || wantText == "" {
+		return fmt.Errorf("cache priming requires nonempty Chat output: %v", err)
 	}
 
-	// 2) Retry similar non-streaming request with backoff until cache hit.
-	similarQ := "How fast does light travel through empty space?"
-	var cacheHit string
-	var body2 []byte
+	// Reuse the identical prompt: this case qualifies cached SSE encoding,
+	// while streaming-cache-roundtrip owns semantic similarity matching.
 	for attempt := 1; attempt <= 4; attempt++ {
-		wait := time.Duration(attempt) * time.Second
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Waiting %v before cache-hit check (attempt %d/4)\n", wait, attempt)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * time.Second):
 		}
-		time.Sleep(wait)
-
-		resp2, requestErr := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
-		if requestErr != nil {
-			if attempt == 4 {
-				return fmt.Errorf("similar request failed: %w", requestErr)
-			}
+		stream, err := sendStreamingRequest(ctx, question, "vllm-sr/auto", localPort)
+		if err != nil {
+			return fmt.Errorf("request cached SSE replay: %w", err)
+		}
+		streamBody, readErr := io.ReadAll(stream.Body)
+		_ = stream.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("read cached SSE replay: %w", readErr)
+		}
+		if stream.Header.Get("x-vsr-cache-hit") != "true" && attempt < 4 {
 			continue
 		}
-		body2, _ = io.ReadAll(resp2.Body)
-		resp2.Body.Close()
-
-		cacheHit = resp2.Header.Get("x-vsr-cache-hit")
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Similar request: status=%d, cache-hit=%s, decision=%s\n",
-				resp2.StatusCode, cacheHit, resp2.Header.Get("x-vsr-selected-decision"))
+		if err := validateStreamingCacheReplay(stream.Header, streamBody, wantText); err != nil {
+			return err
 		}
-		if cacheHit == "true" {
-			break
+		if opts.SetDetails != nil {
+			opts.SetDetails(map[string]interface{}{
+				"original_body_len": len(body),
+				"stream_body_len":   len(streamBody),
+				"stream_cache_hit":  true,
+				"replay_verified":   true,
+			})
 		}
+		return nil
 	}
+	return fmt.Errorf("cached SSE replay never became available")
+}
 
-	// 3) Optionally test streaming cache hit — send a streaming request for a
-	//    similar question. If the backend supports SSE, validate the stream;
-	//    otherwise just check the cache-hit header.
-	var cacheHit3 string
-	resp3, err := sendStreamingRequest(ctx, "What is the velocity of light in vacuum?", "vllm-sr/auto", localPort)
-	if err != nil {
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Streaming similar request failed (mock may not support SSE): %v\n", err)
+func validateStreamingCacheReplay(headers http.Header, body []byte, wantText string) error {
+	if headers.Get("x-vsr-cache-hit") != "true" {
+		return fmt.Errorf("expected cached SSE replay, got cache-hit=%q", headers.Get("x-vsr-cache-hit"))
+	}
+	if !strings.HasPrefix(headers.Get("Content-Type"), "text/event-stream") {
+		return fmt.Errorf("cached response is not SSE: %q", headers.Get("Content-Type"))
+	}
+	if wantText == "" {
+		return fmt.Errorf("cached SSE comparison requires nonempty priming output")
+	}
+	frames := protocolSSEDataFrames(body)
+	if len(frames) == 0 || frames[len(frames)-1] != "[DONE]" {
+		return fmt.Errorf("cached SSE replay must end with [DONE]")
+	}
+	finished := false
+	for _, data := range frames {
+		if data == "[DONE]" {
+			continue
 		}
-	} else {
-		cacheHit3 = resp3.Header.Get("x-vsr-cache-hit")
-		// Drain body regardless of format
-		io.Copy(io.Discard, resp3.Body)
-		resp3.Body.Close()
+		var chunk chatTextStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			return fmt.Errorf("decode cached SSE frame: %w", err)
+		}
+		for _, choice := range chunk.Choices {
+			if finished {
+				return fmt.Errorf("cached SSE replay contains a choice after its finish reason")
+			}
+			if choice.FinishReason != nil {
+				finished = true
+			}
+		}
+		// A final usage-only chunk has no choices and may follow the finish.
 	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"original_body_len":    len(body1),
-			"non_stream_cache_hit": cacheHit,
-			"non_stream_body_len":  len(body2),
-			"stream_cache_hit":     cacheHit3,
-		})
+	if err := validateChatProtocolStream(body, wantText); err != nil {
+		return fmt.Errorf("cached SSE replay: %w", err)
 	}
-
-	if opts.Verbose {
-		fmt.Printf("[Streaming] Non-streaming similar: cache-hit=%s, len=%d\n", cacheHit, len(body2))
-		fmt.Printf("[Streaming] Streaming similar:     cache-hit=%s\n", cacheHit3)
+	text, err := extractProtocolStructuredOutputStreamText("/v1/chat/completions", body)
+	if err != nil || text != wantText {
+		return fmt.Errorf("cached SSE output differs from priming output: %v", err)
 	}
-
-	if cacheHit != "true" {
-		return fmt.Errorf("expected cache hit for non-streaming similar question, got %q", cacheHit)
-	}
-
 	return nil
 }
 

@@ -12,7 +12,8 @@ from pathlib import Path
 
 from ci_plan import digest
 from ci_results import actual_platform, make_receipt
-from execution_batches import validate_component_batch
+from execution_batches import contract_minutes, validate_component_batch
+from execution_targets import execution_observation
 from python_test_evidence import summarize
 from verification_catalog import load_catalog
 from worker_process import run_command as run_isolated_command
@@ -122,6 +123,7 @@ def contract_evidence(record: dict, output: Path) -> dict:
 
 def run_batch(batch: dict, output: Path) -> bool:
     validate_batch(batch)
+    execution_observation(batch["verifications"][0], actual_platform())
     # A rerun must not qualify stale output from a prior execution.
     output.mkdir(parents=True, exist_ok=False)
     results = output / "results"
@@ -147,7 +149,7 @@ def run_batch(batch: dict, output: Path) -> bool:
         (raw / "verification.json").write_text(json.dumps(record, indent=2) + "\n")
         log = raw / "commands.log"
         print(f"::group::{record['display_name']}", flush=True)
-        deadline = time.monotonic() + 45 * 60
+        deadline = time.monotonic() + contract_minutes(record) * 60
         try:
             if target == "test-training-contracts":
                 python = str(ROOT / ".venv-agent/bin/python")

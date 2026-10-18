@@ -13,9 +13,14 @@ permissions:
 jobs:
   tests:
     name: Execute Contracts
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.batch).runner }}
     timeout-minutes: ${{ fromJSON(inputs.batch).job_timeout_minutes }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:

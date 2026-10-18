@@ -11,7 +11,9 @@ import sys
 import time
 from pathlib import Path
 
-from execution_batches import validate_execution_batch
+from ci_results import actual_platform
+from execution_batches import contract_minutes, validate_execution_batch
+from execution_targets import execution_observation
 from worker_process import run_command
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def run_batch(batch: dict, output: Path, *, run=run_command) -> bool:
     validate_execution_batch(batch, "platform")
+    execution_observation(batch["verifications"][0], actual_platform())
     if output.exists() and any(output.iterdir()):
         raise ValueError("platform worker evidence directory must be empty")
     output.mkdir(parents=True, exist_ok=True)
@@ -62,7 +65,7 @@ def run_batch(batch: dict, output: Path, *, run=run_command) -> bool:
         ]
         status = "success"
         print(f"::group::{record['category']} / {record['display_name']}", flush=True)
-        deadline = time.monotonic() + record.get("timeout_minutes", 120) * 60
+        deadline = time.monotonic() + contract_minutes(record) * 60
         try:
             for command in commands:
                 remaining = deadline - time.monotonic()

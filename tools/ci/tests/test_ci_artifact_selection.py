@@ -8,12 +8,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 
 import check_ci_gate as gate  # noqa: E402
 from test_ci_gate import completed  # noqa: E402
+from verification_catalog import load_catalog  # noqa: E402
 
 PATHS = [
     "tools/make/build-run-test.mk",
@@ -65,8 +67,14 @@ def write_builds(directory, builds):
 class CIArtifactSelectionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.old_plan, cls.old_receipts, cls.old_builds = completed(PATHS)
-        cls.plan, cls.receipts, cls.builds = completed(PATHS, full=True)
+        # Components default to separate jobs. Exercise the supported shared
+        # policy here so stale component batches remain a real regression case.
+        with patch.dict(
+            load_catalog()["batching"]["executor_defaults"]["tools"],
+            {"batch_policy": "shared-components"},
+        ):
+            cls.old_plan, cls.old_receipts, cls.old_builds = completed(PATHS)
+            cls.plan, cls.receipts, cls.builds = completed(PATHS, full=True)
 
     def setUp(self):
         scratch = tempfile.TemporaryDirectory()

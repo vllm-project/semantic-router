@@ -23,12 +23,14 @@ from classify_pr_changes import (
 from domain_registry import domain_records, load_domain_registry, matching_domains
 from execution_batches import (
     EXECUTOR_JOBS,
-    component_batches as build_component_batches,
     dispatch_job,
     e2e_batches,
     expected_dispatch_jobs,
     image_producers,
     platform_batches,
+)
+from execution_batches import (
+    component_batches as build_component_batches,
 )
 from provider_mocker_image import (
     IMAGE as MOCKER_IMAGE,
@@ -57,6 +59,7 @@ EXECUTORS = (
     "storage",
     "dashboard",
     "operator",
+    "operator-source",
     "local",
     "recipes",
     "platform",
@@ -175,8 +178,6 @@ def make_plan(
                     "milvus",
                     "qdrant",
                     "hybrid",
-                    "mmbert",
-                    "complexity",
                 )
                 if full
                 else ("memory",)

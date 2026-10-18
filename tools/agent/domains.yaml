@@ -456,13 +456,14 @@ domains:
   operator:
     owner: operator
     paths:
+      - .github/workflows/operator*.yml
       - deploy/operator/**
       - deploy/kubernetes/crds/**
       - src/semantic-router/pkg/apis/**
       - tools/codegen/boilerplate.go.txt
       - deploy/helm/semantic-router/crds/**
     checks: [make generate-api-check]
-    verifications: [operator]
+    verifications: [operator.source, operator]
 
   # The release version contract reads these files. The harness tests check
   # the development-cycle contract on the real tree, so a change to any of them
@@ -734,7 +735,7 @@ domains:
       - tools/ci/deployment_test_results.py
       - tools/ci/check_operator_request.py
     checks: [make harness-check]
-    verifications: [operator, e2e.envoy-ai-gateway]
+    verifications: [operator.source, operator, e2e.envoy-ai-gateway]
 
   planner:
     owner: maintainers
@@ -1061,6 +1062,7 @@ profiles:
     runtime: model-runtime
     device: cpu
     resource_class: model
+    batch_policy: exclusive
     selection: pr
     paths:
       - e2e/profiles/vela-omni/**
@@ -1284,7 +1286,7 @@ profiles:
   dynamo:
     display_name: Dynamo Gateway
     owner: e2e
-    coverage_role: dynamo-gpu-and-batching
+    coverage_role: dynamo-deployment-smoke
     selection: manual
     paths: [e2e/profiles/dynamo/**]
   vectorstore-registry:

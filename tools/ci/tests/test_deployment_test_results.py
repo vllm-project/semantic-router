@@ -10,11 +10,55 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from deployment_test_results import go_unit, kubernetes, operator
+from deployment_test_results import go_unit, kubernetes, operator, operator_source
+from ci_plan import github_outputs, make_plan
 from release_guard_waiver import GUARD_WAIVER
 
 
 class DeploymentResultsTests(unittest.TestCase):
+    def test_operator_source_runs_before_deployment_approval_without_images(self):
+        plan = make_plan(
+            ["deploy/operator/controllers/canonical_config_builder.go"],
+            source_sha="a" * 40,
+            require_approval=True,
+        )
+        contracts = {record["id"]: record for record in plan["verifications"]}
+        self.assertIn("operator.source", contracts)
+        self.assertNotIn("operator", contracts)
+        self.assertEqual(contracts["operator.source"]["images"], [])
+        self.assertEqual(contracts["operator.source"]["runtime"], "none")
+        output = github_outputs(plan)
+        self.assertEqual(
+            [row["id"] for row in json.loads(output["operator-source"])],
+            ["operator.source"],
+        )
+        root = Path(__file__).resolve().parents[3]
+        jobs = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())["jobs"]
+        self.assertEqual(jobs["operator-source"]["needs"], "plan")
+        self.assertIn("operator-source", jobs["gate"]["needs"])
+
+    def test_operator_full_inventory_keeps_distinct_storage_deployments(self):
+        plan = make_plan([], source_sha="a" * 40, full=True)
+        contracts = {record["id"]: record for record in plan["verifications"]}
+        self.assertIn("operator.source", contracts)
+        self.assertEqual(
+            [
+                row["cache-backend"]
+                for row in contracts["operator"]["integration_matrix"]
+            ],
+            ["memory", "redis", "milvus", "qdrant", "hybrid"],
+        )
+        affected = make_plan(
+            ["deploy/operator/controllers/canonical_config_builder.go"],
+            source_sha="a" * 40,
+        )
+        runtime = next(
+            row for row in affected["verifications"] if row["id"] == "operator"
+        )
+        self.assertEqual(
+            [row["cache-backend"] for row in runtime["integration_matrix"]], ["memory"]
+        )
+
     def test_release_guard_case_remains_failed_and_other_cases_are_required(self):
         report = {
             "profile": "production-stack",
@@ -145,24 +189,16 @@ class DeploymentResultsTests(unittest.TestCase):
     def test_operator_requires_every_variant_job_and_image_identity(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
-            unit = {
-                "cases": [{"id": "TestReconcile", "status": "passed"}],
-                "expected_cases": ["TestReconcile"],
-            }
             request = {
                 "cases": [{"id": "operator-routed-request", "status": "passed"}],
                 "expected_cases": ["operator-routed-request"],
             }
             for name in (
-                "operator-unit",
                 "operator-bundle",
                 "operator-request-memory",
                 "operator-request-redis",
             ):
                 (directory / name).mkdir()
-            (directory / "operator-unit/operator-unit.json").write_text(
-                json.dumps(unit)
-            )
             (directory / "operator-bundle/artifacts.json").write_text(
                 json.dumps([{"id": "image:operator-bundle", "sha256": "a" * 64}])
             )
@@ -175,14 +211,13 @@ class DeploymentResultsTests(unittest.TestCase):
             jobs = {
                 name: {"result": "success"}
                 for name in (
-                    "checks",
-                    "bundle-validate",
+                    "bundle-image",
                     "integration-test",
                 )
             }
             variants = [{"cache-backend": name} for name in ("memory", "redis")]
             result = operator(directory, variants, jobs)
-            self.assertEqual(len(result["cases"]), 3)
+            self.assertEqual(len(result["cases"]), 2)
             self.assertEqual(len(result["artifacts"]), 2)
             for job in jobs:
                 for state in ("skipped", "cancelled", "failure", "missing"):
@@ -204,19 +239,61 @@ class DeploymentResultsTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 operator(directory, variants, jobs)
 
+    def test_operator_source_requires_each_section_and_complete_unit_inventory(self):
+        unit = {
+            "cases": [{"id": "TestReconcile", "status": "passed"}],
+            "expected_cases": ["TestReconcile"],
+        }
+        steps = {
+            name: {"outcome": "success"}
+            for name in ("vet", "lint", "tests", "generated", "bundle_drift")
+        }
+        evidence = operator_source(unit, steps)
+        self.assertEqual(len(evidence["cases"]), 5)
+        self.assertEqual(evidence["cases"][0]["id"], "unit/TestReconcile")
+        for name in steps:
+            for outcome in ("failure", "cancelled", "skipped", "missing"):
+                bad = copy.deepcopy(steps)
+                if outcome == "missing":
+                    del bad[name]
+                else:
+                    bad[name]["outcome"] = outcome
+                with self.subTest(name=name, outcome=outcome), self.assertRaises(
+                    ValueError
+                ):
+                    operator_source(unit, bad)
+        for bad_unit in (
+            {"cases": [], "expected_cases": []},
+            {**unit, "cases": []},
+            {**unit, "cases": [{"id": "TestReconcile", "status": "skipped"}]},
+            {**unit, "cases": unit["cases"] * 2},
+            {**unit, "expected_cases": ["TestReconcile", "TestMissing"]},
+        ):
+            with self.subTest(unit=bad_unit), self.assertRaises(ValueError):
+                operator_source(bad_unit, steps)
+
     def test_operator_checks_share_setup_without_masking_section_failures(self):
         root = Path(__file__).resolve().parents[3]
-        jobs = yaml.safe_load((root / ".github/workflows/operator-ci.yml").read_text())[
-            "jobs"
-        ]
-        self.assertFalse({"lint", "test", "manifests"} & jobs.keys())
+        source = yaml.safe_load(
+            (root / ".github/workflows/operator-source.yml").read_text()
+        )["jobs"]
+        runtime = yaml.safe_load(
+            (root / ".github/workflows/operator-ci.yml").read_text()
+        )["jobs"]
+        self.assertEqual(set(source), {"checks"})
+        self.assertEqual(set(runtime), {"bundle-image", "integration-test", "result"})
         self.assertEqual(
-            jobs["result"]["needs"], ["checks", "bundle-validate", "integration-test"]
+            runtime["result"]["needs"], ["bundle-image", "integration-test"]
         )
-        self.assertNotIn("max-parallel", jobs["integration-test"]["strategy"])
-        steps = jobs["checks"]["steps"]
+        self.assertNotIn("max-parallel", runtime["integration-test"]["strategy"])
+        steps = source["checks"]["steps"]
         self.assertEqual(
             sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
+        )
+        self.assertFalse(
+            any(
+                step.get("uses") == "./.github/actions/load-ci-images" for step in steps
+            )
         )
         sections = {
             "Vet Operator Code": "dependencies",
@@ -226,12 +303,12 @@ class DeploymentResultsTests(unittest.TestCase):
             "Install controller-gen": "dependencies",
             "Generate manifests and API code": "controller_gen",
             "Verify no changes": "manifests",
+            "Regenerate bundle": "dependencies",
+            "Verify bundle is up to date": "bundle",
         }
         for name, prerequisite in sections.items():
             with self.subTest(section=name):
                 step = next(step for step in steps if step.get("name") == name)
-                # Explicit status functions keep independent sections running
-                # after a sibling failure; failures themselves stay blocking.
                 self.assertEqual(
                     step["if"],
                     "${{ !cancelled() && steps."
@@ -246,6 +323,13 @@ class DeploymentResultsTests(unittest.TestCase):
         )
         self.assertEqual(upload["if"], "always()")
         self.assertTrue(upload["with"]["include-hidden-files"])
+        record = next(
+            step
+            for step in steps
+            if step.get("name") == "Record complete source contract evidence"
+        )
+        self.assertEqual(record["if"], "always()")
+        self.assertIn("operator-source", record["run"])
 
     def test_kubernetes_loads_shared_images_after_runner_cleanup(self):
         root = Path(__file__).resolve().parents[3]

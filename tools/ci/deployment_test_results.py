@@ -88,17 +88,30 @@ def go_unit(discovery: list[dict], events: list[dict]) -> dict:
     return {"cases": cases, "expected_cases": executed}
 
 
+def operator_source(unit: dict, steps: dict) -> dict:
+    """Keep cheap source qualification independent of live deployment approval."""
+    sections = ("vet", "lint", "tests", "generated", "bundle_drift")
+    for name in sections:
+        if steps.get(name, {}).get("outcome") != "success":
+            raise ValueError(f"operator source section did not succeed: {name}")
+    require_complete(unit["cases"], unit["expected_cases"])
+    cases = [{**row, "id": "unit/" + row["id"]} for row in unit["cases"]]
+    expected = ["unit/" + name for name in unit["expected_cases"]]
+    for name in ("vet", "lint", "generated", "bundle_drift"):
+        case_id = f"source/{name}"
+        cases.append({"id": case_id, "status": "passed"})
+        expected.append(case_id)
+    return {"cases": cases, "expected_cases": expected}
+
+
 def operator(directory: Path, variants: list[dict], jobs: dict) -> dict:
-    for job in ("checks", "bundle-validate", "integration-test"):
+    for job in ("bundle-image", "integration-test"):
         if jobs.get(job, {}).get("result") != "success":
             raise ValueError(f"operator prerequisite did not succeed: {job}")
     names = [row["cache-backend"] for row in variants]
     if not names or len(names) != len(set(names)):
         raise ValueError("operator variant inventory is empty or duplicated")
-    unit = json.loads((directory / "operator-unit" / "operator-unit.json").read_text())
-    require_complete(unit["cases"], unit["expected_cases"])
-    cases = [{**row, "id": "unit/" + row["id"]} for row in unit["cases"]]
-    expected = ["unit/" + name for name in unit["expected_cases"]]
+    cases, expected = [], []
     artifacts = json.loads(
         (directory / "operator-bundle" / "artifacts.json").read_text()
     )
@@ -125,7 +138,9 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("kubernetes", "operator-unit", "operator"))
+    parser.add_argument(
+        "kind", choices=("kubernetes", "operator-unit", "operator-source", "operator")
+    )
     parser.add_argument("--report", type=Path)
     parser.add_argument("--profile")
     parser.add_argument("--discovery", type=Path)
@@ -133,6 +148,7 @@ def main() -> int:
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--variants")
     parser.add_argument("--jobs")
+    parser.add_argument("--steps")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -140,13 +156,23 @@ def main() -> int:
             evidence = kubernetes(json.loads(args.report.read_text()), args.profile)
         elif args.kind == "operator-unit":
             evidence = go_unit(read_jsonl(args.discovery), read_jsonl(args.events))
+        elif args.kind == "operator-source":
+            evidence = operator_source(
+                json.loads(args.report.read_text()), json.loads(args.steps)
+            )
         else:
             evidence = operator(
                 args.directory, json.loads(args.variants), json.loads(args.jobs)
             )
         evidence.update(
-            runtime="none" if args.kind == "operator-unit" else "model-runtime",
-            device="none" if args.kind == "operator-unit" else "cpu",
+            runtime=(
+                "none"
+                if args.kind in {"operator-unit", "operator-source"}
+                else "model-runtime"
+            ),
+            device=(
+                "none" if args.kind in {"operator-unit", "operator-source"} else "cpu"
+            ),
             platform=actual_platform(),
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)

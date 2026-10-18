@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 import run_e2e_batch as runner  # noqa: E402
 from ci_plan import make_plan  # noqa: E402
 from execution_batches import e2e_batches, validate_execution_batch  # noqa: E402
+from execution_targets import observation_errors  # noqa: E402
 
 SHA = "a" * 40
 PROFILES = ("category-remote-backend", "complexity-remote-backend")
@@ -85,6 +86,25 @@ else:
 
 
 class E2EBatchTests(unittest.TestCase):
+    def test_actions_receipts_keep_runner_observation_and_exact_profile_inputs(self):
+        with patch.dict(
+            os.environ,
+            {"GITHUB_ACTIONS": "true", "CI_RUNNER_ENVIRONMENT": "github-hosted"},
+        ):
+            result = self.execute(condition="extra-artifact")
+        self.assertTrue(result["passed"])
+        records = {row["id"]: row for row in self.plan()["verifications"]}
+        for receipt in result["receipts"]:
+            record = records[receipt["id"]]
+            self.assertEqual(
+                observation_errors(record, receipt["execution"], require_actions=True),
+                [],
+            )
+            self.assertEqual(
+                {item["id"] for item in receipt["artifacts"]},
+                {"image:" + image for image in record["images"]},
+            )
+
     def test_real_profiles_reuse_prebuilt_inputs_and_keep_individual_receipts(self):
         result = self.execute()
         self.assertTrue(result["passed"])
@@ -270,7 +290,8 @@ class E2EBatchTests(unittest.TestCase):
         self.assertEqual(
             sum(len(batch["verifications"]) for batch in batches), len(profiles)
         )
-        self.assertTrue(all(len(batch["verifications"]) <= 3 for batch in batches))
+        for batch in batches:
+            self.assertLessEqual(len(batch["verifications"]), 3)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "bin").mkdir()
@@ -279,6 +300,15 @@ class E2EBatchTests(unittest.TestCase):
                 path.write_text(f"#!{sys.executable}\n" + script)
                 path.chmod(0o755)
             original_check_output = subprocess.check_output
+            original_run_command = runner.run_command
+
+            def bounded_command(command, env, log, timeout):
+                if (
+                    command[0].endswith("/bin/e2e")
+                    and "timeout" in (outcomes or {}).values()
+                ):
+                    timeout = 1
+                return original_run_command(command, env, log, timeout)
 
             def checked(command, **kwargs):
                 if command[:2] == ["git", "rev-parse"]:
@@ -299,6 +329,8 @@ class E2EBatchTests(unittest.TestCase):
                 ]
                 if condition == "missing-artifact":
                     artifacts = []
+                elif condition == "extra-artifact":
+                    artifacts.append({"id": "image:dashboard", "sha256": "d" * 64})
                 artifact_file = worker / "artifacts.json"
                 artifact_file.write_text(json.dumps(artifacts))
                 env = {
@@ -324,8 +356,8 @@ class E2EBatchTests(unittest.TestCase):
                     runner, "actual_platform", return_value="linux/amd64"
                 ), patch.object(
                     runner,
-                    "PROFILE_TIMEOUT_MINUTES",
-                    1 / 60 if "timeout" in (outcomes or {}).values() else 90,
+                    "run_command",
+                    side_effect=bounded_command,
                 ), patch.object(
                     runner.subprocess, "check_output", side_effect=checked
                 ), patch.dict(

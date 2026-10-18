@@ -12,8 +12,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
+sys.path.insert(0, str(REPO_ROOT / "tools/calibration/recipe"))
 
 from ci_plan import make_plan  # noqa: E402
+from recipe_conformance_sources import CI_SHARDS_PER_SOURCE  # noqa: E402
 from run_component_batch import commands  # noqa: E402
 from validate_workflows import Workflow, load_workflows, needs  # noqa: E402
 
@@ -52,9 +54,6 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
         self.assertIn("VSR_MGMT_TOKEN", self.runner)
 
     def test_plan_and_evidence_share_the_bounded_source_matrix(self) -> None:
-        sys.path.insert(0, str(REPO_ROOT / "tools/calibration/recipe"))
-        from recipe_conformance_sources import CI_SHARDS_PER_SOURCE
-
         plan = next(
             step
             for step in self.workflow.jobs["inventory"]["steps"]

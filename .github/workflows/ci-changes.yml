@@ -56,6 +56,8 @@ on:
         value: ${{ jobs.plan.outputs.storage }}
       dashboard:
         value: ${{ jobs.plan.outputs.dashboard }}
+      operator-source:
+        value: ${{ jobs.plan.outputs.operator-source }}
       operator:
         value: ${{ jobs.plan.outputs.operator }}
       local:
@@ -106,6 +108,7 @@ jobs:
       core: ${{ steps.plan.outputs.core }}
       storage: ${{ steps.plan.outputs.storage }}
       dashboard: ${{ steps.plan.outputs.dashboard }}
+      operator-source: ${{ steps.plan.outputs.operator-source }}
       operator: ${{ steps.plan.outputs.operator }}
       local: ${{ steps.plan.outputs.local }}
       recipes: ${{ steps.plan.outputs.recipes }}

@@ -166,8 +166,6 @@ class OperatorRequestTests(unittest.TestCase):
             "milvus",
             "qdrant",
             "hybrid",
-            "mmbert",
-            "complexity",
         ]:
             with (
                 self.subTest(backend=backend),

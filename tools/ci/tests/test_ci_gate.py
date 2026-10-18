@@ -26,7 +26,7 @@ SHA = "a" * 40
 MAX_GATE_ENV_BYTES = 4096
 
 
-def completed(paths=None, *, full=False, profile="pr"):
+def completed(paths=None, *, full=False, profile="pr", execution_environment=None):
     plan = make_plan(
         paths or ["tools/make/build-run-test.mk"],
         source_sha=SHA,
@@ -90,7 +90,7 @@ def completed(paths=None, *, full=False, profile="pr"):
                 evidence,
                 source_sha=SHA,
                 execution_platform="linux/amd64",
-                environ={},
+                environ=execution_environment or {},
             )
         )
     return plan, receipts, builds
@@ -421,7 +421,13 @@ class GateTransportTests(unittest.TestCase):
     def test_shell_reconciles_large_file_plan_and_rejects_missing_or_changed_evidence(
         self,
     ):
-        plan, receipts, builds = completed(full=True)
+        actions_environment = {
+            "GITHUB_ACTIONS": "true",
+            "CI_RUNNER_ENVIRONMENT": "github-hosted",
+        }
+        plan, receipts, builds = completed(
+            full=True, execution_environment=actions_environment
+        )
         plan["paths"] = [
             f"website/docs/large-change-{index}.md" for index in range(5000)
         ]
@@ -480,7 +486,12 @@ class GateTransportTests(unittest.TestCase):
                 "python3 tools/ci/check_ci_gate.py",
                 f"{shlex.quote(sys.executable)} {shlex.quote(str(ROOT / 'tools/ci/check_ci_gate.py'))}",
             )
-            environment = {**os.environ, **self.environment(jobs), "GITHUB_SHA": SHA}
+            environment = {
+                **os.environ,
+                **self.environment(jobs),
+                **actions_environment,
+                "GITHUB_SHA": SHA,
+            }
             environment.pop("GITHUB_STEP_SUMMARY", None)
 
             def run():

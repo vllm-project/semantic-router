@@ -1,8 +1,9 @@
 # CI workflow value audit
 
-This audit records the CI restructuring reviewed on 2026-10-18. It covers all
-36 workflow files, their executable jobs, and the boundaries those jobs actually
-check. The audit baseline is `1c629c80b383d7e53e01f266430d0fa41c5d9bf6`;
+This audit records the CI restructuring reviewed on 2026-10-18. It covers the
+original 35 workflows plus the new manual approval and Operator source workflows, their executable
+jobs, and the boundaries those jobs actually check. The audit baseline is
+`1c629c80b383d7e53e01f266430d0fa41c5d9bf6`;
 the decisions below describe this change, not the previous default behavior.
 The ongoing execution policy is documented in [testing-strategy.md](testing-strategy.md).
 
@@ -27,7 +28,8 @@ cost, or a controlled before/after experiment. Different changes selected
 different inventories, and failed runs did not necessarily execute every job.
 The sampled Main runs spent approximately 1,491 runner-minutes on image
 construction/acquisition: **65.7% of their 2,268 minutes**. Nightly E2E execution
-accounted for approximately 2,002 of 3,751 minutes, or 53.4%.
+accounted for approximately 2,002 of 3,751 minutes, or 53.4%. That broad E2E
+category includes Kubernetes, local-stack, and Operator jobs.
 
 This supports reducing automatic image and deployment work before removing
 small source checks. It does not establish a promised percentage saving.
@@ -76,36 +78,48 @@ separate queue-wide full run.
 ## Physical workers and preserved evidence
 
 The scheduled planner previously treated every tracked file as changed when
-there was no diff base. That expanded the plan to 63 contracts and 39 E2E
+there was no diff base. At the exact audit baseline, that expanded the plan to
+64 contracts and 39 E2E
 profiles, including optional deployments outside the versioned full CPU
 inventory. Without an explicit comparison base or supplied changed paths,
 weekly, release qualification, and Main publication now select the versioned
-baseline: 39 contracts and 15 E2E profiles after retiring CK and adding the
-model-runtime and benchmark-tool contracts. The release publication workflow
+baseline: 40 contracts and 15 E2E profiles after retiring CK, adding the
+model-runtime and benchmark-tool contracts, and separating Operator source
+qualification from deployment. The release publication workflow
 does not itself invoke that test-plan mode. Experimental profiles remain
 available through affected PR changes and explicit manual selection. A full PR
 run and explicit Main publication still retain affected-path additions.
 
-Counts below compare physical execution of that versioned full CPU inventory.
-They are execution-worker counts, not counts of assertions or a claim that the
-old scheduled plan contained only 15 E2E profiles.
+Counts below compare the actual old and new versioned full CPU inventories.
+The old inventory has 38 contracts; the new one has 40. These are physical
+worker counts, not assertion counts. See [the job and cost audit](ci-job-cost-audit.md)
+for all expanded jobs, representative PR/Main plans, measured setup, transfer
+estimates, and the cost of rerunning approved work.
 
-| Boundary | Before batching | After batching | What remains independent |
+| Boundary | Old baseline workers | Final workers | What remains independent |
 | --- | ---: | ---: | --- |
-| Component contracts | 10 | 5 | All 10 discovery inventories, failures, logs, and source-bound receipts |
+| Component contracts | 9 | 10 | One job per contract; CK retires, benchmark tools and model-runtime join full qualification |
 | Kubernetes E2E profiles | 15 | 7 | All 15 profiles, clusters, teardown, and receipts |
 | Platform contracts | 2 | 1 | Model and image-routing reports and receipts |
 | Recipe workflow, including inventory/results | 10 | 6 | All 8 live CPU recipes and every authored probe |
+| Operator source and deployment | 10 | 8 | One source job, bundle-image inspection, five live variants, and runtime results |
 
-[execution_batches.py](../../ci/execution_batches.py) groups only compatible
-workers. Component batches contain at most four contracts; model-runtime engine
-dependencies remain separate from training/export tools. Each component has a
-45-minute deadline including setup, and subprocess groups are retired before
-the next contract. E2E/platform batches contain at most three contracts and
-obey a combined execution budget; heavy model profiles remain isolated.
-An E2E teardown failure stops the remaining profiles in that worker instead of
-reusing an untrusted cluster. Ordinary independent failures still preserve
-successful sibling evidence.
+The initial component batching proposal was withdrawn after examining setup
+cost, dependency isolation, and retry granularity. Components default to one
+contract per job. A future opt-in grouping policy exists, but no current
+component uses it. Tiny-fixture model-runtime tests run automatically on affected
+paths; published-model qualification remains approved. Each component has a
+45-minute deadline including target-specific setup, and subprocess groups are
+retired after its
+commands.
+
+[execution_batches.py](../../ci/execution_batches.py) retains bounded batching
+for E2E/platform workers with compatible placement, runtime, device, image, and
+resource requirements. These batches contain at most three contracts and obey
+a combined execution budget; heavy model profiles remain isolated. An E2E
+teardown failure stops the remaining profiles in that worker instead of reusing
+an untrusted cluster. Ordinary independent failures still preserve successful
+sibling evidence. This shares setup, not a live cluster across profiles.
 
 Recipe grouping uses three balanced standalone shards and a separate built-in
 `mom-v1` shard. Current standalone variant weights are 129, 87, and 100; the
@@ -131,7 +145,7 @@ or complete weekly/explicit publication qualification.
 | [main.yml](../../../.github/workflows/main.yml) | `ci`, `images`, `helm`, `pypi` | Merged-source checks and explicit coherent development publication. | Change push behavior to source/component checks only. Publication jobs run after `publish: true` qualification; preserve CLI/image revision coupling. |
 | [nightly-build.yml](../../../.github/workflows/nightly-build.yml) | `ci`, `docker`, `helm` | Broad detection outside the affected-path selection and promotion after successful qualification. | Change daily execution to Monday weekly execution; retain manual dispatch and full coverage. Keep the filename/profile for existing consumers. |
 | [ci-changes.yml](../../../.github/workflows/ci-changes.yml) | `plan` | Resolves source/base, changed paths, approval, selected contracts, image dependencies, and display matrices. | Retain one planner. Approval changes execution eligibility without deleting required inventory. Scheduled full qualification uses the versioned inventory without treating all tracked files as affected changes. |
-| [ci.yml](../../../.github/workflows/ci.yml) | `plan`; `image-router`, `image-dashboard`, `image-operator`, `image-fixtures`, `image-distribution`; `quality`, `generated`, `security`, `core`, `storage`, `dashboard`, `operator`, `local`, `recipes`, `platform`, `performance`, `package`, `tools`, `e2e-router`, `e2e-fixtures`, `e2e-dashboard`; `gate` | Connects producers to their actual consumers and reconciles independent receipts. | Retain the shared dispatcher. Merge compatible physical workers, not all jobs into an opaque shell script. Source checks start without waiting for images. Direct single-verification dispatch remains diagnostic. |
+| [ci.yml](../../../.github/workflows/ci.yml) | `plan`; `image-router`, `image-dashboard`, `image-operator`, `image-fixtures`, `image-distribution`; `quality`, `generated`, `security`, `core`, `storage`, `dashboard`, `operator-source`, `operator`, `local`, `recipes`, `platform`, `performance`, `package`, `tools`, `e2e-router`, `e2e-fixtures`, `e2e-dashboard`; `gate` | Connects producers to their actual consumers and reconciles independent receipts. | Retain the shared dispatcher. Merge compatible physical workers, not all jobs into an opaque shell script. Source checks start without waiting for images. Direct single-verification dispatch remains diagnostic. |
 
 ### Source and product checks
 
@@ -142,14 +156,15 @@ or complete weekly/explicit publication qualification.
 | [security-scan.yml](../../../.github/workflows/security-scan.yml) | `security` | Tests trusted AST scanner behavior, scans candidate source using trusted policy, and scans rendered first-party Helm resources. | Retain affected automatic, weekly Monday 04:17 UTC, and manual runs. Remove the redundant full-plus-diff AST pass and advisory legacy regex scan. Keep SARIF collection plus the distinct HIGH/CRITICAL IaC gate. |
 | [test-and-build.yml](../../../.github/workflows/test-and-build.yml) | `test-and-build` | Helm offline rendering, Go module/vet checks, discovered core tests, and trained-selector parity. | Retain automatic core contracts. Move the real development-launcher smoke test to Local Stack, its deployment owner, so Core does not build a second router image. The legacy filename does not imply a remaining general image-build job. |
 | [dashboard-test.yml](../../../.github/workflows/dashboard-test.yml) | `dashboard-test` | Frontend/backend checks, WASM tests, controlled Evaluation browser tests, and build qualification with one dependency setup. | Retain affected automatic application coverage. Its controlled API/browser tests are not substitutes for the separately approved live dashboard E2E profile. |
-| [test-tools.yml](../../../.github/workflows/test-tools.yml) | `tests`, expanded from component batches | CLI, harness, provider simulator, routing/calibration authoring, benchmark tools, E2E framework, soak-client/proxy, training, ONNX, and model-runtime contracts. | Consolidate 10 selected contracts into 5 compatible workers in a full run. Keep cheap contracts automatic; training/ONNX/runtime require approval. Remove the CK rewrite contract because the corresponding production surface was retired. |
+| [test-tools.yml](../../../.github/workflows/test-tools.yml) | `tests`, expanded from component batches | CLI, harness, provider simulator, routing/calibration authoring, benchmark tools, E2E framework, soak-client/proxy, training, ONNX, and model-runtime contracts. | Keep all 10 selected contracts in independent workers for isolation and precise reruns. Cheap contracts and tiny-fixture model-runtime tests are automatic; training/ONNX require approval. Remove the CK rewrite contract because the corresponding production surface was retired. |
 | [package-check.yml](../../../.github/workflows/package-check.yml) | `package` | Builds and inspects the final wheel/sdist, resources, installed CLI behavior, and source/version metadata; supplies the exact distribution for promotion. | Retain automatic affected packaging qualification and publication qualification. It catches packaging-only regressions that source tests cannot. Do not replace it with `twine check` alone. |
 | [test-storage.yml](../../../.github/workflows/test-storage.yml) | `storage` | Actual Redis, Valkey, Milvus, Qdrant, and PostgreSQL-backed contracts, with required inventory and skip rejection. | Move expensive service setup behind approval/full execution. Retain integration assertions; unit mocks do not establish storage behavior. |
 | [test-local.yml](../../../.github/workflows/test-local.yml) | `integration`, once for each selected local contract | CLI serve/routing/lifecycle, the development launcher routed smoke request, and stateful memory integration. | Approved/full. Keep `local.cli` and `local.memory` separate because they stop shared services or databases; share immutable candidate images rather than rebuild in Core. |
 | [test-platform.yml](../../../.github/workflows/test-platform.yml) | `contracts`, expanded from compatible batches | Published-model CPU inference and image-routing conformance with real runtime evidence. | Approved/full. Merge the two compatible workers while preserving independent reports, deadlines, failures, and model-cache sharing. |
 | [recipe-conformance.yml](../../../.github/workflows/recipe-conformance.yml) | `inventory`, `live-cpu` matrix, `report` | Validates maintained assets and authored Preview acceptance/probe coverage across standalone and built-in latest sources. | Approved/full. Reduce 8 live workers to 4 through weighted grouping; keep inventory/report, serial long-context handling, and all probes. It does not replace a routed upstream-request assertion. |
 | [integration-test-k8s.yml](../../../.github/workflows/integration-test-k8s.yml) | `integration-test`, expanded from E2E batches | Actual Kubernetes profiles consume qualified images, run isolated cases, and publish complete framework evidence. | Approved/full. Reduce 15 profile workers to 7 bounded compatible workers; set up Kind/load images/build the runner once per batch. Preserve the separate model-heavy worker and per-profile teardown. |
-| [operator-ci.yml](../../../.github/workflows/operator-ci.yml) | `checks`, `bundle-validate`, `integration-test` matrix, `result` | Unit/generated/OLM contracts plus Operator reconciliation and an observed routed request. | Approved/full. Preserve current 1-variant affected and 7-variant full behavior in this change; evaluate the matrix separately below. Full expansion is 10 jobs, not 7. |
+| [operator-source.yml](../../../.github/workflows/operator-source.yml) | `checks` | Unit/race, lint, generated drift, OLM bundle generation/validation, and sample-to-router configuration contracts. | Automatic affected work in one shared setup, independent of images or live deployment approval. |
+| [operator-ci.yml](../../../.github/workflows/operator-ci.yml) | `bundle-image`, `integration-test` matrix, `result` | Qualified bundle image inspection plus Operator reconciliation and an observed routed request. | Approved/full. Keep the affected memory variant; reduce full live variants from seven to five. The full source plus runtime expansion is 8 jobs, down from 10. |
 | [performance-test.yml](../../../.github/workflows/performance-test.yml) | `component-benchmarks` | Checks measurement contracts and runs real component/model/Looper benchmarks against baselines. | Approved/full. Repair benchmark compilation and retain evidence completeness. Numerical regressions remain advisory; shared hosted timing is not a reliable automatic PR veto. Execution failure or absent inventory still fails the contract. |
 
 ### Build and publication
@@ -176,55 +191,50 @@ untrusted PR test execution, even when they are small.
 | [stale.yml](../../../.github/workflows/stale.yml) | `stale` | Marks inactivity at 30 days and closes after a further 30, with accepted/review/release exemptions. | Retain daily lifecycle operation. Do not merge its mutation policy into a test Gate. |
 | [unassign-inactive-assignees.yml](../../../.github/workflows/unassign-inactive-assignees.yml) | `unassign-inactive` | Warns inactive assignees and releases ownership after a grace period, with exemptions and dry-run support. | Retain daily/manual. This is different from closing stale issues: accepted work can need reassignment without closure. |
 | [check-translation-staleness.yml](../../../.github/workflows/check-translation-staleness.yml) | `check` | Updates unambiguous translation-status flags and opens a bot PR. | Retain weekly/manual maintenance. It is different from automatic translation coverage checks in Quality. |
-| [contributor-leaderboard.yml](../../../.github/workflows/contributor-leaderboard.yml) | `update-leaderboard` | Refreshes public contributor data and updates its bot PR. | Retain weekly/manual; keep out of merge qualification. Follow-up: remove full website `npm ci` after preserving the generator's built-in Node/local-module dependency boundary. That setup is unnecessary for the current generator. |
+| [contributor-leaderboard.yml](../../../.github/workflows/contributor-leaderboard.yml) | `update-leaderboard` | Refreshes public contributor data and updates its bot PR. | Retain weekly/manual; keep out of merge qualification. Remove the full website `npm ci` and npm cache: the generator and its imports use only built-in Node modules and local files. Execute it directly with Node; its source-consistency check still passes. |
 | [flaky-tests.yml](../../../.github/workflows/flaky-tests.yml) | `report` | Reads recent result artifacts and separates merged-code failures from PR retry observations; it does not rerun E2E. | Retain daily aggregation through Maintenance. After Main becomes light and full runs become weekly, report sample counts/absence explicitly; a 14-day window may contain only two broad weekly runs. Lack of observations is not proof of stability. |
 | [community.yml](../../../.github/workflows/community.yml) | `title-format`, `linked-issue`, `issue-lifecycle`, `issue-kind`, `issue-acceptance`, `issue-manager` | Admission/title checks, linked accepted issue validation, and issue lifecycle/commands with different write needs. | Retain event-driven operations. Combining every branch into one privileged job would obscure permission and event boundaries for little measured runtime benefit. |
 | [community-labels.yml](../../../.github/workflows/community-labels.yml) | `pull-request-state`, `pull-request-sweep`, `issue-sweep` | Trusted post-check PR reconciliation and hourly repair of labels missed by events. | Retain current event/hourly behavior in this change. Measure API/runtime cost before reducing the repair frequency; these jobs are not redundant product tests. |
 | [netlify-preview.yml](../../../.github/workflows/netlify-preview.yml) | `authorize`, `build`, `publish` | Authorizes `/netlify`, builds the requested commit, then publishes a preview under a separate permission boundary. | Retain explicit requested previews. A deployed preview has different value from the automatic website build; do not make it an unconditional PR job. |
 
-## Operator: what the seven configurations prove
+## Operator: reducing seven configurations to five live workers
 
-The full plan selects `memory`, `redis`, `milvus`, `qdrant`, `hybrid`, `mmbert`,
-and `complexity` in [ci_plan.py](../../ci/ci_plan.py). An affected non-full
-Operator run selects only `memory`. The YAML's `cache-backend` name therefore
-covers both storage backends and model/configuration variants; it is not seven
-independent cache implementations.
+The old full plan selected `memory`, `redis`, `milvus`, `qdrant`, `hybrid`,
+`mmbert`, and `complexity`. An affected non-full deployment selected only
+`memory`. The YAML's `cache-backend` name covered both storage backends and
+model/configuration variants, not seven independent cache implementations.
 
-Every matrix entry creates a fresh Kind cluster, installs CRDs and the operator,
-loads the same qualified request-path images, applies a different SemanticRouter
-configuration, waits for reconciliation/readiness, and sends the same nonce
-request. [check_operator_request.py](../../ci/check_operator_request.py) checks
-the selected `operator_ci_route`, selected model, upstream response path, and
-the provider's echoed nonce. This is a valuable real request assertion, not
-merely `kubectl get` succeeding. However, it sends no repeated cache request and
-uses no feature-specific expected route. The receipt aggregator verifies every
-selected variant ran that common assertion; it does not manufacture additional
-feature assertions from the variant names.
+Every retained matrix entry creates a fresh Kind cluster, installs CRDs and the
+operator, loads qualified request-path images, applies a SemanticRouter
+configuration, waits for reconciliation/readiness, and sends a nonce request.
+[check_operator_request.py](../../ci/check_operator_request.py) checks the
+selected `operator_ci_route`, selected model, upstream response path, and echoed
+nonce. This is a real request assertion. However, it sends no repeated cache
+request and uses no feature-specific expected route. Complete receipt inventory
+does not create cache-hit or complexity-selection coverage.
 
-| Variant | Distinct configuration exercised | Current evidence limit | Value decision |
+| Old variant | Distinct configuration | Evidence limit | Final decision |
 | --- | --- | --- | --- |
-| `memory` | Basic reconciled deployment, CPU embedding configuration, in-memory cache configuration | No cache-hit or eviction assertion | Keep as the minimal affected Operator live smoke. It establishes the deploy-to-request path. |
-| `redis` | Redis service, password Secret reference, index/connection configuration | No hit, TTL, or reconnect assertion | Retain a storage-specific integration boundary; add an observable repeated request before calling it cache correctness coverage. |
-| `milvus` | Milvus service, authentication Secret, collection/index configuration | No persistence or query-result assertion | Retain distinct rendered/authentication/startup coverage; cache data behavior belongs in explicit assertions or Storage integration. |
-| `qdrant` | Qdrant service and connection/collection configuration | No hit or persistence assertion | Retain distinct backend wiring; avoid claiming it duplicates the Storage suite's data assertions. |
-| `hybrid` | HNSW plus Milvus configuration with different capacity/index settings | No hot/cold tier or failover assertion | Conditional value: keep full coverage for now; strengthen a hybrid behavior assertion or move the configuration combination into render/unit tests before removing its live cluster. |
-| `mmbert` | Memory cache with HNSW/TTL settings; `memory` already uses the same mmbert embedding family | No extra model-behavior assertion | Strongest candidate for removing a dedicated cluster. Preserve configuration generation tests and the existing memory live path first. This change does not silently remove it. |
-| `complexity` | Complexity candidate/rule configuration plus memory cache | The unconditional common route does not demonstrate complexity-dependent selection | Keep configuration compatibility coverage for now. Either test hard/easy inputs with distinct expected decisions or move this sample to render/unit coverage and retire its independent live worker. |
+| `memory` | Basic CPU embedding deployment and in-memory cache configuration | No cache-hit or eviction assertion | Keep the minimal affected live deploy-to-request path. |
+| `redis` | Redis service, password Secret reference, index/connection configuration | No hit, TTL, or reconnect assertion | Keep distinct backend wiring and authenticated startup in full qualification. |
+| `milvus` | Milvus service, authentication Secret, collection/index configuration | No persistence or query-result assertion | Keep distinct rendered/authentication/startup coverage; Storage integration owns data behavior. |
+| `qdrant` | Qdrant service and connection/collection configuration | No hit or persistence assertion | Keep distinct backend wiring, without claiming data-plane equivalence to Storage tests. |
+| `hybrid` | Hybrid cache/Milvus configuration and capacity/index settings | No hot/cold tier or failover assertion | Keep this distinct startup combination; require stronger assertions before claiming hybrid behavior. |
+| `mmbert` | Memory cache and mmbert embedding options; basic memory already uses that embedding family | No additional model-behavior assertion | Retire the dedicated live cluster. Add actual sample CR → canonical configuration → router-loader assertions for target layer/dimension, cache threshold, size, and TTL. |
+| `complexity` | Complexity rules/candidates plus memory cache | Common unconditional route did not demonstrate complexity-dependent selection | Retire the dedicated live cluster. Add sample round-trip assertions for all three rules, hard/easy candidates, threshold, and medical AND composition. |
 
-The first safe follow-up is to separate `checks` (unit/race, manifests/generated
-code) from the approved deployment contract so cheap Operator source failures
-can surface automatically. `bundle-validate` protects a real OLM distribution
-surface: `make bundle` regenerates manifests and validates the bundle. It does
-repeat part of `checks`' generation/setup, so sharing that preparation is worth
-considering, while retaining both generated-drift and OLM-validation outcomes.
+The new [sample tests](../../../deploy/operator/controllers/canonical_config_sample_variants_test.go)
+check the actual conversion and loader boundary. They do not claim runtime
+model or cache behavior. In particular, the legacy `response_cache.hnsw` sample
+field has no matching router store field and was ignored by the old conversion;
+neither the retired live worker nor the new source test qualifies it.
 
-Do not blindly collapse seven configurations into one long cluster session.
-Service/Secret isolation, cleanup after failed reconciliation, and independent
-request receipts must survive. A smaller live matrix should follow explicit
-coverage decisions: keep one basic deployment and necessary distinct backend
-wiring, move redundant configuration combinations to fast render tests, and
-give remaining feature variants a feature-specific assertion. This change
-keeps the existing Operator implementation and full inventory intact.
+`operator-source.yml` now runs unit/race, generated drift, and OLM bundle
+validation in one automatic source job with shared tooling. It has no image
+dependency. The approved deployment workflow retains a bundle-image inspection
+job, five independent full-matrix clusters, and result aggregation: seven jobs,
+or eight including source qualification. The affected non-full path remains
+four total jobs. No long shared cluster session replaces the removed variants.
 
 ## Acceptance and subsequent measurement
 
@@ -239,6 +249,6 @@ execution.
 After comparable workloads have run, measure runner-minutes by phase, queue and
 end-to-end latency, setup versus test time, retry rates, and approved/deferred
 inventory. Keep representative failed runs in that comparison. Use those
-results to decide the next reductions, especially Operator variants, repeated
-tool installation, and maintenance polling; do not infer savings from fewer
+results to decide the next reductions, especially remaining Operator behavior
+assertions, repeated tool installation, and maintenance polling; do not infer savings from fewer
 green check names alone.

@@ -107,9 +107,6 @@ func (p *Profile) GetTestCases() []string {
 		"dynamo-health-check",
 		"dynamo-category-classification",
 		"dynamo-optimized-inference",
-		"dynamo-performance-comparison",
-		"dynamo-dynamic-batching",
-		"dynamo-gpu-utilization",
 	}
 }
 
