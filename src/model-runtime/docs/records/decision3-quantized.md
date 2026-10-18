@@ -16,11 +16,11 @@ give, and this record compares them with the BF16 package's.
 
 ## Packages
 
-| Package | Made by | Projections | Kept in BF16 | Weights file |
-| --- | --- | --- | --- | --- |
-| FP8 | per-output-channel E4M3, scale `max / 448` rounded to BF16; FP8 activations per token at run time | 304 | GDN `in_proj_qkv` / `in_proj_z` / `in_proj_a` / `in_proj_b`, the vision tower | 31.9 GB |
-| AWQ int4 | AWQ (per-channel scales folded into the norms and `up_proj`, clipping searched per row and group) on 128 rows of the first train shard; asymmetric, group 128 | 400 | `in_proj_a` / `in_proj_b`, the vision tower | 16.2 GB |
-| GPTQ int4 | `TheoHsiung/d3-W4A16-G128` (from d3 revision `093cffba`), with a `MODEL_MANIFEST.json` written for it; symmetric, group 128 | 400 | as AWQ | 16.1 GB |
+| Package | Repository | Made by | Projections | Kept in BF16 | Weights file |
+| --- | --- | --- | --- | --- | --- |
+| FP8 | `vllm-sr/d3-FP8` `2fb271ad` | per-output-channel E4M3, scale `max / 448` rounded to BF16; FP8 activations per token at run time | 304 | GDN `in_proj_qkv` / `in_proj_z` / `in_proj_a` / `in_proj_b`, the vision tower | 31.9 GB |
+| AWQ int4 | `vllm-sr/d3-W4A16-AWQ` `39ffacd3` | AWQ (per-channel scales folded into the norms and `up_proj`, clipping searched per row and group) on 128 rows of the first train shard; asymmetric, group 128 | 400 | `in_proj_a` / `in_proj_b`, the vision tower | 16.2 GB |
+| GPTQ int4 | `vllm-sr/d3-W4A16-GPTQ` `93aa927c` | GPTQ by Theo Hsiung (from d3 revision `093cffba`, whose weights equal the built-in revision's), with a `MODEL_MANIFEST.json` written for it; symmetric, group 128 | 400 | as AWQ | 16.1 GB |
 
 The BF16 package's weights take 52.2 GB. The packages were built with the
 scripts in `bench/d3-quant-eval` (`fp8_package.py`, `awq.py`).

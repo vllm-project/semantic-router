@@ -69,7 +69,8 @@ match the packages' own runtime bit for bit
 ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).
 A d3 package with FP8 or int4 (GPTQ or AWQ) weights in the compressed-tensors
 format, and a `MODEL_MANIFEST.json`, is served the same way, from a local path
-or from its repository with `--revision` and the commit to load. On the test rows of its
+or from its repository with `--revision` and the commit to load. The d3 packages are
+`vllm-sr/d3-FP8`, `vllm-sr/d3-W4A16-AWQ` and `vllm-sr/d3-W4A16-GPTQ`. On the test rows of its
 [record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-quantized.md),
 an FP8 d3 keeps 99.1% of the BF16 answers in 31.9 GB instead of 52.2 GB (FP8
 needs an AMD Instinct MI300 or MI350 series GPU or an NVIDIA GPU of compute
