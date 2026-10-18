@@ -32,7 +32,7 @@ from ...plugins.base import (
     TreeOutput,
 )
 from ...scheduler.planner import padded
-from . import fast, models
+from . import fast, models, quantized
 from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
@@ -113,6 +113,12 @@ class NativeEngineModel(EngineModel):
             not options.exact_kernels_only and spec.dtype.approximate_kernels
         )
         self.kernels.use_variants(spec.kernel_variants)
+        fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
+        for layer in self._quantized():
+            if isinstance(layer, quantized.Int4Linear):
+                layer.fused = fused_int4 and self.device.type == "cuda"
+            else:
+                layer.unscaled_product &= self.kernels.allow_approximate
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
@@ -187,7 +193,11 @@ class NativeEngineModel(EngineModel):
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
             self.masks = fast.NoncausalMasks() if self.noncausal else fast.Masks()
-        if options.graphs:
+        if options.graphs and not quantized.capture_safe(backbone):
+            self.fast["graphs_skipped"] = (
+                "Ada's per-row FP8 product needs PyTorch 2.12 in a graph"
+            )
+        elif options.graphs:
             assert self.masks is not None
             self.graphs = fast.Graphs(backbone, self.masks)
 
@@ -737,6 +747,11 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
+    def _quantized(self) -> list[quantized.Int4Linear | quantized.Float8Linear]:
+        return [
+            layer for module in self._modules() for layer in quantized.layers(module)
+        ]
+
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
@@ -758,6 +773,7 @@ class NativeEngineModel(EngineModel):
 
     def parameter_count(self) -> int:
         packed = sum(layer.weight_elements for layer in self._packed())
+        packed += sum(layer.weight_elements for layer in self._quantized())
         return packed + sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
@@ -766,6 +782,7 @@ class NativeEngineModel(EngineModel):
             layer.packed.numel() * layer.packed.element_size()
             for layer in self._packed()
         )
+        packed += sum(layer.stored_bytes() for layer in self._quantized())
         return (
             copy_bytes
             + packed
@@ -874,13 +891,20 @@ class NativeEngine(Engine):
             spec.dtype.cpu_weights if target.type == "cpu" else spec.dtype.gpu_weights
         )
         dtype = getattr(torch, held) if held else torch.float32
+        # A GPU model keeps checkpoint tensors in their file mapping until placed.
+        private = target.type == "cpu"
         backbone_spec = spec.backbone
         backbone = build_on_meta(backbone_spec)
+        if backbone_spec.quantized is not None:
+            quantized.install(
+                backbone, backbone_spec.quantized, backbone_spec.weight_prefix
+            )
         load_backbone(
             backbone,
             backbone_spec.weight_files,
             backbone_spec.weight_prefix,
             dtype=dtype,
+            private=private,
         )
         lora = backbone_spec.lora
         if lora is not None:
@@ -897,10 +921,13 @@ class NativeEngine(Engine):
                 )
             load_adapter(backbone, lora.weight_files)
         branches = {
-            name: load_branch(backbone, backbone_spec, name)
+            name: load_branch(backbone, backbone_spec, name, private)
             for name in backbone_spec.branches
         }
-        towers = {name: load_tower(tower, dtype) for name, tower in spec.towers.items()}
+        towers = {
+            name: load_tower(tower, dtype, private)
+            for name, tower in spec.towers.items()
+        }
         modules = (backbone, *branches.values(), *towers.values())
         leftovers = [
             name
@@ -935,6 +962,7 @@ class NativeEngine(Engine):
             *stacks.towers.values(),
         ):
             module.to(target).eval()
+            quantized.prepare(module)
         kind = (
             spec.dtype.reduced_cpu if target.type == "cpu" else spec.dtype.reduced_gpu
         )
@@ -962,16 +990,64 @@ def build_on_meta(spec: BackboneSpec) -> nn.Module:
     return module
 
 
-def load_tower(spec: BackboneSpec, dtype: torch.dtype = torch.float32) -> nn.Module:
+def bf16_resident_parameters(spec: BackboneSpec) -> int:
+    """How many backbone parameters ``keep_linear_bf16`` holds in BF16 on a GPU, read from the checkpoint headers.
+
+    Counts the Linear weights the checkpoint stores in BF16; FP32-stored ones
+    that happen to be BF16-exact count as FP32, so the count never exceeds
+    what the engine holds.
+    """
+    from safetensors import safe_open
+
+    if spec.model_type not in models.ARCHITECTURES:
+        return 0
+    module = build_on_meta(spec)
+    shared = {
+        id(parameter)
+        for layer in module.modules()
+        if not isinstance(layer, nn.Linear)
+        for parameter in layer.parameters(recurse=False)
+    }
+    linear = {
+        f"{owner}.{leaf}" if owner else leaf: parameter.numel()
+        for owner, layer in module.named_modules()
+        if isinstance(layer, nn.Linear)
+        for leaf, parameter in layer.named_parameters(recurse=False)
+        if id(parameter) not in shared
+    }
+    prefix = spec.weight_prefix
+    count = 0
+    for path in spec.weight_files:
+        with safe_open(str(path), framework="pt", device="cpu") as handle:
+            names = handle.keys()
+            for name in names:
+                if not name.startswith(prefix):
+                    continue
+                numel = linear.pop(name[len(prefix) :], 0)
+                if numel and handle.get_slice(name).get_dtype() == "BF16":
+                    count += numel
+    return count
+
+
+def load_tower(
+    spec: BackboneSpec, dtype: torch.dtype = torch.float32, private: bool = True
+) -> nn.Module:
     """A tower (``ModelSpec.towers``): every tensor under its prefix must belong to it."""
     tower = build_on_meta(spec)
     load_backbone(
-        tower, spec.weight_files, spec.weight_prefix, strict=True, dtype=dtype
+        tower,
+        spec.weight_files,
+        spec.weight_prefix,
+        strict=True,
+        dtype=dtype,
+        private=private,
     )
     return tower
 
 
-def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module:
+def load_branch(
+    backbone: nn.Module, spec: BackboneSpec, name: str, private: bool = True
+) -> nn.Module:
     """A branch of a branched encoder: its own layer stack and final norm over the backbone's embedding."""
     branch = spec.branches[name]
     with torch.device("meta"):
@@ -986,6 +1062,7 @@ def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module
             f"{branch.layers}.": "layers.",
             f"{branch.final_norm}.": "final_norm.",
         },
+        private=private,
     )
     view.embeddings = backbone.embeddings
     view.rotary_emb = backbone.rotary_emb

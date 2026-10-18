@@ -33,6 +33,7 @@ from typing import Any, ClassVar
 import torch
 
 from ... import media as workers
+from ... import quantization
 from ...errors import (
     INVALID_MODEL_OUTPUT,
     INVALID_QUESTION,
@@ -219,11 +220,13 @@ class Decision3Family(ModelFamily):
             **details.config["text_config"],
             "attention_mode": details.decision_config.get("attention_mode", "causal"),
         }
+        quantized = quantization.parse(details.config)
         backbone = BackboneSpec(
             model_type="qwen3_5_text",
             config=text,
             weight_files=weights,
             weight_prefix=details.text_prefix,
+            quantized=quantized,
         )
         towers = {}
         if details.vision_prefix is not None and details.processor_config is not None:
@@ -241,6 +244,11 @@ class Decision3Family(ModelFamily):
                 bf16_resident=False,
                 gpu_weights="bfloat16",
                 cpu_weights="bfloat16",
+                # docs/records/decision3-quantized.md: the fused int4 kernel and,
+                # in the FP8 d3-mini table, the fused element-wise kernels change
+                # few of a quantized package's answers; BF16 packages keep exact
+                # kernels.
+                approximate_kernels=quantized is not None,
             ),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=CONV_VARIANT,
