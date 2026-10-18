@@ -1,17 +1,15 @@
 package testcases
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
+	"github.com/vllm-project/semantic-router/e2e/pkg/modelruntime"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -47,22 +45,25 @@ func checkIstioProxyMetrics(ctx context.Context, client *http.Client, url string
 		return err
 	}
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Istio proxy metrics returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("istio proxy metrics returned HTTP %d", response.StatusCode)
 	}
-	scanner := bufio.NewScanner(strings.NewReader(string(response.Body)))
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 2 || fields[0] != "envoy_server_live" {
+	// Envoy emits braces even for an unlabelled gauge: envoy_server_live{} 1.
+	metrics, err := modelruntime.ParseMetrics(string(response.Body))
+	if err != nil {
+		return fmt.Errorf("parse istio proxy metrics: %w", err)
+	}
+	found := false
+	for _, sample := range metrics.Samples {
+		if sample.Name != "envoy_server_live" {
 			continue
 		}
-		value, err := strconv.ParseFloat(fields[1], 64)
-		if err != nil || value != 1 {
-			return fmt.Errorf("Istio proxy live gauge is %q, want 1", fields[1])
+		found = true
+		if sample.Value != 1 {
+			return fmt.Errorf("istio proxy live gauge is %g, want 1", sample.Value)
 		}
-		return nil
 	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read Istio proxy metrics: %w", err)
+	if !found {
+		return fmt.Errorf("istio proxy metrics omitted the envoy_server_live gauge; response prefix: %.512q", response.Body)
 	}
-	return fmt.Errorf("Istio proxy metrics omitted the envoy_server_live gauge")
+	return nil
 }

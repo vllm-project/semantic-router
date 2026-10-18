@@ -358,13 +358,13 @@ verifications:
 
 # Versioned required inventory, shared by /ci run full, weekly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
+# Authoring tools remain affected/manual contracts, outside product qualification.
 full_cpu:
   version: 5
   required:
     - quality
     - generated-contracts
     - security
-    - soak-tools
     - core
     - storage
     - dashboard
@@ -379,11 +379,7 @@ full_cpu:
     - cli-package
     - cli-unit
     - model-runtime
-    - bench-tools
-    - training
-    - onnx-artifacts
     - mock-provider
-    - learning-tools
     - harness-tools
     - e2e-unit
     - e2e.standalone

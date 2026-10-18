@@ -10,8 +10,8 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from deployment_test_results import go_unit, kubernetes, operator, operator_source
 from ci_plan import github_outputs, make_plan
+from deployment_test_results import go_unit, kubernetes, operator, operator_source
 from release_guard_waiver import GUARD_WAIVER
 
 

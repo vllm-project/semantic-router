@@ -13,9 +13,10 @@ acceptance wrapper, limitations and disposition:
 - [Routing and deployment cases](ci-routing-testcase-audit.md)
 - [Runtime, state and model cases](ci-runtime-testcase-audit.md)
 
-Together these reviews cover all 271 surviving registrations and the retired
-cases. A static assertion review is not a live passing result. Seventeen
-unreachable registrations are explicitly identified as debt, not CI coverage.
+Together these reviews cover all 249 surviving registrations and the retired
+cases. A static assertion review is not a live passing result. All 17 previously
+unreachable registrations have been retired; the execution graph now requires
+every registered case to belong to a profile, without a debt exception table.
 
 ## Sources and counts
 
@@ -35,19 +36,63 @@ go run ./cmd/e2e-audit > /tmp/e2e-inventory.json
 | Dashboard | 16 | 16 | Product API/state/recovery contracts |
 | Provider protocols | 25 | 25 | Native Anthropic backend and client conversion contracts |
 | Unique cases across those three groups | 83 | 80 | 82 final group entries; two intentional cross-backend repeats |
-| Global testcase registrations | 278 | 271 | Six legacy removals, plus two misleading Istio cases replaced by one metrics smoke |
+| Global testcase registrations | 278 | 249 | 28 legacy removals, plus two misleading Istio cases replaced by one metrics smoke |
 
 `RouterSmoke` contains only `chat-completions-request`, already counted above.
 `chat-completions-request` and `anthropic-messages-streaming` run in both baseline
 and provider groups against different backend protocols. A testcase count is
 not a request count, assertion count, Go subtest count or number of jobs per PR.
 
+The 249 registrations are the repository's available integration coverage,
+not the default PR workload. The fixed full-CPU inventory selects 15 profiles:
+**94 profile/case entries representing 87 distinct case names**. A changed
+surface can add an optional profile; ordinary PRs select affected contracts
+and require committer authorization for expensive execution.
+
+| Default full-CPU integration family | Profile/case entries | Boundary protected |
+| --- | ---: | --- |
+| Canonical router | 41 | Routing, signals, request mutation, safety, cache and accounting |
+| Dashboard | 16 | Configuration, authorization, deployment and recovery |
+| Streaming | 9 | Stream transport, safety, replay and terminal correctness |
+| Standalone | 7 | Direct serving, deployment, configuration and failover |
+| Agentgateway, Istio, llm-d and AIBrix | 12 | Distinct deployed gateway/control-plane integrations |
+| Routing errors | 2 | Router-origin failure contracts |
+| Multimodal, local classifier and remote embedding | 4 | Model-adapter and routing wiring |
+| Vela Omni, Halu and Shield | 3 | Published model identity and positive/negative probes |
+
+The 17 unreachable cases removed in the final cleanup were nine old selector
+cases, five MCP cases, one superseded RBAC case, one OpenAI RAG case and one
+rate-limit case. Their exclusive helpers, data and duplicate RAG manual script
+are removed as well. Existing selector/learning/identity assertions and small
+MCP transport, search and post-auth quota tests preserve the useful current
+boundaries; the companion audits identify each replacement and its limits.
+This cleanup removes maintenance debt, not executed runner minutes. The job
+and artifact savings come from selection and shared expensive setup, as
+quantified in the [cost audit](ci-job-cost-audit.md).
+
+Four selected legacy routing aggregates (embedding, entropy, keyword and
+fallback) are also retired, removing 89 probe requests when both affected
+profiles run. They accepted one matching observation or inferred missing
+evidence; their reports were not useful acceptance gates. Direct classifier,
+decision and selector tests remain, together with discriminating routed
+contracts. This does not claim equivalent live qualification of every former
+natural-language prompt or the old fallback-chain description. The permissive
+Responses backend-error case is removed; existing injected-error matrices
+require exact status and native error fields.
+
+Model-selection and the shared signal-routing cases reject empty or invalid
+corpora; model-selection previously fell back to duplicated built-in data.
+Failover requires successful fault injection. Streaming keyword routing requires
+all positive controls and a fallback control; large-body transport checks the
+provider-observed messages, and Redis profiles require the declared storage
+topology. Local negative controls protect these acceptance rules.
+
 ## Expanded profile inventory
 
-The runtime graph after consolidation contains **47 profiles and 271 registered
-cases**. Every selected name is registered. Seventeen registered cases remain
-unreachable under the existing bounded [debt registry](../../../e2e/pkg/verification/debt.go);
-they are not added to the CI qualification claim. Profile selections overlap,
+The runtime graph after consolidation contains **47 profiles and 249 registered
+cases**. Every selected name is registered, and every registered name is reachable.
+The [execution-graph gate](../../../e2e/pkg/verification/gates_test.go) rejects
+unreachable registrations instead of allowing a growing debt table. Profile selections overlap,
 so this table must not be summed as unique coverage. It is a dated audit snapshot;
 `GetTestCases` and the runtime inventory command remain authoritative.
 
@@ -61,7 +106,7 @@ so this table must not be summed as unique coverage. It is a dated audit snapsho
 | `complexity-routing` | 1 |
 | `conversation-routing` | 1 |
 | `dashboard` | 16 |
-| `dynamic-config` | 4 |
+| `dynamic-config` | 3 |
 | `dynamo` | 3 |
 | `envoy-ai-gateway` | 41 |
 | `external-gateway-responses` | 3 |
@@ -85,14 +130,14 @@ so this table must not be summed as unique coverage. It is a dated audit snapsho
 | `provider-protocols` | 25 |
 | `rag-hybrid-search` | 2 |
 | `remote-embedding` | 1 |
-| `response-api` | 58 |
+| `response-api` | 57 |
 | `response-api-redis` | 12 |
 | `response-api-redis-cluster` | 11 |
 | `response-jailbreak` | 3 |
 | `route-action` | 2 |
 | `router-replay` | 13 |
 | `routing-errors` | 2 |
-| `routing-strategies` | 7 |
+| `routing-strategies` | 4 |
 | `standalone` | 7 |
 | `streaming` | 9 |
 | `structure-routing` | 1 |
@@ -269,7 +314,7 @@ reviews retain the individual assertions and limitations behind each family.
 | Streaming and privacy | [Body limits](../../../e2e/testcases/streaming_body_limits.go) check 413/408 and exact error codes before routing. [Masking](../../../e2e/testcases/masking_cross_protocol.go) observes provider input without raw PII, requires placeholders and rejects unavailable classifiers with 503. Streamed safety now checks the exact decision/refusal and a benign control; no-dispatch is still owned by the separate provider-observation cases. |
 | Routing and selection | Signal families compare positive/negative matched rules and decisions. [Decision-scoped multi-factor](../../../e2e/testcases/decision_scoped_multi_factor.go) requires distinct quality/cost model choices. [Random](../../../e2e/testcases/decision_scoped_random.go) checks eligible candidates and algorithm wiring; statistical uniformity belongs in selector units. Shared selection infrastructure does not make these distinct policy boundaries redundant. |
 | Replay, shadow and state | [Replay restart recovery](../../../e2e/testcases/router_replay_restart_recovery.go) confirms a record in Postgres and provider-observed dispatch hash/length, then preserves it after restart. [Shadow capture](../../../e2e/testcases/shadow_dispatch_capture.go) checks candidate metadata, disabled response-body capture and failure reasons. Keep stateful receipts; do not substitute generic HTTP smoke. |
-| Deployment adapters | Shared chat smoke is appropriate for distinct gateway environments. Istio now has three cases, dynamic-config four and AIBrix two. Preserve adapter-specific data/control-plane assertions while batching only compatible workers with separate cluster lifecycles. |
+| Deployment adapters | Shared chat smoke is appropriate for distinct gateway environments. Istio and dynamic-config now each have three cases, and AIBrix two. Preserve adapter-specific data/control-plane assertions while batching only compatible workers with separate cluster lifecycles. |
 | Production stack: 10 cases | Failover deletes a real backend pod and requires a backend success floor. Load balancing requires endpoints and backend-routed requests, not uniform distribution. [Resource monitoring](../../../e2e/testcases/resource_utilization_monitoring.go) proves a nonempty Prometheus series; [throughput](../../../e2e/testcases/performance_throughput.go) rejects request errors without a comparative performance threshold. Use full/manual qualification and describe the limits accurately. |
 | Dynamo: 3 retained cases | Retire the report-only dynamic batching, performance comparison and GPU-utilization cases. Health, successful inference and output-shape smoke remain; these do not qualify batching efficiency, category accuracy or GPU utilization. |
 | Local product and benchmark contracts | The development launcher smoke now shares the existing CLI worker, but its separate receipt must be present and passed. Benchmark units check fixture independence, timers, cleanup and model identity without checkpoint inference. Identity now includes engine arguments, preventing unlike executions from sharing a baseline. Live inference and pressure belong in explicit qualification. |
@@ -281,10 +326,10 @@ reviews retain the individual assertions and limitations behind each family.
   assertions before treating them as pricing correctness tests.
 - Give non-baseline reuse an explicit acceptance policy; do not silently apply a
   baseline model-quality threshold to a different deployment or model.
-- Address the remaining weak oracles documented per case: fallback method
-  inference, missing routing evidence, fault injection that can be skipped and
-  model-selection empty-input handling. Manual execution alone does not improve
-  assertion quality.
+- Keep remaining limitations explicit: response framing does not prove delivery
+  latency, namespace CPU series do not measure Router efficiency, and model
+  membership does not prove algorithm quality. Manual execution does not change
+  those evidence boundaries.
 - Keep the distinction between deleting a redundant oracle, sharing a worker,
   and moving expensive qualification to full/manual execution. Per-case missing,
   failed and skipped results must remain visible in the Gate.

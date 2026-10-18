@@ -720,7 +720,34 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, training, learning-tools, harness-tools, onnx-artifacts]
+    verifications: [cli-unit, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
+
+  component-execution:
+    owner: maintainers
+    paths:
+      - .github/workflows/ci.yml
+      - .github/workflows/ci-changes.yml
+      - .github/workflows/test-tools.yml
+      - Makefile
+      - tools/agent/domains.yaml
+      - tools/agent/requirements.txt
+      - tools/docs/requirements.txt
+      - tools/make/agent.mk
+      - tools/make/common.mk
+      - tools/ci/ci_plan.py
+      - tools/ci/ci_policy.py
+      - tools/ci/ci_results.py
+      - tools/ci/classify_pr_changes.py
+      - tools/ci/domain_registry.py
+      - tools/ci/execution_batches.py
+      - tools/ci/execution_targets.py
+      - tools/ci/execution_targets.yaml
+      - tools/ci/run_component_batch.py
+      - tools/ci/verification_catalog.py
+      - tools/ci/verification_catalog.yaml
+      - tools/ci/worker_process.py
+    checks: [make harness-check]
+    verifications: [cli-unit, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
 
   runtime-evidence:
     owner: maintainers
@@ -857,6 +884,7 @@ profiles:
     selection: pr
     default_local: true
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
       - e2e/pkg/**
@@ -954,6 +982,7 @@ profiles:
     coverage_role: structure-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/structure-routing/**
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
@@ -964,6 +993,7 @@ profiles:
     coverage_role: conversation-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/conversation-routing/**
       - e2e/testcases/conversation_routing.go
       - src/semantic-router/pkg/classification/classifier_signal_conversation.go
@@ -973,6 +1003,7 @@ profiles:
     coverage_role: complexity-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/complexity-routing/**
       - e2e/testcases/complexity_routing.go
       - e2e/testcases/testdata/complexity_routing_cases.json
@@ -999,6 +1030,7 @@ profiles:
     coverage_role: long-context-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/long-context-routing/**
       - e2e/testcases/context_routing.go
       - e2e/testcases/testdata/context_routing_cases.json
@@ -1011,6 +1043,7 @@ profiles:
     coverage_role: preference-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/preference-routing/**
       - e2e/testcases/preference_routing.go
       - e2e/testcases/testdata/preference_routing_cases.json
@@ -1125,6 +1158,7 @@ profiles:
     coverage_role: production-ha-load-observability
     selection: pr
     paths:
+      - e2e/testcases/failover_during_traffic.go
       - e2e/profiles/production-stack/**
       - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
       - deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
@@ -1134,6 +1168,8 @@ profiles:
     coverage_role: ml-model-selection-contracts
     selection: pr
     paths:
+      - e2e/testcases/testdata/model_selection_cases.json
+      - e2e/testcases/model_selection.go
       - e2e/profiles/ml-model-selection/**
       - src/semantic-router/pkg/modelselection/**
       - src/training/model_selection/ml_model_selection/**
@@ -1167,6 +1203,7 @@ profiles:
     coverage_role: streaming-request-and-cache
     selection: pr
     paths:
+      - e2e/testcases/streaming_*.go
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/llmprotocol/**
@@ -1212,6 +1249,7 @@ profiles:
     coverage_role: responses-api-memory
     selection: pr
     paths:
+      - e2e/testcases/response_api*.go
       - e2e/profiles/response-api/**
       - e2e/testcases/anthropic_response_api_streaming.go
       - e2e/testcases/prompt_cache_key_affinity.go
@@ -1234,6 +1272,7 @@ profiles:
     coverage_role: responses-api-redis-ttl
     selection: manual
     paths:
+      - e2e/testcases/response_api*.go
       - e2e/profiles/response-api-redis/**
       - deploy/kubernetes/response-api/redis.yaml
   response-api-redis-cluster:
@@ -1242,6 +1281,7 @@ profiles:
     coverage_role: responses-api-redis-cluster-ttl
     selection: manual
     paths:
+      - e2e/testcases/response_api*.go
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
   progress-gate:

@@ -32,9 +32,9 @@ func TestModelProtocolSeparatesExecutionSettings(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			changed := card
 			mutate(&changed)
-			protocol, err := modelRuntimeProtocol(changed, input, "full-layer/full-dimension")
-			if err != nil || protocol == baseline {
-				t.Fatalf("different execution settings remained comparable: %s, %v", protocol, err)
+			protocol, protocolErr := modelRuntimeProtocol(changed, input, "full-layer/full-dimension")
+			if protocolErr != nil || protocol == baseline {
+				t.Fatalf("different execution settings remained comparable: %s, %v", protocol, protocolErr)
 			}
 		})
 	}
@@ -42,9 +42,9 @@ func TestModelProtocolSeparatesExecutionSettings(t *testing.T) {
 		{MaxTokens: 8192, Overflow: "truncate"},
 		{MaxTokens: 512, Overflow: "reject"},
 	} {
-		protocol, err := modelRuntimeProtocol(card, changed, "full-layer/full-dimension")
-		if err != nil || protocol == baseline {
-			t.Fatalf("different input budgets remained comparable: %s, %v", protocol, err)
+		protocol, protocolErr := modelRuntimeProtocol(card, changed, "full-layer/full-dimension")
+		if protocolErr != nil || protocol == baseline {
+			t.Fatalf("different input budgets remained comparable: %s, %v", protocol, protocolErr)
 		}
 	}
 	protocol, err := modelRuntimeProtocol(card, input, "layer-6/dimension-256")

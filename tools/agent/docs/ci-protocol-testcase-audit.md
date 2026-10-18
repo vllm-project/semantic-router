@@ -1,8 +1,10 @@
 # CI protocol testcase audit
 
-This source review records all **69 exact testcase registrations** in the
-remaining protocol audit partition on 2026-10-18: 36 codec cases, 20 Responses
-API cases, and 13 masking, response-guardrail and streaming cases. It complements
+This source review records all **69 original testcase entries** in the
+remaining protocol audit partition on 2026-10-18. After retiring one permissive
+Responses API oracle, **68 registrations remain**: 36 codec cases, 19 Responses
+API cases, and 13 masking, response-guardrail and streaming cases. The retired
+entry retains a pinned historical source below. This document complements
 [ci-testcase-audit.md](ci-testcase-audit.md) and the
 [workflow audit](ci-workflow-audit.md). It is a review of executable assertions,
 shared HTTP/provider helpers and acceptance rules, **not a report that these
@@ -12,7 +14,7 @@ document.
 ## Scope and interpretation
 
 Profile reachability follows each profile's `GetTestCases`, not testcase names
-or tags. All 69 entries in this partition have at least one selecting profile;
+or tags. All 68 surviving entries have at least one selecting profile;
 there are **zero registered-but-unreachable entries in this partition**. This
 does not imply every profile belongs to the versioned full CPU inventory or runs
 on every PR. The [CI catalog](../../ci/verification_catalog.yaml) and approved
@@ -32,7 +34,7 @@ Profile abbreviations in the tables:
 | S | [streaming](../../../e2e/profiles/streaming/profile.go) |
 
 The [registration wrapper](../../../e2e/pkg/testcases/acceptance_contracts.go)
-adds threshold gates only to specific baseline cases, none of these 69. Reported
+adds threshold gates only to specific baseline cases, none of these 68. Reported
 details therefore do not create additional assertions here. Typed
 [Responses HTTP helpers](../../../e2e/pkg/fixtures/response_api.go) enforce 200
 and JSON decoding; raw helpers leave status validation to the testcase.
@@ -55,8 +57,9 @@ they do not generate answers constrained by that schema.
   tool continuation, malformed stream terminals, storage expiry/restart and
   upload limits. Shared setup can be consolidated without deleting their
   independent contracts.
-- Retire the permissive unknown-model backend-error oracle after retaining the
-  exact injected-error matrices. Consolidate CRUD setup, input-value variants
+- The permissive unknown-model backend-error oracle is retired; exact
+  injected-error matrices and direct unknown-model tests remain. Consolidate
+  CRUD setup, input-value variants
   and duplicated Responses SSE smoke only after preserving their distinct
   assertions. Move exhaustive field/schema permutations to local codec tests;
   retain deployed representatives for each encoder and gateway boundary.
@@ -65,10 +68,16 @@ they do not generate answers constrained by that schema.
   probing with required cached SSE content/terminal equality. The previous
   generic fast-response and non-streaming-cache acceptance could hide the
   behavior named by those tests.
-- Remaining weaknesses are explicit below: masking's 503 does not observe
-  non-dispatch, one of two keyword probes can pass, any large-body 400 is
-  accepted, and missing Redis can silently bypass direct Redis assertions.
-  Recommendations marked strengthen are follow-up work, not completed fixes.
+- Keyword routing now requires both positive cells and a fallback control.
+  The large-body probe requires 200, the exact urgency decision and the complete
+  original messages recorded at the provider; arbitrary 400 responses fail.
+  Redis profiles require their declared standalone or cluster fixture before
+  every direct storage assertion, while memory profiles can run without Redis.
+  Local negative tests cover partial routing success, altered messages, absent
+  Redis and wrong topology. These oracle tests do not claim live CI completion.
+- Other limitations remain explicit below, including masking's 503 without an
+  independent non-dispatch observation. Recommendations still marked strengthen
+  are follow-up work, not completed fixes.
 
 “Keep” retains the contract; “consolidate” shares scenario/setup ownership while
 preserving listed assertions. Neither is a claim that every registration needs
@@ -86,25 +95,24 @@ the in-memory topology merely because the testcase name is shared.
 | [response-jailbreak-window-warning](../../../e2e/testcases/response_jailbreak_window.go#L44) | J | Unsafe response must be 200 with exact warning decision, warning code and matched rule; same-length benign response must omit that warning. | **Keep, strengthen control.** Content-sensitive window regression; benign control status, decision and delivered text are not required. |
 | [streaming-body-deadline](../../../e2e/testcases/streaming_body_limits.go#L27) | S | 80 KiB non-final upload pauses six seconds below the size bound; requires 408, invalid_request_error/request_timeout, and no selected-decision header. | **Keep.** Real streamed-body deadline boundary; add a successful below-deadline control. Header absence is not a provider non-dispatch observation. |
 | [streaming-body-size-limit](../../../e2e/testcases/streaming_body_limits.go#L22) | S | 192 KiB upload exceeds configured 128 KiB; requires 413, invalid_request_error/request_too_large, and no selected-decision header. | **Keep.** Distinct accumulation limit; pair with a successful near-limit control rather than remove the deployed boundary. |
-| [streaming-cache-roundtrip](../../../e2e/testcases/streaming_body.go#L28) | S | Both non-streaming HTTP calls must succeed; after priming, a semantically similar prompt must report cache-hit=true within four attempts. | **Keep, strengthen.** Owns similarity lookup in streamed-request-body mode; does not require initial miss, output equality or unrelated-query miss. |
+| [streaming-cache-roundtrip](../../../e2e/testcases/streaming_body.go#L29) | S | Both non-streaming HTTP calls must succeed; after priming, a semantically similar prompt must report cache-hit=true within four attempts. | **Keep, strengthen.** Owns similarity lookup in streamed-request-body mode; does not require initial miss, output equality or unrelated-query miss. |
 | [streaming-jailbreak-blocked](../../../e2e/testcases/streaming_safety.go#L20) | S | HTTP 200, exact block_jailbreak decision, fast response and exact refusal text; benign control requires general_decision, nonempty Chat text and no fast response. | **Keep; strengthened here.** Replaces generic fast-response acceptance. It still does not independently observe absence of provider dispatch. |
-| [streaming-keyword-routing](../../../e2e/testcases/streaming_body.go#L23) | S | Two HTTP-200 probes compare selected decisions for code keywords and urgency, but final acceptance requires only one of the two to pass. | **Keep, strengthen.** Require both cells and a fallback control; one working signal currently hides a regression in the other. |
-| [streaming-large-body](../../../e2e/testcases/streaming_body.go#L33) | S | About 75 KiB request across Envoy chunks accepts either HTTP 200 or any 400; routing headers and returned content are only reported. | **Keep boundary, replace oracle.** Require provider-observed original bytes or exact echo. A router-side 400 currently proves no successful reassembly. |
+| [streaming-keyword-routing](../../../e2e/testcases/streaming_body.go#L24) | S | Both HTTP-200 keyword/urgency probes and a benign fallback must select their exact expected decisions; any failed cell fails the case. | **Keep; strengthened here.** Partial success and a universal route no longer pass. Local HTTP regressions exercise one-cell failure, wrong fallback, missing header and 400. This is a fixed routing contract, not an accuracy estimate. |
+| [streaming-large-body](../../../e2e/testcases/streaming_body.go#L34) | S | About 75 KiB request must return 200 with urgent_request_decision; a unique-session provider observation must contain exactly the original system/user messages, roles, order and text. | **Keep; oracle replaced here.** The chosen decision has no prompt rewrite or cache. Truncated, missing, changed or reordered messages and arbitrary 400 fail. This proves complete message delivery without assuming a specific Envoy chunk count or preserving rewritten JSON bytes. |
 | [streaming-pii-blocked](../../../e2e/testcases/streaming_safety.go#L15) | S | HTTP 200, exact block_pii decision, fast response and exact refusal text; benign control requires general_decision, nonempty Chat text and no fast response. | **Keep; strengthened here.** Distinguishes PII from generic blocking; one SSN probe does not measure detection accuracy or prove provider non-dispatch. |
-| [streaming-sse-cache](../../../e2e/testcases/streaming_body.go#L38) | S | Prime nonempty Chat text, require same-prompt streaming cache hit, SSE content type, valid Chat stream with stop and exactly one final DONE, and exact reassembled text equality. | **Keep; strengthened here.** Streaming request/read failure now fails. Separates cached SSE encoding from the similarity lookup case; no timing claim. |
+| [streaming-sse-cache](../../../e2e/testcases/streaming_body.go#L39) | S | Prime and replay identical streaming requests; require nonempty decoded text, replay cache-hit=true, SSE content type, valid Chat streams with stop and exactly one final DONE, and exact reassembled text equality. | **Keep; strengthened here.** Streaming request/read failure now fails. Separates cached SSE encoding from the similarity lookup case; no timing claim. |
 
 ## Responses API and persistence
 
 | Exact case and implementation | Profiles | Effective assertions / negative controls | Value, limitation and recommendation |
 | --- | --- | --- | --- |
 | [response-api-conversation-chaining](../../../e2e/testcases/response_api_conversation_chaining.go#L17) | EG, R, RD, RC | Three stored turns require previous-response linkage and provider-echo user history in order; new instructions appear and previous instructions must not carry over. | **Keep.** Crosses API, storage and provider projection. The in-order subsequence check permits extra history; exact history would be stricter. |
-| [response-api-create](../../../e2e/testcases/response_api_basic.go#L25) | EG, R, RD, RC | Create requires HTTP 200, resp_ ID, response object, completed/in_progress status and timestamp; Redis key/id is checked when a Redis pod is found. | **Consolidate into CRUD fixture.** Valuable API entry smoke, but output is not asserted and missing Redis silently removes the direct-storage assertion. |
-| [response-api-delete](../../../e2e/testcases/response_api_basic.go#L35) | R, RD, RC | Create/delete requires matching ID, response.deleted and deleted=true; subsequent GET must be 404; checks Redis key absence if Redis is found. | **Keep within CRUD sequence.** Positive-to-negative state transition is useful; missing Redis must not be treated as direct Redis deletion evidence. |
+| [response-api-create](../../../e2e/testcases/response_api_basic.go#L25) | EG, R, RD, RC | Create requires HTTP 200, resp_ ID, response object, completed/in_progress status and timestamp; RD/RC require the declared Redis topology and matching stored key/id. | **Consolidate into CRUD fixture; storage guard fixed here.** Missing or wrong Redis cannot remove direct storage evidence from RD/RC. Memory profiles need no Redis. Output is still not asserted by this create case. |
+| [response-api-delete](../../../e2e/testcases/response_api_basic.go#L35) | R, RD, RC | Create/delete requires matching ID, response.deleted and deleted=true; subsequent GET must be 404; RD/RC require their Redis topology and direct key absence. | **Keep within CRUD sequence; storage guard fixed here.** Missing Redis or the wrong topology fails on storage profiles; the memory profile retains its API state-transition assertion. |
 | [response-api-edge-concurrent-requests](../../../e2e/testcases/response_api_edge_cases.go#L40) | R, RD, RC | Twenty creates across five workers must all succeed with distinct nonempty resp_ IDs; any error, duplicate or missing completion fails. | **Keep one bounded concurrency case.** Detects creation/identity failures; does not verify retrieval or request-to-output isolation under concurrency. |
 | [response-api-edge-empty-input](../../../e2e/testcases/response_api_edge_cases.go#L25) | R, RD, RC | Successful response must contain provider-mocker echo with exactly one user message equal to the empty string. | **Consolidate with character-preservation matrix.** Meaningful empty-vs-absent distinction; retain the separate missing-input negative. |
 | [response-api-edge-large-input](../../../e2e/testcases/response_api_edge_cases.go#L30) | R, RD, RC | A 5 MiB + 1024-byte buffered input must succeed and provider echo must contain exactly that one unchanged user string. | **Keep.** Exercises the greater-than-4-MiB transport boundary with byte equality; differs from streamed-body accumulation tests. |
 | [response-api-edge-special-characters](../../../e2e/testcases/response_api_edge_cases.go#L35) | R, RD, RC | Escapes, newline, tab and punctuation must reach provider echo as exactly one unchanged user string. | **Consolidate with input-value cases.** Retain wire integration representative; move broader character permutations to local codec tests. |
-| [response-api-error-backend-passthrough](../../../e2e/testcases/response_api_error_handling.go#L36) | R | Unknown model accepts either any 4xx/5xx with an error message or HTTP 200 decoded as a response; no actual upstream error is required. | **Retire this permissive oracle.** Exact backend error matrices already inject 429 and check native error fields; test unknown-model policy separately if required. |
 | [response-api-error-missing-input](../../../e2e/testcases/response_api_error_handling.go#L16) | R | Omitted input must return 400 with a nonempty error message mentioning input. | **Keep, consolidate error table.** Distinguishes omission from valid empty input; add exact error type/code and non-dispatch observation. |
 | [response-api-error-nonexistent-previous-response-id](../../../e2e/testcases/response_api_error_handling.go#L21) | R | Create referencing a nonexistent response must return 404 and decode as JSON error response. | **Keep, consolidate error table.** Checks missing lineage; currently does not require a nonempty error message or exact code. |
 | [response-api-error-nonexistent-response-id-delete](../../../e2e/testcases/response_api_error_handling.go#L31) | R | DELETE unknown response must return 404 with a nonempty JSON error message. | **Consolidate with unknown-ID GET.** Preserve verb-specific behavior and require stable typed error rather than message presence only. |
@@ -114,9 +122,15 @@ the in-memory topology merely because the testcase name is shared.
 | [response-api-image-generation](../../../e2e/testcases/image_generation_output.go#L27) | R | Responses image tool yields one completed image item with decodable base64; provider receives model/tool; Chat backend rejects with exact capability error and no observed dispatch. | **Keep.** Positive and negative wire-capability boundary. Decodable base64 alone does not establish a valid rendered image or output quality. |
 | [response-api-image-generation-stream](../../../e2e/testcases/image_generation_output.go#L32) | R | HTTP 200 SSE; required image progress/completion events, sequence/index shapes, completed item with decodable base64; rejects Chat chunks and DONE leakage. | **Keep.** Distinct image SSE representation; no image-format validation, first-token timing or independent provider receipt in this case. |
 | [response-api-input-items](../../../e2e/testcases/response_api_basic.go#L40) | R, RD, RC | Create with instructions then list input items; requires HTTP 200, list object and at least one item. | **Consolidate and strengthen.** Check exact roles/content/order and pagination; any nonempty list currently passes. |
-| [response-api-restart-recovery](../../../e2e/testcases/response_api_restart_recovery.go#L28) | RD, RC | Create stored response, optionally inspect/extend Redis key, delete router pod, wait for recovery, then GET matching response ID and object. | **Keep on storage profiles.** Unique process-lifetime boundary; compare saved output/model, require Redis, and reject non-NotFound pod-read errors as termination. |
+| [response-api-restart-recovery](../../../e2e/testcases/response_api_restart_recovery.go#L28) | RD, RC | Require declared Redis topology, inspect and extend the stored key, delete router pod, wait for recovery, then GET matching response ID and object. | **Keep on storage profiles; storage guard fixed here.** Unique process-lifetime boundary. Remaining improvements: compare saved output/model and reject non-NotFound pod-read errors as termination. |
 | [response-api-streaming-sse](../../../e2e/testcases/response_api_streaming.go#L20) | R | HTTP 200 SSE; required Responses lifecycle events, contiguous sequence numbers and required indexes/IDs; forbids Chat chunks/DONE and requires annotations array. | **Consolidate with Chat-backend streaming matrix.** Shared validator already runs there; preserve explicit content-type assertion before retiring duplicate standalone coverage. |
-| [response-api-ttl-expiry](../../../e2e/testcases/response_api_basic.go#L45) | RD, RC | Create is initially retrievable; positive Redis TTL is required only when Redis is found; GET must become 404 within 20 seconds. | **Keep on storage profiles.** Real expiry transition; make Redis presence mandatory there and distinguish expected expiry from unrelated loss. |
+| [response-api-ttl-expiry](../../../e2e/testcases/response_api_basic.go#L45) | RD, RC | Create is initially retrievable; declared Redis topology and positive Redis TTL are mandatory; GET must become 404 within 20 seconds. | **Keep on storage profiles; storage guard fixed here.** A missing fixture cannot skip TTL evidence. The disappearance assertion could still distinguish expected expiry from unrelated loss more precisely. |
+
+## Retired permissive oracle
+
+| Exact historical case | Former profile | Reason and retained evidence |
+| --- | --- | --- |
+| [response-api-error-backend-passthrough](https://github.com/vllm-project/semantic-router/blob/1c629c80b383d7e53e01f266430d0fa41c5d9bf6/e2e/testcases/response_api_error_handling.go#L192) | R | **Retired here.** Accepted either any error with a message or a decoded HTTP 200 without injecting an upstream failure. The active Chat/Responses backend error matrices inject 429 and verify exact native fields. Direct [unknown-model rejection](../../../src/semantic-router/pkg/extproc/model_resolution_test.go#L91) and [typed protocol errors](../../../src/semantic-router/pkg/extproc/processor_protocol_immediate_test.go#L14) retain the separate local contracts. |
 
 ## Protocol conversion and client compatibility
 
@@ -132,7 +146,7 @@ the in-memory topology merely because the testcase name is shared.
 | [protocol-codec-azure-ingress](../../../e2e/testcases/protocol_codec_agent_clients.go#L22) | R | Four Azure paths return correct client shape; observed provider has model/messages/marker and no client api-key; dropped reasoning warned; three unsupported operations return 404. | **Keep.** Path normalization and credential stripping cross gateway boundaries; unsupported-operation probes do not independently check non-dispatch. |
 | [protocol-codec-chat-backend-agent-client-replay](../../../e2e/testcases/protocol_codec_agent_client_replay.go#L86) | R | Three captured client loops run buffered/streamed against Chat: exact tool identity/arguments, linked provider result, required provider fields, numeric usage and typed 429 errors. | **Keep captures, consolidate overlapping generic scenarios.** Usage only checks numeric presence and declared request fields only presence/non-null; no installed client or semantic usage accuracy. |
 | [protocol-codec-chat-backend-buffered-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L120) | R | All three client wires require HTTP 200, native response shape and Chat backend marker; provider observation requires prompt and wire-specific fields, forbidding wrong-wire fields. | **Keep.** Minimal positive codec/gateway matrix; substring/field-presence assertions do not establish exact full payload equality. |
-| [protocol-codec-chat-backend-error-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L195) | R | Injected Chat provider error must become 429 for all three clients with exact rate-limit message/type and OpenAI code or Messages envelope. | **Keep; consolidate redundant unknown-model smoke.** Deterministic error translation; covers one status family, not arbitrary transport failures. |
+| [protocol-codec-chat-backend-error-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L195) | R | Injected Chat provider error must become 429 for all three clients with exact rate-limit message/type and OpenAI code or Messages envelope. | **Keep; permissive unknown-model smoke retired.** Deterministic error translation; covers one status family, not arbitrary transport failures. |
 | [protocol-codec-chat-backend-incomplete-stream-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L155) | R | Truncated Chat backend stream must yield native failure for all three clients; stream_incomplete/details required and successful terminal forbidden. | **Keep.** EOF truncation differs from explicit midstream error; does not compare partial-content completeness or exact failure-event count. |
 | [protocol-codec-chat-backend-midstream-error-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L165) | R | Chat stream failure on all three clients requires partial output before exactly one provider error and native failure terminal; success terminal is forbidden. | **Keep.** Distinct from EOF truncation and pre-response 429; marker-based framing checks do not measure delivery timing. |
 | [protocol-codec-chat-backend-streaming-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L125) | R | All three clients receive valid native text streams with Chat backend marker; rejects wrong-wire frames, checks native terminals and provider request fields/marker. | **Keep.** Broad conversion boundary; Responses events add sequence/index checks. HTTP helper reads the whole stream, so no latency/backpressure evidence. |
@@ -147,7 +161,7 @@ the in-memory topology merely because the testcase name is shared.
 | [protocol-codec-reasoning-summary-template-responses-backend](../../../e2e/testcases/protocol_codec_reasoning_summary_template.go#L22) | R | Exact auto-selected decision/model; provider alias resolves to expected model and enable_thinking=true; reasoning object absent and summary drop warned. | **Keep within reasoning projection matrix.** Exercises configured backend reasoning override; one template/backend combination, not generalized template correctness. |
 | [protocol-codec-responses-backend-agent-client-replay](../../../e2e/testcases/protocol_codec_agent_client_replay.go#L91) | R | Three captured client loops run buffered/streamed against Responses: exact tool identity/arguments, linked provider result, required provider fields, numeric usage and typed 429 errors. | **Keep captures, consolidate overlapping generic scenarios.** Usage only checks numeric presence and declared request fields only presence/non-null; no installed client or semantic usage accuracy. |
 | [protocol-codec-responses-backend-buffered-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L130) | R | All three client wires require HTTP 200, native response shape and Responses backend marker; provider observation requires prompt and wire-specific fields, forbidding wrong-wire fields. | **Keep.** Minimal positive codec/gateway matrix; substring/field-presence assertions do not establish exact full payload equality. |
-| [protocol-codec-responses-backend-error-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L200) | R | Injected Responses provider error must become 429 for all three clients with exact rate-limit message/type and OpenAI code or Messages envelope. | **Keep; consolidate redundant unknown-model smoke.** Deterministic error translation; covers one status family, not arbitrary transport failures. |
+| [protocol-codec-responses-backend-error-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L200) | R | Injected Responses provider error must become 429 for all three clients with exact rate-limit message/type and OpenAI code or Messages envelope. | **Keep; permissive unknown-model smoke retired.** Deterministic error translation; covers one status family, not arbitrary transport failures. |
 | [protocol-codec-responses-backend-midstream-error-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L170) | R | Responses stream failure on all three clients requires partial output before exactly one provider error and native failure terminal; success terminal is forbidden. | **Keep.** Distinct from EOF truncation and pre-response 429; marker-based framing checks do not measure delivery timing. |
 | [protocol-codec-responses-backend-streaming-matrix](../../../e2e/testcases/protocol_codec_responses_backend.go#L135) | R | All three clients receive valid native text streams with Responses backend marker; rejects wrong-wire frames, checks native terminals and provider request fields/marker. | **Keep.** Broad conversion boundary; Responses events add sequence/index checks. HTTP helper reads the whole stream, so no latency/backpressure evidence. |
 | [protocol-codec-responses-backend-structured-output](../../../e2e/testcases/protocol_codec_structured_output.go#L21) | R | Three clients × buffered/streamed modes must return provider echo of the exact JSON Schema through Responses; missing or altered schema fails. | **Keep representative, move schema permutations locally.** Proves constraint transport, not model compliance with that schema or complete stream lifecycle. |

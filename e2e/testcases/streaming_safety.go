@@ -62,8 +62,8 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	if readErr != nil {
 		return fmt.Errorf("%s: read refusal: %w", testName, readErr)
 	}
-	if err := validateStreamingSafetyResponse(resp.Header, body, decision, refusal); err != nil {
-		return fmt.Errorf("%s: %w", testName, err)
+	if validationErr := validateStreamingSafetyResponse(resp.Header, body, decision, refusal); validationErr != nil {
+		return fmt.Errorf("%s: %w", testName, validationErr)
 	}
 
 	// A universal fast response must not pass either safety testcase.
@@ -100,8 +100,11 @@ func validateStreamingSafetyResponse(headers http.Header, body []byte, decision,
 		return fmt.Errorf("unexpected fast-response header for decision %q", decision)
 	}
 	text, err := decodeStructuredChatText(body)
-	if err != nil || text == "" {
-		return fmt.Errorf("expected nonempty Chat response, decode error: %v", err)
+	if err != nil {
+		return fmt.Errorf("decode Chat response: %w", err)
+	}
+	if text == "" {
+		return fmt.Errorf("expected nonempty Chat response")
 	}
 	if blocked && text != refusal {
 		return fmt.Errorf("decision %q returned the wrong refusal: %q", decision, text)

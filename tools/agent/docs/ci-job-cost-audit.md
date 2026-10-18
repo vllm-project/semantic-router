@@ -46,11 +46,11 @@ that qualified fixture exists.
 | Documentation PR | 1 | 1 / 1 | 4 | 4 | Quality plus three control jobs; no runtime saving claimed. |
 | Core PR, automatic run | 5 | 3 / 5 | 10 | 6 | Two E2E contracts and their images await approval. The Gate fails while required evidence is deferred. |
 | Same core PR, approved affected run | 5 | 5 / 5 | 10 | 9 | Two images remain; two compatible E2E profiles use one worker. |
-| Versioned full CPU PR, approved | 38 | 40 / 40 | 64 | 50 | More explicit contracts, fewer duplicate worker setups. |
-| No-base daily Nightly versus weekly qualification | 64 | 40 / 40 | 100 | 59 | Qualification is 92 versus 51; eight success-only image/Helm publication jobs are included in each total. |
+| Versioned full CPU PR, approved | 38 | 35 / 35 | 64 | 45 | Product qualification retains supported boundaries; five authoring contracts run when affected or explicitly selected. |
+| No-base daily Nightly versus weekly qualification | 64 | 35 / 35 | 100 | 54 | Qualification is 92 versus 46; eight success-only image/Helm publication jobs are included in each total. |
 | Main push, core input | 5 | 3 / 3 | 14 | 5 | Before: four image producers and three image publishers. After: automatic source/component evidence only. |
 | Main push, CLI input | 4 | 4 / 4 | 15 | 6 | Before: four image producers, four image publishers, one CLI publisher. Those nine jobs move out of routine pushes. |
-| Explicit Main publication | Not available | 40 / 40 | Not available | 60 | Full qualification, six image publishers, two Helm jobs, one development CLI publisher. |
+| Explicit Main publication | Not available | 35 / 35 | Not available | 55 | Full qualification, six image publishers, two Helm jobs, one development CLI publisher. |
 
 Approval reruns the original PR workflow. The automatic six-job core attempt
 and the approved nine-job attempt can both consume resources: **6 + 9 is 15
@@ -62,18 +62,52 @@ actual allocation, but should be measured rather than assumed. The successful
 and `rerun`), so this complete approval transaction can allocate **17 jobs**.
 Those controller jobs are outside the original PR workflow totals above.
 
-The old full inventory contained nine component contracts. Retiring CK and
-adding benchmark tools and model-runtime qualification to the versioned full
-inventory produces ten component contracts. Each runs in its own job: **9 → 10**, with no
-component-worker saving claimed. The earlier **10 → 5** proposal compared a
-normalized new inventory and was rejected after checking setup cost, dependency
-isolation, and rerun granularity. Adding `operator.source` separately makes the
-complete contract inventory **38 → 40**.
+The old full inventory contained nine component contracts. Ten component
+contracts remain available after retiring CK and adding benchmark tools and
+model-runtime qualification. Every selected component runs in its own job.
+Five authoring contracts (`training`, `onnx-artifacts`, `bench-tools`,
+`learning-tools`, `soak-tools`) now run only when affected or explicitly selected;
+they are absent from the fixed product inventory. Full CPU component jobs are
+therefore **9 → 5**, from scope selection, not batching. The complete full
+contract inventory is **38 → 35**, including the new `operator.source` contract.
+
+Shared component runner, bootstrap, planner, and catalog changes explicitly
+select all ten components through the changed-path registry. Python observation
+changes select its eight component consumers. These changes still exercise the
+authoring tests; `/ci run full` does not discard affected additions. This CI
+refactor's final audited diff selects **51 contracts and 53 physical jobs**,
+including all ten components and 26 E2E profiles. That exceptional diff is not
+the fixed 35-contract, 45-job product baseline. Shared signal, corpus-loader,
+Responses and failover changes select their affected integration consumers.
+
+The same changed paths through the old planner's full entrypoint select
+44 contracts, 19 E2E profiles and 70 physical jobs. The new registry repairs
+seven missing affected-profile mappings: complexity, conversation, long-context,
+learned model selection, preference, production stack and structure. Therefore
+**70 → 53 jobs** is a same-input allocation comparison with broader selected
+coverage; it is not a controlled same-inventory cost measurement.
+
+For a separate inventory-aligned comparison, explicitly requesting those seven
+profiles from the old planner produces 26 E2E workers versus ten now. Holding
+these 26 profile identities fixed removes **21 worker allocations through setup
+sharing**: 16 E2E, four recipe workers and one platform worker. The complete
+old execution shape with this profile inventory has 77 jobs versus 53 now;
+the remaining three reductions are the two retired Operator live variants and
+obsolete CK. The new Operator source contract replaces an embedded source job,
+so logical contract identity is not unchanged. Retired weak testcase corpora
+also differ; profile identity does not imply identical request workload. These
+are planned allocations, not measured runner-minute savings.
+
+| This refactor's approved full plan | Contracts | E2E profiles | E2E workers | Physical jobs |
+| --- | ---: | ---: | ---: | ---: |
+| Old selector, same changed paths | 44 | 19 | 19 | 70 |
+| Old execution shape, explicitly aligned profiles | 51 | 26 | 26 | 77 |
+| Current selector and execution shape | 51 | 26 | 10 | 53 |
 
 ## Every physical job in the versioned full CPU PR
 
 Each row expands a real workflow job or a clearly enumerated matrix. The
-before column sums to 64 and the after column to 50.
+before column sums to 64 and the after column to 45.
 
 | Physical job or matrix | Before | After | Scope and reason for the decision |
 | --- | ---: | ---: | --- |
@@ -90,7 +124,7 @@ before column sums to 64 and the after column to 50.
 | `recipe-conformance.inventory`, `live-cpu`, `report` | 10 | 6 | Inventory + eight recipe jobs + report becomes inventory + four source-aware live shards + report. |
 | `performance-test.component-benchmarks` | 1 | 1 | Real benchmark execution and complete measurement evidence; numerical regressions remain advisory on shared hosted hardware. |
 | `package-check.package` | 1 | 1 | Installed wheel and source/package identity; distinct from unit tests. |
-| `test-tools.tests`, component matrix | 9 | 10 | One job per contract preserves dependency isolation and exact reruns. Add benchmark/runtime qualification and retire obsolete CK. |
+| `test-tools.tests`, component matrix | 9 | 5 | Full selects CLI, model-runtime, E2E framework, CI harness, and provider simulator. Five authoring contracts remain affected/manual, each in its own job. Retire obsolete CK. |
 | `test-platform.contracts`, platform matrix | 2 | 1 | Share the same runtime/model preparation for two CPU contracts; retain separate reports. |
 | `integration-test-k8s.integration-test`, E2E matrix | 15 | 7 | Reuse image loading and binary setup within bounded compatibility groups; retain fresh clusters. |
 
@@ -104,20 +138,21 @@ run when affected or explicitly selected.
 
 ### Component mapping
 
-The ten final logical contracts each have a separate physical worker:
+The ten available logical contracts each have a separate physical worker when
+selected. Five belong to fixed full qualification:
 
-| Job contract | Dependency and rerun reason |
-| --- | --- |
-| `cli-unit` | Editable CLI/bench extras; historically the longest component job. |
-| `model-runtime` | Runtime engine extras and CPU Torch; deterministic tiny-fixture tests are automatic, while real published-model checks remain approved. |
-| `onnx-artifacts` | Real CPU ONNX inference and external-weight artifact behavior. |
-| `training` | Broader pinned training/export stack, including CPU Torch. |
-| `bench-tools` | `bench/requirements.txt` has broad ranges and installs into the harness environment; do not contaminate another contract's dependencies. |
-| `e2e-unit` | Go framework unit/integration contracts without a live Kubernetes profile. |
-| `harness-tools` | Registry, planner, receipt, authorization, and workflow invariants. |
-| `learning-tools` | Research parsing plus calibration authoring tests. |
-| `mock-provider` | Protocol simulator contracts with a dedicated provider-mocker venv. |
-| `soak-tools` | Go soak client plus Python fault-proxy assertions. |
+| Job contract | Fixed full | Dependency and rerun reason |
+| --- | --- | --- |
+| `cli-unit` | Yes | Editable CLI/bench extras; historically the longest component job. |
+| `model-runtime` | Yes | Runtime engine extras and CPU Torch; deterministic tiny-fixture tests are automatic, while real published-model checks remain approved. |
+| `onnx-artifacts` | No | Real CPU ONNX inference and external-weight artifact behavior; qualify changes to artifact tooling. |
+| `training` | No | Broader pinned training/export stack, including CPU Torch; qualify changes to model authoring. |
+| `bench-tools` | No | Benchmark-client contracts; broad dependency ranges must not contaminate another contract's environment. |
+| `e2e-unit` | Yes | Go framework unit/integration contracts without a live Kubernetes profile. |
+| `harness-tools` | Yes | Registry, planner, receipt, authorization, and workflow invariants. |
+| `learning-tools` | No | Research parsing plus calibration authoring tests. |
+| `mock-provider` | Yes | Protocol simulator contracts with a dedicated provider-mocker venv. |
+| `soak-tools` | No | Go soak client plus Python fault-proxy assertions. |
 
 The original singleton component set was `cli-unit`, `ck-rewrite`, `e2e-unit`,
 `harness-tools`, `learning-tools`, `mock-provider`, `onnx-artifacts`, `soak-tools`,
@@ -262,9 +297,9 @@ consumer downloads does not by itself reduce retained artifact size.
 
 ## What can be claimed about savings
 
-The versioned full PR budget falls from 64 to 50 physical jobs: 14 fewer
-allocations, or 21.9%. The scheduled successful-run budget falls from 100 to 59:
-41 fewer allocations. These are structural counts, **not runner-minute or
+The versioned full PR budget falls from 64 to 45 physical jobs: 19 fewer
+allocations, or 29.7%. The scheduled successful-run budget falls from 100 to 54:
+46 fewer allocations. These are structural counts, **not runner-minute or
 wall-clock reductions**.
 
 Changing daily scheduled qualification to weekly removes six of seven scheduled
@@ -272,7 +307,7 @@ launches. If the same run cost were held constant, that cadence alone would
 reduce scheduled runner use by 85.7%. The actual change also alters inventory,
 batching, caches, and failure paths, so the historic average must not be
 presented as measured future usage. With no manual dispatches and all
-prerequisites succeeding, the planned job-launch budget is 700 versus 59 per
+prerequisites succeeding, the planned job-launch budget is 700 versus 54 per
 week; that combined count also must not be translated into a cost percentage.
 
 Routine Main source/component qualification remains. Expensive qualification

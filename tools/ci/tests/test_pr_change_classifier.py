@@ -42,6 +42,28 @@ MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_shared_e2e_oracles_select_their_live_consumers(self):
+        expected_by_source = {
+            "signal_routing_helpers.go": {
+                "envoy-ai-gateway",
+                "structure-routing",
+                "conversation-routing",
+                "complexity-routing",
+                "long-context-routing",
+                "preference-routing",
+            },
+            "model_selection.go": {"ml-model-selection"},
+            "failover_during_traffic.go": {"production-stack"},
+            "streaming_body.go": {"streaming"},
+            "response_api_basic.go": {"response-api"},
+        }
+        for source, profiles in expected_by_source.items():
+            with self.subTest(source=source):
+                selected = set(classify([f"e2e/testcases/{source}"]).selected_jobs)
+                self.assertTrue({f"e2e.{name}" for name in profiles} <= selected)
+                self.assertNotIn("e2e.response-api-redis", selected)
+                self.assertNotIn("e2e.response-api-redis-cluster", selected)
+
     def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
         for path in (
             "e2e/profiles/routing-errors/values.yaml",
@@ -352,6 +374,82 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("e2e.dynamo", plans[0]["expected_verification_ids"])
         self.assertNotIn("e2e.router-replay", plans[0]["expected_verification_ids"])
 
+    def test_authoring_contracts_remain_affected_and_manual_without_full_obligation(
+        self,
+    ):
+        cases = {
+            "training": "src/training/tests/test_model_artifacts.py",
+            "onnx-artifacts": "tools/models/onnx/onnx_artifacts.py",
+            "bench-tools": "bench/grounded_fusion/evaluate.py",
+            "learning-tools": "bench/test_agentic_routing_experiment.py",
+            "soak-tools": "bench/test_openai_fault_proxy.py",
+        }
+        baseline = make_plan([], source_sha=SHA, full=True)
+        self.assertTrue(set(cases).isdisjoint(baseline["expected_verification_ids"]))
+        self.assertEqual(len(baseline["verifications"]), 35)
+        self.assertEqual(len(baseline["component_batches"]), 5)
+        for identity, path in cases.items():
+            with self.subTest(identity=identity):
+                self.assertIn(identity, classify([path]).selected_jobs)
+                affected_full = make_plan([path], source_sha=SHA, full=True)
+                self.assertIn(identity, affected_full["expected_verification_ids"])
+                manual = make_plan([], source_sha=SHA, requested=(identity,))
+                self.assertEqual(manual["expected_verification_ids"], [identity])
+                self.assertEqual(len(manual["component_batches"]), 1)
+
+    def test_shared_component_execution_selects_every_component_consumer(self):
+        components = {
+            identity
+            for identity, record in verification_records(load_domain_registry()).items()
+            if record["executor"] == "tools"
+        }
+        for path in (
+            ".github/workflows/test-tools.yml",
+            ".github/workflows/ci.yml",
+            "tools/ci/run_component_batch.py",
+            "tools/ci/worker_process.py",
+            "tools/ci/execution_batches.py",
+            "tools/ci/execution_targets.yaml",
+            "tools/ci/ci_plan.py",
+            "tools/ci/ci_results.py",
+            "tools/ci/verification_catalog.yaml",
+            "tools/agent/domains.yaml",
+            "tools/agent/requirements.txt",
+            "tools/docs/requirements.txt",
+            "tools/make/agent.mk",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(components <= set(classify([path]).selected_jobs))
+        python_consumers = components - {"e2e-unit", "soak-tools"}
+        self.assertTrue(
+            python_consumers
+            <= set(classify(["tools/ci/python_test_evidence.py"]).selected_jobs)
+        )
+
+    def test_product_full_inventory_keeps_every_published_support_contract(self):
+        supported = load_catalog()["full_cpu"]["support_contracts"]
+        self.assertEqual(
+            set(supported),
+            {
+                "Helm chart",
+                "Local deployment",
+                "Kubernetes Operator",
+                "agentgateway",
+                "Agent Router",
+                "AIBrix",
+                "Istio Gateway",
+                "llm-d",
+                "Streaming with Agent Router",
+            },
+        )
+        required = set(full_cpu_ids())
+        self.assertTrue(
+            {identity for ids in supported.values() for identity in ids} <= required
+        )
+        self.assertTrue(
+            {MODELS, IMAGE_CALIBRATION, "model-runtime", "storage"} <= required
+        )
+
     def test_full_cpu_preserves_affected_pr_and_publication_verifications(self):
         for path in (
             "e2e/profiles/route-action/profile.go",
@@ -379,9 +477,10 @@ class SelectionTests(unittest.TestCase):
             ("release", []),
             ("main", ["--publish"]),
         ):
-            with self.subTest(
-                profile=profile
-            ), tempfile.TemporaryDirectory() as temporary:
+            with (
+                self.subTest(profile=profile),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 output = Path(temporary) / "plan.json"
                 argv = [
                     "ci_plan.py",
@@ -393,13 +492,14 @@ class SelectionTests(unittest.TestCase):
                     str(output),
                     *flags,
                 ]
-                with patch.object(sys, "argv", argv), patch(
-                    "ci_plan.git_changed_files",
-                    return_value=["e2e/profiles/production-stack/profile.go"],
-                ) as changed, patch(
-                    "ci_plan.resolve_image_sources"
-                ), contextlib.redirect_stdout(
-                    io.StringIO()
+                with (
+                    patch.object(sys, "argv", argv),
+                    patch(
+                        "ci_plan.git_changed_files",
+                        return_value=["e2e/profiles/production-stack/profile.go"],
+                    ) as changed,
+                    patch("ci_plan.resolve_image_sources"),
+                    contextlib.redirect_stdout(io.StringIO()),
                 ):
                     self.assertEqual(plan_main(), 0)
                 changed.assert_not_called()

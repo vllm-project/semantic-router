@@ -15,12 +15,21 @@ func TestIstioProxyMetricsRequiresSuccessfulLiveSample(t *testing.T) {
 		wantError bool
 	}{
 		{"live", 200, "# TYPE envoy_server_live gauge\nenvoy_server_live 1\n", false},
+		{"Envoy empty labels", 200, "# TYPE envoy_server_live gauge\nenvoy_server_live{} 1\n", false},
+		{"labelled live sample", 200, "envoy_server_live{pod=\"router proxy\",revision=\"default\"} 1\n", false},
 		{"not ready", 200, "envoy_server_live 0\n", true},
+		{"Envoy not ready", 200, "envoy_server_live{} 0\n", true},
+		{"live followed by not ready", 200, "envoy_server_live{} 1\nenvoy_server_live{} 0\n", true},
+		{"not ready followed by live", 200, "envoy_server_live{} 0\nenvoy_server_live{} 1\n", true},
 		{"HTTP failure", 503, "envoy_server_live 1\n", true},
 		{"HTML", 200, "<html>envoy_server_live</html>", true},
 		{"comment only", 200, "# envoy_server_live 1\n", true},
 		{"unrelated metric", 200, "envoy_server_uptime 42\n", true},
+		{"similar metric name", 200, "envoy_server_live_extra{} 1\n", true},
+		{"unquoted label", 200, "envoy_server_live{pod=router} 1\n", true},
+		{"unterminated labels", 200, "envoy_server_live{pod=\"router\" 1\n", true},
 		{"invalid value", 200, "envoy_server_live NaN\n", true},
+		{"Envoy invalid value", 200, "envoy_server_live{} NaN\n", true},
 		{"missing", 200, "", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {

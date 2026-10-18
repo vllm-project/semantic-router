@@ -154,6 +154,20 @@ Scheduled runs select this explicit inventory; an absent comparison base does
 not mean every optional profile changed. Real PR changes still add affected
 profiles beyond the full baseline.
 
+The fixed CPU product inventory contains 35 contracts and expands to 45 physical
+PR jobs, including planning, images, and result gates. This is exceptional full
+qualification; a representative core change selects six automatic jobs and nine
+after affected approval. Five authoring contracts (`training`, `onnx-artifacts`,
+`bench-tools`, `learning-tools`, `soak-tools`) remain available on affected paths
+or explicit manual selection. They do not run unconditionally in full product
+qualification. Shared component runner, bootstrap, planner, and catalog changes
+select all ten component contracts; each still has an independent job. Published
+deployment support mappings and real-model/runtime qualification remain in full.
+Shared signal and corpus-loader changes also select their integration consumers;
+this refactor's broad diff therefore selects 51 contracts, 26 E2E profiles and
+53 physical jobs. Counts vary with the actual diff and do not measure
+runner-minute savings.
+
 The full CPU inventory lives in
 [`verification_catalog.yaml`](../../ci/verification_catalog.yaml). See the
 [workflow and job audit](ci-workflow-audit.md) for the evidence behind consolidation,

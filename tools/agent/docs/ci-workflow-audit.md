@@ -83,22 +83,23 @@ there was no diff base. At the exact audit baseline, that expanded the plan to
 profiles, including optional deployments outside the versioned full CPU
 inventory. Without an explicit comparison base or supplied changed paths,
 weekly, release qualification, and Main publication now select the versioned
-baseline: 40 contracts and 15 E2E profiles after retiring CK, adding the
-model-runtime and benchmark-tool contracts, and separating Operator source
-qualification from deployment. The release publication workflow
+baseline: 35 contracts and 15 E2E profiles after retiring CK, adding the
+model-runtime contract, separating Operator source qualification from deployment,
+and moving five authoring contracts to affected/manual selection. The release publication workflow
 does not itself invoke that test-plan mode. Experimental profiles remain
 available through affected PR changes and explicit manual selection. A full PR
 run and explicit Main publication still retain affected-path additions.
 
 Counts below compare the actual old and new versioned full CPU inventories.
-The old inventory has 38 contracts; the new one has 40. These are physical
-worker counts, not assertion counts. See [the job and cost audit](ci-job-cost-audit.md)
+The old inventory has 38 contracts; the new one has 35. The table below counts
+physical workers, not assertions. The complete physical job count is 64 → 45.
+See [the job and cost audit](ci-job-cost-audit.md)
 for all expanded jobs, representative PR/Main plans, measured setup, transfer
 estimates, and the cost of rerunning approved work.
 
 | Boundary | Old baseline workers | Final workers | What remains independent |
 | --- | ---: | ---: | --- |
-| Component contracts | 9 | 10 | One job per contract; CK retires, benchmark tools and model-runtime join full qualification |
+| Component contracts | 9 | 5 | One job per selected contract; five authoring contracts run when affected/manual, CK retires, model-runtime joins full qualification |
 | Kubernetes E2E profiles | 15 | 7 | All 15 profiles, clusters, teardown, and receipts |
 | Platform contracts | 2 | 1 | Model and image-routing reports and receipts |
 | Recipe workflow, including inventory/results | 10 | 6 | All 8 live CPU recipes and every authored probe |
@@ -112,6 +113,19 @@ paths; published-model qualification remains approved. Each component has a
 45-minute deadline including target-specific setup, and subprocess groups are
 retired after its
 commands.
+
+All ten component contracts remain available. `training`, `onnx-artifacts`,
+`bench-tools`, `learning-tools`, and `soak-tools` check authoring/tooling surfaces
+rather than every product deployment, so they are not unconditional full CPU
+obligations. Their own paths still select them; shared component execution,
+bootstrap, planner, and catalog changes select all ten. No published
+`support_contracts` mapping is removed. This refactor's broad changed paths
+therefore select 51 contracts and 53 jobs, including 26 E2E profiles after
+repairing missing shared-helper consumer mappings. The old selector on the
+same diff selected only 19 E2E profiles and 70 jobs; those counts are not a
+same-coverage cost comparison. The [cost audit](ci-job-cost-audit.md) separately
+aligns the profile inventory. Ordinary core changes still select six automatic
+jobs or nine jobs after affected approval.
 
 [execution_batches.py](../../ci/execution_batches.py) retains bounded batching
 for E2E/platform workers with compatible placement, runtime, device, image, and
@@ -156,7 +170,7 @@ or complete weekly/explicit publication qualification.
 | [security-scan.yml](../../../.github/workflows/security-scan.yml) | `security` | Tests trusted AST scanner behavior, scans candidate source using trusted policy, and scans rendered first-party Helm resources. | Retain affected automatic, weekly Monday 04:17 UTC, and manual runs. Remove the redundant full-plus-diff AST pass and advisory legacy regex scan. Keep SARIF collection plus the distinct HIGH/CRITICAL IaC gate. |
 | [test-and-build.yml](../../../.github/workflows/test-and-build.yml) | `test-and-build` | Helm offline rendering, Go module/vet checks, discovered core tests, and trained-selector parity. | Retain automatic core contracts. Move the real development-launcher smoke test to Local Stack, its deployment owner, so Core does not build a second router image. The legacy filename does not imply a remaining general image-build job. |
 | [dashboard-test.yml](../../../.github/workflows/dashboard-test.yml) | `dashboard-test` | Frontend/backend checks, WASM tests, controlled Evaluation browser tests, and build qualification with one dependency setup. | Retain affected automatic application coverage. Its controlled API/browser tests are not substitutes for the separately approved live dashboard E2E profile. |
-| [test-tools.yml](../../../.github/workflows/test-tools.yml) | `tests`, expanded from component batches | CLI, harness, provider simulator, routing/calibration authoring, benchmark tools, E2E framework, soak-client/proxy, training, ONNX, and model-runtime contracts. | Keep all 10 selected contracts in independent workers for isolation and precise reruns. Cheap contracts and tiny-fixture model-runtime tests are automatic; training/ONNX require approval. Remove the CK rewrite contract because the corresponding production surface was retired. |
+| [test-tools.yml](../../../.github/workflows/test-tools.yml) | `tests`, expanded from component batches | CLI, harness, provider simulator, routing/calibration authoring, benchmark tools, E2E framework, soak-client/proxy, training, ONNX, and model-runtime contracts. | Keep all 10 available contracts in independent workers when selected; five product/framework contracts belong to fixed full CPU, and five authoring contracts run on affected/manual selection. Cheap contracts and tiny-fixture model-runtime tests are automatic; training/ONNX require approval. Remove CK because its production surface was retired. |
 | [package-check.yml](../../../.github/workflows/package-check.yml) | `package` | Builds and inspects the final wheel/sdist, resources, installed CLI behavior, and source/version metadata; supplies the exact distribution for promotion. | Retain automatic affected packaging qualification and publication qualification. It catches packaging-only regressions that source tests cannot. Do not replace it with `twine check` alone. |
 | [test-storage.yml](../../../.github/workflows/test-storage.yml) | `storage` | Actual Redis, Valkey, Milvus, Qdrant, and PostgreSQL-backed contracts, with required inventory and skip rejection. | Move expensive service setup behind approval/full execution. Retain integration assertions; unit mocks do not establish storage behavior. |
 | [test-local.yml](../../../.github/workflows/test-local.yml) | `integration`, once for each selected local contract | CLI serve/routing/lifecycle, the development launcher routed smoke request, and stateful memory integration. | Approved/full. Keep `local.cli` and `local.memory` separate because they stop shared services or databases; share immutable candidate images rather than rebuild in Core. |
