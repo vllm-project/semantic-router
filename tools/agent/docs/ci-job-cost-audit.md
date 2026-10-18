@@ -26,7 +26,7 @@ The exact inputs below are:
 
 - Documentation: `README.md`.
 - Router core: `src/semantic-router/pkg/extproc/processor_req_body.go`.
-- CLI: `src/vllm-sr/cli/commands/serve.py`.
+- CLI: `src/vllm-sr/cli/commands/serve_options.py`.
 - Full CPU: the versioned full inventory with no additional affected profiles.
 - Old scheduled run: no comparison base, so the old CLI passes every tracked
   path to `make_plan`. The new CLI supplies no changed paths in this situation.
@@ -49,7 +49,7 @@ that qualified fixture exists.
 | Versioned full CPU PR, approved | 38 | 31 / 31 | 64 | 40 | Keep maintained product boundaries; retire four gateway qualifications, use one Operator deployment, and select five authoring contracts only when affected or requested. |
 | No-base daily Nightly versus weekly qualification | 64 | 31 / 31 | 100 | 49 | Qualification is 92 versus 41; eight success-only image/Helm publication jobs are included in each total. |
 | Main push, core input | 5 | 3 / 3 | 14 | 5 | Before: four image producers and three image publishers. After: automatic source/component evidence only. |
-| Main push, CLI input | 4 | 4 / 4 | 15 | 6 | Before: four image producers, four image publishers, one CLI publisher. Those nine jobs move out of routine pushes. |
+| Main push, CLI input | 5 | 4 / 4 | 17 | 6 | Before: five image producers, four image publishers, one CLI publisher and live Local Stack qualification. These eleven jobs move out of routine pushes. |
 | Explicit Main publication | Not available | 31 / 31 | Not available | 50 | Full qualification, six image publishers, two Helm jobs, one development CLI publisher. |
 
 Approval reruns the original PR workflow. The automatic six-job core attempt
