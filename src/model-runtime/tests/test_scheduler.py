@@ -431,6 +431,36 @@ def test_other_forward_errors_fail_only_their_batch():
         scheduler.stop()
 
 
+class OutOfMemoryModel(FakeModel):
+    def run(self, items):
+        import torch
+
+        raise torch.OutOfMemoryError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+
+def test_a_forward_out_of_device_memory_answers_request_too_large():
+    scheduler = Scheduler(
+        OutOfMemoryModel(), batcher(), device_fault=lambda error: False
+    )
+    scheduler.start()
+    try:
+        future = scheduler.submit([item("a", 4)], deadline=None)
+        with pytest.raises(RuntimeServiceError) as caught:
+            future.result(timeout=5)
+        assert caught.value.code == "request_too_large"
+        assert scheduler.failure is None
+    finally:
+        scheduler.stop()
+
+
+def test_a_shared_forward_out_of_device_memory_answers_overloaded():
+    import torch
+
+    error = scheduler_module._out_of_memory(torch.OutOfMemoryError("oom"), jobs=2)
+    assert error is not None and error.code == "overloaded"
+    assert scheduler_module._out_of_memory(RuntimeError("other"), jobs=1) is None
+
+
 class WorkerModel(FakeModel):
     """Runs on any thread; records the threads and the most batches in flight at once."""
 

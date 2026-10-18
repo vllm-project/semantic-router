@@ -175,6 +175,11 @@ def _wrap_varlen(fn: Any) -> Any:
     accepted = set(inspect.signature(fn).parameters)
 
     def attend(query, key, value, packed, *, scale, groups):
+        if query.dtype not in (torch.float16, torch.bfloat16):
+            # flash attention takes 16-bit inputs only (FP32 at --dtype float32)
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
         # Torch 2.10 uses the default scale and infers GQA from the head counts.
         if "scale" not in accepted and scale != query.shape[-1] ** -0.5:
             return varlen_attention_ref(

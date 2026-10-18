@@ -442,8 +442,9 @@ class Scheduler:
             _timed(members, sequence, started, time.monotonic())
             if self.device_fault(exc):
                 self._failure = exc
+            error = _out_of_memory(exc, len(members)) or exc
             for pending in members:
-                _fail(pending.future, exc)
+                _fail(pending.future, error)
             return
         ended = time.monotonic()
         _timed(members, sequence, started, ended)
@@ -504,6 +505,20 @@ def _resolve(future: Future[Results[Any]], result: Results[Any]) -> None:
     """Answer ``future`` unless it is answered or its caller cancelled it (the client left)."""
     with contextlib.suppress(InvalidStateError):
         future.set_result(result)
+
+
+def _out_of_memory(error: BaseException, jobs: int) -> RuntimeServiceError | None:
+    """A forward out of device memory as the request's answer: too large alone, overloaded beside other requests."""
+    if type(error).__name__ != "OutOfMemoryError":  # torch's, on any accelerator
+        return None
+    if jobs == 1:
+        return RuntimeServiceError(
+            "request_too_large",
+            "the request needs more device memory than the model has free",
+        )
+    return RuntimeServiceError(
+        "overloaded", "the batch holding this request ran out of device memory"
+    )
 
 
 def _fail(future: Future[Results[Any]], error: BaseException) -> None:

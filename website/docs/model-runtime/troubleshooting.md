@@ -148,16 +148,26 @@ serving.
 
 `GET /v1/models` shows each model's self-check under `golden`. `matched`
 means its answers equal the released answers for that kind of device.
+`golden.reference` identifies the recorded reference that was checked. When a
+hardware reference is recorded, it takes precedence over the device-class
+reference: for example `cpu:x86_64:avx2:bf16_emulated` or `cuda:sm_89`. Other
+hardware keeps using the existing `cpu`, `rocm` or `cuda` reference when available.
+CPU keys use PyTorch's selected instruction set and native or emulated BF16
+capability. A mismatching selected reference still fails startup; the runtime
+does not try another reference or relax the tolerance.
+
 `unverified` means the model serves, but the runtime can't vouch for that:
 
 - **No `reason`, and `golden.reference` is empty:** there are no released
   answers for this device, for example for a model that is not built in or a
-  GPU without a validated record (CUDA). The runtime checked only that the
+  GPU architecture without a recorded reference. The runtime checked only that the
   answers are well formed and the same on every run.
-- **`reason` starts with `kernel choices not applied`:** on AMD Instinct
-  MI300X and MI325X GPUs, Decision 2.0 and Vela 2.0 run their kernels with
-  the configurations their release recorded with FLA 0.5.2, so every process
-  gives the same answers. When those can't run here, the model still loads,
+- **`reason` starts with `kernel choices not applied`:** models with recorded
+  GPU kernel choices run with those configurations so restarts reproduce
+  the recorded answers. The records also name the dependency versions used
+  for qualification. These include Decision 2.0 and
+  Vela 2.0 on AMD Instinct MI300X/MI325X, and D3-edge on NVIDIA L4.
+  When those can't run here, the model still loads,
   the log says `... runs without its recorded kernel choices: ...`, and its
   answers may differ from the released ones.
 
