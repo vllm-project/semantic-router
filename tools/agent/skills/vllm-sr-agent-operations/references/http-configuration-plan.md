@@ -103,6 +103,7 @@ It is not a bare candidate object or a JSON-encoded string containing that objec
 ```bash
 python3 - <<'PY'
 import copy
+import difflib
 import json
 from pathlib import Path
 
@@ -124,15 +125,18 @@ new = "General requests use the default model"
 assert decisions[index]["description"] == old
 candidate = copy.deepcopy(baseline)
 candidate["routing"]["decisions"][index]["description"] = new
-for name, document in (("baseline.pretty.json", baseline), ("candidate.json", candidate)):
-    Path(name).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
+baseline_text = json.dumps(baseline, indent=2, sort_keys=True) + "\n"
+candidate_text = json.dumps(candidate, indent=2, sort_keys=True) + "\n"
+Path("candidate.json").write_text(candidate_text)
+Path("candidate.diff").write_text("".join(difflib.unified_diff(
+    baseline_text.splitlines(keepends=True), candidate_text.splitlines(keepends=True),
+    fromfile="baseline", tofile="candidate")))
 # JSON is also a YAML document: preserve the full config without another parser.
 Path("plan-request.json").write_text(json.dumps({
     "yaml": json.dumps(candidate), "mode": "replace"}) + "\n")
 print(f"default-route.description: {old!r} -> {new!r}")
 PY
 
-diff -u baseline.pretty.json candidate.json > candidate.diff || [[ $? == 1 ]]
 cat candidate.diff
 ```
 
@@ -144,9 +148,37 @@ others. This example deliberately submits the complete candidate with `replace`.
 ## 4. Check the exact candidate without applying it
 
 ```bash
-request -H 'Content-Type: application/json' \
-  --data-binary @plan-request.json \
-  "$ROUTER_ORIGIN/api/v1/config/plan" > plan.json
+python3 - <<'PY'
+import difflib
+import json
+import os
+import subprocess
+from pathlib import Path
+
+# Read once: inspect and send these same bytes, without reopening the request.
+request_bytes = Path("plan-request.json").read_bytes()
+payload = json.loads(request_bytes)
+submitted = json.loads(payload["yaml"])  # This walkthrough writes JSON as YAML.
+candidate = json.loads(Path("candidate.json").read_text())
+if payload.get("mode") != "replace" or submitted != candidate:
+    raise SystemExit("Request differs from reviewed candidate; no plan request sent.")
+baseline = json.loads(Path("baseline.json").read_text())
+baseline_text = json.dumps(baseline, indent=2, sort_keys=True) + "\n"
+submitted_text = json.dumps(submitted, indent=2, sort_keys=True) + "\n"
+expected_diff = "".join(difflib.unified_diff(
+    baseline_text.splitlines(keepends=True), submitted_text.splitlines(keepends=True),
+    fromfile="baseline", tofile="candidate"))
+if Path("candidate.diff").read_text() != expected_diff:
+    raise SystemExit("Review diff is stale; no plan request sent.")
+command = ["curl", "--fail-with-body", "--silent", "--show-error",
+           "-H", "Content-Type: application/json", "--data-binary", "@-"]
+if os.environ.get("ROUTER_TOKEN"):
+    command += ["-H", "Authorization: Bearer " + os.environ["ROUTER_TOKEN"]]
+command += [os.environ["ROUTER_ORIGIN"] + "/api/v1/config/plan"]
+with Path("plan.json").open("wb") as output:
+    subprocess.run(command, input=request_bytes, stdout=output, check=True)
+PY
+
 request "$ROUTER_ORIGIN/api/v1/config/hash" > after-hash.json
 request "$ROUTER_ORIGIN/api/v1/config/versions" > after-versions.json
 
@@ -173,7 +205,11 @@ PY
 
 Stop here. Retain `plan-request.json`, `candidate.json`, the reviewed diff and
 responses together: the plan returns identities, not a field-level diff. The
-local comparison establishes the intended change; `valid: true` alone does not.
+submission step checks the request document against the candidate, checks its
+diff against the reviewed diff, and sends the same in-memory request bytes to
+curl through stdin. A mismatch stops before the plan call. These checks bind
+the contents; they do not establish that a person read or approved the diff.
+The local review establishes the intended change; `valid: true` alone does not.
 ETags identify bytes, so do not compare the candidate ETag with a hash of your
 locally formatted JSON and assume a mismatch means different configuration.
 
