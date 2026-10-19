@@ -11,6 +11,8 @@ from .chat_request import ChatRequest
 from .chat_wire import build_chat_usage, chat_contains
 
 MARKER = "__mock_vllm_stop_sequence__"
+# Synthetic SGLang 0.5.22 wire variant: matched_stop and buffered weight ranges.
+SGLANG_MARKER = "__mock_sglang_stop_sequence__"
 ANSWER = "ALPHA BRAVO "
 
 
@@ -26,7 +28,7 @@ def matched_stop(req: ChatRequest) -> str | None:
 
 def buffered_reply(req: ChatRequest, created_ts: int, stop: str) -> dict[str, Any]:
     """vLLM 0.26.0 reports the matched stop string in choices[].stop_reason."""
-    return {
+    reply = {
         "id": "chatcmpl-mock-vllm-stop",
         "object": "chat.completion",
         "created": created_ts,
@@ -42,6 +44,13 @@ def buffered_reply(req: ChatRequest, created_ts: int, stop: str) -> dict[str, An
         ],
         "usage": build_chat_usage(req, ANSWER),
     }
+    if chat_contains(req, SGLANG_MARKER):
+        reply["choices"][0]["matched_stop"] = reply["choices"][0].pop("stop_reason")
+        reply["metadata"] = {
+            "weight_version": "default",
+            "weight_versions": [{"version": "default", "start": 0, "end": 17}],
+        }
+    return reply
 
 
 def streamed_reply(req: ChatRequest, created_ts: int, stop: str) -> Iterator[str]:
@@ -58,7 +67,9 @@ def streamed_reply(req: ChatRequest, created_ts: int, stop: str) -> Iterator[str
         ({"content": " "}, "stop", stop),
     ):
         choice = {"index": 0, "delta": delta, "logprobs": None, "finish_reason": finish}
-        if stop_reason is not None:
+        if chat_contains(req, SGLANG_MARKER):
+            choice["matched_stop"] = stop_reason
+        elif stop_reason is not None:
             choice["stop_reason"] = stop_reason
         yield "data: " + json.dumps(
             dict(base, choices=[choice]), separators=(",", ":")

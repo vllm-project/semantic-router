@@ -21,8 +21,12 @@ func openProtocolCodecProviderSession(
 	backendOpts := opts
 	switch backendFormat {
 	case "openai.chat.v1", "openai.responses.v1":
+		namespace := "default"
+		if opts.Profile == "provider-protocols" {
+			namespace = "provider-protocols-system"
+		}
 		backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
-			Namespace: "default", Name: "provider-mocker", ServicePort: "8000",
+			Namespace: namespace, Name: "provider-mocker", ServicePort: "8000",
 		}
 	case "anthropic.messages.v1":
 		backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{

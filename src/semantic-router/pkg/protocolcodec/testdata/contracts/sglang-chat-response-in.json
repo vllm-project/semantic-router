@@ -1,0 +1,23 @@
+{
+  "source": "SGLang 0.5.22, Qwen/Qwen3-0.6B, sglang-A chat_nonstream/chat_stream; choices copied from providers fixtures",
+  "buffered_choice": {
+    "index": 0,
+    "message": {
+      "role": "assistant",
+      "content": "Golden leaves fall,  \nThe air turns crisp,  \nA season of change.",
+      "reasoning_content": null
+    },
+    "logprobs": null,
+    "finish_reason": "stop",
+    "matched_stop": 151645
+  },
+  "stream_choice": {
+    "index": 0,
+    "delta": {
+      "reasoning_content": null
+    },
+    "logprobs": null,
+    "finish_reason": "stop",
+    "matched_stop": 151645
+  }
+}

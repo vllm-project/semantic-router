@@ -133,7 +133,10 @@ async def chat_completions(request: Request):
     if vllm_error is not None:
         return vllm_error
     vllm_stop = vllm_fixture.matched_stop(req)
-    if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
+    if vllm_stop and (
+        chat_contains(req, vllm_fixture.MARKER)
+        or chat_contains(req, vllm_fixture.SGLANG_MARKER)
+    ):
         if req.stream:
             return StreamingResponse(
                 vllm_fixture.streamed_reply(req, created_ts, vllm_stop),

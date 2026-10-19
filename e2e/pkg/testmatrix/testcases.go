@@ -113,6 +113,7 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
+	"protocol-codec-sglang-stop-sequence",
 	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.

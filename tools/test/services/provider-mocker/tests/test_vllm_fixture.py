@@ -17,6 +17,7 @@ from provider_mocker.vllm_fixture import (
     MIDSTREAM_ERROR_MARKER,
     MIDSTREAM_ERROR_SPLIT_MARKER,
     REASONING_ORDER_MARKER,
+    SGLANG_MARKER,
     SPLIT_PAUSE_SECONDS,
     STREAM_ERROR_MARKER,
     STREAM_ERROR_SPLIT_MARKER,
@@ -45,11 +46,12 @@ def choice_frames(sse: str) -> list[tuple[str, str | None]]:
     ]
 
 
+@pytest.mark.parametrize("marker", [MARKER, SGLANG_MARKER])
 @pytest.mark.parametrize("stream", [False, True])
-async def test_vllm_stop_sequence_fixture(stream):
+async def test_vllm_stop_sequence_fixture(stream, marker):
     request = {
         "model": "openai/gpt-oss-20b",
-        "messages": [{"role": "user", "content": MARKER}],
+        "messages": [{"role": "user", "content": marker}],
         "stop": ["CHARLIE"],
         "stream": stream,
     }
@@ -66,14 +68,20 @@ async def test_vllm_stop_sequence_fixture(stream):
             ]
             final = chunks[-1]["choices"][0]
             assert final["finish_reason"] == "stop"
-            assert final["stop_reason"] == "CHARLIE"
+            field = "matched_stop" if marker == SGLANG_MARKER else "stop_reason"
+            assert final[field] == "CHARLIE"
             assert all(
                 "stop_reason" not in chunk["choices"][0] for chunk in chunks[:-1]
             )
         else:
             choice = response.json()["choices"][0]
             assert choice["finish_reason"] == "stop"
-            assert choice["stop_reason"] == "CHARLIE"
+            field = "matched_stop" if marker == SGLANG_MARKER else "stop_reason"
+            assert choice[field] == "CHARLIE"
+            if marker == SGLANG_MARKER:
+                assert response.json()["metadata"]["weight_versions"] == [
+                    {"version": "default", "start": 0, "end": 17}
+                ]
             assert choice["message"]["content"] == "ALPHA BRAVO "
 
         # Without a stop list, or without the marker, Chat replies stay ordinary.
@@ -84,6 +92,7 @@ async def test_vllm_stop_sequence_fixture(stream):
             reply = await client.post("/v1/chat/completions", json=ordinary)
             assert reply.status_code == 200
             assert "stop_reason" not in reply.text
+            assert "matched_stop" not in reply.text
 
 
 async def test_vllm_reasoning_order_fixture():
