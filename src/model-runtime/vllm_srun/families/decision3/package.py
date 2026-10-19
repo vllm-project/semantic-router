@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...quantization import METADATA, PACK
+from ...quantization import FP4_PER_BYTE, METADATA, PACK
 from ...registry.artifacts import (
     named_files,
     read_json,
@@ -241,8 +241,9 @@ def tensor_groups(
 ) -> tuple[dict[str, int], str, str | None]:
     """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes.
 
-    A quantized layer (``quantization.py``) counts its weights, an int4 one eight
-    per ``weight_packed`` word; scales, zero points and shapes are not parameters.
+    A quantized layer (``quantization.py``) counts its weights: an int4 one eight
+    per ``weight_packed`` int32 word, an NVFP4 one two per uint8 byte; scales,
+    global scales, zero points and shapes are not parameters.
     """
     counts: dict[str, int] = {}
     prefixes: dict[str, set[str]] = {"text": set(), "vision": set()}
@@ -268,7 +269,10 @@ def tensor_groups(
             leaf = tensor.rpartition(".")[2]
             if leaf in METADATA:
                 continue
-            size = math.prod(shape) * (PACK if leaf == "weight_packed" else 1)
+            per = 1
+            if leaf == "weight_packed":
+                per = FP4_PER_BYTE if meta.get("dtype") == "U8" else PACK
+            size = math.prod(shape) * per
             counts[group] = counts.get(group, 0) + size
     if len(prefixes["text"]) != 1 or len(prefixes["vision"]) > 1:
         raise PackageError("checkpoint tensors use mixed name prefixes")
