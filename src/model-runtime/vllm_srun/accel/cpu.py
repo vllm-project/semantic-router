@@ -127,6 +127,13 @@ class CPUAccelerator(Accelerator):
     def torch_device(self, device: DeviceInfo) -> torch.device:
         return torch.device("cpu")
 
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        if not device.arch:
+            return None
+        capability = torch.backends.cpu.get_cpu_capability().lower().replace(" ", "_")
+        bf16 = "bf16_native" if device.bf16 else "bf16_emulated"
+        return f"cpu:{device.arch}:{capability}:{bf16}"
+
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = reference_kernels("cpu")
         kernels.register(
@@ -162,6 +169,8 @@ class CPUAccelerator(Accelerator):
                 "model's CPU kernels need; serve it with a PyTorch that has LAPACK "
                 "(the router's CPU image) or on a GPU device"
             )
+        if capability == "nvfp4":
+            return f"{device.label}: NVFP4 packages need FP4 tensor cores (a Blackwell GPU)"
         return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:

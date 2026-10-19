@@ -2,12 +2,13 @@ name: Pull Request
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
 permissions:
   contents: read
   actions: read
+  issues: read
   pull-requests: read
 
 concurrency:
@@ -21,23 +22,23 @@ jobs:
     permissions:
       contents: read
       actions: read
+      issues: read
       pull-requests: read
       security-events: write
     with:
       profile: pr
-      full: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
       draft: >-
         ${{ github.event.pull_request.draft
             && !startsWith(github.head_ref, 'mergify/merge-queue/') }}
     secrets: inherit
 
   pr-gate:
-    name: PR Gate
+    name: ${{ needs.ci.outputs.publisher_ready == 'true' && 'CI Execution' || 'PR Gate' }}
     if: always()
     needs: ci
     runs-on: ubuntu-24.04
     steps:
-      - name: Require the complete planned qualification
+      - name: Require successful reconciliation of executed contracts
         env:
           RESULT: ${{ needs.ci.result }}
         run: test "$RESULT" = success

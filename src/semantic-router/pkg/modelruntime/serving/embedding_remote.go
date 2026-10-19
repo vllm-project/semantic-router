@@ -107,9 +107,10 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 func remoteConnector(cfg embedding.OpenAICompatibleConfig) (string, error) {
 	auth := sha256.Sum256([]byte(cfg.APIKey))
 	encoded, err := json.Marshal(struct {
-		Endpoint, Model, Auth, Client                         string
-		TimeoutSeconds, Retries, Dimension, ExpectedDimension int
-		MaxResponseBytes                                      int64
+		Endpoint, Model, Auth, Client         string
+		TimeoutSeconds                        float64
+		Retries, Dimension, ExpectedDimension int
+		MaxResponseBytes                      int64
 	}{cfg.BaseURL, cfg.Model, hex.EncodeToString(auth[:]), fmt.Sprintf("%p", cfg.HTTPClient), cfg.TimeoutSeconds, cfg.MaxRetries, cfg.Dimensions, cfg.ExpectedDimension, cfg.MaxResponseBytes})
 	if err != nil {
 		return "", err

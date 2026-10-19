@@ -306,11 +306,25 @@ def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
     counts = {"text": 0, "vision": 0}
     for name, tensor in tensors.items():
         counts["vision" if name.startswith("visual.") else "text"] += tensor.numel()
-    readout = pkg.MAX_OPTIONS * text["hidden_size"]
+    write_manifest(root, counts)
+    return root
+
+
+def write_manifest(root: Path, counts: dict[str, int]) -> None:
+    """``MODEL_MANIFEST.json`` over every file in ``root``, with ``counts`` text and vision parameters."""
+    decision = json.loads((root / "decision_config.json").read_text(encoding="utf-8"))
+    hidden = json.loads((root / "config.json").read_text(encoding="utf-8"))[
+        "text_config"
+    ]["hidden_size"]
+    readout = pkg.MAX_OPTIONS * hidden
     identity_files = {
         name: sha256(root / name) for name in ("model.safetensors", *pkg.IDENTITY_FILES)
     }
-    names = sorted(path.name for path in root.iterdir() if path.is_file())
+    names = sorted(
+        path.name
+        for path in root.iterdir()
+        if path.is_file() and path.name != pkg.MANIFEST_NAME
+    )
     manifest = {
         "schema": pkg.MANIFEST_SCHEMA,
         "model_name": root.name,
@@ -338,4 +352,187 @@ def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
     (root / pkg.MANIFEST_NAME).write_text(
         json.dumps(manifest, indent=1) + "\n", encoding="utf-8"
     )
+
+
+# The projections released quantized d3 packages hold (compressed-tensors targets).
+INT4_TARGETS = (
+    r"re:(.*\.)?layers\.\d+\.mlp\.(gate|up|down)_proj$",
+    r"re:(.*\.)?layers\.\d+\.self_attn\.(q|k|v|o)_proj$",
+    r"re:(.*\.)?layers\.\d+\.linear_attn\.(in_proj_qkv|in_proj_z|out_proj)$",
+)
+
+
+def pack_int4(values: torch.Tensor, dim: int = 1) -> torch.Tensor:
+    """Signed 4-bit ``values`` packed as compressed-tensors does: eight per int32 word along ``dim``."""
+    if dim == 0:
+        rows = -(-values.shape[0] // 8) * 8
+        padded = torch.zeros(rows, values.shape[1], dtype=values.dtype)
+        padded[: values.shape[0]] = values
+        return pack_int4(padded.t()).t().contiguous()
+    nibbles = (values.to(torch.int64) + 8).reshape(values.shape[0], -1, 8)
+    words = sum(nibbles[..., i] << (4 * i) for i in range(8))
+    return torch.where(words >= 1 << 31, words - (1 << 32), words).to(torch.int32)
+
+
+def quantize_int4(
+    weight: torch.Tensor, group: int, symmetric: bool
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    """Round-to-nearest int4 per group: (values in [-8, 7], BF16 scales, zero points or None)."""
+    rows, columns = weight.shape
+    grouped = weight.float().reshape(rows, columns // group, group)
+    if symmetric:
+        scale = (grouped.abs().amax(-1) / 7).clamp(min=1e-8)
+        zero = None
+    else:
+        low, high = grouped.amin(-1), grouped.amax(-1)
+        scale = ((high - low) / 15).clamp(min=1e-8)
+        zero = (torch.round(-low / scale) - 8).clamp(-8, 7)
+    scale = scale.to(torch.bfloat16)
+    shift = 0 if zero is None else zero[..., None]
+    values = (torch.round(grouped / scale.float()[..., None]) + shift).clamp(-8, 7)
+    return (
+        values.reshape(rows, columns).to(torch.int8),
+        scale,
+        None if zero is None else zero.to(torch.int8),
+    )
+
+
+# The calibrated input global scale of an NVFP4 fixture: FP8 x FP4 range over an activation amax of 32.
+NVFP4_INPUT_GLOBAL = 448.0 * 6.0 / 32.0
+
+
+def write_quantized_fixture(
+    source: Path,
+    output: Path,
+    scheme: str = "int4",
+    group: int = 32,
+    symmetric: bool = True,
+    dequantized: bool = False,
+) -> Path:
+    """``source`` with its projections in compressed-tensors int4 (W4A16), FP8 (``scheme="float8"``,
+    FP8_DYNAMIC) or NVFP4 (``scheme="nvfp4"``), or (``dequantized``) a BF16 package holding exactly the
+    weights the quantized one holds. NVFP4 activations get a calibrated global scale of
+    ``NVFP4_INPUT_GLOBAL`` (blocks up to 32 in magnitude quantize without saturating).
+    """
+    import shutil
+
+    from safetensors.torch import load_file
+
+    from ..quantization import INT4, QuantizedWeights
+
+    root = Path(output)
+    root.mkdir(parents=True, exist_ok=False)
+    for path in source.iterdir():
+        if path.is_file() and path.name not in ("model.safetensors", pkg.MANIFEST_NAME):
+            shutil.copy(path, root / path.name)
+    holds = QuantizedWeights(INT4, targets=INT4_TARGETS, ignore=()).holds
+    tensors: dict[str, torch.Tensor] = {}
+    counts = {"text": 0, "vision": 0}
+    for name, tensor in load_file(str(source / "model.safetensors")).items():
+        counts["vision" if name.startswith("visual.") else "text"] += tensor.numel()
+        layer = name.removesuffix(".weight")
+        if not (name.endswith(".weight") and holds(layer)):
+            tensors[name] = tensor
+            continue
+        if scheme == "nvfp4":
+            from ..accel import nvfp4
+
+            global_ = nvfp4.global_scale(tensor)
+            packed, scale = nvfp4.quantize(tensor, global_)
+            if dequantized:
+                weight = nvfp4.dequantize(packed, scale, global_)
+                tensors[name] = weight.to(torch.bfloat16)
+            else:
+                tensors[f"{layer}.weight_packed"] = packed
+                tensors[f"{layer}.weight_scale"] = scale
+                tensors[f"{layer}.weight_global_scale"] = global_
+                tensors[f"{layer}.input_global_scale"] = torch.tensor(
+                    [NVFP4_INPUT_GLOBAL]
+                )
+            continue
+        if scheme == "float8":
+            scale = (tensor.float().abs().amax(1, keepdim=True) / 448).clamp(min=1e-12)
+            weight = (tensor.float() / scale).to(torch.float8_e4m3fn)
+            if dequantized:
+                tensors[name] = (weight.float() * scale).to(torch.bfloat16)
+            else:
+                tensors[name] = weight
+                tensors[f"{layer}.weight_scale"] = scale
+            continue
+        values, scale, zero = quantize_int4(tensor, group, symmetric)
+        if dequantized:
+            shift = 0 if zero is None else zero.float().repeat_interleave(group, 1)
+            weight = (values.float() - shift) * scale.float().repeat_interleave(
+                group, 1
+            )
+            tensors[name] = weight.to(torch.bfloat16)
+            continue
+        tensors[f"{layer}.weight_packed"] = pack_int4(values)
+        tensors[f"{layer}.weight_scale"] = scale
+        tensors[f"{layer}.weight_shape"] = torch.tensor(tensor.shape)
+        if zero is not None:
+            tensors[f"{layer}.weight_zero_point"] = pack_int4(zero, dim=0)
+    save(tensors, root / "model.safetensors")
+    if not dequantized:
+        config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+        int4 = {
+            "weights": {
+                "num_bits": 4,
+                "type": "int",
+                "symmetric": symmetric,
+                "strategy": "group",
+                "group_size": group,
+                "dynamic": False,
+                "actorder": None,
+            },
+            "input_activations": None,
+        }
+        float8 = {
+            "weights": {
+                "num_bits": 8,
+                "type": "float",
+                "symmetric": True,
+                "strategy": "channel",
+                "dynamic": False,
+            },
+            "input_activations": {
+                "num_bits": 8,
+                "type": "float",
+                "symmetric": True,
+                "strategy": "token",
+                "dynamic": True,
+            },
+        }
+        fp4 = {
+            "num_bits": 4,
+            "type": "float",
+            "symmetric": True,
+            "strategy": "tensor_group",
+            "group_size": 16,
+            "scale_dtype": "torch.float8_e4m3fn",
+            "block_structure": None,
+            "actorder": None,
+        }
+        nvfp4_args = {
+            "weights": {**fp4, "dynamic": False},
+            "input_activations": {**fp4, "dynamic": "local"},
+        }
+        formats = {"float8": "float-quantized", "nvfp4": "nvfp4-pack-quantized"}
+        args = {"float8": float8, "nvfp4": nvfp4_args}
+        config["quantization_config"] = {
+            "quant_method": "compressed-tensors",
+            "format": formats.get(scheme, "pack-quantized"),
+            "config_groups": {
+                "group_0": {
+                    "targets": list(INT4_TARGETS),
+                    **args.get(scheme, int4),
+                    "output_activations": None,
+                }
+            },
+            "ignore": ["re:.*visual\\..*"],
+        }
+        (root / "config.json").write_text(
+            json.dumps(config, indent=2) + "\n", encoding="utf-8"
+        )
+    write_manifest(root, counts)
     return root
