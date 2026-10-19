@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
 
-from manual_ci import GitHubClient, ManualCIError, read_artifact
+from manual_ci import PAGE_SIZE, GitHubClient, ManualCIError, read_artifact
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -21,6 +21,9 @@ APP_ID = 15368  # GitHub Actions; also the branch-protection check owner.
 SHA = re.compile(r"[0-9a-f]{40}")
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_.-]{1,160}")
 CAPABILITIES = (".github/workflows/ci-status.yml", "tools/ci/pr_ci_status.py")
+MAX_PAGES = 100
+MAX_IDENTIFIERS = 1000
+COMMENT_ITEM_LIMIT = 30
 
 
 class StatusClient(GitHubClient):
@@ -42,13 +45,15 @@ class StatusClient(GitHubClient):
 
 def pages(client, endpoint: str, key: str | None = None):
     separator = "&" if "?" in endpoint else "?"
-    for page in range(1, 101):
-        response = client.request(f"{endpoint}{separator}per_page=100&page={page}")
+    for page in range(1, MAX_PAGES + 1):
+        response = client.request(
+            f"{endpoint}{separator}per_page={PAGE_SIZE}&page={page}"
+        )
         items = response[key] if key else response
         if not isinstance(items, list):
             raise ManualCIError("Invalid GitHub collection response.")
         yield from items
-        if len(items) < 100:
+        if len(items) < PAGE_SIZE:
             return
     raise ManualCIError("GitHub collection exceeds the reconciliation limit.")
 
@@ -129,7 +134,7 @@ def artifact(client, repo: str, run: dict, name: str, filename: str, limit: int)
 def identifiers(value) -> list[str]:
     if (
         not isinstance(value, list)
-        or len(value) > 1000
+        or len(value) > MAX_IDENTIFIERS
         or any(
             not isinstance(item, str) or not IDENTIFIER.fullmatch(item)
             for item in value
@@ -277,10 +282,13 @@ def presentation(
         lines += [
             "",
             "Pending qualification: "
-            + ", ".join(f"`{item}`" for item in plan["deferred_verifications"][:30])
+            + ", ".join(
+                f"`{item}`"
+                for item in plan["deferred_verifications"][:COMMENT_ITEM_LIMIT]
+            )
             + (
-                f" (and {len(plan['deferred_verifications']) - 30} more; see the CI plan)"
-                if len(plan["deferred_verifications"]) > 30
+                f" (and {len(plan['deferred_verifications']) - COMMENT_ITEM_LIMIT} more; see the CI plan)"
+                if len(plan["deferred_verifications"]) > COMMENT_ITEM_LIMIT
                 else ""
             )
             + ".",
@@ -290,10 +298,10 @@ def presentation(
         lines += [
             "",
             "Pending image builds: "
-            + ", ".join(f"`{item}`" for item in images[:30])
+            + ", ".join(f"`{item}`" for item in images[:COMMENT_ITEM_LIMIT])
             + (
-                f" (and {len(images) - 30} more; see the CI plan)"
-                if len(images) > 30
+                f" (and {len(images) - COMMENT_ITEM_LIMIT} more; see the CI plan)"
+                if len(images) > COMMENT_ITEM_LIMIT
                 else ""
             )
             + ".",

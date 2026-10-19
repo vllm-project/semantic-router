@@ -17,11 +17,11 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 
 from check_ci_gate import evaluate_gate, gate_report, render_summary  # noqa: E402
 from ci_plan import component_batches, digest  # noqa: E402
-from execution_batches import (
+from execution_batches import (  # noqa: E402
     e2e_batches,
     expected_dispatch_jobs,
     platform_batches,
-)  # noqa: E402
+)
 from test_ci_artifact_selection import write_builds, write_receipts  # noqa: E402
 from test_ci_gate import SHA, completed  # noqa: E402
 

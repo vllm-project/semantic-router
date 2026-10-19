@@ -19,7 +19,7 @@ from pr_ci_status import (
     PREFIX,
     main,
     reconcile,
-)  # noqa: E402
+)
 
 REPO = "example/router"
 HEAD, BASE, MERGE = "a" * 40, "b" * 40, "c" * 40
@@ -338,18 +338,19 @@ class PRStatusTests(unittest.TestCase):
         self.assertEqual(client.writes, [])
 
     def test_base_or_merge_changing_before_write_cannot_publish_success(self):
+        revalidation_read = 2
         for field in ("base", "merge"):
             with self.subTest(field=field):
                 client = Client()
                 original = client.request
                 reads = 0
 
-                def request(endpoint, **kwargs):
+                def request(endpoint, *, original=original, field=field, **kwargs):
                     nonlocal reads
                     result = original(endpoint, **kwargs)
                     if endpoint.endswith("/pulls/3"):
                         reads += 1
-                        if reads == 2:
+                        if reads == revalidation_read:
                             if field == "base":
                                 result["base"]["sha"] = "f" * 40
                             else:

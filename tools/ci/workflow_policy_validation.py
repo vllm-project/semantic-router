@@ -18,6 +18,7 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 LOCAL_WORKFLOW_PREFIX = "./.github/workflows/"
 REQUIRED_APPROVAL_CONDITION = "#approved-reviews-by >= 2"
 RELEASE_IMAGES = set(PRODUCTION_RELEASE_IMAGES)
+STATUS_PUBLISHER_TIMEOUT_MINUTES = 5
 PR_EXECUTION_NAME = (
     "${{ needs.ci.outputs.publisher_ready == 'true' "
     "&& 'CI Execution' || 'PR Gate' }}"
@@ -147,7 +148,7 @@ def validate_status_publisher(
         "cancel-in-progress": False,
     }:
         errors.append("ci-status.yml must serialize observations of the same PR run")
-    if job.get("timeout-minutes") != 5:
+    if job.get("timeout-minutes") != STATUS_PUBLISHER_TIMEOUT_MINUTES:
         errors.append("ci-status.yml must finish without occupying a waiting runner")
 
 
