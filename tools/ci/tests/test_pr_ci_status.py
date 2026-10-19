@@ -298,12 +298,94 @@ class PRStatusTests(unittest.TestCase):
                 "name": "PR Gate",
                 "app": {"id": APP_ID},
                 "external_id": f"{PREFIX}3:101:1",
+                "status": "in_progress",
             }
         ]
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "running")
         self.assertTrue(result["check"]["external_id"].endswith(":2"))
-        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs")
+        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs/77")
+        self.assertEqual(client.writes[0][2], {"method": "PATCH"})
+
+    def test_approval_completion_resolves_latest_pending_check_in_the_same_run(self):
+        client = Client()
+        client.run["run_attempt"] = 3
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        client.checks = [
+            {
+                "id": identity,
+                "name": "PR Gate",
+                "app": {"id": APP_ID},
+                "external_id": f"{PREFIX}{external}",
+                "status": status,
+            }
+            for identity, external, status in (
+                (77, "3:101:1", "in_progress"),
+                (78, "3:101:2", "in_progress"),
+                (79, "3:101:2", "completed"),
+                (80, "3:102:2", "in_progress"),
+                (81, "4:101:2", "in_progress"),
+            )
+        ]
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        endpoint, payload, options = client.writes[0]
+        self.assertEqual(endpoint, f"repos/{REPO}/check-runs/78")
+        self.assertEqual(options, {"method": "PATCH"})
+        self.assertEqual(payload["external_id"], f"{PREFIX}3:101:3")
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["conclusion"], "success")
+        self.assertNotIn("head_sha", payload)
+
+    def test_completed_or_different_run_or_pr_check_is_not_reused(self):
+        for external, status in (
+            ("3:101:1", "completed"),
+            ("3:102:1", "in_progress"),
+            ("3:1010:1", "in_progress"),
+            ("4:101:1", "in_progress"),
+        ):
+            with self.subTest(external=external, status=status):
+                client = Client()
+                client.run["run_attempt"] = 2
+                client.refresh_report()
+                client.checks = [
+                    {
+                        "id": 77,
+                        "name": "PR Gate",
+                        "app": {"id": APP_ID},
+                        "external_id": f"{PREFIX}{external}",
+                        "status": status,
+                    }
+                ]
+                reconcile(client, REPO, 101)
+                endpoint, payload, options = client.writes[0]
+                self.assertEqual(endpoint, f"repos/{REPO}/check-runs")
+                self.assertEqual(options, {})
+                self.assertEqual(payload["external_id"], f"{PREFIX}3:101:2")
+                self.assertEqual(payload["head_sha"], HEAD)
+
+    def test_exact_current_check_takes_priority_over_newer_pending_check(self):
+        client = Client()
+        client.run["run_attempt"] = 2
+        client.refresh_report()
+        client.checks = [
+            {
+                "id": identity,
+                "name": "PR Gate",
+                "app": {"id": APP_ID},
+                "external_id": f"{PREFIX}{external}",
+                "status": "in_progress",
+            }
+            for identity, external in ((77, "3:101:2"), (78, "3:101:1"))
+        ]
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs/77")
+        self.assertEqual(client.writes[0][2], {"method": "PATCH"})
 
     def test_initial_attempt_does_not_invent_plan_or_compete_with_legacy_gate(self):
         client = Client()

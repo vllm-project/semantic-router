@@ -394,6 +394,16 @@ def publish(
         return {"ignored": "superseded while preparing status"}
     if state != "legacy":
         existing = [item for item in checks if item.get("external_id") == external]
+        if not existing:
+            # An approval rerun should resolve its own pending check, without
+            # reopening a completed check or mutating another workflow run.
+            run_prefix = f"{PREFIX}{pull['number']}:{run['id']}:"
+            existing = [
+                item
+                for item in checks
+                if item.get("status") == "in_progress"
+                and str(item.get("external_id", "")).startswith(run_prefix)
+            ]
         if existing:
             update = dict(payload)
             update.pop("head_sha")
