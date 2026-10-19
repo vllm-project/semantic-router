@@ -82,17 +82,25 @@ python src/model-runtime/tools/nli_parity.py \
 The tool requires explicit local weights and never downloads models. Unit
 and runtime process integration tests use tiny random-weight NLI fixtures instead.
 
-The current public `vllm-sr serve` command launches the runtime in a container.
-To try this branch through that command, install the source CLI and build the
-local image, then start it with the source checkpoint mounted read-only:
+For the current public `vllm-sr serve` container path, use the
+[README's local image and engine configuration](../../README.md#external-nli-models).
+That example builds the local image and writes `nli-config.yaml`, including the
+pinned checkpoint, CPU placement and a loopback listener on port 8899. Once the
+image and configuration are ready, launch it with:
 
 ```bash
-pip install -e ./src/vllm-sr
-make vllm-sr-dev
-VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
-  vllm-sr serve "$NLI_PACKAGE" --device cpu --host 127.0.0.1 --port 8100 \
-  --image-pull-policy never
+VLLM_SR_IMAGE=semantic-router-nli:local vllm-sr serve --engine \
+  --config nli-config.yaml --platform cpu --minimal --image-pull-policy never
 ```
 
-Docker or Podman is required for that path. It was not exercised on the CPU
-parity host, which had neither runtime. GPU execution was also not tested.
+Run the parity tool against `http://127.0.0.1:8899` with `--systemone` for
+that public listener; it exposes decision surfaces, so classification parity
+continues to use the direct runtime above. See the
+[full-input container record](nli-full-input-parity.md#repeat-the-checks) for
+the complete public-listener parity command and the later CPU container result.
+
+Docker or Podman is required for the public CLI path. It was not exercised on
+the original 8 October CPU parity host, which had neither runtime. GPU
+execution was also not tested in that run. The historical records retain the
+`exact` profile used at the time; current configuration uses engine arguments
+and no longer accepts `profile`.

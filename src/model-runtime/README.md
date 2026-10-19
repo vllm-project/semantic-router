@@ -105,7 +105,6 @@ global:
         revision: d421c4545a438fd006fb43f8b981c5d908faa1e1
         public_name: nli
         device: cpu
-        profile: exact
 YAML
 VLLM_SR_IMAGE=semantic-router-nli:local vllm-sr serve --engine \
   --config nli-config.yaml --platform cpu --minimal --image-pull-policy never
