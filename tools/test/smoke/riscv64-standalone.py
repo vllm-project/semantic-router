@@ -3,13 +3,13 @@
 
 import argparse
 import json
+import os
 import platform
 import socket
 import subprocess
 import tempfile
 import time
 import uuid
-import os
 from http import HTTPStatus
 from pathlib import Path
 from urllib.error import URLError
