@@ -111,6 +111,7 @@ curl -s localhost:8080/startup-status
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
 | FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | 该包的权重为 FP8，而当前设备没有 FP8 矩阵单元。请在这类 GPU 上运行，或改用该模型的 BF16 或 int4 包。运行时不会重试。 |
+| NVFP4 packages need FP4 tensor cores; serve NVFP4 packages on a Blackwell GPU | 该包的权重为 NVFP4，而当前设备无法进行这种乘法：它是 CPU、ROCm GPU 或没有 FP4 Tensor Core 的 NVIDIA GPU（计算能力不是 10.x 或 12.x），或者其 PyTorch 没有 FP4 张量、或未安装 Triton（报错信息会指出是哪一种）。请在装有较新 PyTorch 和 Triton 的 Blackwell GPU 上运行，或改用该模型的 BF16、FP8 或 int4 包。运行时不会重试。 |
 | no family recognizes the package | 不支持该模型的架构。见[选择模型](model-runtime/choose-a-model.md#your-own-models)。 |
 | a licence must be accepted | 该模型的许可证限制了使用。确认你可以使用后，传入 `--accept-licence <id>`。 |
 
