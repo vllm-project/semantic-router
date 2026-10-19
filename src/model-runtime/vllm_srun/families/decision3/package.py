@@ -35,7 +35,14 @@ MANIFEST_SCHEMA = "d3-package-manifest/1"
 FORMAT_ID = "d3-code-readout-v1"
 FORMAT_VERSION = 1
 PROMPTS = ("d3",)
-ATTENTION_MODES = ("causal", "noncausal_full_attention")
+NONCAUSAL = "noncausal_full_attention"
+# Layouts in which no state token attends to a question: a request's state block is
+# encoded once and each question branches from it (the native engine's ``branch``).
+# ``prefix_bidir``: the state attends within itself, both ways; a question block attends
+# to the state and within itself, both ways. ``prefix_causal``: the same with a
+# causal state. ``causal``: every token attends to itself and the tokens before it.
+STATE_ONCE_MODES = ("causal", "prefix_bidir", "prefix_causal")
+ATTENTION_MODES = (NONCAUSAL, *STATE_ONCE_MODES)
 READOUT_DTYPES = ("float32", "bfloat16")
 MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
@@ -217,6 +224,13 @@ def check_decision_config(config: Any) -> dict[str, Any]:
     if limit is not None and (type(limit) is not int or limit < MIN_INPUT_TOKENS):
         raise PackageError(
             f"max_length must be null or an integer >= {MIN_INPUT_TOKENS}"
+        )
+    validated = config.get("validated_length")
+    if validated is not None and (
+        type(validated) is not int or validated < MIN_INPUT_TOKENS
+    ):
+        raise PackageError(
+            f"validated_length must be null or an integer >= {MIN_INPUT_TOKENS}"
         )
     return config
 

@@ -152,7 +152,7 @@ def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": [huge]}
     )
-    assert status == 400 and "8,000,000 bytes" in body["error"]["message"]
+    assert status == 400 and "16,777,216 bytes" in body["error"]["message"]
     assert (body["error"]["reason"], body["error"]["limit"]) == (
         "image_too_large",
         img.MAX_IMAGE_BYTES,
