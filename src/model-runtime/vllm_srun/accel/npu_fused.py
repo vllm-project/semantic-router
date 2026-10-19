@@ -29,6 +29,11 @@ WRAPPERS: dict[str, tuple[str, ...]] = {
 # ``torch.npu.get_device_properties(...).name`` ("Ascend950DT_9572" -> "Ascend950DT").
 MEASURED_EXACT = frozenset({"Ascend950DT"})
 
+# npu_rotary_mul's documented operating limits (its doc: B*N < 1000 rows*heads,
+# D < 896 and even); beyond them the wrapper falls back to the reference.
+MAX_ROTARY_ROWS_HEADS = 1000
+MAX_ROTARY_HEAD_DIM = 896
+
 
 def soc_name(name: str | None) -> str | None:
     """The SoC part of a device properties name ("Ascend950DT_9572" -> "Ascend950DT")."""
@@ -77,7 +82,7 @@ def rotary_half(
     """
     d = query.shape[-1]
     rows_heads = query.shape[0] * query.shape[1]
-    if rows_heads >= 1000 or d >= 896 or d % 2:
+    if rows_heads >= MAX_ROTARY_ROWS_HEADS or d >= MAX_ROTARY_HEAD_DIM or d % 2:
         return rotary_half_ref(query, key, cos, sin)
     module = _torch_npu()
     cos, sin = cos.float().unsqueeze(1), sin.float().unsqueeze(1)  # [1, 1, S, D]
