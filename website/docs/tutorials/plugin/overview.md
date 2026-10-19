@@ -78,8 +78,10 @@ text, so they are skipped when the request has no text in its instructions or
 messages. Text is assumed for every model, so a model card never gates them.
 The model card gates only a plugin that acts on another modality, such as
 images: it is skipped when the card declares capabilities and omits that
-modality. A model with no recognized declaration is not gated. Other plugin
-types are not gated and still run on configuration alone.
+modality. A model with no recognized declaration is not gated. [Shadow
+dispatch](./shadow-dispatch) applies the same rule to the shadow model, so media
+is never sent to a model whose card omits it. Other plugin types are not gated
+and still run on configuration alone.
 
 A skip is typed and carries no request content:
 
