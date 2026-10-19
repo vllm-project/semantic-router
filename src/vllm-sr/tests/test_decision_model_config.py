@@ -342,6 +342,7 @@ def test_model_runtime_deployment_rules(deployment, message):
         ({"artifact": "vllm-sr/d3-FP8"}, True),
         ({"artifact": "vllm-sr/d3-FP8", "revision": REVISION}, False),
         ({"artifact": "VLLM-SR/decision-2.0-kai-0.6b"}, False),
+        ({"artifact": "vllm-sr/d3-turbo"}, False),
         ({"artifact": "/models/d3-FP8"}, False),
         ({"artifact": "vllm-sr/d3-FP8", "endpoint": "http://runtime:8100"}, False),
         (
