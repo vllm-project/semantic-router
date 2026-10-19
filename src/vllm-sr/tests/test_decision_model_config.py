@@ -4,7 +4,7 @@ import copy
 
 import pytest
 from cli.models import UserConfig
-from cli.validator import validate_user_config
+from cli.validator import collect_validation_warnings, validate_user_config
 from cli.validator_decision_model import model_runtime_deployment_error
 from pydantic import ValidationError
 
@@ -334,6 +334,41 @@ def test_model_runtime_deployment_rules(deployment, message):
         assert error is None
     else:
         assert error is not None and message in error
+
+
+@pytest.mark.parametrize(
+    "deployment, warned",
+    [
+        ({"artifact": "vllm-sr/d3-FP8"}, True),
+        ({"artifact": "vllm-sr/d3-FP8", "revision": REVISION}, False),
+        ({"artifact": "VLLM-SR/decision-2.0-kai-0.6b"}, False),
+        ({"artifact": "/models/d3-FP8"}, False),
+        ({"artifact": "vllm-sr/d3-FP8", "endpoint": "http://runtime:8100"}, False),
+        (
+            {
+                "artifact": "vllm-sr/d3-FP8",
+                "replicas": [{"endpoint": "http://runtime:8100"}, {"device": "rocm:0"}],
+            },
+            True,
+        ),
+    ],
+)
+def test_unpinned_hub_deployments_are_warned(deployment, warned):
+    document = copy.deepcopy(BASE)
+    document["global"]["model_catalog"]["deployments"]["decision-kai"] = {
+        "provider": "model_runtime",
+        **deployment,
+    }
+    config = UserConfig.model_validate(document)
+    assert _errors(document) == []
+    warnings = [
+        str(warning)
+        for warning in collect_validation_warnings(config)
+        if "decision-kai" in str(warning)
+    ]
+    assert bool(warnings) == warned
+    if warned:
+        assert "vllm-sr/d3-FP8 is not a built-in model" in warnings[0]
 
 
 def test_other_providers_reject_runtime_fields():
