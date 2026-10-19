@@ -41,7 +41,8 @@ The PR, main, weekly, and explicit qualification entrypoints share one verificat
   contracts. A build blocks only its consumers; execution workers are selected
   by environment, resource requirements, and state isolation.
 - **Gate** compares the planned inventory with the actual results and consumed
-  artifacts. The branch-protection check remains **PR Gate**.
+  artifacts. A trusted status publisher exposes the branch-protection check
+  **PR Gate**, including an explicit waiting state for committer authorization.
 
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
@@ -121,12 +122,22 @@ not become optional merely because their filenames contain `test`.
 
 | Entry | Qualification |
 | --- | --- |
-| PR | Automatic affected checks; required expensive checks wait for `/ci run`. The Gate fails while required work remains unapproved. |
+| PR | Automatic affected checks; required expensive checks wait for `/ci run`. PR Gate stays pending with **Waiting for committer approval** while authorization is the only missing requirement. |
 | PR with `/ci run full` | The complete versioned CPU inventory, including baseline stress cases. |
 | Main push | Automatic affected source, deterministic router and product checks. No image or CLI publication. Reviewed PRs and the merge queue own affected live qualification. |
 | Main dispatch with `publish=true` | Full CPU qualification and a complete commit-addressed development image/CLI set; the CLI publishes only after its images succeed. |
 | Weekly Qualification | Monday full CPU qualification and nightly-channel image/Helm publication. The historical `nightly-build.yml` filename and channel remain compatible. |
 | Release tag | Artifact/version pipeline: build and publish images, Helm, and Python with aligned versions. It does not invoke another full CPU suite; the catalog retains a release qualification profile for explicit use. |
+
+The trusted publisher updates one bot comment per PR with the deferred
+contracts, image work, and authorization command. It publishes **PR Gate** as
+pending while required work awaits authorization, failure for actual test or
+evidence failures, and success only for complete passing evidence. Waiting
+does not reserve a runner. A genuine failure takes precedence when other work
+also awaits authorization. Contributors without repository write permission
+do not need to authorize CI and cannot approve these runs.
+The short **CI Execution** job still summarizes the work that ran; its success
+alone does not satisfy the separately published PR Gate.
 
 A committer with current repository write, maintain, or admin permission can
 comment `/ci run` on a PR to authorize all affected work. `/ci run models`,
@@ -135,6 +146,12 @@ scope; multiple scopes may be listed, and valid approvals for the same revision
 accumulate. A partial approval does not waive the other required contracts or
 image builds. `/ci run full` adds the full CPU inventory.
 
+Command feedback uses 👀 for receipt, 🚀 after the rerun API succeeds, and 😕
+with an actionable bot reply for rejected requests or a trigger that could not
+be confirmed. Feedback starts when the command-handler job gets a runner. A
+rocket confirms only that CI was triggered; **PR Gate** owns the test outcome.
+Retries update the same request's bot reply instead of adding duplicate errors.
+
 The command handler runs trusted main code and freezes the PR head, base, merge
 revision, and original PR workflow run. It rechecks the comment and permissions
 before rerunning that original event. Edits, withdrawn permissions, and changed
@@ -142,6 +159,12 @@ revisions invalidate approval. This preserves the required PR check context.
 A standalone workflow dispatch cannot replace the PR Gate. Verified Mergify
 queue PRs automatically qualify affected changes at the queue merge revision;
 a human-created branch with the same prefix gets no exemption.
+
+The publisher is installed on main. During its introduction, branches based on
+the old entrypoint retain the strict legacy PR Gate; missing qualification
+still fails that legacy check. Update such a branch after the publisher lands
+to receive the pending state and bot guidance. Bootstrap does not waive
+required evidence or authorize expensive work.
 
 Before the command handler first lands on main, a committer can use the explicit
 bootstrap form `/ci run full <head-sha> <base-sha> <merge-sha>` (or `affected`)
@@ -153,17 +176,21 @@ For an isolated investigation, dispatch **CI** (`ci.yml`) with a catalog ID such
 as `platform.models-cpu`. This produces the same evidence but does not satisfy
 a different PR run. Documentation changes avoid unrelated model downloads;
 calibration image fixtures remain executable inputs even under documentation
-paths. Missing or skipped required results, a wrong source revision, stale
-artifacts, or an unapproved required contract fail qualification.
+paths. Missing or skipped results from an authorized required check, a wrong
+source revision, or stale artifacts fail qualification. Required work that
+has not been authorized keeps PR Gate pending and cannot produce success.
 
 Scheduled runs select this explicit inventory; an absent comparison base does
 not mean every optional profile changed. Real PR changes still add affected
 profiles beyond the full baseline.
 
-The fixed CPU product inventory contains 31 contracts and expands to 40 physical
-PR jobs, including planning, images, and result gates. This is exceptional full
-qualification; a representative core change selects six automatic jobs and nine
-after affected approval. Five authoring contracts (`training`, `onnx-artifacts`,
+The fixed CPU product inventory contains 31 contracts. The original restructuring
+expanded it to 40 physical PR jobs, including planning, images, and result gates;
+a representative core change selected six automatic jobs and nine after
+affected approval. These historical counts precede the separate status
+publisher; its control jobs are accounted for in the
+[cost audit](ci-job-cost-audit.md#approval-status-publisher-follow-up).
+Full qualification remains exceptional. Five authoring contracts (`training`, `onnx-artifacts`,
 `bench-tools`, `learning-tools`, `soak-tools`) remain available on affected paths
 or explicit manual selection. They do not run unconditionally in full product
 qualification. Shared component runner, bootstrap, planner, and catalog changes

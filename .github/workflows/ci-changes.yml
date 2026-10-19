@@ -20,6 +20,8 @@ on:
         type: string
         default: ''
     outputs:
+      publisher_ready:
+        value: ${{ jobs.plan.outputs.publisher_ready }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
       dispatch:
@@ -90,6 +92,7 @@ jobs:
     name: Resolve Contracts
     runs-on: ubuntu-24.04
     outputs:
+      publisher_ready: ${{ steps.publisher.outputs.ready }}
       plan: ${{ steps.plan.outputs.plan }}
       dispatch: ${{ steps.plan.outputs.dispatch }}
       worker_labels: ${{ steps.plan.outputs.worker_labels }}
@@ -135,6 +138,18 @@ jobs:
             sha="$EVENT_BEFORE"
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - id: publisher
+        name: Check whether the trusted base can publish PR status
+        run: |
+          ready=false
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            base="$(git rev-parse --verify "$GITHUB_SHA^1")"
+            if git cat-file -e "$base:.github/workflows/ci-status.yml" 2>/dev/null \
+              && git cat-file -e "$base:tools/ci/pr_ci_status.py" 2>/dev/null; then
+              ready=true
+            fi
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
       - name: Resolve committer authorization for this exact PR source
         if: github.event_name == 'pull_request'
         env:

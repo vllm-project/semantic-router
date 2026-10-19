@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: read
+      issues: write
       pull-requests: read
     outputs:
       authorized: ${{ steps.request.outputs.authorized }}
@@ -38,6 +38,7 @@ jobs:
           --event "$GITHUB_EVENT_PATH"
           --output authorization.json
       - uses: actions/upload-artifact@v4
+        id: authorization-artifact
         if: steps.request.outputs.authorized == 'true'
         with:
           name: ci-manual-authorization-${{ steps.request.outputs.pr_run_id }}
@@ -45,6 +46,13 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 7
+      - name: Explain authorization artifact failure
+        if: failure() && steps.authorization-artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/ci/manual_ci.py feedback
+          --event "$GITHUB_EVENT_PATH" --reason controller
 
   rerun:
     name: Rerun the authorized pull-request workflow
@@ -58,7 +66,7 @@ jobs:
     permissions:
       contents: read
       actions: write
-      issues: read
+      issues: write
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +74,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
+        id: authorization-artifact
         with:
           name: ci-manual-authorization-${{ needs.authorize.outputs.pr_run_id }}
           path: request
@@ -73,3 +82,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/ci/manual_ci.py rerun --authorization request/authorization.json
+      - name: Explain authorization artifact failure
+        if: failure() && steps.authorization-artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/ci/manual_ci.py feedback
+          --event "$GITHUB_EVENT_PATH" --reason controller
