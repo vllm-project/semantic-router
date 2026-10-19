@@ -33,6 +33,7 @@ from vllm_srun.engines.native.models.branch import (
 from vllm_srun.errors import PackageError, RequestError
 from vllm_srun.families.decision3 import package as pkg
 from vllm_srun.families.decision3 import prompt
+from vllm_srun.families.decision3.family import COALESCED_FORWARD_SECONDS
 from vllm_srun.families.decision3.state_once import StateOnceModel
 from vllm_srun.plugins.base import Batch, BranchBatch, Job
 from vllm_srun.scheduler import calibration
@@ -771,8 +772,12 @@ def test_shared_batches_pack_whole_requests():
     assert every == sorted((id(job), tuple(range(len(job.items)))) for job in jobs)
 
 
-def test_the_batcher_merges_requests_of_a_state_once_model(runtimes):
+def test_the_batcher_merges_requests_of_a_state_once_model(runtimes, monkeypatch):
     model = model_of(runtimes, "prefix_bidir")
+    # Pin the cost per token that sizes merged forwards, so the host's speed cannot split the plan.
+    monkeypatch.setitem(
+        model._token_seconds, "text", COALESCED_FORWARD_SECONDS / 10_000
+    )
     batcher = Batcher(EngineArgs(), SharedContext())
     batcher.bind(model)
     plans = [model.plan(f"state {index}", QUESTIONS) for index in range(3)]
@@ -1123,12 +1128,12 @@ def test_a_burst_planned_over_more_than_the_window_shares_one_forward(
 ):
     runtime = runtimes["prefix_bidir", "auto"]
     served = runtime.lookup(None)
-    monkeypatch.setattr(served.scheduler.limits, "batch_window_ms", 50.0)
+    monkeypatch.setattr(served.scheduler.limits, "batch_window_ms", 200.0)
     plan = served.model.plan_surface
 
     def slow(surface, request):
-        # Request i is planned i * 40 ms late: past the 50 ms window, within three of it.
-        time.sleep(0.04 * int(request.body["state"].rsplit(" ", 1)[1]))
+        # Request i is planned i * 80 ms late: the last past the 200 ms window, well within three of it.
+        time.sleep(0.08 * int(request.body["state"].rsplit(" ", 1)[1]))
         return plan(surface, request)
 
     monkeypatch.setattr(served.model, "plan_surface", slow)
