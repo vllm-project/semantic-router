@@ -46,6 +46,11 @@ class FakeGitHub:
             "base": {"sha": BASE, "ref": "main", "repo": {"full_name": REPO}},
             "merge_commit_sha": MERGE,
         }
+        self.base_ref = {
+            "ref": "refs/heads/main",
+            "object": {"type": "commit", "sha": BASE},
+        }
+        self.merge_parents = [{"sha": BASE}, {"sha": HEAD}]
         self.comment = {
             "id": 99,
             "body": "/ci run",
@@ -99,6 +104,10 @@ class FakeGitHub:
             return {"permission": self.permission}
         if endpoint.endswith("/pulls/42"):
             return self.pull
+        if endpoint.endswith("/git/ref/heads/main"):
+            return self.base_ref
+        if "/git/commits/" in endpoint:
+            return {"parents": self.merge_parents}
         if endpoint.endswith("/issues/comments/99"):
             return self.comment
         if "/issues/comments/" in endpoint:
@@ -457,11 +466,81 @@ class ManualCITests(unittest.TestCase):
         original = copy.deepcopy(self.github.pull)
         for field in ("head", "base", "merge_commit_sha"):
             self.github.pull = copy.deepcopy(original)
+            self.github.base_ref["object"]["sha"] = BASE
+            self.github.merge_parents = [{"sha": BASE}, {"sha": HEAD}]
             if field == "merge_commit_sha":
                 self.github.pull[field] = "f" * 40
             else:
                 self.github.pull[field]["sha"] = "f" * 40
+                if field == "base":
+                    self.github.base_ref["object"]["sha"] = "f" * 40
+                    self.github.merge_parents[0]["sha"] = "f" * 40
+                else:
+                    self.github.merge_parents[1]["sha"] = "f" * 40
             self.assertEqual(self.resolve(), manual_ci.NO_AUTHORIZATION)
+
+    def test_stale_pr_base_metadata_does_not_reject_the_actual_merge_revision(self):
+        self.github.pull["base"]["sha"] = "e" * 40
+        record = self.authorize()
+        self.assertEqual(record["base_sha"], BASE)
+        self.github.add_authorization(record)
+        self.assertEqual(
+            self.resolve(), {"authorized": True, "scopes": ["affected"], "full": False}
+        )
+        manual_ci.rerun(self.github, record)
+        self.assertEqual(self.github.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.github.artifacts = []
+        self.bootstrap()
+        self.assertEqual(
+            self.resolve(), {"authorized": True, "scopes": [], "full": True}
+        )
+
+    def test_advanced_main_requires_a_regenerated_merge_before_authorization(self):
+        record = self.authorize()
+        self.github.base_ref["object"]["sha"] = "e" * 40
+        for operation in (
+            self.authorize,
+            self.resolve,
+            lambda: manual_ci.rerun(self.github, record),
+        ):
+            with (
+                self.subTest(operation=operation),
+                self.assertRaisesRegex(
+                    manual_ci.ManualCIError, "merge revision"
+                ) as error,
+            ):
+                operation()
+            self.assertEqual(error.exception.reason, "revision")
+        self.assertEqual(self.github.posts, [])
+
+    def test_current_base_ref_must_be_main_and_a_valid_commit(self):
+        original = copy.deepcopy(self.github.base_ref)
+        for changes in (
+            {"ref": "refs/heads/feature"},
+            {"object": {"type": "tag", "sha": BASE}},
+            {"object": {"type": "commit", "sha": "main"}},
+            {"object": {"type": "commit", "sha": None}},
+        ):
+            with self.subTest(changes=changes):
+                self.github.base_ref = {**original, **changes}
+                with self.assertRaises(manual_ci.ManualCIError):
+                    self.authorize()
+
+    def test_merge_parents_must_be_exactly_the_live_base_then_current_head(self):
+        for parents in (
+            [],
+            [{"sha": BASE}],
+            [{"sha": HEAD}, {"sha": BASE}],
+            [{"sha": "e" * 40}, {"sha": HEAD}],
+            [{"sha": BASE}, {"sha": "e" * 40}],
+            [{"sha": BASE}, {"sha": HEAD}, {"sha": "e" * 40}],
+            [{"sha": BASE}, {"sha": HEAD}, None],
+            None,
+        ):
+            with self.subTest(parents=parents):
+                self.github.merge_parents = parents
+                with self.assertRaises(manual_ci.ManualCIError):
+                    self.authorize()
 
     def test_bootstrap_requires_full_explicit_current_tuple(self):
         self.bootstrap()
@@ -564,13 +643,29 @@ class ManualCIWorkflowTests(unittest.TestCase):
             self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
             self.assertEqual(checkout["with"]["persist-credentials"], "false")
 
-    def test_write_token_is_confined_to_rerun_after_successful_authorization(self):
+    def test_actions_write_is_confined_to_rerun_after_successful_authorization(self):
         self.assertNotIn("write", self.workflow["permissions"].values())
         authorize = self.workflow["jobs"]["authorize"]
-        self.assertNotIn("write", authorize["permissions"].values())
+        self.assertEqual(
+            authorize["permissions"],
+            {
+                "contents": "read",
+                "actions": "read",
+                "issues": "write",
+                "pull-requests": "read",
+            },
+        )
         rerun = self.workflow["jobs"]["rerun"]
         self.assertEqual(rerun["needs"], "authorize")
-        self.assertEqual(rerun["permissions"]["actions"], "write")
+        self.assertEqual(
+            rerun["permissions"],
+            {
+                "contents": "read",
+                "actions": "write",
+                "issues": "write",
+                "pull-requests": "read",
+            },
+        )
         self.assertEqual(rerun["if"], "needs.authorize.outputs.authorized == 'true'")
 
     def test_pr_gate_cannot_be_skipped_by_an_unrelated_label(self):
@@ -580,6 +675,22 @@ class ManualCIWorkflowTests(unittest.TestCase):
         self.assertNotIn("labeled", workflow["on"]["pull_request"]["types"])
         self.assertNotIn("unlabeled", workflow["on"]["pull_request"]["types"])
         self.assertEqual(workflow["jobs"]["pr-gate"]["if"], "always()")
+
+    def test_artifact_feedback_fallback_cannot_replace_handler_rejections(self):
+        for job in self.workflow["jobs"].values():
+            fallback = next(
+                step
+                for step in job["steps"]
+                if "manual_ci.py feedback" in step.get("run", "")
+            )
+            self.assertEqual(
+                fallback["if"],
+                "failure() && steps.authorization-artifact.outcome == 'failure'",
+            )
+            self.assertIn(
+                '--event "$GITHUB_EVENT_PATH" --reason controller',
+                " ".join(fallback["run"].split()),
+            )
 
 
 if __name__ == "__main__":

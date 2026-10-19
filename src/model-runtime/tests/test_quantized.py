@@ -1,4 +1,4 @@
-"""Decision 3.0 packages with compressed-tensors int4 (W4A16) and FP8 (W8A8) weights: loading, numerics, refusals."""
+"""Decision 3.0 packages with compressed-tensors int4 (W4A16), FP8 (W8A8) and NVFP4 weights: loading, numerics, refusals."""
 
 import asyncio
 import json
@@ -146,11 +146,7 @@ def test_other_weight_schemes_are_refused(change):
         parse(config(**change))
 
 
-def test_nvfp4_and_quantized_activations_are_refused():
-    nvfp4 = config()
-    nvfp4["quantization_config"]["format"] = "nvfp4-pack-quantized"
-    with pytest.raises(PackageError, match="nvfp4"):
-        parse(nvfp4)
+def test_quantized_int4_activations_are_refused():
     w4a8 = config()
     w4a8["quantization_config"]["config_groups"]["group_0"]["input_activations"] = {
         "num_bits": 8
@@ -245,3 +241,114 @@ def test_graphs_skip_adas_per_row_fp8_product_before_pytorch_2_12(
     layer.ada, layer.unscaled_product = ada, unscaled
     monkeypatch.setattr(quantized, "ROWWISE_CAPTURE_SAFE", safe)
     assert quantized.capture_safe(nn.Sequential(layer)) is captured
+
+
+FP4 = {
+    "num_bits": 4,
+    "type": "float",
+    "symmetric": True,
+    "strategy": "tensor_group",
+    "group_size": 16,
+    "scale_dtype": "torch.float8_e4m3fn",
+    "block_structure": None,
+    "actorder": None,
+}
+
+
+def nvfp4_config(weights=None, inputs=None):
+    """What compressed-tensors' NVFP4 scheme exports, with ``weights`` / ``inputs`` changes."""
+    return {
+        "quantization_config": {
+            "quant_method": "compressed-tensors",
+            "format": "nvfp4-pack-quantized",
+            "config_groups": {
+                "group_0": {
+                    "targets": ["Linear"],
+                    "weights": FP4 | {"dynamic": False} | (weights or {}),
+                    "input_activations": FP4 | {"dynamic": "local"} | (inputs or {}),
+                    "output_activations": None,
+                }
+            },
+        }
+    }
+
+
+def test_nvfp4_weights_parse():
+    weights = parse(nvfp4_config())
+    assert (weights.scheme, weights.group_size) == ("nvfp4", 16)
+
+
+@pytest.mark.parametrize(
+    ("weights", "inputs"),
+    [
+        ({"group_size": 32}, None),  # MXFP4-like groups
+        ({"strategy": "group"}, None),
+        ({"scale_dtype": "torch.uint8"}, None),  # E8M0 scales
+        ({"dynamic": True}, None),
+        ({"symmetric": False}, None),
+        (None, {"dynamic": False}),  # static activation block scales
+        (None, {"num_bits": 8}),
+        (None, {"group_size": 32}),
+    ],
+)
+def test_other_fp4_schemes_are_refused(weights, inputs):
+    with pytest.raises(PackageError, match="only NVFP4"):
+        parse(nvfp4_config(weights, inputs))
+
+
+def test_nvfp4_weights_without_quantized_activations_are_refused():
+    config = nvfp4_config()
+    config["quantization_config"]["config_groups"]["group_0"][
+        "input_activations"
+    ] = None
+    with pytest.raises(PackageError, match="only NVFP4"):
+        parse(config)
+
+
+def test_an_nvfp4_package_counts_the_parameters_of_its_weights(
+    tmp_path, d3_text_package
+):
+    from vllm_srun.families.decision3 import package as pkg
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    names = ("model.safetensors",)
+    assert (
+        pkg.tensor_groups(packed, names)[0]
+        == pkg.tensor_groups(d3_text_package, names)[0]
+    )
+
+
+def test_an_nvfp4_package_requires_fp4_tensor_cores_on_every_accelerator(
+    tmp_path, d3_text_package
+):
+    from vllm_srun.families.decision3.family import Decision3Family
+    from vllm_srun.plugins.base import PackageRef, RegistryOptions
+    from vllm_srun.plugins.registry import names
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    family = Decision3Family(RegistryOptions(base_path=None, offline=True))
+    spec = family.describe(family.verify(PackageRef(root=packed)))
+    assert set(spec.requires) == set(names("accelerators"))
+    assert spec.requires["cpu"] == ("lapack", "nvfp4")
+    assert all("nvfp4" in needs for needs in spec.requires.values())
+
+
+def test_an_nvfp4_package_is_refused_on_a_cpu_before_its_weights_load(
+    tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.engines.native import engine
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+
+    def never(*args, **kwargs):
+        raise AssertionError("weights loaded")
+
+    monkeypatch.setattr(engine, "load_backbone", never)
+    with pytest.raises(Exception, match="NVFP4 packages need FP4 tensor cores"):
+        start_runtime(packed)

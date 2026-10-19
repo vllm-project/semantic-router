@@ -1,8 +1,9 @@
 # Decision 3.0 quantized packages
 
 The native engine loads d3 packages whose projections are held as
-compressed-tensors FP8 (W8A8, `float-quantized`) or int4 (W4A16,
-`pack-quantized`) weights (`quantization.py`, `engines/native/quantized.py`).
+compressed-tensors FP8 (W8A8, `float-quantized`), int4 (W4A16,
+`pack-quantized`) or NVFP4 (W4A4, `nvfp4-pack-quantized`, below) weights
+(`quantization.py`, `engines/native/quantized.py`).
 A quantized package is its own model: its answers are the ones its weights
 give, and this record compares them with the BF16 package's.
 
@@ -153,3 +154,49 @@ approximate kernels with the scaled product (largest probability change
 0.109); the other changes come from the fused element-wise kernels. One
 request at a time it saves little latency at these lengths; the gain is the
 kernel table's, at 256 rows and more, as batches of concurrent requests reach.
+
+## NVFP4 on Blackwell
+
+NVFP4 packages multiply on FP4 tensor cores, which only Blackwell GPUs have, so
+they were measured on one NVIDIA RTX PRO 6000 Blackwell Workstation Edition
+(compute capability 12.0; PyTorch 2.11.0+cu128), against the BF16 package on
+the same GPU, with the default engine options (graphs, fused kernels).
+
+| Package | Repository | Made by | Projections | Kept in BF16 | Weights file |
+| --- | --- | --- | --- | --- | --- |
+| NVFP4 | `vllm-sr/d3-NVFP4` `07fa5a04` | FP4 E2M1 weights rounded to nearest, groups of 16 with E4M3 block scales under an FP32 global scale per tensor; activations the same per request, under a global scale calibrated per layer on 512 prompts of the validation split | 400 | as AWQ int4 | 17.2 GB |
+| NVFP4 AWQ | `vllm-sr/d3-NVFP4-AWQ` `27dbfdc4` | AWQ smoothing (scales folded into the norms and `up_proj`) on 512 prompts of the validation split, then as NVFP4 | 400 | as AWQ int4 | 17.2 GB |
+
+The same 14,031 test requests as above; the BF16 package answers 0.8323 of
+them on this GPU:
+
+| Package | Changed | Agreement | Accuracy (BF16 0.8323) | Device memory (BF16 52.2 GB) |
+| --- | --- | --- | --- | --- |
+| NVFP4 | 472 | 96.64% | 0.8271 | 17.2 GB |
+| NVFP4 AWQ | 448 | 96.81% | 0.8292 | 17.2 GB |
+
+Two calibration states are also the states of 2 of these requests.
+
+Median latency as above (the first 500 of the 1,000 train rows answered a
+third time with graphs; all 1,000 answered a second time without), with exact
+kernels only and at `--dtype auto`, the default of `vllm-srun serve`. At
+`--dtype auto` a quantized package also runs the fused element-wise kernels the
+decision3 family allows it (norms, residual adds and gates; approximate on
+CUDA, `docs/records/cuda-fused-approximate.md`); the agreement above was
+answered so. A BF16 package keeps exact kernels at every dtype.
+
+| Package | Exact, graphs | Exact, without graphs | `--dtype auto`, graphs | `--dtype auto`, without graphs |
+| --- | --- | --- | --- | --- |
+| BF16 | 62.6 ms | 63.1 ms | as exact | as exact |
+| NVFP4, the JIT launch and torch scale layout | 30.2 ms | 60.0 ms | | |
+| NVFP4 | 28.5 ms | 48.0 ms | 23.2 ms | 37.4 ms |
+| NVFP4 AWQ | 28.5 ms | 47.7 ms | 23.2 ms | 37.8 ms |
+
+Without graphs an NVFP4 forward is host-bound: it launched 7,196 kernels, and
+the GPU was busy 46% of the time. Each layer now launches two of them. The
+Triton kernel writes the activation scales in cuBLAS's 32x4x4 layout, which
+replaces three torch kernels per call, and the layer skips copies of inputs
+that are already BF16 and contiguous. After a shape's first call, the compiled
+kernel is launched directly, as the FP8 quantization is. After loading, the
+NVFP4 packages hold 17.2 GB of device memory, and 17.9 GB at the peak of the 20
+longest rows (52.2 and 52.8 GB for BF16).

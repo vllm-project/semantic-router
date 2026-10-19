@@ -26,12 +26,15 @@ SHA = "a" * 40
 MAX_GATE_ENV_BYTES = 4096
 
 
-def completed(paths=None, *, full=False, profile="pr", execution_environment=None):
+def completed(
+    paths=None, *, full=False, profile="pr", execution_environment=None, **plan_options
+):
     plan = make_plan(
         paths or ["tools/make/build-run-test.mk"],
         source_sha=SHA,
         full=full,
         profile=profile,
+        **plan_options,
     )
     builds = [
         {"id": f"image:{name}", "sha256": "b" * 64, "source_sha": SHA}

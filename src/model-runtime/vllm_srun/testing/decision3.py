@@ -397,6 +397,10 @@ def quantize_int4(
     )
 
 
+# The calibrated input global scale of an NVFP4 fixture: FP8 x FP4 range over an activation amax of 32.
+NVFP4_INPUT_GLOBAL = 448.0 * 6.0 / 32.0
+
+
 def write_quantized_fixture(
     source: Path,
     output: Path,
@@ -405,8 +409,10 @@ def write_quantized_fixture(
     symmetric: bool = True,
     dequantized: bool = False,
 ) -> Path:
-    """``source`` with its projections in compressed-tensors int4 (W4A16) or FP8 (``scheme="float8"``,
-    FP8_DYNAMIC), or (``dequantized``) a BF16 package holding exactly the weights the quantized one holds.
+    """``source`` with its projections in compressed-tensors int4 (W4A16), FP8 (``scheme="float8"``,
+    FP8_DYNAMIC) or NVFP4 (``scheme="nvfp4"``), or (``dequantized``) a BF16 package holding exactly the
+    weights the quantized one holds. NVFP4 activations get a calibrated global scale of
+    ``NVFP4_INPUT_GLOBAL`` (blocks up to 32 in magnitude quantize without saturating).
     """
     import shutil
 
@@ -427,6 +433,22 @@ def write_quantized_fixture(
         layer = name.removesuffix(".weight")
         if not (name.endswith(".weight") and holds(layer)):
             tensors[name] = tensor
+            continue
+        if scheme == "nvfp4":
+            from ..accel import nvfp4
+
+            global_ = nvfp4.global_scale(tensor)
+            packed, scale = nvfp4.quantize(tensor, global_)
+            if dequantized:
+                weight = nvfp4.dequantize(packed, scale, global_)
+                tensors[name] = weight.to(torch.bfloat16)
+            else:
+                tensors[f"{layer}.weight_packed"] = packed
+                tensors[f"{layer}.weight_scale"] = scale
+                tensors[f"{layer}.weight_global_scale"] = global_
+                tensors[f"{layer}.input_global_scale"] = torch.tensor(
+                    [NVFP4_INPUT_GLOBAL]
+                )
             continue
         if scheme == "float8":
             scale = (tensor.float().abs().amax(1, keepdim=True) / 448).clamp(min=1e-12)
@@ -481,13 +503,29 @@ def write_quantized_fixture(
                 "dynamic": True,
             },
         }
+        fp4 = {
+            "num_bits": 4,
+            "type": "float",
+            "symmetric": True,
+            "strategy": "tensor_group",
+            "group_size": 16,
+            "scale_dtype": "torch.float8_e4m3fn",
+            "block_structure": None,
+            "actorder": None,
+        }
+        nvfp4_args = {
+            "weights": {**fp4, "dynamic": False},
+            "input_activations": {**fp4, "dynamic": "local"},
+        }
+        formats = {"float8": "float-quantized", "nvfp4": "nvfp4-pack-quantized"}
+        args = {"float8": float8, "nvfp4": nvfp4_args}
         config["quantization_config"] = {
             "quant_method": "compressed-tensors",
-            "format": "float-quantized" if scheme == "float8" else "pack-quantized",
+            "format": formats.get(scheme, "pack-quantized"),
             "config_groups": {
                 "group_0": {
                     "targets": list(INT4_TARGETS),
-                    **(float8 if scheme == "float8" else int4),
+                    **args.get(scheme, int4),
                     "output_activations": None,
                 }
             },
