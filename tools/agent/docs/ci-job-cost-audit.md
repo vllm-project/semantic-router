@@ -2,9 +2,11 @@
 
 This is the quantitative companion to [the workflow audit](ci-workflow-audit.md).
 The before revision is `1c629c80b383d7e53e01f266430d0fa41c5d9bf6`; after means
-this change's executable planner and workflows. Counts expand the actual
+the restructuring merged in [PR #5223](https://github.com/vllm-project/semantic-router/pull/5223).
+Counts expand the actual
 matrices at each revision. They are not a comparison of check-name counts or a
-measured after-change performance result.
+measured after-change performance result. The later approval status publisher
+is accounted for separately below; it does not change this historical baseline.
 
 ## Counting rules
 
@@ -61,6 +63,8 @@ actual allocation, but should be measured rather than assumed. The successful
 `manual-ci.yml` approval controller adds two separate hosted jobs (`authorize`
 and `rerun`), so this complete approval transaction can allocate **17 jobs**.
 Those controller jobs are outside the original PR workflow totals above.
+Command reactions and rejection replies execute inside these existing jobs;
+they add API calls but no additional job allocations.
 
 The old full inventory contained nine component contracts. Ten component
 contracts remain available after retiring CK and adding benchmark tools and
@@ -106,6 +110,29 @@ allocations, not measured runner-minute savings.
 | Old selector, same changed paths | 44 | 19 | 19 | 70 |
 | Old execution shape, explicitly aligned profiles | 47 | 22 | 22 | 73 |
 | Current selector and execution shape | 47 | 22 | 9 | 48 |
+
+## Approval status publisher follow-up
+
+The later approval UX publishes **PR Gate** from
+[`ci-status.yml`](../../../.github/workflows/ci-status.yml), whose `publish` job
+runs when a PR run enters `in_progress` and when it completes. These events add
+at most two short publisher jobs per PR attempt, outside that attempt's
+qualification workflow. Explicit status-repair dispatches are separate runs.
+The pending **Waiting for committer approval** check itself occupies
+no runner. The publisher updates one bot comment with the remaining scope and
+the `/ci run` command; actual failures remain failures and complete passing
+evidence is required for success.
+
+The existing `pr.pr-gate` runner job remains. Once the publisher is available,
+it is named **CI Execution** and summarizes the executed qualification; the
+publisher owns the required **PR Gate** check. During bootstrap, older
+entrypoints retain the strict legacy PR Gate until the branch is updated.
+The historical 40-job full baseline and 6 + 9 + 2 approval example above remain
+evidence for the original execution shape. A later full attempt has those 40
+qualification allocations plus at most two publisher allocations from the
+normal events. This separate control cost does not rewrite the historical
+baseline as 42 jobs. No publisher runner-minute or billing saving has been
+measured.
 
 ## Every physical job in the versioned full CPU PR
 

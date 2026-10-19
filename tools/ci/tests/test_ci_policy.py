@@ -162,7 +162,9 @@ class CIApprovalGateTests(unittest.TestCase):
         plan = model_plan()
         verdict = evaluate_gate(plan, automatic_receipts(plan))
         self.assertFalse(verdict.passed)
-        self.assertTrue(any("/ci run" in error for error in verdict.errors))
+        self.assertEqual(verdict.status, "awaiting-approval")
+        self.assertEqual(verdict.errors, ())
+        self.assertEqual(verdict.required, tuple(plan["required_verification_ids"]))
 
     def test_removed_deferred_flag_does_not_erase_the_required_inventory(self):
         plan = model_plan()

@@ -33,12 +33,12 @@ jobs:
     secrets: inherit
 
   pr-gate:
-    name: PR Gate
+    name: ${{ needs.ci.outputs.publisher_ready == 'true' && 'CI Execution' || 'PR Gate' }}
     if: always()
     needs: ci
     runs-on: ubuntu-24.04
     steps:
-      - name: Require the complete planned qualification
+      - name: Require successful reconciliation of executed contracts
         env:
           RESULT: ${{ needs.ci.result }}
         run: test "$RESULT" = success
