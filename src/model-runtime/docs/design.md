@@ -324,6 +324,17 @@ only for a family that consents to approximate kernels
 (`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
+`Accelerator.golden_reference(device)` names an optional hardware-qualified
+golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
+instruction set and native or emulated BF16 capability, for example
+`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+
+`tools/golden_answers.py --record` writes both the generic device-class baseline
+and any qualified reference. The first generic baseline is preserved within a
+revision; later hardware runs update only their qualified entries. A revision
+change clears all old references. Record the new revision on the intended
+baseline device before adding other hardware classes.
+
 ### 5.4 Engine arguments
 
 A served model batches and computes as its engine arguments say (`EngineArgs`,
@@ -426,6 +437,8 @@ A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
+A forward out of device memory is 413 `request_too_large` for a request that
+had it alone and 429 `overloaded` for one that shared it (`scheduler.py`).
 Item-level failures (`max_length_exceeded`, `invalid_input`,
 `invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
 place and never fail sibling items.
@@ -869,6 +882,27 @@ add more than 10% to its tokens ([record](records/decision3-lanes-packing.md)).
 Request images and videos are decoded in the process's media worker processes
 (`vllm_srun/media.py`, `--media-workers`).
 
+A package may hold its projections quantized, declared by a compressed-tensors
+`quantization_config` in `config.json` (`quantization.py`): FP8 weights with
+one scale per output channel and FP8 activations per token (`float-quantized`,
+FP8_DYNAMIC), or 4-bit integer weights in groups, symmetric (GPTQ) or with
+zero points (AWQ), and BF16 activations (`pack-quantized`), or NVFP4 weights
+and activations: FP4 in groups of 16 with FP8 block scales under a global
+scale, activations quantized per request (`nvfp4-pack-quantized`). Any other
+scheme, including every other FP4 variant, is refused. The targeted layers
+become `Float8Linear`, `Int4Linear` or `NVFP4Linear` on the meta backbone and
+load the stored tensors as they are (`engines/native/quantized.py`): FP8 runs
+`torch._scaled_mm` after one Triton kernel quantizes the activations per row,
+and needs FP8 matrix units; int4 unpacks its weights to BF16 with one Triton
+kernel per call (plain torch on a CPU) and multiplies in BF16, which keeps the
+memory but not the time; NVFP4 quantizes the activations with one Triton kernel
+that writes their scales in cuBLAS's layout and multiplies in
+`torch.nn.functional.scaled_mm` with 1x16 block scales, which needs FP4 tensor
+cores (a Blackwell GPU). A
+quantized package is its own model: its manifest's parameter counts are the
+logical ones, placement counts its files, and its answers are compared with
+the BF16 package's in `docs/records/decision3-quantized.md`.
+
 ## 9. Scheduler and planner
 
 ```text
@@ -945,9 +979,11 @@ CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
 available device with enough free memory. The memory estimate is the weights
 in the dtype the accelerator holds them in (FP32 as an upper bound, or BF16
-plus 10% for a family whose `gpu_weights` / `cpu_weights` name it) plus a
-2 GiB activation reserve, matched to the peaks in
-[the Decision 3.0 device memory record](records/decision3-device-memory.md);
+plus 10% for a family whose `gpu_weights` / `cpu_weights` name it and, on GPUs,
+for the BF16-stored Linear weights of a `bf16_resident` family) plus a 2 GiB
+activation reserve, matched to the peaks in
+[the Decision 3.0 device memory record](records/decision3-device-memory.md) and
+[the BF16-resident one](records/bf16-resident-device-memory.md);
 `--memory-budget` caps it per model. A refusal names, per device, what the
 model needs and how much is free; on a host with a GPU the GPU's reasons come
 first and the CPU's last. A model names the device capabilities it requires per
@@ -958,8 +994,13 @@ load. The Qwen3.5
 decoders require `lapack` on the CPU, since their gated-delta kernel solves
 triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
 refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
-CPU image, or a GPU device). When every device the model may use lacks a
-capability, the failure is final instead of retried.
+CPU image, or a GPU device). A package with FP8 weights requires `float8` on
+every accelerator, which a GPU reports when it has FP8 matrix units (an NVIDIA
+GPU of compute capability 8.9 or later, or an MI300 or MI350 series GPU), so
+any other device refuses it before its weights load. A package with NVFP4
+weights likewise requires `nvfp4`, which a GPU of compute capability 10.x or
+12.x (Blackwell) reports. When every device the
+model may use lacks a capability, the failure is final instead of retried.
 
 ### 10.2 Readiness and health
 
@@ -967,7 +1008,11 @@ Per model: `loading` (resolve, verify, load, identity) → `warming` (golden
 answers) → `ready`, or `failed` with a reason. Readiness is gated on golden
 answers per surface: every built-in revision carries golden requests with
 reference answers per device class (1e-3 on CPU, 0.02 on GPUs; encoder
-embeddings compare by cosine). Every golden request runs through its
+embeddings compare by cosine). A recorded hardware-qualified key takes
+precedence over the device-class reference; otherwise the existing device-class
+reference is used. A selected reference that fails is never replaced by another
+candidate. The tolerance is selected by device class, not reference key.
+Every golden request runs through its
 surface the same way: the loaded model's `golden_values` and `golden_compare`
 say what to compare and how, so decisions count questions and the other
 surfaces count values. Without a reference the runtime checks
@@ -1034,6 +1079,10 @@ graph captures anyway, §9); a captured graph keeps the configurations it was
 captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
+The choices are recorded at the published precision, so a model served at
+another `--dtype` runs without them and its kernels tune their own: a BF16
+configuration can need more shared memory than an FP32 kernel has (d3 at
+`float32` on gfx942).
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 

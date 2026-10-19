@@ -16,6 +16,7 @@ from typing import Any
 
 import torch
 
+from ..engines.native.quantized import float8_format
 from ..plugins.base import Accelerator, DeviceInfo
 from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 
@@ -51,6 +52,34 @@ def _optional(module: str, attribute: str) -> Any:
         return getattr(importlib.import_module(module), attribute)
     except Exception:
         return None
+
+
+def nvfp4_unavailable(index: int | None) -> str | None:
+    """Why device ``index`` cannot multiply NVFP4 weights (``quantization.NVFP4``); None when it can.
+
+    NVFP4 needs NVIDIA FP4 tensor cores (Blackwell: compute capability 10.x or
+    12.x), a PyTorch with FP4 tensors and the block-scaled ``scaled_mm``, and
+    Triton, which quantizes the activations.
+    """
+    if torch.version.hip is not None:
+        return "NVFP4 weights need NVIDIA FP4 tensor cores, which ROCm GPUs do not have"
+    scaling = _optional("torch.nn.functional", "ScalingType")
+    if not hasattr(torch, "float4_e2m1fn_x2") or not hasattr(scaling, "BlockWise1x16"):
+        return (
+            f"PyTorch {torch.__version__} has no FP4 tensors with block-scaled "
+            "torch.nn.functional.scaled_mm"
+        )
+    if not torch.cuda.is_available():
+        return "no CUDA device"
+    major, minor = torch.cuda.get_device_capability(index or 0)
+    if major not in (10, 12):
+        return (
+            f"compute capability {major}.{minor} has no FP4 tensor cores "
+            "(NVFP4 needs a Blackwell GPU, compute capability 10.x or 12.x)"
+        )
+    if _optional("triton", "__version__") is None:
+        return "NVFP4 activations are quantized with Triton, which is not installed"
+    return None
 
 
 class GPUAccelerator(Accelerator):
@@ -125,7 +154,15 @@ class GPUAccelerator(Accelerator):
             "fla": _optional("fla.ops.gated_delta_rule", "chunk_gated_delta_rule")
             is not None,
             "causal_conv1d": _optional("causal_conv1d", "causal_conv1d_fn") is not None,
+            "float8": float8_format(self.torch_device(device)) is not None,
+            "nvfp4": nvfp4_unavailable(device.index) is None,
         }
+
+    def lacks(self, device: DeviceInfo, capability: str) -> str:
+        if capability == "nvfp4":
+            reason = nvfp4_unavailable(device.index) or "no FP4 tensor cores"
+            return f"{device.label}: {reason}; serve NVFP4 packages on a Blackwell GPU"
+        return super().lacks(device, capability)
 
     def autocast(
         self, device: DeviceInfo, dtype: str | None
@@ -173,6 +210,11 @@ def _wrap_varlen(fn: Any) -> Any:
     accepted = set(inspect.signature(fn).parameters)
 
     def attend(query, key, value, packed, *, scale, groups):
+        if query.dtype not in (torch.float16, torch.bfloat16):
+            # flash attention takes 16-bit inputs only (FP32 at --dtype float32)
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
         # Torch 2.10 uses the default scale and infers GQA from the head counts.
         if "scale" not in accepted and scale != query.shape[-1] ** -0.5:
             return varlen_attention_ref(
