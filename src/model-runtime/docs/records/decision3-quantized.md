@@ -83,13 +83,13 @@ memory, not time.
 Microseconds at 64, 256 and 1,024 rows, summed over one of each of d3's
 projection shapes (`in_proj_qkv`, `in_proj_z`, `out_proj`, `q_proj`, `k_proj`,
 `o_proj`, `gate_proj` twice for `up_proj`, `down_proj`), random weights,
-`triton.testing.do_bench`:
+`triton.testing.do_bench` (the MI300X on 2026-10-15):
 
 | Device | Rows | BF16 GEMM | FP8 (quantize + scaled GEMM) | int4 (unpack + GEMM) |
 | --- | --- | --- | --- | --- |
-| MI300X | 64 | 585 | 442 | 816 |
-| MI300X | 256 | 881 | 609 | 1,223 |
-| MI300X | 1,024 | 2,197 | 1,370 | 2,414 |
+| MI300X | 64 | 577 | 429 | 809 |
+| MI300X | 256 | 877 | 611 | 1,211 |
+| MI300X | 1,024 | 2,220 | 1,364 | 2,408 |
 | RTX 4070 Ti SUPER | 64 | 2,225 | 1,289 | 4,102 |
 | RTX 4070 Ti SUPER | 256 | 3,264 | 4,857 | 5,286 |
 | RTX 4070 Ti SUPER | 1,024 | 11,585 | 17,737 | 13,655 |
