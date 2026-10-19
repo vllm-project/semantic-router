@@ -117,7 +117,7 @@ class NativeEngineModel(EngineModel):
         for layer in self._quantized():
             if isinstance(layer, quantized.Int4Linear):
                 layer.fused = fused_int4 and self.device.type == "cuda"
-            else:
+            elif isinstance(layer, quantized.Float8Linear):
                 layer.unscaled_product &= self.kernels.allow_approximate
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
@@ -747,7 +747,9 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
-    def _quantized(self) -> list[quantized.Int4Linear | quantized.Float8Linear]:
+    def _quantized(
+        self,
+    ) -> list[quantized.Int4Linear | quantized.Float8Linear | quantized.NVFP4Linear]:
         return [
             layer for module in self._modules() for layer in quantized.layers(module)
         ]

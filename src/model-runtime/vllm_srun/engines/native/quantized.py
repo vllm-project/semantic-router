@@ -1,4 +1,4 @@
-"""Linear layers held as quantized checkpoint weights (``quantization.py``): int4 (W4A16) and FP8 (W8A8).
+"""Linear layers held as quantized checkpoint weights (``quantization.py``): int4 (W4A16), FP8 (W8A8) and NVFP4.
 
 The projections a checkpoint's ``quantization_config`` targets become these
 layers on the meta backbone before it loads (``install``), and load the
@@ -32,6 +32,19 @@ checkpoint's compressed tensors as they are stored:
   The scaled product writes BF16 whatever the dtype (hipBLASLt's row-wise
   scaling writes nothing else), cast to the activation dtype after, and a cast
   of the whole model to another dtype leaves the FP8 weight as stored.
+- ``NVFP4Linear``: ``weight_packed`` (FP4 E2M1 codes, two per byte),
+  ``weight_scale`` (FP8 E4M3 per 16 input columns) and the FP32
+  ``weight_global_scale`` and ``input_global_scale``. An eighth of BF16 plus a
+  sixteenth for the scales. Each call quantizes the activations to NVFP4 under
+  the calibrated input global scale (``accel/triton_nvfp4.py``, dynamic 16-value
+  block scales as compressed-tensors computes them) and multiplies on the FP4
+  tensor cores in ``torch.nn.functional.scaled_mm`` with 1x16 block scales and a
+  tensor scale per operand, writing BF16. It needs a Blackwell GPU
+  (``accel/gpu.py``, ``nvfp4_unavailable``), which placement checks before
+  loading; ``prepare`` lays the weight scales out as cuBLAS reads them
+  (``accel/nvfp4.py``, ``swizzle``) in place of the stored ones. Inputs of more
+  than ``NVFP4_ROWS`` rows multiply in slices: rows quantize independently, so
+  the slices compute the same values while holding less at once.
 """
 
 from __future__ import annotations
@@ -42,7 +55,7 @@ import torch
 from torch import nn
 
 from ...errors import PackageError
-from ...quantization import FLOAT8, FLOAT8_DEVICES, PACK, QuantizedWeights
+from ...quantization import FLOAT8, FLOAT8_DEVICES, NVFP4, PACK, QuantizedWeights
 
 # e4m3fn negative zero, whose bits are NaN in e4m3fnuz.
 E4M3FN_NEGATIVE_ZERO = -128
@@ -53,6 +66,8 @@ UNSCALED_ROWS = 256
 # PyTorch before 2.12 zeroes the stream-K workspace of Ada's per-row FP8 kernel on the
 # default stream (pytorch/pytorch#177573), so that product hangs in a graph or on another stream.
 ROWWISE_CAPTURE_SAFE = torch.torch_version.TorchVersion(torch.__version__) >= "2.12"
+# Rows per NVFP4 product: longer inputs multiply in slices (their FP4 copy and output stay bounded).
+NVFP4_ROWS = 8192
 # The FP8 format each ROCm architecture's matrix units multiply.
 ROCM_FLOAT8 = {"gfx942": torch.float8_e4m3fnuz, "gfx950": torch.float8_e4m3fn}
 
@@ -272,6 +287,122 @@ class Float8Linear(nn.Module):
         return out.reshape(*shape[:-1], self.out_features)
 
 
+class NVFP4Linear(nn.Module):
+    """A linear layer over NVFP4 weights, multiplied with NVFP4 activations on FP4 tensor cores."""
+
+    weight_packed: torch.Tensor
+    weight_scale: torch.Tensor
+    weight_global_scale: torch.Tensor
+    input_global_scale: torch.Tensor
+
+    def __init__(self, linear: nn.Linear):
+        super().__init__()
+        out_features, in_features = linear.out_features, linear.in_features
+        if out_features % 16 or in_features % 32:
+            # FP4 products take multiples of 16 rows and 32 columns (two codes per byte, 16 per scale)
+            raise PackageError(
+                f"an NVFP4 layer of {out_features}x{in_features} is not a multiple of 16x32"
+            )
+        self.in_features, self.out_features = in_features, out_features
+        device = linear.weight.device
+        self.register_buffer(
+            "weight_packed",
+            torch.empty(
+                out_features, in_features // 2, dtype=torch.uint8, device=device
+            ),
+        )
+        self.register_buffer(
+            "weight_scale",
+            torch.empty(
+                out_features,
+                in_features // 16,
+                dtype=torch.float8_e4m3fn,
+                device=device,
+            ),
+        )
+        self.register_buffer("weight_global_scale", torch.empty(1, device=device))
+        self.register_buffer("input_global_scale", torch.empty(1, device=device))
+        self.bias = linear.bias
+
+    @property
+    def weight_elements(self) -> int:
+        return self.in_features * self.out_features
+
+    def stored_bytes(self) -> int:
+        return sum(b.numel() * b.element_size() for b in self.buffers(recurse=False))
+
+    def _apply(
+        self, fn: Callable[[torch.Tensor], torch.Tensor], recurse: bool = True
+    ) -> NVFP4Linear:
+        # A cast of the whole model keeps the FP8 scales and the FP32 global scales as stored.
+        kept = {name: b.dtype for name, b in self.named_buffers(recurse=False)}
+        super()._apply(fn, recurse)  # type: ignore[no-untyped-call]  # torch leaves _apply unannotated
+        for name, dtype in kept.items():
+            buffer = getattr(self, name)
+            if buffer.dtype != dtype:
+                setattr(self, name, buffer.to(dtype))
+        return self
+
+    def prepare(self) -> None:
+        """Lay the weight scales out for cuBLAS and bind the global scales, so a call never syncs the host."""
+        from ...accel.gpu import nvfp4_unavailable
+
+        device = self.weight_packed.device
+        reason = (
+            "they need a CUDA GPU"
+            if device.type != "cuda"
+            else nvfp4_unavailable(device.index)
+        )
+        if reason:
+            raise ValueError(f"NVFP4 weights: {reason}")
+        from torch.nn.functional import ScalingType, SwizzleType
+
+        from ...accel.nvfp4 import swizzle
+        from ...accel.triton_nvfp4 import quantize
+
+        self.weight_scale = swizzle(self.weight_scale)
+        self.input_global = float(self.input_global_scale.float().item())
+        self.input_decode = (1.0 / self.input_global_scale.float()).reshape(1)
+        self.weight_decode = (1.0 / self.weight_global_scale.float()).reshape(1)
+        self.weight_fp4 = self.weight_packed.view(torch.float4_e2m1fn_x2).t()
+        self.scaling = [ScalingType.BlockWise1x16, ScalingType.TensorWise]
+        self.swizzling = [SwizzleType.SWIZZLE_32_4_4, SwizzleType.NO_SWIZZLE]
+        self.quantize = quantize
+
+    def _product(self, rows: torch.Tensor) -> torch.Tensor:
+        # the kernel writes the activation scales in cuBLAS's layout already
+        q, scale = self.quantize(rows, self.input_global)
+        return nn.functional.scaled_mm(
+            q.view(torch.float4_e2m1fn_x2),
+            self.weight_fp4,
+            [scale, self.input_decode],
+            self.scaling,
+            [self.weight_scale, self.weight_decode],
+            self.scaling,
+            swizzle_a=self.swizzling,
+            swizzle_b=self.swizzling,
+            output_dtype=torch.bfloat16,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        shape = x.shape
+        rows = x.reshape(-1, shape[-1])
+        if rows.dtype != torch.bfloat16:
+            rows = rows.to(torch.bfloat16)
+        if not rows.is_contiguous():
+            rows = rows.contiguous()
+        if rows.shape[0] > NVFP4_ROWS:
+            parts = torch.split(rows, NVFP4_ROWS)
+            out = torch.cat([self._product(part) for part in parts])
+        else:
+            out = self._product(rows)
+        if out.dtype != x.dtype:
+            out = out.to(x.dtype)
+        if self.bias is not None:
+            out = out + self.bias
+        return out.reshape(*shape[:-1], self.out_features)
+
+
 def install(module: nn.Module, weights: QuantizedWeights, prefix: str = "") -> int:
     """Swap every linear layer ``weights`` holds (by checkpoint name ``prefix + name``) for its quantized layer."""
     swapped = 0
@@ -279,11 +410,13 @@ def install(module: nn.Module, weights: QuantizedWeights, prefix: str = "") -> i
         if isinstance(layer, nn.Linear) and weights.holds(prefix + name):
             parent, _, leaf = name.rpartition(".")
             owner = module.get_submodule(parent) if parent else module
-            new: nn.Module = (
-                Float8Linear(layer)
-                if weights.scheme == FLOAT8
-                else Int4Linear(layer, weights.group_size, weights.symmetric)
-            )
+            new: nn.Module
+            if weights.scheme == FLOAT8:
+                new = Float8Linear(layer)
+            elif weights.scheme == NVFP4:
+                new = NVFP4Linear(layer)
+            else:
+                new = Int4Linear(layer, weights.group_size, weights.symmetric)
             setattr(owner, leaf, new)
             swapped += 1
     if not swapped:
@@ -293,11 +426,11 @@ def install(module: nn.Module, weights: QuantizedWeights, prefix: str = "") -> i
     return swapped
 
 
-def layers(module: nn.Module) -> list[Int4Linear | Float8Linear]:
+def layers(module: nn.Module) -> list[Int4Linear | Float8Linear | NVFP4Linear]:
     return [
         layer
         for layer in module.modules()
-        if isinstance(layer, (Int4Linear, Float8Linear))
+        if isinstance(layer, (Int4Linear, Float8Linear, NVFP4Linear))
     ]
 
 
@@ -310,7 +443,7 @@ def capture_safe(module: nn.Module) -> bool:
 
 
 def prepare(module: nn.Module) -> None:
-    """Ready the placed layers for their device (``Float8Linear.prepare``)."""
+    """Ready the placed layers for their device (``Float8Linear.prepare``, ``NVFP4Linear.prepare``)."""
     for layer in layers(module):
-        if isinstance(layer, Float8Linear):
+        if isinstance(layer, (Float8Linear, NVFP4Linear)):
             layer.prepare()
