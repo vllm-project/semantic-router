@@ -233,8 +233,20 @@ recipes can set their recipe-level description. This restriction does not apply
 to decision descriptions within `routing`. An explicitly supplied `entrypoints`
 field can change entrypoint bindings: omitting it preserves them for this task.
 
-Recipe validation returns `valid`, `name` and `action`; it returns neither a
-candidate ETag nor the full-config plan's hot-reload check. Record the GET ETag
-as the read baseline, preserve the exact submitted payload, and compare the
-complete intended result separately. Do not describe recipe validation as a
-config plan or as proof that the candidate is ready to activate.
+Recipe validation applies the requested recipe mutation to the current persisted
+configuration in memory, then validates the resulting complete configuration
+document without saving or reloading it. It returns `valid`, `name` and
+`action`, but neither a candidate ETag nor the full-config plan's hot-reload
+compatibility check. The returned `action` describes the proposed operation, not
+a completed save.
+
+Record the recipe GET ETag as the read baseline and preserve the exact submitted
+payload. However, validation reads the persisted configuration again, does not
+enforce an `If-Match` precondition, and returns no `current_etag`. The earlier
+GET ETag therefore does not establish which baseline validation used if the
+configuration changes between requests. This example assumes no concurrent
+writers; that assumption is not a baseline-binding guarantee provided by the
+validation endpoint.
+
+Compare the complete intended result separately. Do not describe recipe
+validation as a config plan or as proof that the candidate is ready to activate.
