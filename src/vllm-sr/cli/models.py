@@ -78,6 +78,13 @@ class ListenerSystemOne(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     models: List[str] = Field(min_length=1)
+    max_deadline_ms: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="The longest this listener waits for a model it calls "
+        "directly, however long a request's options.deadline_ms asks for. "
+        "Omitted, 600000 (10 minutes).",
+    )
 
     @field_validator("models")
     @classmethod

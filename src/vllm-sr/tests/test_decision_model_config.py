@@ -450,6 +450,17 @@ def test_systemone_duplicate_identity_requires_explicit_public_names():
     assert _errors(document) == []
 
 
+def test_systemone_listener_bounds_the_request_deadline():
+    document = copy.deepcopy(BASE)
+    systemone = {"models": ["vllm-sr/Decision-2.0-Kai-0.6B"], "max_deadline_ms": 120000}
+    document["listeners"][0]["systemone"] = systemone
+    assert _errors(document) == []
+    for limit in (0, -1, "10m"):
+        systemone["max_deadline_ms"] = limit
+        with pytest.raises(ValidationError, match="max_deadline_ms"):
+            UserConfig.model_validate(document)
+
+
 def test_decision_window_input_is_a_supported_scan_budget():
     document = copy.deepcopy(BASE)
     document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
