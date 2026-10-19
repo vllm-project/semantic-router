@@ -1,4 +1,4 @@
-"""Build native RISC-V images from a public SDK without importing build caches."""
+"""Build native RISC-V Router images with a public or existing SDK."""
 
 import argparse
 import json
@@ -23,12 +23,13 @@ def build_commands(args):
         "docker",
         "buildx",
         "build",
-        "--no-cache",
         "--progress=plain",
         "--platform",
         "linux/riscv64",
         "--load",
     ]
+    if args.no_cache:
+        common.append("--no-cache")
     # Older Engine-integrated BuildKit versions leave globally redeclared
     # automatic arguments empty during dynamic FROM stage resolution.
     for variable in (
@@ -50,19 +51,25 @@ def build_commands(args):
         common += ["--build-arg", variable]
     if args.network:
         common += ["--network", args.network]
-    sdk = "semantic-router-native-sdk:" + args.tag
-    commands = [
-        [
-            *common,
-            "--build-arg",
-            "BASE_IMAGE=" + args.base_image,
-            "-f",
-            "tools/docker/riscv64/Dockerfile.toolchain",
-            "-t",
-            sdk,
-            ".",
+    sdk = args.sdk_image or "semantic-router-native-sdk:" + args.tag
+    commands = (
+        []
+        if args.sdk_image
+        else [
+            [
+                *common,
+                "--build-arg",
+                "BASE_IMAGE=" + args.base_image,
+                "--build-arg",
+                "BUILD_JOBS=" + str(args.jobs or 2),
+                "-f",
+                "tools/docker/riscv64/Dockerfile.toolchain",
+                "-t",
+                sdk,
+                ".",
+            ]
         ]
-    ]
+    )
     if args.component == "sdk":
         return commands
     dockerfile = "tools/docker/Dockerfile.extproc"
@@ -94,11 +101,29 @@ def main():
     parser.add_argument("--tag", default="public")
     parser.add_argument("--go-proxy")
     parser.add_argument("--network", choices=("default", "host"))
+    parser.add_argument(
+        "--no-cache", action="store_true", help="Rebuild all Docker layers"
+    )
+    parser.add_argument(
+        "--sdk-image", help="Reuse an existing SDK instead of building it"
+    )
+    parser.add_argument(
+        "--jobs", type=int, help="Go/Cargo concurrency in a new SDK (default: 2)"
+    )
     parser.add_argument("--output", type=Path)
     parser.add_argument(
         "--plan", action="store_true", help="Print commands without running Docker"
     )
     args = parser.parse_args()
+    if args.jobs is not None and args.jobs < 1:
+        parser.error("--jobs must be positive")
+    if args.sdk_image:
+        if args.component != "router" or args.jobs is not None:
+            parser.error(
+                "--sdk-image requires --component router and cannot set --jobs"
+            )
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/@:-]*", args.sdk_image):
+            parser.error("invalid SDK image reference")
     if not re.fullmatch(r"[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}", args.base_image):
         parser.error("--base-image must be pinned by digest")
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", args.tag):
@@ -109,9 +134,10 @@ def main():
         return
     if platform.system() != "Linux" or platform.machine() != "riscv64":
         parser.error("execute on native riscv64 Linux; --plan works on other hosts")
-    validate_builder(
-        subprocess.check_output(["docker", "buildx", "inspect"], text=True)
-    )
+    if not args.sdk_image:
+        validate_builder(
+            subprocess.check_output(["docker", "buildx", "inspect"], text=True)
+        )
     output = args.output or Path(tempfile.mkdtemp(prefix="vsr-public-build-"))
     output.mkdir(parents=True, exist_ok=True)
     receipt = {"machine": platform.machine(), "commands": commands, "steps": []}
