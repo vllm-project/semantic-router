@@ -1,0 +1,36 @@
+[project]
+name = "mmbert-32k"
+version = "0.0.0"
+description = "Environment for the mmBERT-32K embedding trainer under src/training/model_embeddings/mmbert_32k"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    # accelerate is not imported by name. SentenceTransformerTrainer needs it.
+    "accelerate>=1.12.0,<2",
+    "datasets>=4.5.0,<5",
+    # The documented `hf download` command comes from this package.
+    "huggingface-hub>=0.36.0,<1",
+    "numpy>=2.2.2,<3",
+    "safetensors>=0.5.2,<1",
+    # requirements.txt pins 5.3.0. 5.7 changes Pooling and LambdaLoss, which these tests check.
+    "sentence-transformers>=5.3.0,<5.4",
+    # runtime.json pins the release image at PyTorch 2.10.0. The default wheel is PyPI.
+    "torch>=2.10.0,<3",
+    "tqdm>=4.67.1,<5",
+    # 4.57.6 is part of the foundation YaRN contract, so the range stops before 4.58.
+    "transformers>=4.57.6,<4.58",
+]
+
+[dependency-groups]
+# foundation_data_local.py treats a missing langdetect import as optional.
+local-corpus = ["langdetect>=1.0.9,<2"]
+# Only the representation export test imports these.
+export = [
+    # Floors stay on releases that still publish Python 3.10 wheels.
+    "onnx>=1.16,<2",
+    "onnxruntime>=1.18,<2",
+    "onnxscript>=0.1,<1",
+]
+
+[tool.uv]
+package = false

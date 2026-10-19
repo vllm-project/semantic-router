@@ -189,11 +189,13 @@ for GPU training. The configuration hash below is the SHA256 of the JSON file:
 
 ```bash
 export PYTHONPATH="$PWD"
-python -m src.training.model_embeddings.mmbert_32k.newbase_training \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m src.training.model_embeddings.mmbert_32k.newbase_training \
   --config /data/retrieval/task.json --config-sha256 CONFIG_SHA256 \
   --output /data/retrieval/run --device cuda
 
-python -m src.training.model_embeddings.mmbert_32k.newbase_scoring \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m src.training.model_embeddings.mmbert_32k.newbase_scoring \
   --model /data/retrieval/run/step-100 --task embedding \
   --known-dev /data/retrieval/validation --split validation \
   --output /data/retrieval/evaluation --device cpu --token-budget 32768
@@ -219,17 +221,30 @@ Export and engine qualification remain separate from this training interface.
 
 ## Install
 
-Use a Python environment with a compatible PyTorch build, then install the
-family dependencies:
+This directory is a uv project (`pyproject.toml` and `uv.lock`). Create the
+environment from the lock, from the repository root:
 
 ```bash
-python -m pip install --requirement \
-  src/training/model_embeddings/mmbert_32k/requirements.txt
+uv sync --locked --project src/training/model_embeddings/mmbert_32k
 ```
 
-The accelerator image and Python package versions for a release run are pinned
-in `runtime.json`. Keep that environment, the resolved configuration, and
-output checksums with the run.
+`pyproject.toml` bounds each dependency and `uv.lock` pins the exact versions.
+The default PyPI `torch` wheel is a CUDA build on Linux and the platform
+default on macOS. A release run still uses the digest-pinned ROCm image in
+`runtime.json`. ROCm uses PyTorch's `cuda` device name. Keep that image, the
+resolved configuration, and output checksums with the run.
+
+Optional groups stay out of the default install. `local-corpus` adds
+`langdetect` for local foundation text. `export` adds `onnx`, `onnxruntime`,
+and `onnxscript` for the representation export tests:
+
+```bash
+uv sync --locked --project src/training/model_embeddings/mmbert_32k \
+  --group local-corpus --group export
+```
+
+`requirements.txt` stays for anyone who installs with pip. The commands below
+run from the repository root through `uv run --locked --project`.
 
 ## Configure paths
 
@@ -253,19 +268,23 @@ applied after the config and are explicit overrides.
 The family runner can resolve a command without importing the ML stack:
 
 ```bash
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/foundation.json \
   --stage prepare --print-command
 
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/foundation.json \
   --stage train --print-command
 
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/embedder.json \
   --print-command
 
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/reranker.json \
   --print-command
 ```
@@ -285,11 +304,13 @@ source prefixes observed by the first:
 ```bash
 export MMBERT32K_FOUNDATION_AUDIT=/path/to/mmbert32k-cc100-audit
 
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/foundation.json \
   --stage prepare --output_dir "$MMBERT32K_FOUNDATION_AUDIT"
 
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/foundation.json \
   --stage prepare \
   --source_prefix_contract_dir "$MMBERT32K_FOUNDATION_AUDIT"
@@ -300,7 +321,8 @@ packed-token content, Arrow schema, and every shard checksum. Foundation
 training validates that manifest before loading model weights:
 
 ```bash
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/foundation.json \
   --stage train
 ```
@@ -322,12 +344,14 @@ Download the BGE-M3 training data at the revision pinned in the config, then
 run:
 
 ```bash
-hf download Shitao/bge-m3-data \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  hf download Shitao/bge-m3-data \
   --repo-type dataset \
   --revision a69db8b86e9c1767d193ee0de95e5c4001a71eae \
   --local-dir "$MMBERT32K_BGE_DATA"
 
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/embedder.json
 ```
 
@@ -340,7 +364,8 @@ pinned AllNLI training source and STS-B evaluation source.
 The reranker uses the same BGE-M3 data directory:
 
 ```bash
-python -m training.model_embeddings.mmbert_32k \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m training.model_embeddings.mmbert_32k \
   --config src/training/model_embeddings/mmbert_32k/configs/reranker.json
 ```
 
@@ -360,14 +385,16 @@ bash src/training/model_embeddings/mmbert_32k/run_rerank_2d_matryoshka_training.
 ```
 
 Set `MMBERT32K_STAGE=prepare` when using `run_rope_training.sh` for data
-preparation. `MMBERT32K_PYTHON_BIN` selects a non-default Python executable.
+preparation. Set `MMBERT32K_PYTHON_BIN` to pass `uv run --python` a
+non-default interpreter. Otherwise the locked project interpreter is used.
 
 ## Validate
 
 The lightweight contract suite does not download models:
 
 ```bash
-python -m unittest discover \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m unittest discover \
   -s src/training/model_embeddings/mmbert_32k/tests \
   -p 'test_*.py'
 ```
