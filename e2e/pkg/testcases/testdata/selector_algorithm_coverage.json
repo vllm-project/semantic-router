@@ -63,6 +63,12 @@
     "prerequisite": "deterministic router-model fixture"
   },
   {
+    "algorithm": "random",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
     "algorithm": "router_dc",
     "tier": "supported",
     "status": "planned",
