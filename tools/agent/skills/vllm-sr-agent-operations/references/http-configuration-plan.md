@@ -2,13 +2,13 @@
 
 This example prepares one decision-description change for review through the
 Router management API. It stops after a config plan; nothing is saved or
-activated. The [configuration workflow](configuration-loop.md) covers a later,
+activated. The [configuration workflow](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md) covers a later,
 separately authorized activation.
 
 Use Bash, curl and Python 3 in an empty working directory. Use a disposable
 Router with the secret-free fixture below, a converged persisted/active
 configuration, and no concurrent writers. Follow the
-[installation skill](../SKILL.md) to start a new stack; do not restart an existing
+[installation skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md) to start a new stack; do not restart an existing
 stack to try this example. Set `ROUTER_ORIGIN` to its management origin. If bearer
 auth is enabled, supply `ROUTER_TOKEN` through your environment with the built-in
 `viewer` role; it permits discovery, reads and planning, but blocks writes.

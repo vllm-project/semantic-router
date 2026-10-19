@@ -13,7 +13,7 @@ help and the Router's advertised API define the supported contract.
 
 ## Prepare a change without applying it
 
-For an HTTP-only workflow, follow the [configuration planning example](http-configuration-plan.md). It reads a fresh baseline, changes one description, checks the exact candidate with `config/plan`, and stops before any write. Recipe validation and its narrower guarantees are explained separately.
+For an HTTP-only workflow, follow the [configuration planning example](https://vllm-sr.ai/install/agent/vllm-sr/references/http-configuration-plan.md). It reads a fresh baseline, changes one description, checks the exact candidate with `config/plan`, and stops before any write. Recipe validation and its narrower guarantees are explained separately.
 
 ## Activate a change
 
