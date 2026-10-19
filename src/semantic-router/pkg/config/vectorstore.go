@@ -16,7 +16,10 @@ limitations under the License.
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // VectorStoreConfig holds configuration for the vector store feature.
 type VectorStoreConfig struct {
@@ -202,7 +205,34 @@ func (c *VectorStoreConfig) Validate() error {
 	if err := validateVectorStoreMetadataStore(c); err != nil {
 		return err
 	}
+	if err := validateVectorStoreSupportedFormats(c.SupportedFormats); err != nil {
+		return err
+	}
 	return validateVectorStoreBackendConfig(c)
+}
+
+// VectorStoreFormatExtension normalizes a supported_formats entry to a
+// lowercase file extension with a leading dot.
+func VectorStoreFormatExtension(format string) string {
+	ext := strings.ToLower(strings.TrimSpace(format))
+	if ext != "" && !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+func validateVectorStoreSupportedFormats(formats []string) error {
+	for _, format := range formats {
+		switch VectorStoreFormatExtension(format) {
+		case ".txt", ".md", ".json", ".csv", ".html", ".htm":
+		default:
+			return fmt.Errorf(
+				"vector_store.supported_formats must contain only '.txt', '.md', '.json', '.csv', '.html', or '.htm', got '%s'",
+				format,
+			)
+		}
+	}
+	return nil
 }
 
 func validateVectorStoreBackendType(backendType string) error {
