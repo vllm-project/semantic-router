@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
+from .packed import Packed, is_packed, packed_attention
 from .tree import Tree, is_tree, tree_attention
 
 PADDING_MASK_RANK = 2
@@ -161,17 +162,22 @@ def attention(
     query: torch.Tensor,
     key: torch.Tensor,
     value: torch.Tensor,
-    mask: torch.Tensor | Tree | None,
+    mask: torch.Tensor | Tree | Packed | None,
     *,
     groups: int,
     scaling: float,
 ) -> torch.Tensor:
     """SDPA as Transformers dispatches it: GQA in-kernel only without a mask; returns [B, T, H, D].
 
-    A shared-context ``Tree`` as the mask runs the tree attention instead.
+    A shared-context ``Tree`` as the mask runs the tree attention instead, and
+    a ``Packed`` layout one variable-length attention over its rows.
     """
     if is_tree(mask):
         return tree_attention(query, key, value, mask, groups=groups, scaling=scaling)
+    if is_packed(mask):
+        return packed_attention(
+            kernels, query, key, value, mask, groups=groups, scaling=scaling
+        )
     enable_gqa = False
     if groups > 1:
         if mask is None and key.shape[-1] == value.shape[-1] <= SDPA_GQA_MAX_HEAD_DIM:

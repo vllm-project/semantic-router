@@ -135,3 +135,64 @@ func TestValkeyAtomicStoreConcurrentSameIDHasOneCompleteWinner(t *testing.T) {
 	assert.NotEmpty(t, stored["user_id"])
 	assert.NotEmpty(t, stored[valkeyStoreOperationIDField])
 }
+
+func TestValkeyAtomicRecordRetrievalUpdatesExistingMemory(t *testing.T) {
+	_, client := newValkeyAtomicStoreTestClient(t)
+	ctx := context.Background()
+	key := "memory:retrieve-existing"
+
+	err := client.HSet(ctx, key, map[string]string{
+		"id":           "retrieve-existing",
+		"content":      "cached data",
+		"access_count": "3",
+		"updated_at":   "1000",
+	}).Err()
+	require.NoError(t, err)
+
+	result, err := client.Eval(ctx, valkeyTrackRetrievalScriptSource, []string{key}, "retrieve-existing", "2500").Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), result)
+
+	fields, err := client.HGetAll(ctx, key).Result()
+	require.NoError(t, err)
+	assert.Equal(t, "4", fields["access_count"], "access_count should be incremented")
+	assert.Equal(t, "2500", fields["last_accessed"], "last_accessed should be updated")
+	assert.Equal(t, "1000", fields["updated_at"], "updated_at is the write-version and must not change on retrieve")
+	assert.Equal(t, "cached data", fields["content"])
+}
+
+func TestValkeyAtomicRecordRetrievalDoesNotResurrectDeletedMemory(t *testing.T) {
+	server, client := newValkeyAtomicStoreTestClient(t)
+	ctx := context.Background()
+	key := "memory:retrieve-deleted"
+
+	err := client.HSet(ctx, key, map[string]string{
+		"id":           "retrieve-deleted",
+		"content":      "temporary memory",
+		"access_count": "1",
+		"updated_at":   "1000",
+	}).Err()
+	require.NoError(t, err)
+
+	err = client.Del(ctx, key).Err()
+	require.NoError(t, err)
+	require.False(t, server.Exists(key))
+
+	result, err := client.Eval(ctx, valkeyTrackRetrievalScriptSource, []string{key}, "retrieve-deleted", "3000").Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), result)
+
+	assert.False(t, server.Exists(key), "deleted memory must not be resurrected by access tracking")
+}
+
+func TestValkeyAtomicRecordRetrievalMissingKeyLeavesNoKey(t *testing.T) {
+	server, client := newValkeyAtomicStoreTestClient(t)
+	ctx := context.Background()
+	key := "memory:never-existed"
+
+	result, err := client.Eval(ctx, valkeyTrackRetrievalScriptSource, []string{key}, "never-existed", "3000").Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), result)
+
+	assert.False(t, server.Exists(key), "missing key must never be created by access tracking")
+}

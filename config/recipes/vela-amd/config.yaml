@@ -347,7 +347,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         revision: f6354f54adcf38770f635ad903be2b00577f6c11
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -356,7 +355,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
         revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -365,7 +363,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
         revision: 087f9e401012df839c83717b746967ac7aebfa3e
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -374,7 +371,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback
         revision: 47434a7fd7c245c0c7c17564a000b3c56ccfec41
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -383,7 +379,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-FactCheck
         revision: 99ede1aba1563e59e416f744d25b3f6b7e9d8274
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -392,7 +387,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Modality
         revision: 5384b8997e3cbb79ca3a670e869577f4e4f4997e
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -401,7 +395,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
         revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
@@ -410,7 +403,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         revision: 1e57cebf5a7b7fec6e6973f05bbca97c5cca4436
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
@@ -419,7 +411,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
@@ -428,7 +419,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: rocm:0
-        profile: exact
         input:
           max_tokens: 32768
           overflow: reject

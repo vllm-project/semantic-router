@@ -17,6 +17,20 @@ def step_with_command(job, command):
 
 
 class QualityWorkflowTests(unittest.TestCase):
+    def test_quality_reuses_tool_caches_without_repeating_reference_generation(self):
+        steps = workflow("pre-commit.yml")["jobs"]["quality"]["steps"]
+        go = next(step for step in steps if step.get("uses") == "actions/setup-go@v5")
+        self.assertIn("!inputs.docs_only", go["if"])
+        self.assertEqual(go["with"]["cache-dependency-path"], "**/go.sum")
+        cache = next(
+            step
+            for step in steps
+            if step.get("name") == "Cache Pre-Commit Environments"
+        )
+        self.assertIn("-pre-commit-", cache["with"]["key"])
+        self.assertIn("-pre-commit-", cache["with"]["restore-keys"])
+        self.assertFalse(any("npm run build" in step.get("run", "") for step in steps))
+
     def test_quality_checks_and_receipt_share_one_successful_job(self):
         data = workflow("pre-commit.yml")
         self.assertEqual(set(data["jobs"]), {"quality"})
@@ -24,7 +38,7 @@ class QualityWorkflowTests(unittest.TestCase):
         steps = job["steps"]
         references = step_with_command(job, "make docs-generated-check")
         source = step_with_command(job, "make check CI_STATIC_ONLY=true")
-        website = step_with_command(job, "npm run build")
+        website = step_with_command(job, "npx --no-install docusaurus build")
         receipt = step_with_command(job, "workflow_evidence.py")
         self.assertNotIn("if", references)
         self.assertNotIn("if", source)
@@ -76,8 +90,17 @@ class QualityWorkflowTests(unittest.TestCase):
             self.assertLess(steps.index(scan), steps.index(receipt))
         self.assertNotIn("always()", receipt.get("if", ""))
         advisory = [step for step in steps if step.get("continue-on-error")]
-        self.assertEqual(len(advisory), 1)
-        self.assertIn("scan_malicious_code.py", advisory[0]["run"])
+        self.assertEqual(advisory, [])
+        self.assertFalse(
+            any("scan_malicious_code.py" in step.get("run", "") for step in steps)
+        )
+        self.assertFalse(
+            any(
+                "ast_security_scanner.py" in step.get("run", "")
+                and "diff " in step["run"]
+                for step in steps
+            )
+        )
         upload = next(
             step
             for step in steps
