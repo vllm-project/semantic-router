@@ -4,7 +4,7 @@ description: 查看 Semantic Router 项目维护哪些部署路径、集成、�
 translation:
   source_commit: "49fd62932eb54334c4e4bbc64977733f1c7ed5fa"
   source_file: "docs/installation/support-matrix.md"
-  outdated: false
+  outdated: true
 ---
 
 # 部署支持

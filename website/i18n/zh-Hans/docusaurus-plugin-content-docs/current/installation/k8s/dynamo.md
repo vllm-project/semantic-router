@@ -5,7 +5,7 @@ description: 将 Semantic Router 放在 Kubernetes 上由 Dynamo 管理的推理
 translation:
   source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
   source_file: "docs/installation/k8s/dynamo.md"
-  outdated: false
+  outdated: true
 ---
 
 # 与 NVIDIA Dynamo 集成

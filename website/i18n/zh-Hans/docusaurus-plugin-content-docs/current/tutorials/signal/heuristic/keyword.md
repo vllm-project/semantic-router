@@ -2,7 +2,7 @@
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/signal/heuristic/keyword.md"
-  outdated: false
+  outdated: true
 ---
 
 # 关键词信号 {#keyword-signal}

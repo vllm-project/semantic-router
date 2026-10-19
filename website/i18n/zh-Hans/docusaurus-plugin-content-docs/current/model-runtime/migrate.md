@@ -5,7 +5,7 @@ description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/migrate.md"
-  outdated: false
+  outdated: true
 ---
 
 # 从原生绑定迁移

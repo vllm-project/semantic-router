@@ -4,7 +4,7 @@ description: 为部署 vLLM Semantic Router 选择 Docker、Kubernetes 或硬件
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/deployment-options.md"
-  outdated: false
+  outdated: true
 ---
 
 # 选择部署方式

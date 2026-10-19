@@ -4,7 +4,7 @@ description: 将 Semantic Router 作为 ExtProc 服务接入 agentgateway 的 Ku
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/installation/k8s/agentgateway.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 agentgateway 部署

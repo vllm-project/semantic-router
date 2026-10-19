@@ -4,7 +4,7 @@ description: 在 Istio Gateway 后面将 Semantic Router 作为 ExtProc 服务�
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/installation/k8s/istio.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 Istio Gateway 部署

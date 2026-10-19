@@ -4,7 +4,7 @@ description: 将 Semantic Router 的模型池选择与 AIBrix 的模型部署和
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/installation/k8s/aibrix.md"
-  outdated: false
+  outdated: true
 ---
 
 # 与 AIBrix 集成
