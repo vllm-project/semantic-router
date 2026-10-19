@@ -80,10 +80,24 @@ func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
 			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
 		}
 		seen[model] = true
-		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed || cfg.IsSystemOneBackend(model) {
+		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed {
 			continue
 		}
-		if _, _, err := cfg.ResolveSystemOneDeployment(model); err != nil {
+		if cfg.IsSystemOneBackend(model) {
+			// A remote alias has no local deployment. A local one is served
+			// through the decisions API, so it takes a decision input.
+			if name := cfg.ModelConfig[model].Deployment; name != "" {
+				if err := validateModelRuntimeReference(cfg, name); err != nil {
+					return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
+				}
+			}
+			continue
+		}
+		name, deployment, err := cfg.ResolveSystemOneDeployment(model)
+		if err != nil {
+			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
+		}
+		if err := deployment.ValidateDecisionInput(name); err != nil {
 			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
 		}
 	}
