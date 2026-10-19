@@ -116,9 +116,19 @@ def source_identity(client, repo: str, number: int) -> dict:
             "CI requests require an open pull request targeting main.",
             reason="revision",
         )
+    # The PR API's base.sha can lag behind the test merge commit. Read the
+    # actual target ref, then require one coherent base/head/merge revision.
+    base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+    if (
+        base_ref.get("ref") != "refs/heads/main"
+        or base_ref.get("object", {}).get("type") != "commit"
+    ):
+        raise ManualCIError(
+            "The current main revision is unavailable.", reason="revision"
+        )
     result = {
         "head_sha": pull.get("head", {}).get("sha"),
-        "base_sha": pull.get("base", {}).get("sha"),
+        "base_sha": base_ref.get("object", {}).get("sha"),
         "source_sha": pull.get("merge_commit_sha"),
     }
     if any(
@@ -127,6 +137,18 @@ def source_identity(client, repo: str, number: int) -> dict:
     ):
         raise ManualCIError(
             "The current PR merge revision is unavailable; resolve conflicts first.",
+            reason="revision",
+        )
+    commit = client.request(f"repos/{repo}/git/commits/{result['source_sha']}")
+    parents = commit.get("parents")
+    if (
+        not isinstance(parents, list)
+        or any(not isinstance(parent, dict) for parent in parents)
+        or [parent.get("sha") for parent in parents]
+        != [result["base_sha"], result["head_sha"]]
+    ):
+        raise ManualCIError(
+            "The PR merge revision changed or is still being prepared; wait for its Plan job.",
             reason="revision",
         )
     return result

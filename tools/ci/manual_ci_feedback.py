@@ -36,7 +36,8 @@ MESSAGES = {
     ),
     "revision": (
         "CI requests need an open PR targeting `main` with an available merge "
-        "revision. Resolve any conflicts, wait for its Plan job, then request CI again."
+        "revision. Update the branch onto current `main` or resolve conflicts, "
+        "wait for its Plan job, then request CI again."
     ),
     "plan": "The current PR's CI plan is not ready. Wait for its Plan job, then post a new `/ci run` comment.",
     "busy": "Automatic CI is still running. After it finishes, rerun this command handler or post a new `/ci run` comment.",

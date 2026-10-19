@@ -187,6 +187,7 @@ class ManualCIFeedbackTests(unittest.TestCase):
     def test_expired_authorization_reports_next_step_without_starting_ci(self):
         record = manual_ci.authorize_with_feedback(self.client, self.event)
         self.client.pull["head"]["sha"] = "f" * 40
+        self.client.merge_parents[1]["sha"] = "f" * 40
         with self.assertRaises(manual_ci.ManualCIError):
             manual_ci.rerun_with_feedback(self.client, record, self.event)
         self.assertNotIn("rocket", self.client.reactions)
@@ -195,6 +196,18 @@ class ManualCIFeedbackTests(unittest.TestCase):
             "revision or authorization changed", self.client.comments[0]["body"]
         )
         self.assertIn("new `/ci run`", self.client.comments[0]["body"])
+
+    def test_stale_merge_reports_branch_update_instead_of_only_waiting_for_plan(self):
+        self.client.base_ref["object"]["sha"] = "f" * 40
+        with self.assertRaises(manual_ci.ManualCIError) as error:
+            manual_ci.authorize_with_feedback(self.client, self.event)
+        self.assertEqual(error.exception.reason, "revision")
+        self.assertEqual(self.client.posts, [])
+        self.assertNotIn("rocket", self.client.reactions)
+        self.assertIn(
+            "Update the branch onto current `main` or resolve conflicts",
+            self.client.comments[0]["body"],
+        )
 
     def test_trigger_failure_or_timeout_is_not_reported_as_a_success_or_certainty(self):
         record = manual_ci.authorize_with_feedback(self.client, self.event)
