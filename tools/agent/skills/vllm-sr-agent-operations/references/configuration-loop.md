@@ -11,6 +11,10 @@ vllm-sr config schema --endpoint "$ROUTER_ORIGIN" --surface algorithm:multi_fact
 Follow section child paths; use expanded/full output only when needed. Installed
 help and the Router's advertised API define the supported contract.
 
+## Prepare a change without applying it
+
+For an HTTP-only workflow, follow the [configuration planning example](http-configuration-plan.md). It reads a fresh baseline, changes one description, checks the exact candidate with `config/plan`, and stops before any write. Recipe validation and its narrower guarantees are explained separately.
+
 ## Activate a change
 
 For a new stack, write the configuration as the [main skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
