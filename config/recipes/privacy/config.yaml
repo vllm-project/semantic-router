@@ -11,9 +11,6 @@ global:
     response_cache:
       enabled: false
       backend_type: memory
-  router:
-    auto_model_names:
-      - vllm-sr/auto
 
 providers:
   defaults:
@@ -447,12 +444,12 @@ routing:
     jailbreak:
       - name: jailbreak_strict
         method: classifier
-        threshold: 0.45
+        threshold: 0.75
         description: Strict jailbreak classifier for routing suspicious prompts into local containment.
 
     pii:
       - name: pii_strict
-        threshold: 0.85
+        threshold: 0.01
         description: Detect personally identifiable information that should remain on local infrastructure.
 
     kb:
@@ -780,3 +777,7 @@ routing:
             enabled: true
             max_records: 50000
             max_body_bytes: 2048
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

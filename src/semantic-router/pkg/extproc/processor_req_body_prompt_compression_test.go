@@ -83,7 +83,7 @@ global:
 
 func TestPromptCompressionKeepsChatDispatchPromptAndTools(t *testing.T) {
 	body := mustMarshalCompressionFixture(t, map[string]any{
-		"model": config.DefaultVSRAutoModelName,
+		"model": config.DefaultEntrypointModel,
 		"messages": []any{
 			map[string]any{"role": "system", "content": compressionAgentInstructions},
 			map[string]any{"role": "user", "content": compressionAgentPrompt},
@@ -104,7 +104,7 @@ func TestPromptCompressionKeepsChatDispatchPromptAndTools(t *testing.T) {
 
 func TestPromptCompressionKeepsResponsesDispatchPromptAndTools(t *testing.T) {
 	body := mustMarshalCompressionFixture(t, map[string]any{
-		"model":        config.DefaultVSRAutoModelName,
+		"model":        config.DefaultEntrypointModel,
 		"instructions": compressionAgentInstructions,
 		"input": []any{map[string]any{
 			"type":    "message",

@@ -93,31 +93,15 @@ func TestValidatePromptGuardBackend_RequiresJailbreakMappingPath(t *testing.T) {
 	}
 }
 
-// The local (variant) backend needs no external model at all.
-func TestValidatePromptGuardBackend_LocalVariantNeedsNoGuardrail(t *testing.T) {
+// The local model needs no external model at all.
+func TestValidatePromptGuardBackend_LocalModelNeedsNoGuardrail(t *testing.T) {
 	cfg := remotePromptGuardConfig()
 	cfg.PromptGuard.Backend = nil
-	cfg.PromptGuard.Variant = PromptGuardVariantMmBERT32K
 	cfg.PromptGuard.ModelID = "models/jailbreak"
 	cfg.ExternalModels = nil
 
 	if err := validatePromptGuardBackend(cfg); err != nil {
-		t.Fatalf("unexpected error for the local variant backend: %v", err)
-	}
-}
-
-// The wiring checks are additive: the pre-existing backend-selection checks
-// must still fire through the same entry point.
-func TestValidatePromptGuardBackend_StillRejectsVariantAndBackendTogether(t *testing.T) {
-	cfg := remotePromptGuardConfig()
-	cfg.PromptGuard.Variant = PromptGuardVariantMmBERT32K
-
-	err := validatePromptGuardBackend(cfg)
-	if err == nil {
-		t.Fatal("expected an error when variant and backend are both set")
-	}
-	if !strings.Contains(err.Error(), "mutually exclusive") {
-		t.Errorf("error %q should report the mutual exclusion", err)
+		t.Fatalf("unexpected error for the local model: %v", err)
 	}
 }
 
@@ -151,17 +135,5 @@ func TestValidatePromptGuardNamedBackend(t *testing.T) {
 	cfg.PromptGuard.Backend.Model = "unknown"
 	if err := validatePromptGuardBackend(cfg); err == nil {
 		t.Fatal("guard fell back to first matching role")
-	}
-}
-
-func TestCanonicalPromptGuardNamedBackendReplacesInheritedVariant(t *testing.T) {
-	raw := MustStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"backend": map[string]interface{}{"protocol": "http_chat", "model": "guard", "contract": "label_decision.v1"}}}}})
-	model := PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
-	if err := normalizeCanonicalPromptGuardBackend(&model, raw); err != nil || model.Variant != "" {
-		t.Fatalf("model=%+v err=%v", model, err)
-	}
-	legacy := MustStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"protocol": "http_chat"}}}})
-	if err := normalizeCanonicalPromptGuardBackend(&model, legacy); err == nil || !strings.Contains(err.Error(), "migrate") {
-		t.Fatalf("legacy protocol should require migration: %v", err)
 	}
 }

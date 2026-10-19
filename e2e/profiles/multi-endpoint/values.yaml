@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   pullPolicy: Never
   tag: e2e-test
 service:
@@ -29,6 +29,14 @@ config:
             endpoint: vllm-14b-prod.default.svc.cluster.local:8000
             weight: 1
             provider: vllm
+      - name: qwen14b-slow
+        external_model_ids:
+          vllm: qwen14b-slow
+        backend_refs:
+          - name: vllm-14b-slow
+            endpoint: vllm-14b-slow.default.svc.cluster.local:8000
+            weight: 1
+            provider: vllm
   evaluation:
     records:
       - model: qwen14b-dev
@@ -36,6 +44,10 @@ config:
         metrics:
           score: 0.85
       - model: qwen14b-prod
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.85
+      - model: qwen14b-slow
         benchmark: vllm-sr/operator-rating@1.0.0
         metrics:
           score: 0.85
@@ -89,6 +101,32 @@ config:
           - type: fast_response
             configuration:
               message: For your security, please do not share personal information.
+      # Both reach a backend that answers after six seconds. Only the bounded
+      # route sets a reliability override, which Envoy applies per request.
+      - name: reliability_bounded_route
+        description: Slow backend with a 2s total timeout from the decision
+        priority: 300
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: reliability_bounded_keywords
+        modelRefs:
+          - model: qwen14b-slow
+            use_reasoning: false
+        reliability:
+          total_timeout: 2s
+      - name: reliability_control_route
+        description: Slow backend with the provider model's timeouts
+        priority: 299
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: reliability_control_keywords
+        modelRefs:
+          - model: qwen14b-slow
+            use_reasoning: false
       - name: code_to_dev
         description: Route code/tech queries to Dev (internal developer env)
         priority: 100
@@ -130,6 +168,14 @@ config:
             use_reasoning: false
     signals:
       keywords:
+        - name: reliability_bounded_keywords
+          operator: OR
+          keywords:
+            - reliability-probe-bounded
+        - name: reliability_control_keywords
+          operator: OR
+          keywords:
+            - reliability-probe-control
         - name: code_keywords
           operator: OR
           keywords:
@@ -168,16 +214,16 @@ config:
           description: Catch-all for unclassified queries
       jailbreak:
         - name: jailbreak_dev
-          threshold: 0.5
+          threshold: 0.75
           include_history: false
           description: Relaxed jailbreak detection for dev environment
         - name: jailbreak_prod
-          threshold: 0.9
+          threshold: 0.77
           include_history: false
           description: Strict jailbreak detection for prod environment
       pii:
         - name: pii_dev
-          threshold: 0.6
+          threshold: 0.01
           pii_types_allowed:
             - GPE
             - ORGANIZATION
@@ -185,7 +231,7 @@ config:
           include_history: false
           description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
         - name: pii_prod
-          threshold: 0.9
+          threshold: 0.01
           pii_types_allowed: []
           include_history: false
           description: Strict PII policy for prod (block all)

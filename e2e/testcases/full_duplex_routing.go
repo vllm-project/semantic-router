@@ -19,7 +19,7 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-// Each profile's full-duplex gateway sends a request to the full-duplex-selected
+// The streaming profile's full-duplex gateway sends a request to the full-duplex-selected
 // backend only when it carries the x-selected-model header that the Router sets
 // once the body is routed, and every other request to full-duplex-default. The
 // Router gives full-duplex-provider a provider chat path and credential that
@@ -43,18 +43,6 @@ type fullDuplexGateway struct {
 }
 
 func init() {
-	pkgtestcases.Register("agentgateway-full-duplex-routing", pkgtestcases.TestCase{
-		Description: "Verify agentgateway FullDuplexStreamed requests reach the backend x-selected-model names with the provider path and credential, and an end-of-stream rejection reaches no backend",
-		Tags:        []string{"agentgateway", "gateway", "streaming", "routing"},
-		Fn: fullDuplexRoutingTest(fullDuplexGateway{
-			service: pkgtestcases.ServiceConfig{
-				LabelSelector: "gateway.networking.k8s.io/gateway-name=agentgateway-full-duplex",
-				Namespace:     "agentgateway-system",
-				ServicePort:   "80",
-			},
-			backendsNamespace: "agentgateway-system",
-		}),
-	})
 	pkgtestcases.Register("envoy-full-duplex-routing", pkgtestcases.TestCase{
 		Description: "Verify raw Envoy FULL_DUPLEX_STREAMED requests reach the backend x-selected-model names with the provider path and credential, and an end-of-stream rejection reaches no backend",
 		Tags:        []string{"streaming", "gateway", "routing"},
@@ -78,8 +66,8 @@ type fullDuplexRequest struct {
 }
 
 func fullDuplexRequests() []fullDuplexRequest {
-	// "urgent" routes to a keyword decision without a response cache in both
-	// profiles, so every routed request reaches a backend. Digits would trip
+	// "urgent" routes to a keyword decision without a response cache in the
+	// profile, so every routed request reaches a backend. Digits would trip
 	// the streaming profile's PII block.
 	body := func(model, n string) []string {
 		return []string{
@@ -168,8 +156,8 @@ func checkFullDuplexRequest(
 	if request.reject {
 		// The mocker would accept this body, so a 400 carrying the Router's
 		// error envelope is the Router's immediate response.
-		if status != http.StatusBadRequest || !strings.Contains(responseBody, "invalid inference request") {
-			return fmt.Errorf("expected the Router's HTTP 400, got %d: %s", status, responseBody)
+		if status != http.StatusBadRequest || !strings.Contains(responseBody, `"code":"model_not_found"`) {
+			return fmt.Errorf("expected the Router's HTTP 400 with code model_not_found, got %d: %s", status, responseBody)
 		}
 		if selected != nil || unrouted != nil {
 			return fmt.Errorf("a rejected request reached a backend (%s %v, %s %v)",

@@ -56,7 +56,7 @@ func azureChatDeployment(path string) (string, bool) {
 // request body has no model field; the deployment in the path selects it.
 func withAzureDeploymentModel(body []byte, path string) []byte {
 	deployment, ok := azureChatDeployment(path)
-	if !ok {
+	if !ok || len(body) == 0 {
 		return body
 	}
 	rewritten, err := sjson.SetBytes(body, "model", deployment)

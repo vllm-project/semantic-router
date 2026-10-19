@@ -139,10 +139,7 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
         "ttl_seconds": 604800,
         "async_writes": False,
     }
-    assert (
-        document["recipes"][0]["routing"].get("data_policy", {}).get("replay")
-        is not False
-    )
+    assert "data_policy" not in document["recipes"][0]["routing"]
     assert (
         parse_user_config(str(output), log_summary=False).global_["router"]["learning"]
         == learning

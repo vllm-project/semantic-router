@@ -12,7 +12,7 @@ import (
 // trip through the CLI or the dashboard.
 const hallucinationSignalDSL = `
 SIGNAL keyword probe { keywords: ["__probe__"] }
-SIGNAL hallucination ungrounded_claims { use_nli: true description: "Checks the answer against its grounding context." }
+SIGNAL hallucination ungrounded_claims { description: "Checks the answer against its grounding context." }
 SIGNAL hallucination plain_check {}
 ROUTE grounded { PRIORITY 1 WHEN keyword("probe") MODEL "m:1b" }
 `
@@ -32,11 +32,11 @@ func compileHallucinationSignal(t *testing.T, input string) *config.RouterConfig
 func TestHallucinationSignalCompiles(t *testing.T) {
 	cfg := compileHallucinationSignal(t, hallucinationSignalDSL)
 	rule := cfg.HallucinationRules[0]
-	if rule.Name != "ungrounded_claims" || !rule.UseNLI || rule.Description != "Checks the answer against its grounding context." {
+	if rule.Name != "ungrounded_claims" || rule.Description != "Checks the answer against its grounding context." {
 		t.Errorf("first rule = %+v", rule)
 	}
-	if plain := cfg.HallucinationRules[1]; plain.Name != "plain_check" || plain.UseNLI {
-		t.Errorf("second rule = %+v, want plain_check without NLI", plain)
+	if plain := cfg.HallucinationRules[1]; plain.Name != "plain_check" {
+		t.Errorf("second rule = %+v, want plain_check", plain)
 	}
 }
 
@@ -47,16 +47,22 @@ func TestHallucinationSignalDecompileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
-	if !strings.Contains(dslText, "SIGNAL hallucination ungrounded_claims") || !strings.Contains(dslText, "use_nli: true") {
-		t.Errorf("decompiled DSL dropped the hallucination rule or its use_nli:\n%s", dslText)
+	if !strings.Contains(dslText, "SIGNAL hallucination ungrounded_claims") || !strings.Contains(dslText, "SIGNAL hallucination plain_check") {
+		t.Errorf("decompiled DSL dropped a hallucination rule:\n%s", dslText)
 	}
-	if strings.Count(dslText, "use_nli:") != 1 {
-		t.Errorf("a rule without NLI must not gain an explicit use_nli:\n%s", dslText)
+	if again := compileHallucinationSignal(t, dslText); again.HallucinationRules[0].Description != cfg.HallucinationRules[0].Description {
+		t.Errorf("description after round trip = %q", again.HallucinationRules[0].Description)
 	}
+}
 
-	again := compileHallucinationSignal(t, dslText)
-	if !again.HallucinationRules[0].UseNLI || again.HallucinationRules[1].UseNLI {
-		t.Errorf("use_nli after round trip = %v / %v", again.HallucinationRules[0].UseNLI, again.HallucinationRules[1].UseNLI)
+func TestHallucinationSignalRejectsRetiredNLI(t *testing.T) {
+	_, errs := Compile(`
+SIGNAL keyword probe { keywords: ["__probe__"] }
+SIGNAL hallucination ungrounded_claims { use_nli: true }
+ROUTE grounded { PRIORITY 1 WHEN keyword("probe") MODEL "m:1b" }
+`)
+	if len(errs) == 0 || !strings.Contains(errs[0].Error(), "use_nli is retired") {
+		t.Fatalf("use_nli must be refused, got %v", errs)
 	}
 }
 
@@ -67,11 +73,11 @@ func TestHallucinationSignalASTDecompile(t *testing.T) {
 	var found bool
 	for _, sig := range prog.Signals {
 		if sig.SignalType == "hallucination" && sig.Name == "ungrounded_claims" {
-			v, ok := sig.Fields["use_nli"].(BoolValue)
-			found = ok && v.V
+			v, ok := sig.Fields["description"].(StringValue)
+			found = ok && v.V != ""
 		}
 	}
 	if !found {
-		t.Error("AST decompile dropped the hallucination rule or its use_nli field")
+		t.Error("AST decompile dropped the hallucination rule or its description")
 	}
 }

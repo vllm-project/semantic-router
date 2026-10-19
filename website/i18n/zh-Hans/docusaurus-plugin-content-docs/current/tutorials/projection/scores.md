@@ -1,7 +1,7 @@
 ---
 sidebar_position: 3
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/projection/scores.md"
   outdated: false
 ---
@@ -54,6 +54,11 @@ translation:
 - `complexity`
 - `modality`
 - `authz`
+- `metadata`
+- `classifier`
+- `input_modality`
+- `decision`
+- `safety`
 - `jailbreak`
 - `pii`
 - `kb`

@@ -331,7 +331,7 @@ func externalAPIEnvironmentReferenceAt(value string, offset int) int {
 
 func resolveExternalAPIEnvironmentReference(reference string) string {
 	if strings.HasPrefix(reference, "${") {
-		return resolveBracedEnvReference(reference[2 : len(reference)-1])
+		return processEnv.resolveBraced(reference[2 : len(reference)-1])
 	}
 	return os.Getenv(reference[1:])
 }

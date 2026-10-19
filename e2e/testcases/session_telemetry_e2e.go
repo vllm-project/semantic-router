@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -43,7 +44,7 @@ func testSessionTelemetryMetrics(
 		"x-authz-user-id": "e2e-session-telemetry-user",
 	}
 	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Say hello in one short sentence for session telemetry."},
 		},

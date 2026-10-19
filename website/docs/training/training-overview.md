@@ -23,14 +23,14 @@ This section covers creating and evaluating your own task models.
 | Detect personal information | [PII](./classifier-models#pii-detector) | Entity spans |
 | Apply a content-risk policy | [Safety and Hazard](./mmbert-safety-classifier) | Safe/unsafe and risk categories |
 
-[Vela's model catalog](./model-catalog) lists all eleven releases. Vela 1.0
+[Vela's model catalog](./model-catalog) lists the task checkpoints. Vela 1.0
 accepts text; [multimodal embeddings](./multimodal-embeddings) are a separate
 family. [Provider model evaluation](./model-performance-eval) and
 [learned model selection](./ml-model-selection) help choose the downstream LLM.
 
 ## Choose your starting checkpoint {#record-the-base-and-task-lineage}
 
-Use [Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)
+Use [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)
 to train a new task. It is the common base for Vela's classifiers, embeddings,
 and reranker. Download an explicit Hub revision and keep its tokenizer and
 configuration together with the weights.
@@ -73,13 +73,13 @@ to serve.
 ## Use the trained model in the router
 
 Export a complete checkpoint with its tokenizer and labels. Choose a supported
-engine and input limit in [Run models locally](../installation/runtime/in-process.md),
+engine and input limit in [Run models locally](../model-runtime/deploy.md),
 then validate your configuration:
 
 ```bash
 vllm-sr config validate --config config.yaml
 ```
 
-Use [route preview](../installation/runtime/lifecycle-diagnostics.md) to check
+Use [route preview](../model-runtime/troubleshooting.md) to check
 the signal, selected decision, and latency on representative requests before
 deploying the model to traffic.

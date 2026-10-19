@@ -32,14 +32,17 @@ export const ProviderMark: React.FC<{ provider: CatalogProvider }> = ({ provider
   <CatalogMark presentation={provider.presentation} />
 )
 
-const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
+const Stat: React.FC<{ label: string; value: number | null }> = ({ label, value }) => (
   <div className={styles.statFact}>
-    <dd>{value.toLocaleString()}</dd>
+    <dd>{value === null ? '…' : value.toLocaleString()}</dd>
     <dt>{label}</dt>
   </div>
 )
 
-export const HubHero: React.FC<{ stats: ModelHubStats }> = ({ stats }) => (
+export const HubHero: React.FC<{ stats: ModelHubStats; evidenceReady?: boolean }> = ({
+  stats,
+  evidenceReady = true,
+}) => (
   <header className={styles.hero}>
     <div className={styles.heroCopy}>
       <h1>Model Hub</h1>
@@ -49,7 +52,7 @@ export const HubHero: React.FC<{ stats: ModelHubStats }> = ({ stats }) => (
       <Stat label="models" value={stats.models} />
       <Stat label="creators" value={stats.creators} />
       <Stat label="providers" value={stats.providerContracts} />
-      <Stat label="evaluations" value={stats.evaluations} />
+      <Stat label="evaluations" value={evidenceReady ? stats.evaluations : null} />
     </dl>
     <Link className={styles.primaryAction} to="/config/models">
       Add model
@@ -118,7 +121,7 @@ export const HubPagination: React.FC<{
     <label className={styles.pageSize}>
       <span>Per page</span>
       <select value={pagination.pageSize} onChange={(event) => setPageSize(+event.target.value)}>
-        {[10, 20, 50].map((size) => (
+        {[3, 6].map((size) => (
           <option value={size} key={size}>
             {size}
           </option>

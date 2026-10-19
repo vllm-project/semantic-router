@@ -15,11 +15,21 @@ from cli.config_contract import (
 )
 from cli.config_migration_catalog import migrate_v03_catalog_contract
 from cli.config_migration_global import normalize_global_layout, place_global_block
-from cli.config_migration_model_runtime import migrate_prompt_guard_backend
+from cli.config_migration_looper import drop_looper_endpoint
+from cli.config_migration_model_runtime import (
+    migrate_model_runtime_contract,
+    migrate_prompt_guard_backend,
+)
+from cli.config_migration_notes import MigrationNotes
 
 
-def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Return a canonical v0.3 config dict from legacy or mixed input data."""
+def migrate_config_data(
+    data: dict[str, Any], notes: MigrationNotes | None = None
+) -> dict[str, Any]:
+    """Return a canonical v0.3 config dict from legacy or mixed input data.
+
+    ``notes`` collects the rewrites and removals an operator should review.
+    """
 
     source = deepcopy(data or {})
     # Historically an omitted listener list meant that the local CLI would
@@ -67,12 +77,16 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         canonical["global"] = global_config
     if "setup" in source:
         canonical["setup"] = deepcopy(source["setup"])
+    _migrate_entrypoint_names(canonical)
     _normalize_response_cache_plugins(canonical)
     migrate_v03_catalog_contract(
         canonical,
         router_owns_transport=router_owns_transport,
     )
     migrate_prompt_guard_backend(canonical)
+    notes = notes if notes is not None else MigrationNotes()
+    migrate_model_runtime_contract(canonical, notes)
+    drop_looper_endpoint(canonical, notes)
 
     return canonical
 
@@ -154,12 +168,12 @@ def _move_legacy_routing_blocks(
 def _move_legacy_flat_signal_blocks(
     source: dict[str, Any], routing: dict[str, Any]
 ) -> None:
-    signals = _ensure_dict(routing, "signals")
     for legacy_key, canonical_key in LEGACY_SIGNAL_KEY_TO_CANONICAL.items():
-        if canonical_key in signals:
-            continue
         legacy_value = _clone_list(source.get(legacy_key))
-        if legacy_value:
+        if not legacy_value:
+            continue
+        signals = _ensure_dict(routing, "signals")
+        if canonical_key not in signals:
             signals[canonical_key] = legacy_value
 
 
@@ -329,9 +343,10 @@ def _move_legacy_global_blocks(
     providers: dict[str, Any],
     global_config: dict[str, Any],
 ) -> None:
-    model_catalog = _ensure_dict(global_config, "model_catalog")
-    if "external_models" in providers and "external" not in model_catalog:
-        model_catalog["external"] = deepcopy(providers.pop("external_models"))
+    if "external_models" in providers:
+        model_catalog = _ensure_dict(global_config, "model_catalog")
+        if "external" not in model_catalog:
+            model_catalog["external"] = deepcopy(providers.pop("external_models"))
 
     for key, value in source.items():
         if (
@@ -583,3 +598,28 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 def _clone_list(value: Any) -> list[Any]:
     return deepcopy(value) if isinstance(value, list) else []
+
+
+def _migrate_entrypoint_names(canonical: dict[str, Any]) -> None:
+    """Explicit migration only; the runtime never accepts retired alias fields."""
+    global_config = _as_dict(canonical.get("global"))
+    router = _as_dict(global_config.get("router"))
+    explicit = router.pop("auto_model_names", None)
+    single = router.pop("auto_model_name", None)
+    if "include_config_models_in_list" in router:
+        router.setdefault(
+            "list_backend_models", router.pop("include_config_models_in_list")
+        )
+    names = explicit if isinstance(explicit, list) else ([single] if single else [])
+    names = list(
+        dict.fromkeys(str(name).strip() for name in names if str(name).strip())
+    )
+    entries = canonical.get("entrypoints", [])
+    if names and not any(entry.get("recipe") == "default" for entry in entries):
+        canonical["entrypoints"] = [
+            {"model_names": names, "recipe": "default"},
+            *entries,
+        ]
+    if "router" in global_config:
+        global_config["router"] = router
+        canonical["global"] = global_config

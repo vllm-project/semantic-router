@@ -13,6 +13,12 @@ func TestBuiltinComplexityKeepsIndependentBoundariesAndMiddle(t *testing.T) {
 	} {
 		t.Run(profile.name, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, profile.name)
+			models, _ := preparedJudgmentModels(t)
+			models.cfg = c.Config
+			judgment, err := prepareDecisionComplexity(models, c.Config.ComplexityRules)
+			if err != nil || judgment != nil {
+				t.Fatalf("shipped prototype rules changed to native decision scoring: %v", err)
+			}
 			rule := c.Config.ComplexityRules[0]
 			if rule.Name != "difficulty" || rule.Threshold != 0 || rule.HardAbove == nil || rule.EasyBelow == nil {
 				t.Fatal("difficulty must use an explicit pair instead of a symmetric threshold")
