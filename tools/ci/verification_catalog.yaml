@@ -283,6 +283,8 @@ verifications:
     target: test-training-contracts
     inventory: training-contracts-and-tiny-model-cpu-inference
   training-locks:
+    layer: runtime
+    execution: automatic
     display_name: Training Lockfiles
     activity: test
     boundary: [unit]

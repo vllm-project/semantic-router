@@ -746,8 +746,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, training, training-locks, learning-tools, harness-tools, onnx-artifacts]
-    verifications: [cli-unit, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
+    verifications: [cli-unit, model-runtime, bench-tools, training, training-locks, learning-tools, harness-tools, mock-provider, onnx-artifacts]
 
   component-execution:
     owner: maintainers
@@ -774,7 +773,7 @@ domains:
       - tools/ci/verification_catalog.yaml
       - tools/ci/worker_process.py
     checks: [make harness-check]
-    verifications: [cli-unit, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
+    verifications: [cli-unit, model-runtime, bench-tools, training, training-locks, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
 
   runtime-evidence:
     owner: maintainers
