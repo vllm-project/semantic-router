@@ -188,7 +188,8 @@ global:
     deployments:
       domain:
         provider: model_runtime
-        profile: max_speed
+        max_num_seqs: 64
+        dtype: auto
     embeddings:
       semantic:
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
@@ -201,6 +202,54 @@ global:
 	}
 	if err := rejectRemovedModelExecutionFields(raw); err != nil {
 		t.Fatalf("canonical fields rejected: %v", err)
+	}
+}
+
+func TestParseRefusesADeploymentProfileWithTheMigrateCommand(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`version: v0.3
+global:
+  model_catalog:
+    deployments:
+      decider:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        profile: shared_context
+`))
+	if err == nil {
+		t.Fatal("a deployment profile must be refused")
+	}
+	for _, want := range []string{
+		"global.model_catalog.deployments.decider.profile: profile was removed",
+		"max_num_seqs, max_num_batched_tokens, batch_window_ms, enable_shared_context, dtype",
+		"vllm-sr config migrate --config old-config.yaml",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not name %q: %v", want, err)
+		}
+	}
+}
+
+func TestParseKeepsADeploymentsEngineArguments(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+global:
+  model_catalog:
+    deployments:
+      decider:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        max_num_seqs: 64
+        max_num_batched_tokens: 16384
+        batch_window_ms: 0.5
+        dtype: bfloat16
+        enable_shared_context: false
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := cfg.ModelDeployments["decider"]
+	if d.MaxNumSeqs == nil || *d.MaxNumSeqs != 64 || d.MaxNumBatchedTokens == nil || *d.MaxNumBatchedTokens != 16384 ||
+		d.BatchWindowMS == nil || *d.BatchWindowMS != 0.5 || d.Dtype != "bfloat16" || d.EnableSharedContext == nil || *d.EnableSharedContext {
+		t.Fatalf("engine arguments = %+v", d)
 	}
 }
 

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
+from ...quantization import METADATA, PACK
 from ...registry.artifacts import (
     named_files,
     read_json,
@@ -238,7 +239,11 @@ def check_config(config: Any) -> dict[str, Any]:
 def tensor_groups(
     root: Path, weights: tuple[str, ...]
 ) -> tuple[dict[str, int], str, str | None]:
-    """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes."""
+    """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes.
+
+    A quantized layer (``quantization.py``) counts its weights, an int4 one eight
+    per ``weight_packed`` word; scales, zero points and shapes are not parameters.
+    """
     counts: dict[str, int] = {}
     prefixes: dict[str, set[str]] = {"text": set(), "vision": set()}
     for name in weights:
@@ -260,7 +265,11 @@ def tensor_groups(
                 )
             group = "vision" if vision else "text"
             prefixes[group].add(vision or text or "")
-            counts[group] = counts.get(group, 0) + math.prod(shape)
+            leaf = tensor.rpartition(".")[2]
+            if leaf in METADATA:
+                continue
+            size = math.prod(shape) * (PACK if leaf == "weight_packed" else 1)
+            counts[group] = counts.get(group, 0) + size
     if len(prefixes["text"]) != 1 or len(prefixes["vision"]) > 1:
         raise PackageError("checkpoint tensors use mixed name prefixes")
     vision_prefix = next(iter(prefixes["vision"]), None)

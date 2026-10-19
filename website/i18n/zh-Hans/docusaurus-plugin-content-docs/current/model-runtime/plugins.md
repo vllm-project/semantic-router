@@ -11,13 +11,13 @@ is_mtpe: true
 
 # 接入自己的模型家族 {#add-your-own-model-family}
 
-runtime 是插件搭起来的。**模型家族**懂一种模型格式：怎么读模型包、怎么把请求变成模型输入、怎么把模型输出变成答案。**引擎**真正跑网络，**加速器**驱动一类硬件，**档位**定数值和批处理。内置的家族、引擎、加速器和档位，注册方式和你的一模一样，所以插件是 runtime 的一等公民。
+runtime 是插件搭起来的。**模型家族**懂一种模型格式：怎么读模型包、怎么把请求变成模型输入、怎么把模型输出变成答案。**引擎**真正跑网络，**加速器**驱动一类硬件。内置的家族、引擎和加速器，注册方式和你的一模一样，所以插件是 runtime 的一等公民。批处理是 runtime 自己的事：它按部署的[引擎参数](./engine-args.md)为每个家族组成前向，你的也一样。
 
 想服务一个内置家族不认识的新模型，才需要写插件。Hugging Face ModernBERT 和 mmBERT 的分类器、嵌入模型不用——它们直接就能加载。
 
 ## 示例插件 {#the-example-plugin}
 
-仓库里有个完整插件，小到坐下来一会儿就能读完：[`src/model-runtime/examples/third_party_plugin`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/examples/third_party_plugin)。它加了一个关键词模型家族和跑它的引擎，外加一个加速器和一个档位，四种插件都齐了。它的模型包是一个 JSON 文件，把标签映到关键词；家族就靠词频答 `/v1/classify`、`/v1/embeddings` 和 `/v1/rerank`。runtime 的测试套件会构建安装它的 wheel、通过 entry points 发现它，并让它在同一个进程里和一个决策模型并肩服务，每个端点上都是，用的还是示例自带的加速器和档位。
+仓库里有个完整插件，小到坐下来一会儿就能读完：[`src/model-runtime/examples/third_party_plugin`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/examples/third_party_plugin)。它加了一个关键词模型家族和跑它的引擎，外加一个加速器，三种插件都齐了。它的模型包是一个 JSON 文件，把标签映到关键词；家族就靠词频答 `/v1/classify`、`/v1/embeddings` 和 `/v1/rerank`。runtime 的测试套件会构建安装它的 wheel、通过 entry points 发现它，并让它在同一个进程里和一个决策模型并肩服务，每个端点上都是，用的还是示例自带的加速器。
 
 试一把：
 
@@ -36,22 +36,22 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 vllm-srun plugins
 ```
 
-第一个请求对第一段文本返回 `billing`，对第二段返回 `shipping`。`vllm-srun plugins` 会在家族里列出 `example_keywords`、引擎里列出 `example_counts`、加速器里列出 `example_host`、档位里列出 `example_one_by_one`；`GET /v1/models` 还会显示它们各自的来源发行版和版本。
+第一个请求对第一段文本返回 `billing`，对第二段返回 `shipping`。`vllm-srun plugins` 会在家族里列出 `example_keywords`、引擎里列出 `example_counts`、加速器里列出 `example_host`；`GET /v1/models` 还会显示它们各自的来源发行版和版本。
 
-示例的加速器把宿主机 CPU 当成一种设备提供，它的档位让每个请求按到达顺序单独跑。名字跟内置的一样起：
+示例的加速器把宿主机 CPU 当成一种设备提供。名字跟内置的一样起，引擎参数也和任何模型一样设：
 
 ```bash
-vllm-srun serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
+vllm-srun serve /tmp/keywords --engine example_counts --device example_host --max-num-seqs 1 --port 8100
 ```
 
 对这个只做分类的插件，用一个装了该插件的镜像显式起 worker 容器。实例的 System One 前端需要能决策的模型。示例带一个 Dockerfile，负责把它加进 router 镜像。从仓库根目录：
 
 ```bash
 docker build -t vllm-sr-example src/model-runtime/examples/third_party_plugin
-docker run --rm -p 127.0.0.1:8100:8100 -v /tmp/keywords:/app/keywords:ro --entrypoint vllm-srun vllm-sr-example serve /app/keywords --device example_host --profile example_one_by_one --host 0.0.0.0 --port 8100
+docker run --rm -p 127.0.0.1:8100:8100 -v /tmp/keywords:/app/keywords:ro --entrypoint vllm-srun vllm-sr-example serve /app/keywords --device example_host --host 0.0.0.0 --port 8100
 ```
 
-容器通过只读挂载读 `/tmp/keywords`。runtime 自己挑中示例的引擎，并拒绝没装的设备或档位。配好的实例可以用 `endpoint` 和模型名挂到这个 worker 上；classify 端点始终是一个独立运作的 worker API。
+容器通过只读挂载读 `/tmp/keywords`。runtime 自己挑中示例的引擎，并拒绝没装的设备。配好的实例可以用 `endpoint` 和模型名挂到这个 worker 上；classify 端点始终是一个独立运作的 worker API。
 
 ## 写自己的插件 {#write-your-own}
 
@@ -77,7 +77,9 @@ docker run --rm -p 127.0.0.1:8100:8100 -v /tmp/keywords:/app/keywords:ro --entry
 
 **2. 引擎，需要的话。** 多数家族在 `ModelSpec` 里描述好自己的网络，复用内置的 `native`（PyTorch）或 `onnxruntime` 引擎就够了。只有新种类的网络或新的执行库才值得写引擎（`Engine` 和 `EngineModel`：`supports`、`load`、`forward` 或 `encode`）。想让 `engine: auto` 优先试你的引擎，就设 `auto_priority`（值小的先试；内置 `native` 引擎是 0）；不设的话，`auto` 会在设有优先级的引擎都试过之后，按名字试到它。你的 `descriptor()` 要建在 `super().descriptor()` 之上——它会在模型卡上列出 `auto_priority`。如果你的 `load` 要从磁盘读权重，那就连 `read` 一起覆写：它抢在 runtime 拿下设备之前做这些宿主侧的活儿，把收尾的设备侧活儿交回去，这样设备上的其他模型在读的时候照常答。不覆写的话，整个 `load` 都是设备侧活儿。
 
-**3. 加速器或档位，需要的话。** 新硬件就继承 `Accelerator`（`available`、`devices`、`torch_device`、`kernels`），想让 `device: auto` 可能挑中它就设 `auto_priority`；不设，只有点名这个设备的请求会用到它。新的请求合并方式，就继承 `Profile`（`plan`，以及它从模型读什么的 `bind`）。
+引擎只支持 `--dtype auto`，除非它在 `dtypes` 里列出能跑的其他取值；部署向引擎要一个它没列出的精度时，runtime 会拒绝。
+
+**3. 加速器，需要的话。** 新硬件就继承 `Accelerator`（`available`、`devices`、`torch_device`、`kernels`），想让 `device: auto` 可能挑中它就设 `auto_priority`；不设，只有点名这个设备的请求会用到它。
 
 **4. 在 `pyproject.toml` 里注册：**
 
@@ -90,17 +92,14 @@ example_counts = "vllm_sr_example.engine:CountsEngine"
 
 [project.entry-points."vllm_srun.accelerators"]
 example_host = "vllm_sr_example.accelerator:HostAccelerator"
-
-[project.entry-points."vllm_srun.profiles"]
-example_one_by_one = "vllm_sr_example.profile:OneByOneProfile"
 ```
 
-组名是 `vllm_srun.families`、`vllm_srun.engines`、`vllm_srun.accelerators` 和 `vllm_srun.profiles`。名字撞了，启动时直接被拒。
+组名是 `vllm_srun.families`、`vllm_srun.engines` 和 `vllm_srun.accelerators`。名字撞了，启动时直接被拒。
 
-**5. 让它快。** 两个开关打开 runtime 的共享优化：
+**5. 让它快。** runtime 已经会把并发请求的行合并成批。两个开关让它做得更多：
 
 - 在结果只取决于内容的工作项上设 `cache_key`，重复输入就走结果缓存；
-- 一次前向能顺带服务一批打包到达的请求时，给加载好的模型设 `fuse_bundled_jobs = True`。
+- 测试证明每行单独跑和在任意批次里跑答案都一样之后，给加载好的模型设 `batch_invariant = True`：runtime 随后不等批处理窗口就合并排队的请求，并把模型的数值报告为 `exact`。
 
 **6. 测它**，照示例的样子：装上发行包、在一个小模型包上起 runtime，逐个端点和 OpenAPI 契约会对（[`tests/test_third_party_plugin.py`](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/tests/test_third_party_plugin.py)）。
 
@@ -118,7 +117,7 @@ global:
         served_name: keywords
 ```
 
-自定义分类器信号随后就能读它的标签；见[分类请求](./guides/classify.md#use-your-own-classifier)。router 会把绑定和模型在 `/v1/models` 里报告的标签对一遍。部署用 `device` 点名你的加速器、用 `profile` 点名你的档位，方式一样；router 只查格式，名字没有对应插件，runtime 拒绝并列出它有的一些。
+自定义分类器信号随后就能读它的标签；见[分类请求](./guides/classify.md#use-your-own-classifier)。router 会把绑定和模型在 `/v1/models` 里报告的标签对一遍。部署用 `device` 点名你的加速器，方式一样；router 只查格式，名字没有对应插件，runtime 拒绝并列出它有的一些。
 
 ## 插件的规矩 {#rules-for-plugins}
 

@@ -19,11 +19,16 @@ permissions:
 jobs:
   package:
     name: CLI Package
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
     timeout-minutes: 20
     env:
       VERIFICATION: ${{ inputs.verification }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -31,7 +36,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install packaging tools
-        run: python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+        run: python -m pip install build==1.6.1 twine==7.0.0 PyYAML==6.0.3 jsonschema==4.26.0
       - name: Qualify the final candidate
         env:
           MODE: ${{ inputs.mode }}
@@ -52,12 +57,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.verification).id }}
           path: .agent-harness/package/result.json
           include-hidden-files: true
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: vllm-sr-dist
           path: .agent-harness/package/dist/
           include-hidden-files: true
