@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ci_plan import digest
+from ci_plan import component_batches, digest
 from ci_results import collection_errors, execution_errors
+from classify_pr_changes import classify
 from execution_batches import (
     dispatch_job,
     e2e_batches,
@@ -19,6 +20,7 @@ from execution_batches import (
     image_producers,
     platform_batches,
 )
+from execution_targets import TARGET_FIELDS, target_errors
 from provider_mocker_image import validate_acquisition
 from release_guard_waiver import planned_waiver
 from verification_catalog import full_cpu_ids, load_catalog
@@ -40,11 +42,42 @@ def evaluate_gate(
     *,
     builds: list[dict] | None = None,
     jobs: dict | None = None,
+    require_actions: bool = False,
 ) -> GateVerdict:
     errors: list[str] = []
     required = plan.get("expected_verification_ids", [])
     if not isinstance(required, list) or len(set(required)) != len(required):
         return GateVerdict((), ("plan verification IDs are invalid or duplicated",))
+    deferred = plan.get("deferred_verifications", [])
+    complete = plan.get("required_verification_ids", required)
+    if (
+        not isinstance(deferred, list)
+        or not isinstance(complete, list)
+        or len(set(deferred)) != len(deferred)
+        or len(set(complete)) != len(complete)
+        or set(required) & set(deferred)
+        or set(complete) != set(required) | set(deferred)
+    ):
+        return GateVerdict(
+            tuple(required),
+            ("required execution and deferred inventories do not partition the plan",),
+        )
+    if plan.get("approval_required"):
+        selected = (
+            []
+            if plan.get("draft")
+            else list(
+                classify(
+                    plan.get("paths", []), full=bool(plan.get("full_cpu"))
+                ).selected_jobs
+            )
+        )
+        if set(complete) != set(selected):
+            errors.append(
+                "required qualification inventory differs from changed-path selection"
+            )
+    if deferred or plan.get("deferred_images"):
+        errors.append("required qualification awaits committer authorization: /ci run")
     unsigned = {key: value for key, value in plan.items() if key != "plan_sha256"}
     if plan.get("schema_version") != 1 or plan.get("plan_sha256") != digest(unsigned):
         errors.append("plan schema or content digest is invalid")
@@ -54,12 +87,17 @@ def evaluate_gate(
     ):
         errors.append("plan records do not exactly match expected verification IDs")
     for name, record in planned.items():
+        errors.extend(f"{name}: {error}" for error in target_errors(record))
+        if record.get("contract_sha256") != digest(
+            {key: value for key, value in record.items() if key != "contract_sha256"}
+        ):
+            errors.append(f"{name}: verification contract digest differs")
         if record.get("known_issue_waiver") != planned_waiver(
             plan.get("profile", ""), name
         ):
             errors.append(f"{name}: known-issue waiver differs from release policy")
     if plan.get("full_cpu") and not (plan.get("draft") and plan.get("profile") == "pr"):
-        missing = set(full_cpu_ids()) - set(required)
+        missing = set(full_cpu_ids()) - set(complete)
         if missing:
             errors.append(f"full CPU required inventory omitted: {sorted(missing)}")
     if not required and not (plan.get("draft") and plan.get("profile") == "pr"):
@@ -75,6 +113,7 @@ def evaluate_gate(
             if record.get("dispatch_job") != dispatch_job(record):
                 errors.append(f"{record['id']}: dispatch identity differs")
         for field, build_batches in (
+            ("component_batches", component_batches),
             ("platform_batches", platform_batches),
             ("e2e_batches", e2e_batches),
         ):
@@ -144,7 +183,7 @@ def evaluate_gate(
             "inventory",
             "runtime",
             "device",
-            "platform",
+            *TARGET_FIELDS,
         ):
             if receipt.get(key) != record.get(key):
                 errors.append(f"{name}: {key} differs from plan")
@@ -160,7 +199,12 @@ def evaluate_gate(
                 errors.append(f"{name}: evidence {key} differs from plan")
         errors.extend(
             f"{name}: {error}"
-            for error in execution_errors(record, receipt.get("platform"))
+            for error in execution_errors(
+                record,
+                receipt.get("platform"),
+                receipt.get("execution"),
+                require_actions=require_actions,
+            )
         )
         consumed = receipt.get("artifacts", [])
         consumed_ids = [item.get("id") for item in consumed]
@@ -188,9 +232,35 @@ def evaluate_gate(
     return GateVerdict(tuple(required), tuple(sorted(set(errors))))
 
 
-def load_builds(directory: Path) -> list[dict]:
+def load_receipts(directory: Path, plan: dict) -> list[dict]:
+    # A rerun can expand authorization and regroup workers. Artifacts from an
+    # obsolete batch remain in the run even with upload-artifact overwrite.
+    # Select physical containers from this plan; never deduplicate their cases.
+    names = {
+        f"ci-result-{record['id']}"
+        for record in plan["verifications"]
+        if record["executor"] not in {"tools", "platform", "e2e"}
+    }
+    names.update(
+        f"ci-result-components-{batch['id']}" for batch in plan["component_batches"]
+    )
+    names.update(
+        f"ci-result-{batch['id']}"
+        for batch in [*plan["platform_batches"], *plan["e2e_batches"]]
+    )
+    return [
+        json.loads(path.read_text())
+        for name in sorted(names)
+        for path in sorted((directory / name).glob("*.json"))
+    ]
+
+
+def load_builds(directory: Path, images: list[str] | None = None) -> list[dict]:
     builds = []
+    selected = None if images is None else {f"ci-build-image-{name}" for name in images}
     for path in sorted(directory.glob("ci-build-image-*/manifest.json")):
+        if selected is not None and path.parent.name not in selected:
+            continue
         record = json.loads(path.read_text())
         if not any(
             image.get("platform") == "linux/amd64" for image in record.get("images", [])
@@ -237,17 +307,18 @@ def main() -> int:
             "source_sha"
         ):
             raise ValueError("plan source SHA differs from this workflow run")
-        receipts = [
-            json.loads(path.read_text())
-            for path in sorted(args.results.glob("ci-result-*/*.json"))
-        ]
+        receipts = load_receipts(args.results, plan)
         jobs = (
             json.loads(os.environ["EXECUTOR_RESULTS"])
             if "EXECUTOR_RESULTS" in os.environ
             else None
         )
         verdict = evaluate_gate(
-            plan, receipts, builds=load_builds(args.results), jobs=jobs
+            plan,
+            receipts,
+            builds=load_builds(args.results, plan["images"]),
+            jobs=jobs,
+            require_actions=os.environ.get("GITHUB_ACTIONS") == "true",
         )
     except (ValueError, TypeError, KeyError, OSError) as exc:
         verdict = GateVerdict((), (str(exc),))

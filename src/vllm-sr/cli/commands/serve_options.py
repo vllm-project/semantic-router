@@ -42,7 +42,11 @@ SERVE_OPTION_GROUPS = (
             "model",
             "revision",
             "data_parallel_size",
-            "runtime_profile",
+            "max_num_seqs",
+            "max_num_batched_tokens",
+            "batch_window_ms",
+            "dtype",
+            "enable_shared_context",
         ),
     ),
     OptionGroup(

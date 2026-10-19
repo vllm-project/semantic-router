@@ -60,6 +60,14 @@ const (
 	Query    EmbeddingsRequestInputType = "query"
 )
 
+// Defines values for EngineArgsDtype.
+const (
+	Auto     EngineArgsDtype = "auto"
+	Bfloat16 EngineArgsDtype = "bfloat16"
+	Float16  EngineArgsDtype = "float16"
+	Float32  EngineArgsDtype = "float32"
+)
+
 // Defines values for ErrorBodyCode.
 const (
 	InternalError      ErrorBodyCode = "internal_error"
@@ -143,6 +151,12 @@ const (
 	Alive LivenessStatus = "alive"
 )
 
+// Defines values for ModelCardNumerics.
+const (
+	ModelCardNumericsApproximate ModelCardNumerics = "approximate"
+	ModelCardNumericsExact       ModelCardNumerics = "exact"
+)
+
 // Defines values for ModelCardStatus.
 const (
 	ModelCardStatusDegraded ModelCardStatus = "degraded"
@@ -163,12 +177,6 @@ const (
 	ModelHealthStatusWarming  ModelHealthStatus = "warming"
 )
 
-// Defines values for ProfileInfoNumerics.
-const (
-	Approximate ProfileInfoNumerics = "approximate"
-	Exact       ProfileInfoNumerics = "exact"
-)
-
 // Defines values for QuestionHead.
 const (
 	Broad  QuestionHead = "broad"
@@ -185,6 +193,12 @@ const (
 const (
 	Reject   RerankOptionsOverflow = "reject"
 	Truncate RerankOptionsOverflow = "truncate"
+)
+
+// Defines values for ResponseMetaNumerics.
+const (
+	ResponseMetaNumericsApproximate ResponseMetaNumerics = "approximate"
+	ResponseMetaNumericsExact       ResponseMetaNumerics = "exact"
 )
 
 // Defines values for SetAnswerInputCoverage.
@@ -301,9 +315,6 @@ type ClassifyOptions struct {
 
 	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
 	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -569,9 +580,6 @@ type EmbeddingsOptions struct {
 	MaxTokens  *int                       `json:"max_tokens,omitempty"`
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
 
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
-
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
@@ -619,6 +627,32 @@ type EmbeddingsUsage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
+// EngineArgs How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+type EngineArgs struct {
+	// BatchWindowMs How long the scheduler waits after the first request to collect more (when `max_num_seqs` is above 1).
+	BatchWindowMs float64 `json:"batch_window_ms"`
+
+	// Dtype The configured precision; auto is the precision the model was published in.
+	Dtype EngineArgsDtype `json:"dtype"`
+
+	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
+	EnableSharedContext bool `json:"enable_shared_context"`
+
+	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
+	MaxNumBatchedTokens int `json:"max_num_batched_tokens"`
+
+	// MaxNumSeqs The most rows one forward holds, across requests: one per question of a decision request, one per
+	// input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+	// one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+	// budget, since a row costs at least 8 padded tokens).
+	MaxNumSeqs int `json:"max_num_seqs"`
+}
+
+// EngineArgsDtype The configured precision; auto is the precision the model was published in.
+type EngineArgsDtype string
+
 // ErrorBody defines model for ErrorBody.
 type ErrorBody struct {
 	Code ErrorBodyCode `json:"code"`
@@ -651,8 +685,10 @@ type FloatVector = []float32
 
 // GoldenStatus defines model for GoldenStatus.
 type GoldenStatus struct {
-	Checked   *int               `json:"checked,omitempty"`
-	Matched   *int               `json:"matched,omitempty"`
+	Checked *int `json:"checked,omitempty"`
+	Matched *int `json:"matched,omitempty"`
+
+	// Reference Recorded golden reference key. A hardware-qualified key is preferred when present; otherwise the device-class reference is used.
 	Reference *string            `json:"reference"`
 	Status    GoldenStatusStatus `json:"status"`
 }
@@ -765,37 +801,50 @@ type ModelCard struct {
 	Dtype                *string        `json:"dtype,omitempty"`
 	Embedding            *EmbeddingCard `json:"embedding,omitempty"`
 	Engine               *string        `json:"engine,omitempty"`
-	Family               string         `json:"family"`
-	Golden               *GoldenStatus  `json:"golden,omitempty"`
-	Heads                *[]HeadCard    `json:"heads,omitempty"`
-	Id                   string         `json:"id"`
-	Licence              *string        `json:"licence"`
-	Limits               *ModelLimits   `json:"limits,omitempty"`
-	ManifestSha256       *string        `json:"manifest_sha256,omitempty"`
+
+	// EngineArgs How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+	EngineArgs     *EngineArgs   `json:"engine_args,omitempty"`
+	Family         string        `json:"family"`
+	Golden         *GoldenStatus `json:"golden,omitempty"`
+	Heads          *[]HeadCard   `json:"heads,omitempty"`
+	Id             string        `json:"id"`
+	Licence        *string       `json:"licence"`
+	Limits         *ModelLimits  `json:"limits,omitempty"`
+	ManifestSha256 *string       `json:"manifest_sha256,omitempty"`
 
 	// Modalities Decision models only; the inputs a decisions request may carry (`text`, `image` for `images`, `video` for `videos`).
-	Modalities  *[]string     `json:"modalities,omitempty"`
-	ModelSha256 *string       `json:"model_sha256,omitempty"`
-	Object      string        `json:"object"`
-	OwnedBy     *string       `json:"owned_by,omitempty"`
-	Parameters  *int          `json:"parameters,omitempty"`
-	Plugins     *[]PluginInfo `json:"plugins,omitempty"`
+	Modalities  *[]string `json:"modalities,omitempty"`
+	ModelSha256 *string   `json:"model_sha256,omitempty"`
+
+	// Numerics exact when the model's answers never depend on batching: its rows answer the same alone or in
+	// any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+	// their references. approximate when the rows a forward holds, shared-context trees, another dtype
+	// or approximate kernels can move answers by rounding.
+	Numerics   *ModelCardNumerics `json:"numerics,omitempty"`
+	Object     string             `json:"object"`
+	OwnedBy    *string            `json:"owned_by,omitempty"`
+	Parameters *int               `json:"parameters,omitempty"`
+	Plugins    *[]PluginInfo      `json:"plugins,omitempty"`
 
 	// Presets Questions the model defines (Question.preset).
-	Presets       *[]string      `json:"presets,omitempty"`
-	Profile       *string        `json:"profile,omitempty"`
-	Profiles      *[]ProfileInfo `json:"profiles,omitempty"`
-	QuestionTypes *[]string      `json:"question_types,omitempty"`
-	Ready         bool           `json:"ready"`
-	Reason        *string        `json:"reason"`
-	Repo          *string        `json:"repo"`
-	Rerank        *RerankCard    `json:"rerank,omitempty"`
-	Revision      *string        `json:"revision"`
+	Presets       *[]string   `json:"presets,omitempty"`
+	QuestionTypes *[]string   `json:"question_types,omitempty"`
+	Ready         bool        `json:"ready"`
+	Reason        *string     `json:"reason"`
+	Repo          *string     `json:"repo"`
+	Rerank        *RerankCard `json:"rerank,omitempty"`
+	Revision      *string     `json:"revision"`
 
 	// Status This model's state.
 	Status   *ModelCardStatus `json:"status,omitempty"`
 	Surfaces []string         `json:"surfaces"`
 }
+
+// ModelCardNumerics exact when the model's answers never depend on batching: its rows answer the same alone or in
+// any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+// their references. approximate when the rows a forward holds, shared-context trees, another dtype
+// or approximate kernels can move answers by rounding.
+type ModelCardNumerics string
 
 // ModelCardStatus This model's state.
 type ModelCardStatus string
@@ -873,9 +922,9 @@ type ModelList struct {
 
 // PluginInfo defines model for PluginInfo.
 type PluginInfo struct {
-	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
-	// and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
-	// `auto_priority`, where `auto` tries them (lowest first; null: only when named).
+	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures,
+	// outputs and the `--dtype` values it runs (`dtypes`), an accelerator's validation status. Engines and
+	// accelerators also list `auto_priority`, where `auto` tries them (lowest first; null: only when named).
 	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
 	Distribution *string                 `json:"distribution"`
 	Group        string                  `json:"group"`
@@ -892,19 +941,6 @@ type ProcessLimits struct {
 	// MaxRequestBytes Largest request body, in bytes.
 	MaxRequestBytes int `json:"max_request_bytes"`
 }
-
-// ProfileInfo defines model for ProfileInfo.
-type ProfileInfo struct {
-	Description *string             `json:"description,omitempty"`
-	Name        string              `json:"name"`
-	Numerics    ProfileInfoNumerics `json:"numerics"`
-}
-
-// ProfileInfoNumerics defines model for ProfileInfo.Numerics.
-type ProfileInfoNumerics string
-
-// ProfileName exact, or a profile the server enabled for this model (its card's `profiles`).
-type ProfileName = string
 
 // Question One question. `instructions` is required unless `preset` names a question the model defines (see
 // `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
@@ -994,9 +1030,6 @@ type RequestOptions struct {
 	// takes it.
 	MaxTokens *int `json:"max_tokens,omitempty"`
 
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
-
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
@@ -1020,9 +1053,6 @@ type RerankOptions struct {
 
 	// Overflow What happens to a query-document pair longer than max_tokens (default reject).
 	Overflow *RerankOptionsOverflow `json:"overflow,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -1082,17 +1112,21 @@ type ResponseMeta struct {
 	Accelerator *string  `json:"accelerator,omitempty"`
 	ComputeMs   *float64 `json:"compute_ms,omitempty"`
 	Device      *string  `json:"device,omitempty"`
-	Engine      *string  `json:"engine,omitempty"`
+
+	// Dtype The precision the backbone computed in (float32, bfloat16 or float16).
+	Dtype  *string `json:"dtype,omitempty"`
+	Engine *string `json:"engine,omitempty"`
 
 	// Head The head that produced a classify result.
 	Head *string `json:"head,omitempty"`
 
 	// ModelId The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
-	ModelId     *string  `json:"model_id,omitempty"`
-	ModelSha256 *string  `json:"model_sha256,omitempty"`
-	Numerics    *string  `json:"numerics,omitempty"`
-	Profile     *string  `json:"profile,omitempty"`
-	QueueMs     *float64 `json:"queue_ms,omitempty"`
+	ModelId     *string `json:"model_id,omitempty"`
+	ModelSha256 *string `json:"model_sha256,omitempty"`
+
+	// Numerics exact when the model's answers never depend on batching; see ModelCard.numerics.
+	Numerics *ResponseMetaNumerics `json:"numerics,omitempty"`
+	QueueMs  *float64              `json:"queue_ms,omitempty"`
 
 	// Representation The identity of an embedding space; vectors with different representations never mix.
 	Representation *Representation `json:"representation,omitempty"`
@@ -1100,6 +1134,9 @@ type ResponseMeta struct {
 	// Revision The 40-hex Hub revision; null for a local package directory.
 	Revision *string `json:"revision"`
 }
+
+// ResponseMetaNumerics exact when the model's answers never depend on batching; see ModelCard.numerics.
+type ResponseMetaNumerics string
 
 // SetAnswer defines model for SetAnswer.
 type SetAnswer struct {

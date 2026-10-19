@@ -98,7 +98,7 @@ func TestDecodeRejectsOutOfRangeSetAndSpanProbabilities(t *testing.T) {
 		for _, preset := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/preset=%t", name, preset), func(t *testing.T) {
 				kind, noul := "noul", 0.5
-				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability}}}
+				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability, "shipping": 0.5}}}
 				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: probability}}}
 				body := api.DecisionResponse{
 					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &noul}},
@@ -201,30 +201,6 @@ func TestBundleAsksOneModelTheStagesQuestionsAboutOneStateInOneTask(t *testing.T
 	}
 	if len(answers[2].Answers) != 1 || answers[2].Answers["pii_classifier:pii"].Type != "span" || len(answers[2].Answers["pii_classifier:pii"].Spans) != 1 {
 		t.Fatalf("the caller about the other state gets that state's answer: %+v", answers[2].Answers)
-	}
-}
-
-func TestBundleAsksAnOlderRuntimeOneTaskPerState(t *testing.T) {
-	runtime := runtimetest.New(vela2Fake("vela"))
-	runtime.SetAPIVersion("2.1.0")
-	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
-	first := Request{State: "refund my billing to Tom", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
-	second := Request{State: "a different message", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
-	var errs [2]error
-	stage(time.Second,
-		func(ctx context.Context) { _, errs[0] = lease.Decide(ctx, "vela", first) },
-		func(ctx context.Context) { _, errs[1] = lease.Decide(ctx, "vela", second) },
-	)
-	if errs[0] != nil || errs[1] != nil {
-		t.Fatal(errs)
-	}
-	if calls, tasks := runtime.Bundles(); calls != 1 || tasks != 2 {
-		t.Fatalf("a runtime without states gets one task per state, in one bundle: %d bundles, %d tasks", calls, tasks)
-	}
-	for _, asked := range runtime.Decisions() {
-		if asked.States != nil {
-			t.Fatalf("a runtime without states is never sent them: %+v", asked)
-		}
 	}
 }
 

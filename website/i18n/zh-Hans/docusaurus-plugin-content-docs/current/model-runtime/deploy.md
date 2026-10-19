@@ -32,7 +32,7 @@ vllm-sr serve --config config.yaml
 
 ## 描述一个部署 {#describe-a-deployment}
 
-想自己挑模型、执行档位和 worker 放置，就写一个部署。部署就是 `global.model_catalog.deployments` 下一个有名字的模型：
+想自己挑模型、引擎参数和 worker 放置，就写一个部署。部署就是 `global.model_catalog.deployments` 下一个有名字的模型：
 
 ```yaml
 global:
@@ -56,12 +56,12 @@ global:
 | `provider` | 对 runtime 服务的模型来说，永远是 `model_runtime`。 |
 | `artifact` | Hugging Face 仓库，或本地副本的绝对路径。 |
 | `revision` | 要加载的 40 位 commit。内置模型已钉好版本；其他仓库需要指定。 |
-| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`mps`，或插件添加的加速器。 |
-| `profile` | `exact`（默认），或选择加入的更快档位。见[档位](./profiles.md)。 |
+| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`npu:N`、`mps`，或插件添加的加速器。 |
+| `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 引擎参数：worker 怎么对请求做批处理、用什么精度计算。不写就用 runtime 的默认值。见[引擎参数](./engine-args.md)。 |
 | `input` | 对任务模型：最长输入（`max_tokens`，token 数），以及超长输入怎么办（`overflow`：`reject`、`truncate` 或 `window`）。 |
 | `replicas` | 给这个模型显式指定受管 `device`，或挂接的 `endpoint`/`served_name` 放置。省略时只有一个 worker。 |
 | `endpoint` | 挂到一个你自己跑的 runtime，不新起进程。 |
-| `served_name` | 挂接的 runtime 同时服务多个模型时，本模型在那边叫什么（默认用部署名）。 |
+| `served_name` | 本模型在挂接的 runtime 上的 ID，即它的 `GET /v1/models` 列出的名字（默认用部署名）。 |
 
 然后用一个**绑定**把功能连到部署上：
 
@@ -82,7 +82,7 @@ global:
 
 ![按部署的副本调度与模型 worker 内的各界面](/img/architecture/system-one/03-serving-engine-and-workers.svg)
 
-用 `-dp` 设置默认部署的独立 worker 数。数值档位和放置位置分开管：
+用 `-dp` 设置默认部署的独立 worker 数。引擎参数和放置位置分开管：
 
 ```bash
 # Two workers on one explicitly selected host GPU.
@@ -91,9 +91,9 @@ vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
-不给设备 ID 时，新的 GPU 放置用前 N 块可用 GPU，容量不够就拒绝，不会悄悄把每个 worker 都塞到一块卡上。已写明的放置按声明顺序缩改。只指定 MODEL 时保留配置好的副本和档位。这些 flag 写的是下面同一份规范化资源，没有单独的 DP 状态。Kubernetes 上用配置里的分配序，不用宿主机 ID。
+不给设备 ID 时，新的 GPU 放置用前 N 块可用 GPU，容量不够就拒绝，不会悄悄把每个 worker 都塞到一块卡上。已写明的放置按声明顺序缩改。只指定 MODEL 时保留配置好的副本和引擎参数。这些 flag 写的是下面同一份规范化资源，没有单独的 DP 状态。Kubernetes 上用配置里的分配序，不用宿主机 ID。
 
-每个受管副本各有自己的进程。一个部署的全部副本共用同一制品、revision、档位和能力。一个请求的融合问题批在逻辑模型选定后作为一个单元调度。池子挑就绪且待处理请求字节最少的 worker，并列时挑最近最少分配的。这是本地负载估计，不是挂接 runtime 的队列长度，也不是实测 token 数。原生请求和路由任务共享同一个物理 worker 的负载计量。
+每个受管副本各有自己的进程。一个部署的全部副本共用同一制品、revision、引擎参数和能力。一个请求的融合问题批在逻辑模型选定后作为一个单元调度。池子挑就绪且待处理请求字节最少的 worker，并列时挑最近最少分配的。这是本地负载估计，不是挂接 runtime 的队列长度，也不是实测 token 数。原生请求和路由任务共享同一个物理 worker 的负载计量。
 
 ```yaml
 global:
@@ -104,7 +104,6 @@ global:
       primary:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-4B
-        profile: exact
         replicas:
           - device: rocm:0
           - device: rocm:1
@@ -113,7 +112,7 @@ global:
         deployment: primary
 ```
 
-用不同的 GPU 加算力。显式重复同一设备就在该 GPU 上起多个 worker；每个 worker 要为自己的模型留显存。选布局前，用你的输入长度和并发实测吞吐和尾延迟。`batching` 能提高单个 worker 内的跨请求利用率；`max_speed` 还会改变数值，需要单独做质量评估。副本不做权重分片，也不是张量或流水并行。
+用不同的 GPU 加算力。显式重复同一设备就在该 GPU 上起多个 worker；每个 worker 要为自己的模型留显存。选布局前，用你的输入长度和并发实测吞吐和尾延迟。在一个 worker 内，并发请求的行本来就共用前向（[引擎参数](./engine-args.md)）。副本不做权重分片，也不是张量或流水并行。
 
 `replicas` 不要和部署级的 `device`、`endpoint` 或 `served_name` 一起用。省略 `replicas` 保留单 worker 简写，调度和状态契约与显式单副本相同。单 worker 部署保留前端结果缓存；多副本用各自独立的 worker 缓存。副本的放置与绑定无关，路由消费方的变化不会改动 worker 身份。重配先准备好兼容的池再发布，退场的 worker 会排空已有请求。
 
@@ -162,8 +161,10 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Lux-9B
         endpoint: http://gpu-runtime.internal:8100
-        served_name: vllm-sr/Decision-2.0-Lux-9B
+        served_name: Decision-2.0-Lux-9B
 ```
+
+`served_name` 是 runtime 在 `GET /v1/models` 里列出的 ID。已发布的模型以去掉组织名的仓库名列出，这里是 `Decision-2.0-Lux-9B`，除非用 `--served-model-name` 另起名字。不写 `served_name` 时 router 按部署名去找。runtime 不提供的名字会让这个部署一直不可用。
 
 `endpoint` 收 `http://host:port`、`https://host:port` 或 Unix socket（`unix:///path/to/runtime.sock`）。挂接的 runtime  router 不启动、不重启、不停——它只探活，runtime 挂了就当作不可用。
 
@@ -177,7 +178,7 @@ router 镜像自带 CPU runtime，托管部署在任何集群里都能跑。ROCm
 
 首次启动时，runtime 会把 router 用到的模型下载进它的模型卷（`/app/models`，即 chart 的 `persistence` 声明，默认 10 GiB）。按你路由的模型来定这个声明的大小：光 Vela Omni Mini 就要 4.3 GB。在离线的集群里，先把它们拉进去（见[故障排查](model-runtime/troubleshooting.md#the-runtime-stays-in-loading-or-warming)）。
 
-ROCm 镜像里留在 CPU 上跑的模型，用的是它的 ROCm 版 PyTorch。对多数 Vela 任务模型，这个构建过不了 runtime 的加载期检查（单独答和批量答要一致），所以在 `exact` 下它们排队逐个答请求：答案一样，负载下吞吐低些。模型全在 CPU 上跑的 router，该用 CPU 镜像。ROCm 镜像的 PyTorch 没有 CPU LAPACK，带 gated delta rule 层的解码器（Qwen3.5 一系的模型，比如 Decision 2.0 Lux-9B 和 Vela 2.0 4B）在它的 CPU 上根本加载不了：runtime 在启动时、权重加载前就拒绝 `device: cpu`，并说明原因。这类模型放 GPU 上跑，或者用 CPU 镜像跑。
+ROCm 镜像里留在 CPU 上跑的模型，用的是它的 ROCm 版 PyTorch。对多数 Vela 任务模型，这个构建过不了 runtime 的加载期检查（单独答和批量答要一致），所以它们像 GPU 上的模型一样做批处理：批处理窗口过后并发请求共用前向，答案可能因舍入而变动。模型全在 CPU 上跑的 router，该用 CPU 镜像。ROCm 镜像的 PyTorch 没有 CPU LAPACK，带 gated delta rule 层的解码器（Qwen3.5 一系的模型，比如 Decision 2.0 Lux-9B 和 Vela 2.0 4B）在它的 CPU 上根本加载不了：runtime 在启动时、权重加载前就拒绝 `device: cpu`，并说明原因。这类模型放 GPU 上跑，或者用 CPU 镜像跑。
 
 多个 router 想共享 GPU 模型，就用同一个镜像把 runtime 单独跑成一个 Deployment，所有 router 挂它的 Service。镜像里的 `vllm-srun` 命令就是干这个的：
 
@@ -246,7 +247,7 @@ router 开始服务后，请求绝不会等一个答不上来的模型：
 ## 看看什么在跑 {#check-what-is-running}
 
 - router 在 metrics 端口导出 `vsr_model_runtime_ready{deployment="..."}`（部署能答题时为 1）、`vsr_model_runtime_restarts_total`、按结果分的 `vsr_model_runtime_requests_total` 和按原因分的 `vsr_model_runtime_unknown_answers_total`。
-- router 的管理 API 列出每个部署及其进程、状态、重启次数和所服务的模型（标签、设备、档位）：`curl -s localhost:8080/api/v1/inventory/model-runtime`。
+- router 的管理 API 列出每个部署及其进程、状态、重启次数和所服务的模型（标签、设备、引擎参数）：`curl -s localhost:8080/api/v1/inventory/model-runtime`。
 - 挂接的 runtime 直接应答 `GET /v1/models` 和 `GET /health`。
 
 [参考](./reference.md#router-managed-runtimes) 列出能改 runtime 命令、socket 目录和托管 runtime 模型缓存的环境变量。
