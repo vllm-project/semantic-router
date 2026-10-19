@@ -6,6 +6,8 @@ jobs, and the boundaries those jobs actually check. The audit baseline is
 `1c629c80b383d7e53e01f266430d0fa41c5d9bf6`;
 the decisions below describe this change, not the previous default behavior.
 The ongoing execution policy is documented in [testing-strategy.md](testing-strategy.md).
+The subsequent approval UX adds `ci-status.yml`; its separate control cost is
+recorded in the [cost audit](ci-job-cost-audit.md#approval-status-publisher-follow-up).
 
 The main cost problem was repeated environment preparation and broad automatic
 qualification, especially image builds. Counting workflow files alone obscures
@@ -42,7 +44,10 @@ can increase the elapsed time of an individual worker.
 - **Pull requests:** run the affected automatic source/component checks first.
   Expensive runtime, service, image, and deployment qualification requires a
   committer's approval. A deferred required check or image remains required;
-  the Gate fails until the planned evidence exists.
+  the status publisher keeps PR Gate pending with **Waiting for committer
+  approval** when authorization is the only missing requirement. It updates a
+  single bot comment with the pending scope and `/ci run` instructions. Waiting
+  occupies no runner; actual test or evidence failures still fail the Gate.
 - **Manual approval:** a new `/ci run` comment authorizes the affected heavy
   work for the current PR revision and reruns the original Pull Request
   workflow. The trusted controller checks write/maintain/admin permission and
@@ -50,7 +55,9 @@ can increase the elapsed time of an individual worker.
   fresh approval. `/ci run full` requests the complete CPU inventory; narrower
   scopes are available in [ci_policy.py](../../ci/ci_policy.py). A separate
   manually dispatched verification is useful for diagnosis but does not replace
-  the original PR Gate.
+  the original PR Gate. Contributors without write permission cannot authorize
+  runs. Valid scopes accumulate for the same revision; a partial approval keeps
+  the remaining scope pending.
 - **Main pushes:** run source/component checks selected by the automatic policy.
   They do not automatically publish the development CLI or production images.
   `Main` dispatched with `publish: true` runs complete qualification and
@@ -157,7 +164,8 @@ or complete weekly/explicit publication qualification.
 
 | Workflow | Jobs | Actual value | Decision and execution time |
 | --- | --- | --- | --- |
-| [pr.yml](../../../.github/workflows/pr.yml) | `ci`, `pr-gate` | One PR execution entry and the stable branch-protection result. | Retain. Cheap work starts automatically; missing approved evidence keeps PR Gate red. No duplicate comment-triggered test pipeline. |
+| [pr.yml](../../../.github/workflows/pr.yml) | `ci`, `pr-gate` | One PR execution entry and a short job summarizing executed qualification. | With the publisher available, `pr-gate` is named CI Execution; its success alone does not satisfy PR Gate. Older branches retain the strict legacy gate until updated after the publisher lands on main. |
+| [ci-status.yml](../../../.github/workflows/ci-status.yml) | `publish` | Trusted main code publishes PR Gate and updates one bot comment with the deferred scope and authorization command. | At most two short jobs from normal `in_progress`/`completed` events per attempt. Missing authorization remains pending without a resident runner; actual failures fail, and complete passing evidence succeeds. |
 | [manual-ci.yml](../../../.github/workflows/manual-ci.yml) | `authorize`, `rerun` | Validates a comment and frozen revision, then reruns its original PR run. It executes trusted controller code. | Retain as the approval entrypoint; run only for `/ci run` comments. The two jobs separate authorization from Actions write permission. |
 | [main.yml](../../../.github/workflows/main.yml) | `ci`, `images`, `helm`, `pypi` | Merged-source checks and explicit coherent development publication. | Change push behavior to source/component checks only. Publication jobs run after `publish: true` qualification; preserve CLI/image revision coupling. |
 | [nightly-build.yml](../../../.github/workflows/nightly-build.yml) | `ci`, `docker`, `helm` | Broad detection outside the affected-path selection and promotion after successful qualification. | Change daily execution to Monday weekly execution; retain manual dispatch and full coverage. Keep the filename/profile for existing consumers. |

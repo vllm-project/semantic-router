@@ -182,7 +182,13 @@ class SelectionTests(unittest.TestCase):
                 workflow["jobs"][job]["with"]["mode"],
                 "${{ fromJSON(needs.plan.outputs.plan).profile }}",
             )
-        self.assertIn("--results", workflow["jobs"]["gate"]["steps"][-1]["run"])
+        reconciliation = [
+            step["run"]
+            for step in workflow["jobs"]["gate"]["steps"]
+            if "check_ci_gate.py" in step.get("run", "")
+        ]
+        self.assertEqual(len(reconciliation), 1)
+        self.assertIn("--results", reconciliation[0])
 
     def test_docs_and_paper_do_not_schedule_models_or_containers(self):
         for path in ("README.md", "website/docs/overview.md", "paper/main.tex"):

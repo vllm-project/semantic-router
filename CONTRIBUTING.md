@@ -205,6 +205,35 @@ Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
 the change is needed, which modules it affects, and how its user-visible
 behavior was verified.
 
+### Understand CI authorization
+
+Affected source and component checks start automatically. Expensive image,
+model, service, and deployment checks need a committer's authorization. When
+only that authorization is missing, **PR Gate** stays pending with
+**Waiting for committer approval**. A single bot comment on the PR lists the
+remaining checks and the command to authorize them; it is updated as the PR
+changes. Waiting does not occupy a runner. Actual test or evidence failures
+remain failures, and the Gate succeeds only when all required evidence passes.
+
+Contributors without repository write permission do not need to authorize CI
+and cannot do so. A committer with current `write`, `maintain`, or `admin`
+permission can post a new, unedited comment:
+
+```text
+/ci run
+```
+
+This authorizes the affected work and reruns the original PR workflow.
+`/ci run full` requests the complete CPU inventory. Narrower scopes are
+documented in the [testing strategy](tools/agent/docs/testing-strategy.md#product-layers-and-execution-policy).
+Valid scopes accumulate for the same revision; partial authorization does not
+waive the remaining checks. A new head, base, or merge revision requires fresh
+authorization.
+
+Branches based on main before the status publisher was introduced retain the
+strict legacy PR Gate during bootstrap. Update the branch after the publisher
+lands on main to use the pending state and bot guidance.
+
 Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it, all required checks pass, and all review conversations are resolved.
