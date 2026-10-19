@@ -146,6 +146,12 @@ scope; multiple scopes may be listed, and valid approvals for the same revision
 accumulate. A partial approval does not waive the other required contracts or
 image builds. `/ci run full` adds the full CPU inventory.
 
+Command feedback uses 👀 for receipt, 🚀 after the rerun API succeeds, and 😕
+with an actionable bot reply for rejected requests or a trigger that could not
+be confirmed. Feedback starts when the command-handler job gets a runner. A
+rocket confirms only that CI was triggered; **PR Gate** owns the test outcome.
+Retries update the same request's bot reply instead of adding duplicate errors.
+
 The command handler runs trusted main code and freezes the PR head, base, merge
 revision, and original PR workflow run. It rechecks the comment and permissions
 before rerunning that original event. Edits, withdrawn permissions, and changed

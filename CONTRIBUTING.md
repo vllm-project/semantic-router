@@ -230,6 +230,12 @@ Valid scopes accumulate for the same revision; partial authorization does not
 waive the remaining checks. A new head, base, or merge revision requires fresh
 authorization.
 
+The command handler reacts with 👀 when it receives a request and 🚀 after it
+successfully triggers the PR workflow. The rocket means CI was started, not that
+tests passed; **PR Gate** reports the final result. Rejected requests receive 😕
+and a short bot reply explaining the reason and next step, including when the
+requester lacks permission. Feedback appears when the command handler starts.
+
 Branches based on main before the status publisher was introduced retain the
 strict legacy PR Gate during bootstrap. Update the branch after the publisher
 lands on main to use the pending state and bot guidance.

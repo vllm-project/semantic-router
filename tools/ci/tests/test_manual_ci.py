@@ -564,13 +564,29 @@ class ManualCIWorkflowTests(unittest.TestCase):
             self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
             self.assertEqual(checkout["with"]["persist-credentials"], "false")
 
-    def test_write_token_is_confined_to_rerun_after_successful_authorization(self):
+    def test_actions_write_is_confined_to_rerun_after_successful_authorization(self):
         self.assertNotIn("write", self.workflow["permissions"].values())
         authorize = self.workflow["jobs"]["authorize"]
-        self.assertNotIn("write", authorize["permissions"].values())
+        self.assertEqual(
+            authorize["permissions"],
+            {
+                "contents": "read",
+                "actions": "read",
+                "issues": "write",
+                "pull-requests": "read",
+            },
+        )
         rerun = self.workflow["jobs"]["rerun"]
         self.assertEqual(rerun["needs"], "authorize")
-        self.assertEqual(rerun["permissions"]["actions"], "write")
+        self.assertEqual(
+            rerun["permissions"],
+            {
+                "contents": "read",
+                "actions": "write",
+                "issues": "write",
+                "pull-requests": "read",
+            },
+        )
         self.assertEqual(rerun["if"], "needs.authorize.outputs.authorized == 'true'")
 
     def test_pr_gate_cannot_be_skipped_by_an_unrelated_label(self):
@@ -580,6 +596,22 @@ class ManualCIWorkflowTests(unittest.TestCase):
         self.assertNotIn("labeled", workflow["on"]["pull_request"]["types"])
         self.assertNotIn("unlabeled", workflow["on"]["pull_request"]["types"])
         self.assertEqual(workflow["jobs"]["pr-gate"]["if"], "always()")
+
+    def test_artifact_feedback_fallback_cannot_replace_handler_rejections(self):
+        for job in self.workflow["jobs"].values():
+            fallback = next(
+                step
+                for step in job["steps"]
+                if "manual_ci.py feedback" in step.get("run", "")
+            )
+            self.assertEqual(
+                fallback["if"],
+                "failure() && steps.authorization-artifact.outcome == 'failure'",
+            )
+            self.assertIn(
+                '--event "$GITHUB_EVENT_PATH" --reason controller',
+                " ".join(fallback["run"].split()),
+            )
 
 
 if __name__ == "__main__":

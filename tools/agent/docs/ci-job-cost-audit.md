@@ -63,6 +63,8 @@ actual allocation, but should be measured rather than assumed. The successful
 `manual-ci.yml` approval controller adds two separate hosted jobs (`authorize`
 and `rerun`), so this complete approval transaction can allocate **17 jobs**.
 Those controller jobs are outside the original PR workflow totals above.
+Command reactions and rejection replies execute inside these existing jobs;
+they add API calls but no additional job allocations.
 
 The old full inventory contained nine component contracts. Ten component
 contracts remain available after retiring CK and adding benchmark tools and
