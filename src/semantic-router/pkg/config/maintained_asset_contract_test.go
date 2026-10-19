@@ -97,6 +97,36 @@ func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 	}
 }
 
+func TestIstioEnvoyFilterRouterNameIsUnique(t *testing.T) {
+	const rel = "deploy/kubernetes/istio/envoyfilter.yaml"
+	root := decodeYAMLMap(t, mustReadRepoFile(t, rel), rel)
+	patches, ok := mustAssetMapValue(t, root, "spec", rel)["configPatches"].([]interface{})
+	if !ok || len(patches) == 0 {
+		t.Fatalf("%s has no configPatches", rel)
+	}
+	routerFilters := 0
+	for i, item := range patches {
+		patch, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s configPatches[%d] is not a map", rel, i)
+		}
+		value := mustAssetMapValue(t, mustAssetMapValue(t, patch, "patch", rel), "value", rel)
+		typed, _ := value["typed_config"].(map[string]interface{})
+		if typed["@type"] != "type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor" {
+			continue
+		}
+		routerFilters++
+		// Istio keys InferencePool per-route ext_proc config by this name.
+		name, _ := value["name"].(string)
+		if name == "" || name == "envoy.filters.http.ext_proc" {
+			t.Fatalf("%s configPatches[%d] names the router filter %q; it needs a unique name or InferencePool routes override it", rel, i, name)
+		}
+	}
+	if routerFilters == 0 {
+		t.Fatalf("%s has no ext_proc router filter patch", rel)
+	}
+}
+
 func TestMaintainedRecipeDirectoriesAreCompleteAndSymmetric(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "config", "recipes")
 	entries, err := os.ReadDir(root)

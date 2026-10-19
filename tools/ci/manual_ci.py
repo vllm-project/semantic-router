@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
+from manual_ci_feedback import command_event, feedback_for_event
+
 CONTROLLER = ".github/workflows/manual-ci.yml"
 AUTHORIZE_JOB = "Authorize requested CI"
 # Public immutable GitHub identity: https://api.github.com/users/mergify%5Bbot%5D
@@ -33,6 +35,10 @@ PLAN_LIMIT = 16 * 1024 * 1024
 
 class ManualCIError(RuntimeError):
     """A credential-free failure suitable for a workflow summary."""
+
+    def __init__(self, message: str, *, reason: str = "failed") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class GitHubClient:
@@ -52,6 +58,19 @@ class GitHubClient:
     def request(self, endpoint: str, *, method="GET"):
         value = self.raw(endpoint, method=method)
         return json.loads(value) if value.strip() else None
+
+    def write(self, endpoint: str, payload: dict, *, method="POST"):
+        result = subprocess.run(
+            ["gh", "api", endpoint, "--method", method, "--input", "-"],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        if result.returncode:
+            raise ManualCIError("GitHub feedback API request failed.")
+        return json.loads(result.stdout) if result.stdout.strip() else None
 
 
 def parse_command(body: str) -> dict | None:
@@ -93,10 +112,23 @@ def source_identity(client, repo: str, number: int) -> dict:
         or pull.get("base", {}).get("ref") != "main"
         or pull.get("base", {}).get("repo", {}).get("full_name") != repo
     ):
-        raise ManualCIError("CI requests require an open pull request targeting main.")
+        raise ManualCIError(
+            "CI requests require an open pull request targeting main.",
+            reason="revision",
+        )
+    # The PR API's base.sha can lag behind the test merge commit. Read the
+    # actual target ref, then require one coherent base/head/merge revision.
+    base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+    if (
+        base_ref.get("ref") != "refs/heads/main"
+        or base_ref.get("object", {}).get("type") != "commit"
+    ):
+        raise ManualCIError(
+            "The current main revision is unavailable.", reason="revision"
+        )
     result = {
         "head_sha": pull.get("head", {}).get("sha"),
-        "base_sha": pull.get("base", {}).get("sha"),
+        "base_sha": base_ref.get("object", {}).get("sha"),
         "source_sha": pull.get("merge_commit_sha"),
     }
     if any(
@@ -104,7 +136,20 @@ def source_identity(client, repo: str, number: int) -> dict:
         for value in result.values()
     ):
         raise ManualCIError(
-            "The current PR merge revision is unavailable; resolve conflicts first."
+            "The current PR merge revision is unavailable; resolve conflicts first.",
+            reason="revision",
+        )
+    commit = client.request(f"repos/{repo}/git/commits/{result['source_sha']}")
+    parents = commit.get("parents")
+    if (
+        not isinstance(parents, list)
+        or any(not isinstance(parent, dict) for parent in parents)
+        or [parent.get("sha") for parent in parents]
+        != [result["base_sha"], result["head_sha"]]
+    ):
+        raise ManualCIError(
+            "The PR merge revision changed or is still being prepared; wait for its Plan job.",
+            reason="revision",
         )
     return result
 
@@ -145,7 +190,9 @@ def unchanged_comment(client, repo: str, number: int, comment_id: int) -> dict:
         != f"https://api.github.com/repos/{repo}/issues/{number}"
         or comment.get("created_at") != comment.get("updated_at")
     ):
-        raise ManualCIError("Use a new, unedited /ci run comment on this pull request.")
+        raise ManualCIError(
+            "Use a new, unedited /ci run comment on this pull request.", reason="edited"
+        )
     timestamp(comment.get("created_at"))
     return comment
 
@@ -212,7 +259,8 @@ def authorize(client, event: dict) -> dict | None:
         return None
     if not can_write(client, repo, actor):
         raise ManualCIError(
-            "Only repository write, maintain or admin collaborators may request CI."
+            "Only repository write, maintain or admin collaborators may request CI.",
+            reason="permission",
         )
     number, comment_id = int(issue["number"]), int(event_comment["id"])
     comment = unchanged_comment(client, repo, number, comment_id)
@@ -220,12 +268,15 @@ def authorize(client, event: dict) -> dict | None:
         comment.get("body") != event_comment.get("body")
         or comment.get("user", {}).get("login") != actor
     ):
-        raise ManualCIError("The CI request changed after its creation event.")
+        raise ManualCIError(
+            "The CI request changed after its creation event.", reason="edited"
+        )
     identity = source_identity(client, repo, number)
     head = client.request(f"repos/{repo}/pulls/{number}")["head"]
     if command["pinned"] and command["pinned"] != list(identity.values()):
         raise ManualCIError(
-            "The requested head, base or merge SHA is no longer current."
+            "The requested head, base or merge SHA is no longer current.",
+            reason="expired",
         )
     query = urlencode(
         {"event": "pull_request", "head_sha": identity["head_sha"], "per_page": 20}
@@ -277,7 +328,8 @@ def authorize(client, event: dict) -> dict | None:
             "controller_sha": os.environ["GITHUB_SHA"],
         }
     raise ManualCIError(
-        "No current PR CI plan is available; wait for its Plan job, then post a new request."
+        "No current PR CI plan is available; wait for its Plan job, then post a new request.",
+        reason="plan",
     )
 
 
@@ -424,16 +476,71 @@ def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
         if not matching_authorization(client, repo, number, run, identity, record):
             raise ManualCIError(
-                "The PR revision or authorization changed; post a new /ci run request."
+                "The PR revision or authorization changed; post a new /ci run request.",
+                reason="expired",
             )
         if run.get("status") == "completed":
             client.request(f"repos/{repo}/actions/runs/{run_id}/rerun", method="POST")
             return
         if time.monotonic() >= deadline:
             raise ManualCIError(
-                "Automatic CI is still running; rerun this request after it completes."
+                "Automatic CI is still running; rerun this request after it completes.",
+                reason="busy",
             )
         time.sleep(10)
+
+
+def authorize_with_feedback(client, event: dict) -> dict | None:
+    feedback = feedback_for_event(client, event)
+    try:
+        if command_event(event) and parse_command(event["comment"].get("body")) is None:
+            raise ManualCIError("Unsupported /ci run command.", reason="syntax")
+        if feedback:
+            feedback.received()
+        return authorize(client, event)
+    except (
+        ManualCIError,
+        KeyError,
+        TypeError,
+        ValueError,
+        OSError,
+        subprocess.TimeoutExpired,
+    ) as error:
+        if feedback:
+            feedback.rejected(getattr(error, "reason", "failed"))
+        raise
+
+
+def rerun_with_feedback(client, record: dict, event: dict) -> None:
+    feedback = feedback_for_event(client, event, record=record)
+    try:
+        rerun(client, record)
+    except (
+        ManualCIError,
+        KeyError,
+        TypeError,
+        ValueError,
+        OSError,
+        subprocess.TimeoutExpired,
+    ) as error:
+        if feedback:
+            reason = getattr(error, "reason", "trigger-failed")
+            feedback.rejected(
+                "trigger-failed" if reason == "failed" else reason,
+                run_id=record.get("pr_run_id"),
+            )
+        raise
+    if feedback:
+        feedback.started(record["pr_run_id"])
+
+
+def feedback_event() -> dict:
+    """Feedback context is optional; reading it must not block an authorized rerun."""
+    try:
+        return json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
+    except (KeyError, ValueError, OSError):
+        print("::warning::CI command feedback context is unavailable.")
+        return {}
 
 
 def write_outputs(values: dict) -> None:
@@ -456,17 +563,29 @@ def main() -> int:
     resolver.add_argument("--output", type=Path, required=True)
     rerunner = commands.add_parser("rerun")
     rerunner.add_argument("--authorization", type=Path, required=True)
+    feedback_parser = commands.add_parser("feedback")
+    feedback_parser.add_argument("--event", type=Path, required=True)
+    feedback_parser.add_argument("--reason", choices=["controller"], required=True)
     args = parser.parse_args()
+    if args.command == "feedback":
+        try:
+            event = json.loads(args.event.read_text())
+            feedback = feedback_for_event(GitHubClient(), event)
+            if feedback:
+                feedback.rejected(args.reason)
+        except (KeyError, TypeError, ValueError, OSError):
+            print("::warning::CI command feedback context is unavailable.")
+        return 0
     try:
         client = GitHubClient()
         if args.command == "rerun":
             record = json.loads(args.authorization.read_text())
-            rerun(client, record)
+            rerun_with_feedback(client, record, feedback_event())
             print(f"Requested rerun of pull-request CI {record['pr_run_id']}.")
             return 0
         event = json.loads(args.event.read_text())
         result = (
-            authorize(client, event)
+            authorize_with_feedback(client, event)
             if args.command == "authorize"
             else resolve(client, event, source=args.source, base=args.base)
         )
