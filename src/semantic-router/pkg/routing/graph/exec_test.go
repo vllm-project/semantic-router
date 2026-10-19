@@ -164,12 +164,14 @@ func TestTimeoutCancelsTheRun(t *testing.T) {
 func TestClientCancellationReachesEveryHop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var started, stopped atomic.Int32
+	sawStop := make(chan struct{}, 3)
 	caller := &fakeCaller{answer: func(ctx context.Context, _ *HopRequest) (*HopResponse, error) {
 		if started.Add(1) == 3 {
 			cancel()
 		}
 		<-ctx.Done()
 		stopped.Add(1)
+		sawStop <- struct{}{}
 		return nil, ctx.Err()
 	}}
 	program := &Program{Steps: Sequence{parallel("panel", &Parallel{Branches: branchesOf("a", "b", "c")}), respond()}}
@@ -177,8 +179,13 @@ func TestClientCancellationReachesEveryHop(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err %v", err)
 	}
-	if stopped.Load() != 3 {
-		t.Fatalf("%d of 3 hops saw the cancellation", stopped.Load())
+	// Run returns when the caller cancels the step, before every hop records it.
+	for range 3 {
+		select {
+		case <-sawStop:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%d of 3 hops saw the cancellation", stopped.Load())
+		}
 	}
 }
 

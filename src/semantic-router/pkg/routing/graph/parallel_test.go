@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestParallelCapsConcurrencyAndStartsInOrder(t *testing.T) {
@@ -51,6 +53,7 @@ func TestParallelCapsConcurrencyAndStartsInOrder(t *testing.T) {
 
 func TestParallelFirstKCancelsTheRest(t *testing.T) {
 	var cancelled atomic.Int32
+	sawCancel := make(chan struct{}, 2)
 	var inFlight sync.WaitGroup
 	inFlight.Add(2)
 	caller := &fakeCaller{answer: func(ctx context.Context, req *HopRequest) (*HopResponse, error) {
@@ -62,6 +65,7 @@ func TestParallelFirstKCancelsTheRest(t *testing.T) {
 		inFlight.Done()
 		<-ctx.Done()
 		cancelled.Add(1)
+		sawCancel <- struct{}{}
 		return nil, ctx.Err()
 	}}
 	program := &Program{Steps: Sequence{
@@ -76,8 +80,14 @@ func TestParallelFirstKCancelsTheRest(t *testing.T) {
 	if got := answerText(t, outcome); got != "fast1+fast2" {
 		t.Fatalf("answer %q", got)
 	}
-	if cancelled.Load() != 2 {
-		t.Fatalf("%d slow hops cancelled", cancelled.Load())
+	// Run returns once FirstK stops the step, before each slow hop has
+	// recorded that it saw the cancel.
+	for range 2 {
+		select {
+		case <-sawCancel:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%d slow hops cancelled", cancelled.Load())
+		}
 	}
 	for _, attempt := range outcome.Attempts {
 		if (attempt.Model == "slow1" || attempt.Model == "slow2") && attempt.Status != AttemptCancelled {
@@ -151,4 +161,106 @@ func TestParallelFailStopsAtTheFirstFailure(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the slow branch was not cancelled")
 	}
+}
+
+// TestParallelNoncooperativeBranch checks a branch that never selects on ctx.
+// stuck waits on a release channel. fast runs only after stuck has entered.
+// Run must return before release is closed.
+func TestParallelNoncooperativeBranch(t *testing.T) {
+	success := func(req *HopRequest) (*HopResponse, error) {
+		return completion(req.Model, req.Model, 1), nil
+	}
+	t.Run("first-k", func(t *testing.T) {
+		for range 20 {
+			outcome, err := runNoncooperative(t, context.Background(), &Parallel{
+				Branches: branchesOf("stuck", "fast"), FirstK: 1,
+			}, success, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := answerText(t, outcome); got != "fast" {
+				t.Fatalf("answer %q", got)
+			}
+		}
+	})
+	t.Run("fatal", func(t *testing.T) {
+		for range 20 {
+			_, err := runNoncooperative(t, context.Background(), &Parallel{
+				Branches: branchesOf("stuck", "fast"),
+			}, func(*HopRequest) (*HopResponse, error) {
+				return &HopResponse{Status: 500, Body: []byte("{}")}, nil
+			}, nil)
+			var callErr *CallError
+			if !errors.As(err, &callErr) || callErr.Result.Model != "fast" {
+				t.Fatalf("err %v", err)
+			}
+		}
+	})
+	t.Run("parent_cancel", func(t *testing.T) {
+		for range 20 {
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			_, err := runNoncooperative(t, ctx, &Parallel{
+				Branches: branchesOf("stuck", "fast"), FirstK: 1,
+			}, success, cancel)
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("parent: %v", err)
+			}
+		}
+	})
+}
+
+// runNoncooperative starts one parallel step and the following respond step.
+// onFastReturned, when set, runs after fast has returned and the step context
+// is done, so FirstK can record errEnough before the caller is canceled.
+func runNoncooperative(t *testing.T, ctx context.Context, step *Parallel, answer func(*HopRequest) (*HopResponse, error), onFastReturned context.CancelFunc) (*Outcome, error) {
+	t.Helper()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	fastDone := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	var enteredOnce sync.Once
+	caller := &fakeCaller{answer: func(_ context.Context, req *HopRequest) (*HopResponse, error) {
+		if req.Model == "stuck" {
+			enteredOnce.Do(func() { close(entered) })
+			<-release
+			return completion(req.Model, "stuck", 1), nil
+		}
+		<-entered
+		defer close(fastDone)
+		return answer(req)
+	}}
+	if onFastReturned != nil {
+		step.afterStop = func() {
+			<-fastDone
+			onFastReturned()
+		}
+	}
+	program := &Program{Steps: Sequence{parallel("panel", step), respond()}}
+	// Build the run on this goroutine. Run itself is started separately so a
+	// branch that ignores cancellation cannot block the test.
+	input := Input{Request: chatRequest(t, "hello")}
+	options := Options{Caller: caller, Hop: routing.Hop{Decision: "panel", Recipe: "default"}}
+	type result struct {
+		outcome *Outcome
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		outcome, err := Run(ctx, program, input, options)
+		done <- result{outcome, err}
+	}()
+	select {
+	case got := <-done:
+		return got.outcome, got.err
+	case <-time.After(5 * time.Second):
+		t.Fatal("parallel step waited for a branch that ignores cancellation")
+	}
+	return nil, nil
 }
