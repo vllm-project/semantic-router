@@ -14,20 +14,6 @@ ROUTER_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 START_ROUTER = REPO_ROOT / "src" / "vllm-sr" / "start-router.sh"
 MODEL_RUNTIME = REPO_ROOT / "src" / "model-runtime"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
-STAGES = (
-    "router-build",
-    "image-routing-assets",
-    "python-base",
-    "torch-cpu",
-    "torch-rocm-base",
-    "causal-conv1d-rocm",
-    "rocm-torch-release",
-    "rocm-lib-slim",
-    "torch-rocm",
-    "torch-cuda",
-    "runtime",
-    "vllm-sr",
-)
 
 
 def router_dockerfile() -> str:
@@ -56,8 +42,8 @@ def stages() -> dict[str, tuple[str, str]]:
 def test_every_router_image_comes_from_one_stage_graph() -> None:
     graph = stages()
 
-    # vllm-sr is the only image stage, and the default target of every build.
-    assert tuple(graph) == STAGES
+    # Adding an explicit target must not change the bundled default.
+    assert next(reversed(graph)) == "vllm-sr"
     assert graph["runtime"][0] == "torch-${ACCELERATOR}"
     for stage in ("torch-cpu", "torch-rocm-base", "torch-cuda"):
         assert graph[stage][0] == "python-base", stage
@@ -66,6 +52,9 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     assert graph["rocm-lib-slim"][0] == "rocm-torch-release"
     assert graph["torch-rocm"][0] == "python-base"
     assert graph["vllm-sr"][0] == "runtime"
+    assert graph["vllm-sr-attached"][0] == "${IMAGE_REGISTRY}${ATTACHED_BASE_IMAGE}"
+    for target in ("vllm-sr", "vllm-sr-attached"):
+        assert re.search(r"COPY (?:--link )?--from=router-files / /", graph[target][1])
     assert "ARG ACCELERATOR=cpu" in router_dockerfile()
 
 
@@ -73,8 +62,6 @@ def test_router_images_carry_no_native_model_bindings() -> None:
     text = router_dockerfile()
 
     for legacy in (
-        "cargo",
-        "rustup",
         "-binding",
         "onnxruntime_rocm",
         "migraphx",
@@ -86,6 +73,10 @@ def test_router_images_carry_no_native_model_bindings() -> None:
         "rocm/dev-ubuntu",
     ):
         assert legacy not in text, legacy
+    # Rust builds the GLIDE client dependency, not a Router-side model engine.
+    for stage in ("runtime", "vllm-sr", "vllm-sr-attached"):
+        assert "cargo" not in stages()[stage][1]
+        assert "rustup" not in stages()[stage][1]
 
 
 def test_router_binary_needs_only_the_target_c_linker() -> None:
@@ -99,8 +90,9 @@ def test_router_binary_needs_only_the_target_c_linker() -> None:
         assert "apt-get" not in graph[image_stage][1], image_stage
     # The CLI's readiness and status probes run curl inside the stack image.
     assert "apt-get install -y --no-install-recommends curl &&" in graph["vllm-sr"][1]
-    assert "COPY --link --from=router-build /out/router /usr/local/bin/router" in (
-        graph["vllm-sr"][1]
+    assert (
+        "COPY --from=router-build /out/router /usr/local/bin/router"
+        in graph["router-files"][1]
     )
 
 
@@ -180,13 +172,14 @@ def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:
 
 
 def test_router_images_share_the_model_assets() -> None:
-    router = stages()["vllm-sr"][1]
+    graph = stages()
+    router = graph["vllm-sr"][1]
+    resources = graph["router-files"][1]
 
     assert (
-        "COPY --link --from=image-routing-assets /out/ /app/share/image-routing/"
-        in (router)
+        "COPY --from=image-routing-assets /out/ /app/share/image-routing/" in resources
     )
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in router
+    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in resources
     assert "ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime" in router
     # The charts' root filesystem is read-only: GPU caches live in the model volume.
     for cache in (
@@ -198,22 +191,25 @@ def test_router_images_share_the_model_assets() -> None:
 
 
 def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
-    vllm_sr = stages()["vllm-sr"][1]
+    graph = stages()
+    vllm_sr = graph["vllm-sr"][1]
+    resources = graph["router-files"][1]
 
-    assert "COPY src/vllm-sr/cli/ /app/cli/" in vllm_sr
-    assert "COPY config/recipes/built-in/ /app/cli/model_assets/" in vllm_sr
+    assert "COPY src/vllm-sr/cli/ /app/cli/" in resources
+    assert "COPY config/recipes/built-in/ /app/cli/model_assets/" in resources
     assert (
         "COPY config/fragments/algorithm/selection/latency-aware.yaml "
         "/app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml"
-    ) in vllm_sr
-    assert "config/recipes/privacy/" not in vllm_sr
+    ) in resources
+    assert "config/recipes/privacy/" not in resources
     assert (
         "COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json "
         "/app/cli/config_schema/router-config-v0.3.schema.json"
-    ) in vllm_sr
+    ) in resources
     # The script is not executable in git; the entrypoint needs the bit.
     assert (
-        "COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh" in vllm_sr
+        "COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh"
+        in resources
     )
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in vllm_sr
     assert 'VOLUME ["/app/models"]' in vllm_sr
@@ -223,7 +219,9 @@ def test_kubernetes_launchers_run_the_router_with_the_mounted_config() -> None:
     vllm_sr = stages()["vllm-sr"][1]
 
     # The reference config is the default for an image run with no mount.
-    assert "COPY config/config.yaml /app/config/config.yaml" in vllm_sr
+    assert (
+        "COPY config/config.yaml /app/config/config.yaml" in stages()["router-files"][1]
+    )
     assert "CMD " not in vllm_sr
     content = START_ROUTER.read_text(encoding="utf-8")
     dispatch = content.index('if [ $# -eq 0 ] || [ "${1#-}" != "$1" ]; then')
@@ -269,9 +267,14 @@ def test_entrypoint_dispatches_flags_and_config_paths(tmp_path: Path) -> None:
 
 
 def test_base_images_are_fully_qualified_for_podman() -> None:
-    local = set(STAGES)
+    local = set(stages())
     for base, _ in stages().values():
-        if base in local or base == "torch-${ACCELERATOR}":
+        if base in local or base in ("scratch", "torch-${ACCELERATOR}"):
+            continue
+        if base == "glide-${TARGETARCH}":
+            assert all(
+                f"glide-{arch}" in local for arch in ("amd64", "arm64", "riscv64")
+            )
             continue
         assert base.startswith("${IMAGE_REGISTRY}"), base
 

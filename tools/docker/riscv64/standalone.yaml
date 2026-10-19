@@ -1,0 +1,55 @@
+version: v0.3
+listeners:
+  - name: public
+    address: 127.0.0.1
+    port: 8899
+    timeout: 120s
+providers:
+  defaults:
+    model: backend-model
+  models:
+    - name: backend-model
+      provider_model_id: replace-with-served-model
+      api_format: openai
+      backend_refs:
+        - name: external
+          base_url: http://inference.example:8000/v1
+          provider: vllm
+          api_key_env: VSR_BACKEND_API_KEY
+          openai_compat_gateway: true
+          weight: 100
+routing:
+  modelCards:
+    - name: backend-model
+      modality: ar
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: backend-model
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+global:
+  router:
+    model_selection:
+      enabled: false
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      enabled: false
+    observability:
+      tracing:
+        enabled: false
+  stores:
+    response_cache:
+      enabled: false
+  integrations:
+    tools:
+      enabled: false
+  model_catalog:
+    kbs: []
