@@ -158,6 +158,43 @@ func TestChatLongStopSequenceReachesClient(t *testing.T) {
 	}
 }
 
+// Captured from SGLang 0.5.19 with Qwen/Qwen2-0.5B-Instruct and "stop": ["CHARLIE"].
+// SGLang reports the matched stop string in choices[].matched_stop and adds a
+// metadata.weight_versions array. The buffered test drops the flat
+// usage.reasoning_tokens, which #4914 covers.
+func sglangStopSequenceResponse(t *testing.T) []byte {
+	t.Helper()
+	body := vllmStopSequenceCapture(t, "sglang-chat-stop-sequence-out.json")
+	return []byte(strings.Replace(body, `,"reasoning_tokens":0`, "", 1))
+}
+
+func TestSGLangChatResponseReachesClients(t *testing.T) {
+	chat, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, sglangStopSequenceResponse(t), nil)
+	if err != nil {
+		t.Fatalf("buffered Chat client: %v", err)
+	}
+	if len(chat.Response.Output) != 1 {
+		t.Fatalf("output = %+v", chat.Response.Output)
+	}
+	anthropic, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, sglangStopSequenceResponse(t), nil)
+	if err != nil {
+		t.Fatalf("buffered Anthropic client: %v", err)
+	}
+	if !strings.Contains(string(anthropic.Body), `"stop_reason":"stop_sequence","stop_sequence":"CHARLIE"`) {
+		t.Fatalf("Anthropic client lost the matched stop sequence: %s", anthropic.Body)
+	}
+}
+
+func TestSGLangChatStreamReachesClients(t *testing.T) {
+	stream := vllmStopSequenceCapture(t, "sglang-chat-stop-sequence-stream.sse")
+	if out := translateMatchedStopStream(t, llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, stream); !strings.Contains(out, "BRA") || !strings.Contains(out, "[DONE]") {
+		t.Fatalf("streamed Chat client lost the content:\n%s", out)
+	}
+	if out := translateMatchedStopStream(t, llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, stream); !strings.Contains(out, `"stop_reason":"stop_sequence","stop_sequence":"CHARLIE"`) {
+		t.Fatalf("streamed Anthropic client lost the matched stop sequence:\n%s", out)
+	}
+}
+
 // An empty stop_reason string is still malformed, for a Chat client too.
 func TestChatEmptyStopReasonStringIsRejected(t *testing.T) {
 	body := strings.Replace(vllmStopSequenceCapture(t, "vllm-chat-stop-sequence-out.json"), `"stop_reason":"CHARLIE"`, `"stop_reason":""`, 1)

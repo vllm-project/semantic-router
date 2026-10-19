@@ -106,6 +106,7 @@ type chatChunkChoiceWire struct {
 	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
 	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
 	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
+	MatchedStop        *chatStopReasonWire `json:"matched_stop,omitempty"`
 	TokenIDs           []int64             `json:"token_ids,omitempty"`
 	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
@@ -437,7 +438,7 @@ func isExactGatewayKeepalive(chunk chatChunkWire) bool {
 	choice := chunk.Choices[0]
 	delta := choice.Delta
 	return choice.Index == 0 && choice.FinishReason == nil && choice.Logprobs == nil &&
-		choice.StopReason == nil && len(choice.TokenIDs) == 0 && choice.RoutedExperts == nil &&
+		choice.StopReason == nil && choice.MatchedStop == nil && len(choice.TokenIDs) == 0 && choice.RoutedExperts == nil &&
 		delta.Role == "" && delta.Content == nil && delta.Reasoning == nil &&
 		delta.AlternateReasoning == nil && delta.Refusal == nil && delta.Audio == nil &&
 		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
@@ -541,7 +542,7 @@ func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]ll
 		return nil, err
 	}
 	events = append(events, toolEvents...)
-	completed, err := decoder.completeChoice(choice.FinishReason, choice.StopReason)
+	completed, err := decoder.completeChoice(choice.FinishReason, chatStopDetail(choice.StopReason, choice.MatchedStop))
 	return append(events, completed...), err
 }
 

@@ -18,7 +18,7 @@ type chatResponseWire struct {
 	Provider            *string                   `json:"provider,omitempty"`
 	Choices             []chatChoiceWire          `json:"choices"`
 	Usage               *chatUsageWire            `json:"usage,omitempty"`
-	Metadata            map[string]string         `json:"metadata,omitempty"`
+	Metadata            map[string]any            `json:"metadata,omitempty"`
 	Moderation          json.RawMessage           `json:"moderation,omitempty"`
 	Error               *chatErrorWire            `json:"error,omitempty"`
 	ServiceTier         *chatServiceTierWire      `json:"service_tier,omitempty"`
@@ -67,6 +67,7 @@ type chatChoiceWire struct {
 	// metadata and is not replayed to the client.
 	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
 	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
+	MatchedStop            *chatStopReasonWire `json:"matched_stop,omitempty"`
 	TokenIDs               []int64             `json:"token_ids,omitempty"`
 	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }

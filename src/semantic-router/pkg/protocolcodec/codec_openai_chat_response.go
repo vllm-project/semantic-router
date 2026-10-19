@@ -208,7 +208,7 @@ func decodeChatChoices(wire chatResponseWire, response *llmprotocol.Response, po
 			response.Evidence.TokenLogprobs = decodeChatTokenLogprobs(choice.Logprobs)
 			if choice.FinishReason != nil {
 				response.SourceStopReason = *choice.FinishReason
-				response.StopReason, response.MatchedStopSequence = decodeChatStopWithMatch(*choice.FinishReason, choice.StopReason, policy)
+				response.StopReason, response.MatchedStopSequence = decodeChatStopWithMatch(*choice.FinishReason, chatStopDetail(choice.StopReason, choice.MatchedStop), policy)
 			}
 			continue
 		}
@@ -391,6 +391,13 @@ func decodeChatStopWithMatch(reason string, detail *chatStopReasonWire, policy l
 		return llmprotocol.StopSequence, *detail.Text
 	}
 	return decodeChatStop(reason), ""
+}
+
+func chatStopDetail(stopReason, matchedStop *chatStopReasonWire) *chatStopReasonWire {
+	if stopReason != nil {
+		return stopReason
+	}
+	return matchedStop
 }
 
 func decodeChatStop(reason string) llmprotocol.StopReason {
