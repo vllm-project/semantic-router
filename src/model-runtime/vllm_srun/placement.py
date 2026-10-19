@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from . import dtypes
 from .errors import PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
@@ -84,21 +85,31 @@ def resident_dtype(spec: ModelSpec, accelerator: str) -> str:
     return policy.gpu_weights or policy.weights
 
 
-def estimate_bytes(spec: ModelSpec, parameters: int, accelerator: str) -> int:
+def estimate_bytes(
+    spec: ModelSpec, parameters: int, accelerator: str, bf16_parameters: int = 0
+) -> int:
     """The weights in the dtype ``accelerator`` holds them in, plus an activation reserve.
 
     Weights a family holds in BF16 there (``gpu_weights`` / ``cpu_weights``)
-    count two bytes each plus ``RESIDENT_HEADROOM``; FP32 stays an upper bound
-    for the others (BF16-resident Linear weights only lower it). The reserve
-    covers loading and ordinary requests: inputs of tens of thousands of
-    tokens need more, and a forward that runs out of device memory fails
-    only its own requests.
+    count two bytes each plus ``RESIDENT_HEADROOM``, and so do the
+    ``bf16_parameters`` a ``bf16_resident`` family holds in BF16 on a GPU, its
+    BF16-stored Linear weights (docs/records/bf16-resident-device-memory.md);
+    the rest count as FP32. The reserve covers loading and ordinary requests:
+    inputs of tens of thousands of tokens need more, and a forward that runs
+    out of device memory fails only its own requests. A quantized checkpoint
+    counts its files instead.
     """
     width = DTYPE_BYTES.get(resident_dtype(spec, accelerator), FP32_BYTES)
-    weights = parameters * width
-    if width < FP32_BYTES:
-        weights += int(weights * RESIDENT_HEADROOM)
-    return weights + ACTIVATION_RESERVE
+    held = parameters if width < FP32_BYTES else 0
+    if width == FP32_BYTES and accelerator != "cpu" and spec.dtype.bf16_resident:
+        width, held = DTYPE_BYTES["bfloat16"], min(bf16_parameters, parameters)
+    weights = held * width
+    if spec.backbone.quantized is not None:
+        # Quantized weights load as stored; the files bound them (the rest is BF16).
+        weights = sum(path.stat().st_size for path in spec.backbone.weight_files)
+        held = parameters
+    weights += int(weights * RESIDENT_HEADROOM)
+    return weights + (parameters - held) * FP32_BYTES + ACTIVATION_RESERVE
 
 
 def place(
@@ -106,7 +117,10 @@ def place(
     device: str,
     parameters: int,
     memory_budget_gib: float | None = None,
+    bf16_parameters: int = 0,
+    dtype: str = "auto",
 ) -> Placement:
+    """A device for ``spec`` at ``dtype`` (``--dtype``), which decides the dtypes its weights are held in."""
     kind, index = parse_device(device)
     budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
     candidates = auto_order() if kind == "auto" else [kind]
@@ -124,25 +138,31 @@ def place(
         if not accelerator.available():
             absent.append(f"{name}: not available on this host")
             continue
-        needed = estimate_bytes(spec, parameters, name)
-        if budget is not None and needed > budget:
-            reasons.append(
-                f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "
-                f"above --memory-budget {memory_budget_gib} GiB"
-            )
-            continue
         devices = accelerator.devices()
         if index is not None:
             devices = [d for d in devices if d.index == index]
         required = spec.requires.get(name, ())
         for info in devices:
+            # The dtypes a device holds the weights in follow its torch device, as
+            # the runtime resolves --dtype and the engines read the policy.
+            gpu = accelerator.torch_device(info).type != "cpu"
+            running = dtypes.apply(spec, dtype, gpu)
+            needed = estimate_bytes(
+                running, parameters, name, bf16_parameters if gpu else 0
+            )
+            if budget is not None and needed > budget:
+                reasons.append(
+                    f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "
+                    f"above --memory-budget {memory_budget_gib} GiB"
+                )
+                break
             if required:
                 offered = accelerator.capabilities(info)
                 lacking = [need for need in required if not offered.get(need)]
                 if lacking:
                     unsupported += [accelerator.lacks(info, need) for need in lacking]
                     continue
-            if name != "cpu" and not info.bf16 and spec.dtype.needs_gpu_bf16:
+            if gpu and not info.bf16 and running.dtype.needs_gpu_bf16:
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
             if (

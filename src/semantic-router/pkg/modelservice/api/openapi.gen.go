@@ -691,8 +691,10 @@ type FloatVector = []float32
 
 // GoldenStatus defines model for GoldenStatus.
 type GoldenStatus struct {
-	Checked   *int               `json:"checked,omitempty"`
-	Matched   *int               `json:"matched,omitempty"`
+	Checked *int `json:"checked,omitempty"`
+	Matched *int `json:"matched,omitempty"`
+
+	// Reference Recorded golden reference key. A hardware-qualified key is preferred when present; otherwise the device-class reference is used.
 	Reference *string            `json:"reference"`
 	Status    GoldenStatusStatus `json:"status"`
 }

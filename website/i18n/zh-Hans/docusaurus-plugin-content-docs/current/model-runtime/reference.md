@@ -40,7 +40,7 @@ is_mtpe: true
 | `MODEL ...` | | Hub 仓库、内置模型名或本地包目录。多个模型共用一个进程。`MODEL@REVISION` 钉 revision。 |
 | `--models FILE` | | 用 models 文件代替 `MODEL` 参数。 |
 | `--revision SHA` | | 要加载的 40 位 commit，对一个 `MODEL` 生效。 |
-| `--device` | `auto` | `auto`，或带可选索引的加速器：`cpu`、`cuda[:N]`、`rocm[:N]`、`xpu[:N]`、`mps`，或插件加的。 |
+| `--device` | `auto` | `auto`，或带可选索引的加速器：`cpu`、`cuda[:N]`、`rocm[:N]`、`xpu[:N]`、`npu[:N]`、`mps`，或插件加的。 |
 | `--host` | `127.0.0.1` | 监听地址。 |
 | `--port` | `8100` | 监听端口。 |
 | `--uds PATH` | | 监听 Unix socket，不走 TCP。 |
@@ -123,7 +123,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 任务分发到多个模型的 bundle，报告的是最后答完那个模型的 `queue`、`forward` 和 `post`。客户端自己这次调用的时间减去 `total` 就是传输：它的编解码、连接和 HTTP 交换。router 把它作为每次调用的指标记下来。
 
-完全服务不了的请求返 HTTP 错误，带 `{"error": {"code", "message"}}`：400 `invalid_request`、404 `model_not_found`、413 `request_too_large`、422 `unsupported_surface`（模型不服务这个端点）、429 `overloaded`、503 `not_ready`。部署的所有 worker 都在忙时，Router 同样返回 429 `overloaded`；没有就绪 worker 时返回 503 `not_ready`；两者都带 `Retry-After`（1 秒和 5 秒）。Engine 模式下，调用超过 Router 的 30 秒预算时返回 504 `systemone_deadline_exceeded`。请求里单个条目失败（一个输入或一个问题）只带自己的错误码，不牵连其他条目。
+完全服务不了的请求返 HTTP 错误，带 `{"error": {"code", "message"}}`：400 `invalid_request`、404 `model_not_found`、413 `request_too_large`、422 `unsupported_surface`（模型不服务这个端点）、429 `overloaded`、503 `not_ready`。前向计算显存不足时，请求独占这次前向返回 413 `request_too_large`，与其他请求共享时返回 429 `overloaded`。部署的所有 worker 都在忙时，Router 同样返回 429 `overloaded`；没有就绪 worker 时返回 503 `not_ready`；两者都带 `Retry-After`（1 秒和 5 秒）。Engine 模式下，调用超过 Router 的 30 秒预算时返回 504 `systemone_deadline_exceeded`。请求里单个条目失败（一个输入或一个问题）只带自己的错误码，不牵连其他条目。
 
 ### 长输入 {#long-inputs}
 

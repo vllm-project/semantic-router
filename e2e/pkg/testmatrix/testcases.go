@@ -35,14 +35,11 @@ var BaselineRouterContract = []string{
 	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
-	"plugin-chain-execution",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
-	"rule-condition-logic",
 	"decision-fallback-behavior",
-	"plugin-config-variations",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
@@ -85,6 +82,8 @@ var DashboardContract = []string{
 	"dashboard-status",
 	// Issue #2794: OpenAPI rendered from the route registration.
 	"dashboard-openapi",
+	// Issue #2794: per-caller capability states with cached dependency probes.
+	"dashboard-capabilities",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints
@@ -122,6 +121,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-chat-cache-control",
 	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
+	// A stop_sequence terminal must project to the generic Chat stop for
+	// clients that cannot carry the matched string (issue #4892)
+	"anthropic-chat-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
 	"anthropic-response-api-buffered",

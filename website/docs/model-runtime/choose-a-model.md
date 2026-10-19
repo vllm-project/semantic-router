@@ -67,6 +67,19 @@ d3-lite), and run on a GPU. Start one with, for example,
 MI325X. They answer `choice`, `noul` and `score` questions, and their answers
 match the packages' own runtime bit for bit
 ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).
+A d3 package with FP8, int4 (GPTQ or AWQ) or NVFP4 weights in the
+compressed-tensors format, and a `MODEL_MANIFEST.json`, is served the same way,
+from a local path or from its repository with `--revision` and the commit to load.
+The d3 packages are `vllm-sr/d3-FP8`, `vllm-sr/d3-W4A16-AWQ`, `vllm-sr/d3-W4A16-GPTQ`,
+`vllm-sr/d3-NVFP4` and `vllm-sr/d3-NVFP4-AWQ`. On the test rows of its
+[record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-quantized.md),
+an FP8 d3 keeps 99.1% of the BF16 answers in 31.9 GB instead of 52.2 GB (FP8
+needs an AMD Instinct MI300 or MI350 series GPU or an NVIDIA GPU of compute
+capability 8.9 or later), an int4 d3 keeps about 98% in 16.5 GB, a little
+slower than BF16, and an NVFP4 d3 keeps about 97% in 17.2 GB and answers a
+request in 23.2 ms against BF16's 62.6 ms on an RTX PRO 6000. NVFP4 needs FP4
+tensor cores, which only NVIDIA Blackwell GPUs (compute capability 10.x or
+12.x) have; any other device refuses the package before its weights load.
 
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
@@ -294,6 +307,7 @@ the record maps each to every size (for example `mom-v1`'s `prompt_attack`
 | AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform rocm` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
 | NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform cuda` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
+| Ascend NPUs (910B, 950) | Works, not yet validated | `device: npu:0`, with the runtime installed next to torch_npu and the host CANN toolkit. See [Ascend NPU](../installation/ascend-npu.md). |
 | Apple silicon | CPU only in this release | On macOS the docker target runs the CPU image, because Docker's Linux VM gets no GPU. Host GPU support is tracked in [#4636](https://github.com/vllm-project/semantic-router/issues/4636). |
 
 On AMD GPUs the router images ship the stack the runtime is validated on:
@@ -311,6 +325,9 @@ says so and gives how often it agrees with the released answers.
 `device: auto` (the default) picks the first validated GPU with enough free
 memory and otherwise the CPU. A GPU you name explicitly must exist, or the
 model fails to load with a clear reason instead of quietly running on the CPU.
+Accelerators that are not yet validated (`xpu`, `npu`) are never picked by
+`auto` — on a host that has one, `auto` still selects the CPU; name the device
+explicitly to use it.
 
 ### How much memory
 

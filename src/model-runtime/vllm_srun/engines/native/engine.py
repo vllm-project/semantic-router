@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 import torch
 from torch import nn
@@ -31,7 +32,8 @@ from ...plugins.base import (
     TreeOutput,
 )
 from ...scheduler.planner import padded
-from . import fast, models
+from . import fast, models, quantized
+from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
 from .models.lora import attach
@@ -46,6 +48,8 @@ from .weights import (
     load_adapter,
     load_backbone,
 )
+
+_T = TypeVar("_T")
 
 # FLA's gated-delta kernels index q / k / v with 32-bit offsets: one forward's stay within 2**30 elements.
 GATED_DELTA_ELEMENTS = 2**30 - 1
@@ -109,6 +113,12 @@ class NativeEngineModel(EngineModel):
             not options.exact_kernels_only and spec.dtype.approximate_kernels
         )
         self.kernels.use_variants(spec.kernel_variants)
+        fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
+        for layer in self._quantized():
+            if isinstance(layer, quantized.Int4Linear):
+                layer.fused = fused_int4 and self.device.type == "cuda"
+            elif isinstance(layer, quantized.Float8Linear):
+                layer.unscaled_product &= self.kernels.allow_approximate
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
@@ -130,6 +140,14 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self._cpu_threads = options.threads or torch.get_num_threads()
+        self.threads_resolver = (
+            adaptive_threads.AdaptiveThreads(
+                self._cpu_threads, serve=adaptive_threads.serving_enabled()
+            )
+            if self.device.type == "cpu" and adaptive_threads.enabled()
+            else None
+        )
         self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
         self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
         self.noncausal = bool(getattr(backbone, "noncausal", False))
@@ -158,8 +176,8 @@ class NativeEngineModel(EngineModel):
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs.
 
-        The host masks and graphs are causal, so a noncausal backbone takes only the
-        fused layers and builds its masks per forward (``noncausal_masks``).
+        A noncausal backbone builds its masks per forward as ``noncausal_masks``
+        does (``fast.NoncausalMasks``), so its graphs capture those.
         """
         options, backbone = self.options, self.backbone
         if options.fused_kernels:
@@ -167,13 +185,19 @@ class NativeEngineModel(EngineModel):
             self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
             if reason:
                 self.fast["fused_skipped"] = reason
-        if self.noncausal:
-            return
-        if self.spec.backbone.lora is not None and self.residency is not None:
+        if (
+            self.spec.backbone.lora is not None
+            and self.residency is not None
+            and not self.noncausal
+        ):
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
-            self.masks = fast.Masks()
-        if options.graphs:
+            self.masks = fast.NoncausalMasks() if self.noncausal else fast.Masks()
+        if options.graphs and not quantized.capture_safe(backbone):
+            self.fast["graphs_skipped"] = (
+                "Ada's per-row FP8 product needs PyTorch 2.12 in a graph"
+            )
+        elif options.graphs:
             assert self.masks is not None
             self.graphs = fast.Graphs(backbone, self.masks)
 
@@ -349,11 +373,97 @@ class NativeEngineModel(EngineModel):
             prefix_ids.numel() + block_ids.numel(),
         ).clone()
 
+    def begin_traffic(self) -> None:
+        """Start thread exploration; called once the startup golden check has passed."""
+        if self.threads_resolver is not None:
+            self.threads_resolver.start()
+
+    @staticmethod
+    def _bit_equal(a: Any, b: Any) -> bool:
+        """Bit-for-bit equality over the engines' output dataclasses.
+
+        Encoder outputs carry dicts of tensors (per-layer hidden states), so
+        dicts recurse like every other container; only scalars ever reach
+        ``==``.
+        """
+        if type(a) is not type(b):
+            return False
+        if isinstance(a, torch.Tensor):
+            return torch.equal(a, b)
+        if isinstance(a, (tuple, list)):
+            return len(a) == len(b) and all(
+                NativeEngineModel._bit_equal(x, y) for x, y in zip(a, b, strict=True)
+            )
+        if isinstance(a, dict):
+            return a.keys() == b.keys() and all(
+                NativeEngineModel._bit_equal(a[key], b[key]) for key in a
+            )
+        fields = getattr(a, "__dataclass_fields__", None)
+        if fields:
+            return all(
+                NativeEngineModel._bit_equal(getattr(a, f), getattr(b, f))
+                for f in fields
+            )
+        return bool(a == b)
+
+    def _with_threads(self, tokens: int, run: Callable[[], _T]) -> _T:
+        """Run one batch under the resolver's thread discipline.
+
+        The served answer always comes from the configured count. Exploration
+        times the allowed counts against it in shadow passes that must
+        reproduce the served answer bit for bit. The serving pass pays cold
+        caches, so its timing is discarded: every configured-count sample in
+        the table is a warm pass timed beside the warm shadows, and the
+        shadow restores the configured count before it returns, so
+        everything after the engine — a family's readout included — never
+        inherits the shadow's team size. Past adoption the table is final:
+        level 2 serves the learned count, level 1 keeps the configured
+        count serving, and both run exactly one pass per request.
+        """
+        resolver = self.threads_resolver
+        if resolver is None:
+            if self.device.type == "cpu":
+                adaptive_threads.CpuTeam.apply(self._cpu_threads)
+            return run()
+        count = resolver.pick(tokens)
+        if resolver.adopted:
+            # The table is final — one pass, nothing left to measure.
+            # Level 2 serves the learned count; level 1 keeps serving the
+            # configured one.
+            adaptive_threads.CpuTeam.apply(count if resolver.serving else resolver.base)
+            return run()
+        base = resolver.base
+        # Exploring: the configured count serves; another count only shadows.
+        adaptive_threads.CpuTeam.apply(base)
+        started = time.perf_counter()
+        try:
+            result = run()
+        finally:
+            pass  # the serving pass pays cold caches; its timing is discarded
+        if count != base:
+            adaptive_threads.CpuTeam.apply(count)
+            started = time.perf_counter()
+            try:
+                shadow = run()
+            finally:
+                shadow_ms = (time.perf_counter() - started) * 1000.0
+                adaptive_threads.CpuTeam.apply(base)
+            resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
+        # A warm configured-count pass, timed beside the warm shadow: the
+        # caches both just built, so the counts compare evenly.
+        started = time.perf_counter()
+        run()
+        resolver.record_base(tokens, (time.perf_counter() - started) * 1000.0)
+        return result
+
     @property
     def supports_packed(self) -> bool:
         return self.packed_reason is None
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
+        return self._with_threads(batch.input_ids.numel(), lambda: self._forward(batch))
+
+    def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
             return self._forward_tree(batch)
         if batch.packed:
@@ -533,8 +643,21 @@ class NativeEngineModel(EngineModel):
 
         Packed rows stay packed and padded rows padded. A reduced batch runs its
         stack's reduced copy when one is loaded, and every stack has its graphs.
-        A batch that names a tower runs it on its named inputs.
+        A batch that names a tower runs it on its named inputs. Towers carry
+        image/audio inputs with no token count, so they run the configured
+        count and stay out of the token-size learning.
         """
+        if batch.tower is not None:
+            if self.device.type == "cpu":
+                adaptive_threads.CpuTeam.apply(
+                    self.threads_resolver.base
+                    if self.threads_resolver is not None
+                    else self._cpu_threads
+                )
+            return self._encode(batch)
+        return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
+
+    def _encode(self, batch: EncoderBatch) -> EncoderOutput:
         if batch.tower is not None:
             return self._encode_tower(batch)
         stack = self.backbone if batch.branch is None else self.branches[batch.branch]
@@ -624,6 +747,13 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
+    def _quantized(
+        self,
+    ) -> list[quantized.Int4Linear | quantized.Float8Linear | quantized.NVFP4Linear]:
+        return [
+            layer for module in self._modules() for layer in quantized.layers(module)
+        ]
+
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
@@ -645,6 +775,7 @@ class NativeEngineModel(EngineModel):
 
     def parameter_count(self) -> int:
         packed = sum(layer.weight_elements for layer in self._packed())
+        packed += sum(layer.weight_elements for layer in self._quantized())
         return packed + sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
@@ -653,6 +784,7 @@ class NativeEngineModel(EngineModel):
             layer.packed.numel() * layer.packed.element_size()
             for layer in self._packed()
         )
+        packed += sum(layer.stored_bytes() for layer in self._quantized())
         return (
             copy_bytes
             + packed
@@ -761,13 +893,20 @@ class NativeEngine(Engine):
             spec.dtype.cpu_weights if target.type == "cpu" else spec.dtype.gpu_weights
         )
         dtype = getattr(torch, held) if held else torch.float32
+        # A GPU model keeps checkpoint tensors in their file mapping until placed.
+        private = target.type == "cpu"
         backbone_spec = spec.backbone
         backbone = build_on_meta(backbone_spec)
+        if backbone_spec.quantized is not None:
+            quantized.install(
+                backbone, backbone_spec.quantized, backbone_spec.weight_prefix
+            )
         load_backbone(
             backbone,
             backbone_spec.weight_files,
             backbone_spec.weight_prefix,
             dtype=dtype,
+            private=private,
         )
         lora = backbone_spec.lora
         if lora is not None:
@@ -784,10 +923,13 @@ class NativeEngine(Engine):
                 )
             load_adapter(backbone, lora.weight_files)
         branches = {
-            name: load_branch(backbone, backbone_spec, name)
+            name: load_branch(backbone, backbone_spec, name, private)
             for name in backbone_spec.branches
         }
-        towers = {name: load_tower(tower, dtype) for name, tower in spec.towers.items()}
+        towers = {
+            name: load_tower(tower, dtype, private)
+            for name, tower in spec.towers.items()
+        }
         modules = (backbone, *branches.values(), *towers.values())
         leftovers = [
             name
@@ -822,6 +964,7 @@ class NativeEngine(Engine):
             *stacks.towers.values(),
         ):
             module.to(target).eval()
+            quantized.prepare(module)
         kind = (
             spec.dtype.reduced_cpu if target.type == "cpu" else spec.dtype.reduced_gpu
         )
@@ -849,16 +992,64 @@ def build_on_meta(spec: BackboneSpec) -> nn.Module:
     return module
 
 
-def load_tower(spec: BackboneSpec, dtype: torch.dtype = torch.float32) -> nn.Module:
+def bf16_resident_parameters(spec: BackboneSpec) -> int:
+    """How many backbone parameters ``keep_linear_bf16`` holds in BF16 on a GPU, read from the checkpoint headers.
+
+    Counts the Linear weights the checkpoint stores in BF16; FP32-stored ones
+    that happen to be BF16-exact count as FP32, so the count never exceeds
+    what the engine holds.
+    """
+    from safetensors import safe_open
+
+    if spec.model_type not in models.ARCHITECTURES:
+        return 0
+    module = build_on_meta(spec)
+    shared = {
+        id(parameter)
+        for layer in module.modules()
+        if not isinstance(layer, nn.Linear)
+        for parameter in layer.parameters(recurse=False)
+    }
+    linear = {
+        f"{owner}.{leaf}" if owner else leaf: parameter.numel()
+        for owner, layer in module.named_modules()
+        if isinstance(layer, nn.Linear)
+        for leaf, parameter in layer.named_parameters(recurse=False)
+        if id(parameter) not in shared
+    }
+    prefix = spec.weight_prefix
+    count = 0
+    for path in spec.weight_files:
+        with safe_open(str(path), framework="pt", device="cpu") as handle:
+            names = handle.keys()
+            for name in names:
+                if not name.startswith(prefix):
+                    continue
+                numel = linear.pop(name[len(prefix) :], 0)
+                if numel and handle.get_slice(name).get_dtype() == "BF16":
+                    count += numel
+    return count
+
+
+def load_tower(
+    spec: BackboneSpec, dtype: torch.dtype = torch.float32, private: bool = True
+) -> nn.Module:
     """A tower (``ModelSpec.towers``): every tensor under its prefix must belong to it."""
     tower = build_on_meta(spec)
     load_backbone(
-        tower, spec.weight_files, spec.weight_prefix, strict=True, dtype=dtype
+        tower,
+        spec.weight_files,
+        spec.weight_prefix,
+        strict=True,
+        dtype=dtype,
+        private=private,
     )
     return tower
 
 
-def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module:
+def load_branch(
+    backbone: nn.Module, spec: BackboneSpec, name: str, private: bool = True
+) -> nn.Module:
     """A branch of a branched encoder: its own layer stack and final norm over the backbone's embedding."""
     branch = spec.branches[name]
     with torch.device("meta"):
@@ -873,6 +1064,7 @@ def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module
             f"{branch.layers}.": "layers.",
             f"{branch.final_norm}.": "final_norm.",
         },
+        private=private,
     )
     view.embeddings = backbone.embeddings
     view.rotary_emb = backbone.rotary_emb

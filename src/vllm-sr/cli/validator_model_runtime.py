@@ -1,5 +1,6 @@
 """Model-runtime checks that do not load local or remote model resources."""
 
+from cli.model_revision import builtin_releases
 from cli.model_runtime_defaults import (
     effective_model_deployments,
     global_model_bindings,
@@ -285,3 +286,31 @@ def _deployment_error(name, deployment, external_names):
     if (budget.get("overflow") or "reject") not in {"reject", "truncate", "window"}:
         return "input.overflow must be reject, truncate or window"
     return None
+
+
+def unpinned_hub_deployment_warnings(config: UserConfig) -> list[ValidationError]:
+    """Managed deployments of a Hub repository the runtime cannot load without a revision."""
+    built_in = {name.lower() for name in builtin_releases()}
+    warnings = []
+    for name, deployment in effective_model_deployments(config).items():
+        artifact = (deployment.get("artifact") or "").strip()
+        replicas = deployment.get("replicas") or [deployment]
+        if (
+            deployment.get("provider") != "model_runtime"
+            or not artifact
+            or artifact.startswith("/")
+            or deployment.get("revision")
+            or artifact.lower() in built_in
+            or all(replica.get("endpoint") for replica in replicas)
+        ):
+            continue
+        warnings.append(
+            ValidationError(
+                f"{artifact} is not a built-in model and sets no revision; the "
+                "runtime refuses to load it",
+                field=f"global.model_catalog.deployments.{name}",
+                hint="Set revision to the 40-hex commit to load, or use an "
+                "absolute path for a local package.",
+            )
+        )
+    return warnings

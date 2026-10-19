@@ -1,6 +1,12 @@
 name: Main
 
 on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Qualify and publish the complete development CLI and commit-addressed images.
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -8,6 +14,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  issues: read
 
 jobs:
   ci:
@@ -17,9 +24,11 @@ jobs:
       contents: read
       actions: read
       pull-requests: read
+      issues: read
       security-events: write
     with:
       profile: main
+      publish: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish }}
     secrets: inherit
 
   images:
@@ -56,9 +65,11 @@ jobs:
 
   pypi:
     name: Publish Development CLI
-    needs: ci
+    # The package defaults to this commit's images, which must exist first.
+    needs: [ci, images]
     if: >-
       !cancelled() && needs.ci.result == 'success'
+      && needs.images.result == 'success'
       && needs.ci.outputs.publish_python == 'true'
       && github.repository == 'vllm-project/semantic-router'
     uses: ./.github/workflows/pypi-publish.yml
