@@ -2,6 +2,8 @@
 
 import importlib.util
 import json
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -25,6 +27,19 @@ class NativeSmokeResponseTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             self.module.check_response(json.dumps(body), False, "general-model")
+
+    def test_fixture_is_readable_by_container_uid_under_private_umask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            previous = os.umask(0o077)
+            try:
+                self.module.write_configuration(path, "backend:8000", 19000)
+            finally:
+                os.umask(previous)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+            self.assertEqual(
+                json.loads(path.read_text())["listeners"][0]["port"], 19000
+            )
 
     def test_stream_without_done_is_rejected(self):
         raw = 'data: {"model":"code-model","choices":[{"delta":{"content":"ok"}}]}\n\n'
@@ -86,6 +101,25 @@ class NativeSmokeResponseTests(unittest.TestCase):
                     call("rm", "--force", "--volumes", "owned-test"),
                 ],
             )
+
+    def test_router_runs_unprivileged_with_only_explicit_writable_mounts(self):
+        args = self.module.router_run_args(
+            "router:test", "owned", "network", Path("/tmp/config.json")
+        )
+        self.assertEqual(args[args.index("--user") + 1], "65532:65532")
+        self.assertIn("--read-only", args)
+        self.assertEqual(args[args.index("--cap-drop") + 1], "ALL")
+        self.assertIn("no-new-privileges", args)
+        mounts = [args[i + 1] for i, value in enumerate(args) if value == "--tmpfs"]
+        self.assertEqual(
+            mounts,
+            [
+                "/tmp:rw,noexec,nosuid,mode=1777",
+                "/app/config:rw,noexec,nosuid,uid=65532,gid=65532,mode=0700",
+                "/app/models:rw,noexec,nosuid,uid=65532,gid=65532,mode=0700",
+            ],
+        )
+        self.assertIn("/tmp/config.json:/app/config/config.yaml:ro", args)
 
 
 if __name__ == "__main__":

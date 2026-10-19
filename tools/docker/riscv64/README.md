@@ -7,14 +7,15 @@ unchanged.
 
 ## Requirements
 
-- Native `riscv64` Linux, Python 3.10+, Docker Engine with BuildKit/buildx's
-  `docker` driver. The local SDK image must be visible to the image builder.
+- Native `riscv64` Linux, Python 3.10+, Docker Engine with BuildKit/buildx.
+  Building the SDK locally requires the `docker` driver so the next build can
+  resolve it. With `--sdk-image`, supply an SDK available to the selected builder.
 - A glibc-compatible host and the standard RISC-V GNU user ISA required by the
   upstream Go/Rust binaries; no vendor extensions are enabled.
 - Network access to Docker Hub, Debian packages, Go/Rust downloads, Go modules,
   GitHub and crates.io. The optional smoke fixture also needs PyPI.
-- Sufficient disk space and compilation time. Go/Cargo concurrency is limited
-  to two to keep the native SDK usable on memory-constrained machines.
+- Sufficient disk space and compilation time. New SDKs default to two Go/Cargo
+  workers; `--jobs N` changes this according to the machine's available memory.
 
 The Debian RISC-V manifest is pinned by digest. Go 1.25.14 and Rust 1.90.0 release
 archives are pinned by URL and SHA256 in `toolchains.json`. GLIDE source and its
@@ -38,8 +39,24 @@ python3 tools/docker/riscv64/build.py --component router --tag public \
 
 Use a fresh output directory. The runner builds `semantic-router-native-sdk:public`
 and `semantic-router-router:public`, recording commands, logs, exit codes and the
-final image ID. Both builds use `--no-cache`, without importing module caches or
-host toolchains. `--component sdk` builds only the SDK.
+final image ID. Normal Docker layer caching is enabled. Public archives remain
+checksummed, and no private host toolchain is copied into the build.
+`--component sdk` builds only the SDK. For a fresh-layer qualification, explicitly
+pass `--no-cache`; use an isolated builder for an empty-cache test, rather than
+pruning a shared host.
+
+Reuse a previously verified SDK when rebuilding Router code:
+
+```bash
+python3 tools/docker/riscv64/build.py --sdk-image semantic-router-native-sdk:public \
+  --tag local --output /tmp/vsr-router-local-build
+```
+
+This skips the SDK build. A local image must exist in the selected builder; a
+remote SDK should be pinned by digest. It must provide native RISC-V Go, Rust,
+Python and Debian-compatible build tools. `--jobs` applies to a newly built SDK,
+not an existing image. Override tool versions through the checked input manifest,
+updating URLs, SHA256 and installer filenames together.
 
 `--base-image REGISTRY/debian@sha256:DIGEST` selects a pinned mirror of the RISC-V
 base, and `--go-proxy URL` selects a module mirror. Configure registry access and
@@ -60,6 +77,10 @@ mkdir -p "$HOME/.local/share/vsr-riscv"
 cp -i tools/docker/riscv64/standalone.yaml "$HOME/.local/share/vsr-riscv/config.yaml"
 # Edit the copied configuration before running this command.
 docker run --detach --name vsr-riscv --pull never \
+  --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,mode=1777 \
+  --tmpfs /app/config:rw,noexec,nosuid,uid=65532,gid=65532,mode=0700 \
+  --tmpfs /app/models:rw,noexec,nosuid,uid=65532,gid=65532,mode=0700 \
   --publish 127.0.0.1:8899:8899 \
   --volume "$HOME/.local/share/vsr-riscv/config.yaml:/app/config/config.yaml:ro" \
   semantic-router-router:public -gateway=standalone -listener-address=0.0.0.0
@@ -88,6 +109,7 @@ Prepare Python 3.11+ and a separate environment for the maintained provider fixt
 ```bash
 VSR_SMOKE_WORK=$(mktemp -d)
 python3 -m venv "$VSR_SMOKE_WORK/provider"
+"$VSR_SMOKE_WORK/provider/bin/pip" install --upgrade pip
 "$VSR_SMOKE_WORK/provider/bin/pip" install \
   -r tools/test/services/provider-mocker/requirements.txt
 python3 tools/test/smoke/riscv64-standalone.py \
@@ -97,7 +119,8 @@ python3 tools/test/smoke/riscv64-standalone.py \
 ```
 
 Use the same native Docker daemon as the build. The test checks the actual image
-ID, keyword/default routing, buffered responses and SSE content/termination, then
+ID, non-root UID, read-only root filesystem, keyword/default routing and buffered/
+SSE content/termination, then
 restarts the container and repeats the four requests. It uses unique resource
 names and loopback host ports; only its own container, provider process and
 network are removed. Results and logs remain in the output directory.
@@ -105,3 +128,28 @@ network are removed. Results and logs remain in the output directory.
 The deterministic fixture tests transport and restart, not model inference,
 classifier quality, CLI lifecycle, configuration persistence or incremental SSE
 timing. Those remain separate integration checks.
+
+The writable tmpfs directories hold temporary files, configuration history and
+the unused model-cache mount; they are not persistent storage. The mounted input
+configuration remains read-only. This does not qualify every possible plugin
+or model under a read-only deployment.
+
+## Maintenance and verification
+
+The attached target is an opt-in build without the managed model runtime. It
+is not a new published image or an addition to the official supported-platform
+inventory. The existing bundled image's asset stage and final resource copies
+remain unchanged; its Go build gains only the architecture-specific native
+dependency path.
+
+The Python contracts run through the existing tools test discovery. Native smoke
+is an explicit command for a real RISC-V worker, not a claim of hosted RISC-V CI.
+Attach its build/image identity and result receipt when proposing support. Image
+publication and a continuously maintained native runner require a separate
+maintainer decision; no inactive runner labels are added here.
+
+The GLIDE lock file is necessary because the pinned release omits the FFI lock
+and the Go module omits the RISC-V static archive. Its Go version, source hash
+and Rust lock must be updated together as described in the dependency README.
+A future upstream RISC-V archive can replace this source fallback after its
+compatibility is verified; the fallback adds no stub or feature-disable path.
