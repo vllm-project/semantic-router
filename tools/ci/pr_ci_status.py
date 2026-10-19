@@ -184,12 +184,18 @@ def publisher_ready(client, repo: str, base: str) -> bool:
 
 
 def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
-    """A successful automatic workflow is not necessarily full qualification."""
+    """A successful automatic workflow is not necessarily full qualification.
+
+    The publisher writes PR Gate onto this run's check suite before a later
+    reconciliation can observe it. Waiting approval leaves that check in
+    progress, so its missing conclusion is not a failed workflow job.
+    """
+    executed = [job for job in jobs if job.get("name") != CHECK]
     if run.get("conclusion") != "success" or any(
-        job.get("conclusion") not in {"success", "skipped"} for job in jobs
+        job.get("conclusion") not in {"success", "skipped"} for job in executed
     ):
         return "failure"
-    by_name = {job.get("name"): job for job in jobs}
+    by_name = {job.get("name"): job for job in executed}
     if any(
         by_name.get(name, {}).get("conclusion") != "success"
         for name in ("CI / Gate", "CI Execution")
