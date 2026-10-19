@@ -56,6 +56,9 @@ Decision 3.0 models also answer questions about images and videos. On an AMD
 Instinct MI325X, start one with
 `vllm-sr serve vllm-sr/d3-lite --engine --platform rocm`, and send images and
 videos as described in [Router and Engine modes](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images-and-videos).
+`vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm` starts d3-turbo, which
+reads each input once for all of its questions and also finds things in images
+and videos ([Box and track questions](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#find-things-in-images-and-videos)).
 
 In Engine mode the CLI starts only the persistent frontend and a managed model
 worker: one Router container. `--dashboard` adds the Dashboard, `--observability`

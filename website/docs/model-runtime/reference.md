@@ -497,11 +497,11 @@ state once: its images, videos and text form one state block, and every
 question branches from it. Asking more questions about one state then costs
 only their own tokens, and `usage.input_tokens` counts the state once and each
 question's block. Its answers are those of each question asked alone, up to
-rounding.
+rounding. `vllm-sr/d3-turbo` is such a package.
 
 ```json title="POST /v1/systemone"
 {
-  "model": "d3-lite",
+  "model": "d3-turbo",
   "state": "Is the attached receipt complete, and does the clip show it being paid?",
   "images": ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."],
   "videos": ["data:video/mp4;base64,AAAAIGZ0eXBpc29t..."],
