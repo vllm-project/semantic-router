@@ -91,6 +91,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 		Actions:       append([]ActionRule(nil), signals.ActionRules...),
 		Decision:      append([]DecisionSignalRule(nil), signals.DecisionRules...),
+		AgenticFacts:  append([]AgenticFactsRule(nil), signals.AgenticFactsRules...),
 
 		TopicContinuity: append([]TopicContinuityRule(nil), signals.TopicContinuityRules...),
 	}
@@ -313,6 +314,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
 			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
+			AgenticFacts:   cfg.AgenticFacts,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,

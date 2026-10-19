@@ -262,6 +262,7 @@ type RouterOptions struct {
 	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AgenticFacts           AgenticFactsConfig   `yaml:"agentic_facts,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

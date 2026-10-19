@@ -100,6 +100,93 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AgenticFactsBoundsConfig": {
+      "properties": {
+        "max_envelope_bytes": {
+          "type": "integer"
+        },
+        "max_depth": {
+          "type": "integer"
+        },
+        "max_capabilities": {
+          "type": "integer"
+        },
+        "max_string_length": {
+          "type": "integer"
+        },
+        "max_lifetime": {
+          "type": "string"
+        },
+        "clock_skew": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgenticFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "carrier_header": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/AgenticFactsTrustConfig"
+        },
+        "bounds": {
+          "$ref": "#/$defs/AgenticFactsBoundsConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgenticFactsPredicate": {
+      "properties": {
+        "equals": {
+          "type": "string"
+        },
+        "in": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgenticFactsRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "predicate": {
+          "$ref": "#/$defs/AgenticFactsPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgenticFactsTrustConfig": {
+      "properties": {
+        "marker_header": {
+          "type": "string"
+        },
+        "marker_value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AlgorithmBudget": {
       "properties": {
         "deadline": {
@@ -1264,6 +1351,9 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "agentic_facts": {
+          "$ref": "#/$defs/AgenticFactsConfig"
         }
       },
       "additionalProperties": false,
@@ -1491,6 +1581,12 @@
         "decision": {
           "items": {
             "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
+        },
+        "agentic_facts": {
+          "items": {
+            "$ref": "#/$defs/AgenticFactsRule"
           },
           "type": "array"
         },
@@ -6936,6 +7032,7 @@
           "type": "string",
           "enum": [
             "action",
+            "agentic_facts",
             "authz",
             "classifier",
             "complexity",
@@ -8284,6 +8381,14 @@
         "decision_referenceable": true,
         "reference_qualifier": "label",
         "schema_ref": "#/$defs/DecisionSignalRule"
+      },
+      {
+        "type": "agentic_facts",
+        "display_name": "Agentic Facts",
+        "collection": "agentic_facts",
+        "observation_key": "agentic_facts",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/AgenticFactsRule"
       },
       {
         "type": "topic_continuity",

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agenticfacts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -32,10 +33,14 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	signalInput := r.prepareSignalEvaluationInput(history)
 	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
 	signalInput.requestFacts.Context = ctx.TraceContext
+	if ctx.AgenticFacts.Accepted != nil {
+		signalInput.requestFacts.AgenticFactsDelegatedRole = ctx.AgenticFacts.Accepted.DelegatedRole
+		signalInput.requestFacts.AgenticFactsTaskPhase = ctx.AgenticFacts.Accepted.TaskPhase
+	}
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
 		signalInput.requestFacts.ContextHasNonText
-	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history) {
+	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history, ctx) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -68,7 +73,7 @@ func (r *OpenAIRouter) prepareDecisionEvaluation(
 	ctx *RequestContext,
 ) (string, bool) {
 	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" &&
-		!hasEnvelopeRoutingFacts(history) {
+		!hasEnvelopeRoutingFacts(history, ctx) {
 		return "", true
 	}
 
@@ -367,6 +372,18 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 	}
 }
 
+// nonPortableContextBinding reports whether this request carries context that
+// cannot move to a different model, and names the source.
+//
+// previous_response_id is checked first because it is a protocol fact: real
+// provider-side state exists and genuinely cannot transfer. An agent declaring
+// context_portability=sticky is asserting the same constraint about its own
+// context, so it produces the same lock with its own reason.
+//
+// The lock is bounded on both sides. It applies only when the operator enables
+// ContextPortabilityHardLock, and SessionAwareSelector.Select refuses to lock
+// at all when the previous model is not in the candidate list, so a caller
+// cannot use sticky to reach a model outside the configured set.
 func nonPortableContextBinding(reqCtx *RequestContext) (bool, string) {
 	if reqCtx == nil {
 		return false, ""
@@ -380,6 +397,10 @@ func nonPortableContextBinding(reqCtx *RequestContext) (bool, string) {
 			return false, ""
 		}
 		return true, "previous_response_id"
+	}
+	if accepted := reqCtx.AgenticFacts.Accepted; accepted != nil &&
+		accepted.ContextPortability == agenticfacts.ContextPortabilitySticky {
+		return true, "agentic_facts_sticky"
 	}
 	return false, ""
 }
