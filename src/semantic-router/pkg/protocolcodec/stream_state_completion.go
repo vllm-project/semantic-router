@@ -340,7 +340,7 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		return llmprotocol.Usage{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "usage_evidence_decreased", "upstream streaming usage evidence became unavailable", nil)
 	}
 	currentCounts := usageCounts(current)
-	updateCounts := usageCounts(update)
+	updateCounts := usageCounts(dropPlaceholderBuckets(current, update))
 	merged := make([]llmprotocol.TokenCount, len(currentCounts))
 	for index := range merged {
 		value, err := mergeTokenCount(currentCounts[index], updateCounts[index])
@@ -370,21 +370,54 @@ func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.Tok
 	if incoming.Value == nil {
 		return existing, nil
 	}
+	if placeholderFrame(existing, incoming) {
+		// A zero cannot decrease positive cumulative evidence: cumulative
+		// -usage upstreams emit all-zero placeholder snapshots between real
+		// cumulative frames, so that zero carries no evidence of its own
+		// and the running evidence keeps. A zero beside unknown counters
+		// still merges below as new settled evidence.
+		return existing, nil
+	}
 	if existing.Value != nil && *existing.Value > *incoming.Value {
-		if *incoming.Value == 0 {
-			// A zero cannot decrease positive cumulative evidence: cumulative
-			// -usage upstreams emit all-zero placeholder snapshots between real
-			// cumulative frames, so that zero carries no evidence of its own
-			// and the running evidence keeps. A zero beside unknown counters
-			// still merges below as new settled evidence.
-			return existing, nil
-		}
 		return llmprotocol.TokenCount{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "usage_decreased", "upstream streaming usage counter decreased", nil)
 	}
 	if existing.Value != nil && usageEvidenceRank(incoming.Provenance) < usageEvidenceRank(existing.Provenance) {
 		return llmprotocol.TokenCount{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "usage_evidence_decreased", "upstream streaming usage evidence quality decreased", nil)
 	}
 	return incoming, nil
+}
+
+// placeholderFrame reports whether an incoming zero repeats evidence the frame
+// cannot decrease instead of settling a counter of its own.
+func placeholderFrame(existing, incoming llmprotocol.TokenCount) bool {
+	return incoming.Value != nil && *incoming.Value == 0 && existing.Value != nil && *existing.Value > 0
+}
+
+// dropPlaceholderBuckets clears the zero breakdown buckets a placeholder frame
+// repeats beside the totals it cannot decrease. Such a frame describes its own
+// all-zero snapshot rather than the running usage, so settling those zeros
+// would leave a breakdown that contradicts the retained total they failed to
+// decrease. Positive buckets beside a placeholder total stay incoming
+// evidence.
+func dropPlaceholderBuckets(current, update llmprotocol.Usage) llmprotocol.Usage {
+	inputFrame := placeholderFrame(current.InputTotal, update.InputTotal)
+	cacheWriteFrame := placeholderFrame(current.InputCacheWrite, update.InputCacheWrite)
+	outputFrame := placeholderFrame(current.OutputTotal, update.OutputTotal)
+	update.InputUncached = dropPlaceholderBucket(inputFrame, update.InputUncached)
+	update.InputCacheRead = dropPlaceholderBucket(inputFrame, update.InputCacheRead)
+	update.InputCacheWrite = dropPlaceholderBucket(inputFrame, update.InputCacheWrite)
+	update.InputCacheWrite5m = dropPlaceholderBucket(cacheWriteFrame, update.InputCacheWrite5m)
+	update.InputCacheWrite1h = dropPlaceholderBucket(cacheWriteFrame, update.InputCacheWrite1h)
+	update.OutputReasoning = dropPlaceholderBucket(outputFrame, update.OutputReasoning)
+	update.OutputOther = dropPlaceholderBucket(outputFrame, update.OutputOther)
+	return update
+}
+
+func dropPlaceholderBucket(frame bool, bucket llmprotocol.TokenCount) llmprotocol.TokenCount {
+	if !frame || bucket.Value == nil || *bucket.Value != 0 {
+		return bucket
+	}
+	return unknownCount()
 }
 
 func mergedUsageState(current, update llmprotocol.UsageState) llmprotocol.UsageState {
