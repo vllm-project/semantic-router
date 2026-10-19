@@ -138,6 +138,7 @@ reasons:
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
 | FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | The package holds FP8 weights and the device has no FP8 matrix units. Serve it on such a GPU, or serve the BF16 or int4 package of the model instead. The runtime does not retry it. |
+| NVFP4 packages need FP4 tensor cores; serve NVFP4 packages on a Blackwell GPU | The package holds NVFP4 weights and the device cannot multiply them: it is a CPU, a ROCm GPU or an NVIDIA GPU without FP4 tensor cores (compute capability other than 10.x or 12.x), or its PyTorch has no FP4 tensors or Triton is missing (the reason names which). Serve it on a Blackwell GPU with a recent PyTorch and Triton, or serve the BF16, FP8 or int4 package of the model instead. The runtime does not retry it. |
 | no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
 | a licence must be accepted | The model's licence restricts use. Pass `--accept-licence <id>` after you checked that you may use it. |
 
