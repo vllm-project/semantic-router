@@ -30,11 +30,12 @@ const (
 	lifecycleAdapter   = "general-expert"
 	lifecycleMissing   = "missing-lifecycle-model"
 	lifecycleSamples   = 3
+	lifecycleRuleNodes = 8
 )
 
 func init() {
 	pkgtestcases.Register("dynamic-config-generation-lifecycle", pkgtestcases.TestCase{
-		Description: "Require current-generation readiness, retain active routing after a rejected reference, and activate a recovered generation",
+		Description: "Require current-generation readiness, retain active routing after rejected references and rule budgets, and activate a recovered generation",
 		Tags:        []string{"dynamic-config", "kubernetes", "readiness", "routing"},
 		Fn:          testDynamicConfigGenerationLifecycle,
 	})
@@ -113,7 +114,7 @@ func testDynamicConfigGenerationLifecycle(ctx context.Context, client *kubernete
 		if opts.SetDetails != nil {
 			opts.SetDetails(map[string]interface{}{
 				"phases": lifecycle.phases, "required_routed_samples_per_phase": lifecycleSamples,
-				"rejection_contract": "ValidationFailed: ordinary unknown model reference; not a warmup failure",
+				"rejection_contract": "ValidationFailed: unknown model reference and oversized rule tree; both retain active routing",
 			})
 		}
 	}()
@@ -176,15 +177,49 @@ func (l *dynamicConfigLifecycle) run(ctx context.Context) (result error) {
 	if err = l.observe(ctx, "rejected_retains_active", pool, rejected, "False", "ValidationFailed", "lifecycle_active"); err != nil {
 		return err
 	}
+	oversizedSpec, err := lifecycleOversizedRuleSpec(originalSpec)
+	if err != nil {
+		return err
+	}
+	oversized, err := l.updateSpec(ctx, rejected, oversizedSpec)
+	if err != nil {
+		return fmt.Errorf("API did not accept the oversized rule tree below the CRD child cap: %w", err)
+	}
+	if err = l.observe(ctx, "oversized_retains_active", pool, oversized, "False", "ValidationFailed", "lifecycle_active"); err != nil {
+		return err
+	}
 	recoveredSpec, err := lifecycleRouteSpec(originalSpec, "lifecycle_recovered", lifecycleModel)
 	if err != nil {
 		return err
 	}
-	recovered, err := l.updateSpec(ctx, rejected, recoveredSpec)
+	recovered, err := l.updateSpec(ctx, oversized, recoveredSpec)
 	if err != nil {
 		return fmt.Errorf("publish recovered route: %w", err)
 	}
 	return l.observe(ctx, "recovered_active", pool, recovered, "True", "Ready", "lifecycle_recovered")
+}
+
+func lifecycleOversizedRuleSpec(original map[string]interface{}) (map[string]interface{}, error) {
+	spec, err := lifecycleRouteSpec(original, "lifecycle_oversized", lifecycleModel)
+	if err != nil {
+		return nil, err
+	}
+	decisions, _, err := unstructured.NestedSlice(spec, "decisions")
+	if err != nil {
+		return nil, err
+	}
+	decision := decisions[len(decisions)-1].(map[string]interface{})
+	conditions := make([]interface{}, lifecycleRuleNodes)
+	for i := range conditions {
+		conditions[i] = map[string]interface{}{"type": "keyword", "name": lifecycleKeyword}
+	}
+	if err := unstructured.SetNestedSlice(decision, conditions, "signals", "conditions"); err != nil {
+		return nil, err
+	}
+	if err := unstructured.SetNestedSlice(spec, decisions, "decisions"); err != nil {
+		return nil, err
+	}
+	return spec, nil
 }
 
 func lifecycleRouteSpec(original map[string]interface{}, decision, model string) (map[string]interface{}, error) {
@@ -268,8 +303,14 @@ func (l *dynamicConfigLifecycle) observe(ctx context.Context, name string, pool,
 	if err := wait.PollUntilContextTimeout(ctx, l.interval, l.timeout, true, read); err != nil {
 		return fmt.Errorf("%s: current-generation %s/%s not reached (pool=%+v route=%+v): %w", name, ready, reason, phase.Pool, phase.Route, err)
 	}
-	if reason == "ValidationFailed" && !strings.Contains(phase.Route.Message, "references unknown model: "+lifecycleMissing) {
-		return fmt.Errorf("%s: rejection was not the expected model reference error: %s", name, phase.Route.Message)
+	if reason == "ValidationFailed" {
+		expected := "references unknown model: " + lifecycleMissing
+		if name == "oversized_retains_active" {
+			expected = fmt.Sprintf("node count %d exceeds max_nodes=%d", lifecycleRuleNodes+1, lifecycleRuleNodes)
+		}
+		if !strings.Contains(phase.Route.Message, expected) {
+			return fmt.Errorf("%s: rejection did not contain %q: %s", name, expected, phase.Route.Message)
+		}
 	}
 	if decision == "" {
 		return nil

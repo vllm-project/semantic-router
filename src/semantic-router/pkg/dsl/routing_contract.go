@@ -31,6 +31,9 @@ func EmitRoutingYAML(input string) ([]byte, []error) {
 
 // EmitRoutingYAMLFromConfig marshals only the DSL-owned routing surface.
 func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return nil, err
+	}
 	canonical := config.CanonicalConfigFromRouterConfig(cfg)
 	doc := routingYAMLDocument{
 		Routing:     canonical.Routing,
@@ -42,6 +45,9 @@ func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 
 // DecompileRouting converts runtime config to the routing-only DSL contract.
 func DecompileRouting(cfg *config.RouterConfig) (string, error) {
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return "", err
+	}
 	d := &decompiler{cfg: cfg}
 	d.pluginTemplates = make(map[string]*pluginTemplate)
 	d.extractPluginTemplates()
@@ -69,6 +75,9 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return nil
+	}
 	d := &decompiler{cfg: cfg}
 	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone()}
 	d.appendSignalsToProgram(prog)

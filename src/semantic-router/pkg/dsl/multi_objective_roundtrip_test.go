@@ -80,6 +80,7 @@ func assertMultiObjectiveRoutingScopesEqual(
 	recipeDiff := cmp.Diff(
 		original.Recipes,
 		recompiled.Recipes,
+		compareDSLRootLeaves(),
 		cmp.Comparer(func(left, right config.StructuredPayload) bool {
 			var leftValue, rightValue interface{}
 			if json.Unmarshal(left.Raw, &leftValue) != nil ||

@@ -11,8 +11,8 @@ import { withRequestTimeout } from '@/utils/boundedRequest'
 // no longer waits for a multi-megabyte browser compiler download.
 const pending = new Map<string, { promise: Promise<unknown>; controller: AbortController }>()
 
-function request<T>(operation: string, source: string): Promise<T> {
-  const key = `${operation}\0${source}`
+function request<T>(operation: string, source: string, baseYaml = ''): Promise<T> {
+  const key = `${operation}\0${source}\0${baseYaml}`
   const existing = pending.get(key)
   if (existing) return existing.promise as Promise<T>
   const controller = new AbortController()
@@ -21,7 +21,7 @@ function request<T>(operation: string, source: string): Promise<T> {
       const response = await fetch(`/api/dsl/${operation}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source }),
+        body: JSON.stringify({ source, ...(baseYaml ? { baseYaml } : {}) }),
         signal,
       })
       if (!response.ok) throw new Error(`Compiler request failed (HTTP ${response.status}).`)
@@ -44,9 +44,9 @@ export const dslCompiler = {
   async init(): Promise<void> {
     await request<ValidateResult>('validate', '')
   },
-  compile: (source: string) => request<CompileResult>('compile', source),
-  validate: (source: string) => request<ValidateResult>('validate', source),
-  parseAST: (source: string) => request<ParseASTResult>('parse', source),
+  compile: (source: string, baseYaml = '') => request<CompileResult>('compile', source, baseYaml),
+  validate: (source: string, baseYaml = '') => request<ValidateResult>('validate', source, baseYaml),
+  parseAST: (source: string, baseYaml = '') => request<ParseASTResult>('parse', source, baseYaml),
   decompile: (source: string) => request<DecompileResult>('decompile', source),
-  format: (source: string) => request<FormatResult>('format', source),
+  format: (source: string, baseYaml = '') => request<FormatResult>('format', source, baseYaml),
 }

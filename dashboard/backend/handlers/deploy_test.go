@@ -854,6 +854,19 @@ func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
 		t.Fatalf("ParseYAMLBytes(merged) error: %v", err)
 	}
 
+	// DSL has no unary AND spelling and keeps single-signal WHEN as a leaf.
+	// Compare that root spelling equivalently while retaining the full canonical
+	// equality check for every other field, including root unknown policy.
+	for _, cfg := range []*routerconfig.RouterConfig{originalCfg, mergedCfg} {
+		for i := range cfg.Decisions {
+			root := &cfg.Decisions[i].Rules
+			if root.Operator == "AND" && len(root.Conditions) == 1 && root.Conditions[0].Type != "" {
+				leaf := root.Conditions[0]
+				leaf.OnUnknown = root.OnUnknown
+				*root = leaf
+			}
+		}
+	}
 	originalCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(originalCfg))
 	if err != nil {
 		t.Fatalf("marshal original canonical config: %v", err)

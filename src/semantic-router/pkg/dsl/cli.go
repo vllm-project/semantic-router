@@ -22,7 +22,18 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath s
 	}
 
 	input := string(data)
-	cfg, errs := Compile(input)
+	var limits config.DecisionRuleLimits
+	if basePath != "" {
+		base, readErr := os.ReadFile(basePath)
+		if readErr != nil {
+			return fmt.Errorf("failed to read base config: %w", readErr)
+		}
+		limits, err = config.DecisionRuleLimitsFromYAML(base)
+		if err != nil {
+			return err
+		}
+	}
+	cfg, errs := CompileWithLimits(input, limits)
 	if len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "  %s\n", e)
@@ -31,7 +42,7 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath s
 	}
 
 	// Refuse to write output on blocking validation diagnostics; parsing twice keeps Compile byte-identical.
-	if diags, _ := Validate(input); hasBlockingDiagnostics(diags) {
+	if diags, _ := ValidateWithLimits(input, limits); hasBlockingDiagnostics(diags) {
 		blocking := writeValidationDiagnostics(os.Stderr, diags)
 		return fmt.Errorf("%d blocking validation diagnostic(s); no output written", blocking)
 	}

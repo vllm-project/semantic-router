@@ -71,6 +71,9 @@ func (r *SemanticRouter) ValidateDelete(_ context.Context, _ runtime.Object) (ad
 
 // validateSemanticRouter validates the SemanticRouter resource
 func (r *SemanticRouter) validateSemanticRouter() error {
+	if err := r.ValidateDecisionRuleLimits(); err != nil {
+		return err
+	}
 	if err := r.validatePromptGuardContext(); err != nil {
 		return err
 	}
