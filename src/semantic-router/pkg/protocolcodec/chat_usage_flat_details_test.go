@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -72,6 +73,44 @@ func TestChatResponseAcceptsFlatUsageDetailFields(t *testing.T) {
 		usage.OutputOther.Value == nil || *usage.OutputOther.Value != 1 ||
 		usage.Total.Value == nil || *usage.Total.Value != 5 {
 		t.Fatalf("buffered flat usage detail fields decoded wrong: %+v", usage)
+	}
+}
+
+func TestChatFlatUsageDetailsCanonicalizeOnSameFormatReplay(t *testing.T) {
+	body := []byte(`{"id":"chatcmpl_1","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5,"cached_tokens":1,"reasoning_tokens":1}}`)
+	engine, err := NewEngine(NewBuiltinRegistry(), llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, body, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Usage struct {
+			CachedTokens        *int64 `json:"cached_tokens"`
+			ReasoningTokens     *int64 `json:"reasoning_tokens"`
+			PromptTokensDetails *struct {
+				CachedTokens *int64 `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+			CompletionTokensDetails *struct {
+				ReasoningTokens *int64 `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(result.Body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire.Usage.CachedTokens != nil || wire.Usage.ReasoningTokens != nil {
+		t.Fatalf("same-format reply replayed flat usage detail fields: %s", result.Body)
+	}
+	if wire.Usage.PromptTokensDetails == nil || wire.Usage.PromptTokensDetails.CachedTokens == nil ||
+		*wire.Usage.PromptTokensDetails.CachedTokens != 1 {
+		t.Fatalf("flat cached_tokens missing from canonical nested details: %s", result.Body)
+	}
+	if wire.Usage.CompletionTokensDetails == nil || wire.Usage.CompletionTokensDetails.ReasoningTokens == nil ||
+		*wire.Usage.CompletionTokensDetails.ReasoningTokens != 1 {
+		t.Fatalf("flat reasoning_tokens missing from canonical nested details: %s", result.Body)
 	}
 }
 
