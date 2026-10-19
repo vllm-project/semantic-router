@@ -34,9 +34,10 @@ def fake_torch_npu(monkeypatch):
 
 
 def test_rotary_half_registers_as_an_exact_fused_kernel(fake_torch_npu):
-    """Where the op exists the slot's preferred kernel is the fused one, exact."""
+    """Where the measured SoC ships the op, the slot's kernel is the fused one, exact."""
     accelerator = NPUAccelerator()
-    kernels = accelerator.kernels(SimpleNamespace(label="npu:0"))
+    device = SimpleNamespace(label="npu:0", arch="Ascend950DT")
+    kernels = accelerator.kernels(device)
     kernel = kernels.select("rotary_half")
     assert kernel.source == "torch-npu-fused"
     assert kernel.exact is True
@@ -46,13 +47,20 @@ def test_rotary_half_registers_as_an_exact_fused_kernel(fake_torch_npu):
     assert kernels.select("geglu").source == "torch-reference"
 
 
+def test_rotary_half_stays_reference_on_unmeasured_socs(fake_torch_npu):
+    """Exactness was measured on the 950DT: other SoCs keep the reference kernel."""
+    accelerator = NPUAccelerator()
+    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch="Ascend910B1"))
+    assert kernels.select("rotary_half").source == "torch-reference"
+
+
 def test_rotary_half_stays_reference_without_the_op(monkeypatch):
     """A torch_npu without the op leaves the reference kernel in the slot."""
     monkeypatch.setitem(
         sys.modules, "torch_npu", SimpleNamespace(__version__="2.10.0.test")
     )
     accelerator = NPUAccelerator()
-    kernels = accelerator.kernels(SimpleNamespace(label="npu:0"))
+    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch="Ascend950DT"))
     assert kernels.select("rotary_half").source == "torch-reference"
 
 
@@ -61,7 +69,7 @@ def test_reference_kernels_without_torch_npu():
     if getattr(torch, "npu", None) is not None or HAS_TORCH_NPU:
         pytest.skip("needs an environment where torch_npu is absent")
     accelerator = NPUAccelerator()
-    kernels = accelerator.kernels(SimpleNamespace(label="npu:0"))
+    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch="Ascend950DT"))
     assert all(source == "torch-reference" for source in kernels.describe().values())
 
 
@@ -91,6 +99,32 @@ def test_rotary_half_wrapper_promotes_the_tables(fake_torch_npu, cos_dtype):
     got_q, got_k = npu_fused.rotary_half(query, key, cos, sin)
     assert torch.equal(got_q, expected_q)
     assert torch.equal(got_k, expected_k)
+
+
+def test_rotary_half_falls_back_beyond_the_op_limits(fake_torch_npu, monkeypatch):
+    """Past B*N = 1000 rows*heads the wrapper returns the reference and never calls the op."""
+    calls = []
+    monkeypatch.setattr(
+        npu_fused, "rotary_half_ref", lambda q, k, c, s: ("ref-q", "ref-k")
+    )
+
+    def counting_rotary_mul(inp, r1, r2, rotary_mode="half"):
+        calls.append(inp.shape)
+        return fake_rotary_mul(inp, r1, r2, rotary_mode)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "torch_npu",
+        SimpleNamespace(npu_rotary_mul=counting_rotary_mul, __version__="2.10.0.test"),
+    )
+    # 64 heads x 32 rows = 2048 >= 1000: the documented op limit is exceeded
+    query = torch.randn(32, 64, 473, 64)
+    key = torch.randn(32, 64, 473, 64)
+    cos = torch.randn(1, 473, 64)
+    sin = torch.randn(1, 473, 64)
+    got_q, got_k = npu_fused.rotary_half(query, key, cos, sin)
+    assert (got_q, got_k) == ("ref-q", "ref-k")
+    assert calls == []
 
 
 def test_available_wrappers_track_the_op_set(monkeypatch):

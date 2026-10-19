@@ -59,7 +59,7 @@ class NPUAccelerator(Accelerator):
                     total_memory=getattr(properties, "total_memory", None),
                     free_memory=free_memory,
                     bf16=bool(npu.is_bf16_supported()),
-                    arch=None,
+                    arch=npu_fused.soc_name(getattr(properties, "name", None)),
                 )
             )
         return devices
@@ -69,8 +69,11 @@ class NPUAccelerator(Accelerator):
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = reference_kernels(device.label)
-        for name, fn in npu_fused.available_wrappers().items():
-            kernels.register(Kernel(name, fn, "torch-npu-fused", exact=True))
+        # Exact only where the fused ops were measured (the rocm.py precedent);
+        # other SoCs run the reference kernels until measured.
+        if device.arch in npu_fused.MEASURED_EXACT:
+            for name, fn in npu_fused.available_wrappers().items():
+                kernels.register(Kernel(name, fn, "torch-npu-fused", exact=True))
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:

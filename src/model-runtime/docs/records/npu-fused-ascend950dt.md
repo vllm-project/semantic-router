@@ -1,8 +1,5 @@
 # NPU: the fused rotate-half op as an exact kernel (Ascend 950DT)
 
-> A2 record 草稿（2026-10-16，本地版）。上游落位：`src/model-runtime/docs/records/npu-fused-ascend950dt.md`。
-> 照 `cuda-fused-approximate.md` 的形态：逐算子 exactness 判定 + 归因 + 端到端数据（含诚实的负结果）。
-
 ## Findings
 
 On Ascend 950DT (CANN 9.1, torch_npu 2.10.0.post4), measured against the eager
@@ -13,9 +10,9 @@ reference kernels:
   and casts back (`kernels.rotary_half_ref`); the op's half mode computes the
   same algebra (`r1 * input + r2 * cat((-x2, x1))`). The op's own BF16 path
   rounds one ulp off the reference (max 0.0625); feeding the op FP32 inputs
-  and casting back reproduces the reference **bit for bit on every dtype**
-  tried. Registered as an exact kernel, so no gate applies and no answer
-  changes by construction.
+  and casting back reproduces the reference **bit for bit at fp32 and bf16**,
+  the dtypes tried. Registered as an exact kernel, so no gate applies and no
+  answer changes by construction.
 - **`npu_fusion_attention` equals eager SDPA bit for bit without a mask** —
   the same kernel underneath (torch's SDPA already dispatches to it on this
   device), so registering it buys nothing. With a mask it does not reproduce
@@ -62,4 +59,11 @@ reference kernels:
   the isolated per-op numbers; serve A/B ran the frozen corpus (195 input
   tokens p50) at c4/8/16, 120 requests per point.
 - `npu_rotary_mul` constraint check: head_dim 64 < 896, B*N < 1000, BNSD
-  layout as the slot passes it; cos/sin as [1, 1, S, D] (11SD).
+  layout as the slot passes it; cos/sin as [1, 1, S, D] (11SD). The wrapper
+  enforces the documented limits and falls back to `rotary_half_ref` beyond
+  them, so the exact contract holds wherever the shapes land.
+- Exactness was measured on this SoC only: the accelerator gates the exact
+  registration on the SoC parsed from `torch.npu.get_device_properties().name`
+  (`Ascend950DT_9572` → `Ascend950DT`, the rocm.py precedent of registering
+  exact only on the measured gfx942). Other Ascend SoCs — the 910B1 included —
+  run the reference kernels until measured there.
