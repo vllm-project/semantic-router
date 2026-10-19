@@ -718,5 +718,148 @@
    }
   },
   "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4"
+ },
+ "vllm-sr/d3-turbo": {
+  "answers": {
+   "cpu": {
+    "difficulty": {
+     "confidence": 0.8414858487756145,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.09945986572754363,
+      "1": 0.894323899183743,
+      "2": 0.006216235088713354
+     },
+     "score": 0.9067563693611697,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9991355845143876,
+     "probabilities": {
+      "code": 0.9994237230095917,
+      "math": 0.00018655991520240135,
+      "other": 0.00038971707520591965
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8925457852545464,
+     "probabilities": {
+      "blue": 0.023991717137357767,
+      "green": 0.0455802383161161,
+      "other": 0.9194093389409098,
+      "red": 0.011018705605616354
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.002812743818954781,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.6498905017939359,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.8414858487756145,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.09945986572754363,
+      "1": 0.894323899183743,
+      "2": 0.006216235088713354
+     },
+     "score": 0.9067563693611697,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9991355845143876,
+     "probabilities": {
+      "code": 0.9994237230095917,
+      "math": 0.00018655991520240135,
+      "other": 0.00038971707520591965
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8925457852545464,
+     "probabilities": {
+      "blue": 0.023991717137357767,
+      "green": 0.0455802383161161,
+      "other": 0.9194093389409098,
+      "red": 0.011018705605616354
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.002812743818954781,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.6498905017939359,
+     "type": "noul"
+    }
+   },
+   "rocm": {
+    "difficulty": {
+     "confidence": 0.8388393264465499,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.1012832480416591,
+      "1": 0.8925595509643667,
+      "2": 0.0061572009939742794
+     },
+     "score": 0.9048739529523152,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9991308266960149,
+     "probabilities": {
+      "code": 0.9994205511306767,
+      "math": 0.00018331001551204725,
+      "other": 0.00039613885381117045
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8868135781668781,
+     "probabilities": {
+      "blue": 0.024543766275194,
+      "green": 0.04850956120308807,
+      "other": 0.9151101836251586,
+      "red": 0.011836488896559303
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.0027401013095860707,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.6525958776473999,
+     "type": "noul"
+    }
+   }
+  },
+  "revision": "da17b5d0c860f7e5be6e2afebe67228b4bd24d0c"
  }
 }

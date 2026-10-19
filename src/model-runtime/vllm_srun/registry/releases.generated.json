@@ -36,5 +36,6 @@
   "vllm-sr/d3-flash": "521525effa79469d899a570726547dd7f00da3af",
   "vllm-sr/d3-lite": "a8d25a91ef75552803f7009d25b7bd435991abd9",
   "vllm-sr/d3-mini": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
-  "vllm-sr/d3-nano": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4"
+  "vllm-sr/d3-nano": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
+  "vllm-sr/d3-turbo": "da17b5d0c860f7e5be6e2afebe67228b4bd24d0c"
 }
