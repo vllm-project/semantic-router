@@ -71,11 +71,18 @@ export const CapabilitiesProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (!isAuthenticated) return undefined
     const controller = new AbortController()
     let retry: ReturnType<typeof setTimeout> | undefined
+    let failureMessage = 'Dashboard feature availability is unavailable. Refresh access to retry.'
     void (async () => {
       try {
         const decoded = await withRequestTimeout(async (signal) => {
           const response = await fetch('/api/v1/capabilities', { signal })
-          if (!response.ok) throw new Error(`Capabilities request failed (${response.status})`)
+          if (!response.ok) {
+            if (response.status === 403) {
+              failureMessage =
+                'Access to Dashboard feature availability was denied. Refresh access or contact an administrator.'
+            }
+            throw new Error(`Capabilities request failed (${response.status})`)
+          }
           return decodeDashboardCapabilities(await response.json())
         }, controller.signal)
         if (controller.signal.aborted) return
@@ -91,7 +98,7 @@ export const CapabilitiesProvider: React.FC<{ children: ReactNode }> = ({ childr
       } catch (err) {
         if (controller.signal.aborted) return
         setCapabilities(null)
-        setError('Dashboard feature availability is unavailable. Refresh access to retry.')
+        setError(failureMessage)
         console.warn('Failed to fetch dashboard capabilities:', err)
       } finally {
         if (!controller.signal.aborted) setIsLoading(false)
