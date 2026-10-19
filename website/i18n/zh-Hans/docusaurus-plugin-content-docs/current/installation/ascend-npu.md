@@ -51,13 +51,15 @@ readiness 会执行模型的 golden 自检：两次参考前向，各自与发�
 
 ### 精度：bf16 作为 opt-in
 
-`--dtype bfloat16` 让模型在 NPU 上走 BF16 autocast；它是显式引擎参数，
-`--dtype auto` 保持各模型发布的（fp32）精度。在 Ascend 950DT 上的实测
-（见 [bf16 record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/npu-bf16-ascend950dt.md)）：
-Vela 2.0 解码器 2.5×（并发 8 时 84.8 → 214.1 请求/秒），encoder 家族无变化，
-四信号语料上标签零翻转。confidence 叶子可能漂过 0.02 容差（两模型分别为
-0.8% / 4.3%），阈值卡在 confidence 边界上的路由规则在 bf16 下可能翻转——
-这类部署建议保持 fp32。
+`--dtype bfloat16` 让模型在 NPU 上以 bf16 精度运行（权重以 bf16 驻留，
+reference kernels）；它是显式引擎参数，`--dtype auto` 保持各模型发布的
+（fp32）精度。bf16 下 readiness 报告 unverified——golden 参照按
+`--dtype auto` 记录——准确度依据是离线的逐请求比对（见
+[bf16 record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/npu-bf16-ascend950dt.md)）：
+665-token 的 Vela 2.0 成员 2.5×（并发 8 时 84.8 → 214.1 请求/秒），
+195-token 成员无变化；两模型在本语料上标签零翻转。confidence 叶子可能漂过
+0.02 容差（两模型分别为 0.8% / 4.3%），阈值卡在 confidence 边界上的路由
+规则在 bf16 下可能翻转——这类部署建议保持 fp32。
 
 ## 在容器中运行 NPU 运行时
 
