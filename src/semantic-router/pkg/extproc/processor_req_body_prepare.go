@@ -48,6 +48,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 
 func (r *OpenAIRouter) runRequestPreRoutingStages(
 	originalModel string,
+	request *llmprotocol.Request,
 	snapshot *requestSignalSnapshot,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
@@ -56,7 +57,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
-	history := signalConversationHistoryFromSnapshot(snapshot)
+	// Keep the general snapshot payload-free, but attach tool-result text at the
+	// signal-history boundary so opt-in PII rules can inspect it. This is the
+	// only pre-routing path for normal request-body processing.
+	history := signalConversationHistoryFromRequest(request, snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
@@ -90,6 +94,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
+	ctx.PluginBackendModel = selectedModel
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
@@ -229,6 +234,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
+	// Topic-continuity evidence reads the original history captured before RAG
+	// and Memory, and is ready before any context transformation reads it.
+	r.evaluateTopicContinuity(ctx)
 	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}

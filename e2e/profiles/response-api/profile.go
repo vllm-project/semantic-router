@@ -5,7 +5,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -66,7 +65,6 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-error-nonexistent-previous-response-id",
 		"response-api-error-nonexistent-response-id-get",
 		"response-api-error-nonexistent-response-id-delete",
-		"response-api-error-backend-passthrough",
 		"response-api-edge-empty-input",
 		"response-api-edge-large-input",
 		"response-api-edge-special-characters",
@@ -108,6 +106,8 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-ollama-output-limit",
 		"protocol-codec-ollama-empty-content",
 		"protocol-codec-vllm-stop-sequence",
+		"protocol-codec-vllm-reasoning-order",
+		"protocol-codec-vllm-stream-error",
 		"protocol-codec-auto-unsupported-capability",
 		"protocol-codec-chat-backend-agent-client-replay",
 		"protocol-codec-responses-backend-agent-client-replay",

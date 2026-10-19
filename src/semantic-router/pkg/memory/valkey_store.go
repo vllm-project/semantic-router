@@ -21,7 +21,7 @@ var errValkeyMemoryAlreadyExists = errors.New("valkey memory already exists")
 // ValkeyStore provides memory storage and retrieval using Valkey with the Search module.
 // Implements the Store interface with HASH-based storage and FT.SEARCH for vector similarity.
 type ValkeyStore struct {
-	client           *glide.Client
+	client           valkeyMemoryClient
 	config           config.MemoryConfig
 	valkeyConfig     *config.MemoryValkeyConfig
 	enabled          bool
@@ -33,6 +33,17 @@ type ValkeyStore struct {
 	metricType       string
 	dimension        int
 }
+
+// valkeyMemoryClient is the subset of Glide used by ValkeyStore. Keeping the
+// constructor's public client type concrete preserves its lifecycle contract.
+type valkeyMemoryClient interface {
+	CustomCommand(ctx context.Context, args []string) (any, error)
+	HGetAll(ctx context.Context, key string) (map[string]string, error)
+	HSet(ctx context.Context, key string, fields map[string]string) (int64, error)
+	Del(ctx context.Context, keys []string) (int64, error)
+}
+
+var _ valkeyMemoryClient = (*glide.Client)(nil)
 
 // ValkeyStoreOptions contains configuration for creating a ValkeyStore.
 type ValkeyStoreOptions struct {
@@ -255,22 +266,23 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		status = "error"
 		return fmt.Errorf("failed to build hash fields: %w", err)
 	}
+	operationID, err := valkeyNewStoreOperationID()
+	if err != nil {
+		status = "error"
+		return fmt.Errorf("failed to generate store operation ID: %w", err)
+	}
 
 	key := v.hashKey(memory.ID)
+	command := valkeyBuildAtomicStoreCommand(key, fields, operationID)
 
-	// Enforce uniqueness atomically using HSetNX as a reservation on the "id" field.
-	// HSetNX is atomic: if the key already exists, it returns false without writing.
-	// This avoids the TOCTOU race of a separate EXISTS check.
+	// Write the complete hash in one Lua operation. The operation ID is stored with
+	// the document so a retry after a lost response can recognize its own write.
 	err = v.retryWithBackoff(ctx, func() error {
-		reserved, hsetNXErr := v.client.HSetNX(ctx, key, "id", memory.ID)
-		if hsetNXErr != nil {
-			return hsetNXErr
+		result, commandErr := v.client.CustomCommand(ctx, command)
+		if commandErr != nil {
+			return commandErr
 		}
-		if !reserved {
-			return fmt.Errorf("%w: memory id=%s", errValkeyMemoryAlreadyExists, memory.ID)
-		}
-		_, hsetErr := v.client.HSet(ctx, key, fields)
-		return hsetErr
+		return valkeyAtomicStoreResult(result, memory.ID)
 	})
 	if err != nil {
 		status = "error"
@@ -286,6 +298,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 
 // rerankAndFilter applies hybrid re-ranking, adaptive threshold, score filtering, and access tracking.
 func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts RetrieveOptions, threshold float32, limit int) []*RetrieveResult {
+	candidates = retainProjectMatches(candidates, opts.ProjectID)
 	if opts.HybridSearch && len(candidates) > 1 {
 		candidates = hybridRerankCandidates(candidates, opts)
 	}
@@ -306,11 +319,7 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 	}
 
 	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
-		}
-		go v.recordRetrievalBatch(ids)
+		go v.recordRetrievalBatch(retrieveResultIDs(results))
 	}
 
 	return results
@@ -321,7 +330,15 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 // index schema. The "metadata" field is stored in the HASH but not indexed as
 // a schema field, which is intentional — it's only needed for result parsing.
 func (v *ValkeyStore) buildRetrieveSearchCmd(opts RetrieveOptions, embedding []float32, limit int) []string {
+	return v.buildRetrieveSearchCmdWithTopK(opts, embedding, retrieveSearchTopK(limit, opts.HybridSearch))
+}
+
+func (v *ValkeyStore) buildRetrieveSearchCmdWithTopK(opts RetrieveOptions, embedding []float32, searchTopK int) []string {
 	filterExpr := fmt.Sprintf("@user_id:{%s}", valkeyEscapeTagValue(opts.UserID))
+
+	if opts.ProjectID != "" {
+		filterExpr = fmt.Sprintf("%s @project_id:{%s}", filterExpr, valkeyEscapeTagValue(opts.ProjectID))
+	}
 
 	if len(opts.Types) > 0 {
 		typeValues := make([]string, len(opts.Types))
@@ -331,16 +348,12 @@ func (v *ValkeyStore) buildRetrieveSearchCmd(opts RetrieveOptions, embedding []f
 		filterExpr = fmt.Sprintf("%s @memory_type:{%s}", filterExpr, strings.Join(typeValues, " | "))
 	}
 
-	searchTopK := limit * 4
-	if opts.HybridSearch {
-		searchTopK = limit * 8
-	}
-	if searchTopK < 20 {
-		searchTopK = 20
-	}
-
 	embeddingBytes := valkeyFloat32ToBytes(embedding)
-	query := fmt.Sprintf("(%s)=>[KNN %d @embedding $BLOB AS vector_distance]", filterExpr, searchTopK)
+	// EF_RUNTIME belongs in the KNN clause. A PARAMS entry with the same name
+	// is not read. The beam has to be at least K and no greater than Valkey's
+	// supported EF_RUNTIME maximum.
+	searchTopK = clampSearchTopK(searchTopK, maxValkeyVectorEfRuntime)
+	query := fmt.Sprintf("(%s)=>[KNN %d @embedding $BLOB EF_RUNTIME %d AS vector_distance]", filterExpr, searchTopK, searchTopK)
 
 	return []string{
 		"FT.SEARCH", v.indexName, query,
@@ -351,7 +364,41 @@ func (v *ValkeyStore) buildRetrieveSearchCmd(opts RetrieveOptions, embedding []f
 	}
 }
 
-// Retrieve searches for memories in Valkey with similarity threshold filtering.
+func clampSearchTopK(searchTopK, maxTopK int) int {
+	if maxTopK > 0 && searchTopK > maxTopK {
+		return maxTopK
+	}
+	return searchTopK
+}
+
+// retrieveCandidates widens a project-scoped KNN query while legacy rows still
+// occupy the candidate window. Valkey stops at its supported EF_RUNTIME limit.
+func (v *ValkeyStore) retrieveCandidates(ctx context.Context, opts RetrieveOptions, embedding []float32, limit int) ([]*RetrieveResult, error) {
+	searchTopK := clampSearchTopK(retrieveSearchTopK(limit, opts.HybridSearch), maxValkeyVectorEfRuntime)
+	for {
+		searchCmd := v.buildRetrieveSearchCmdWithTopK(opts, embedding, searchTopK)
+
+		var searchResult any
+		err := v.retryWithBackoff(ctx, func() error {
+			var retryErr error
+			searchResult, retryErr = v.client.CustomCommand(ctx, searchCmd)
+			return retryErr
+		})
+		if err != nil {
+			return nil, fmt.Errorf("valkey FT.SEARCH failed after retries: %w", err)
+		}
+
+		candidates := v.parseSearchCandidates(searchResult, opts.UserID)
+		nextTopK := nextProjectScopedSearchTopK(opts.ProjectID, searchTopK, v.extractTotalCount(searchResult), len(retainProjectMatches(candidates, opts.ProjectID)), maxValkeyVectorEfRuntime)
+		if nextTopK == 0 {
+			return candidates, nil
+		}
+
+		logging.Debugf("ValkeyStore.Retrieve: widening project-scoped candidate window from %d to %d", searchTopK, nextTopK)
+		searchTopK = nextTopK
+	}
+}
+
 func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
 	startTime := time.Now()
 	backend := "valkey"
@@ -393,20 +440,12 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	searchCmd := v.buildRetrieveSearchCmd(opts, embedding, limit)
-
-	var searchResult any
-	err = v.retryWithBackoff(ctx, func() error {
-		var retryErr error
-		searchResult, retryErr = v.client.CustomCommand(ctx, searchCmd)
-		return retryErr
-	})
+	candidates, err := v.retrieveCandidates(ctx, opts, embedding, limit)
 	if err != nil {
 		status = "error"
-		return nil, fmt.Errorf("valkey FT.SEARCH failed after retries: %w", err)
+		return nil, err
 	}
 
-	candidates := v.parseSearchCandidates(searchResult, opts.UserID)
 	if len(candidates) == 0 {
 		status = "miss"
 		return []*RetrieveResult{}, nil
@@ -489,8 +528,10 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 	memory.UpdatedAt = time.Now()
 
 	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
+	var existing *Memory
 	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
-		existing, err := v.Get(ctx, id)
+		var err error
+		existing, err = v.Get(ctx, id)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("memory not found: %s", id)
@@ -498,12 +539,16 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 		if memory.CreatedAt.IsZero() {
 			memory.CreatedAt = existing.CreatedAt
 		}
-		if len(memory.Embedding) == 0 {
-			memory.Embedding = existing.Embedding
-		}
 	}
+	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, v.embeddingConfig)
+	if err != nil {
+		status = "error"
+		return err
+	}
+	writeMemory := *memory
+	writeMemory.Embedding = embedding
 
-	err := v.upsert(ctx, memory)
+	err = v.upsert(ctx, &writeMemory)
 	if err != nil {
 		status = "error"
 		return err

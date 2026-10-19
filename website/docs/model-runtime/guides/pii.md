@@ -38,9 +38,14 @@ routing:
         - model: private-model
 ```
 
-The router runs Vela PII on the CPU. It reads the whole request, up to 32,768
-tokens, in overlapping 512-token windows, so a name near the end of a long
-document is found as reliably as one at the start.
+Without an override, the Router uses the default Vela 2.0 deployment for PII.
+Its input limits and coverage differ from the Vela 1.0 specialist below; see
+[Choose a model](../choose-a-model#vela-20). Rule thresholds are explicit
+policy: calibrate this example's value for the model you select.
+
+The Vela 1.0 binding below scans up to 32,768 tokens in overlapping 512-token
+windows. Coverage includes the end of the document, but detection accuracy
+still depends on the text and model.
 
 ## Choose where it runs
 
@@ -94,8 +99,10 @@ global:
         contract: token_spans.v1
 ```
 
-The model reads the whole request itself, so the deployment takes no `input`
-and the PII module no `window`. See the
+Vela 2.0 uses its own full-input checks and supported scan budget; it does not
+use the specialist's 512-token PII window settings. An `input` override can
+set the deployment's scan budget. Incomplete coverage remains unresolved;
+see [Long inputs](../reference.md#long-inputs) and the
 [`pii` signal](tutorials/signal/learned/pii.md#vela-20) for how rule
 thresholds apply to its spans.
 

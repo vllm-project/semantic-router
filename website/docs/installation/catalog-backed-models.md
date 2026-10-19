@@ -34,7 +34,7 @@ OpenAI-specific mapping from `catalog: openai/gpt-5.6-sol`; do not repeat its
 reasoning definition in YAML.
 
 Browse built-in identities and their Provider support in **Model Hub**, or
-choose a Provider in **Build → Models → Add Model**. The Dashboard labels
+choose a Provider in **Build → Routing → Models → Add Model**. The Dashboard labels
 catalog choices as **Built-in** and saves both the local alias and canonical
 identity.
 

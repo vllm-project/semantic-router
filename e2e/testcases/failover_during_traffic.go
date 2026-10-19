@@ -6,9 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -75,17 +77,12 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 		}
 	}
 
-	pods, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=vllm-llama3-8b-instruct"})
-	if err == nil && len(pods.Items) > 0 {
-		if err := client.CoreV1().Pods("default").Delete(ctx, pods.Items[0].Name, metav1.DeleteOptions{}); err != nil {
-			// Log but don't fail - pod might already be deleted
-			if opts.Verbose {
-				fmt.Printf("[Test] Warning: failed to delete pod: %v\n", err)
-			}
-		}
-	}
+	deletedPod, faultErr := deleteProductionStackBackendPod(ctx, client.CoreV1().Pods("default"))
 
 	<-done
+	if faultErr != nil {
+		return fmt.Errorf("failover fault injection failed: %w", faultErr)
+	}
 
 	errCount := int(atomic.LoadInt32(&requestErrors))
 	fastResponseCount := int(atomic.LoadInt32(&fastResponses))
@@ -93,6 +90,7 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 	backendSuccessRate := float64(successCount) / float64(total)
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
+			"deleted_pod":             deletedPod,
 			"total":                   total,
 			"warmup_attempts":         warmup.Attempts,
 			"warmup_successes":        warmup.Successes,
@@ -126,4 +124,19 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 		return fmt.Errorf("vllm demo did not recover: %w", err)
 	}
 	return nil
+}
+
+func deleteProductionStackBackendPod(ctx context.Context, pods typedcorev1.PodInterface) (string, error) {
+	listed, err := pods.List(ctx, metav1.ListOptions{LabelSelector: "app=vllm-llama3-8b-instruct"})
+	if err != nil {
+		return "", fmt.Errorf("list backend pods: %w", err)
+	}
+	if len(listed.Items) == 0 {
+		return "", fmt.Errorf("no backend pod available for failover fault injection")
+	}
+	name := listed.Items[0].Name
+	if deleteErr := pods.Delete(ctx, name, metav1.DeleteOptions{}); deleteErr != nil {
+		return "", fmt.Errorf("delete backend pod %q: %w", name, deleteErr)
+	}
+	return name, nil
 }

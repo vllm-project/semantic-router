@@ -119,7 +119,7 @@ overall benchmark score or leaderboard rank.
 
 Use [local model bindings](../model-runtime/deploy.md) to select the
 checkpoint and serving engine. Test the selected depth, dimension, and input
-limit through [route preview](model-runtime/troubleshooting.md).
+limit through [route preview](../model-runtime/troubleshooting.md).
 An ONNX deployment needs graphs exported from the same trained weights.
 
 ## Earlier mmBERT workflows

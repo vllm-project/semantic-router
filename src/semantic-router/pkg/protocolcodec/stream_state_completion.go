@@ -350,6 +350,13 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		merged[index] = value
 	}
 	result := usageFromCounts(mergedUsageState(current.State, update.State), merged)
+	if result.InputCacheWrite.Value != nil &&
+		result.InputCacheWrite5m.Value != nil && result.InputCacheWrite1h.Value != nil {
+		if *result.InputCacheWrite5m.Value+*result.InputCacheWrite1h.Value != *result.InputCacheWrite.Value {
+			result.InputCacheWrite5m = llmprotocol.TokenCount{}
+			result.InputCacheWrite1h = llmprotocol.TokenCount{}
+		}
+	}
 	if err := deriveUsageTotal(&result); err != nil {
 		return llmprotocol.Usage{}, err
 	}
@@ -385,6 +392,7 @@ func mergedUsageState(current, update llmprotocol.UsageState) llmprotocol.UsageS
 func usageCounts(usage llmprotocol.Usage) []llmprotocol.TokenCount {
 	return []llmprotocol.TokenCount{
 		usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite,
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h,
 		usage.OutputReasoning, usage.OutputOther, usage.InputTotal, usage.OutputTotal, usage.Total,
 	}
 }
@@ -392,8 +400,9 @@ func usageCounts(usage llmprotocol.Usage) []llmprotocol.TokenCount {
 func usageFromCounts(state llmprotocol.UsageState, counts []llmprotocol.TokenCount) llmprotocol.Usage {
 	return llmprotocol.Usage{
 		State: state, InputUncached: counts[0], InputCacheRead: counts[1], InputCacheWrite: counts[2],
-		OutputReasoning: counts[3], OutputOther: counts[4], InputTotal: counts[5],
-		OutputTotal: counts[6], Total: counts[7],
+		InputCacheWrite5m: counts[3], InputCacheWrite1h: counts[4],
+		OutputReasoning: counts[5], OutputOther: counts[6], InputTotal: counts[7],
+		OutputTotal: counts[8], Total: counts[9],
 	}
 }
 

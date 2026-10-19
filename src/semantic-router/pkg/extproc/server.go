@@ -659,6 +659,7 @@ func (rs *RouterService) Shutdown(ctx context.Context) error {
 		if generation != nil {
 			generation.retire()
 			rs.retired.Add(1)
+			// #nosec G118 -- Cleanup must outlive the caller's wait deadline so retained requests can drain safely.
 			go rs.closeRetiredGeneration(generation)
 		}
 	}
@@ -839,6 +840,7 @@ func publishSnapshotState(
 		if runtimeRegistry != nil {
 			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 				Config: cfg, ConfigSnapshot: snapshot, AcquireClassification: routerruntime.AcquireClassification(acquire),
+				MemoryStatus: routerruntime.MemoryStatus{Reason: routerruntime.MemoryReasonStarting},
 			})
 		} else {
 			services.SetGlobalClassificationService(nil)
@@ -856,6 +858,7 @@ func publishSnapshotState(
 			ClassificationService: router.ClassificationService,
 			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,
+			MemoryStatus:          router.MemoryStatus,
 			ModelSelector:         router.ModelSelector,
 			LearningRuntime:       router.routerLearningRuntimeState(),
 			ReplayRuntime:         router,
@@ -863,6 +866,7 @@ func publishSnapshotState(
 			ContextCompression:    router.contextCompressionService(),
 			CompressionRecovery:   router.CompressionRecovery,
 			Plugins:               pluginruntime.Capabilities{Guards: router, Retrieval: router, Inspector: router},
+			NativeRouter:          router,
 		})
 		return
 	}

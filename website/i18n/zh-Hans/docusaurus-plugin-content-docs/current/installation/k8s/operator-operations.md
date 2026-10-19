@@ -3,7 +3,7 @@ title: 运维 Operator 部署
 sidebar_label: Kubernetes 操作符
 description: 监控、更新、扩缩容并排查由 Kubernetes Operator 管理的 SemanticRouter。
 translation:
-  source_commit: "f8c1197a9ed47f7a265cbab83bf2d84eb5fa505e"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/k8s/operator-operations.md"
   outdated: false
 ---
@@ -81,9 +81,9 @@ kubectl describe inferenceservice <name> -n <backend-namespace>
 
 ### Gateway 模式没有路由
 
-Operator 不会创建 `HTTPRoute`。对于普通 Gateway HTTP 转发，省略 `spec.gateway.existingRef`，保留 Envoy sidecar，并将 `/v1` 路由到 Router Service 的 `envoy-http` 端口 **8801**。检查 Gateway 允许来自 Router 命名空间的路由，且路由报告 `Accepted=True` 和 `ResolvedRefs=True`。
+Operator 不会创建 `HTTPRoute`。对于普通 Gateway HTTP 转发，省略 `spec.gateway.existingRef`，将 `/v1` 直接路由到 standalone Router Service 的 `http-8801` 端口 **8801**；不会创建 Envoy sidecar。检查 Gateway 允许来自 Router 命名空间的路由，且路由报告 `Accepted=True` 和 `ResolvedRefs=True`。
 
-若设置了 `spec.gateway.existingRef`，则省略 sidecar。验证网关特定的 ExtProc 策略指向 Router Service 的 gRPC 端口（默认 **50051**），且其模型路由指向真实的后端 Service。Router `api` 端口（默认 **8080**）是管理端点，不能服务推理 completions。见两条[现有 Gateway 部署路径](operator#existing-gateway)。
+若设置了 `spec.gateway.existingRef`，Router 使用 ExtProc 模式。验证网关特定的 ExtProc 策略指向 Router Service 的 gRPC 端口（默认 **50051**），且其模型路由指向真实的后端 Service。Router `api` 端口（默认 **8080**）是管理端点，不能服务推理 completions。见两条[现有 Gateway 部署路径](operator#existing-gateway)。
 
 ```bash
 kubectl get gateway -A

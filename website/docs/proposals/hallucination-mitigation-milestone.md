@@ -84,8 +84,7 @@ especially retrieval and tool-assisted workflows. It is not a general fact datab
 a substitute for domain review, or a guarantee that supported context is itself true.
 
 The current route-local plugin reads its model dependencies from the canonical module
-path below. The exhaustive reference configuration owns the detector and explainer
-details:
+path below. The exhaustive reference configuration owns the detector details (the old NLI explainer is retired):
 
 ```yaml
 global:

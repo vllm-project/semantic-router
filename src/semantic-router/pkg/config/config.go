@@ -56,6 +56,7 @@ const (
 
 // API format constants for model backends.
 const (
+	APIFormatSystemOne = "systemone"
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"

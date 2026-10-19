@@ -444,7 +444,11 @@ def plan(manifest, *, policy=None):
             raise ValueError("capture_recipe must be boolean")
         if t.get("capture_recipe") and t["kind"] != "mom":
             raise ValueError("Recipe capture is only available for MoM targets")
-        if t.get("session_mode", STATELESS) not in {STATELESS, SESSION_AWARE}:
+        session_mode = t.get("session_mode", STATELESS)
+        if not isinstance(session_mode, str) or session_mode not in {
+            STATELESS,
+            SESSION_AWARE,
+        }:
             raise ValueError("session_mode must be stateless or session_aware")
         u = urlparse(t.get("base_url", ""))
         if (

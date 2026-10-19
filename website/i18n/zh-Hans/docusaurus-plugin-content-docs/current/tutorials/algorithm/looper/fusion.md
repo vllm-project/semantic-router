@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "f538b1e52efaa172923a6764c8ad9ab18e0188af"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: true
+  outdated: false
 ---
 
 # 融合
@@ -17,7 +17,7 @@ translation:
 
 - 并发运行分析模型，而不是只选一个模型。
 - 支持显式的 `separate`、`one_call` 和 `none` 裁判执行模式。
-- 将 Fusion 策略保留在 vLLM-SR 决策内：`vllm-sr/auto` 可以选择任意路由，而 `vllm-sr/fusion` 只在 Fusion 路由中智能选择。
+- Fusion 策略属于配方。可将 `vllm-sr/fusion` 映射到只包含 Fusion 决策的独立配方；入口名字本身不会筛选算法。
 - 将裁判、面板、预算、提示词、追踪、回退和依据策略都放在配方所有权下。
 - 仅当剩余可用响应仍满足法定人数时，才在部分面板失败后继续，同时保留失败模型的元数据。
 
@@ -41,15 +41,11 @@ Fusion 始终先执行面板，再遵循决策显式的分析模式：
 
 ```mermaid
 flowchart TD
-    A[Request arrives] --> B{Request model}
-    B -- vllm-sr/auto --> C[Evaluate all decisions]
-    B -- vllm-sr/fusion --> D[Evaluate Fusion decisions only]
+    A[Request arrives] --> B[Resolve entrypoint to its recipe]
+    B --> C[Evaluate that recipe's signals and decisions]
     C --> E{Matched decision uses algorithm.type=fusion?}
-    D --> F{Matched Fusion decision?}
-    E -- No --> G[Use normal selected route]
+    E -- No --> G[Use the matched route or recipe fallback]
     E -- Yes --> H[Resolve recipe-owned Fusion config]
-    F -- Yes --> H
-    F -- No --> J[Return no eligible Fusion decision error]
     H --> M[Run analysis panel concurrently]
     M --> N{Usable responses meet quorum?}
     N -- No --> O[Return typed Fusion quorum error]
@@ -69,7 +65,7 @@ flowchart TD
 
 ## 解决什么问题？
 
-有些提示词更适合多次独立尝试再加一次裁判，而不是单次路由决策。`fusion` 把这种编排放在 Router 策略里，因此客户端可以通过同一个 chat completions 端点使用它。与固定的提供商侧 Fusion 端点不同，`vllm-sr/fusion` 会先用 vLLM-SR 信号和决策优先级，为请求选出正确的 Fusion 路由。
+有些提示词更适合多次独立尝试再加一次裁判，而不是单次路由决策。`fusion` 把这种编排放在 Router 策略里，因此客户端可以通过同一个 chat completions 端点使用它。`vllm-sr/fusion` 这样的入口选择其配置的配方，再由该配方的信号和决策确定是否执行 Fusion。
 
 ## 何时使用
 
