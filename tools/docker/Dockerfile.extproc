@@ -20,36 +20,106 @@ ARG IMAGE_REGISTRY=docker.io/
 ARG PYTHON_IMAGE=library/python:3.12-slim-bookworm
 ARG ROCM_TORCH_IMAGE=vllm/vllm-openai-rocm@sha256:1fd21abe66455b4df5a2e83629e97cdcc9d58913b16052d8118b92b239792339
 ARG ACCELERATOR=cpu
+ARG GO_IMAGE=golang:1.25-bookworm
+ARG RUST_IMAGE=rust:1.90-slim-bookworm
+ARG ATTACHED_BASE_IMAGE=debian:trixie-slim
+ARG ASSETS_IMAGE=${PYTHON_IMAGE}
+ARG TARGETARCH
+
+# Only RISC-V needs a source-built FFI; existing platforms keep module archives.
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_IMAGE} AS glide-amd64
+RUN mkdir -p /out/glide
+FROM glide-amd64 AS glide-arm64
+
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_IMAGE} AS glide-riscv64
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential protobuf-compiler cmake pkg-config curl ca-certificates libssl-dev \
+    && if [ "$(dpkg --print-architecture)" != riscv64 ]; then \
+      apt-get install -y --no-install-recommends gcc-riscv64-linux-gnu g++-riscv64-linux-gnu; \
+    fi && rm -rf /var/lib/apt/lists/*
+RUN if [ ! -d "$(rustc --print target-libdir --target riscv64gc-unknown-linux-gnu)" ]; then \
+      rustup target add riscv64gc-unknown-linux-gnu; \
+    fi
+WORKDIR /source
+COPY src/semantic-router/go.mod src/semantic-router/go.mod
+COPY tools/docker/build-glide.sh tools/docker/build-glide.sh
+COPY tools/docker/valkey-glide/ tools/docker/valkey-glide/
+RUN bash tools/docker/build-glide.sh --output /out/glide
+
+FROM glide-${TARGETARCH} AS router-native-deps
 
 # The router is a Go binary. cgo links only valkey-glide's bundled static
 # library, so the build needs the target's C linker and nothing else.
-FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS router-build
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_IMAGE} AS router-build
 ARG TARGETARCH
 RUN if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ]; then \
       apt-get update && \
       apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross && \
       rm -rf /var/lib/apt/lists/*; \
+    elif [ "$TARGETARCH" = riscv64 ] && [ "$(dpkg --print-architecture)" != riscv64 ]; then \
+      apt-get update && apt-get install -y --no-install-recommends gcc-riscv64-linux-gnu libc6-dev-riscv64-cross && \
+      rm -rf /var/lib/apt/lists/*; \
     fi
 WORKDIR /src/semantic-router
 # Pipe falls back to direct on any proxy error; comma only on 404 and 410.
-ENV GOPROXY="https://proxy.golang.org|direct"
+ARG GOPROXY="https://proxy.golang.org|direct"
+ENV GOPROXY=${GOPROXY}
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 RUN go mod download
 COPY src/semantic-router/ ./
-RUN if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ]; then \
+COPY --from=router-native-deps /out/glide/ /out/glide/
+RUN native_flags=; \
+    if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ]; then \
       export CC=aarch64-linux-gnu-gcc; \
-    fi && \
+    elif [ "$TARGETARCH" = riscv64 ] && [ "$(dpkg --print-architecture)" != riscv64 ]; then \
+      export CC=riscv64-linux-gnu-gcc; \
+    fi; \
+    if [ "$TARGETARCH" = riscv64 ]; then native_flags="-extldflags=-L/out/glide"; fi; \
     CGO_ENABLED=1 GOOS=linux GOARCH="$TARGETARCH" \
-      go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/router ./cmd
+      go build -trimpath -buildvcs=false -ldflags="-s -w $native_flags" -o /out/router ./cmd
+
+FROM scratch AS router-binary
+COPY --from=router-build /out/router /router
 
 # Frozen image-routing prototypes; no model download or inference.
-FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${PYTHON_IMAGE} AS image-routing-assets
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${ASSETS_IMAGE} AS image-routing-assets
+RUN if ! command -v python3 >/dev/null 2>&1; then \
+      apt-get update && apt-get install -y --no-install-recommends python3 && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
 WORKDIR /source
 COPY tools/calibration/image-routing/prepare_assets.py tools/calibration/image-routing/prepare_assets.py
 COPY config/assets/image-routing/manifest.json config/assets/image-routing/manifest.json
 COPY website/static/img/ website/static/img/
 COPY dashboard/frontend/public/ dashboard/frontend/public/
-RUN python tools/calibration/image-routing/prepare_assets.py --repository-root /source --output /out
+RUN python3 tools/calibration/image-routing/prepare_assets.py --repository-root /source --output /out
+
+# One resource layout for bundled and externally managed model runtimes.
+FROM scratch AS router-files
+COPY --from=image-routing-assets /out/ /app/share/image-routing/
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/config.yaml /app/config/config.yaml
+COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
+COPY config/recipes/built-in/ /app/cli/model_assets/
+COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
+COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
+COPY --from=router-build /out/router /usr/local/bin/router
+
+# Standalone deployments with model runtime endpoints configured externally.
+# Select explicitly with --target vllm-sr-attached; bundled remains the default.
+FROM ${IMAGE_REGISTRY}${ATTACHED_BASE_IMAGE} AS vllm-sr-attached
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      bash ca-certificates curl python3 python3-yaml libgcc-s1 && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /app/config /app/models && \
+    useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin vllm-sr
+WORKDIR /app
+ENV USER=vllm-sr
+COPY --from=router-files / /
+EXPOSE 8801 50051 8080 9190
+VOLUME ["/app/models"]
+ENTRYPOINT ["/app/start-router.sh"]
 
 FROM ${IMAGE_REGISTRY}${PYTHON_IMAGE} AS python-base
 ENV PIP_NO_CACHE_DIR=1 \
@@ -228,15 +298,7 @@ ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime \
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/* && \
     python -c "import torch"
-COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
-COPY config/knowledge_bases/ /app/config/knowledge_bases/
-COPY config/config.yaml /app/config/config.yaml
-COPY src/vllm-sr/cli/ /app/cli/
-COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
-COPY config/recipes/built-in/ /app/cli/model_assets/
-COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
-COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
-COPY --link --from=router-build /out/router /usr/local/bin/router
+COPY --link --from=router-files / /
 EXPOSE 50051 8080 9190
 VOLUME ["/app/models"]
 # With no arguments or with router flags, the entrypoint runs the Router on
