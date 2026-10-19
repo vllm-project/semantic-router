@@ -1351,7 +1351,6 @@ class Runtime:
         lookup: _Lookup | None = None,
     ) -> None:
         """Run one model's job group; every member is answered from its own jobs."""
-        self._planned()
         served = members[0][1].served
         if lookup is None:
             lookup = self._lookup(members)
@@ -1372,6 +1371,9 @@ class Runtime:
             for index, _ in members:
                 outcomes[index] = _error_outcome(exc)
             return
+        finally:
+            # Not before its jobs are queued: a window that stops waiting for this call must find them.
+            self._planned()
         results = await asyncio.gather(
             *(asyncio.wrap_future(future) for future in futures),
             return_exceptions=True,
