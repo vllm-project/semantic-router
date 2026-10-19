@@ -29,6 +29,8 @@ on:
         type: string
         default: ''
     outputs:
+      publisher_ready:
+        value: ${{ jobs.plan.outputs.publisher_ready }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
       publish_images:
@@ -373,6 +375,7 @@ jobs:
           path: .agent-harness/ci/results
       - name: Reconcile source, dependencies, qualified combinations and cases
         env:
+          PUBLISHER_READY: ${{ needs.plan.outputs.publisher_ready }}
           # Job outputs include the full plan and dispatch copies. Keep them out of
           # the process environment; the complete plan is downloaded above.
           EXECUTOR_RESULTS: >-
@@ -402,6 +405,18 @@ jobs:
               "e2e-dashboard": {"result": "${{ needs.e2e-dashboard.result }}"}
             }
         run: |
+          flags=()
+          if [[ "$PUBLISHER_READY" == true ]]; then flags+=(--allow-deferred); fi
           python3 tools/ci/check_ci_gate.py \
             --plan .agent-harness/ci/plan.json \
-            --results .agent-harness/ci/results
+            --results .agent-harness/ci/results \
+            --output .agent-harness/ci/gate.json "${flags[@]}"
+      - name: Upload the reconciled execution outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: ci-gate
+          path: .agent-harness/ci/gate.json
+          include-hidden-files: true
+          if-no-files-found: error
