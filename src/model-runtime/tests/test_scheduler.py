@@ -431,6 +431,45 @@ def test_other_forward_errors_fail_only_their_batch():
         scheduler.stop()
 
 
+@pytest.mark.parametrize("result_count", [0, 1, 3])
+@pytest.mark.parametrize("inline", [False, True], ids=["worker", "inline"])
+def test_wrong_result_count_fails_every_job_and_keeps_serving(
+    monkeypatch, result_count, inline
+):
+    model = FakeModel()
+    model.device_thread = not inline
+    run = model.run
+
+    def wrong_once(items):
+        values = run(items)
+        if len(model.calls) == 1:
+            return (values + values)[:result_count]
+        return values
+
+    monkeypatch.setattr(model, "run", wrong_once)
+    scheduler = Scheduler(model, batcher(model, EngineArgs(max_num_seqs=8)))
+    scheduler.start()
+    try:
+        submit = scheduler.run_now if inline else scheduler.submit_group
+        futures = submit([[item("a", 8)], [item("b", 8)]], deadlines=[None, None])
+        assert futures is not None
+        for future in futures:
+            with pytest.raises(
+                RuntimeError,
+                match=f"model result count mismatch: expected 2, got {result_count}",
+            ):
+                future.result(timeout=5)
+        assert model.calls == [["a", "b"]]
+        assert scheduler.failure is None
+        assert scheduler._thread.is_alive()
+        wait_until(lambda: scheduler._pending_jobs == 0)
+        served = scheduler.submit([item("later", 8)], deadline=None)
+        assert served.result(timeout=5) == [[0.0, 8.0]]
+        assert model.calls == [["a", "b"], ["later"]]
+    finally:
+        scheduler.stop()
+
+
 class OutOfMemoryModel(FakeModel):
     def run(self, items):
         import torch
