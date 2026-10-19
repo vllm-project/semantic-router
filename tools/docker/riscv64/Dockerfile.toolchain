@@ -27,8 +27,10 @@ RUN python3 /opt/sdk-inputs/fetch-toolchains.py --output /tmp/sdk-archives && \
       tar -xJf "$package.tar.xz"; \
       bash "$package/install.sh" --prefix=/opt/rust --disable-ldconfig; \
     done && rm -rf /tmp/sdk-archives
+ARG BUILD_JOBS=2
+RUN test "$BUILD_JOBS" -gt 0
 ENV PATH="/usr/local/go/bin:/opt/rust/bin:${PATH}" \
-    CARGO_BUILD_JOBS=2 GOMAXPROCS=2 GOTOOLCHAIN=local
+    CARGO_BUILD_JOBS=${BUILD_JOBS} GOMAXPROCS=${BUILD_JOBS} GOTOOLCHAIN=local
 RUN go version && rustc --version && cargo --version && \
     test "$(go env GOHOSTARCH)" = riscv64 && \
     test -z "$(find /root -name go-build -o -name registry)"

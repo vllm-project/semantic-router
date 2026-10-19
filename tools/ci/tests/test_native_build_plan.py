@@ -21,11 +21,11 @@ class NativeBuildPlanTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)["commands"]
 
-    def test_router_constructs_sdk_then_attached_image_without_cache_imports(self):
+    def test_router_constructs_sdk_then_attached_image_with_layer_cache(self):
         commands = self.plan()
         self.assertEqual(len(commands), 2)
         for command in commands:
-            self.assertIn("--no-cache", command)
+            self.assertNotIn("--no-cache", command)
             self.assertNotIn("--cache-from", command)
             self.assertIn("TARGETARCH=riscv64", command)
             self.assertIn("TARGETOS=linux", command)
@@ -34,6 +34,30 @@ class NativeBuildPlanTests(unittest.TestCase):
         self.assertIn("vllm-sr-attached", commands[1])
         self.assertIn("GO_IMAGE=semantic-router-native-sdk:public", commands[1])
         self.assertIn("RUST_IMAGE=semantic-router-native-sdk:public", commands[1])
+
+    def test_cold_build_is_explicit(self):
+        for command in self.plan("--no-cache"):
+            self.assertIn("--no-cache", command)
+
+    def test_existing_sdk_skips_sdk_build(self):
+        commands = self.plan("--sdk-image", "native-sdk:verified")
+        self.assertEqual(len(commands), 1)
+        self.assertIn("GO_IMAGE=native-sdk:verified", commands[0])
+        self.assertIn("RUST_IMAGE=native-sdk:verified", commands[0])
+
+    def test_sdk_concurrency_is_configurable(self):
+        commands = self.plan("--component", "sdk", "--jobs", "4")
+        self.assertIn("BUILD_JOBS=4", commands[0])
+
+    def test_invalid_jobs_are_rejected(self):
+        for jobs in ("0", "-1"):
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--plan", "--jobs", jobs],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2)
 
     def test_sdk_only_build(self):
         self.assertEqual(len(self.plan("--component", "sdk")), 1)

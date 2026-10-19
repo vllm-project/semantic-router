@@ -153,6 +153,12 @@ def configuration(backend, listener):
     }
 
 
+def write_configuration(path, backend, listener):
+    path.write_text(json.dumps(configuration(backend, listener), indent=2))
+    # This generated fixture contains no credentials and is read by another UID.
+    path.chmod(0o644)
+
+
 def wait_ready(url, process=None):
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
@@ -173,6 +179,39 @@ def remove_router(docker, identity, output):
         (output / "router.log").write_text(docker("logs", identity))
     finally:
         docker("rm", "--force", "--volumes", identity)
+
+
+def router_run_args(image, identity, network, config):
+    return [
+        "run",
+        "--detach",
+        "--pull",
+        "never",
+        "--name",
+        identity,
+        "--network",
+        network,
+        "--publish",
+        "127.0.0.1::19000",
+        "--user",
+        "65532:65532",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,mode=1777",
+        "--tmpfs",
+        "/app/config:rw,noexec,nosuid,uid=65532,gid=65532,mode=0700",
+        "--tmpfs",
+        "/app/models:rw,noexec,nosuid,uid=65532,gid=65532,mode=0700",
+        "--volume",
+        f"{config}:/app/config/config.yaml:ro",
+        image,
+        "-gateway=standalone",
+        "-listener-address=0.0.0.0",
+    ]
 
 
 def main():
@@ -239,27 +278,9 @@ def main():
             )
         wait_ready(f"http://{gateway}:{backend_port}/health", provider)
         config = output / "config.json"
-        config.write_text(
-            json.dumps(configuration(f"{gateway}:{backend_port}", 19000), indent=2)
-        )
+        write_configuration(config, f"{gateway}:{backend_port}", 19000)
         container_attempted = True
-        docker(
-            "run",
-            "--detach",
-            "--pull",
-            "never",
-            "--name",
-            identity,
-            "--network",
-            network,
-            "--publish",
-            "127.0.0.1::19000",
-            "--volume",
-            f"{config}:/app/config/config.yaml:ro",
-            image["Id"],
-            "-gateway=standalone",
-            "-listener-address=0.0.0.0",
-        )
+        docker(*router_run_args(image["Id"], identity, network, config))
         initial_id = None
         for phase in ("initial", "restart"):
             if phase == "restart":
@@ -267,6 +288,13 @@ def main():
             container = json.loads(docker("inspect", identity))[0]
             if container["Image"] != image["Id"]:
                 raise RuntimeError("unexpected Router image")
+            if (
+                container["Config"]["User"] != "65532:65532"
+                or not container["HostConfig"]["ReadonlyRootfs"]
+            ):
+                raise RuntimeError(
+                    "Router must run unprivileged with a read-only root filesystem"
+                )
             if initial_id is not None and container["Id"] != initial_id:
                 raise RuntimeError("restart did not retain the container")
             initial_id = container["Id"]
