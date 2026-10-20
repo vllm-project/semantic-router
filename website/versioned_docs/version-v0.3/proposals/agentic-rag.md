@@ -245,15 +245,7 @@ go test ./pkg/extproc/req_filter_rag_openai_test.go -v
 
 ### E2E Tests
 
-Run E2E tests based on the OpenAI cookbook:
-
-```bash
-# Python-based E2E test
-python e2e/testing/08-rag-openai-test.py --base-url http://localhost:8080
-
-# Go-based E2E test (requires Kubernetes cluster)
-make e2e-test E2E_TESTS=rag-openai
-```
+The unselected Go probe and its Python copy have been retired. Current direct-search assertions live in `src/semantic-router/pkg/extproc/req_filter_rag_openai_test.go`; server-hosted `tool_based` file search is explicitly unsupported.
 
 ### OpenAI API Validation Test Suite
 

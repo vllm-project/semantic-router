@@ -169,6 +169,8 @@ class CPUAccelerator(Accelerator):
                 "model's CPU kernels need; serve it with a PyTorch that has LAPACK "
                 "(the router's CPU image) or on a GPU device"
             )
+        if capability == "nvfp4":
+            return f"{device.label}: NVFP4 packages need FP4 tensor cores (a Blackwell GPU)"
         return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:

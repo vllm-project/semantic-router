@@ -74,10 +74,7 @@ func TestOperatorCIUsesCanonicalVelaModels(t *testing.T) {
 	}
 	lines := []string{"apiVersion: vllm.ai/v1alpha1"}
 	for _, line := range strings.Split(resource, "\n") {
-		// Cache backends vary across the matrix; model selection is shared.
-		if strings.TrimSpace(line) != "${CACHE_CONFIG}" {
-			lines = append(lines, strings.TrimPrefix(line, "          "))
-		}
+		lines = append(lines, strings.TrimPrefix(line, "          "))
 	}
 	canonical := operatorModelConfig(t, []byte(strings.Join(lines, "\n")))
 	data, err := yaml.Marshal(canonical)

@@ -27,6 +27,7 @@ dependencies = [
   "httptools>=0.6",
   "prometheus_client>=0.20",
   "pyyaml>=6.0",
+  "backports.zstd>=1.0; python_version < '3.14'",
 ]
 
 [project.optional-dependencies]
