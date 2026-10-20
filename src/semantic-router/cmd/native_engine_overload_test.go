@@ -33,6 +33,10 @@ func TestEngineFrontendAnswersAFullWorkerPoolAsOverloaded(t *testing.T) {
 		fake.Handler().ServeHTTP(w, r)
 	}))
 	defer worker.Close()
+	var releaseOnce sync.Once
+	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
+	// Runs before worker.Close, so a failed admission does not leave handlers blocked.
+	defer releaseAll()
 	manager := modelservice.NewManager()
 	previous := modelservice.DefaultManager()
 	modelservice.SetDefault(manager)
@@ -78,7 +82,7 @@ func TestEngineFrontendAnswersAFullWorkerPoolAsOverloaded(t *testing.T) {
 		}
 	}
 	refused := ask()
-	close(release)
+	releaseAll()
 	admitted.Wait()
 	if refused.Code != http.StatusTooManyRequests || !strings.Contains(refused.Body.String(), `"overloaded"`) || refused.Header().Get("Retry-After") != "1" {
 		t.Fatalf("full pool: %d %q Retry-After %q", refused.Code, refused.Body.String(), refused.Header().Get("Retry-After"))
