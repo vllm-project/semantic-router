@@ -208,8 +208,11 @@ and one weight global scale in every layer (the Gated DeltaNet `in_proj_qkv` /
 are merged at load into one layer per group, so one quantization and one
 block-scaled product replace two or three. Each column comes out the same as
 the separate products from 1 to 9,000 rows, and the parts keep views of the
-merged weight, so device memory is unchanged. The `in_proj_qkv` / `in_proj_z`
-pair shares its input quantization. On the 1,000 test requests of the
+merged weight, so device memory is unchanged. q and k reach `attn_prep`, and
+gate and up reach `silu_mul`, as column-slice views of the merged product, so a
+layer's projections peak no higher than the separate ones (89.1 MB both at
+2,048 rows of d3's q / k / v widths; copying q and k out took 142.6 MB). The
+`in_proj_qkv` / `in_proj_z` pair shares its input quantization. On the 1,000 test requests of the
 agreement table, every answer is the same byte for byte. At `--dtype auto`, two
 alternating runs of each:
 

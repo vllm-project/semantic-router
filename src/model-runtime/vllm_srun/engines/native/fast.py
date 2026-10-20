@@ -363,7 +363,6 @@ def _forest_projection(
     rows, length, _ = h.shape
     hd = m.head_dim
     qp, kp, vp = project(h, m.q_proj, m.k_proj, m.v_proj)
-    qp, kp = qp.contiguous(), kp.contiguous()
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // (2 * hd)
     kv_heads = kp.shape[-1] // hd
@@ -454,6 +453,7 @@ def _packed_gated_delta(
             m.num_k_heads, m.head_k_dim,
         )
     )  # fmt: skip
+    # in_proj_z reads the ungapped rows, so it cannot share in_proj_qkv's quantization here
     z = m.in_proj_z(normed)
     repeat = m.num_v_heads // m.num_k_heads
     if repeat > 1:
@@ -526,7 +526,6 @@ def _gated_attention(
     batch, length, _ = normed.shape
     hd = m.head_dim
     qp, kp, vp = project(normed, m.q_proj, m.k_proj, m.v_proj)
-    qp, kp = qp.contiguous(), kp.contiguous()
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // (2 * hd)
     kv_heads = kp.shape[-1] // hd
@@ -554,7 +553,6 @@ def _qwen3_forward(
     batch, length, _ = normed.shape
     hd = m.head_dim
     qp, kp, vp = project(normed, m.q_proj, m.k_proj, m.v_proj)
-    qp, kp = qp.contiguous(), kp.contiguous()
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // hd
     kv_heads = kp.shape[-1] // hd

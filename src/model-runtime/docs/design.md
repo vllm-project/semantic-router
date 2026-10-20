@@ -898,7 +898,14 @@ kernel per call (plain torch on a CPU) and multiplies in BF16, which keeps the
 memory but not the time; NVFP4 quantizes the activations with one Triton kernel
 that writes their scales in cuBLAS's layout and multiplies in
 `torch.nn.functional.scaled_mm` with 1x16 block scales, which needs FP4 tensor
-cores (a Blackwell GPU). A
+cores (a Blackwell GPU). At load, NVFP4 projections of one input (q / k / v,
+gate / up) whose input and weight global scales agree are merged into one
+layer (`merge_siblings`): one quantization and one product per group, each
+part keeping views of the merged weight so device memory stays the same, and
+its outputs reaching the fused kernels as column-slice views. Projections that
+share only the input global scale (`in_proj_qkv` / `in_proj_z`) share its
+quantization (`project`). Each column is the one its separate product gives, so
+answers do not change. A
 quantized package is its own model: its manifest's parameter counts are the
 logical ones, placement counts its files, and its answers are compared with
 the BF16 package's in `docs/records/decision3-quantized.md`.

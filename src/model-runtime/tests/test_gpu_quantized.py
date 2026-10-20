@@ -557,6 +557,89 @@ def test_silu_mul_reads_column_slices_as_it_reads_contiguous_rows(device):
     assert triton_gfx942.silu_mul(gate, up).equal(want)
 
 
+# d3's widths: hidden 5120; q (with its gate) 24 x 2 x 256, k / v 4 x 256; gate / up 17408
+D3_QKV = [(12288, 5120), (1024, 5120), (1024, 5120)]
+D3_GATE_UP = [(17408, 5120), (17408, 5120)]
+
+
+@pytest.mark.parametrize("shapes", [D3_QKV, D3_GATE_UP], ids=["q/k/v", "gate/up"])
+def test_d3_siblings_merge_bit_for_bit_at_the_package_widths(blackwell, shapes):
+    from vllm_srun.engines.native import quantized
+
+    parts = sibling_layers(shapes, blackwell)
+    owner = nn.Module()
+    names = quantized.SIBLINGS[0] if len(parts) == 3 else quantized.SIBLINGS[1]
+    for name, layer in zip(names, parts, strict=True):
+        setattr(owner, name, layer)
+        layer.prepare()
+    # 9,000 rows go in two slices of NVFP4_ROWS
+    xs = [
+        torch.randn(rows, 5120, device=blackwell).to(torch.bfloat16)
+        for rows in (1, 300, 9000)
+    ]
+    before = [[layer(x) for layer in parts] for x in xs]
+    assert quantized.merge_siblings(owner) == 1
+    for x, want in zip(xs, before, strict=True):
+        assert all(
+            got.equal(w)
+            for got, w in zip(quantized.project(x, *parts), want, strict=True)
+        )
+        reversed_ = quantized.project(x, *parts[::-1])  # any order: one product
+        assert all(got.equal(w) for got, w in zip(reversed_, want[::-1], strict=True))
+    del before
+
+
+def test_merged_q_k_v_reach_attn_prep_as_views_with_no_higher_peak(blackwell):
+    pytest.importorskip("triton")
+    from vllm_srun.accel import triton_gfx942
+    from vllm_srun.engines.native import quantized
+
+    q, k, v = sibling_layers(D3_QKV, blackwell)
+    attention = nn.Module()
+    attention.q_proj, attention.k_proj, attention.v_proj = q, k, v
+    for layer in (q, k, v):
+        layer.prepare()
+    torch.manual_seed(1)
+    x = torch.randn(1, 2048, 5120, device=blackwell).to(torch.bfloat16)
+    norm = [torch.randn(256, device=blackwell) for _ in range(2)]
+    cos, sin = (
+        torch.randn(1, 2048, 64, device=blackwell).to(torch.bfloat16) for _ in range(2)
+    )
+
+    def prep():
+        qp, kp, vp = quantized.project(x, q, k, v)
+        return (*triton_gfx942.attn_prep(qp, kp, *norm, cos, sin, 24, 4, 256, 1e-6), vp)
+
+    def peak():
+        prep()  # the first call compiles and sizes the cuBLAS workspace
+        torch.cuda.synchronize(blackwell)
+        torch.cuda.reset_peak_memory_stats(blackwell)
+        start = torch.cuda.memory_allocated(blackwell)
+        out = prep()
+        torch.cuda.synchronize(blackwell)
+        return out, torch.cuda.max_memory_allocated(blackwell) - start
+
+    separate, separate_peak = peak()
+    assert quantized.merge_siblings(attention) == 1
+    merged, merged_peak = peak()
+    assert all(got.equal(want) for got, want in zip(merged, separate, strict=True))
+    # q and k are not copied out of the merged product
+    assert merged_peak <= separate_peak
+
+
+def test_a_merged_nvfp4_layer_refuses_a_move_after_the_merge(blackwell):
+    from vllm_srun.engines.native import quantized
+
+    gate, up = sibling_layers([(256, 256), (256, 256)], blackwell)
+    mlp = nn.Module()
+    mlp.gate_proj, mlp.up_proj = gate, up
+    quantized.prepare(mlp)
+    assert gate.merged is not None
+    mlp.to(blackwell)  # where it already is: still views
+    with pytest.raises(RuntimeError, match="before quantized.prepare"):
+        mlp.to("cpu")
+
+
 def test_a_whole_model_cast_keeps_the_nvfp4_weights(device):
     from vllm_srun.engines.native.quantized import NVFP4Linear
 

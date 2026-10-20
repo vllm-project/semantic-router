@@ -234,8 +234,8 @@ def _silu_mul_kernel(
     tl.store(out_ptr + row * n_cols + cols, (s * u).to(tl.bfloat16), mask=mask)
 
 
-def _rows(t: Any, n: int) -> Any:
-    """``t`` as rows of ``n`` contiguous values a row stride apart (a view where it is one)."""
+def _row_view(t: Any, n: int) -> Any:
+    """``t`` as rows of ``n`` contiguous values ``stride(0)`` apart: a view where one exists, else a copy."""
     rows = t.reshape(-1, n)
     return rows if rows.stride(-1) == 1 else rows.contiguous()
 
@@ -243,7 +243,7 @@ def _rows(t: Any, n: int) -> Any:
 def silu_mul(gate: Any, up: Any) -> Any:
     """``silu(gate) * up`` of two BF16 tensors of one shape, whose rows may be column slices of wider ones."""
     n = gate.shape[-1]
-    g, u = (_rows(t, n) for t in (gate, up))
+    g, u = (_row_view(t, n) for t in (gate, up))
     out = torch.empty(gate.shape, dtype=torch.bfloat16, device=gate.device)
     _silu_mul_kernel[(g.shape[0], triton.cdiv(n, 1024))](
         g, u, out, n, g.stride(0), u.stride(0), BLOCK=1024, num_warps=4, **EXACT
@@ -445,6 +445,7 @@ def _head_prep_kernel(
     eps,
     inv_d,
     cs_bstride,
+    src_rstride,
     D: tl.constexpr,
     ROT: tl.constexpr,
     SRC_HEAD: tl.constexpr,
@@ -463,7 +464,7 @@ def _head_prep_kernel(
     d = tl.arange(0, D)
     half: tl.constexpr = ROT // 2
     partner = tl.where(d < half, d + half, tl.where(d < ROT, d - half, d))
-    src = src_ptr + (bt * (NH * SRC_HEAD) + hid * SRC_HEAD)[:, None]
+    src = src_ptr + (bt * src_rstride + hid * SRC_HEAD)[:, None]
     wp = w_ptr
     dst = dst_ptr + (((b * NH + hid) * T + t) * D)[:, None]
     x = tl.load(src + d[None, :], mask=rmask, other=0.0).to(tl.float32)
@@ -519,7 +520,8 @@ def attn_prep(
     head, the norms multiply by ``1 + w`` (passed as ``q_norm_w1`` / ``k_norm_w1``) and round to
     BF16 before the partial RoPE. Qwen3 (neither): ``q_proj_out`` is [B, T, H * D], the norms
     round ``x * rstd`` to BF16 and multiply by ``w`` in FP32, and the full RoPE runs in FP32.
-    ``k_proj_out`` [B, T, Hkv * D] is contiguous BF16 like ``q_proj_out``; ``cos`` / ``sin`` the
+    ``k_proj_out`` [B, T, Hkv * D] is BF16 like ``q_proj_out``, and the rows of either may be
+    column slices of a wider product (q / k / v multiplied at once); ``cos`` / ``sin`` the
     contiguous [B or 1, T, rotary dim] rotary tables in the stream's dtype (BF16 tables round the
     RoPE products and sum to BF16); the head dim is 128 or 256.
     """
@@ -535,6 +537,7 @@ def attn_prep(
         (q_proj_out, q_norm_w1, q, heads, 2 * head_dim if gated else head_dim),
         (k_proj_out, k_norm_w1, k, kv_heads, head_dim),
     ):
+        src = _row_view(src, count * width)
         _head_prep_kernel[(triton.cdiv(B * T, rows), count)](
             src,
             weight,
@@ -547,6 +550,7 @@ def attn_prep(
             eps,
             float(np.float32(1.0) / np.float32(head_dim)),
             0 if cos.shape[0] == 1 else T * rot,
+            src.stride(0),
             D=head_dim,
             ROT=rot,
             SRC_HEAD=width,

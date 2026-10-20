@@ -345,6 +345,12 @@ class NVFP4Linear(nn.Module):
             buffer = getattr(self, name)
             if buffer.dtype != dtype:
                 setattr(self, name, buffer.to(dtype))
+        group = getattr(self, "merged", None)
+        if group is not None and not group.holds(self):
+            # the part's copy and the group's weight would both stay alive, and a call would read the old one
+            raise RuntimeError(
+                "a merged NVFP4 layer moves or casts with its model before quantized.prepare, not after"
+            )
         return self
 
     def prepare(self) -> None:
@@ -362,7 +368,7 @@ class NVFP4Linear(nn.Module):
         from ...accel.nvfp4 import swizzle
 
         self.weight_scale = swizzle(self.weight_scale)
-        self.merged: Merged | None = None
+        self.merged: MergedGroup | None = None
         self._bind()
 
     def _bind(self) -> None:
@@ -406,12 +412,12 @@ class NVFP4Linear(nn.Module):
         # one slice at a time: only that slice's FP4 copy is alive
         products = [
             self._product(*self.quantize(part, self.input_global))
-            for part in _slices(_rows(x))
+            for part in _slices(_bf16_rows(x))
         ]
         return self._finish(x, products)
 
 
-def _rows(x: torch.Tensor) -> torch.Tensor:
+def _bf16_rows(x: torch.Tensor) -> torch.Tensor:
     """``x`` as contiguous BF16 rows, the input of an NVFP4 product."""
     rows = x.reshape(-1, x.shape[-1])
     if rows.dtype != torch.bfloat16:
@@ -440,12 +446,12 @@ def project(x: torch.Tensor, *projections: nn.Module) -> list[torch.Tensor]:
     """
     first = projections[0] if projections else None
     group = first.merged if isinstance(first, NVFP4Linear) else None
-    if group is not None and projections == group.parts:
-        return list(torch.split(group.layer(x), list(group.sizes), dim=-1))
+    if group is not None and group.is_all_of(projections):
+        return group.project(x, projections)
     fp4 = [p for p in projections if isinstance(p, NVFP4Linear)]
     products: dict[int, list[torch.Tensor]] = {id(p): [] for p in fp4}
     if fp4:
-        for part in _slices(_rows(x)):
+        for part in _slices(_bf16_rows(x)):
             shared: dict[float, tuple[torch.Tensor, torch.Tensor]] = {}
             for p in fp4:
                 codes = shared.get(p.input_global)
@@ -499,16 +505,37 @@ def capture_safe(module: nn.Module) -> bool:
 
 
 @dataclass(frozen=True, eq=False)
-class Merged:
+class MergedGroup:
     """Sibling NVFP4 layers held as one weight: ``layer`` multiplies ``parts`` at once, ``sizes`` its columns per part."""
 
     layer: NVFP4Linear
     parts: tuple[NVFP4Linear, ...]
     sizes: tuple[int, ...]
 
+    def is_all_of(self, projections: tuple[nn.Module, ...]) -> bool:
+        """Whether ``projections`` are this group's parts, in any order."""
+        parts = set(self.parts)
+        return len(projections) == len(parts) and set(projections) == parts
+
+    def project(
+        self, x: torch.Tensor, order: tuple[nn.Module, ...]
+    ) -> list[torch.Tensor]:
+        """Each part's output for ``x`` in ``order``: column slices (views) of one product."""
+        columns = torch.split(self.layer(x), list(self.sizes), dim=-1)
+        outputs: dict[nn.Module, torch.Tensor] = dict(zip(self.parts, columns))
+        return [outputs[p] for p in order]
+
+    def holds(self, part: NVFP4Linear) -> bool:
+        """Whether ``part``'s weight is still a view of the merged one (no move or cast since the merge)."""
+        return (
+            part.weight_packed.untyped_storage().data_ptr()
+            == self.layer.weight_packed.untyped_storage().data_ptr()
+        )
+
 
 def _mergeable(parts: list[NVFP4Linear]) -> bool:
     first = parts[0]
+    # without a bias, the merged product's column slices are each part's whole output
     return all(
         p.merged is None
         and p.bias is None
@@ -532,7 +559,7 @@ def _merge(parts: list[NVFP4Linear]) -> None:
     layer.input_global_scale = first.input_global_scale.clone()
     layer.merged = None
     layer._bind()
-    group = Merged(layer, tuple(parts), tuple(p.out_features for p in parts))
+    group = MergedGroup(layer, tuple(parts), tuple(p.out_features for p in parts))
     row = scale = 0
     for p in parts:
         width = p.weight_scale.numel()

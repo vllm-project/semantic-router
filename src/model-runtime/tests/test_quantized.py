@@ -390,3 +390,45 @@ def test_shared_nvfp4_quantization_holds_one_slice_of_a_long_input(monkeypatch):
     shared = quantized.project(x, gate, up, plain)
     assert calls == [4, 4, 4, 1]  # one quantization per slice for both layers
     assert all(got.equal(want) for got, want in zip(shared, alone, strict=True))
+
+
+def unprepared_siblings(shapes, bias=False):
+    """gate / up NVFP4 layers on the CPU with one input and one weight global scale, as ``prepare`` leaves them."""
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    mlp = nn.Module()
+    for name, (rows, columns) in zip(("gate_proj", "up_proj"), shapes, strict=True):
+        layer = NVFP4Linear(nn.Linear(columns, rows, bias=bias))
+        layer.weight_global_scale.fill_(1.0)
+        layer.merged, layer.input_global = None, 2.0
+        setattr(mlp, name, layer)
+    return mlp
+
+
+@pytest.mark.parametrize(
+    "apart",
+    [
+        "input global scale",
+        "weight global scale",
+        "rows not whole 128-row scale tiles",
+        "input width",
+        "bias",
+    ],
+)
+def test_nvfp4_siblings_stay_apart_unless_one_product_gives_their_outputs(apart):
+    from vllm_srun.engines.native import quantized
+
+    control = unprepared_siblings([(256, 64), (256, 64)])
+    assert quantized._mergeable([control.gate_proj, control.up_proj])
+    shapes = [(256, 64), (256, 64)]
+    if apart == "rows not whole 128-row scale tiles":
+        shapes[1] = (144, 64)
+    if apart == "input width":
+        shapes[1] = (256, 96)
+    mlp = unprepared_siblings(shapes, bias=apart == "bias")
+    if apart == "input global scale":
+        mlp.up_proj.input_global = 4.0
+    if apart == "weight global scale":
+        mlp.up_proj.weight_global_scale.fill_(2.0)
+    assert quantized.merge_siblings(mlp) == 0
+    assert mlp.gate_proj.merged is None and mlp.up_proj.merged is None
