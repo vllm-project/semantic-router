@@ -19,6 +19,7 @@ type chatStreamDecoder struct {
 	toolKinds            map[int]llmprotocol.ToolKind
 	providerReported     bool
 	nativeReasonReported bool
+	dynamoNVExtBytes     int
 	reportedOmissions    map[string]bool
 	stopSequence         string
 }
@@ -72,6 +73,7 @@ type chatChunkWire struct {
 	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	NVExt             json.RawMessage           `json:"nvext,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
 	// Ollama reports generation timings in an object beside the final usage.
 	Timings map[string]json.RawMessage `json:"timings,omitempty"`
@@ -168,8 +170,20 @@ func (decoder *chatStreamDecoder) push(chunk []byte) ([]llmprotocol.Event, llmpr
 
 func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	parsed, err := decoder.parseProviderSSEFrame(frame)
-	if err != nil || !parsed.HasData {
+	if err != nil {
 		return nil, nil, err
+	}
+	if parsed.Event == "request_id" {
+		if decoder.terminal {
+			return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted a request_id event after its terminal sentinel")
+		}
+		event, eventErr := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventProviderOpaque, Opaque: append([]byte(nil), frame...), DynamoRequestID: true,
+		})
+		return []llmprotocol.Event{event}, nil, eventErr
+	}
+	if !parsed.HasData {
+		return nil, nil, nil
 	}
 	if decoder.terminal {
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
@@ -188,28 +202,64 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
 	}
-	// Some gateways emit empty synthetic chunks while waiting for the first
-	// model token. Before a response has started, any such chunk is a
-	// heartbeat: it must not establish the response ID or model identity, or
-	// it would poison a stream that later switches to its real identity. Once
-	// a response has started, only the exact keepalive sentinel stays exempt,
-	// so a post-start empty chunk carrying a different response ID still
-	// fails closed through identity observation.
-	if isGatewayChatKeepalive(chunk) && (!decoder.started || isExactGatewayKeepalive(chunk)) {
+	dynamoNVExt, err := decoder.decodeDynamoNVExt(chunk.NVExt)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Before the response starts, empty gateway chunks must not establish
+	// identity. After it starts, only the exact keepalive sentinel is exempt.
+	// Chunks carrying Dynamo metadata must still be decoded and validated.
+	if dynamoNVExt == nil && isGatewayChatKeepalive(chunk) && (!decoder.started || isExactGatewayKeepalive(chunk)) {
 		diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 		return nil, diagnostics, nil
 	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
 		return nil, diagnostics, err
 	}
+	return decoder.decodeValidatedChunk(chunk, dynamoNVExt, diagnostics)
+}
+
+func (decoder *chatStreamDecoder) decodeValidatedChunk(chunk chatChunkWire, dynamoNVExt *llmprotocol.DynamoResponseNVExt, diagnostics llmprotocol.Diagnostics) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	if chunk.Error != nil {
+		if dynamoNVExt != nil {
+			return nil, nil, invalidProviderResponse("dynamo_nvext_error_chunk", "Chat stream error chunks cannot carry Dynamo nvext")
+		}
 		events, failureErr := decoder.nextAfterHeld(chatStreamFailureEvent(chunk.Error))
 		return events, diagnostics, failureErr
 	}
 	events, chunkDiagnostics, err := decoder.decodeOrHoldChunk(chunk)
 	diagnostics = appendDiagnostics(diagnostics, chunkDiagnostics, decoder.policy.Limits.Diagnostics)
+	if err == nil && dynamoNVExt != nil {
+		extensionEvent, extensionErr := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventProviderOpaque, ResponseID: chunk.ID, Model: chunk.Model,
+			DynamoNVExt: dynamoNVExt,
+		})
+		if extensionErr != nil {
+			return events, diagnostics, extensionErr
+		}
+		events = append(events, extensionEvent)
+	}
 	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 	return events, diagnostics, err
+}
+
+func (decoder *chatStreamDecoder) decodeDynamoNVExt(raw json.RawMessage) (*llmprotocol.DynamoResponseNVExt, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	limit := decoder.policy.Limits.DynamoNVExtStreamBytes
+	if limit > 0 && (decoder.dynamoNVExtBytes > limit || len(raw) > limit-decoder.dynamoNVExtBytes) {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable, "dynamo_nvext_stream_size_limit",
+			"upstream Dynamo nvext stream exceeds the configured cumulative limit", nil,
+		)
+	}
+	extension, err := decodeDynamoResponseNVExt(raw, decoder.policy)
+	if err != nil {
+		return nil, err
+	}
+	decoder.dynamoNVExtBytes += len(raw)
+	return extension, nil
 }
 
 // A first delta with both the answer and reasoning has lost their order.
@@ -926,13 +976,57 @@ func (encoder *chatStreamEncoder) encodeDirectEvent(event llmprotocol.Event) ([]
 		frame, err := encodeSSE("", openAITransportErrorEnvelope(event.Error))
 		return [][]byte{frame}, diagnostics, err
 	case llmprotocol.EventProviderOpaque:
-		if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
-			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
-		}
-		return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
+		return encoder.encodeProviderOpaqueEvent(event)
 	default:
 		return nil, nil, nil
 	}
+}
+
+func (encoder *chatStreamEncoder) encodeProviderOpaqueEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.DynamoRequestID {
+		if encoder.context.Source != llmprotocol.OpenAIChatV1 || encoder.context.Target != llmprotocol.OpenAIChatV1 {
+			return nil, nil, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_request_id_translation",
+				"Dynamo request_id SSE events cannot be translated across wire formats", nil,
+			)
+		}
+		if len(event.Opaque) == 0 {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "invalid_dynamo_request_id_event", "Dynamo request_id SSE event has no source frame", nil)
+		}
+		return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
+	}
+	if event.DynamoNVExt != nil {
+		return encoder.encodeDynamoProviderEvent(event)
+	}
+	if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
+	}
+	return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
+}
+
+func (encoder *chatStreamEncoder) encodeDynamoProviderEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if encoder.context.Source != llmprotocol.OpenAIChatV1 || encoder.context.Target != llmprotocol.OpenAIChatV1 {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",
+			"Dynamo nvext stream chunks cannot be translated across wire formats", nil,
+		)
+	}
+	if len(event.Opaque) != 0 {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "invalid_dynamo_nvext_event", "Dynamo nvext stream event mixes structured and opaque data", nil)
+	}
+	raw, err := encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+	if err != nil {
+		return nil, nil, err
+	}
+	frame, err := encodeChatStreamFrame(encoder.context, chatChunkWire{
+		ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
+		NVExt: raw,
+		Choices: []chatChunkChoiceWire{{
+			Index: 0,
+			Delta: chatChunkDeltaWire{},
+		}},
+	})
+	return [][]byte{frame}, nil, err
 }
 
 func (encoder *chatStreamEncoder) encodeCompletion(

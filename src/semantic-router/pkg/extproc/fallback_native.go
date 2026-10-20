@@ -346,6 +346,17 @@ func (s *routingSession) candidateCall(candidate *fallbackCandidate) (*routing.C
 	if err := routing.ApplyHeaderMutation(&header, effect.Header, false, routing.DefaultLimits); err != nil {
 		return nil, err
 	}
+	dynamoHeaders := make(map[string]string)
+	for _, name := range dynamoRoutingHeaderNames {
+		dynamoHeaders[name] = header.Get(name)
+	}
+	backendCtx := &RequestContext{Headers: dynamoHeaders}
+	if err := validateDynamoRoutingHeaders(backendCtx); err != nil {
+		return nil, err
+	}
+	if err := validateDynamoBackendPool(s.router.Config, candidate.dispatch.effectiveBackendModel(), backendCtx, s.ctx.ProtocolEnvelope); err != nil {
+		return nil, err
+	}
 	return &routing.Call{
 		Route:   header.Get(routing.RouteHeader),
 		Request: routing.Request{Header: header, Body: routing.ApplyBodyMutation(nil, effect.Body)},

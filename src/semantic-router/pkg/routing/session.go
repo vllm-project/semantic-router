@@ -17,7 +17,7 @@ type Session interface {
 	RequestHeaders(header Header, endOfStream bool) (*Effect, error)
 	RequestBody(body []byte, endOfStream bool) (*Effect, error)
 	// ResponseHeaders receives the upstream status as the ":status" header.
-	ResponseHeaders(header Header, endOfStream bool) (*Effect, error)
+	ResponseHeaders(header Header, endOfStream bool, backend BackendIdentity) (*Effect, error)
 	ResponseBody(body []byte, endOfStream bool) (*Effect, error)
 	// Evidence reports the routing facts known so far.
 	Evidence() Evidence
@@ -39,4 +39,11 @@ type Evidence struct {
 	ReasoningMode   string              `json:"reasoning_mode,omitempty"`
 	CacheHit        bool                `json:"cache_hit,omitempty"`
 	Signals         map[string][]string `json:"signals,omitempty"`
+}
+
+// BackendIdentity is supplied by the transport, never by HTTP headers. Name
+// identifies the actual serving endpoint after retries and fallback. A zero
+// value means no trusted endpoint identity is available.
+type BackendIdentity struct {
+	Name string
 }

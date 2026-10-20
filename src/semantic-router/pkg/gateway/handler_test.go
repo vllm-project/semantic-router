@@ -70,7 +70,7 @@ func (s *fakeSession) RequestBody(b []byte, _ bool) (*routing.Effect, error) {
 	return s.next(routing.PhaseRequestBody, nil, b)
 }
 
-func (s *fakeSession) ResponseHeaders(h routing.Header, _ bool) (*routing.Effect, error) {
+func (s *fakeSession) ResponseHeaders(h routing.Header, _ bool, _ routing.BackendIdentity) (*routing.Effect, error) {
 	return s.next(routing.PhaseResponseHeaders, h, nil)
 }
 

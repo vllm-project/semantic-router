@@ -146,6 +146,15 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if err != nil {
 		return nil, r.ingressDecodeErrorResponse(ctx, err)
 	}
+	if err := validateDynamoRoutingHeaders(ctx); err != nil {
+		recordIngressProtocolError(ctx, err)
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		return nil, r.createErrorResponse(400, "invalid Dynamo routing header")
+	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
@@ -283,6 +292,9 @@ func (r *OpenAIRouter) decodeClientResponse(
 	mutation := clientResponseMutation(ctx, source)
 	decoded, err := engine.TranslateResponse(source, target, body, mutation)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateDynamoResponseBackend(ctx, decoded.Envelope); err != nil {
 		return nil, err
 	}
 	ctx.SemanticResponse = &decoded.Response

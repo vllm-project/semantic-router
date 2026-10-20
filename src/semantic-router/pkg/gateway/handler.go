@@ -241,9 +241,10 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 		return verbatim(resp), closeBody, nil
 	}
 	out, err := serving.Engine.Respond(ctx, plan, &routing.UpstreamResponse{
-		Status: resp.StatusCode,
-		Header: routingHeader(resp.Header),
-		Body:   responseBody(plan.Call, resp),
+		Backend: routing.BackendIdentity{Name: resp.Endpoint.Name},
+		Status:  resp.StatusCode,
+		Header:  routingHeader(resp.Header),
+		Body:    responseBody(plan.Call, resp),
 	})
 	if err != nil {
 		closeBody()

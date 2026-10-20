@@ -51,7 +51,7 @@ func (s *scriptedSession) RequestBody(b []byte, eos bool) (*Effect, error) {
 	return s.answer(phaseCall{phase: PhaseRequestBody, endOfStream: eos, body: string(b)})
 }
 
-func (s *scriptedSession) ResponseHeaders(h Header, eos bool) (*Effect, error) {
+func (s *scriptedSession) ResponseHeaders(h Header, eos bool, _ BackendIdentity) (*Effect, error) {
 	return s.answer(phaseCall{phase: PhaseResponseHeaders, endOfStream: eos, header: h})
 }
 
