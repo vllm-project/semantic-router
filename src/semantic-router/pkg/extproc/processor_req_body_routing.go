@@ -310,6 +310,9 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
+	// The negotiated reply encoding comes before provider metadata, so an
+	// operator-supplied Accept-Encoding still takes precedence.
+	appendUpstreamEncodingHeader(&state.setHeaders, ctx)
 	// Provider metadata is applied before credentials so an operator-supplied
 	// extra header can never replace the credential selected for this request.
 	appendProfileHeaders(&state.setHeaders, dispatch.profile)

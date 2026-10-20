@@ -161,6 +161,10 @@ type RequestContext struct {
 	// this request (e.g. response headers not processed). The cache-write path
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
+	// UpstreamResponseGzip is set at every response-header phase from that
+	// reply's Content-Encoding. The response-body phase decodes a gzip reply
+	// before any phase reads it.
+	UpstreamResponseGzip bool
 
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string

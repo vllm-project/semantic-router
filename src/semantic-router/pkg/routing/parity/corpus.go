@@ -9,6 +9,7 @@ package parity
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -47,12 +48,14 @@ type CaseRequest struct {
 }
 
 // Upstream is a canned backend response. Chunks, when set, arrive one per
-// read, as a streaming backend sends them.
+// read, as a streaming backend sends them. Encoding "gzip" sends Body
+// gzip-encoded under Content-Encoding: gzip.
 type Upstream struct {
-	Status  int        `yaml:"status"`
-	Headers [][]string `yaml:"headers"`
-	Body    string     `yaml:"body"`
-	Chunks  []string   `yaml:"chunks"`
+	Status   int        `yaml:"status"`
+	Headers  [][]string `yaml:"headers"`
+	Body     string     `yaml:"body"`
+	Chunks   []string   `yaml:"chunks"`
+	Encoding string     `yaml:"encoding"`
 }
 
 type corpusFile struct {
@@ -73,6 +76,11 @@ func LoadCorpus(dir string) (*Corpus, error) {
 	var file corpusFile
 	if err := yaml.Unmarshal(data, &file); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", filepath.Join(dir, "cases.yaml"), err)
+	}
+	for name, upstream := range file.Upstreams {
+		if upstream.Encoding != "" && (upstream.Encoding != "gzip" || upstream.Body == "" || len(upstream.Chunks) > 0) {
+			return nil, fmt.Errorf("upstream %q: encoding %q needs a gzip body without chunks", name, upstream.Encoding)
+		}
 	}
 	for i := range file.Cases {
 		c := &file.Cases[i]
@@ -120,15 +128,18 @@ func (c Case) GatewayRequest() *routing.Request {
 	return &routing.Request{Header: header, Body: []byte(c.Request.Body)}
 }
 
-// Header returns the fixture's response headers, with the content length of a
-// non-chunked body.
+// Header returns the fixture's response headers, with the content coding and
+// the content length of a non-chunked body.
 func (u *Upstream) Header() routing.Header {
-	header := make(routing.Header, 0, len(u.Headers)+1)
+	header := make(routing.Header, 0, len(u.Headers)+2)
 	for _, pair := range u.Headers {
 		header = append(header, routing.HeaderField{Name: strings.ToLower(pair[0]), Value: pair[1]})
 	}
+	if u.Encoding != "" {
+		header = append(header, routing.HeaderField{Name: "content-encoding", Value: u.Encoding})
+	}
 	if u.Body != "" {
-		header = append(header, routing.HeaderField{Name: "content-length", Value: strconv.Itoa(len(u.Body))})
+		header = append(header, routing.HeaderField{Name: "content-length", Value: strconv.Itoa(len(u.wireBody()))})
 	}
 	return header
 }
@@ -147,7 +158,21 @@ func (u *Upstream) Parts() []string {
 	if u.Body == "" {
 		return nil
 	}
-	return []string{u.Body}
+	return []string{u.wireBody()}
+}
+
+// wireBody returns Body as the backend sends it. A gzip body is stored, not
+// compressed, inside the gzip framing, so recorded bytes do not depend on the
+// Go release's deflate output.
+func (u *Upstream) wireBody() string {
+	if u.Encoding != "gzip" {
+		return u.Body
+	}
+	var buf bytes.Buffer
+	writer, _ := gzip.NewWriterLevel(&buf, gzip.NoCompression)
+	_, _ = writer.Write([]byte(u.Body))
+	_ = writer.Close()
+	return buf.String()
 }
 
 // Response returns the fixture as an upstream response whose body reads one
