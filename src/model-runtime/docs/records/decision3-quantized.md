@@ -220,3 +220,65 @@ alternating runs of each:
 | --- | --- | --- | --- |
 | Separate projections | 23.3 / 23.4 ms | 37.5 / 37.9 ms | 17.2 GB |
 | Merged projections | 21.5 / 21.5 ms | 36.5 / 36.5 ms | 17.2 GB |
+
+### FlashInfer's FP4 GEMM in graphs
+
+For the few hundred rows of a d3 request, cuBLASLt's block-scaled FP4 product
+reads the NVFP4 weights below the GPU's memory bandwidth. With approximate
+kernels on compute capability 12.x, graph captures of up to 512 rows multiply
+in FlashInfer's CUTLASS FP4 GEMM instead (`accel/flashinfer_nvfp4.py`, #5290),
+its tile tuned per weight shape and power of two of rows at load. A FlashInfer
+call takes 46 us of host time against 17 for `scaled_mm`, so eager forwards keep
+cuBLAS. Of the NVFP4 products of 200 train requests (each answered twice),
+16.6% have up to 128 rows, 58.1% up to 256, 80.4% up to 512 and 95.1% up to
+1,024.
+
+The forward's 400 products (merged as above, a distinct weight per product,
+13.7 GB) captured in one graph per kernel and replayed alternately, PyTorch
+2.13.0+cu130, FlashInfer 0.7.0.post1:
+
+| Rows | cuBLAS | FlashInfer | Ratio |
+| --- | --- | --- | --- |
+| 16 | 13.64 ms | 10.49 ms | 0.77 |
+| 64 | 12.65 ms | 10.92 ms | 0.86 |
+| 128 | 12.91 ms | 10.76 ms | 0.83 |
+| 192 | 14.49 ms | 12.87 ms | 0.89 |
+| 256 | 14.99 ms | 14.49 ms | 0.97 |
+| 320 | 19.47 ms | 19.45 ms | 1.00 |
+| 384 | 20.16 ms | 20.01 ms | 0.99 |
+| 512 | 25.83 ms | 23.90 ms | 0.93 |
+
+Each of FlashInfer's 32 tiles writes the bytes CUDA 12.8's cuBLAS writes for
+d3's widths at the row counts tried with random inputs (1 to 512), but not for
+every row count of real activations: tiles round some sums differently. FlashInfer's tuner
+times each tile after a delay kernel that FlashInfer 0.7 compiles ahead of
+time for other GPUs only, so on 12.x it compiles it at first use and needs a
+CUDA toolkit of 12.9 or later with Ninja; without one, every product would take
+FlashInfer's default tile, which is no faster than cuBLAS and fails in a graph
+after a few captures, so the runtime keeps cuBLAS and the receipt's
+`nvfp4_product` says why. The CUDA image (PyTorch 2.10.0+cu128, no compiler)
+keeps cuBLAS.
+
+`vllm-sr/d3-NVFP4` at `--dtype auto`, as the latency tables above (the first
+500 of the 1,000 train rows answered a third time with graphs, two alternating
+runs of each), and the first 1,000 test requests of the agreement table
+answered a second time (the graphs the first pass captured replaying), on two
+stacks: PyTorch 2.11.0+cu128 (cuBLAS 12.8) with a CUDA 12.9 compiler for
+FlashInfer, and the `vllm/vllm-openai:v0.32.0` image (PyTorch 2.13.0+cu130):
+
+| Stack | Product | Median latency | Mean | Load | Device memory after loading | Train answers changed | Test answers changed | Test accuracy |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CUDA 12.8 | cuBLAS | 21.3 / 21.5 ms | 30.9 / 31.4 ms | 12 s (26 s cold) | 16.04 GB | | | 0.805 |
+| CUDA 12.8 | FlashInfer | 20.5 / 20.6 ms | 29.7 / 30.1 ms | 23 s (28 s cold) | 16.08 GB | 8 and 16 of 500; 0 and 1 decisions | 5 of 1,000; no decision | 0.805 |
+| CUDA 13 | cuBLAS | 21.3 / 21.4 ms | 31.1 / 31.2 ms | 14 to 17 s | 16.04 GB | | | 0.799 |
+| CUDA 13 | FlashInfer | 20.3 / 20.5 ms | 29.9 / 30.1 ms | 22 to 24 s | 16.11 GB | 2 and 2 of 500; no decision | 2 of 1,000; no decision | 0.799 |
+
+The median falls 3.8% (CUDA 12.8) and 4.5% (CUDA 13), short of the 5% #5290
+asked for. Loading takes about 10 s longer for the tuning and the delay
+kernel's first build. The changed decision is a `corr2cause` choice whose top
+two options stood 0.495 and 0.447; the largest probability change is 0.061.
+A request's answer can differ between its first forward (eager, cuBLAS) and
+later ones (graphs, FlashInfer): 3 and 5 of 150 train requests did. Processes
+that time their own tiles answered 144 of 150 alike; with an autotune cache
+(`--autotune-cache`) the first process records each shape's tiles there and
+later ones load them untimed, and three processes answered all 150 alike.

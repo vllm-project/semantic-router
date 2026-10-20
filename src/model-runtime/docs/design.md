@@ -912,7 +912,12 @@ part keeping views of the merged weight so device memory stays the same, and
 its outputs reaching the fused kernels as column-slice views. Projections that
 share only the input global scale (`in_proj_qkv` / `in_proj_z`) share its
 quantization (`project`). Each column is the one its separate product gives, so
-answers do not change. A
+answers do not change. With approximate kernels on compute capability 12.x,
+graph captures of up to 512 rows multiply in FlashInfer's CUTLASS FP4 GEMM
+instead, where FlashInfer is installed and can tune its tiles (it compiles a
+delay kernel for its tuner with a CUDA 12.9 or later toolkit), each weight
+shape checked against cuBLAS first (`accel/flashinfer_nvfp4.py`,
+`use_flashinfer`); the receipt's `nvfp4_product` says which runs and why. A
 quantized package is its own model: its manifest's parameter counts are the
 logical ones, placement counts its files, and its answers are compared with
 the BF16 package's in `docs/records/decision3-quantized.md`.

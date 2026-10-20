@@ -4,9 +4,10 @@ For the few hundred rows of a request, cuBLASLt's block-scaled FP4 product
 (``torch.nn.functional.scaled_mm``) reads d3's NVFP4 weights below the GPU's
 memory bandwidth. FlashInfer's CUTLASS kernel for compute capability 12.x,
 its tile tuned per weight shape and power of two of rows (``tune``), reads
-them faster up to ``GRAPH_ROWS`` rows. It sums in another order than CUDA
-13's cuBLAS (the bytes of CUDA 12.8's, for every one of its tiles), so it is
-an approximate kernel (``docs/records/decision3-quantized.md``). A call goes
+them faster up to ``GRAPH_ROWS`` rows. Its tiles round some sums otherwise
+than cuBLAS, so it is an approximate kernel, and processes that tune their own
+tiles can answer apart unless they share an autotune cache (``tune``,
+``docs/records/decision3-quantized.md``). A call goes
 through FlashInfer's Python wrapper, about three times the host time of
 ``scaled_mm``, so only graph captures take it, where that time is spent once;
 eager forwards keep cuBLAS.
@@ -67,23 +68,52 @@ def load(device: torch.device) -> tuple[Product | None, str | None]:
 def tune(
     mm_fp4: Product, shapes: Iterable[tuple[int, int]], device: torch.device
 ) -> None:
-    """Time FlashInfer's tiles for each [out, in] weight shape up to ``GRAPH_ROWS`` rows; later calls take the fastest."""
-    autotune = importlib.import_module("flashinfer").autotune
+    """Time FlashInfer's tiles for each [out, in] weight shape up to ``GRAPH_ROWS`` rows; later calls take the fastest.
+
+    Tiles can round differently, so processes that time their own may answer
+    apart. With an autotune cache (``autotune.freeze_autotune``) the first
+    process records each shape's choices there, after timing all of its
+    buckets, and later ones load them untimed.
+    """
+    from .autotune import frozen_directory
+
+    flashinfer = importlib.import_module("flashinfer")
+    directory = frozen_directory()
+    gpu = torch.cuda.get_device_name(device).replace(" ", "_")
+    # its own generator: tuning leaves the caller's random state as it was
+    generator = torch.Generator(device=device).manual_seed(0)
     for out_features, in_features in sorted(set(shapes)):
+        cache = (
+            None
+            if directory is None
+            else directory
+            / f"flashinfer-fp4-{gpu}-{flashinfer.__version__}-{out_features}x{in_features}.json"
+        )
         q = torch.randint(
-            0, 256, (GRAPH_ROWS, in_features // 2), dtype=torch.uint8, device=device
+            0,
+            256,
+            (GRAPH_ROWS, in_features // 2),
+            dtype=torch.uint8,
+            device=device,
+            generator=generator,
         )
         weight = torch.randint(
-            0, 256, (out_features, in_features // 2), dtype=torch.uint8, device=device
+            0,
+            256,
+            (out_features, in_features // 2),
+            dtype=torch.uint8,
+            device=device,
+            generator=generator,
         )
         # the default buckets: calls outside this context look their tiles up by them
-        with autotune(True):
+        timed = cache is None or not cache.exists()
+        with flashinfer.autotune(timed, cache=None if cache is None else str(cache)):
             product(
                 mm_fp4,
                 q,
-                _scales(GRAPH_ROWS, in_features, device),
+                _scales(GRAPH_ROWS, in_features, generator),
                 weight.t(),
-                _scales(out_features, in_features, device)
+                _scales(out_features, in_features, generator)
                 .view(_padded(out_features), -1)
                 .t(),
                 torch.ones(1, device=device),
@@ -119,9 +149,10 @@ def _padded(rows: int) -> int:
     return -(-rows // 128) * 128
 
 
-def _scales(rows: int, in_features: int, device: torch.device) -> torch.Tensor:
+def _scales(rows: int, in_features: int, generator: torch.Generator) -> torch.Tensor:
     """Random flat block scales of ``rows`` rows in cuBLAS's padded layout, for timing."""
     groups = -(-(in_features // 16) // 4) * 4
-    return (torch.rand(_padded(rows) * groups, device=device) + 0.5).to(
-        torch.float8_e4m3fn
+    values = torch.rand(
+        _padded(rows) * groups, device=generator.device, generator=generator
     )
+    return (values + 0.5).to(torch.float8_e4m3fn)

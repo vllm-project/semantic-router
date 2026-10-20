@@ -501,6 +501,30 @@ def test_flashinfer_multiplies_nvfp4_as_cublas_does(blackwell, mm_fp4, shape):
     assert module.flashinfer_disagrees(mm_fp4, generator) is None
 
 
+def test_an_autotune_cache_records_flashinfer_tiles_once_per_shape(
+    blackwell, mm_fp4, tmp_path, monkeypatch
+):
+    import importlib
+
+    from vllm_srun.accel import autotune, flashinfer_nvfp4
+
+    flashinfer = importlib.import_module("flashinfer")
+    monkeypatch.setattr(autotune, "_FROZEN", tmp_path)
+    timed = []
+    real = flashinfer.autotune
+
+    def recorded(tune_mode=True, cache=None, **kwargs):
+        timed.append(tune_mode)
+        return real(tune_mode, cache=cache, **kwargs)
+
+    monkeypatch.setattr(flashinfer, "autotune", recorded)
+    flashinfer_nvfp4.tune(mm_fp4, [(384, 256), (256, 512)], blackwell)
+    assert timed == [True, True] and len(list(tmp_path.glob("flashinfer-fp4-*"))) == 2
+    # a later process loads them untimed: its tiles are the first one's
+    flashinfer_nvfp4.tune(mm_fp4, [(384, 256), (256, 512)], blackwell)
+    assert timed == [True, True, False, False]
+
+
 def test_only_graph_captures_of_up_to_its_rows_take_flashinfer(blackwell):
     from vllm_srun.accel import flashinfer_nvfp4
 
@@ -766,45 +790,6 @@ def test_cuda_offers_nvfp4_where_its_fp4_tensor_cores_run(device):
         assert "Blackwell" in accelerator.lacks(info, "nvfp4")
 
 
-def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
-    blackwell, tmp_path, d3_text_package, monkeypatch
-):
-    from vllm_srun.accel import nvfp4
-    from vllm_srun.engines.native.quantized import NVFP4Linear
-
-    packed = write_quantized_fixture(
-        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
-    )
-    plain = write_quantized_fixture(
-        d3_text_package, tmp_path / "plain", scheme="nvfp4", dequantized=True
-    )
-    got, parameters, size = gpu_answers(packed)
-    assert numbers(gpu_answers(packed)[0]).equal(numbers(got))
-    _, plain_parameters, plain_size = gpu_answers(plain)
-    assert parameters == plain_parameters and size < plain_size
-
-    prepare = NVFP4Linear.prepare
-
-    def keep_weight(self):
-        self.reference = nvfp4.dequantize(
-            self.weight_packed, self.weight_scale, self.weight_global_scale
-        )
-        prepare(self)
-        self.quantize = lambda rows, global_scale: (rows, None)  # the BF16 rows
-
-    def emulated(self, rows, _):
-        # each layer quantizes the rows it gets itself, so shared slices are checked too
-        q, scales = nvfp4.quantize(rows, self.input_global_scale)
-        out = nvfp4.dequantize(q, scales, self.input_global_scale) @ self.reference.T
-        return out.to(torch.bfloat16)
-
-    monkeypatch.setattr(NVFP4Linear, "prepare", keep_weight)
-    monkeypatch.setattr(NVFP4Linear, "_product", emulated)
-    want = gpu_answers(packed)[0]
-    # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
-    assert (numbers(got) - numbers(want)).abs().max() < 0.02
-
-
 def served(package, dtype):
     """Each fixture state answered twice (graphs capture on a shape's first uses) and the engine's receipt."""
     from vllm_srun.config import ModelConfig, ServeConfig
@@ -857,3 +842,42 @@ def test_graphs_of_an_nvfp4_package_take_flashinfer_with_close_answers(
     assert (numbers(got) - numbers(want)).abs().max() < 0.01
     # an explicit --dtype runs exact kernels only, which keep cuBLAS
     assert "nvfp4_product" not in served(packed, "float16")[1]
+
+
+def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
+    blackwell, tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    plain = write_quantized_fixture(
+        d3_text_package, tmp_path / "plain", scheme="nvfp4", dequantized=True
+    )
+    got, parameters, size = gpu_answers(packed)
+    assert numbers(gpu_answers(packed)[0]).equal(numbers(got))
+    _, plain_parameters, plain_size = gpu_answers(plain)
+    assert parameters == plain_parameters and size < plain_size
+
+    prepare = NVFP4Linear.prepare
+
+    def keep_weight(self):
+        self.reference = nvfp4.dequantize(
+            self.weight_packed, self.weight_scale, self.weight_global_scale
+        )
+        prepare(self)
+        self.quantize = lambda rows, global_scale: (rows, None)  # the BF16 rows
+
+    def emulated(self, rows, _):
+        # each layer quantizes the rows it gets itself, so shared slices are checked too
+        q, scales = nvfp4.quantize(rows, self.input_global_scale)
+        out = nvfp4.dequantize(q, scales, self.input_global_scale) @ self.reference.T
+        return out.to(torch.bfloat16)
+
+    monkeypatch.setattr(NVFP4Linear, "prepare", keep_weight)
+    monkeypatch.setattr(NVFP4Linear, "_product", emulated)
+    want = gpu_answers(packed)[0]
+    # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
+    assert (numbers(got) - numbers(want)).abs().max() < 0.02
