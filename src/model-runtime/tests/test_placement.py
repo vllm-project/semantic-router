@@ -464,7 +464,7 @@ def test_an_integrated_gpu_reports_host_mem_available(monkeypatch):
 def test_an_integrated_gpu_admits_a_model_that_fits_host_memory(monkeypatch):
     _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=0.5)
     _fake_host_memory(monkeypatch, 1.0)
-    with pytest.raises(PlacementError, match="1.0 GiB free"):
+    with pytest.raises(PlacementError, match=r"1\.0 GiB free"):
         place(SPEC, "cuda:0", 1_000_000_000)
     _fake_host_memory(monkeypatch, 60.0)
     assert place(SPEC, "cuda:0", 1_000_000_000).device.label == "cuda:0"
@@ -515,5 +515,5 @@ def test_gb10_integrated_gpu_admits_a_model_from_host_memory(monkeypatch):
     assert device.free_memory == int(104 * GIB)
     assert place(SPEC, "cuda:0", 1_000_000_000).device.label == "cuda:0"
     _fake_cuda_host(monkeypatch, integrated=False, cuda_free_gib=2.2, total_gib=121.0)
-    with pytest.raises(PlacementError, match="2.2 GiB free"):
+    with pytest.raises(PlacementError, match=r"2\.2 GiB free"):
         place(SPEC, "cuda:0", 1_000_000_000)
