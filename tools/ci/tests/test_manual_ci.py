@@ -652,7 +652,7 @@ class ManualCIWorkflowTests(unittest.TestCase):
                 "contents": "read",
                 "actions": "read",
                 "issues": "write",
-                "pull-requests": "read",
+                "pull-requests": "write",
             },
         )
         rerun = self.workflow["jobs"]["rerun"]
@@ -663,7 +663,7 @@ class ManualCIWorkflowTests(unittest.TestCase):
                 "contents": "read",
                 "actions": "write",
                 "issues": "write",
-                "pull-requests": "read",
+                "pull-requests": "write",
             },
         )
         self.assertEqual(rerun["if"], "needs.authorize.outputs.authorized == 'true'")

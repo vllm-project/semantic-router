@@ -128,7 +128,7 @@ def validate_status_publisher(
         "actions": "read",
         "checks": "write",
         "issues": "write",
-        "pull-requests": "read",
+        "pull-requests": "write",
     }:
         errors.append("ci-status.yml must limit its publisher token permissions")
     steps = job.get("steps", [])

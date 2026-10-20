@@ -59,6 +59,7 @@ from .models.lora import LoRALinear
 from .models.packed import Packed, is_packed, packed_rule
 from .models.qwen3_5 import noncausal_masks
 from .models.tree import Tree, is_tree, suffix_rule
+from .quantized import project
 
 if TYPE_CHECKING:
     from .models.qwen3 import Qwen3Backbone, Qwen3Layer
@@ -308,7 +309,7 @@ def _qwen3_5_forward(
         hidden_states, delta.contiguous(), p["w1_post"], p["eps"]
     )
     mlp = layer.mlp
-    act = kernels("silu_mul")(mlp.gate_proj(normed), mlp.up_proj(normed))
+    act = kernels("silu_mul")(*project(normed, mlp.gate_proj, mlp.up_proj))
     return _residual(kernels, hidden, mlp.down_proj(act))
 
 
@@ -360,7 +361,7 @@ def _qwen3_5_forest(
             stream, delta.contiguous(), p["w1_post"], p["eps"]
         )
         mlp = layer.mlp
-        act = kernels("silu_mul")(mlp.gate_proj(normed_post), mlp.up_proj(normed_post))
+        act = kernels("silu_mul")(*project(normed_post, mlp.gate_proj, mlp.up_proj))
         out.append(_residual(kernels, hidden, mlp.down_proj(act)))
     return out[0], out[1]
 
@@ -375,9 +376,7 @@ def _forest_projection(
     """``forest.project_attention`` through ``attn_prep``; the gate stays a view of the q projection."""
     rows, length, _ = h.shape
     hd = m.head_dim
-    qp = m.q_proj(h).contiguous()
-    kp = m.k_proj(h).contiguous()
-    vp = m.v_proj(h)
+    qp, kp, vp = project(h, m.q_proj, m.k_proj, m.v_proj)
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // (2 * hd)
     kv_heads = kp.shape[-1] // hd
@@ -400,10 +399,9 @@ def _tree_gated_delta(
     whose first outputs are dropped)."""
     _, length, _ = normed.shape
     pre, n, window = tree.prefix, len(tree.lengths), m.conv_kernel_size
-    mixed = m.in_proj_qkv(normed)
-    z = m.in_proj_z(normed)
-    b = m.in_proj_b(normed)
-    a = m.in_proj_a(normed)
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
     args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
 
     def rows(x: torch.Tensor) -> torch.Tensor:
@@ -458,10 +456,9 @@ def _branch_gated_delta(
     output projection of those rows only."""
     _, length, _ = normed.shape
     window = m.conv_kernel_size
-    mixed = m.in_proj_qkv(normed)
-    z = m.in_proj_z(normed)
-    b = m.in_proj_b(normed)
-    a = m.in_proj_a(normed)
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
     prep = kernels("gdn_prep")
     args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
     segments = getattr(prep, "segments", None)
@@ -525,6 +522,7 @@ def _packed_gated_delta(
             m.num_k_heads, m.head_k_dim,
         )
     )  # fmt: skip
+    # in_proj_z reads the ungapped rows, so it cannot share in_proj_qkv's quantization here
     z = m.in_proj_z(normed)
     repeat = m.num_v_heads // m.num_k_heads
     if repeat > 1:
@@ -565,10 +563,9 @@ def _gated_delta(
     if mask is not None:
         normed = (normed * mask[:, :, None]).to(normed.dtype)
     batch, length, _ = normed.shape
-    mixed = m.in_proj_qkv(normed)
-    z = m.in_proj_z(normed)
-    b = m.in_proj_b(normed)
-    a = m.in_proj_a(normed)
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
     q, k, v, g, beta = kernels("gdn_prep")(
         mixed.contiguous(), b.contiguous(), a.contiguous(), p["conv_w"], p["A_log"], p["dt_bias"],
         m.num_k_heads, m.head_k_dim,
@@ -601,9 +598,7 @@ def _gated_attention(
 ) -> torch.Tensor:
     batch, length, _ = normed.shape
     hd = m.head_dim
-    qp = m.q_proj(normed).contiguous()
-    kp = m.k_proj(normed).contiguous()
-    vp = m.v_proj(normed)
+    qp, kp, vp = project(normed, m.q_proj, m.k_proj, m.v_proj)
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // (2 * hd)
     kv_heads = kp.shape[-1] // hd
@@ -632,9 +627,7 @@ def _qwen3_forward(
     m = layer.self_attn
     batch, length, _ = normed.shape
     hd = m.head_dim
-    qp = m.q_proj(normed).contiguous()
-    kp = m.k_proj(normed).contiguous()
-    vp = m.v_proj(normed)
+    qp, kp, vp = project(normed, m.q_proj, m.k_proj, m.v_proj)
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // hd
     kv_heads = kp.shape[-1] // hd
@@ -649,7 +642,7 @@ def _qwen3_forward(
         hidden_states, delta.contiguous(), p["w_post"], p["eps"]
     )
     mlp = layer.mlp
-    act = kernels("silu_mul")(mlp.gate_proj(normed), mlp.up_proj(normed))
+    act = kernels("silu_mul")(*project(normed, mlp.gate_proj, mlp.up_proj))
     return _residual(kernels, hidden, mlp.down_proj(act))
 
 
