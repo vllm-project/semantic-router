@@ -52,13 +52,14 @@ without: the flips do not come from those layers.
 Median of a request answered a third time, so that its shape's graph replays,
 over the first 500 of those 1,000 train rows, each package against BF16 in the
 same process. Decision 3.0 forwards are captured as graphs only with the
-change of #4999, so the table also gives main as it is (the first 1,000 rows,
-answered a second time):
+change of #4999; without graphs, the first 1,000 rows are answered a second
+time. Measured on 2026-10-16 with this runtime as of 2026-10-14 and the graph
+capture of #4999:
 
-| Package | BF16 with graphs | Package with graphs | BF16, main | Package, main |
+| Package | BF16 with graphs | Package with graphs | BF16 without graphs | Package without graphs |
 | --- | --- | --- | --- | --- |
-| FP8 | 45.2 ms | 36.5 ms | 66.1 ms | 83.3 ms |
-| AWQ int4 | 45.1 ms | 60.2 ms | 67.5 ms | 86.1 ms |
+| FP8 | 46.4 ms | 36.8 ms | 67.1 ms | 80.9 ms |
+| AWQ int4 | 48.2 ms | 62.0 ms | 72.5 ms | 86.9 ms |
 
 FP8 pays per layer for one activation quantization and one scaled GEMM launch,
 which costs more host time than it saves without graphs. Triton's launcher binds
@@ -71,8 +72,8 @@ views at load saves another 6 us; one gate projection of 64 rows then takes
 bytes.
 Without graphs the FP8 package's median falls from 84.0 and 85.4 ms to 77.5 ms
 in alternating runs (d3 68.3 to 71.3 ms). After loading, the
-packages hold 52.3 GB (BF16), 32.2 GB (FP8) and 16.9 GB (AWQ) of device memory,
-and 52.9, 32.9 and 17.5 GB at the peak of the 20 longest of those 1,000 rows
+packages hold 52.2 GB (BF16), 31.9 GB (FP8) and 16.5 GB (AWQ) of weights,
+and 52.9, 32.8 and 17.5 GB at the peak of the 20 longest of those 1,000 rows
 (up to 5,928 characters of state), each in its own process. Int4 layers unpack
 their weights to BF16 on every call and then multiply in BF16: they save
 memory, not time.
@@ -82,13 +83,13 @@ memory, not time.
 Microseconds at 64, 256 and 1,024 rows, summed over one of each of d3's
 projection shapes (`in_proj_qkv`, `in_proj_z`, `out_proj`, `q_proj`, `k_proj`,
 `o_proj`, `gate_proj` twice for `up_proj`, `down_proj`), random weights,
-`triton.testing.do_bench`:
+`triton.testing.do_bench` (the MI300X on 2026-10-15):
 
 | Device | Rows | BF16 GEMM | FP8 (quantize + scaled GEMM) | int4 (unpack + GEMM) |
 | --- | --- | --- | --- | --- |
-| MI300X | 64 | 585 | 442 | 816 |
-| MI300X | 256 | 881 | 609 | 1,223 |
-| MI300X | 1,024 | 2,197 | 1,370 | 2,414 |
+| MI300X | 64 | 577 | 429 | 809 |
+| MI300X | 256 | 877 | 611 | 1,211 |
+| MI300X | 1,024 | 2,220 | 1,364 | 2,408 |
 | RTX 4070 Ti SUPER | 64 | 2,225 | 1,289 | 4,102 |
 | RTX 4070 Ti SUPER | 256 | 3,264 | 4,857 | 5,286 |
 | RTX 4070 Ti SUPER | 1,024 | 11,585 | 17,737 | 13,655 |
