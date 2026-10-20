@@ -106,6 +106,22 @@ Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
 
+### Agents that send tool output as messages
+
+Some harnesses, such as mini-SWE-agent, do not use the protocol's tool calls: the model writes a command in its reply and the
+harness sends the command's output back as the next user message. The Router
+cannot tell that output from a new user turn, so it never sees a tool loop, and
+signals read the latest output as if the user had written it.
+
+Under `scope: conversation`, a decision that changes on such an output releases
+the current model, and `min_turns_before_switch` does not hold it. Use
+`scope: session` with a new session ID for every agent run instead: a changed
+decision alone then keeps the run on its model, while idle timeout, a bypass
+decision, candidate exclusion, or a qualified [rescue](../tutorials/learning/protection)
+can still release it. To restart a task on a
+different model, start a new run with a new session ID, or name the concrete
+model, which bypasses recipe routing.
+
 ## Program the policy behind the entrypoint
 
 [Connect models and publish a recipe](../tutorials/global/models-entrypoints-serving)
