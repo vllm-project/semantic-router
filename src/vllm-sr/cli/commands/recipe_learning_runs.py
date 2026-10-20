@@ -26,6 +26,8 @@ _SUCCESS_VERDICTS = frozenset({"good_fit", "overprovisioned"})
 _FAILURE_VERDICTS = frozenset({"underpowered", "failed"})
 _WILSON_Z = 1.96
 MIN_RUNS_FOR_RECOMMENDATION = 20
+# A sample spread needs at least two values.
+_MIN_VALUES_FOR_SPREAD = 2
 
 
 @dataclass
@@ -127,7 +129,7 @@ def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
 def _mean_interval(values: list[float]) -> tuple[float, float, float]:
     n = len(values)
     mean = sum(values) / n
-    if n < 2:
+    if n < _MIN_VALUES_FOR_SPREAD:
         return mean, mean, mean
     sd = math.sqrt(sum((v - mean) ** 2 for v in values) / (n - 1))
     half = _WILSON_Z * sd / math.sqrt(n)

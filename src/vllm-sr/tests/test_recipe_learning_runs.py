@@ -195,18 +195,18 @@ def test_confident_recommendation_becomes_default_model_patch():
     findings = [f for f in artifact["findings"] if f["type"] == "default_model"]
     assert len(findings) == 1
     assert findings[0]["evidence"]["current_default"] == "strong"
-    suggestion = [
+    suggestion = next(
         s
         for s in artifact["recipe_patch"]["suggestions"]
         if s["finding_type"] == "default_model"
-    ][0]
+    )
     assert suggestion["path"] == "/routing/decisions/code/modelRefs"
     assert suggestion["action"] == "reorder"
-    candidate = [
+    candidate = next(
         c
         for c in artifact["candidate_recipes"]
         if c["patch"]["suggestions"][0] == suggestion
-    ][0]
+    )
     refs = candidate["recipe"]["routing"]["decisions"][0]["modelRefs"]
     assert [r["model"] for r in refs] == ["cheap", "strong"]
 
