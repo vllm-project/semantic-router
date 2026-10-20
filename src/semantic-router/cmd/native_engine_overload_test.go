@@ -25,10 +25,9 @@ func TestEngineFrontendAnswersAFullWorkerPoolAsOverloaded(t *testing.T) {
 	var held atomic.Int32
 	release := make(chan struct{})
 	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/systemone" {
+		if r.URL.Path == "/v1/decisions" {
 			held.Add(1)
 			<-release
-			r.URL.Path = "/v1/decisions"
 		}
 		fake.Handler().ServeHTTP(w, r)
 	}))
