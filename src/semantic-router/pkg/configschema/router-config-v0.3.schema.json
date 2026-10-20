@@ -6532,6 +6532,10 @@
         "conversation": {
           "type": "string",
           "minLength": 1
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,
