@@ -78,7 +78,10 @@ python train.py \
 ```
 
 `train.py --help` lists algorithm-specific options. The default embedding model
-is Qwen3. The exported files are:
+is Qwen3. Embeddings are cached under `--cache-dir` in a file named after the
+model, revision, and query set (`feature_snapshot.py`), so a changed model or
+dataset never reuses old vectors. Pass `--embedding-revision` to pin the model;
+an unpinned model cannot detect an upstream change. The exported files are:
 
 | File | Selector |
 |---|---|

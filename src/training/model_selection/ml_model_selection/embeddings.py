@@ -8,10 +8,10 @@ This ensures training embeddings match inference embeddings exactly.
 The router uses: Qwen/Qwen3-Embedding-0.6B (1024-dim)
 """
 
-import os
 from pathlib import Path
 
 import numpy as np
+from feature_snapshot import build_snapshot, cache_key
 
 # Optional sentence-transformers import; the service only needs it when it
 # actually generates embeddings, not to start and serve health checks.
@@ -27,10 +27,6 @@ except ImportError:
 # Router uses: Qwen/Qwen3-Embedding-0.6B through the model runtime (1024-dim)
 # We use the same model via sentence-transformers for identical embeddings
 DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
-
-# Dimension the router-side contract expects; loading a model with a different
-# dimension only warns so alternative aliases stay usable for comparison.
-EXPECTED_ROUTER_DIM = 768
 
 # Model aliases - qwen3 is the default and matches the router
 EMBEDDING_MODELS = {
@@ -56,6 +52,7 @@ class EmbeddingGenerator:
         model_name: str = DEFAULT_MODEL,
         cache_dir: str | None = None,
         device: str = "cpu",
+        revision: str | None = None,
     ):
         """
         Initialize embedding generator.
@@ -64,6 +61,7 @@ class EmbeddingGenerator:
             model_name: HuggingFace model name or alias (default: qwen3)
             cache_dir: Directory to cache model files
             device: Device to run on ("cpu", "cuda", "mps")
+            revision: Model revision to load; None loads the default branch
         """
         # Resolve model alias
         if model_name in EMBEDDING_MODELS:
@@ -86,15 +84,11 @@ class EmbeddingGenerator:
             model_name,
             cache_folder=cache_dir,
             device=device,
+            revision=revision,
             trust_remote_code=is_qwen,  # Required for Qwen models
         )
         self.dim = self.model.get_sentence_embedding_dimension()
         print(f"Embedding model loaded (dim={self.dim})")
-
-        if self.dim != EXPECTED_ROUTER_DIM:
-            print(
-                f"  ⚠ Warning: Router expects {EXPECTED_ROUTER_DIM}-dim embeddings, got {self.dim}-dim"
-            )
 
     def encode(
         self,
@@ -127,44 +121,72 @@ class EmbeddingGenerator:
         return self.encode([text], show_progress=False)[0]
 
 
+def _load_cached_embeddings(
+    path: Path, key: str, queries: list[str]
+) -> dict[str, np.ndarray] | None:
+    """Return the cached vectors, or None when the file is absent or was made for other inputs."""
+    if not path.exists():
+        return None
+    with np.load(path, allow_pickle=False) as data:
+        if str(data["inputs_id"]) != key:
+            return None
+        cached = dict(zip(data["queries"].tolist(), data["vectors"], strict=True))
+    if any(query not in cached for query in queries):
+        return None
+    return {query: cached[query] for query in queries}
+
+
 def generate_embeddings_for_queries(
     queries: list[str],
     model_name: str = DEFAULT_MODEL,
     batch_size: int = 32,
     cache_dir: str | None = None,
-    cache_file: str | None = None,
+    embeddings_dir: str | None = None,
+    model_revision: str | None = None,
 ) -> dict[str, np.ndarray]:
     """
     Generate embeddings for a list of queries.
 
     Args:
         queries: List of query strings
-        model_name: Embedding model name
+        model_name: Embedding model name or alias
         batch_size: Batch size for encoding
         cache_dir: Model cache directory
-        cache_file: Optional file to cache embeddings
+        embeddings_dir: Directory for the embeddings cache; None disables it. A cache
+            file is named after the model, revision, and query set, so changing any of
+            them never reuses another run's vectors.
+        model_revision: Model revision to pin; None is recorded as unpinned, which
+            cannot detect an upstream change to the model.
 
     Returns:
         Dict mapping query -> embedding
     """
-    # Check cache first
-    if cache_file and os.path.exists(cache_file):
-        print(f"Loading cached embeddings from {cache_file}")
-        data = np.load(cache_file, allow_pickle=True)
-        return dict(data["embeddings"].item())
+    model_id = EMBEDDING_MODELS.get(model_name, model_name)
+    key = cache_key(queries, model_id, model_revision)
+    cache_path = (
+        Path(embeddings_dir) / f"embeddings_{key}.npz" if embeddings_dir else None
+    )
 
-    # Generate embeddings
-    generator = EmbeddingGenerator(model_name, cache_dir)
-    embeddings = generator.encode(queries, batch_size=batch_size)
+    if cache_path is not None:
+        cached = _load_cached_embeddings(cache_path, key, queries)
+        if cached is not None:
+            print(f"Loading cached embeddings from {cache_path}")
+            return cached
 
-    # Create mapping
-    result = dict(zip(queries, embeddings, strict=False))
+    generator = EmbeddingGenerator(model_name, cache_dir, revision=model_revision)
+    vectors = np.asarray(generator.encode(queries, batch_size=batch_size))
+    build_snapshot(
+        queries, model_id, generator.dim, model_revision=model_revision
+    ).check_vectors(vectors, len(queries))
 
-    # Save cache
-    if cache_file:
-        cache_path = Path(cache_file)
+    if cache_path is not None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        np.savez(cache_file, embeddings=result)
-        print(f"Saved embeddings cache to {cache_file}")
+        np.savez(
+            cache_path,
+            inputs_id=np.array(key),
+            queries=np.array(queries, dtype=str),
+            vectors=vectors.astype(np.float32),
+        )
+        print(f"Saved embeddings cache to {cache_path}")
 
-    return result
+    return dict(zip(queries, vectors, strict=True))
