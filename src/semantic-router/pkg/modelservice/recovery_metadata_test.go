@@ -21,7 +21,7 @@ func TestRecoveryRequiresFreshModelCard(t *testing.T) {
 			if p == 1 {
 				state, code = "starting", http.StatusServiceUnavailable
 			}
-			writeJSON(w, code, map[string]any{"api_version": "3.0.0", "status": state})
+			writeJSON(w, code, map[string]any{"api_version": "3.2.0", "status": state})
 		case "/v1/models":
 			modelCalls.Add(1)
 			if p == 2 {
@@ -33,7 +33,7 @@ func TestRecoveryRequiresFreshModelCard(t *testing.T) {
 				question = "span"
 			}
 			writeJSON(w, http.StatusOK, map[string]any{
-				"api_version": "3.0.0", "object": "list",
+				"api_version": "3.2.0", "object": "list",
 				"data": []any{map[string]any{"id": "primary", "object": "model", "family": "fixture", "ready": true, "surfaces": []string{"decisions"}, "question_types": []string{question}}},
 			})
 		default:

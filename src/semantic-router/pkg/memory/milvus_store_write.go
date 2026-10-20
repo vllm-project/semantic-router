@@ -48,7 +48,14 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	}
 
 	cols := newMemoryRowColumns(memory, embedding, string(metadataJSON))
+	attempted := false
 	err = m.retryWithBackoff(ctx, func() error {
+		// A transient Insert error may still have written the row, so retries upsert to stay idempotent.
+		if attempted {
+			_, upsertErr := m.client.Upsert(ctx, m.collectionName, "", cols.insertArgs()...)
+			return upsertErr
+		}
+		attempted = true
 		_, insertErr := m.client.Insert(ctx, m.collectionName, "", cols.insertArgs()...)
 		return insertErr
 	})

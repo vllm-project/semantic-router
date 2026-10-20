@@ -57,6 +57,10 @@ __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
 # weight of each later forward in the lane's running estimate.
 INITIAL_TOKEN_COST = 2e-5
 COST_SMOOTHING = 0.1
+# A batching window waits for requests still being planned when it opened for
+# at most this many windows, checking every BURST_POLL_S once its own has passed.
+BURST_WINDOWS = 3
+BURST_POLL_S = 0.00025
 
 
 @dataclass
@@ -98,12 +102,15 @@ class Scheduler:
         observe: Callable[[str, dict[str, Any]], None] | None = None,
         execute: Callable[[Callable[[], Any]], Any] | None = None,
         device_fault: Callable[[BaseException], bool] | None = None,
+        planning: Callable[[float], bool] | None = None,
     ):
         """``execute`` runs each batch where the device wants its work (the CPU's one thread).
 
         ``device_fault`` tells an error that left the device unusable, which is
         recorded as the scheduler's ``failure``, from any other error in a
-        forward, which fails only the jobs of that batch.
+        forward, which fails only the jobs of that batch. ``planning(opened)``
+        says whether a request received before ``opened`` is still being
+        planned: a batching window then waits for it (``_take``).
         """
         self.model = model
         self.batcher = batcher
@@ -111,6 +118,7 @@ class Scheduler:
         self.observe = observe or (lambda event, values: None)
         self.execute = execute or (lambda work: work())
         self.device_fault = device_fault or (lambda error: False)
+        self.planning = planning or (lambda opened: False)
         self._queue: deque[_Pending] = deque()
         # Admitted jobs not yet answered, queued or planned, and their tokens.
         self._pending_jobs = 0
@@ -164,6 +172,7 @@ class Scheduler:
         deadlines: list[float | None],
         timing: RunTiming | None = None,
         reference: bool = False,
+        alone: bool = False,
     ) -> list[Future[Results[Any]]]:
         """Queue one job per item list at once, as one group (a bundle's tasks for this model).
 
@@ -171,8 +180,9 @@ class Scheduler:
         job not yet answered, queued or planned, and refuses the whole group
         or none of it. ``timing`` records the group's forwards. ``reference``
         jobs (the golden check) run alone, in their released forwards.
+        ``alone`` jobs (``Job.alone``) are planned without the batching window.
         """
-        futures, pending = self._jobs(item_lists, deadlines, timing, reference)
+        futures, pending = self._jobs(item_lists, deadlines, timing, reference, alone)
         if not pending:
             return futures
         tokens = sum(entry.tokens for entry in pending)
@@ -231,6 +241,7 @@ class Scheduler:
         deadlines: list[float | None],
         timing: RunTiming | None,
         reference: bool = False,
+        alone: bool = False,
     ) -> tuple[list[Future[Results[Any]]], list[_Pending]]:
         futures: list[Future[Results[Any]]] = [Future() for _ in item_lists]
         pending = []
@@ -248,6 +259,7 @@ class Scheduler:
                 enqueued=enqueued,
                 group=group,
                 reference=reference,
+                alone=alone,
             )
             lanes: dict[str, int] = {}
             for item in items:
@@ -303,13 +315,15 @@ class Scheduler:
 
         With ``wait`` (nothing planned) block until work arrives and, when the
         batcher coalesces and a queued job may merge, hold the batching window,
-        then take everything. Without it take at once the jobs that need not
+        then take everything. The window also waits, up to ``BURST_WINDOWS``
+        windows, while requests received before it opened are still being
+        planned, so a burst of concurrent requests forms one batch whatever
+        their planning takes. Without it take at once the jobs that need not
         wait (all of them when the batcher does not coalesce, and references)
         and the others once they have waited a window. Either way wait while a
         ``run_now`` caller owns the model; batches a caller left planned count
         as planned work.
         """
-        window = self.limits.batch_window_ms / 1000.0
         with self._lock:
             while (
                 self._owned or (wait and not self._queue and not self._ready)
@@ -318,6 +332,7 @@ class Scheduler:
             if self._stopped:
                 return None
             self._owned = True
+            window = self.limits.batch_window_ms / 1000.0
             if not wait or self._ready:
                 now = time.monotonic()
                 taken: list[_Pending] = []
@@ -332,18 +347,24 @@ class Scheduler:
                 return taken
             coalescing = any(self._waits(pending) for pending in self._queue)
             if window > 0 and coalescing:
-                deadline = time.monotonic() + window
-                while (
-                    not self._stopped and (remaining := deadline - time.monotonic()) > 0
-                ):
-                    self._lock.wait(timeout=remaining)
+                opened = time.monotonic()
+                deadline, limit = opened + window, opened + BURST_WINDOWS * window
+                while not self._stopped:
+                    now = time.monotonic()
+                    if now >= deadline and (now >= limit or not self.planning(opened)):
+                        break
+                    until = (
+                        deadline if now < deadline else min(limit, now + BURST_POLL_S)
+                    )
+                    self._lock.wait(timeout=until - now)
             taken = list(self._queue)
             self._queue.clear()
             return taken
 
     def _waits(self, pending: _Pending) -> bool:
         """Whether a queued job waits for the batching window before it is planned."""
-        return self.batcher.coalesces and not pending.job.reference
+        job = pending.job
+        return self.batcher.coalesces and not job.reference and not job.alone
 
     def _plan(self, taken: list[_Pending]) -> None:
         now = time.monotonic()
@@ -438,12 +459,18 @@ class Scheduler:
             else:
                 work = partial(self.model.run, items)
             values = self.execute(work)
+            # Validate the whole forward before publishing any job's results.
+            if len(values) != len(items):
+                raise RuntimeError(
+                    f"model result count mismatch: expected {len(items)}, got {len(values)}"
+                )
         except Exception as exc:
             _timed(members, sequence, started, time.monotonic())
             if self.device_fault(exc):
                 self._failure = exc
+            error = _out_of_memory(exc, len(members)) or exc
             for pending in members:
-                _fail(pending.future, exc)
+                _fail(pending.future, error)
             return
         ended = time.monotonic()
         _timed(members, sequence, started, ended)
@@ -504,6 +531,20 @@ def _resolve(future: Future[Results[Any]], result: Results[Any]) -> None:
     """Answer ``future`` unless it is answered or its caller cancelled it (the client left)."""
     with contextlib.suppress(InvalidStateError):
         future.set_result(result)
+
+
+def _out_of_memory(error: BaseException, jobs: int) -> RuntimeServiceError | None:
+    """A forward out of device memory as the request's answer: too large alone, overloaded beside other requests."""
+    if type(error).__name__ != "OutOfMemoryError":  # torch's, on any accelerator
+        return None
+    if jobs == 1:
+        return RuntimeServiceError(
+            "request_too_large",
+            "the request needs more device memory than the model has free",
+        )
+    return RuntimeServiceError(
+        "overloaded", "the batch holding this request ran out of device memory"
+    )
 
 
 def _fail(future: Future[Results[Any]], error: BaseException) -> None:
