@@ -10,7 +10,9 @@ are shared by every question of a request. Without videos, each question of a
 pass carries its own copy of the images through the vision tower, as the
 released runtime's processor hands them on; with videos, the tower reads the
 request's images and videos once and every question reuses their features, as
-the d3 runtime does.
+the d3 runtime does. A package whose ``attention_mode`` gives no state token a
+view of a question loads as a ``StateOnceModel`` (``state_once.py``): its
+requests read their state once and branch every question from it.
 
 A forward that merges requests (``run_approximate``) holds text rows or rows
 that read media (``lane``), each lane with its own cost per token. Where the
@@ -27,8 +29,8 @@ from __future__ import annotations
 import itertools
 import math
 import time
-from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from dataclasses import dataclass, field, replace
+from typing import Any, ClassVar, cast
 
 import torch
 
@@ -56,7 +58,7 @@ from ...plugins.base import (
     VerifiedPackage,
     VideoInputs,
 )
-from ...plugins.decisions import DecisionModel, RequestPlan
+from ...plugins.decisions import LONG_CONTEXT, DecisionModel, RequestPlan
 from ...registry import builtin, policy
 from ...systemone import (
     GOLDEN_STATE,
@@ -65,8 +67,10 @@ from ...systemone import (
     MIN_LEVELS,
     MIN_OPTIONS,
     canonical,
+    choice_confidence,
     golden_questions,
     read_question,
+    score_confidence,
     valid_state,
 )
 from . import cache as mc
@@ -151,9 +155,25 @@ class RequestMedia:
         return rows
 
 
+@dataclass(frozen=True, eq=False)
+class RequestState:
+    """A state-once request's state block, shared by its questions: its token IDs (media placeholders
+    expanded) and its media."""
+
+    ids: tuple[int, ...]
+    media: RequestMedia | None = None
+    # The tokens after the state that open each of its question blocks (a track window's own state).
+    opening: tuple[int, ...] = ()
+
+
 @dataclass(frozen=True)
 class Item:
-    """One rendered question: its full token IDs (media placeholders expanded) and how its answer reads."""
+    """One rendered question: its full token IDs (media placeholders expanded) and how its answer reads.
+
+    A state-once question also names its request's ``state``: its IDs start
+    with the state block's, and ``cost`` holds its question block plus its
+    share of the state, the tokens it adds to a branched forward.
+    """
 
     question_id: str
     task_type: str
@@ -161,6 +181,13 @@ class Item:
     keys: list[str]
     descriptions: list[Any]
     media: RequestMedia | None = None
+    state: RequestState | None = None
+    cost: int | None = None
+    # Composed questions (``composed``): the readouts as (offset from the last token, codes read), None for the
+    # last token over ``keys``; the question's own images in block order; a Box's ``at`` time.
+    readouts: tuple[tuple[int, int], ...] | None = None
+    block_images: tuple[img.ProcessedImage, ...] = ()
+    at: float | None = None
 
 
 class Decision3Family(ModelFamily):
@@ -259,6 +286,7 @@ class Decision3Family(ModelFamily):
     def load(
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
     ) -> Decision3Model:
+        """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once."""
         from safetensors.torch import load_file
 
         details: pkg.Decision3Package = package.details["package"]
@@ -302,6 +330,12 @@ class Decision3Family(ModelFamily):
             raise PackageError("the tokenizer's video token differs from config.json")
         limits: dict[str, Any] = {
             "max_input_tokens": package.max_input_tokens,
+            **(
+                {"validated_input_tokens": decision["validated_length"]}
+                if decision.get("validated_length")
+                and decision["validated_length"] < package.max_input_tokens
+                else {}
+            ),
             "min_options": MIN_OPTIONS,
             "max_options": MAX_OPTIONS,
             "min_levels": MIN_LEVELS,
@@ -324,6 +358,15 @@ class Decision3Family(ModelFamily):
                 "video_max_seconds": vid.MAX_SECONDS,
                 "video_source_max_pixels": vid.MAX_SOURCE_PIXELS,
             }
+            # The longest clip a box + at or track question reads, declared by a size that
+            # answers track: decision_config systemone.box_video_max_seconds.
+            systemone = details.decision_config.get("systemone") or {}
+            if "track" in systemone.get("question_types", ()) and systemone.get(
+                "box_video_max_seconds"
+            ):
+                limits["box_video_max_seconds"] = int(
+                    systemone["box_video_max_seconds"]
+                )
             modalities += ("video",)
         info = ModelInfo(
             id=package.model_name,
@@ -333,14 +376,43 @@ class Decision3Family(ModelFamily):
             model_sha256=package.model_sha256,
             manifest_sha256=package.manifest_sha256,
             surfaces=tuple(sorted(self.surfaces)),
-            question_types=("choice", "noul", "score"),
+            question_types=(
+                "choice",
+                "noul",
+                "score",
+                *(
+                    kind
+                    for kind in ("box", "track")
+                    if kind
+                    in (details.decision_config.get("systemone") or {}).get(
+                        "question_types", ()
+                    )
+                ),
+            ),
+            image_placements=tuple(
+                (details.decision_config.get("systemone") or {}).get(
+                    "image_placements", ()
+                )
+            ),
             limits=limits,
             licence=package.licence,
             parameters=parameters,
             dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
             modalities=modalities,
         )
-        return Decision3Model(
+        model_class = Decision3Model
+        if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
+            from .state_once import StateOnceModel
+
+            model_class = StateOnceModel
+            # A state-once model counts each state once in usage.input_tokens, and that count of one request
+            # is capped at the context length (max_request_tokens).
+            info = replace(
+                info,
+                usage="state_once",
+                limits={**info.limits, "max_request_tokens": package.max_input_tokens},
+            )
+        return model_class(
             info,
             engine_model,
             backend,
@@ -373,14 +445,6 @@ class Decision3Family(ModelFamily):
         return requests
 
 
-def _confidence(values: list[float]) -> float:
-    """One minus the normalized entropy, clipped to [0, 1]."""
-    if len(values) <= 1:
-        return 1.0
-    entropy = -sum(p * math.log(p) for p in values if p > 0)
-    return max(0.0, min(1.0, 1.0 - entropy / math.log(len(values))))
-
-
 def product_answer(item: Item, probabilities: list[float]) -> dict[str, Any]:
     """The released runtime's answer: probabilities renormalized on the host, argmax with first-option ties."""
     values = [float(v) for v in probabilities]
@@ -401,13 +465,13 @@ def product_answer(item: Item, probabilities: list[float]) -> dict[str, Any]:
             "choice": item.keys[best],
             "probabilities": dict(zip(item.keys, values, strict=True)),
         }
-        answer["confidence"] = _confidence(list(answer["probabilities"].values()))
+        answer["confidence"] = choice_confidence(values)
         return answer
     return {
         "type": "score",
         "score": sum(i * p for i, p in enumerate(values)),
         "probabilities": dict(zip(item.keys, values, strict=True)),
-        "confidence": _confidence(values),
+        "confidence": score_confidence(values),
         "legend": {
             key: level if isinstance(level, str) else canonical(level)
             for key, level in zip(item.keys, item.descriptions, strict=True)
@@ -444,10 +508,15 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.video_token = video_token
         self.video_inputs = video_settings is not None
         self.limit = info.limits["max_input_tokens"]
+        # The length the model was validated at caps each question unless the request asks for long context.
+        self.validated: int | None = info.limits.get("validated_input_tokens")
         self.media_cache: mc.LRUCache[Any] = mc.LRUCache(mc.MEDIA_CACHE_BYTES)
         self.feature_cache: mc.LRUCache[torch.Tensor] = mc.LRUCache(
             mc.FEATURE_CACHE_BYTES
         )
+        # The package's isotonic Box-confidence map (decision_config ``systemone.box_calibration``:
+        # [[raw, calibrated], ...]), fitted on BoxSet-dev for a size that passed its Box bar.
+        self.box_calibration = (decision.get("systemone") or {}).get("box_calibration")
         self.packs_merged_rows = engine_model.supports_packed
         assumed = 2 * info.parameters / ASSUMED_FLOPS
         self._token_seconds = {"text": assumed, "media": assumed}
@@ -581,15 +650,9 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         ):
             ids = encoding.ids
             length = len(ids) - images - videos + visual
-            if length > self.limit:
-                errors[question_id] = question_error(
-                    kind,
-                    QuestionError(
-                        MAX_LENGTH_EXCEEDED,
-                        f"the question prompt has {length} tokens, over the maximum context length of "
-                        f"{self.limit} tokens; nothing was truncated",
-                    ),
-                )
+            refused = self.length_error(length)
+            if refused is not None:
+                errors[question_id] = question_error(kind, refused)
                 continue
             if media:
                 ids = self._expand(ids, media)
@@ -607,6 +670,33 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 and question.get("require_full_input") is True
                 and key not in errors
             ),
+        )
+
+    def question_cap(self) -> tuple[int, bool]:
+        """The per-question token cap of the request being planned, and whether it is the validated length: a
+        package that declares one caps each question at it unless the request asks for long context.
+        """
+        if self.validated is not None and not LONG_CONTEXT.get():
+            return self.validated, True
+        return self.limit, False
+
+    def length_error(self, length: int) -> QuestionError | None:
+        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+        limit, capped = self.question_cap()
+        if length <= limit:
+            return None
+        hint = (
+            f"the length this model was validated at; long context "
+            f"(options.long_context) reads up to "
+            f"{self.limit} tokens, slower and less accurate"
+            if capped
+            else "the maximum context length"
+        )
+        return QuestionError(
+            MAX_LENGTH_EXCEEDED,
+            f"the question prompt has {length} tokens, over {limit} tokens, {hint}; "
+            "nothing was truncated",
+            "question_tokens",
         )
 
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
@@ -636,6 +726,34 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         images: list[Any],
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
+        return self._plan(state, questions, self.request_media(images, videos))
+
+    def image(self, value: Any, where: str) -> img.ProcessedImage:
+        """One image decoded and preprocessed (cached by its data URL's digest)."""
+        if self.settings is None:
+            raise MediaError(
+                "image_unsupported",
+                f"model {self.info.id} has no vision tower; images are not supported",
+            )
+        key = mc.url_digest(value)
+        cached = self.media_cache.get(("image", key)) if key else None
+        if cached is not None:
+            return cast(img.ProcessedImage, cached)
+        try:
+            picture, digest = img.decode(value)
+            image = img.preprocess(picture, digest, self.settings)
+        except MediaError as exc:
+            raise exc.at(where) from exc
+        except ValueError as exc:
+            raise ValueError(f"{where}: {exc}") from exc
+        if key:
+            self.media_cache.put(("image", key), image, _bytes(image.pixel_values))
+        return image
+
+    def request_media(
+        self, images: list[Any], videos: list[Any] | None = None
+    ) -> RequestMedia:
+        """A request's processed images and videos (the state's media)."""
         if self.settings is None:
             raise MediaError(
                 "image_unsupported",
@@ -764,11 +882,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             )
             for clip in clips
         )
-        return self._plan(
-            state,
-            questions,
-            RequestMedia(tuple(processed), tuple(clips), expansions),
-        )
+        return RequestMedia(tuple(processed), tuple(clips), expansions)
 
     # ------------------------------------------------------------------ forwards
 
@@ -978,6 +1092,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         mask: torch.Tensor,
         last: torch.Tensor,
         images: ImageInputs | None,
+        states: list[int] | None = None,
         packed: bool = False,
     ) -> list[list[float] | None]:
         output = self.engine_model.forward(
@@ -988,14 +1103,20 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 query=last,
                 lengths=[len(item.ids) for item in items],
                 images=images,
+                states=states,
                 packed=packed,
             )
         )
+        return self._probabilities(items, output.query)
+
+    def _probabilities(
+        self, items: list[Item], hidden: torch.Tensor
+    ) -> list[list[float] | None]:
+        """Each question's option probabilities from its last token's final hidden state."""
         counts = torch.as_tensor(
             [len(item.keys) for item in items], device=self.readout.device
         )
         with torch.inference_mode():
-            hidden = output.query
             if self.readout.dtype == torch.float32:
                 logits = hidden.float() @ self.readout.T
             else:
@@ -1056,6 +1177,23 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         if values is None:
             return {"type": item.task_type, "error": INVALID_MODEL_OUTPUT}
         try:
+            if item.task_type in ("box", "track"):
+                from . import composed
+
+                # A Box or track item's values are one distribution per readout, not one.
+                rows = cast(list[list[float]], values)
+                edges = rows[-len(composed.EDGES) :]
+                answer = composed.box_answer(edges, self.box_calibration)
+                if item.task_type == "track":
+                    return {
+                        "time": item.at,
+                        "box": answer["box"],
+                        "confidence": answer["confidence"],
+                        "visible": float(rows[0][1] / sum(rows[0])),
+                    }
+                if item.at is not None:
+                    answer["time"] = item.at
+                return answer
             return product_answer(item, values)
         except ValueError as exc:
             return {

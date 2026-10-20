@@ -5,7 +5,7 @@ description: 每个任务该用哪个模型，决策模型需要多大，以及�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/choose-a-model.md"
-  outdated: false
+  outdated: true
 ---
 
 # 选择模型、规模和硬件

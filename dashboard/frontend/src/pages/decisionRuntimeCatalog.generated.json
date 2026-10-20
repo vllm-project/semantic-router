@@ -132,6 +132,15 @@
       "minMemoryGiB": 72
     },
     {
+      "id": "vllm-sr/d3-turbo",
+      "name": "d3-turbo",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72
+    },
+    {
       "id": "vllm-sr/d3-flash",
       "name": "d3-flash",
       "provider": "vllm-sr",
