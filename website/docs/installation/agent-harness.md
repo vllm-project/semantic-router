@@ -65,6 +65,22 @@ the answer plus `x-vsr-selected-recipe` and `x-vsr-selected-model`; HTTP success
 alone does not verify the output or route. See [routing
 receipts](../troubleshooting/vsr-headers) and [CLI previews and probes](../api/cli).
 
+### Model names the harness picks itself
+
+A harness can request models other than the one you configured. Claude Code,
+for example, asks for its own Haiku model ID when it starts an Explore
+subagent. The Router answers a model it does not publish with "the requested
+model is not available", and that subagent fails. Point every model setting
+the harness has at an entrypoint (for Claude Code, `ANTHROPIC_MODEL` and the
+`ANTHROPIC_DEFAULT_*_MODEL` variables), or list the IDs it sends in the
+entrypoint's `model_names`:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, claude-haiku-5-5]
+    recipe: default
+```
+
 ## Set budgets before running a task
 
 `GET /v1/models` discovers virtual names and routing metadata; it does not
@@ -105,6 +121,12 @@ for identity priority and privacy boundaries.
 Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
+
+Claude Code sends `x-claude-code-session-id` on every Messages request and
+does not send `x-session-id`. To hold its runs, set
+`identity.headers.session: x-claude-code-session-id`. Its subagents send the
+same session ID as the agent that started them, so under that setting they
+are held on the model their parent was given.
 
 ### Agents that send tool output as messages
 
