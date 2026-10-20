@@ -3,7 +3,7 @@ is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/api/router.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由器接口 {#router-api}

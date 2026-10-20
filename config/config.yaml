@@ -26,6 +26,9 @@ listeners:
     # Native System One inference has its own explicit public-model scope.
     systemone:
       models: [decision-public]
+      # The longest the listener waits for a model it calls directly, however
+      # long a request's options.deadline_ms asks for (10 minutes by default).
+      max_deadline_ms: 600000
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -256,6 +259,8 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
+        - name: business-adapter
+          description: Adapter specialized for business strategy and operations prompts.
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -909,6 +914,12 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+        # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
+        - model: qwen3-32b
+          lora_name: business-adapter
+          use_reasoning: true
+          reasoning_mode: enabled
+          reasoning_effort: low
       candidateIterations:
         - variable: candidate
           source: models
@@ -1043,6 +1054,16 @@ routing:
               max_tools: 16
               max_new_tools_per_turn: 2
               pin_called_tools: true
+        - type: masking
+          configuration:
+            enabled: true
+            threshold: 0.85
+            entity_types:
+              - EMAIL_ADDRESS
+              - PHONE_NUMBER
+            placeholders:
+              EMAIL_ADDRESS: "[EMAIL_{index}]"
+              PHONE_NUMBER: "[PHONE_{index}]"
       emits:
         - kind: retention
           retention:

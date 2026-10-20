@@ -133,12 +133,13 @@ several models. The contract is the OpenAPI document served at
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /v1/decisions` | Answer Choice, Noul, Score, Set and Span questions about a state. `POST /v1/systemone` is the same. |
+| `POST /v1/decisions` | Answer Choice, Noul, Score, Box, Set and Span questions about a state; a failed question is answered in place. |
+| `POST /v1/systemone` | The same requests, answered as System One answers them: a request with a failed question fails as a whole ([System One compatibility](#system-one-compatibility)). |
 | `POST /v1/classify` | Run a classification head over texts, text pairs or grounded answers: label probabilities, independent label scores or token spans. |
 | `POST /v1/embeddings` | OpenAI-compatible embeddings of text, images and audio, with `dimensions` and `layer`. |
 | `POST /v1/rerank` | Score documents against a query. |
 | `POST /v1/bundle` | Several of the above, for one or more models, in one call. |
-| `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version`. |
+| `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version`. `models` lists the decision models as `{name, description, release_date}`, the shape the System One SDKs read. |
 | `GET /health` | Readiness: 200 when every model is ready, 503 otherwise. `status` is `starting`, `loading`, `warming`, `ready`, `degraded` or `failed`, and a process that serves several models lists each model's state. |
 | `GET /health/live` | Liveness: 200 with `"status": "alive"` while the process serves requests, whether or not its models are ready. |
 | `GET /metrics` | Prometheus metrics. |
@@ -177,19 +178,28 @@ HTTP exchange. The router records it as a metric for every call.
 
 A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
-`model_not_found`, 413 `request_too_large`, 422 `unsupported_surface` (the
-model does not serve that endpoint), 429 `overloaded`, 503 `not_ready`. A
-rejected image or video adds its `reason` (for example `video_too_long`,
-`image_too_large` or `video_malformed`) and, when it broke a limit, the
-`limit`. These fixed words never carry request data, so the Router's public
+`model_not_found`, 413 `request_too_large`, 415 `unsupported_media_type` (a
+`Content-Encoding` other than one layer of gzip or zstd), 422
+`unsupported_surface` (the model does not serve that endpoint), 429
+`overloaded`, 503 `not_ready`. A rejected image, video, asset or body adds its
+`reason` (for example `video_too_long`, `image_too_large`, `asset_unreferenced`
+or `encoding_malformed`) and, when it broke a limit, the `limit`. A forward
+that runs out of device memory answers 413 `request_too_large` when the
+request had the forward to itself and 429 `overloaded` when it shared it with
+other requests. These fixed words never carry request data, so the Router's public
 System One API answers with them and keeps the runtime's message private: it
 says `video longer than 300 s` where the runtime says why in its own words.
 The Router answers a deployment whose workers are all busy the same way, 429
 `overloaded`, and one with no ready worker 503 `not_ready`; both carry
 `Retry-After` (1 and 5 seconds). In Engine mode a call that runs past the
-Router's 30-second budget returns 504 `systemone_deadline_exceeded`.
+Router's 30-second budget returns 504 `systemone_deadline_exceeded`; a request
+whose `options.deadline_ms` is longer, such as a long-context one, waits that
+long instead, up to the listener's `systemone.max_deadline_ms` (10 minutes by
+default).
 A failed item of a request (one input or one question) carries its own error
-code and never fails the others.
+code and never fails the others; a failed question also carries a fixed
+`reason`. `POST /v1/systemone` is the exception: there a failed question fails
+the request ([System One compatibility](#system-one-compatibility)).
 
 ### Long inputs
 
@@ -348,7 +358,7 @@ answered these two requests on CPU; the numbers are rounded.
     "domain": {
       "type": "choice",
       "choice": "code",
-      "confidence": 0.99,
+      "confidence": 1.0,
       "probabilities": {"code": 1.0, "math": 0.0, "other": 0.0},
       "abstain_probability": 0.01
     },
@@ -356,7 +366,7 @@ answered these two requests on CPU; the numbers are rounded.
     "difficulty": {
       "type": "score",
       "score": 1.3,
-      "confidence": 0.28,
+      "confidence": 0.0,
       "legend": {"0": "Trivial", "1": "Moderate", "2": "Hard"},
       "probabilities": {"0": 0.13, "1": 0.43, "2": 0.43}
     }
@@ -417,11 +427,25 @@ the question to choose another.
 }
 ```
 
+`confidence` is System One's published statistic. For a Choice with n options
+it is `(p_max - 1/n) / (1 - 1/n)`: how far the chosen option sits above an even
+split. For a Score with levels 0 to n - 1 it is
+`max(0, 1 - sum_i p_i |i - m| / MAD_unif)`, where m is the most likely level and
+`MAD_unif = sum_i |i - (n - 1)/2| / n` is the same spread for an even
+distribution: probability on a neighbouring level lowers it less than the same
+probability further away. Above, Vela is torn between Moderate and Hard, so the
+Score's confidence is 0. A Noul has none: its `noul` already says how sure it
+is.
+
 An invalid question is answered `{"type", "error": "invalid_question",
-"message"}`, where the message names the field, such as `set questions do not
-take ['colour']`; the other questions are answered as usual. A request in which
-no question is valid is answered 400 `invalid_request`, with each question's
-reason in the message.
+"reason", "message"}`, where the message names the field, such as `set
+questions do not take ['colour']`; the other questions are answered as usual.
+`reason` is a fixed word, such as `question_malformed` or `box_unsupported`, that
+never carries request data. A Choice or Score may omit `instructions` (the
+model chooses the best matching option), and so may a Noul whose criteria
+describe an outcome. A request in which no question is valid is answered 400
+`invalid_request`, with each question's reason in the message and the first
+one's `reason` and `question`.
 
 A request can ask about further states in the same call. Each entry of
 `states` holds a `state` and its own `questions`, is read exactly as a request
@@ -465,11 +489,19 @@ request take at most `limits.video_max_tokens` input tokens. An entry of
 without its modality, fails the request with 400 `invalid_request` and its
 `reason`. A worker
 started directly reads bodies of at most `--max-request-bytes`, so raise it to
-send large videos; the Router gives the workers it manages 64 MiB.
+send large videos; the Router gives the workers it manages 96 MiB.
+
+A Decision 3.0 package whose `decision_config.json` declares a state-once
+`attention_mode` (`prefix_bidir`, `prefix_causal` or `causal`) reads each
+state once: its images, videos and text form one state block, and every
+question branches from it. Asking more questions about one state then costs
+only their own tokens, and `usage.input_tokens` counts the state once and each
+question's block. Its answers are those of each question asked alone, up to
+rounding. `vllm-sr/d3-turbo` is such a package.
 
 ```json title="POST /v1/systemone"
 {
-  "model": "d3-lite",
+  "model": "d3-turbo",
   "state": "Is the attached receipt complete, and does the clip show it being paid?",
   "images": ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."],
   "videos": ["data:video/mp4;base64,AAAAIGZ0eXBpc29t..."],
@@ -483,6 +515,115 @@ send large videos; the Router gives the workers it manages 64 MiB.
 `src/model-runtime/tools/reference_examples.py --url <runtime>` sends this
 section's requests to a runtime that serves Vela 2.0 0.3B and checks that the
 answers match.
+
+### System One compatibility
+
+`POST /v1/systemone` accepts System One requests as JSON, compressed JSON or
+multipart bodies, and answers with System One fields. It also accepts the
+extensions above (`images`, `videos`, `states`, Set and Span, `choices` /
+`levels` / `labels`, `options`). A model the process does not serve is
+answered with an error that names the served models.
+
+**Bodies.** A body may be compressed with one layer of `Content-Encoding`
+`gzip` (or `x-gzip`) or `zstd` with a window of at most 8 MiB; the size limit
+applies to the body as sent and again once decoded. Another coding, or more
+than one, is 415. A body may be `multipart/form-data`: the first part,
+`request`, holds the JSON request, and every other part holds one image's
+bytes and is claimed by exactly one asset.
+
+**Assets.** A top-level `assets` object holds images by reference, as
+`{"type": "image", "data_base64": "..."}` or, in a multipart body,
+`{"type": "image", "part": "<part name>"}`. Each reference is replaced
+wherever it occurs in a string of the state, of a question's `instructions`
+or of its options: a string equal to a reference is that image, a longer one
+is split at each occurrence, and object keys are never replaced. Every asset
+must be used, a reference has 1 to 1,024 bytes (65,536 for all of them), and
+each use adds the image again: its tokens count where it sits. The format is
+read from the bytes (PNG, JPEG or WebP; animated images are refused), and an
+image may have up to 16 MiB. One rejected image fails the request.
+
+```json title="POST /v1/systemone"
+{
+  "model": "d3-lite",
+  "state": {"receipt": "<receipt>", "note": "Uploaded by the customer."},
+  "assets": {"<receipt>": {"type": "image", "data_base64": "/9j/4AAQSkZJRgABAQ..."}},
+  "questions": {
+    "complete": {"type": "noul", "instructions": "Does <receipt> show a total, a date and a merchant?"}
+  }
+}
+```
+
+Where a model reads images is its card's `image_placements`. Every model with
+the `image` modality reads the state's images: a use in the state is read as
+one more image in front of the state, after `images`, and the state's text
+names it `[image k]`. Where the card also lists `instructions` or `criteria`,
+an image in a question's instructions or options belongs to that question
+alone; on other models that question fails with `question_images_unsupported`
+rather than being moved into the state, where it would change the other
+questions' answers. Put an image several questions share in the state: it is
+read once there.
+
+**Box.** A `box` question locates what its instructions describe in an image:
+the one image its instructions reference, else the state's only image
+(`box_needs_image` and `box_target_ambiguous` otherwise). With `at`, a number
+of seconds, it locates it at that moment of the state's only video, and a
+`track` question at every sampled moment of it, `rate` times per second: 1
+(the default) or 2. Answers:
+
+```json title="Box answers"
+{"type": "box", "box": {"top": 0.13, "left": 0.25, "bottom": 0.23, "right": 0.35}, "confidence": 0.81}
+{"type": "box", "box": {"top": 0.2, "left": 0.1, "bottom": 0.6, "right": 0.5}, "confidence": 0.77, "time": 4.5}
+{"type": "track", "track": [{"time": 0.0, "box": {"top": 0.2, "left": 0.1, "bottom": 0.6, "right": 0.5}, "confidence": 0.9, "visible": 0.98}]}
+```
+
+Edges are fractions of the image's height and width from its top-left corner,
+as the image was sent. A box is always given, so pair it with a Noul when the
+target may be absent; `visible` is the probability that the target is visible
+at that moment. `confidence` follows the model card's formula and may be
+`null`. A model answers `box` and `track` only where its card's
+`question_types` list them; otherwise the question fails with `box_unsupported`
+or `track_unsupported`. Where the card has `limits.box_video_max_seconds`, a
+`box` question with `at` and a `track` question read a clip of at most that
+many seconds: a longer clip, or one whose length cannot be read from its
+container, fails that question with `box_video_too_long`. Every other question
+about a video keeps `limits.video_max_seconds`.
+
+**Errors.** On `/v1/systemone` a request any of whose questions fails is
+answered as a whole, as System One answers it, so that every answer a client
+receives has its question's type: `{"error": {"code": "question_failed", "question_error",
+"reason", "question", "message"}}`, 422 for `invalid_question`, 400 for
+`max_length_exceeded`, `scan_budget_exceeded` and `invalid_input`, 500 for
+`invalid_model_output`, 503 for `unavailable` and 504 for `deadline_exceeded`.
+The first failed question decides, and the message lists them all.
+`/v1/decisions` answers each failed question in place.
+
+**Long context.** A model whose card has `limits.validated_input_tokens` caps
+each question (the state and that question) at that length, the one it was
+validated at. A request with `"options": {"long_context": true}` may have up
+to `limits.max_input_tokens` per question, slower and less accurate; a longer
+question fails with `max_length_exceeded`, reason `question_tokens`. A model
+without `validated_input_tokens` reads up to `max_input_tokens` either way. A
+state-once model (`usage: state_once`) also caps each request at
+`limits.max_request_tokens`: its state once and every question's own tokens,
+with or without long context (the frame windows a video Box or track question
+reads are bounded by the video limits instead); a longer request fails as a
+whole with 400 `invalid_request`, reason `request_tokens`, and the cap as
+`limit`.
+
+In summary:
+
+| Area | vLLM Semantic Router |
+| --- | --- |
+| Image formats | PNG, JPEG, WebP |
+| Image size | up to 16,000,000 pixels and an aspect ratio of 200, read at the model's `image_max_pixels` (resized) |
+| Images in questions and options | models whose `image_placements` list them; otherwise 422 `question_images_unsupported` |
+| Box and track | models whose `question_types` list them; otherwise 422 `box_unsupported` or `track_unsupported` |
+| A malformed question | 422 for the request on `/v1/systemone`; on `/v1/decisions` that question fails alone |
+| Context | `validated_input_tokens` per question by default, `max_input_tokens` with long context; state-once models: `max_request_tokens` per request (the state once and every question) |
+| Models | the served model IDs; any other model is answered with the served models |
+| `GET /v1/models` | `{models}` and the runtime's cards (`data`) |
+| Usage | the state once on models whose card says `usage: state_once`; each question's copy otherwise |
+| Request size | 48 MiB on the Router's public API; `--max-request-bytes` on a worker |
 
 ## Router configuration
 

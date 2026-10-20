@@ -11,7 +11,7 @@ import (
 // (src/model-runtime/vllm_srun/api/openapi.yaml info.version) this client was
 // generated from. A Router and its model runtime come from one release, so a
 // runtime that serves any other version is refused.
-const RuntimeAPIVersion = "3.0.0"
+const RuntimeAPIVersion = "3.2.0"
 
 // processHealth is a runtime process's /health: its own state and, when it
 // serves several models, each model's state.
