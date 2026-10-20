@@ -22,7 +22,7 @@ func systemOneManager(t *testing.T, invoke http.HandlerFunc) *Manager {
 	t.Helper()
 	fake := runtimetest.New(runtimetest.Model{ID: "served"})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/systemone" {
+		if r.URL.Path == "/v1/decisions" {
 			invoke(w, r)
 			return
 		}

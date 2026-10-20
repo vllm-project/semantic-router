@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
+from ...quantization import FP4_PER_BYTE, METADATA, PACK
 from ...registry.artifacts import (
     named_files,
     read_json,
@@ -34,7 +35,14 @@ MANIFEST_SCHEMA = "d3-package-manifest/1"
 FORMAT_ID = "d3-code-readout-v1"
 FORMAT_VERSION = 1
 PROMPTS = ("d3",)
-ATTENTION_MODES = ("causal", "noncausal_full_attention")
+NONCAUSAL = "noncausal_full_attention"
+# Layouts in which no state token attends to a question: a request's state block is
+# encoded once and each question branches from it (the native engine's ``branch``).
+# ``prefix_bidir``: the state attends within itself, both ways; a question block attends
+# to the state and within itself, both ways. ``prefix_causal``: the same with a
+# causal state. ``causal``: every token attends to itself and the tokens before it.
+STATE_ONCE_MODES = ("causal", "prefix_bidir", "prefix_causal")
+ATTENTION_MODES = (NONCAUSAL, *STATE_ONCE_MODES)
 READOUT_DTYPES = ("float32", "bfloat16")
 MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
@@ -217,6 +225,13 @@ def check_decision_config(config: Any) -> dict[str, Any]:
         raise PackageError(
             f"max_length must be null or an integer >= {MIN_INPUT_TOKENS}"
         )
+    validated = config.get("validated_length")
+    if validated is not None and (
+        type(validated) is not int or validated < MIN_INPUT_TOKENS
+    ):
+        raise PackageError(
+            f"validated_length must be null or an integer >= {MIN_INPUT_TOKENS}"
+        )
     return config
 
 
@@ -238,7 +253,12 @@ def check_config(config: Any) -> dict[str, Any]:
 def tensor_groups(
     root: Path, weights: tuple[str, ...]
 ) -> tuple[dict[str, int], str, str | None]:
-    """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes."""
+    """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes.
+
+    A quantized layer (``quantization.py``) counts its weights: an int4 one eight
+    per ``weight_packed`` int32 word, an NVFP4 one two per uint8 byte; scales,
+    global scales, zero points and shapes are not parameters.
+    """
     counts: dict[str, int] = {}
     prefixes: dict[str, set[str]] = {"text": set(), "vision": set()}
     for name in weights:
@@ -260,7 +280,14 @@ def tensor_groups(
                 )
             group = "vision" if vision else "text"
             prefixes[group].add(vision or text or "")
-            counts[group] = counts.get(group, 0) + math.prod(shape)
+            leaf = tensor.rpartition(".")[2]
+            if leaf in METADATA:
+                continue
+            per = 1
+            if leaf == "weight_packed":
+                per = FP4_PER_BYTE if meta.get("dtype") == "U8" else PACK
+            size = math.prod(shape) * per
+            counts[group] = counts.get(group, 0) + size
     if len(prefixes["text"]) != 1 or len(prefixes["vision"]) > 1:
         raise PackageError("checkpoint tensors use mixed name prefixes")
     vision_prefix = next(iter(prefixes["vision"]), None)

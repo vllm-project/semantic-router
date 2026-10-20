@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Generic, Protocol, TypeVar
 
 BUILT_IN_LATEST_SUBDIR = Path("built-in") / "latest"
+CI_SHARDS_PER_SOURCE = 3
 
 
 class RecipeLike(Protocol):

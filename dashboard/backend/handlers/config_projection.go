@@ -22,7 +22,8 @@ func ConfigDeploymentsHandler() http.HandlerFunc {
 
 		deployments, err := configProjectionStore.ListDeployments()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to list deployments: %v", err)
+			http.Error(w, "failed to list deployments", http.StatusInternalServerError)
 			return
 		}
 
@@ -55,10 +56,11 @@ func ConfigDeploymentDetailHandler() http.HandlerFunc {
 		deployment, err := configProjectionStore.GetDeployment(version)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
-				http.Error(w, err.Error(), http.StatusNotFound)
+				http.Error(w, "deployment not found", http.StatusNotFound)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to get deployment: %v", err)
+			http.Error(w, "failed to get deployment", http.StatusInternalServerError)
 			return
 		}
 
@@ -84,7 +86,8 @@ func ActiveConfigProjectionHandler() http.HandlerFunc {
 
 		projection, err := configProjectionStore.GetActiveProjection()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to get active projection: %v", err)
+			http.Error(w, "failed to get active projection", http.StatusInternalServerError)
 			return
 		}
 
