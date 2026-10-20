@@ -1129,6 +1129,10 @@ def test_a_burst_planned_over_more_than_the_window_shares_one_forward(
     runtime = runtimes["prefix_bidir", "auto"]
     served = runtime.lookup(None)
     monkeypatch.setattr(served.scheduler.limits, "batch_window_ms", 200.0)
+    # Pin the cost per token that sizes merged forwards, so the host's speed cannot split the burst.
+    monkeypatch.setitem(
+        served.model._token_seconds, "text", COALESCED_FORWARD_SECONDS / 10_000
+    )
     plan = served.model.plan_surface
 
     def slow(surface, request):
