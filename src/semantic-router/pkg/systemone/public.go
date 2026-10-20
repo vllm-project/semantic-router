@@ -157,7 +157,11 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")
+			if routed {
+				publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")
+			} else {
+				publicSystemOneErrorMessage(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded", deadlineExceeded(wait, limit))
+			}
 			return
 		}
 		if err != nil && (code < 400 || code > 599) {
