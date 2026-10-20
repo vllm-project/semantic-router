@@ -15,7 +15,8 @@ from pydantic import ValidationError
 
 @pytest.fixture
 def native_document():
-    return yaml.safe_load("""
+    return yaml.safe_load(
+        """
 version: v0.3
 listeners:
   - name: native
@@ -59,7 +60,8 @@ recipes:
             stages:
               - {name: fast, kind: native, model: kai}
               - {name: strong, kind: native, model: strong}
-""")
+"""
+    )
 
 
 def test_native_round_trip_and_listener_scope(native_document, tmp_path):
