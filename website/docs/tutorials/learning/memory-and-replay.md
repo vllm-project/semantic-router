@@ -161,3 +161,9 @@ at the low end of its interval against every other model's high end, and it is
 not already the decision's first `modelRefs` entry, the command adds a
 `default_model` finding and a patch that moves it to the front. Models need at
 least 20 runs with outcomes before they are compared.
+
+A run whose calls went to more than one model is counted under
+`switched_runs` and left out of the rates, because its outcome and cost belong
+to several models. That covers a run the router moved, a harness falling back
+to another model, and a subagent that shares the run's session but runs on a
+different model.

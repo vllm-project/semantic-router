@@ -139,8 +139,9 @@ def _mean_interval(values: list[float]) -> tuple[float, float, float]:
 def model_run_stats(model_runs: list[_Run]) -> dict[str, Any]:
     """Success and cost statistics over a model's runs that stayed on it.
 
-    A run the router moved to another model mid-way (for example a rescue)
-    mixes two models' work, so it is counted but kept out of the statistics."""
+    A run whose calls went to more than one model mixes their work: the router
+    moved it (a rescue), the harness fell back to another model, or a subagent
+    of the run used another model. It is counted but kept out of the statistics."""
     kept = [r for r in model_runs if len(r.models) <= 1]
     labeled = [r for r in kept if r.outcome is not None]
     stats: dict[str, Any] = {
