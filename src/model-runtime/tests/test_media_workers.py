@@ -1,5 +1,6 @@
 """Request media decoded in worker processes: the same patch rows and the same rejections as in-process decoding."""
 
+import os
 import pickle
 
 import pytest
@@ -47,6 +48,15 @@ def test_without_workers_decoding_runs_on_the_calling_thread(workers):
     with pytest.raises(MediaError) as caught:
         media.submit(img.load, "not a data url", SETTINGS).result()
     assert caught.value.reason == "image_format"
+
+
+def test_stopping_the_workers_waits_for_them_to_exit(workers):
+    workers(1)
+    pid = media.outcome(media.submit(os.getpid), os.getpid)
+    assert pid != os.getpid()
+    media.stop()
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
 
 
 def test_worker_processes_decode_images_bit_for_bit(workers, png_url):

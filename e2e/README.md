@@ -115,22 +115,19 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **standalone**: the Router's own listener with Helm defaults, provider-observed chat routing, model listing, backend failover, typed errors, decision-model configuration, and config rollout. This profile does not yet qualify the complete standalone SSE path.
 - **routing-errors**: all four Router error probes through Envoy, plus a routed positive control, without learned models or a default provider. The baseline retains its three unknown-model probes and its genuine default-provider fallback checks; `standalone` also runs all four error probes. Keeping the no-route policy separate avoids changing the baseline during parallel tests.
 - **model-runtime**: Router-managed and attached model runtimes on tiny fixture models: process groups, task signals and decision signals against the runtimes' own answers, the decision selector, request bundles, supervisor restarts, and fail-open.
 - **model-runtime-real** (opt-in, downloads about 4 GB): real Decision 2.0 Kai-0.6B and the Vela Domain, PII and Guard defaults on CPU in the Router's managed runtime; clear prompts take the routes the models decide, and the Router routes on Kai's own answer. Run it with `make e2e-test E2E_PROFILE=model-runtime-real` on a machine with Hugging Face Hub access.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
-- **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **category-remote-backend**: shared remote category `http_classify` backend.
 - **complexity-remote-backend**: shared remote complexity `score.v1` backend, with no local candidates so a verdict can only come from the remote score.
-- **llm-d**: llm-d inference-gateway health and router smoke coverage.
 - **looper**: deterministic Looper algorithm contracts.
-- **istio**: sidecar, mTLS, and tracing behavior.
-- **agentgateway**: agentgateway routing and ExtProc policy enforcement.
 - **production-stack**: HA, load balancing, failover, and load checks.
 - **ml-model-selection**: trained model-selector behavior.
 - **multi-endpoint**: environment policy across several backends.
@@ -142,7 +139,6 @@ until the selected cases are known to be isolated.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary, restart-recovery, and single-shadow failure-isolation coverage.
-- **dynamo**: manual NVIDIA Dynamo batching and GPU health coverage.
 - **vectorstore-registry**: manual metadata restart-recovery coverage.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
