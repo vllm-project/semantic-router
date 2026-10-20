@@ -20,17 +20,35 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		defer recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	}
 
-	if looperResponse := r.handleLooperResponseBody(v.ResponseBody.Body, v.ResponseBody.GetEndOfStream(), ctx); looperResponse != nil {
-		return looperResponse, nil
+	responseBody, decoded, failure := r.decodeUpstreamResponseBody(v.ResponseBody.Body, v.ResponseBody.GetEndOfStream(), ctx)
+	if failure != nil {
+		return failure, nil
+	}
+	response := r.handleDecodedResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), completionLatency, ctx)
+	if decoded {
+		deliverDecodedResponseBody(response, responseBody)
+	}
+	return response, nil
+}
+
+// handleDecodedResponseBody runs the response phases on the upstream body as
+// the router reads it, after any content coding is removed.
+func (r *OpenAIRouter) handleDecodedResponseBody(
+	responseBody []byte,
+	endOfStream bool,
+	completionLatency time.Duration,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if looperResponse := r.handleLooperResponseBody(responseBody, endOfStream, ctx); looperResponse != nil {
+		return looperResponse
 	}
 
-	responseBody := v.ResponseBody.Body
 	if isUpstreamTransportError(ctx) {
-		return r.handleUpstreamTransportError(responseBody, ctx), nil
+		return r.handleUpstreamTransportError(responseBody, ctx)
 	}
 
 	if ctx.IsStreamingResponse {
-		return r.handleSemanticStreamingResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), ctx), nil
+		return r.handleSemanticStreamingResponseBody(responseBody, endOfStream, ctx)
 	}
 	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
 		ctx.TraceContext,
@@ -43,14 +61,14 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			"error":      recoveryErr.Error(),
 		})
 		if contextRecoveryFailClosed(ctx) {
-			return r.createErrorResponse(502, "Context recovery followup failed"), nil
+			return r.createErrorResponse(502, "Context recovery followup failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency), nil
+	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency)
 }
 
 func contextRecoveryFailClosed(ctx *RequestContext) bool {

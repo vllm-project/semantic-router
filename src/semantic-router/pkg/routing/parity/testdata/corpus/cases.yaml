@@ -188,6 +188,52 @@ cases:
       body: '{"model":"vllm-sr/auto","input":"Write an essay outline about tides.","store":false}'
     upstream: anthropic-ok
 
+  # A client that accepts gzip lets a buffered reply arrive gzip-encoded. The
+  # Router decodes the reply before any phase reads it and sends the client
+  # the decoded bytes (#5099).
+  - name: gzip-accepting-client
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [accept-encoding, "gzip, deflate"]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Hello there."}]}'
+    upstream: chat-ok-gzip
+
+  - name: gzip-anthropic-backend
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [accept-encoding, "gzip, deflate"]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Write a short poem about rivers."}],"max_tokens":64}'
+    upstream: anthropic-ok-gzip
+
+  - name: gzip-upstream-error
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [accept-encoding, gzip]
+      body: '{"model":"general-small","messages":[{"role":"user","content":"Hello there."}]}'
+    upstream: chat-503-gzip
+
+  # A streamed reply is parsed as it arrives, so the provider is not asked for
+  # gzip even when the client accepts it.
+  - name: gzip-client-streaming-keeps-identity
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [accept, text/event-stream]
+        - [accept-encoding, gzip]
+      body: '{"model":"vllm-sr/auto","stream":true,"messages":[{"role":"user","content":"Hello there."}]}'
+    upstream: chat-sse
+
 upstreams:
   chat-ok:
     status: 200
@@ -222,3 +268,26 @@ upstreams:
       - [content-type, application/json]
       - [retry-after, "2"]
     body: '{"error":{"message":"rate limited","type":"rate_limit_error"}}'
+
+  # Replies sent gzip-encoded. The text carries a code point above U+FFFF, the
+  # kind of reply #5099's provider path only returns compressed.
+  chat-ok-gzip:
+    status: 200
+    encoding: gzip
+    headers:
+      - [content-type, application/json]
+    body: '{"id":"chatcmpl-parity","object":"chat.completion","created":1700000000,"model":"upstream-model","choices":[{"index":0,"message":{"role":"assistant","content":"💡 Hello from the upstream model."},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":6,"total_tokens":18}}'
+
+  anthropic-ok-gzip:
+    status: 200
+    encoding: gzip
+    headers:
+      - [content-type, application/json]
+    body: '{"id":"msg_parity","type":"message","role":"assistant","model":"claude-compatible-1","content":[{"type":"text","text":"💡 Rivers carve the land."}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}'
+
+  chat-503-gzip:
+    status: 503
+    encoding: gzip
+    headers:
+      - [content-type, application/json]
+    body: '{"error":{"message":"backend overloaded","type":"server_error"}}'
