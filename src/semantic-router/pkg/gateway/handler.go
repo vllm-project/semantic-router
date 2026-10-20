@@ -160,12 +160,14 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	ctx = routing.WithListenerModels(ctx, serving.Models)
+	x.record.RequestID = r.Header.Get("X-Request-ID")
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if errors.Is(err, errBodyTooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
 		return
 	}
 	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
 		return
 	}
 	var strip map[string]bool

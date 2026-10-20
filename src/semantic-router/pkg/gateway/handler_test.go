@@ -3,14 +3,19 @@ package gateway
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"testing/iotest"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
@@ -459,6 +464,136 @@ func TestHandlerRejectsOversizedBodies(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("four")))
 	if rec.Code != http.StatusRequestEntityTooLarge || len(p.headers) != 0 {
 		t.Fatalf("response = %d", rec.Code)
+	}
+}
+
+func TestHandlerRejectsUnreadableBodies(t *testing.T) {
+	tests := []struct {
+		name     string
+		readErr  error
+		canceled bool
+	}{
+		{name: "unexpected EOF", readErr: io.ErrUnexpectedEOF},
+		{name: "I/O error", readErr: errors.New("body reader failed")},
+		{name: "disconnected client", readErr: context.Canceled, canceled: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			p, u := &fakeProcessor{}, &fakeUpstream{}
+			h := newTestHandler(t, p, u)
+			var records []AccessRecord
+			h.opts.AccessLog = func(r AccessRecord) { records = append(records, r) }
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			req.Header.Set("X-Request-ID", "unreadable-body")
+			req.Body = io.NopCloser(io.MultiReader(
+				strings.NewReader(`{"model":`), iotest.ErrReader(test.readErr),
+			))
+			rec := httptest.NewRecorder()
+			var writer http.ResponseWriter = rec
+			if test.canceled {
+				ctx, cancel := context.WithCancel(req.Context())
+				cancel()
+				req = req.WithContext(ctx)
+				writer = &disconnectedResponseWriter{ResponseWriter: rec}
+			}
+			h.ServeHTTP(writer, req)
+
+			if len(records) != 1 {
+				t.Fatalf("access records = %d, want 1", len(records))
+			}
+			if record := records[0]; record.Status != http.StatusBadRequest ||
+				record.RequestID != "unreadable-body" || record.BytesSent != int64(rec.Body.Len()) {
+				t.Errorf("access record = %+v, response bytes = %d", record, rec.Body.Len())
+			}
+			if len(p.models) != 0 || len(u.got) != 0 {
+				t.Error("an unreadable body reached routing or the upstream")
+			}
+			if test.canceled {
+				if rec.Code != http.StatusBadRequest || rec.Body.Len() != 0 {
+					t.Fatalf("disconnected response = %d %q", rec.Code, rec.Body.String())
+				}
+				return
+			}
+			assertInvalidRequestBodyResponse(t, rec.Code, rec.Header(), rec.Body.Bytes())
+		})
+	}
+}
+
+type disconnectedResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (*disconnectedResponseWriter) Write([]byte) (int, error) {
+	return 0, io.ErrClosedPipe
+}
+
+func TestHandlerRejectsMalformedChunkedBodyOverHTTP(t *testing.T) {
+	p, u := &fakeProcessor{}, &fakeUpstream{}
+	h := newTestHandler(t, p, u)
+	records := make(chan AccessRecord, 1)
+	h.opts.AccessLog = func(r AccessRecord) { records <- r }
+	server := httptest.NewServer(h)
+	defer server.Close()
+	conn, err := net.DialTimeout("tcp", server.Listener.Addr().String(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err = conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	// Deliver part of the body, then an invalid chunk size while the client
+	// remains connected to receive the gateway's error response.
+	prefix := `{"model":`
+	_, err = fmt.Fprintf(conn, "POST /v1/chat/completions HTTP/1.1\r\n"+
+		"Host: localhost\r\nTransfer-Encoding: chunked\r\n"+
+		"X-Request-ID: malformed-chunk\r\nConnection: close\r\n\r\n"+
+		"%x\r\n%s\r\nnot-hex\r\n", len(prefix), prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: http.MethodPost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertInvalidRequestBodyResponse(t, resp.StatusCode, resp.Header, body)
+	select {
+	case record := <-records:
+		if record.Status != http.StatusBadRequest || record.RequestID != "malformed-chunk" ||
+			record.BytesSent != int64(len(body)) {
+			t.Fatalf("access record = %+v, response bytes = %d", record, len(body))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing access record")
+	}
+	if len(p.models) != 0 || len(u.got) != 0 {
+		t.Fatal("a malformed chunked body reached routing or the upstream")
+	}
+}
+
+func assertInvalidRequestBodyResponse(t *testing.T, status int, header http.Header, body []byte) {
+	t.Helper()
+	if status != http.StatusBadRequest || header.Get("Content-Type") != "application/json" {
+		t.Fatalf("response = %d %q %s", status, header.Get("Content-Type"), body)
+	}
+	var response struct {
+		Error struct {
+			Code    string `json:"code"`
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error.Code != "invalid_request_body" || response.Error.Type != "invalid_request_error" ||
+		response.Error.Message != "The request body could not be read." {
+		t.Fatalf("error response = %s", body)
 	}
 }
 

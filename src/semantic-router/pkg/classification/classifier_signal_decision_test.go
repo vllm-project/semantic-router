@@ -153,3 +153,36 @@ func TestPIIToolResultErrorCanFailRequestWithUnknownPolicy(t *testing.T) {
 		t.Fatalf("error = %v, want ErrDecisionUnresolved", err)
 	}
 }
+
+func TestEvaluateDecisionWithEngineConsumesClassifierObservation(t *testing.T) {
+	threshold := 0.8
+	classifier := &Classifier{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Strategy: config.RoutingStrategyPriority,
+			Decisions: []config.Decision{
+				{Name: "typed", Priority: 100, Rules: config.RuleCombination{
+					Type: config.SignalTypeClassifier, Name: "risk", Label: "RISKY",
+					Predicate: &config.NumericPredicate{GTE: &threshold},
+				}},
+				{Name: "fallback", Priority: 1, Rules: config.RuleCombination{Operator: "AND"}},
+			},
+		},
+	}}
+	signals := &SignalResults{
+		Observations: []decision.SignalObservation{{
+			Version: decision.SignalObservationVersionV1, SignalType: config.SignalTypeClassifier, Name: "risk",
+			Availability: decision.SignalObservationAvailable,
+			PayloadType:  config.RemoteClassifierContractLabelDistribution,
+			Payload:      &decision.LabelDistributionObservation{Scores: map[string]float64{"RISKY": 0.9}},
+		}},
+		SignalValues: map[string]float64{"classifier:risk:RISKY": 0.1},
+	}
+
+	result, err := classifier.EvaluateDecisionWithEngine(signals)
+	if err != nil {
+		t.Fatalf("EvaluateDecisionWithEngine failed: %v", err)
+	}
+	if result == nil || result.Decision.Name != "typed" {
+		t.Fatalf("decision = %+v, want typed", result)
+	}
+}

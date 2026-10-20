@@ -28,6 +28,25 @@ class DomainRegistryTests(unittest.TestCase):
         self.assertFalse((REPO_ROOT / "tools/agent/test-domain-registry.yaml").exists())
         self.assertFalse((REPO_ROOT / "tools/agent/task-matrix.yaml").exists())
 
+    def test_experimental_gateway_examples_keep_only_static_checks(self) -> None:
+        for directory in (
+            "agentgateway",
+            "aibrix",
+            "dynamo",
+            "istio",
+            "llm-d",
+            "llmd-base",
+        ):
+            path = f"deploy/kubernetes/{directory}/values.yaml"
+            with self.subTest(path=path):
+                selected = classify([path])
+                self.assertIn(
+                    "experimental-gateway-examples", matching_domains((path,))
+                )
+                self.assertEqual(set(selected.selected_jobs), {"quality", "security"})
+                self.assertEqual(selected.profiles, ())
+                self.assertEqual(selected.pr_images, ())
+
     def test_path_matching_distinguishes_one_level_from_recursive(self) -> None:
         self.assertTrue(path_matches("e2e/root.go", "e2e/*.go"))
         self.assertFalse(path_matches("e2e/testcases/root.go", "e2e/*.go"))

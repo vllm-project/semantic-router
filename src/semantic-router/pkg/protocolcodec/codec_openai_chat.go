@@ -94,10 +94,15 @@ type chatMessageWire struct {
 	AlternateReasoning *string              `json:"reasoning,omitempty"`
 	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
 	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
-	ToolCalls          []chatToolCallWire   `json:"tool_calls,omitempty"`
-	ToolCallID         string               `json:"tool_call_id,omitempty"`
-	Annotations        []chatAnnotationWire `json:"annotations,omitempty"`
-	Name               json.RawMessage      `json:"name,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on response messages. The content is opaque
+	// provider metadata and is not replayed to the client. Client requests
+	// that carry the field are rejected in decodeChatRequestMessage.
+	ProviderSpecificFields json.RawMessage      `json:"provider_specific_fields,omitempty"`
+	ToolCalls              []chatToolCallWire   `json:"tool_calls,omitempty"`
+	ToolCallID             string               `json:"tool_call_id,omitempty"`
+	Annotations            []chatAnnotationWire `json:"annotations,omitempty"`
+	Name                   json.RawMessage      `json:"name,omitempty"`
 }
 
 type chatAudioOutputWire struct {
@@ -355,6 +360,11 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 }
 
 func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+	// Response-only LiteLLM metadata. The shared message wire accepts the
+	// field so upstream replies decode; a client request must not.
+	if err := rejectUnsupportedRequestField("messages.provider_specific_fields", wire.ProviderSpecificFields); err != nil {
+		return llmprotocol.Message{}, err
+	}
 	for _, call := range wire.ToolCalls {
 		if call.Function.TokenizedArguments != nil {
 			return llmprotocol.Message{}, llmprotocol.NewError(

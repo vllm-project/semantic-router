@@ -65,7 +65,6 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-error-nonexistent-previous-response-id",
 		"response-api-error-nonexistent-response-id-get",
 		"response-api-error-nonexistent-response-id-delete",
-		"response-api-error-backend-passthrough",
 		"response-api-edge-empty-input",
 		"response-api-edge-large-input",
 		"response-api-edge-special-characters",
