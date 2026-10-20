@@ -84,17 +84,28 @@ def group_runs(records: list[dict[str, Any]]) -> tuple[dict[str, _Run], int]:
             unidentified += 1
             continue
         model = record_selected_model(record)
-        turn = (int(numeric(record.get("turn_index"))), parse_time(record.get("timestamp")))
+        turn = (
+            int(numeric(record.get("turn_index"))),
+            parse_time(record.get("timestamp")),
+        )
         run = runs.get(key)
         if run is None:
-            run = runs[key] = _Run(decision=record_decision(record), model=model, first_turn=turn)
+            run = runs[key] = _Run(
+                decision=record_decision(record), model=model, first_turn=turn
+            )
         elif turn < run.first_turn:
-            run.decision, run.model, run.first_turn = record_decision(record), model, turn
+            run.decision, run.model, run.first_turn = (
+                record_decision(record),
+                model,
+                turn,
+            )
         run.cost += record_actual_cost(record)
         if model:
             run.models.add(model)
         outcome = record_run_outcome(record)
-        if outcome is not None and (run.outcome is None or outcome[0] >= run.outcome[0]):
+        if outcome is not None and (
+            run.outcome is None or outcome[0] >= run.outcome[0]
+        ):
             run.outcome = outcome
     return runs, unidentified
 
@@ -105,7 +116,11 @@ def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
     p = successes / trials
     denom = 1 + _WILSON_Z**2 / trials
     centre = (p + _WILSON_Z**2 / (2 * trials)) / denom
-    half = _WILSON_Z * math.sqrt(p * (1 - p) / trials + _WILSON_Z**2 / (4 * trials**2)) / denom
+    half = (
+        _WILSON_Z
+        * math.sqrt(p * (1 - p) / trials + _WILSON_Z**2 / (4 * trials**2))
+        / denom
+    )
     return max(0.0, centre - half), min(1.0, centre + half)
 
 

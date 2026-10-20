@@ -427,7 +427,10 @@ def current_default_model(recipe: dict[str, Any] | None, decision: str) -> str:
     if not isinstance(recipe, dict):
         return ""
     for item in (recipe.get("routing") or {}).get("decisions") or []:
-        if isinstance(item, dict) and str(item.get("name") or item.get("id") or "") == decision:
+        if (
+            isinstance(item, dict)
+            and str(item.get("name") or item.get("id") or "") == decision
+        ):
             refs = item.get("modelRefs") or []
             if refs and isinstance(refs[0], dict):
                 return str(refs[0].get("model") or "")
