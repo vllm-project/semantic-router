@@ -352,3 +352,83 @@ def test_an_nvfp4_package_is_refused_on_a_cpu_before_its_weights_load(
     monkeypatch.setattr(engine, "load_backbone", never)
     with pytest.raises(Exception, match="NVFP4 packages need FP4 tensor cores"):
         start_runtime(packed)
+
+
+def test_shared_nvfp4_quantization_holds_one_slice_of_a_long_input(monkeypatch):
+    import weakref
+
+    from vllm_srun.engines.native import quantized
+
+    monkeypatch.setattr(quantized, "NVFP4_ROWS", 4)  # 13 rows: four slices
+    alive, calls = [], []
+
+    def fp4_layer(out_features, seed):
+        weight = torch.randn(
+            out_features, 32, generator=torch.Generator().manual_seed(seed)
+        )
+        layer = quantized.NVFP4Linear(nn.Linear(32, out_features, bias=False))
+        layer.merged, layer.input_global = None, 2.0
+
+        def quantize(rows, global_scale):
+            # stands in for the FP4 copy; an earlier slice's copy must be gone by now
+            assert not [ref for ref in alive if ref() is not None]
+            codes = rows.float() * global_scale
+            alive.append(weakref.ref(codes))
+            calls.append(rows.shape[0])
+            return codes, torch.tensor(global_scale)
+
+        layer.quantize = quantize
+        layer._product = lambda codes, scale: (codes / scale) @ weight.T
+        return layer
+
+    gate, up = fp4_layer(16, 1), fp4_layer(32, 2)
+    plain = nn.Linear(32, 4, bias=False)
+    x = torch.randn(1, 13, 32)
+    alone = [gate(x), up(x), plain(x)]
+    alive.clear()
+    calls.clear()
+    shared = quantized.project(x, gate, up, plain)
+    assert calls == [4, 4, 4, 1]  # one quantization per slice for both layers
+    assert all(got.equal(want) for got, want in zip(shared, alone, strict=True))
+
+
+def unprepared_siblings(shapes, bias=False):
+    """gate / up NVFP4 layers on the CPU with one input and one weight global scale, as ``prepare`` leaves them."""
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    mlp = nn.Module()
+    for name, (rows, columns) in zip(("gate_proj", "up_proj"), shapes, strict=True):
+        layer = NVFP4Linear(nn.Linear(columns, rows, bias=bias))
+        layer.weight_global_scale.fill_(1.0)
+        layer.merged, layer.input_global = None, 2.0
+        setattr(mlp, name, layer)
+    return mlp
+
+
+@pytest.mark.parametrize(
+    "apart",
+    [
+        "input global scale",
+        "weight global scale",
+        "rows not whole 128-row scale tiles",
+        "input width",
+        "bias",
+    ],
+)
+def test_nvfp4_siblings_stay_apart_unless_one_product_gives_their_outputs(apart):
+    from vllm_srun.engines.native import quantized
+
+    control = unprepared_siblings([(256, 64), (256, 64)])
+    assert quantized._mergeable([control.gate_proj, control.up_proj])
+    shapes = [(256, 64), (256, 64)]
+    if apart == "rows not whole 128-row scale tiles":
+        shapes[1] = (144, 64)
+    if apart == "input width":
+        shapes[1] = (256, 96)
+    mlp = unprepared_siblings(shapes, bias=apart == "bias")
+    if apart == "input global scale":
+        mlp.up_proj.input_global = 4.0
+    if apart == "weight global scale":
+        mlp.up_proj.weight_global_scale.fill_(2.0)
+    assert quantized.merge_siblings(mlp) == 0
+    assert mlp.gate_proj.merged is None and mlp.up_proj.merged is None

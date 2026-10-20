@@ -201,3 +201,22 @@ that are already BF16 and contiguous. After a shape's first call, the compiled
 kernel is launched directly, as the FP8 quantization is. After loading, the
 NVFP4 packages hold 17.2 GB of device memory, and 17.9 GB at the peak of the 20
 longest rows (52.2 and 52.8 GB for BF16).
+
+In both NVFP4 packages, q / k / v and gate / up share one input global scale
+and one weight global scale in every layer (the Gated DeltaNet `in_proj_qkv` /
+`in_proj_z` share only the input scale, in all but one layer). Their weights
+are merged at load into one layer per group, so one quantization and one
+block-scaled product replace two or three. Each column comes out the same as
+the separate products from 1 to 9,000 rows, and the parts keep views of the
+merged weight, so device memory is unchanged. q and k reach `attn_prep`, and
+gate and up reach `silu_mul`, as column-slice views of the merged product, so a
+layer's projections peak no higher than the separate ones (89.1 MB both at
+2,048 rows of d3's q / k / v widths; copying q and k out took 142.6 MB). The
+`in_proj_qkv` / `in_proj_z` pair shares its input quantization. On the 1,000 test requests of the
+agreement table, every answer is the same byte for byte. At `--dtype auto`, two
+alternating runs of each:
+
+| NVFP4 | Graphs | Without graphs | Device memory after loading |
+| --- | --- | --- | --- |
+| Separate projections | 23.3 / 23.4 ms | 37.5 / 37.9 ms | 17.2 GB |
+| Merged projections | 21.5 / 21.5 ms | 36.5 / 36.5 ms | 17.2 GB |
