@@ -41,8 +41,11 @@ A new multi-GPU placement uses the first N available GPUs. If fewer are
 available, specify one `--device-ids` value to request colocated workers
 explicitly. Resizing an authored placement repeats its device order. An
 existing visibility mask is honored: for example, host GPU 7 maps to runtime
-ordinal 0 under `ROCR_VISIBLE_DEVICES=7`. Kubernetes uses pod allocation
-ordinals in canonical config and does not accept physical `--device-ids`.
+ordinal 0 under `ROCR_VISIBLE_DEVICES=7`. A mask that names GPUs by UUID
+(`GPU-...`) also selects the platform with `--platform auto`; `--device-ids`
+and new multi-GPU placements still need a mask of host indices. Kubernetes
+uses pod allocation ordinals in canonical config and does not accept physical
+`--device-ids`.
 
 Listener ports and API grants belong in `listeners`; the initial native API
 listener uses port `8899`. Selecting a model never broadens an existing
