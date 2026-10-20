@@ -9,8 +9,10 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -26,6 +28,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/gateway"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -384,5 +387,37 @@ func TestListenerIdentityTrustComesFromTheNamedListener(t *testing.T) {
 	trust := listenerIdentityTrust(cfg, "behind-auth")
 	if !trust.Headers || len(trust.Peers) != 1 || trust.Peers[0].String() != "10.0.0.0/8" {
 		t.Fatalf("trust = %+v", trust)
+	}
+}
+
+func TestNativeLocalSystemOneAnswerGivesPoolRefusalsTheWorkerCodes(t *testing.T) {
+	code := func(body []byte) string {
+		var answer struct {
+			Error struct{ Code string } `json:"error"`
+		}
+		if json.Unmarshal(body, &answer) != nil {
+			return ""
+		}
+		return answer.Error.Code
+	}
+	for _, test := range []struct {
+		name       string
+		result     modelservice.SystemOneResult
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{"every worker full", modelservice.SystemOneResult{}, fmt.Errorf("pool: %w", modelservice.ErrOverloaded), http.StatusTooManyRequests, "overloaded"},
+		{"no ready worker", modelservice.SystemOneResult{}, modelservice.ErrUnavailable, http.StatusServiceUnavailable, "not_ready"},
+		{"worker refused", modelservice.SystemOneResult{Status: 429, Body: []byte(`{"error":{"code":"overloaded","message":"queue full"}}`)}, modelservice.ErrOverloaded, 429, "overloaded"},
+		{"answered", modelservice.SystemOneResult{Status: 200, Body: []byte(`{"answers":{}}`)}, nil, 200, ""},
+		{"transport failure", modelservice.SystemOneResult{}, modelservice.ErrFailed, 0, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			status, body, err := nativeLocalSystemOneAnswer(test.result, test.err)
+			if status != test.wantStatus || code(body) != test.wantCode || !errors.Is(err, test.err) {
+				t.Fatalf("got %d %s %v", status, body, err)
+			}
+		})
 	}
 }

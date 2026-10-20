@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/gateway"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -208,7 +209,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 	remote, _ := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
 	local := func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
 		result, err := models.SystemOne(ctx, deployment, body)
-		return result.Status, result.Body, err
+		return nativeLocalSystemOneAnswer(result, err)
 	}
 	var nativeRouter systemone.Router
 	if lease.Router != nil {
@@ -232,6 +233,20 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		serving.Upstream = set
 	}
 	return serving, lease.Release, nil
+}
+
+// nativeLocalSystemOneAnswer mirrors apiserver.localSystemOneAnswer: a
+// replica-pool refusal before any worker answers gets the worker's own code.
+func nativeLocalSystemOneAnswer(result modelservice.SystemOneResult, err error) (int, []byte, error) {
+	if result.Status == 0 {
+		switch {
+		case errors.Is(err, modelservice.ErrOverloaded):
+			return http.StatusTooManyRequests, []byte(`{"error":{"code":"overloaded","message":"every worker of the deployment is busy"}}`), err
+		case errors.Is(err, modelservice.ErrUnavailable):
+			return http.StatusServiceUnavailable, []byte(`{"error":{"code":"not_ready","message":"the deployment has no ready worker"}}`), err
+		}
+	}
+	return result.Status, result.Body, err
 }
 
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
