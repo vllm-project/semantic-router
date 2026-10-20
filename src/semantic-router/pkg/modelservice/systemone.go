@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -145,9 +146,9 @@ func SystemOneAnswer(result SystemOneResult, err error) (int, []byte, error) {
 	if result.Status == 0 {
 		switch {
 		case errors.Is(err, ErrOverloaded):
-			return http.StatusTooManyRequests, poolOverloadedAnswer, err
+			return http.StatusTooManyRequests, slices.Clone(poolOverloadedAnswer), err
 		case errors.Is(err, ErrUnavailable):
-			return http.StatusServiceUnavailable, poolNotReadyAnswer, err
+			return http.StatusServiceUnavailable, slices.Clone(poolNotReadyAnswer), err
 		}
 	}
 	return result.Status, result.Body, err
