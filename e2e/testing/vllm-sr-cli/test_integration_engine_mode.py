@@ -493,6 +493,17 @@ class TestEngineModeDeadlineLimit(EngineStack):
             failure["error"]["code"], "systemone_deadline_exceeded", failure
         )
 
+    def test_the_server_limit_bounds_a_long_context_request(self):
+        body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
+        body["model"] = PUBLIC_MODEL
+        body["options"] = {"long_context": True}
+        status, failure = self.public("/v1/systemone", body)
+        self.assertEqual(status, 504, failure)
+        self.assertEqual(
+            failure["error"]["code"], "systemone_deadline_exceeded", failure
+        )
+        self.assertIn("systemone.max_deadline_ms", failure["error"]["message"], failure)
+
 
 class TestEngineModeImages(EngineStack):
     fixture = ("decision3", "vision")
