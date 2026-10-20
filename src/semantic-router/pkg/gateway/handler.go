@@ -162,6 +162,11 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		writeError(w, http.StatusNotFound, "routing_disabled", "Chat routing is disabled for this instance.")
 		return
 	}
+	if r.URL.Path == "/" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		writeError(w, http.StatusNotFound, "not_found",
+			"Unknown endpoint: GET /. Use POST /v1/chat/completions or GET /v1/models.")
+		return
+	}
 	ctx = routing.WithListenerModels(ctx, serving.Models)
 	x.record.RequestID = r.Header.Get("X-Request-ID")
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
