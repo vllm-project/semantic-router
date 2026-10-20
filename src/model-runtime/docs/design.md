@@ -1149,8 +1149,8 @@ answers their panels byte for byte. The official wheel still provides torch's
 Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
 ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
 machine code is the released build's. It carries
-code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
-`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for gfx90a, gfx942, gfx950 and gfx1151 (Instinct MI200, MI300 and
+MI350, and Ryzen AI Max; `CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
 code for rather than falling back. Triton's compiled kernels and
 MIOpen's databases live in the model volume, since the charts run the router
 on a read-only root without a home directory.

@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 
 import manual_ci  # noqa: E402
-from manual_ci_feedback import feedback_for_event  # noqa: E402
+from manual_ci_feedback import feedback_for_event, warning  # noqa: E402
 from test_manual_ci import REPO, TRUSTED, FakeGitHub  # noqa: E402
 
 
@@ -233,6 +233,90 @@ class ManualCIFeedbackTests(unittest.TestCase):
         self.assertIn("::warning::", output.getvalue())
         self.assertNotIn("SECRET", output.getvalue())
 
+    def test_http_403_diagnostic_does_not_expose_api_content_or_change_authorization(
+        self,
+    ):
+        self.client.write = manual_ci.GitHubClient().write
+        output = io.StringIO()
+        result = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout='{"message":"SECRET response body"}',
+            stderr="gh: SECRET response and credential (HTTP 403)\n",
+        )
+        with (
+            patch("manual_ci.subprocess.run", return_value=result),
+            contextlib.redirect_stdout(output),
+        ):
+            record = manual_ci.authorize_with_feedback(self.client, self.event)
+            manual_ci.rerun_with_feedback(self.client, record, self.event)
+        self.assertEqual(self.client.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.assertIn("(reaction; HTTP 403)", output.getvalue())
+        self.assertNotIn("SECRET", output.getvalue())
+        self.assertNotIn(REPO, output.getvalue())
+
+    def test_malformed_success_response_has_no_public_payload_or_invented_status(self):
+        self.client.write = manual_ci.GitHubClient().write
+        result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="SECRET malformed JSON", stderr=""
+        )
+        output = io.StringIO()
+        with (
+            patch("manual_ci.subprocess.run", return_value=result),
+            contextlib.redirect_stdout(output),
+        ):
+            record = manual_ci.authorize_with_feedback(self.client, self.event)
+        self.assertEqual(record["pr_run_id"], 123)
+        self.assertIn("(reaction; HTTP status unavailable)", output.getvalue())
+        self.assertNotIn("SECRET", output.getvalue())
+
+    def test_transport_diagnostics_accept_only_a_bounded_http_error_suffix(self):
+        for stderr, expected in (
+            ("gh: SECRET (HTTP 403)\n", 403),
+            ("gh: SECRET (HTTP 502)", 502),
+            ("SECRET connection failed", None),
+            ("SECRET (HTTP 4030)", None),
+            ("SECRET (HTTP 999)", None),
+            ("SECRET (HTTP 403)\nSECRET trailing payload", None),
+        ):
+            for raw in (False, True):
+                with self.subTest(stderr=stderr, raw=raw):
+                    result = subprocess.CompletedProcess(
+                        args=[],
+                        returncode=1,
+                        stdout=b"SECRET body" if raw else "SECRET body",
+                        stderr=stderr.encode() if raw else stderr,
+                    )
+                    client = manual_ci.GitHubClient()
+                    with (
+                        patch("manual_ci.subprocess.run", return_value=result),
+                        self.assertRaises(manual_ci.ManualCIError) as error,
+                    ):
+                        if raw:
+                            client.raw("SECRET endpoint")
+                        else:
+                            client.write("SECRET endpoint", {"body": "SECRET payload"})
+                    self.assertEqual(error.exception.http_status, expected)
+                    self.assertNotIn("SECRET", str(error.exception))
+                    output = io.StringIO()
+                    with contextlib.redirect_stdout(output):
+                        warning("comment", error.exception)
+                    self.assertIn(
+                        f"HTTP {expected}" if expected else "HTTP status unavailable",
+                        output.getvalue(),
+                    )
+                    self.assertNotIn("SECRET", output.getvalue())
+
+    def test_diagnostic_labels_and_status_metadata_cannot_inject_log_content(self):
+        for status in ("403\nSECRET", True, 4030, -403, None):
+            with self.subTest(status=status):
+                error = manual_ci.ManualCIError("SECRET exception", http_status=status)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    warning("SECRET untrusted endpoint", error)
+                self.assertIn("(feedback; HTTP status unavailable)", output.getvalue())
+                self.assertNotIn("SECRET", output.getvalue())
+
     def test_failed_feedback_target_lookup_does_not_block_independent_authorization(
         self,
     ):
@@ -308,13 +392,13 @@ class ManualCIFeedbackTests(unittest.TestCase):
             authorization = Path(directory) / "authorization.json"
             output = Path(directory) / "github-output"
             event.write_text(json.dumps(self.event))
-            with patch.dict(
-                os.environ,
-                {"GITHUB_EVENT_PATH": str(event), "GITHUB_OUTPUT": str(output)},
-            ), patch.object(
-                manual_ci, "GitHubClient", return_value=self.client
-            ), contextlib.redirect_stdout(
-                io.StringIO()
+            with (
+                patch.dict(
+                    os.environ,
+                    {"GITHUB_EVENT_PATH": str(event), "GITHUB_OUTPUT": str(output)},
+                ),
+                patch.object(manual_ci, "GitHubClient", return_value=self.client),
+                contextlib.redirect_stdout(io.StringIO()),
             ):
                 with patch.object(
                     sys,
@@ -381,18 +465,21 @@ class ManualCIFeedbackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             event = Path(directory) / "event.json"
             event.write_text(json.dumps(self.event))
-            with patch.object(
-                sys,
-                "argv",
-                [
-                    "manual_ci.py",
-                    "feedback",
-                    "--event",
-                    str(event),
-                    "--reason",
-                    "controller",
-                ],
-            ), patch.object(manual_ci, "GitHubClient", return_value=self.client):
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "manual_ci.py",
+                        "feedback",
+                        "--event",
+                        str(event),
+                        "--reason",
+                        "controller",
+                    ],
+                ),
+                patch.object(manual_ci, "GitHubClient", return_value=self.client),
+            ):
                 self.assertEqual(manual_ci.main(), 0)
                 self.assertIn(
                     "transfer its authorization evidence",
