@@ -135,3 +135,29 @@ The command writes:
 - `recipe_patch.json`
 - `experience_seed_pack.json`
 - candidate recipe YAML files when `--recipe-file` is provided
+
+### Choose a default model from agent-run outcomes
+
+An agent run makes many model calls, but its outcome, such as whether the
+task's tests passed, belongs to the whole run. Report it once, as a
+`target: model` outcome on one of the run's replay records, and send the same
+`x-conversation-id` (or `x-session-id`) on every call of the run. Recipe
+learning then groups records into runs, adds up each run's recorded cost, and
+reports for each decision and model how many runs succeeded, with a 95%
+interval, and what a run cost:
+
+```bash
+vllm-sr optimize recipe-learning \
+  --replay-file replay.json \
+  --recipe-file config.yaml \
+  --value-per-success 1 --value-per-success 4 \
+  --output-dir ./router-learning-report
+```
+
+`--value-per-success` states what one successful run is worth in the replay's
+cost currency. For each value, `metrics.json` names the model with the highest
+expected value minus cost under `runs.per_decision`. When that model wins even
+at the low end of its interval against every other model's high end, and it is
+not already the decision's first `modelRefs` entry, the command adds a
+`default_model` finding and a patch that moves it to the front. Models need at
+least 20 runs with outcomes before they are compared.

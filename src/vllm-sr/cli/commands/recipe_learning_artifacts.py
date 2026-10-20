@@ -102,6 +102,16 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
                     finding=item,
                 )
             )
+        elif finding_type == "default_model":
+            suggestions.append(
+                patch_suggestion(
+                    f"/routing/decisions/{decision}/modelRefs",
+                    "reorder",
+                    item.get("recommendation", ""),
+                    value=item.get("evidence", {}).get("recommended_model"),
+                    finding=item,
+                )
+            )
         elif finding_type in {"underpowered_model", "model_overuse"}:
             suggestions.append(
                 patch_suggestion(
@@ -201,6 +211,21 @@ def apply_decision_patch(
         apply_adaptation_candidate_set_patch(adaptations, action, suggestion)
     elif path.endswith("protection", "mode"):
         apply_protection_mode_patch(adaptations, action, suggestion)
+    elif path.endswith("modelRefs") and action == "reorder":
+        apply_model_refs_reorder_patch(decision, suggestion)
+
+
+def apply_model_refs_reorder_patch(
+    decision: dict[str, Any], suggestion: dict[str, Any]
+) -> None:
+    """Move the recommended model to the front of modelRefs, keeping the rest in order."""
+    model = str(suggestion.get("value") or "")
+    refs = decision.get("modelRefs")
+    if not model or not isinstance(refs, list):
+        return
+    first = [ref for ref in refs if isinstance(ref, dict) and ref.get("model") == model]
+    if first:
+        decision["modelRefs"] = first + [ref for ref in refs if ref not in first]
 
 
 def apply_priority_patch(decision: dict[str, Any], action: str) -> None:

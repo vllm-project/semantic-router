@@ -1075,6 +1075,7 @@ Analyze replay and outcomes to produce recipe-learning artifacts.
 | `--output-dir DIRECTORY` | Directory for metrics/findings/patch/seed-pack artifacts. |
 | `--json` | Print the full recipe-learning artifact. Default: false. |
 | `--report-only` | Compute metrics and findings without generating recipe patches. Default: false. |
+| `--value-per-success FLOAT` | Value of one successful run (an agent task whose outcome was reported), in the replay cost currency. Repeat to compare several. Enables default-model recommendations from run outcomes and realized run cost. May be repeated. |
 | `--timeout INTEGER` | HTTP request timeout in seconds.  [default: 15] |
 | `--help` | Show this message and exit. Default: false. |
 
