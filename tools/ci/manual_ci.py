@@ -31,14 +31,27 @@ NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
 AUTHORIZATION_LIMIT = 65536
 PLAN_LIMIT = 16 * 1024 * 1024
+ERROR_STATUS_TAIL_LIMIT = 256
+
+
+def http_error_status(stderr: str | bytes) -> int | None:
+    """Retain only gh's bounded HTTP error suffix, never response text."""
+    tail = stderr[-ERROR_STATUS_TAIL_LIMIT:]
+    if isinstance(tail, bytes):
+        tail = tail.decode("ascii", errors="replace")
+    match = re.search(r"\(HTTP ([45][0-9]{2})\)\s*\Z", tail)
+    return int(match[1]) if match else None
 
 
 class ManualCIError(RuntimeError):
     """A credential-free failure suitable for a workflow summary."""
 
-    def __init__(self, message: str, *, reason: str = "failed") -> None:
+    def __init__(
+        self, message: str, *, reason: str = "failed", http_status: int | None = None
+    ) -> None:
         super().__init__(message)
         self.reason = reason
+        self.http_status = http_status
 
 
 class GitHubClient:
@@ -51,7 +64,8 @@ class GitHubClient:
         )
         if result.returncode:
             raise ManualCIError(
-                "GitHub API request failed; check workflow permissions."
+                "GitHub API request failed; check workflow permissions.",
+                http_status=http_error_status(result.stderr),
             )
         return result.stdout
 
@@ -69,7 +83,10 @@ class GitHubClient:
             timeout=60,
         )
         if result.returncode:
-            raise ManualCIError("GitHub feedback API request failed.")
+            raise ManualCIError(
+                "GitHub feedback API request failed.",
+                http_status=http_error_status(result.stderr),
+            )
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 

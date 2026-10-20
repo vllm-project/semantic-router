@@ -164,7 +164,25 @@ class Client:
 
     def write(self, endpoint, payload, **kwargs):
         self.writes.append((endpoint, payload, kwargs))
-        return {"id": 50}
+        if endpoint.endswith("/check-runs"):
+            check = {
+                **copy.deepcopy(payload),
+                "id": max([50, *(item["id"] for item in self.checks)]) + 1,
+                "app": {"id": APP_ID},
+            }
+            self.checks.append(check)
+        elif "/check-runs/" in endpoint:
+            identity = int(endpoint.rsplit("/", 1)[1])
+            check = next(item for item in self.checks if item["id"] == identity)
+            check.update(copy.deepcopy(payload))
+        else:
+            return {"id": 50}
+        job = next((item for item in self.jobs if item.get("id") == check["id"]), None)
+        if job is None:
+            job = {"id": check["id"]}
+            self.jobs.append(job)
+        job.update({key: check.get(key) for key in ("name", "status", "conclusion")})
+        return copy.deepcopy(check)
 
 
 class PRStatusTests(unittest.TestCase):
@@ -235,6 +253,71 @@ class PRStatusTests(unittest.TestCase):
                 result = reconcile(client, REPO, 101)
                 self.assertEqual(result["state"], "awaiting-approval")
                 self.assertIn("Automatic checks passed", result["comment"])
+    def test_repeated_waiting_receipt_keeps_the_same_gate_pending(self):
+        client = Client()
+        for _ in range(2):
+            result = reconcile(client, REPO, 101)
+            self.assertEqual(result["state"], "awaiting-approval")
+            self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertEqual(len(client.checks), 1)
+        self.assertIsNone(client.jobs[-1]["conclusion"])
+
+    def test_successful_rerun_ignores_its_pending_or_failed_published_gate(self):
+        for conclusion in (None, "failure"):
+            with self.subTest(conclusion=conclusion):
+                client = Client()
+                reconcile(client, REPO, 101)
+                client.run.update(run_attempt=2, status="in_progress", conclusion=None)
+                self.assertEqual(reconcile(client, REPO, 101)["state"], "running")
+                client.jobs[-1]["conclusion"] = conclusion
+                client.run.update(status="completed", conclusion="success")
+                client.plan.update(
+                    expected_verification_ids=["quality", "e2e.dashboard"],
+                    deferred_verifications=[],
+                    deferred_images=[],
+                )
+                client.refresh_report()
+                for _ in range(2):
+                    result = reconcile(client, REPO, 101)
+                    self.assertEqual(result["check"]["conclusion"], "success")
+                self.assertEqual(len(client.checks), 1)
+
+    def test_unowned_failed_checks_are_still_ci_failures(self):
+        for override in (
+            {"app": {"id": APP_ID + 1}},
+            {"external_id": f"{PREFIX}4:101:1"},
+            {"external_id": None},
+            {"name": "Another Gate"},
+        ):
+            with self.subTest(override=override):
+                client = Client()
+                check = {
+                    "id": 77,
+                    "name": "PR Gate",
+                    "app": {"id": APP_ID},
+                    "external_id": f"{PREFIX}3:101:1",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    **override,
+                }
+                client.checks = [check]
+                client.jobs.append(
+                    {key: check[key] for key in ("id", "name", "conclusion")}
+                )
+                self.assertEqual(reconcile(client, REPO, 101)["state"], "failure")
+
+    def test_published_gate_does_not_replace_required_jobs_or_receipt_validation(self):
+        for invalid in ("execution", "receipt"):
+            with self.subTest(invalid=invalid):
+                client = Client()
+                reconcile(client, REPO, 101)
+                if invalid == "execution":
+                    client.jobs = [
+                        job for job in client.jobs if job["name"] != "CI Execution"
+                    ]
+                else:
+                    client.report["run_attempt"] = 0
+                self.assertEqual(reconcile(client, REPO, 101)["state"], "failure")
 
     def test_real_failure_wins_over_deferred_approval(self):
         client = Client()
