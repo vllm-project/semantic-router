@@ -24,12 +24,14 @@ DEFINITIONS = {
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-riscv64": (".", ROUTER_DOCKERFILE, ["linux/riscv64"]),
     "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
 # Router images are one Dockerfile target per accelerator: (target, accelerator).
 ROUTER_BUILDS = {
     "vllm-sr": ("vllm-sr", "cpu"),
+    "vllm-sr-riscv64": ("vllm-sr-attached", "cpu"),
     "vllm-sr-cuda": ("vllm-sr", "cuda"),
     "vllm-sr-rocm": ("vllm-sr", "rocm"),
 }
@@ -285,7 +287,7 @@ def main() -> None:
         parser.error("--image is required")
     context, dockerfile, supported = DEFINITIONS[args.image]
     target, accelerator = ROUTER_BUILDS.get(args.image, ("", ""))
-    platforms = supported if args.multiarch else ["linux/amd64"]
+    platforms = supported if args.multiarch else supported[:1]
     if args.command == "definition":
         values = {
             "context": context,

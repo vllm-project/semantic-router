@@ -57,11 +57,16 @@ class DockerCrossCompilationTests(unittest.TestCase):
             with self.subTest(image=image):
                 _, dockerfile, platforms = DEFINITIONS[image]
                 self.assertEqual(dockerfile, ROUTER_DOCKERFILE)
-                self.assertEqual(target, "vllm-sr")
+                attached = image == "vllm-sr-riscv64"
+                self.assertEqual(target, "vllm-sr-attached" if attached else "vllm-sr")
                 expected = (
-                    ["linux/amd64", "linux/arm64"]
-                    if accelerator == "cpu"
-                    else ["linux/amd64"]
+                    ["linux/riscv64"]
+                    if attached
+                    else (
+                        ["linux/amd64", "linux/arm64"]
+                        if accelerator == "cpu"
+                        else ["linux/amd64"]
+                    )
                 )
                 self.assertEqual(platforms, expected)
         builder = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text()
