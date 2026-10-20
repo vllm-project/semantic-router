@@ -3,7 +3,7 @@ is_mtpe: false
 title: 模型性能评测
 sidebar_label: 模型评测
 translation:
-  source_commit: "13bd272651ff0ac75e7be8d739f4d7f71bc2b793"
+  source_commit: "f4173abf247f061030032e13eab3905ba83ce6a2"
   source_file: "docs/training/model-performance-eval.md"
   outdated: false
 ---
