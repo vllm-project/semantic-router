@@ -53,7 +53,6 @@ func TestParallelCapsConcurrencyAndStartsInOrder(t *testing.T) {
 
 func TestParallelFirstKCancelsTheRest(t *testing.T) {
 	var cancelled atomic.Int32
-	sawCancel := make(chan struct{}, 2)
 	var inFlight sync.WaitGroup
 	inFlight.Add(2)
 	caller := &fakeCaller{answer: func(ctx context.Context, req *HopRequest) (*HopResponse, error) {
@@ -65,7 +64,6 @@ func TestParallelFirstKCancelsTheRest(t *testing.T) {
 		inFlight.Done()
 		<-ctx.Done()
 		cancelled.Add(1)
-		sawCancel <- struct{}{}
 		return nil, ctx.Err()
 	}}
 	program := &Program{Steps: Sequence{
@@ -80,18 +78,15 @@ func TestParallelFirstKCancelsTheRest(t *testing.T) {
 	if got := answerText(t, outcome); got != "fast1+fast2" {
 		t.Fatalf("answer %q", got)
 	}
-	// Run returns once FirstK stops the step, before each slow hop has
-	// recorded that it saw the cancel.
-	for range 2 {
-		select {
-		case <-sawCancel:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("%d slow hops cancelled", cancelled.Load())
-		}
+	// Both slow hops observe the cancel, and their attempts are on the outcome
+	// before Run returns. A later record would miss the run's evidence.
+	if cancelled.Load() != 2 {
+		t.Fatalf("%d slow hops cancelled", cancelled.Load())
 	}
-	for _, attempt := range outcome.Attempts {
-		if (attempt.Model == "slow1" || attempt.Model == "slow2") && attempt.Status != AttemptCancelled {
-			t.Fatalf("attempt %+v", attempt)
+	for _, model := range []string{"slow1", "slow2"} {
+		status, ok := attemptStatus(outcome, model)
+		if !ok || status != AttemptCancelled {
+			t.Fatalf("%s attempt %+v in %+v", model, status, outcome.Attempts)
 		}
 	}
 }
@@ -105,6 +100,18 @@ func TestParallelFirstKNeverStartsQueuedBranches(t *testing.T) {
 	if _, err := run(t, program, caller); err != nil || !slices.Equal(caller.models(), []string{"a"}) {
 		t.Fatalf("err %v sent %v", err, caller.models())
 	}
+}
+
+func attemptStatus(outcome *Outcome, model string) (AttemptStatus, bool) {
+	if outcome == nil {
+		return "", false
+	}
+	for _, attempt := range outcome.Attempts {
+		if attempt.Model == model {
+			return attempt.Status, true
+		}
+	}
+	return "", false
 }
 
 func failing(models ...string) *fakeCaller {
@@ -151,15 +158,18 @@ func TestParallelFailStopsAtTheFirstFailure(t *testing.T) {
 		return nil, ctx.Err()
 	}}
 	program := &Program{Steps: Sequence{parallel("panel", &Parallel{Branches: branchesOf("slow", "bad")}), respond()}}
-	_, err := run(t, program, caller)
+	outcome, err := run(t, program, caller)
 	var callErr *CallError
 	if !errors.As(err, &callErr) || callErr.Result.Model != "bad" {
 		t.Fatalf("err %v", err)
 	}
 	select {
 	case <-sawCancel:
-	case <-time.After(5 * time.Second):
+	default:
 		t.Fatal("the slow branch was not cancelled")
+	}
+	if status, ok := attemptStatus(outcome, "slow"); !ok || status != AttemptCancelled {
+		t.Fatalf("slow attempt %+v in %+v", status, outcome.Attempts)
 	}
 }
 
@@ -181,6 +191,13 @@ func TestParallelNoncooperativeBranch(t *testing.T) {
 			if got := answerText(t, outcome); got != "fast" {
 				t.Fatalf("answer %q", got)
 			}
+			status, ok := attemptStatus(outcome, "fast")
+			if !ok || status != AttemptSucceeded {
+				t.Fatalf("fast attempt %+v in %+v", status, outcome.Attempts)
+			}
+			if _, stuck := attemptStatus(outcome, "stuck"); stuck {
+				t.Fatalf("stuck was recorded before it returned: %+v", outcome.Attempts)
+			}
 		}
 	})
 	t.Run("fatal", func(t *testing.T) {
@@ -200,11 +217,18 @@ func TestParallelNoncooperativeBranch(t *testing.T) {
 		for range 20 {
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
-			_, err := runNoncooperative(t, ctx, &Parallel{
+			outcome, err := runNoncooperative(t, ctx, &Parallel{
 				Branches: branchesOf("stuck", "fast"), FirstK: 1,
 			}, success, cancel)
 			if !errors.Is(err, context.Canceled) {
 				t.Fatalf("parent: %v", err)
+			}
+			status, ok := attemptStatus(outcome, "fast")
+			if !ok || status != AttemptSucceeded {
+				t.Fatalf("fast attempt %+v in %+v", status, outcome.Attempts)
+			}
+			if _, stuck := attemptStatus(outcome, "stuck"); stuck {
+				t.Fatalf("stuck was recorded before it returned: %+v", outcome.Attempts)
 			}
 		}
 	})

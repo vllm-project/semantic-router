@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // OnError is what a parallel step does when a branch fails.
@@ -25,6 +26,12 @@ var ErrTooFewResults = errors.New("graph: too few branches succeeded")
 // errEnough stops the branches still running once a parallel step has the
 // first k successes it needs.
 var errEnough = errors.New("graph: the parallel step has its first results")
+
+// branchReportGrace is how long the collector keeps taking results after the
+// step stops. A branch that returns on cancellation is recorded with the run.
+// A branch that ignores the context is left behind when the grace expires, so
+// it cannot hold the caller.
+const branchReportGrace = 100 * time.Millisecond
 
 // Parallel is the parallel step: it runs its branches concurrently, each on a
 // fork of the state, and makes the successful branches' results the state's
@@ -57,9 +64,10 @@ type branchRun struct {
 
 // Run runs the branches. One loop starts them in order, as slots free up,
 // and takes their outcomes, so a branch starts only after every outcome that
-// could have stopped the step has been taken. Once the step context is done
-// the loop stops waiting: a branch that ignores cancellation must not hold
-// the caller, and it may still be running when Run returns.
+// could have stopped the step has been taken. After the step stops, the
+// collector keeps taking results until every running branch reports or
+// branchReportGrace elapses. A branch that ignores cancellation may still
+// be running when Run returns.
 func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 	// Keep the caller context. FirstK cancels the step with errEnough, and
 	// that cause stays on the step context when the caller is canceled later.
@@ -115,23 +123,19 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 		}
 	}
 
-	// Leave once the step is done. Drain results already buffered, and do
-	// not wait for a branch that has not sent.
-collect:
-	for launch(); running > 0; launch() {
+	// Stop launching once the step is done, then keep taking results from the
+	// branches already running. branchReportGrace bounds that wait.
+	stopped := false
+	for launch(); running > 0 && !stopped; launch() {
 		select {
 		case i := <-finished:
 			take(i)
 		case <-step.Done():
-			for running > 0 {
-				select {
-				case i := <-finished:
-					take(i)
-				default:
-					break collect
-				}
-			}
+			stopped = true
 		}
+	}
+	if running > 0 {
+		drainBranches(finished, &running, take)
 	}
 	if n.afterStop != nil && step.Err() != nil {
 		n.afterStop()
@@ -166,6 +170,29 @@ collect:
 	}
 	st.Results = results
 	return nil
+}
+
+// drainBranches takes results that arrive after the step has stopped. It
+// returns when every running branch has reported, or when branchReportGrace
+// has elapsed and no result is already queued.
+func drainBranches(finished <-chan int, running *int, take func(int)) {
+	timer := time.NewTimer(branchReportGrace)
+	defer timer.Stop()
+	for *running > 0 {
+		select {
+		case i := <-finished:
+			take(i)
+		case <-timer.C:
+			for *running > 0 {
+				select {
+				case i := <-finished:
+					take(i)
+				default:
+					return
+				}
+			}
+		}
+	}
 }
 
 func (n *Parallel) concurrency() int {
