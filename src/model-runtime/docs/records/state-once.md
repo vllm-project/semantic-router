@@ -9,8 +9,8 @@ the per-row forward does, and every decision that differs is a near-tie. It
 also times the served path against the Decision 3.0 path, one row per
 question, on the same weights.
 
-- **Date:** 2026-10-15; the `vllm-sr/d3-turbo` rows 2026-10-19.
-- **Packages:** `vllm-sr/d3-turbo` (`da17b5d0`), which declares
+- **Date:** 2026-10-15; the `vllm-sr/d3-turbo` rows 2026-10-20.
+- **Packages:** `vllm-sr/d3-turbo` (`689b3af1`), which declares
   `attention_mode: prefix_bidir`; and the released Decision 3.0 weights served
   under `prefix_bidir` (`tools/state_once_parity.py --attention-mode
   prefix_bidir` writes a copy of the package that declares it). Those weights
@@ -49,13 +49,13 @@ requests (8 requests, 170 questions):
 
 | Comparison | Identical decisions | Largest gap | Mean gap |
 | --- | ---: | ---: | ---: |
-| Branched vs per-row, as served | 169 (99.41%) | 0.028 | 0.0039 |
-| Branched vs each question alone | 169 (99.41%) | 0.022 | 0.0040 |
-| Each question alone vs per-row in a batch | 170 (100%) | 0.018 | 0.0036 |
+| Branched vs per-row, as served | 169 (99.41%) | 0.032 | 0.0041 |
+| Branched vs each question alone | 169 (99.41%) | 0.017 | 0.0039 |
+| Each question alone vs per-row in a batch | 168 (98.82%) | 0.021 | 0.0041 |
 
 Branching moves d3-turbo's answers about as much as batching moves the
-per-row path's own (mean gap 0.0039 against 0.0036); the one decision that
-differs is a near-tie (margin at most 0.005).
+per-row path's own (mean gap 0.0041 against 0.0041); each decision that
+differs is a near-tie of one of the two paths (margin at most 0.008).
 
 The Decision 3.0 d3-edge weights (`vllm-sr/d3-edge` `18d61df7`) served under
 `prefix_bidir`, on the 4,000-request sample: branched vs per-row 99.54%

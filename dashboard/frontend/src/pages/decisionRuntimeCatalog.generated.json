@@ -136,7 +136,7 @@
       "name": "d3-turbo",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "da17b5d0c860f7e5be6e2afebe67228b4bd24d0c",
+      "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 72
     },

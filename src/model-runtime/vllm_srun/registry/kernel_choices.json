@@ -10406,12 +10406,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 8
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 4
               },
               "key": [
                 128,
@@ -10429,7 +10429,7 @@
                 "kwargs": {},
                 "maxnreg": null,
                 "num_ctas": 1,
-                "num_stages": 4,
+                "num_stages": 3,
                 "num_warps": 4
               },
               "key": [
@@ -10457,6 +10457,6 @@
         "triton": "3.7.0"
       }
     },
-    "revision": "da17b5d0c860f7e5be6e2afebe67228b4bd24d0c"
+    "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad"
   }
 }
