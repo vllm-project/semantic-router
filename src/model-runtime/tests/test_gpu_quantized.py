@@ -509,7 +509,7 @@ def test_an_autotune_cache_records_flashinfer_tiles_once_per_shape(
     from vllm_srun.accel import autotune, flashinfer_nvfp4
 
     flashinfer = importlib.import_module("flashinfer")
-    monkeypatch.setattr(autotune, "_FROZEN", tmp_path)
+    monkeypatch.setitem(autotune._FROZEN, "directory", tmp_path)
     timed = []
     real = flashinfer.autotune
 

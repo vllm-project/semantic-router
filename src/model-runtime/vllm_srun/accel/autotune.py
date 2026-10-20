@@ -48,7 +48,7 @@ class _Scope(threading.local):
 _SCOPE = _Scope()
 _ROUTING = threading.Lock()
 # The directory ``freeze_autotune`` records choices in, for tuners other than Triton's (FlashInfer's)
-_FROZEN: Path | None = None
+_FROZEN: dict[str, Path] = {}
 
 
 def freeze_autotune(directory: str) -> Path:
@@ -57,10 +57,9 @@ def freeze_autotune(directory: str) -> Path:
     Triton reads these settings when a kernel is decorated, so this must run
     before FLA is imported.
     """
-    global _FROZEN
     path = Path(directory).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)
-    _FROZEN = path
+    _FROZEN["directory"] = path
     os.environ["TRITON_CACHE_DIR"] = str(path)
     os.environ["TRITON_CACHE_AUTOTUNING"] = "1"
     if "fla" in sys.modules:
@@ -72,7 +71,7 @@ def freeze_autotune(directory: str) -> Path:
 
 def frozen_directory() -> Path | None:
     """The directory ``freeze_autotune`` records autotune choices in, or None."""
-    return _FROZEN
+    return _FROZEN.get("directory")
 
 
 class KernelChoices:

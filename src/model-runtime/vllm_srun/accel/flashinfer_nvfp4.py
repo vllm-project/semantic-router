@@ -35,6 +35,8 @@ import torch
 # each power of two up to here, and a call takes the tile of the power its rows round to.
 GRAPH_ROWS = 512
 ARCH_LIST = "FLASHINFER_CUDA_ARCH_LIST"
+# The compute capability major FlashInfer's FP4 GEMM is measured on (RTX PRO 6000 Blackwell)
+MEASURED_MAJOR = 12
 
 Product = Callable[..., torch.Tensor]
 
@@ -42,7 +44,7 @@ Product = Callable[..., torch.Tensor]
 def load(device: torch.device) -> tuple[Product | None, str | None]:
     """FlashInfer's FP4 GEMM for ``device``, or None and why it cannot run there."""
     major, minor = torch.cuda.get_device_capability(device)
-    if major != 12:
+    if major != MEASURED_MAJOR:
         return None, (
             f"FlashInfer's FP4 GEMM is measured on compute capability 12.x, not {major}.{minor}"
         )
