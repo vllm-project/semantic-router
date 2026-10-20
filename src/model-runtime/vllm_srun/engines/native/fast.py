@@ -456,10 +456,9 @@ def _branch_gated_delta(
     output projection of those rows only."""
     _, length, _ = normed.shape
     window = m.conv_kernel_size
-    mixed = m.in_proj_qkv(normed)
-    z = m.in_proj_z(normed)
-    b = m.in_proj_b(normed)
-    a = m.in_proj_a(normed)
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
     prep = kernels("gdn_prep")
     args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
     segments = getattr(prep, "segments", None)
