@@ -393,27 +393,8 @@ class NVFP4Linear(nn.Module):
             output_dtype=torch.bfloat16,
         )
 
-    def quantize_input(
-        self, x: torch.Tensor
-    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
-        """``x``'s rows in FP4 with their scales, one pair per slice of ``NVFP4_ROWS``; ``multiply`` takes them."""
-        rows = x.reshape(-1, x.shape[-1])
-        if rows.dtype != torch.bfloat16:
-            rows = rows.to(torch.bfloat16)
-        if not rows.is_contiguous():
-            rows = rows.contiguous()
-        if rows.shape[0] <= NVFP4_ROWS:  # a split costs host time on every call
-            return [self.quantize(rows, self.input_global)]
-        return [
-            self.quantize(part, self.input_global)
-            for part in torch.split(rows, NVFP4_ROWS)
-        ]
-
-    def multiply(
-        self, x: torch.Tensor, codes: list[tuple[torch.Tensor, torch.Tensor]]
-    ) -> torch.Tensor:
-        """The layer's output for ``x``, from ``quantize_input(x)`` (of this layer or one of its input global scale)."""
-        products = [self._product(q, scale) for q, scale in codes]
+    def _finish(self, x: torch.Tensor, products: list[torch.Tensor]) -> torch.Tensor:
+        """The layer's output for ``x`` from its products, one per slice of ``_slices``."""
         out = products[0] if len(products) == 1 else torch.cat(products)
         if out.dtype != x.dtype:
             out = out.to(x.dtype)
@@ -422,7 +403,29 @@ class NVFP4Linear(nn.Module):
         return out.reshape(*x.shape[:-1], self.out_features)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.multiply(x, self.quantize_input(x))
+        # one slice at a time: only that slice's FP4 copy is alive
+        products = [
+            self._product(*self.quantize(part, self.input_global))
+            for part in _slices(_rows(x))
+        ]
+        return self._finish(x, products)
+
+
+def _rows(x: torch.Tensor) -> torch.Tensor:
+    """``x`` as contiguous BF16 rows, the input of an NVFP4 product."""
+    rows = x.reshape(-1, x.shape[-1])
+    if rows.dtype != torch.bfloat16:
+        rows = rows.to(torch.bfloat16)
+    if not rows.is_contiguous():
+        rows = rows.contiguous()
+    return rows
+
+
+def _slices(rows: torch.Tensor) -> tuple[torch.Tensor, ...]:
+    """``rows`` in slices of ``NVFP4_ROWS``; one slice, unsplit, when it fits (a split costs host time per call)."""
+    if rows.shape[0] <= NVFP4_ROWS:
+        return (rows,)
+    return torch.split(rows, NVFP4_ROWS)
 
 
 def project(x: torch.Tensor, *projections: nn.Module) -> list[torch.Tensor]:
@@ -432,22 +435,28 @@ def project(x: torch.Tensor, *projections: nn.Module) -> list[torch.Tensor]:
     global scale in the NVFP4 packages compressed-tensors writes, so their FP4
     activations are the same bytes: quantized once, each product is the one its
     own call gives. Other layers, and NVFP4 layers of another scale, run alone.
+    Long inputs go slice by slice, as a layer alone takes them, so only one
+    slice's FP4 copy per input global scale is alive at a time.
     """
     first = projections[0] if projections else None
     group = first.merged if isinstance(first, NVFP4Linear) else None
     if group is not None and projections == group.parts:
         return list(torch.split(group.layer(x), list(group.sizes), dim=-1))
-    shared: dict[float, list[tuple[torch.Tensor, torch.Tensor]]] = {}
-    out = []
-    for projection in projections:
-        if isinstance(projection, NVFP4Linear):
-            codes = shared.get(projection.input_global)
-            if codes is None:
-                codes = shared[projection.input_global] = projection.quantize_input(x)
-            out.append(projection.multiply(x, codes))
-        else:
-            out.append(projection(x))
-    return out
+    fp4 = [p for p in projections if isinstance(p, NVFP4Linear)]
+    products: dict[int, list[torch.Tensor]] = {id(p): [] for p in fp4}
+    if fp4:
+        for part in _slices(_rows(x)):
+            shared: dict[float, tuple[torch.Tensor, torch.Tensor]] = {}
+            for p in fp4:
+                codes = shared.get(p.input_global)
+                if codes is None:
+                    codes = shared[p.input_global] = p.quantize(part, p.input_global)
+                products[id(p)].append(p._product(*codes))
+            del shared, codes  # this slice's FP4 copy goes before the next is made
+    return [
+        p._finish(x, products[id(p)]) if isinstance(p, NVFP4Linear) else p(x)
+        for p in projections
+    ]
 
 
 def install(module: nn.Module, weights: QuantizedWeights, prefix: str = "") -> int:

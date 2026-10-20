@@ -608,16 +608,16 @@ def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
             self.weight_packed, self.weight_scale, self.weight_global_scale
         )
         prepare(self)
+        self.quantize = lambda rows, global_scale: (rows, None)  # the BF16 rows
 
-    def emulated(self, x, codes):
-        # each layer from its own input, so the layers sharing one quantization are checked too
-        rows = x.reshape(-1, x.shape[-1]).to(torch.bfloat16)
+    def emulated(self, rows, _):
+        # each layer quantizes the rows it gets itself, so shared slices are checked too
         q, scales = nvfp4.quantize(rows, self.input_global_scale)
         out = nvfp4.dequantize(q, scales, self.input_global_scale) @ self.reference.T
-        return out.to(torch.bfloat16).to(x.dtype).reshape(*x.shape[:-1], -1)
+        return out.to(torch.bfloat16)
 
     monkeypatch.setattr(NVFP4Linear, "prepare", keep_weight)
-    monkeypatch.setattr(NVFP4Linear, "multiply", emulated)
+    monkeypatch.setattr(NVFP4Linear, "_product", emulated)
     want = gpu_answers(packed)[0]
     # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
     assert (numbers(got) - numbers(want)).abs().max() < 0.02
