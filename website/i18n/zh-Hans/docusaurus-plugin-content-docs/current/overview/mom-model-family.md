@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 5
 title: 多模型混合
 description: 虚拟模型如何把共享的独立模型池变成稳定、面向目标的 AI 服务。

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "2e968c6bb62123c2cfbc239cc727f1e4d1d92b03"
   source_file: "docs/tutorials/signal/heuristic/input-modality.md"

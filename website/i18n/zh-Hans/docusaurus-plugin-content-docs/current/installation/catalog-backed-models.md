@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 目录支持的模型
 description: 将内置 Model Card 绑定到受支持的 Provider，而无需重复模型元数据或推理规则。
 translation:
