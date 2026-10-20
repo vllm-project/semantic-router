@@ -32,33 +32,78 @@ func builtinPolicyClassifier(t *testing.T, name string) *Classifier {
 	return &Classifier{Config: cfg.ConfigForRecipe(recipe)}
 }
 
+// balanceAnswers supplies the decision-model answers Balance reads: the task
+// label, the 0-4 difficulty score and the deliberation probability. They are
+// controlled inputs to the shipped projections and rules, not model output.
+func balanceAnswers(task string, difficulty, deliberation float64, matched ...string) SignalResults {
+	in := SignalResults{
+		MatchedDecisionRules: append([]string{"task:" + task}, matched...),
+		SignalValues: map[string]float64{
+			"decision:difficulty":         difficulty,
+			"decision:needs:deliberation": deliberation,
+			"decision:needs:verification": 0,
+			"decision:needs:tools":        0,
+		},
+	}
+	if difficulty >= 2 {
+		in.MatchedDecisionRules = append(in.MatchedDecisionRules, "difficulty")
+	}
+	return in
+}
+
+func balanceWith(in SignalResults, conversation, keywords, feedback []string) SignalResults {
+	in.MatchedConversationRules = conversation
+	in.MatchedKeywordRules = keywords
+	in.MatchedUserFeedbackRules = feedback
+	return in
+}
+
 // These are policy counterexamples, not classifier accuracy measurements. Read
 // the shipped recipe and run its actual projections and decision evaluator.
-func TestBuiltinBalanceIntentAndRecovery(t *testing.T) {
+func TestBuiltinBalanceEffortLanes(t *testing.T) {
 	c := builtinPolicyClassifier(t, "balance")
+	unknown := SignalResults{SignalErrors: map[string]string{}}
+	for _, name := range []string{"task", "difficulty", "precise_facts", "needs", "correction"} {
+		unknown.SignalErrors["decision:"+name] = "unavailable"
+	}
+	tools := balanceAnswers("chat", 0.5, 0)
+	tools.SignalValues["decision:needs:tools"] = 0.7
 	tests := []struct {
 		name string
 		in   SignalResults
 		want string
 	}{
-		{"uncertain task keeps middle pool", SignalResults{}, "medium"},
-		{"positive simple evidence", SignalResults{MatchedComplexityRules: []string{"difficulty:easy"}}, "simple"},
-		{"hard task", SignalResults{MatchedComplexityRules: []string{"difficulty:hard"}}, "reasoning"},
-		{"concise answer to a hard task", SignalResults{MatchedComplexityRules: []string{"difficulty:hard"}, MatchedKeywordRules: []string{"deliberate", "no_analysis"}}, "reasoning"},
-		{"quoted execution vocabulary", SignalResults{MatchedKeywordRules: []string{"deliberate", "verify"}, MatchedStructureRules: []string{"quoted_request"}}, "medium"},
-		{"topic is not difficulty", SignalResults{MatchedComplexityRules: []string{"difficulty:easy"}, MatchedDomainRules: []string{"health"}, MatchedFactCheckRules: []string{"needs_fact_check"}}, "simple"},
-		{"consequential advice combines evidence", SignalResults{MatchedComplexityRules: []string{"difficulty:easy"}, MatchedDomainRules: []string{"health"}, MatchedFactCheckRules: []string{"needs_fact_check"}, SignalValues: map[string]float64{"embedding:consequential": 0.6, "embedding:informational": 0.4}}, "reasoning"},
-		{"financial stakes include economics", SignalResults{MatchedDomainRules: []string{"economics"}, MatchedFactCheckRules: []string{"needs_fact_check"}, SignalValues: map[string]float64{"embedding:consequential": 0.6, "embedding:informational": 0.4}}, "reasoning"},
-		{"repeat alone is not a failed answer", SignalResults{MatchedConversationRules: []string{"has_answer"}, MatchedReaskRules: []string{"repeat"}}, "medium"},
-		{"negative feedback after answer", SignalResults{MatchedConversationRules: []string{"has_answer"}, MatchedUserFeedbackRules: []string{"wrong_answer"}}, "reasoning"},
-		{"feedback cannot replace missing assistant history", SignalResults{MatchedKeywordRules: []string{"correction"}, MatchedUserFeedbackRules: []string{"wrong_answer"}}, "medium"},
-		{"repeat with correction", SignalResults{MatchedConversationRules: []string{"has_answer"}, MatchedReaskRules: []string{"repeat"}, MatchedKeywordRules: []string{"correction"}}, "reasoning"},
-		{"quoted feedback is not recovery", SignalResults{MatchedConversationRules: []string{"has_answer"}, MatchedUserFeedbackRules: []string{"wrong_answer"}, MatchedStructureRules: []string{"quoted_request"}}, "medium"},
-		{"classifier error does not fabricate low complexity", builtinComplexityUnavailable(c, SignalResults{}), "medium"},
-		{"failed feedback propagates through projection", SignalResults{MatchedConversationRules: []string{"has_answer"}, MatchedReaskRules: []string{"repeat"}, MatchedKeywordRules: []string{"correction"}, SignalErrors: map[string]string{"user_feedback:wrong_answer": "unavailable"}}, "medium"},
-		{"active tool conversation is not simple", SignalResults{MatchedComplexityRules: []string{"difficulty:easy"}, MatchedConversationRules: []string{"tool_loop"}}, "medium"},
+		{"unknown answers keep the middle pool", unknown, "medium"},
+		{"no reasoning needed", balanceAnswers("chat", 0.5, 0), "simple"},
+		{"some reasoning", balanceAnswers("analysis", 1.8, 0), "medium"},
+		{"brief request lowers effort", balanceWith(balanceAnswers("analysis", 1.8, 0), nil, []string{"brief_request"}, nil), "simple"},
+		{"high effort", balanceAnswers("analysis", 2.5, 0.2), "reasoning"},
+		{"maximum effort", balanceAnswers("stem", 3.5, 1), "reasoning"},
+		{"brief STEM problem rated multi-step", balanceWith(balanceAnswers("stem", 2, 0), nil, []string{"brief_request"}, nil), "reasoning"},
+		{"code at high effort keeps its lane", balanceAnswers("code", 2.5, 0.2), "medium"},
+		{"code at maximum effort", balanceAnswers("code", 3.5, 1), "reasoning"},
+		{"exact facts at high effort keep their lane", balanceAnswers("facts", 2.5, 0.2, "precise_facts"), "medium"},
+		{"exact facts are not simple", balanceAnswers("facts", 0.5, 0, "precise_facts"), "medium"},
+		{"exact facts at maximum effort", balanceAnswers("facts", 3.5, 1, "precise_facts"), "reasoning"},
 	}
 	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) { assertBuiltinPolicy(t, c, &tt.in, tt.want) })
+	}
+	for _, tt := range []struct {
+		name string
+		in   SignalResults
+		want string
+	}{
+		{"active tool loop", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"tool_loop"}, nil, nil), "reasoning"},
+		{"tool loop with unknown answers", balanceWith(unknown, []string{"tool_loop"}, nil, nil), "reasoning"},
+		{"declared tools for agentic work", balanceWith(balanceAnswers("agentic", 0.5, 0), []string{"has_tools"}, nil, nil), "reasoning"},
+		{"declared tools the answer needs", balanceWith(tools, []string{"has_tools"}, nil, nil), "reasoning"},
+		{"tools disabled by the client", balanceWith(balanceAnswers("agentic", 0.5, 0), []string{"has_tools", "tool_disabled"}, nil, nil), "simple"},
+		{"declared tools the request does not need", balanceWith(balanceAnswers("writing", 0.5, 0), []string{"has_tools"}, nil, nil), "simple"},
+		{"correction and feedback after an answer", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer"}, nil, []string{"wrong_answer"}), "reasoning"},
+		{"correction without the feedback judgment", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer"}, nil, nil), "simple"},
+		{"feedback without an earlier answer", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), nil, nil, []string{"wrong_answer"}), "simple"},
+	} {
 		t.Run(tt.name, func(t *testing.T) { assertBuiltinPolicy(t, c, &tt.in, tt.want) })
 	}
 }
@@ -92,7 +137,7 @@ func TestBuiltinSpeedAndCostToolIntent(t *testing.T) {
 
 func TestBuiltinHardTasksPreservePresentationAndToolBoundaries(t *testing.T) {
 	for _, profile := range []struct{ name, fallback string }{
-		{"balance", "medium"}, {"speed", "fast"}, {"cost", "economy"}, {"accuracy", "simple"},
+		{"speed", "fast"}, {"cost", "economy"}, {"accuracy", "simple"},
 	} {
 		t.Run(profile.name, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, profile.name)
@@ -120,6 +165,10 @@ func TestBuiltinHardNamedToolRequiresCapableCandidate(t *testing.T) {
 		t.Run(recipe, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, recipe)
 			in := &SignalResults{MatchedComplexityRules: []string{"difficulty:hard"}, MatchedKeywordRules: []string{"no_analysis"}, MatchedConversationRules: []string{"has_tools", "tool_required"}}
+			if recipe == "balance" {
+				answers := balanceWith(balanceAnswers("agentic", 2.5, 0.2), []string{"has_tools"}, nil, nil)
+				in = &answers
+			}
 			result, err := c.EvaluateDecisionWithEngine(c.applyProjections(in))
 			if err != nil || result == nil || result.Decision == nil || result.Decision.Name != "reasoning" {
 				t.Fatalf("hard named-tool decision=%+v err=%v", result, err)
@@ -342,10 +391,6 @@ func TestBuiltinCareAndSupportRequireGrounding(t *testing.T) {
 		name, recipe, want string
 		in                 SignalResults
 	}{
-		{"care with either corroborator", "balance", "reasoning", SignalResults{MatchedFactCheckRules: []string{"needs_fact_check"}, SignalValues: map[string]float64{"embedding:consequential": .6, "embedding:informational": .4}}},
-		{"care direction without corroboration", "balance", "medium", SignalResults{SignalValues: map[string]float64{"embedding:consequential": .6, "embedding:informational": .4}}},
-		{"informational topic", "balance", "medium", SignalResults{MatchedDomainRules: []string{"health"}, SignalValues: map[string]float64{"embedding:consequential": .4, "embedding:informational": .6}}},
-		{"care unavailable direction", "balance", "medium", SignalResults{MatchedDomainRules: []string{"health"}, SignalValues: map[string]float64{"embedding:consequential": .6}, SignalErrors: map[string]string{"embedding:informational": "unavailable"}}},
 		{"weak support direction alone", "vault", "private", SignalResults{SignalValues: map[string]float64{"embedding:supportive_intent": .2, "embedding:informational": .1}}},
 		{"support cue plus direction", "vault", "sensitive", SignalResults{MatchedKeywordRules: []string{"personal_support"}, SignalValues: map[string]float64{"embedding:supportive_intent": .6, "embedding:informational": .5}}},
 		{"support unavailable direction", "vault", "", SignalResults{MatchedKeywordRules: []string{"personal_support"}, SignalErrors: map[string]string{"embedding:supportive_intent": "unavailable", "embedding:informational": "unavailable"}}},
@@ -373,7 +418,7 @@ func TestBuiltinCareAndSupportRequireGrounding(t *testing.T) {
 }
 
 func TestBuiltinConsequentialDomainsWithOptionalFactCheck(t *testing.T) {
-	for _, recipe := range []string{"balance", "accuracy"} {
+	for _, recipe := range []string{"accuracy"} {
 		c := builtinPolicyClassifier(t, recipe)
 		for _, domain := range []string{"health", "law", "business", "economics"} {
 			for _, evidence := range []string{"domain", "domain_and_fact_check"} {
@@ -460,7 +505,7 @@ func TestBuiltinVaultActionWordingPreservesQuotationScope(t *testing.T) {
 }
 
 func TestBuiltinRecoveryUsesAssistantHistory(t *testing.T) {
-	for _, profile := range []struct{ name, fallback string }{{"balance", "medium"}, {"cost", "economy"}, {"accuracy", "simple"}} {
+	for _, profile := range []struct{ name, fallback string }{{"cost", "economy"}, {"accuracy", "simple"}} {
 		t.Run(profile.name, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, profile.name)
 			if len(c.Config.UserFeedbackRules) == 0 {

@@ -13,6 +13,12 @@ its reasoning setting.
 
 To try it, connect the three backends and follow the [quick start](#quick-start).
 
+The built-in [MoM V1](../built-in/latest/mom-v1/README.md) Balance recipe, `vllm-sr/mom-v1-blend`, asks
+the same questions with the router's default decision model and maps the same lanes onto three decisions,
+`reasoning`, `medium` and `simple`, over the models you assign. It leaves prompt attacks and unsafe content
+to MoM V1 Vault, and images and long inputs to its candidate checks. This recipe is the reference deployment
+on named models, with an effort for every lane.
+
 ## Model details
 
 | Model | Role | Relative cost per 1M output tokens |
