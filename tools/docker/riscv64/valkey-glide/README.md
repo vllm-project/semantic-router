@@ -23,7 +23,7 @@ the host compiler. Cargo's target linker and CC/CXX environment variables can
 override the cross-compiler names.
 
 ```bash
-bash tools/docker/build-glide.sh --output "$PWD/bin/glide"
+bash tools/docker/riscv64/build-glide.sh --output "$PWD/bin/glide"
 GLIDE_LIBRARY_DIR="$PWD/bin/glide"
 (cd src/semantic-router && CGO_ENABLED=1 go build \
   -ldflags="-extldflags=-L$GLIDE_LIBRARY_DIR" -o ../../bin/router ./cmd)

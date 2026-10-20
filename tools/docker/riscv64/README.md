@@ -8,8 +8,8 @@ unchanged.
 ## Requirements
 
 - Native `riscv64` Linux, Python 3.10+, Docker Engine with BuildKit/buildx.
-  Building the SDK locally requires the `docker` driver so the next build can
-  resolve it. With `--sdk-image`, supply an SDK available to the selected builder.
+  The `docker` buildx driver is required for local SDK and Router-binary image
+  handoffs, including when reusing an SDK with `--sdk-image`.
 - A glibc-compatible host and the standard RISC-V GNU user ISA required by the
   upstream Go/Rust binaries; no vendor extensions are enabled.
 - Network access to Docker Hub, Debian packages, Go/Rust downloads, Go modules,
@@ -19,7 +19,7 @@ unchanged.
 
 The Debian RISC-V manifest is pinned by digest. Go 1.25.14 and Rust 1.90.0 release
 archives are pinned by URL and SHA256 in `toolchains.json`. GLIDE source and its
-Rust dependency lock are documented in [valkey-glide](../valkey-glide/README.md).
+Rust dependency lock are documented in [valkey-glide](valkey-glide/README.md).
 Debian package repositories remain live; this is a reproducible procedure,
 not a promise of byte-identical images on every date or support for every board.
 
@@ -38,8 +38,10 @@ python3 tools/docker/riscv64/build.py --component router --tag public \
 ```
 
 Use a fresh output directory. The runner builds `semantic-router-native-sdk:public`
-and `semantic-router-router:public`, recording commands, logs, exit codes and the
-final image ID. Normal Docker layer caching is enabled. Public archives remain
+then the binary image `semantic-router-native-router:public` using this
+directory's `Dockerfile`, and the runtime `semantic-router-router:public` using
+`../Dockerfile.attached`. Commands, logs, exit codes and the
+final image ID are recorded. Normal Docker layer caching is enabled. Public archives remain
 checksummed, and no private host toolchain is copied into the build.
 `--component sdk` builds only the SDK. For a fresh-layer qualification, explicitly
 pass `--no-cache`; use an isolated builder for an empty-cache test, rather than
@@ -136,11 +138,11 @@ or model under a read-only deployment.
 
 ## Maintenance and verification
 
-The attached target is an opt-in build without the managed model runtime. It
-is not a new published image or an addition to the official supported-platform
-inventory. The existing bundled image's asset stage and final resource copies
-remain unchanged; its Go build gains only the architecture-specific native
-dependency path.
+The attached image is an opt-in build without the managed model runtime.
+The artifact name `vllm-sr-riscv64` records its platform independently from
+bundled images; it is not a promise of a published registry tag or recurring
+native CI. The public support matrix labels this path experimental. The
+existing `Dockerfile.extproc` does not gain RISC-V stages or dependencies.
 
 The Python contracts run through the existing tools test discovery. Native smoke
 is an explicit command for a real RISC-V worker, not a claim of hosted RISC-V CI.
