@@ -21,7 +21,12 @@ from vllm_srun.scheduler.batching import (
     reference,
 )
 from vllm_srun.scheduler.planner import cost, micro_batches
-from vllm_srun.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
+from vllm_srun.scheduler.scheduler import (
+    BURST_WINDOWS,
+    DEADLINE,
+    Scheduler,
+    SchedulerLimits,
+)
 from vllm_srun.timing import RunTiming
 
 ALONE = EngineArgs(max_num_seqs=1)
@@ -613,6 +618,70 @@ def test_batching_window_coalesces_concurrent_requests():
         for future in futures:
             future.result(timeout=5)
         assert len(model.calls) == 1 and sorted(model.calls[0]) == ["r0", "r1", "r2"]
+    finally:
+        scheduler.stop()
+
+
+def test_a_job_served_alone_does_not_wait_for_the_batching_window():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model, batcher(model, EngineArgs()), SchedulerLimits(batch_window_ms=2_000)
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit_group([[item("a", 8)]], deadlines=[None], alone=True)[
+            0
+        ].result(timeout=5)
+        assert time.monotonic() - started < 1.0
+    finally:
+        scheduler.stop()
+
+
+def test_a_window_waits_for_requests_still_being_planned_when_it_opened():
+    model = FakeModel()
+    planning = threading.Event()
+    planning.set()
+    opened: list[float] = []
+
+    def still_planning(window_opened: float) -> bool:
+        opened.append(window_opened)
+        return planning.is_set()
+
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs()),
+        SchedulerLimits(batch_window_ms=100),
+        planning=still_planning,
+    )
+    scheduler.start()
+    try:
+        first = scheduler.submit([item("a", 8)], deadline=None)
+        # Past the window, within BURST_WINDOWS of it: the second request is still on its way.
+        time.sleep(0.15)
+        second = scheduler.submit([item("b", 8)], deadline=None)
+        planning.clear()
+        first.result(timeout=5)
+        second.result(timeout=5)
+        assert len(model.calls) == 1 and opened
+    finally:
+        scheduler.stop()
+
+
+def test_a_window_waits_for_a_burst_at_most_burst_windows():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs()),
+        SchedulerLimits(batch_window_ms=100),
+        planning=lambda opened: True,
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit([item("a", 8)], deadline=None).result(timeout=5)
+        elapsed = time.monotonic() - started
+        assert 0.1 * BURST_WINDOWS - 0.05 <= elapsed < 0.1 * BURST_WINDOWS + 0.7
     finally:
         scheduler.stop()
 
