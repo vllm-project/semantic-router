@@ -32,6 +32,56 @@ DEVICE_FAULT_MARKERS = (
 )
 
 
+def _host_mem_available_bytes() -> int | None:
+    """Reclaimable system memory in bytes (``MemAvailable``), None when unreadable."""
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as stream:
+            for line in stream:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _cgroup_limit_bytes() -> int | None:
+    """This container's memory limit in bytes (cgroup v2, then v1), None when unlimited."""
+    for path in (
+        "/sys/fs/cgroup/memory.max",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    ):
+        try:
+            with open(path, encoding="utf-8") as stream:
+                value = stream.read().strip()
+        except OSError:
+            continue
+        if value == "max":
+            continue
+        try:
+            return int(value)
+        except ValueError:
+            continue
+    return None
+
+
+def _integrated_free_bytes(total: int | None) -> int | None:
+    """Usable bytes on an integrated GPU, which shares memory with the CPU.
+
+    ``torch.cuda.mem_get_info`` stays low there while reclaimable page cache
+    shows as used, so this reads the host's ``MemAvailable`` instead, capped
+    by the container limit where present and by the device size.
+    """
+    available = _host_mem_available_bytes()
+    if available is None:
+        return None
+    limit = _cgroup_limit_bytes()
+    if limit is not None:
+        available = min(available, limit)
+    if total is not None:
+        available = min(available, total)
+    return available
+
+
 def device_lock(index: int) -> Any:
     """The lock that serializes this process's device work on one GPU."""
     with _LOCKS:
@@ -103,6 +153,14 @@ class GPUAccelerator(Accelerator):
                 free, total = torch.cuda.mem_get_info(index)
             except RuntimeError:
                 free, total = None, properties.total_memory
+            # An integrated GPU shares memory with the CPU, where mem_get_info
+            # stays low while reclaimable page cache shows as used; the
+            # placement check below then reads host MemAvailable instead.
+            # getattr guards older PyTorch without the is_integrated flag.
+            if getattr(properties, "is_integrated", False):
+                integrated = _integrated_free_bytes(properties.total_memory)
+                if integrated is not None:
+                    free = integrated
             devices.append(
                 DeviceInfo(
                     accelerator=self.name,

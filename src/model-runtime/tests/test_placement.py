@@ -415,3 +415,107 @@ def test_a_host_without_gpus_still_names_the_accelerators_it_lacks(monkeypatch):
         "no device can serve d3: rocm: not available on this host; "
         "cuda: not available on this host; cpu: this PyTorch is built without LAPACK"
     )
+
+
+def _fake_cuda_host(monkeypatch, *, integrated, cuda_free_gib, total_gib=120.0):
+    """A one-GPU CUDA host; ``integrated=None`` leaves off the ``is_integrated`` flag."""
+    from types import SimpleNamespace
+
+    if integrated is None:
+        properties = SimpleNamespace(
+            name="Discrete GPU", total_memory=int(total_gib * GIB)
+        )
+    else:
+        properties = SimpleNamespace(
+            name="Shared GPU",
+            total_memory=int(total_gib * GIB),
+            is_integrated=integrated,
+        )
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: True)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda index: properties)
+    monkeypatch.setattr(
+        torch.cuda,
+        "mem_get_info",
+        lambda *args: (int(cuda_free_gib * GIB), int(total_gib * GIB)),
+    )
+    monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda: True)
+
+
+def _fake_host_memory(monkeypatch, available_gib, limit_gib=None):
+    monkeypatch.setattr(
+        gpu, "_host_mem_available_bytes", lambda: int(available_gib * GIB)
+    )
+    monkeypatch.setattr(
+        gpu,
+        "_cgroup_limit_bytes",
+        lambda: None if limit_gib is None else int(limit_gib * GIB),
+    )
+
+
+def test_an_integrated_gpu_reports_host_mem_available(monkeypatch):
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=0.5)
+    _fake_host_memory(monkeypatch, 60.0)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(60.0 * GIB)
+
+
+def test_an_integrated_gpu_admits_a_model_that_fits_host_memory(monkeypatch):
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=0.5)
+    _fake_host_memory(monkeypatch, 1.0)
+    with pytest.raises(PlacementError, match="1.0 GiB free"):
+        place(SPEC, "cuda:0", 1_000_000_000)
+    _fake_host_memory(monkeypatch, 60.0)
+    assert place(SPEC, "cuda:0", 1_000_000_000).device.label == "cuda:0"
+
+
+def test_a_discrete_gpu_keeps_mem_get_info(monkeypatch):
+    _fake_cuda_host(monkeypatch, integrated=False, cuda_free_gib=3.0)
+    _fake_host_memory(monkeypatch, 60.0)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(3.0 * GIB)
+
+
+def test_a_gpu_without_the_integrated_flag_keeps_mem_get_info(monkeypatch):
+    _fake_cuda_host(monkeypatch, integrated=None, cuda_free_gib=3.0)
+    _fake_host_memory(monkeypatch, 60.0)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(3.0 * GIB)
+
+
+def test_integrated_free_memory_clamps_to_the_device_size(monkeypatch):
+    _fake_cuda_host(
+        monkeypatch, integrated=True, cuda_free_gib=0.5, total_gib=120.0
+    )
+    _fake_host_memory(monkeypatch, 200.0)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(120.0 * GIB)
+
+
+def test_integrated_free_memory_respects_the_container_limit(monkeypatch):
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=0.5)
+    _fake_host_memory(monkeypatch, 60.0, limit_gib=10.0)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(10.0 * GIB)
+
+
+def test_an_integrated_gpu_falls_back_to_mem_get_info_without_host_memory(
+    monkeypatch,
+):
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=2.2, total_gib=121.0)
+    monkeypatch.setattr(gpu, "_host_mem_available_bytes", lambda: None)
+    monkeypatch.setattr(gpu, "_cgroup_limit_bytes", lambda: None)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(2.2 * GIB)
+
+
+def test_gb10_integrated_gpu_admits_a_model_from_host_memory(monkeypatch):
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=2.2, total_gib=121.0)
+    _fake_host_memory(monkeypatch, 104.0)
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == int(104 * GIB)
+    assert place(SPEC, "cuda:0", 1_000_000_000).device.label == "cuda:0"
+    _fake_cuda_host(monkeypatch, integrated=False, cuda_free_gib=2.2, total_gib=121.0)
+    with pytest.raises(PlacementError, match="2.2 GiB free"):
+        place(SPEC, "cuda:0", 1_000_000_000)
