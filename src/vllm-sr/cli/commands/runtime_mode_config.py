@@ -8,7 +8,7 @@ import click
 
 from cli.bootstrap import build_bootstrap_config
 from cli.decision_model import configured_decision_model, decision_model_deployment
-from cli.model_revision import resolve_model_revision
+from cli.model_revision import resolve_model_revision, warn_saved_revision_mismatch
 from cli.validator_decision_model import engine_args_error, public_model_name
 
 MODE_HELP = """
@@ -202,12 +202,15 @@ def apply_instance_options(
             for name in ("device", "endpoint", "served_name"):
                 resource.pop(name, None)
         resource.setdefault("provider", "model_runtime")
+        explicit_revision = "revision" in (model_options or {})
         revision = resolve_model_revision(
             resource["artifact"], resource.get("revision")
         )
         if revision is None:
             resource.pop("revision", None)
         else:
+            if not explicit_revision:
+                warn_saved_revision_mismatch(resource["artifact"], revision)
             resource["revision"] = revision
         deployments[key] = resource
         catalog.setdefault("system", {})["decision_model"] = {"deployment": key}

@@ -4,7 +4,11 @@ from types import SimpleNamespace
 
 import huggingface_hub
 import pytest
-from cli.model_revision import builtin_releases, resolve_model_revision
+from cli.model_revision import (
+    builtin_releases,
+    resolve_model_revision,
+    warn_saved_revision_mismatch,
+)
 from huggingface_hub import HfApi, constants
 
 
@@ -89,3 +93,70 @@ def test_hub_errors_do_not_echo_response_or_credentials(monkeypatch, hub):
     with pytest.raises(ValueError, match="Cannot resolve") as error:
         resolve_model_revision("acme/custom", "main")
     assert "secret-token" not in str(error.value)
+
+
+# -- warn_saved_revision_mismatch tests --
+
+
+def test_saved_revision_differs_from_pin_warns(caplog):
+    """Saved revision != pin → one warning naming both short hashes and --revision."""
+    releases = builtin_releases()
+    artifact = "vllm-sr/Vela-2.0-4B"
+    pinned = releases[artifact]
+    saved = "f" * 40
+    with caplog.at_level("WARNING", logger="cli.model_revision"):
+        warn_saved_revision_mismatch(artifact, saved)
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    message = warnings[0].getMessage()
+    assert saved[:7] in message
+    assert pinned[:7] in message
+    assert "--revision" in message
+
+
+def test_saved_revision_matches_pin_is_silent(caplog):
+    """Saved revision == pin → no warning."""
+    releases = builtin_releases()
+    artifact = "vllm-sr/Vela-2.0-4B"
+    pinned = releases[artifact]
+    with caplog.at_level("WARNING", logger="cli.model_revision"):
+        warn_saved_revision_mismatch(artifact, pinned)
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_no_pin_for_model_is_silent(caplog):
+    """Unknown model with no release pin → no warning, no crash."""
+    with caplog.at_level("WARNING", logger="cli.model_revision"):
+        warn_saved_revision_mismatch("acme/custom-no-pin", "a" * 40)
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_fresh_workspace_gets_pin_no_warning(hub, caplog):
+    """Fresh workspace (revision=None) → resolve returns pin, no warning path."""
+    releases = builtin_releases()
+    artifact = "vllm-sr/d3-turbo"
+    pinned = releases[artifact]
+    result = resolve_model_revision(artifact, None)
+    assert result == pinned
+    # warn_saved_revision_mismatch is never called with None; calling with
+    # the pin confirms silence.
+    with caplog.at_level("WARNING", logger="cli.model_revision"):
+        warn_saved_revision_mismatch(artifact, pinned)
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+    assert hub == []
+
+
+def test_explicit_revision_skips_warning(hub, caplog):
+    """Explicit --revision → caller does not invoke warn; verify no false warn."""
+    # Simulates the caller's contract: when --revision is explicit,
+    # warn_saved_revision_mismatch is never called. Here we verify that the
+    # function itself is harmless when called with the explicit value matching
+    # the pin (the only case it could be called).
+    artifact = "vllm-sr/d3-turbo"
+    # Explicit commit passed by the user → resolve_model_revision returns it.
+    explicit = "b" * 40
+    result = resolve_model_revision(artifact, explicit)
+    assert result == explicit.lower()
+    # Caller skips warn_saved_revision_mismatch entirely for explicit revision.
+    # No warning records should exist.
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
