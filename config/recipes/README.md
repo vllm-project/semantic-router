@@ -16,7 +16,7 @@ start those inference backends.
 | --- | --- |
 | [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
 | [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
-| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
+| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs, routed on four named decision-model questions. |
 | [Decision Balance](decision-balance/README.md) | One decision-model call per request sets the reasoning effort and model across GLM-5.3-Flash and two Qwen3.8 models; MoM V1 Balance runs the same policy over the models you assign. |
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
