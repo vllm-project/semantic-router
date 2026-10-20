@@ -56,6 +56,7 @@ const (
 
 // API format constants for model backends.
 const (
+	APIFormatSystemOne = "systemone"
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"
@@ -221,6 +222,10 @@ type Listener struct {
 
 type ListenerSystemOne struct {
 	Models []string `yaml:"models"`
+	// MaxDeadlineMs bounds how long the listener waits for a model it calls
+	// directly, however long a request's options.deadline_ms asks for.
+	// Omitted, it is DefaultSystemOneMaxDeadlineMs.
+	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
 }
 
 // ListenerIdentity names the identity sources a standalone listener trusts.

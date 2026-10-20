@@ -1,13 +1,19 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.2.0
+  version: 3.2.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
-    serves several). `POST /v1/decisions` is a strict superset of System One:
-    every System One request is accepted and every System One response field
-    keeps its meaning; `POST /v1/systemone` is an alias. `POST /v1/classify`,
+    serves several). `POST /v1/systemone` accepts System One requests,
+    including `assets` (as base64 or as multipart/form-data parts) and
+    compressed bodies, and answers them with System One fields. It also
+    accepts vLLM Semantic Router extensions: `images`, `videos`, `states`, Set
+    and Span questions, `choices` / `levels` / `labels`, Box `at` and `track`
+    questions on videos, and `options`. `POST /v1/decisions` takes the same
+    requests and answers a failed question in its answer, where
+    `POST /v1/systemone` answers the request as a whole, as System One does.
+    The model runtime reference documents both. `POST /v1/classify`,
     `POST /v1/embeddings` (OpenAI-compatible) and `POST /v1/rerank` serve
     fixed heads, embeddings and pair scores. `POST /v1/bundle` carries the
     work of several surfaces and models in one call. The router's Go client
@@ -18,13 +24,22 @@ paths:
   /v1/decisions:
     post:
       operationId: createDecisions
-      summary: Answer typed Choice, Noul, Score, Set and Span questions about one or more states
+      summary: Answer typed Choice, Noul, Score, Box, Set and Span questions about one or more states
+      description: |
+        The body may be compressed with one layer of `Content-Encoding` `gzip` (or `x-gzip`) or `zstd` (a
+        window of at most 8 MiB); `limits.max_request_bytes` applies to the body as sent and again once
+        decoded. Another coding, or more than one, is 415 unsupported_media_type (reason
+        `encoding_unsupported`); a body that does not decode is 400 (reason `encoding_malformed`). A body may
+        be multipart/form-data (decompressed first).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/DecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecisionMultipart'
       responses:
         '200':
           description: |
@@ -40,6 +55,7 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '500': {$ref: '#/components/responses/Error'}
@@ -47,16 +63,29 @@ paths:
   /v1/systemone:
     post:
       operationId: createSystemOne
-      summary: Alias of /v1/decisions
+      summary: System One requests; a failed question fails the request
+      description: |
+        The requests of /v1/decisions. A request any of whose questions (of its own state or of a `states`
+        entry) cannot be answered is answered as a whole with that question's error instead of a 200: the
+        first failed question in request order gives the status (`invalid_question` 422;
+        `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input` 400; `invalid_model_output` 500;
+        `unavailable` 503; `deadline_exceeded` 504) and the body is `question_failed` with that question's
+        `question_error`, `reason` and `question` ID, and the
+        message lists every failed question. System One answers carry no per-question error, and the official
+        SDKs validate each answer by its type. Bodies, compression and headers are read as /v1/decisions reads
+        them.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/DecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecisionMultipart'
       responses:
         '200':
-          description: Same as /v1/decisions.
+          description: One answer per question, in request order; every question answered.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -66,10 +95,12 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '500': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+        '504': {$ref: '#/components/responses/Error'}
   /v1/classify:
     post:
       operationId: createClassification
@@ -265,6 +296,12 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        images:
+          $ref: '#/components/schemas/DecisionImages'
+        videos:
+          $ref: '#/components/schemas/DecisionVideos'
+        assets:
+          $ref: '#/components/schemas/DecisionAssets'
         states:
           type: object
           description: |
@@ -289,24 +326,121 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        images:
+          $ref: '#/components/schemas/DecisionImages'
+        videos:
+          $ref: '#/components/schemas/DecisionVideos'
+    DecisionMultipart:
+      type: object
+      required: [request]
+      description: |
+        A request as multipart/form-data, as the System One SDKs send one with images: the first part is named
+        `request` (application/json) and holds the request; every other part holds one image's bytes (named
+        uniquely, typed image/png, image/jpeg, image/jpg, application/octet-stream or not at all) and is
+        claimed by exactly one asset's `part`. Anything else is 400 invalid_request (reason
+        `multipart_malformed`).
+      properties:
+        request:
+          $ref: '#/components/schemas/DecisionRequest'
+      additionalProperties:
+        type: string
+        format: binary
+    DecisionAssets:
+      type: object
+      minProperties: 1
+      description: |
+        Images by reference (System One `assets`), for models whose card lists the `image` modality. Each
+        reference is 1 to 1,024 bytes and not blank, all of them together at most 65,536 bytes, and every one
+        must be used (reason `asset_unreferenced`). A reference is replaced wherever it occurs in a string of
+        the state, of a question's `instructions` or of its options (criteria values, `choices` and `labels`
+        descriptions, `levels`), in the request and in every `states` entry: a string equal to a reference is
+        that image, a longer one is split at each occurrence (left to right, the longest reference first at
+        one position), and object keys are never replaced. Each occurrence is one use, read where it sits and
+        counted again, toward the token limits and `usage.input_tokens`; the bytes of all uses together are at
+        most `limits.max_request_bytes` of the process (reason `asset_uses`). An image in the state is part of
+        the state. An image in a question's instructions or options belongs to that question only, on models
+        whose `image_placements` list `instructions` or `criteria`; another model answers that question with
+        invalid_question, reason `question_images_unsupported`. One rejected image fails the request.
+      additionalProperties:
+        $ref: '#/components/schemas/Asset'
+    Asset:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [image]
+        format:
+          type: string
+          enum: [png, jpg, jpeg]
+          description: Optional; the format is read from the bytes (PNG, JPEG or WebP; animated images are refused).
+        data_base64:
+          type: string
+          description: The image file, base64; at most `limits.image_max_bytes` decoded.
+        part:
+          type: string
+          description: In a multipart request, the part holding the image file (data_base64 is then ignored).
+    DecisionImages:
+      type: array
+      description: |
+        Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+        JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+        `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+        pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+        invalid_request, as it does a malformed image.
+      items:
+        type: string
+    DecisionVideos:
+      type: array
+      description: |
+        Videos every question of the state sees, after its images, for models whose card lists the `video`
+        modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+        `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+        pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+        `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+        every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+        at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+        invalid_request, as it does a malformed or over-limit video.
+      items:
+        type: string
     Question:
       type: object
       additionalProperties: false
       description: |
-        One question. `instructions` is required unless `preset` names a question the model defines (see
-        `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
-        its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
-        `head` and `threshold` where the model reads them), and any other field is answered with
-        invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
-        a question takes one or the other.
+        One question. Choice and Score may omit `instructions` (the model then chooses the best matching
+        option); a Noul may when its criteria describe an outcome; Box and track need them; a `preset` names a
+        question the model defines (see `presets` in /v1/models). Every family validates System One fields the
+        same way: a question takes only its type's fields (`choices` for Choice and Noul, `levels` for Score,
+        `labels` for Set and Span, `at` for Box, `rate` for track, `over`, `head` and `threshold` where the
+        model reads them), and any other field is answered with invalid_question. `choices`, `levels` and
+        `labels` are the Router config's ordered forms of `criteria`; a question takes one or the other. A Box
+        question locates what its instructions describe in its target image: the image its instructions
+        reference when there is one, else the state's only image (reasons `box_needs_image`,
+        `box_target_ambiguous`); with `at`, at that moment of the state's only video; a track question locates
+        it at every sampled moment of that video, `rate` times per second (reasons `video_needed`,
+        `video_target_ambiguous`, `box_video_too_long` for a clip longer than `limits.box_video_max_seconds`,
+        `at_out_of_range`).
       properties:
         type:
           type: string
           description: |
-            choice, noul or score; set and span where the model declares them (`question_types` in /v1/models).
-            Unknown or undeclared types are answered with invalid_question.
+            choice, noul or score; box, track, set and span where the model declares them (`question_types` in
+            /v1/models). Unknown types are answered with invalid_question (reason `type_unsupported`); an
+            undeclared box or track with reason `box_unsupported` or `track_unsupported`.
         instructions:
           description: The question; non-blank text, an object or an array.
+        at:
+          type: number
+          format: double
+          minimum: 0
+          description: Box questions on a video; seconds from its start (the sampled moment nearest to it is read).
+        rate:
+          type: integer
+          enum: [1, 2]
+          default: 1
+          description: |
+            Track questions: updates per second over the whole video, 1 (16-second windows at 2 frames per
+            second) or 2 (8-second windows at 4); any other value is answered with invalid_question.
         criteria:
           description: |
             System One criteria. Choice: an object of 2..255 non-blank option keys to descriptions (descriptions
@@ -373,10 +507,6 @@ components:
         description:
           nullable: true
           description: Text, an object, an array or null.
-    ProfileName:
-      type: string
-      pattern: '^[a-z][a-z0-9_]*$'
-      description: exact, or a profile the server enabled for this model (its card's `profiles`).
     RequestOptions:
       type: object
       additionalProperties: false
@@ -387,11 +517,15 @@ components:
           exclusiveMinimum: true
           minimum: 0
           description: Work not started by the deadline is not run; its items return deadline_exceeded.
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
+        long_context:
+          type: boolean
+          description: |
+            Long context (default false): each question may have up to the model's `limits.max_input_tokens`
+            instead of its `limits.validated_input_tokens`, and a state-once model's request up to
+            `limits.max_request_tokens`. Slower and less accurate than the validated length.
         max_tokens:
           type: integer
           minimum: 1
@@ -489,8 +623,11 @@ components:
       required: [type]
       description: |
         One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-        level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
-        knows why, message.
+        level), probabilities, confidence, legend. Box: box, confidence (null when the model gives none) and,
+        on a video, time. Track: track. Choice and Score confidence are System One's published statistics:
+        Choice `(p_max - 1/n) / (1 - 1/n)`; Score `max(0, 1 - sum_i p_i |i - m| / MAD_unif)`, m the most likely
+        level and `MAD_unif = sum_i |i - (n - 1)/2| / n`. A failed question has only type, error, reason and,
+        when the runtime knows why, message.
       properties:
         input_coverage:
           type: string
@@ -523,11 +660,73 @@ components:
           type: object
           additionalProperties:
             type: string
+        box:
+          $ref: '#/components/schemas/Box'
+        time:
+          type: number
+          format: double
+          description: Box on a video; the second of the sampled moment the box was read at.
+        track:
+          type: array
+          description: Track; one entry per sampled moment of the video, in time order.
+          items:
+            $ref: '#/components/schemas/TrackPoint'
         error:
           $ref: '#/components/schemas/ItemError'
+        reason:
+          $ref: '#/components/schemas/QuestionReason'
         message:
           type: string
           description: Why the question failed, naming the field, such as "set questions do not take ['colour']".
+    Box:
+      type: object
+      required: [top, bottom, left, right]
+      description: |
+        A box as fractions of its image's height (top, bottom) and width (left, right) from the top-left
+        corner, as the image was sent: 0 <= top < bottom <= 1, 0 <= left < right <= 1. A box is always given;
+        pair it with a Noul when the target may be absent.
+      properties:
+        top:
+          type: number
+          format: double
+        bottom:
+          type: number
+          format: double
+        left:
+          type: number
+          format: double
+        right:
+          type: number
+          format: double
+    TrackPoint:
+      type: object
+      required: [time, box, confidence, visible]
+      properties:
+        time:
+          type: number
+          format: double
+          description: Seconds from the start of the video.
+        box:
+          $ref: '#/components/schemas/Box'
+        confidence:
+          type: number
+          format: double
+          nullable: true
+        visible:
+          type: number
+          format: double
+          description: The probability that the target is visible at this moment.
+    QuestionReason:
+      type: string
+      description: |
+        A fixed word for why a question failed; it never carries request data. invalid_question:
+        `question_malformed`, `type_unsupported`, `box_unsupported`, `track_unsupported`,
+        `question_images_unsupported`, `box_needs_image`, `box_target_ambiguous`, `video_needed`,
+        `video_target_ambiguous`, `box_video_too_long`, `at_out_of_range`, `preset_unknown`; max_length_exceeded:
+        `question_tokens`
+        (over `limits.validated_input_tokens`, or `limits.max_input_tokens` with long context),
+        `require_full_input`; scan_budget_exceeded: `scan_budget`; invalid_input: `input_malformed`;
+        invalid_model_output: `model_output`; deadline_exceeded: `deadline`; unavailable: `model_unavailable`.
     ItemError:
       type: string
       enum: [invalid_question, invalid_input, max_length_exceeded, scan_budget_exceeded, invalid_model_output, deadline_exceeded, unavailable]
@@ -580,16 +779,22 @@ components:
     ResponseMeta:
       type: object
       properties:
+        model_id:
+          type: string
+          description: The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
         revision:
           type: string
           nullable: true
           description: The 40-hex Hub revision; null for a local package directory.
         model_sha256:
           type: string
-        profile:
+        dtype:
           type: string
+          description: The precision the backbone computed in (float32, bfloat16 or float16).
         numerics:
           type: string
+          enum: [exact, approximate]
+          description: exact when the model's answers never depend on batching; see ModelCard.numerics.
         engine:
           type: string
         accelerator:
@@ -680,8 +885,6 @@ components:
           format: double
           exclusiveMinimum: true
           minimum: 0
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -919,8 +1122,6 @@ components:
           format: double
           exclusiveMinimum: true
           minimum: 0
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -1019,8 +1220,6 @@ components:
           format: double
           exclusiveMinimum: true
           minimum: 0
-        profile:
-          $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
@@ -1141,13 +1340,42 @@ components:
       properties:
         code:
           type: string
-          enum: [invalid_request, model_not_found, request_too_large, unsupported_surface, overloaded, internal_error, not_ready]
+          description: |
+            The request's error. `question_failed` (POST /v1/systemone): the request is answered as a whole for
+            its failed question `question`, whose code is `question_error`; its status follows that code.
+          enum: [invalid_request, model_not_found, request_too_large, unsupported_media_type, unsupported_surface, overloaded, internal_error, not_ready, question_failed]
         message:
           type: string
+        reason:
+          type: string
+          description: |
+            Why an image, video, asset or body was rejected, or the failed question's reason (QuestionReason).
+            These fixed words never carry request data, so a gateway may show them where it must not show
+            `message`.
+          enum: [image_format, image_too_large, image_pixels, image_aspect_ratio, image_malformed, image_unsupported, video_format, video_too_large, video_too_long, video_pixels, video_aspect_ratio, video_malformed, video_tokens, video_unsupported, encoding_unsupported, encoding_malformed, multipart_malformed, asset_malformed, asset_unreferenced, asset_reference, asset_uses, request_tokens, question_malformed, type_unsupported, box_unsupported, track_unsupported, question_images_unsupported, box_needs_image, box_target_ambiguous, video_needed, video_target_ambiguous, box_video_too_long, at_out_of_range, preset_unknown, input_malformed, question_tokens, require_full_input, scan_budget, model_output, deadline, model_unavailable]
+        question:
+          type: string
+          description: |
+            The question whose failure answers the request: on POST /v1/systemone, and on a request none of whose
+            questions is valid.
+        question_error:
+          $ref: '#/components/schemas/ItemError'
+          description: The failed question's code (`question_failed`).
+        limit:
+          type: integer
+          description: |
+            The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
+            for `video_too_long`, input tokens for `video_tokens` and the longer side over the shorter for
+            `*_aspect_ratio`.
     ModelList:
       type: object
-      required: [object, data, api_version, limits]
+      required: [object, data, api_version, limits, models]
       properties:
+        models:
+          type: array
+          description: The decision models in System One's model-list shape, which the System One SDKs read.
+          items:
+            $ref: '#/components/schemas/SystemOneModel'
         api_version:
           type: string
           description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
@@ -1159,6 +1387,18 @@ components:
             $ref: '#/components/schemas/ModelCard'
         limits:
           $ref: '#/components/schemas/ProcessLimits'
+    SystemOneModel:
+      type: object
+      required: [name, description, release_date]
+      properties:
+        name:
+          type: string
+          description: The model ID a request names.
+        description:
+          type: string
+        release_date:
+          type: string
+          description: YYYY-MM-DD, or empty when the package does not say.
     ProcessLimits:
       type: object
       required: [max_bundle_tasks, max_request_bytes]
@@ -1209,6 +1449,24 @@ components:
           description: Questions the model defines (Question.preset).
           items:
             type: string
+        modalities:
+          type: array
+          description: Decision models only; the inputs a decisions request may carry (`text`, `image` for `images` and `assets`, `video` for `videos`).
+          items:
+            type: string
+        image_placements:
+          type: array
+          description: |
+            Decision models with the `image` modality; where they read a request's images: `state` (in front of
+            the state text: `images`, and the uses of `assets` in the state), and `instructions` and `criteria`
+            (inside one question) where the model reads a question's own images.
+          items:
+            type: string
+            enum: [state, instructions, criteria]
+        usage:
+          type: string
+          enum: [state_once]
+          description: How usage.input_tokens counts a request; `state_once` when the state counts once and every question its own tokens; absent when each question counts its own copy of the state.
         heads:
           type: array
           items:
@@ -1222,12 +1480,16 @@ components:
         licence:
           type: string
           nullable: true
-        profile:
+        engine_args:
+          $ref: '#/components/schemas/EngineArgs'
+        numerics:
           type: string
-        profiles:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProfileInfo'
+          enum: [exact, approximate]
+          description: |
+            exact when the model's answers never depend on batching: its rows answer the same alone or in
+            any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+            their references. approximate when the rows a forward holds, shared-context trees, another dtype
+            or approximate kernels can move answers by rounding.
         engine:
           type: string
         accelerator:
@@ -1357,6 +1619,15 @@ components:
       properties:
         max_input_tokens:
           type: integer
+          description: The most tokens of one question (the state and that question), with long context where the model has `validated_input_tokens`.
+        validated_input_tokens:
+          type: integer
+          description: |
+            The length the model was validated at: each question's cap unless the request asks for long context
+            (`options.long_context`); absent when `max_input_tokens` is the only cap.
+        max_request_tokens:
+          type: integer
+          description: State-once models; the most tokens of one request, its state once and every question's own.
         max_scan_tokens:
           type: integer
           description: |
@@ -1379,17 +1650,69 @@ components:
         max_inputs:
           type: integer
           description: Most inputs or documents one classify, embeddings or rerank request may carry.
-    ProfileInfo:
+        image_max_pixels:
+          type: integer
+          description: Models that read images; the most pixels the model reads of one image (larger images are resized).
+        image_source_max_pixels:
+          type: integer
+          description: Models that read images; the most pixels one supplied image may have.
+        image_max_bytes:
+          type: integer
+          description: Models that read images; the most bytes one supplied image may have (16 MiB for Decision 3.0).
+        video_fps:
+          type: number
+          description: Models that read videos; the frames per second the model samples.
+        video_max_frames:
+          type: integer
+          description: Models that read videos; the most frames the model reads of one video.
+        video_max_pixels:
+          type: integer
+          description: Models that read videos; the most pixels the model reads of one frame (larger frames are resized).
+        video_max_tokens:
+          type: integer
+          description: Models that read videos; the most input tokens the videos of one request may take.
+        video_max_bytes:
+          type: integer
+          description: Models that read videos; the most bytes one supplied video may have.
+        video_max_seconds:
+          type: integer
+          description: Models that read videos; the longest supplied video, in seconds.
+        box_video_max_seconds:
+          type: integer
+          description: Models that answer track questions; the longest clip a box question with `at` or a track question reads, in seconds (a longer clip gets `box_video_too_long`); every other video question keeps `video_max_seconds`.
+        video_source_max_pixels:
+          type: integer
+          description: Models that read videos; the most pixels one frame of a supplied video may have.
+    EngineArgs:
       type: object
-      required: [name, numerics]
+      description: How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+      required: [max_num_seqs, max_num_batched_tokens, batch_window_ms, dtype, enable_shared_context]
       properties:
-        name:
+        max_num_seqs:
+          type: integer
+          minimum: 1
+          description: |
+            The most rows one forward holds, across requests: one per question of a decision request, one per
+            input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+            one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+            budget, since a row costs at least 8 padded tokens).
+        max_num_batched_tokens:
+          type: integer
+          description: |
+            The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+            that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+            is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
+        batch_window_ms:
+          type: number
+          format: double
+          description: How long the scheduler waits after the first request to collect more (when `max_num_seqs` is above 1).
+        dtype:
           type: string
-        numerics:
-          type: string
-          enum: [exact, approximate]
-        description:
-          type: string
+          enum: [auto, float32, bfloat16, float16]
+          description: The configured precision; auto is the precision the model was published in.
+        enable_shared_context:
+          type: boolean
+          description: Whether a multi-question decision request computes its shared state once.
     GoldenStatus:
       type: object
       required: [status]
@@ -1404,6 +1727,7 @@ components:
         reference:
           type: string
           nullable: true
+          description: Recorded golden reference key. A hardware-qualified key is preferred when present; otherwise the device-class reference is used.
     PluginInfo:
       type: object
       required: [group, name]
@@ -1421,9 +1745,9 @@ components:
         capabilities:
           type: object
           description: |
-            The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
-            and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
-            `auto_priority`, where `auto` tries them (lowest first; null: only when named).
+            The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures,
+            outputs and the `--dtype` values it runs (`dtypes`), an accelerator's validation status. Engines and
+            accelerators also list `auto_priority`, where `auto` tries them (lowest first; null: only when named).
           additionalProperties: true
     Health:
       type: object

@@ -50,7 +50,7 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
 		}
 		if ruleTreeSetsOnError(node) {
-			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
+			return fmt.Errorf("decision '%s': %s", decisionName, OnUnknownOnErrorConflictMessage)
 		}
 	}
 	if node.IsLeaf() {
@@ -63,6 +63,8 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 	}
 	return nil
 }
+
+const OnUnknownOnErrorConflictMessage = "condition on_error has no effect when rules.on_unknown is set; remove one of them"
 
 func ruleTreeSetsOnError(node *RuleNode) bool {
 	if node == nil {
@@ -243,6 +245,9 @@ func validateDecisionAnnotations(decision Decision) error {
 }
 
 func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
+	if decision.Algorithm.IsNative() {
+		return validateNativeDecisionSurfaces(decision)
+	}
 	for i, modelRef := range decision.ModelRefs {
 		if modelRef.Model == "" {
 			return fmt.Errorf("decision '%s', modelRefs[%d]: model name cannot be empty", decision.Name, i)
@@ -507,6 +512,9 @@ func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
 func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {
 	if algorithm == nil {
 		return nil
+	}
+	if err := validateNativeAlgorithmConfig(decisionName, modelRefs, algorithm); err != nil {
+		return err
 	}
 
 	normalizedType, displayType, err := normalizeDecisionAlgorithmType(

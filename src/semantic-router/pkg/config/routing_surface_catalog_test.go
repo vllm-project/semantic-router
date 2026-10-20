@@ -20,7 +20,7 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 		if entry.Tier != "supported" && entry.Tier != "experimental" {
 			t.Errorf("Catalog entry %q has invalid Tier %q", entry.Type, entry.Tier)
 		}
-		if entry.Execution != AlgorithmExecutionSelector && entry.Execution != AlgorithmExecutionLooper {
+		if entry.Execution != AlgorithmExecutionSelector && entry.Execution != AlgorithmExecutionLooper && entry.Execution != AlgorithmExecutionNative {
 			t.Errorf("Catalog entry %q has invalid Execution %q", entry.Type, entry.Execution)
 		}
 		if entry.PayloadShape != "" && entry.PayloadShape != AlgorithmPayloadNested {
@@ -99,7 +99,7 @@ func TestSupportedLooperAlgorithmTypes(t *testing.T) {
 		}
 	}
 
-	for _, algorithmType := range []string{DecisionAlgorithmStatic, "rl_driven", "unknown"} {
+	for _, algorithmType := range []string{DecisionAlgorithmStatic, DecisionAlgorithmRandom, "rl_driven", "unknown"} {
 		if IsLooperAlgorithmType(algorithmType) {
 			t.Errorf("IsLooperAlgorithmType(%q) = true, want false", algorithmType)
 		}
@@ -109,7 +109,7 @@ func TestSupportedLooperAlgorithmTypes(t *testing.T) {
 func TestDecisionAlgorithmCatalog_PublicAlgorithmSurface(t *testing.T) {
 	publicTypes := []string{
 		"automix", "confidence", "fusion", "hybrid", "kmeans",
-		"knn", "latency_aware", "mlp", "multi_factor", "ratings",
+		"knn", "latency_aware", "mlp", "multi_factor", "random", "ratings",
 		"remom", "router_dc", "static", "svm",
 	}
 

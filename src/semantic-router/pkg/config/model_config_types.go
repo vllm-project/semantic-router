@@ -240,7 +240,7 @@ type ExternalModelConfig struct {
 	ModelRole        string                        `yaml:"model_role"`
 	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
 	ModelName        string                        `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   int                           `yaml:"llm_timeout_seconds,omitempty"`
+	TimeoutSeconds   float64                       `yaml:"llm_timeout_seconds,omitempty"`
 	ParserType       string                        `yaml:"parser_type,omitempty"`
 	Threshold        float32                       `yaml:"threshold,omitempty"`
 	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
@@ -380,17 +380,24 @@ type ProviderProfile struct {
 	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion    string            `yaml:"api_version,omitempty"`
 	ChatPath      string            `yaml:"chat_path,omitempty"`
+	// OpenAICompatGateway marks a vLLM-type profile that actually points at an
+	// OpenAI-compatible gateway injecting its own usage metering fields, so
+	// the response decoder tolerates them instead of stripping undeclared
+	// usage fields. A plain vLLM backend must leave it unset.
+	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
 }
 
 type ModelPricing struct {
-	Currency         string   `yaml:"currency,omitempty"`
-	PromptPer1M      float64  `yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M  float64  `yaml:"completion_per_1m,omitempty"`
-	CachedInputPer1M float64  `yaml:"cached_input_per_1m,omitempty"`
-	CacheWritePer1M  *float64 `yaml:"cache_write_per_1m,omitempty"`
+	Currency          string   `yaml:"currency,omitempty"`
+	PromptPer1M       float64  `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M   float64  `yaml:"completion_per_1m,omitempty"`
+	CachedInputPer1M  float64  `yaml:"cached_input_per_1m,omitempty"`
+	CacheWritePer1M   *float64 `yaml:"cache_write_per_1m,omitempty"`
+	CacheWrite1hPer1M *float64 `yaml:"cache_write_1h_per_1m,omitempty"`
 }
 
 type ModelParams struct {
+	Deployment         string              `yaml:"deployment,omitempty"`
 	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`

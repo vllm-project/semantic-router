@@ -7716,6 +7716,34 @@
                           "confidence": {
                             "type": "number"
                           },
+                          "pii": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "has_pii": {
+                                "type": "boolean"
+                              },
+                              "pii_types": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "scores_available": {
+                                "nullable": true,
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "has_pii",
+                              "confidence"
+                            ]
+                          },
                           "probabilities": {
                             "nullable": true,
                             "type": "object",
@@ -7725,6 +7753,95 @@
                           },
                           "processing_time_ms": {
                             "type": "integer"
+                          },
+                          "security": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "decision": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "categories": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "score": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Value": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "Value"
+                                    ]
+                                  },
+                                  "score_semantics": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Calibrated": {
+                                        "type": "boolean"
+                                      },
+                                      "Direction": {
+                                        "type": "string"
+                                      },
+                                      "Maximum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Minimum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Unit": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "Unit",
+                                      "Direction",
+                                      "Minimum",
+                                      "Maximum",
+                                      "Calibrated"
+                                    ]
+                                  },
+                                  "source_label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "label"
+                                ]
+                              },
+                              "is_jailbreak": {
+                                "type": "boolean"
+                              },
+                              "scores_available": {
+                                "nullable": true,
+                                "type": "boolean"
+                              },
+                              "threat_type": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "is_jailbreak",
+                              "threat_type",
+                              "confidence"
+                            ]
                           }
                         },
                         "required": [
@@ -8233,6 +8350,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -9553,6 +9677,13 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "action": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -15511,8 +15642,8 @@
         "x-vllm-sr-visibility": "advanced"
       },
       "post": {
-        "summary": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline",
-        "description": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline",
+        "summary": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 48 MiB request, 4 MiB response, 30 second deadline",
+        "description": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 48 MiB request, 4 MiB response, 30 second deadline",
         "operationId": "post_api_v1_diagnostics_models_systemone",
         "tags": [
           "diagnostics"
@@ -15540,6 +15671,30 @@
                           "abstain_probability": {
                             "nullable": true,
                             "type": "number"
+                          },
+                          "box": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "bottom": {
+                                "type": "number"
+                              },
+                              "left": {
+                                "type": "number"
+                              },
+                              "right": {
+                                "type": "number"
+                              },
+                              "top": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "bottom",
+                              "left",
+                              "right",
+                              "top"
+                            ]
                           },
                           "choice": {
                             "nullable": true,
@@ -15579,9 +15734,65 @@
                               "type": "number"
                             }
                           },
+                          "reason": {
+                            "nullable": true,
+                            "type": "string"
+                          },
                           "score": {
                             "nullable": true,
                             "type": "number"
+                          },
+                          "time": {
+                            "nullable": true,
+                            "type": "number"
+                          },
+                          "track": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "box": {
+                                  "type": "object",
+                                  "properties": {
+                                    "bottom": {
+                                      "type": "number"
+                                    },
+                                    "left": {
+                                      "type": "number"
+                                    },
+                                    "right": {
+                                      "type": "number"
+                                    },
+                                    "top": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "bottom",
+                                    "left",
+                                    "right",
+                                    "top"
+                                  ]
+                                },
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "time": {
+                                  "type": "number"
+                                },
+                                "visible": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "box",
+                                "confidence",
+                                "time",
+                                "visible"
+                              ]
+                            }
                           },
                           "type": {
                             "nullable": true,
@@ -15609,6 +15820,10 @@
                           "nullable": true,
                           "type": "string"
                         },
+                        "dtype": {
+                          "nullable": true,
+                          "type": "string"
+                        },
                         "engine": {
                           "nullable": true,
                           "type": "string"
@@ -15617,15 +15832,15 @@
                           "nullable": true,
                           "type": "string"
                         },
+                        "model_id": {
+                          "nullable": true,
+                          "type": "string"
+                        },
                         "model_sha256": {
                           "nullable": true,
                           "type": "string"
                         },
                         "numerics": {
-                          "nullable": true,
-                          "type": "string"
-                        },
-                        "profile": {
                           "nullable": true,
                           "type": "string"
                         },
@@ -15762,6 +15977,30 @@
                                   "nullable": true,
                                   "type": "number"
                                 },
+                                "box": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "properties": {
+                                    "bottom": {
+                                      "type": "number"
+                                    },
+                                    "left": {
+                                      "type": "number"
+                                    },
+                                    "right": {
+                                      "type": "number"
+                                    },
+                                    "top": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "bottom",
+                                    "left",
+                                    "right",
+                                    "top"
+                                  ]
+                                },
                                 "choice": {
                                   "nullable": true,
                                   "type": "string"
@@ -15800,9 +16039,65 @@
                                     "type": "number"
                                   }
                                 },
+                                "reason": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
                                 "score": {
                                   "nullable": true,
                                   "type": "number"
+                                },
+                                "time": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "track": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "box": {
+                                        "type": "object",
+                                        "properties": {
+                                          "bottom": {
+                                            "type": "number"
+                                          },
+                                          "left": {
+                                            "type": "number"
+                                          },
+                                          "right": {
+                                            "type": "number"
+                                          },
+                                          "top": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "bottom",
+                                          "left",
+                                          "right",
+                                          "top"
+                                        ]
+                                      },
+                                      "confidence": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "time": {
+                                        "type": "number"
+                                      },
+                                      "visible": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "box",
+                                      "confidence",
+                                      "time",
+                                      "visible"
+                                    ]
+                                  }
                                 },
                                 "type": {
                                   "nullable": true,
@@ -15830,6 +16125,10 @@
                                 "nullable": true,
                                 "type": "string"
                               },
+                              "dtype": {
+                                "nullable": true,
+                                "type": "string"
+                              },
                               "engine": {
                                 "nullable": true,
                                 "type": "string"
@@ -15838,15 +16137,15 @@
                                 "nullable": true,
                                 "type": "string"
                               },
+                              "model_id": {
+                                "nullable": true,
+                                "type": "string"
+                              },
                               "model_sha256": {
                                 "nullable": true,
                                 "type": "string"
                               },
                               "numerics": {
-                                "nullable": true,
-                                "type": "string"
-                              },
-                              "profile": {
                                 "nullable": true,
                                 "type": "string"
                               },
@@ -16567,7 +16866,7 @@
           }
         },
         "requestBody": {
-          "description": "application/json request payload. Limit: 10485760 bytes.",
+          "description": "application/json request payload. Limit: 50339840 bytes.",
           "required": true,
           "content": {
             "application/json": {
@@ -16583,6 +16882,39 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "assets": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "data_base64": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "format": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "part": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "images": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "model": {
                         "nullable": true,
                         "type": "string"
@@ -16595,13 +16927,13 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "long_context": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
                           "max_tokens": {
                             "nullable": true,
                             "type": "integer"
-                          },
-                          "profile": {
-                            "nullable": true,
-                            "type": "string"
                           },
                           "return_meta": {
                             "nullable": true,
@@ -16616,6 +16948,10 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "at": {
+                              "nullable": true,
+                              "type": "number"
+                            },
                             "choices": {
                               "nullable": true,
                               "type": "array",
@@ -16682,6 +17018,10 @@
                               "nullable": true,
                               "type": "string"
                             },
+                            "rate": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
                             "require_full_input": {
                               "nullable": true,
                               "type": "boolean"
@@ -16705,12 +17045,23 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "images": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "questions": {
                               "nullable": true,
                               "type": "object",
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
+                                  "at": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
                                   "choices": {
                                     "nullable": true,
                                     "type": "array",
@@ -16777,6 +17128,10 @@
                                     "nullable": true,
                                     "type": "string"
                                   },
+                                  "rate": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  },
                                   "require_full_input": {
                                     "nullable": true,
                                     "type": "boolean"
@@ -16793,13 +17148,27 @@
                                 "additionalProperties": false
                               }
                             },
-                            "state": {}
+                            "state": {},
+                            "videos": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
                           },
                           "required": [
                             "questions",
                             "state"
                           ],
                           "additionalProperties": false
+                        }
+                      },
+                      "videos": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
                         }
                       }
                     },
@@ -17041,6 +17410,50 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "description": "Request body too large",
             "content": {
@@ -17216,10 +17629,54 @@
                 }
               }
             }
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "requestBody": {
-          "description": "application/json request payload. Limit: 2105344 bytes.",
+          "description": "application/json request payload. Limit: 50339840 bytes.",
           "required": true,
           "content": {
             "application/json": {
@@ -17231,6 +17688,9 @@
                   },
                   "authorization": {
                     "type": "string"
+                  },
+                  "backend_request": {
+                    "type": "boolean"
                   },
                   "listener": {
                     "type": "string"
@@ -18558,6 +19018,992 @@
                   "recipe",
                   "binding",
                   "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-plane": "diagnostic",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "advanced"
+      }
+    },
+    "/api/v1/diagnostics/routes/systemone": {
+      "get": {
+        "summary": "List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health",
+        "description": "List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health",
+        "operationId": "get_api_v1_diagnostics_routes_systemone",
+        "tags": [
+          "diagnostics"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active native routing plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "routes": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "algorithms": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "execution_timeout_ms": {
+                            "type": "integer"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "question_types": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "recipe": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "model",
+                          "recipe",
+                          "algorithms",
+                          "question_types",
+                          "execution_timeout_ms"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "available",
+                    "routes"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config",
+        "x-vllm-sr-plane": "diagnostic",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "advanced"
+      },
+      "post": {
+        "summary": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
+        "description": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
+        "operationId": "post_api_v1_diagnostics_routes_systemone",
+        "tags": [
+          "diagnostics"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selected native response and routing outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "description": "application/json request payload. Limit: 10485760 bytes.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "request": {
+                    "type": "object",
+                    "properties": {
+                      "assets": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "data_base64": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "format": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "part": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "images": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "model": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "options": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                          "deadline_ms": {
+                            "nullable": true,
+                            "type": "number"
+                          },
+                          "long_context": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
+                          "max_tokens": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "return_meta": {
+                            "nullable": true,
+                            "type": "boolean"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "questions": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "choices": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "description": {
+                                    "nullable": true
+                                  },
+                                  "key": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "description",
+                                  "key"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "criteria": {
+                              "nullable": true
+                            },
+                            "head": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "instructions": {
+                              "nullable": true
+                            },
+                            "labels": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "description": {
+                                    "nullable": true
+                                  },
+                                  "key": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "description",
+                                  "key"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "levels": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {}
+                            },
+                            "over": {
+                              "nullable": true
+                            },
+                            "overflow": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "preset": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "rate": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
+                            "require_full_input": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
+                            "threshold": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "state": {},
+                      "states": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "images": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "questions": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                  "at": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "choices": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "description": {
+                                          "nullable": true
+                                        },
+                                        "key": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "description",
+                                        "key"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "criteria": {
+                                    "nullable": true
+                                  },
+                                  "head": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "instructions": {
+                                    "nullable": true
+                                  },
+                                  "labels": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "description": {
+                                          "nullable": true
+                                        },
+                                        "key": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "description",
+                                        "key"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "levels": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {}
+                                  },
+                                  "over": {
+                                    "nullable": true
+                                  },
+                                  "overflow": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "preset": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "rate": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  },
+                                  "require_full_input": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "threshold": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "type": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "state": {},
+                            "videos": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "questions",
+                            "state"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "videos": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "questions",
+                      "state"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "model",
+                  "request"
                 ],
                 "additionalProperties": false
               }
@@ -20193,6 +21639,34 @@
                           "engine": {
                             "type": "string"
                           },
+                          "engine_args": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "batch_window_ms": {
+                                "type": "number"
+                              },
+                              "dtype": {
+                                "type": "string"
+                              },
+                              "enable_shared_context": {
+                                "type": "boolean"
+                              },
+                              "max_num_batched_tokens": {
+                                "type": "integer"
+                              },
+                              "max_num_seqs": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "max_num_seqs",
+                              "max_num_batched_tokens",
+                              "batch_window_ms",
+                              "dtype",
+                              "enable_shared_context"
+                            ]
+                          },
                           "family": {
                             "type": "string"
                           },
@@ -20228,10 +21702,10 @@
                           "name": {
                             "type": "string"
                           },
-                          "process": {
+                          "numerics": {
                             "type": "string"
                           },
-                          "profile": {
+                          "process": {
                             "type": "string"
                           },
                           "ready": {
@@ -24307,6 +25781,113 @@
                                 "additionalProperties": {
                                   "type": "string"
                                 }
+                              },
+                              "topic_continuity": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "assistant_included": {
+                                      "type": "boolean"
+                                    },
+                                    "class": {
+                                      "type": "string"
+                                    },
+                                    "classify_us": {
+                                      "type": "integer"
+                                    },
+                                    "combined_score": {
+                                      "type": "number"
+                                    },
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "coverage": {
+                                      "type": "string"
+                                    },
+                                    "entity_score": {
+                                      "type": "number"
+                                    },
+                                    "evaluator_version": {
+                                      "type": "string"
+                                    },
+                                    "excluded_content_present": {
+                                      "type": "boolean"
+                                    },
+                                    "fallback": {
+                                      "type": "boolean"
+                                    },
+                                    "feature_cap_reached": {
+                                      "type": "boolean"
+                                    },
+                                    "history_source": {
+                                      "type": "string"
+                                    },
+                                    "input_bytes": {
+                                      "type": "integer"
+                                    },
+                                    "lexical_score": {
+                                      "type": "number"
+                                    },
+                                    "live_prose_terms": {
+                                      "type": "integer"
+                                    },
+                                    "live_terms": {
+                                      "type": "integer"
+                                    },
+                                    "marker_ambiguous": {
+                                      "type": "boolean"
+                                    },
+                                    "max_entity_score": {
+                                      "type": "number"
+                                    },
+                                    "max_raw_score": {
+                                      "type": "number"
+                                    },
+                                    "prepare_extract_us": {
+                                      "type": "integer"
+                                    },
+                                    "prior_turns_examined": {
+                                      "type": "integer"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    },
+                                    "schema_version": {
+                                      "type": "string"
+                                    },
+                                    "signal": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "signal",
+                                    "schema_version",
+                                    "evaluator_version",
+                                    "class",
+                                    "confidence",
+                                    "reason",
+                                    "fallback",
+                                    "coverage",
+                                    "history_source",
+                                    "assistant_included",
+                                    "excluded_content_present",
+                                    "feature_cap_reached",
+                                    "marker_ambiguous",
+                                    "prior_turns_examined",
+                                    "input_bytes",
+                                    "live_terms",
+                                    "live_prose_terms",
+                                    "lexical_score",
+                                    "entity_score",
+                                    "combined_score",
+                                    "max_raw_score",
+                                    "max_entity_score",
+                                    "classify_us",
+                                    "prepare_extract_us"
+                                  ]
+                                }
                               }
                             }
                           },
@@ -24552,6 +26133,9 @@
                                     "arguments": {
                                       "type": "string"
                                     },
+                                    "content_redacted": {
+                                      "type": "boolean"
+                                    },
                                     "output": {
                                       "type": "string"
                                     },
@@ -24565,6 +26149,9 @@
                                       "type": "string"
                                     },
                                     "source": {
+                                      "type": "string"
+                                    },
+                                    "status": {
                                       "type": "string"
                                     },
                                     "text": {
@@ -26036,6 +27623,485 @@
           }
         },
         "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          },
+          {
+            "plugin": "shadow_dispatch",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/observability/replays/dataset/judge-tasks": {
+      "get": {
+        "summary": "Build blinded pairwise judge tasks over the shadow comparison dataset",
+        "description": "Build blinded pairwise judge tasks over the shadow comparison dataset",
+        "operationId": "get_api_v1_observability_replays_dataset_judge_tasks",
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "description": "Seed that fixes split assignment; the same records under the same seed reproduce the same manifest.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "description": "Repeatable split written as name:weight, for example train:8.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "balance_by",
+            "in": "query",
+            "description": "Group a balance cap applies to. Requires balance_max.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recipe",
+                "decision",
+                "primary_model"
+              ]
+            }
+          },
+          {
+            "name": "balance_max",
+            "in": "query",
+            "description": "Most examples one group may contribute. Requires balance_by.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "blinding_key",
+            "in": "query",
+            "description": "Secret that derives the opaque arm labels. Keep it from the judge, since it maps each label back to a model.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blinded judge tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "excluded": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
+                        },
+                        "pairs": {
+                          "type": "integer"
+                        },
+                        "tasks": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "pairs",
+                        "tasks"
+                      ]
+                    },
+                    "manifest_digest": {
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "first": {
+                            "type": "object",
+                            "properties": {
+                              "arm": {
+                                "type": "string"
+                              },
+                              "names_own_model": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "arm",
+                              "text"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "input": {
+                            "type": "string"
+                          },
+                          "input_digest": {
+                            "type": "string"
+                          },
+                          "pair": {
+                            "type": "string"
+                          },
+                          "second": {
+                            "type": "object",
+                            "properties": {
+                              "arm": {
+                                "type": "string"
+                              },
+                              "names_own_model": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "arm",
+                              "text"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "pair",
+                          "input",
+                          "input_digest",
+                          "first",
+                          "second"
+                        ]
+                      }
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "manifest_digest",
+                    "counts",
+                    "tasks"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.detail",
         "x-vllm-sr-sensitivity": "replay",
         "x-vllm-sr-plane": "management",
         "x-vllm-sr-audiences": [
@@ -28466,6 +30532,113 @@
                           "additionalProperties": {
                             "type": "string"
                           }
+                        },
+                        "topic_continuity": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "assistant_included": {
+                                "type": "boolean"
+                              },
+                              "class": {
+                                "type": "string"
+                              },
+                              "classify_us": {
+                                "type": "integer"
+                              },
+                              "combined_score": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "coverage": {
+                                "type": "string"
+                              },
+                              "entity_score": {
+                                "type": "number"
+                              },
+                              "evaluator_version": {
+                                "type": "string"
+                              },
+                              "excluded_content_present": {
+                                "type": "boolean"
+                              },
+                              "fallback": {
+                                "type": "boolean"
+                              },
+                              "feature_cap_reached": {
+                                "type": "boolean"
+                              },
+                              "history_source": {
+                                "type": "string"
+                              },
+                              "input_bytes": {
+                                "type": "integer"
+                              },
+                              "lexical_score": {
+                                "type": "number"
+                              },
+                              "live_prose_terms": {
+                                "type": "integer"
+                              },
+                              "live_terms": {
+                                "type": "integer"
+                              },
+                              "marker_ambiguous": {
+                                "type": "boolean"
+                              },
+                              "max_entity_score": {
+                                "type": "number"
+                              },
+                              "max_raw_score": {
+                                "type": "number"
+                              },
+                              "prepare_extract_us": {
+                                "type": "integer"
+                              },
+                              "prior_turns_examined": {
+                                "type": "integer"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "schema_version": {
+                                "type": "string"
+                              },
+                              "signal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "signal",
+                              "schema_version",
+                              "evaluator_version",
+                              "class",
+                              "confidence",
+                              "reason",
+                              "fallback",
+                              "coverage",
+                              "history_source",
+                              "assistant_included",
+                              "excluded_content_present",
+                              "feature_cap_reached",
+                              "marker_ambiguous",
+                              "prior_turns_examined",
+                              "input_bytes",
+                              "live_terms",
+                              "live_prose_terms",
+                              "lexical_score",
+                              "entity_score",
+                              "combined_score",
+                              "max_raw_score",
+                              "max_entity_score",
+                              "classify_us",
+                              "prepare_extract_us"
+                            ]
+                          }
                         }
                       }
                     },
@@ -28711,6 +30884,9 @@
                               "arguments": {
                                 "type": "string"
                               },
+                              "content_redacted": {
+                                "type": "boolean"
+                              },
                               "output": {
                                 "type": "string"
                               },
@@ -28724,6 +30900,9 @@
                                 "type": "string"
                               },
                               "source": {
+                                "type": "string"
+                              },
+                              "status": {
                                 "type": "string"
                               },
                               "text": {
@@ -35527,6 +37706,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -35708,6 +37894,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -35882,6 +38075,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -36143,6 +38343,99 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "action": {
+                          "type": "object",
+                          "properties": {
+                            "confidence": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "confidence_available": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
+                            "execution_time_ms": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "policy_default": {
+                              "type": "string"
+                            },
+                            "rules": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "content_token_windows": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "type": "string"
+                                  },
+                                  "execution_time_ms": {
+                                    "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "policy_sha256": {
+                                    "type": "string"
+                                  },
+                                  "precision": {
+                                    "type": "string"
+                                  },
+                                  "processed_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "thresholds": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "window_batch_size": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "policy_sha256",
+                                  "provider",
+                                  "device",
+                                  "precision",
+                                  "input_tokens",
+                                  "processed_tokens",
+                                  "truncated",
+                                  "content_token_windows",
+                                  "thresholds",
+                                  "window_batch_size",
+                                  "execution_time_ms"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "execution_time_ms",
+                            "confidence"
+                          ]
+                        },
                         "authz": {
                           "type": "object",
                           "properties": {
@@ -38306,6 +40599,7 @@
                         "metadata",
                         "classifier",
                         "input_modality",
+                        "action",
                         "decision"
                       ]
                     },
@@ -38970,6 +41264,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "action": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -39151,6 +41452,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "action": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -39325,6 +41633,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "action": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -39586,6 +41901,99 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "type": "object",
+                              "properties": {
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "confidence_available": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "execution_time_ms": {
+                                  "type": "number"
+                                },
+                                "method": {
+                                  "type": "string"
+                                },
+                                "policy_default": {
+                                  "type": "string"
+                                },
+                                "rules": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "content_token_windows": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "integer"
+                                          }
+                                        }
+                                      },
+                                      "device": {
+                                        "type": "string"
+                                      },
+                                      "execution_time_ms": {
+                                        "type": "number"
+                                      },
+                                      "input_tokens": {
+                                        "type": "integer"
+                                      },
+                                      "policy_sha256": {
+                                        "type": "string"
+                                      },
+                                      "precision": {
+                                        "type": "string"
+                                      },
+                                      "processed_tokens": {
+                                        "type": "integer"
+                                      },
+                                      "provider": {
+                                        "type": "string"
+                                      },
+                                      "thresholds": {
+                                        "nullable": true,
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "truncated": {
+                                        "type": "boolean"
+                                      },
+                                      "window_batch_size": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "required": [
+                                      "policy_sha256",
+                                      "provider",
+                                      "device",
+                                      "precision",
+                                      "input_tokens",
+                                      "processed_tokens",
+                                      "truncated",
+                                      "content_token_windows",
+                                      "thresholds",
+                                      "window_batch_size",
+                                      "execution_time_ms"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "execution_time_ms",
+                                "confidence"
+                              ]
+                            },
                             "authz": {
                               "type": "object",
                               "properties": {
@@ -41749,6 +44157,7 @@
                             "metadata",
                             "classifier",
                             "input_modality",
+                            "action",
                             "decision"
                           ]
                         },

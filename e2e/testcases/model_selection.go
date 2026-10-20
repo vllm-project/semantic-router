@@ -10,8 +10,9 @@ import (
 	"os"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -67,13 +68,10 @@ func testModelSelection(ctx context.Context, client *kubernetes.Clientset, opts 
 	}
 	defer stopPortForward()
 
-	// Load test cases from JSON file or use default
+	// The checked-in corpus is required evidence for this acceptance test.
 	testCases, err := loadModelSelectionCases("e2e/testcases/testdata/model_selection_cases.json")
 	if err != nil {
-		if opts.Verbose {
-			fmt.Printf("[Test] Could not load test cases from file: %v, using default cases\n", err)
-		}
-		testCases = getDefaultModelSelectionCases()
+		return fmt.Errorf("failed to load model selection test cases: %w", err)
 	}
 
 	// Run model selection tests
@@ -242,177 +240,11 @@ func loadModelSelectionCases(filepath string) ([]ModelSelectionCase, error) {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		return nil, err
 	}
+	if len(cases) == 0 {
+		return nil, fmt.Errorf("model selection test corpus %q is empty", filepath)
+	}
 
 	return cases, nil
-}
-
-func getDefaultModelSelectionCases() []ModelSelectionCase {
-	// Models configured in values.yaml matching training data
-	mlModels := []string{"llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"}
-
-	// 20 test cases covering all 4 ML algorithms with DIVERSE decision types:
-	// - MLP: math_decision (3 cases), code_decision (2 cases) - diverse domains
-	// - SVM: physics_decision (3 cases), business_decision (2 cases) - diverse domains
-	// - KNN: science_decision (3 cases), law_decision (2 cases) - diverse domains
-	// - KMeans: health_decision (3 cases), engineering_decision (2 cases) - diverse domains
-
-	return []ModelSelectionCase{
-		// =================================================================
-		// MLP ALGORITHM: math_decision + code_decision (5 cases total)
-		// =================================================================
-		{
-			Query:          "Calculate the derivative of x^3 + 2x^2 - 5x + 1",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Calculus derivative - MLP/math",
-			Algorithm:      "mlp",
-		},
-		{
-			Query:          "Solve for x: 3x + 7 = 22",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Algebra equation - MLP/math",
-			Algorithm:      "mlp",
-		},
-		{
-			Query:          "What is the integral of sin(x)dx?",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Integral calculus - MLP/math",
-			Algorithm:      "mlp",
-		},
-		{
-			Query:          "Write a Python function to sort a list using bubble sort",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "Python sorting - MLP/code",
-			Algorithm:      "mlp",
-		},
-		{
-			Query:          "How do I create a for loop in JavaScript?",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "JavaScript loop - MLP/code",
-			Algorithm:      "mlp",
-		},
-
-		// =================================================================
-		// SVM ALGORITHM: physics_decision + business_decision (5 cases total)
-		// =================================================================
-		{
-			Query:          "What is Newton's second law of motion?",
-			Decision:       "physics_decision",
-			ExpectedModels: mlModels,
-			Description:    "Classical mechanics - SVM/physics",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "Calculate the kinetic energy of a 5kg object moving at 10m/s",
-			Decision:       "physics_decision",
-			ExpectedModels: mlModels,
-			Description:    "Energy calculation - SVM/physics",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "What is the wavelength of light with frequency 5e14 Hz?",
-			Decision:       "physics_decision",
-			ExpectedModels: mlModels,
-			Description:    "Wave physics - SVM/physics",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "What is the law of supply and demand in economics?",
-			Decision:       "business_decision",
-			ExpectedModels: mlModels,
-			Description:    "Economics law - SVM/business",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "How does inflation affect interest rates?",
-			Decision:       "business_decision",
-			ExpectedModels: mlModels,
-			Description:    "Monetary economics - SVM/business",
-			Algorithm:      "svm",
-		},
-
-		// =================================================================
-		// KNN ALGORITHM: science_decision + law_decision (5 cases total)
-		// =================================================================
-		{
-			Query:          "What is the process of photosynthesis in plants?",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Biology photosynthesis - KNN/science",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "Explain the structure of DNA and its double helix",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Biology DNA - KNN/science",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "What is the pH of a neutral solution at 25 degrees Celsius?",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Chemistry pH - KNN/science",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "What is the difference between civil law and criminal law?",
-			Decision:       "law_decision",
-			ExpectedModels: mlModels,
-			Description:    "Legal concepts - KNN/law",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "What are the elements of a valid contract?",
-			Decision:       "law_decision",
-			ExpectedModels: mlModels,
-			Description:    "Contract law - KNN/law",
-			Algorithm:      "knn",
-		},
-
-		// =================================================================
-		// KMeans ALGORITHM: health_decision + engineering_decision (5 cases total)
-		// =================================================================
-		{
-			Query:          "What are the symptoms of diabetes mellitus?",
-			Decision:       "health_decision",
-			ExpectedModels: mlModels,
-			Description:    "Medical symptoms - KMeans/health",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "How does the human cardiovascular system work?",
-			Decision:       "health_decision",
-			ExpectedModels: mlModels,
-			Description:    "Human anatomy - KMeans/health",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "What causes high blood pressure in humans?",
-			Decision:       "health_decision",
-			ExpectedModels: mlModels,
-			Description:    "Health condition - KMeans/health",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "What is the difference between AC and DC electrical current?",
-			Decision:       "engineering_decision",
-			ExpectedModels: mlModels,
-			Description:    "Electrical engineering - KMeans/engineering",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "How does a transistor amplify electrical signals?",
-			Decision:       "engineering_decision",
-			ExpectedModels: mlModels,
-			Description:    "Electronics engineering - KMeans/engineering",
-			Algorithm:      "kmeans",
-		},
-	}
 }
 
 func printModelSelectionResults(results []ModelSelectionResult, totalTests, correctTests int, accuracy float64) {

@@ -16,7 +16,6 @@ SIGNAL metadata "canary" {
   predicate: { equals: "canary" }
 }
 
-
 SIGNAL classifier "risk" {
   type: "local"
   model_path: "models/risk"
@@ -53,6 +52,37 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
 	)
+}
+
+func TestPIISourceRoundTrip(t *testing.T) {
+	input := `
+SIGNAL pii "tool-data" {
+  source: "tool_result"
+}
+
+ROUTE "tool-route" {
+  PRIORITY 100
+  WHEN pii("tool-data")
+  MODEL "model-a"
+}`
+
+	cfg := mustCompilePolicyDSL(t, input)
+	if len(cfg.PIIRules) != 1 || cfg.PIIRules[0].Source != config.PIISourceToolResult {
+		t.Fatalf("PII rules = %#v, want source %q", cfg.PIIRules, config.PIISourceToolResult)
+	}
+
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(source, `source: "tool_result"`) {
+		t.Fatalf("decompiled DSL missing PII source:\n%s", source)
+	}
+
+	roundTrip := mustCompilePolicyDSL(t, source)
+	if len(roundTrip.PIIRules) != 1 || roundTrip.PIIRules[0].Source != config.PIISourceToolResult {
+		t.Fatalf("round-trip PII rules = %#v, want source %q", roundTrip.PIIRules, config.PIISourceToolResult)
+	}
 }
 
 func TestClassifierRationaleRoundTrip(t *testing.T) {
@@ -214,6 +244,53 @@ ROUTE "x" (on_unknown = "allow") {
 		}
 	}
 	t.Fatalf("no diagnostic mentions on_unknown: %#v", diagnostics)
+}
+
+func TestValidateOnUnknownOnErrorConflict(t *testing.T) {
+	const signals = `
+SIGNAL classifier "risk" {
+  type: "local"
+  model_path: "models/risk"
+  labels: ["SAFE", "RISKY"]
+  use_cpu: true
+}
+SIGNAL keyword "hack" {
+  operator: "contains"
+  values: ["hack"]
+}
+`
+	cases := map[string]struct {
+		route string
+		want  bool
+	}{
+		"flat":             {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
+		"nested and":       {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
+		"nested or not":    {`ROUTE "r" (on_unknown = "match") { PRIORITY 1 WHEN keyword("hack") OR NOT classifier("risk", label: "RISKY", on_error: "match") MODEL "m" }`, true},
+		"empty on_error":   {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "") MODEL "m" }`, false},
+		"on_error alone":   {`ROUTE "r" { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, false},
+		"on_unknown alone": {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY") MODEL "m" }`, false},
+		"match all":        {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 MODEL "m" }`, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			diagnostics, errs := Validate(signals + tc.route)
+			if len(errs) != 0 {
+				t.Fatalf("parse errors: %v", errs)
+			}
+			got := false
+			for _, diagnostic := range diagnostics {
+				if strings.Contains(diagnostic.Message, "on_error has no effect") {
+					if diagnostic.Level != DiagConstraint {
+						t.Fatalf("level = %v, want DiagConstraint", diagnostic.Level)
+					}
+					got = true
+				}
+			}
+			if got != tc.want {
+				t.Fatalf("conflict flagged = %v, want %v: %#v", got, tc.want, diagnostics)
+			}
+		})
+	}
 }
 
 func assertPolicyDSLSource(t *testing.T, source string) {

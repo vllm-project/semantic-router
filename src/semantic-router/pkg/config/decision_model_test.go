@@ -120,3 +120,20 @@ func TestDecisionModelCanonicalExport(t *testing.T) {
 		t.Fatal("lost selected resource")
 	}
 }
+
+// The hazard line never follows the decision model: every other artifact -
+// DefaultSystemModels, the shipped config's explicit line, the model_eval
+// mirror - pins it to the Vela 1.0 Hazard encoder, and the resolution must
+// not bind the safety module's hazard head to a model with no hazard
+// question.
+func TestDecisionModelPinsHazardToTheVela1Encoder(t *testing.T) {
+	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-0.3B", ""))
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	resolved, err := resolveCanonicalGlobal(canonical.Global, canonical.globalOverrideRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resolved.ModelCatalog.System.Hazard; got != "models/Vela-1.0-Encoder-307M-Hazard" {
+		t.Fatalf("hazard = %q, want the Vela 1.0 Hazard encoder", got)
+	}
+}

@@ -313,7 +313,7 @@ spec:
           timeoutSeconds: 10
           failureThreshold: 3
         readinessProbe:
-          tcpSocket:
+          grpc:
             port: 50051
           initialDelaySeconds: 90
           periodSeconds: 30

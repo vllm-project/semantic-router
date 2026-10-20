@@ -64,6 +64,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
 | [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
+| [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
 | [`vllm-sr config router`](#vllm-sr-config-router) | Print the canonical router configuration. |
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
@@ -830,6 +831,29 @@ Validate and plan an exact remote mutation without changing the Router.
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr config propose` {#vllm-sr-config-propose}
+
+```text
+Usage: vllm-sr config propose [OPTIONS]
+```
+
+Print a reviewable config proposal. This command does not apply it.
+
+Examples:
+
+```bash
+vllm-sr config propose --config config.yaml \
+    --intent selection.latency-aware --decision default-route
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
+| `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
+| `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr config rollback` {#vllm-sr-config-rollback}
 
 ```text
@@ -1412,6 +1436,7 @@ kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
+random     - Uniform pick among eligible candidates (no configuration)
 ```
 
 Cross-request learning lives under global.router.learning.adaptation and
@@ -1453,12 +1478,19 @@ vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm -dp 2 --device-ids 0
 ```
 
 Without --engine the instance starts in Router mode, including on restart.
---engine (-e) disables recipe routing; the frontend, Dashboard and native
-System One APIs remain available. Saved routing configuration is retained.
+--engine (-e) disables recipe routing and serves the model. On the docker
+target only the Router container (the frontend, the native System One APIs
+and the model runtime) starts; --dashboard, --observability or --no-minimal
+add the rest. Without --config, and with no ./config.yaml, Engine mode keeps
+each model's config and state in ~/.local/state/vllm-sr/engine/&lt;model&gt; and
+prints a short summary (--verbose prints every detail). Saved routing
+configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
 Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model/placement options override saved settings.
+0.3B). Only explicit model, placement and engine options override saved
+settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
+and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
 
 | Parameter | Description |
@@ -1472,12 +1504,16 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--envoy-image TEXT` | Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
+| `--restart-policy CHOICE` | Restart policy of the containers this start creates: no (default), on-failure, unless-stopped, always. unless-stopped and always restart a crashed container and bring the stack back after a host reboot; vllm-sr stop still stops it. Choices: no, on-failure, unless-stopped, always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
-| `--minimal` | Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana) Default: false. |
+| `--minimal / --no-minimal` | Start without the Dashboard, sr-bench and the observability stack (Jaeger, Prometheus, Grafana). The default in engine mode; --no-minimal starts them all. |
+| `--dashboard` | Also start the Dashboard and sr-bench when minimal (engine mode's default). Default: false. |
+| `--observability` | Also start Jaeger, Prometheus and Grafana when minimal (engine mode's default). Default: false. |
+| `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
@@ -1489,7 +1525,11 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--revision TEXT` | Optional model branch, tag or commit; resolved once to an immutable startup revision. |
 | `-dp, --data-parallel-size INTEGER RANGE` | Number of model replicas. Preserve configured placement; new GPU deployments use distinct available GPUs.  [1&lt;=x&lt;=64] |
 | `--device-ids IDS` | Docker host GPU indices, e.g. 0 or 0,1. One index shares a GPU across replicas; otherwise use one per replica. Existing visibility masks are respected, not changed. |
-| `--runtime-profile PROFILE` | Model runtime numerics profile (default exact; vllm-srun plugins lists the installed ones). |
+| `--max-num-seqs INTEGER RANGE` | Most rows one model forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone. Unset, the runtime picks it by the device (256 on GPUs with 160 GB or more, fewer on smaller ones, 8192 on the CPU).  [x&gt;=1] |
+| `--max-num-batched-tokens INTEGER RANGE` | Tokens one model forward may hold: the sum of its rows for models that pack merged rows, else its rows times its longest row. Unset, the runtime picks it by the device and a short startup calibration (at most 32768 on GPUs with 160 GB or more, 65536 on the CPU).  [x&gt;=8] |
+| `--batch-window-ms FLOAT RANGE` | How long the model runtime waits after the first request to collect more (runtime default 2.0).  [0&lt;=x&lt;=1000] |
+| `--dtype CHOICE` | Precision the model computes in; auto (the runtime default) is the one it was published in. Choices: auto, float32, bfloat16, float16. |
+| `--enable-shared-context / --no-enable-shared-context` | Compute the shared state of a multi-question decision request once (runtime default: on where the model family's records show no accuracy loss, Decision 2.0). |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}

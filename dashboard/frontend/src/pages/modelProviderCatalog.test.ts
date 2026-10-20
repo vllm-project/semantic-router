@@ -26,7 +26,7 @@ describe('model provider catalog contracts', () => {
 
   it('only emits upstream wire formats supported by the router', () => {
     const formats = new Set(modelProviderCatalog.map((provider) => provider.apiFormat))
-    expect([...formats].sort()).toEqual(['anthropic', 'openai', 'responses'])
+    expect([...formats].sort()).toEqual(['anthropic', 'openai', 'responses', 'systemone'])
   })
 
   it('rejects an unknown default protocol instead of silently selecting OpenAI', () => {
@@ -73,14 +73,7 @@ describe('model provider catalog presentation', () => {
     const featured = modelProviderCatalog.filter((provider) => provider.featured)
 
     expect(featured.map((provider) => provider.id)).toEqual(
-      expect.arrayContaining([
-        'openai',
-        'anthropic',
-        'openrouter',
-        'vllm',
-        'sglang',
-        'ollama',
-      ]),
+      expect.arrayContaining(['openai', 'anthropic', 'openrouter', 'vllm', 'sglang', 'ollama']),
     )
     expect(featured.length).toBeGreaterThan(0)
     expect(featured.length).toBeLessThan(modelProviderCatalog.length)

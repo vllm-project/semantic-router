@@ -9,6 +9,7 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
+	"cascade":       "native",
 	"automix":       "selection",
 	"confidence":    "looper",
 	"fusion":        "looper",
@@ -18,6 +19,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"latency-aware": "selection",
 	"mlp":           "selection",
 	"multi-factor":  "selection",
+	"random":        "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
 	"router-dc":     "selection",
@@ -39,6 +41,7 @@ var pluginTutorialBuckets = map[string]string{
 	"fast-response":       "response-and-mutation",
 	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",
+	"masking":             "response-and-mutation",
 	"memory":              "retrieval-and-memory",
 	"prompt-cache":        "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",

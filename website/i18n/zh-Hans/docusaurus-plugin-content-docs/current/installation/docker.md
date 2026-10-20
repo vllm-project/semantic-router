@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: Docker 部署
 description: 将 Semantic Router 作为本地或单主机容器栈运行，并连接你单独运维的模型后端。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "9be5c38a1a746675535001e9fa45712e93a2cc7f"
   source_file: "docs/installation/docker.md"
   outdated: false
 ---
@@ -21,6 +22,8 @@ CLI 会管理 Router、控制面板，以及所选配置所需的支持服务；
 vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
+
+稳定版 CLI 拉取以自身发布版本为 tag 的 Router 和控制面板镜像；开发版本的 CLI 拉取从它自己的 `main` commit 发布、以该 commit SHA 为 tag 的镜像。源码检出使用 `:latest`。需要其他构建时，用 `--image` 和文档中的镜像环境变量覆盖。
 
 未指定 `--config` 时，`vllm-sr serve` 使用当前目录中的 `config.yaml`，或在控制面板中打开首次运行设置。设置期间该命令保持运行：你在控制面板中激活配置后，它用这份配置启动 Router 并等待其就绪。如果你提前停止它，下一次 `vllm-sr serve` 会启动 Router，`vllm-sr status` 会提示设置是否已完成。控制面板不会拿到容器运行时的 socket。默认本地端点为：
 
@@ -65,6 +68,16 @@ vllm-sr stop
 使用 `--gateway extproc` 时，`vllm-sr logs envoy` 还能查看 Envoy 容器的日志；standalone 模式下没有 Envoy 容器，该命令会说明这一点。
 
 使用 `--minimal` 在不启动控制面板和可观测性栈（Jaeger、Prometheus、Grafana）的情况下运行。使用 `--readonly` 保持控制面板可用但不允许更改配置。在将监听器暴露到受信任主机之外之前，固定镜像并复核[安全加固](security-hardening)。
+
+### 让栈在崩溃和重启后继续运行
+
+`vllm-sr serve` 创建的容器默认没有重启策略：崩溃的容器会保持停止状态，主机重启后栈也不会恢复。在服务器上，请带上重启策略启动：
+
+```bash
+vllm-sr serve --config config.yaml --restart-policy unless-stopped
+```
+
+`unless-stopped` 和 `always` 会重启退出的容器，并在 Docker 守护进程启动时重新启动栈；`on-failure` 只重启失败的容器。`vllm-sr stop` 仍然会停止栈。策略只作用于本次启动创建的容器，因此每次 `serve` 都要传入。使用 Podman 时，还需要启用它的重启服务（`systemctl enable --now podman-restart.service`），带策略的容器才会在重启后恢复。
 
 使用 `--gateway extproc` 时，Envoy 默认使用安全的 `info` 日志级别。若要临时排查问题，在启动栈之前设置 `VLLM_SR_ENVOY_LOG_LEVEL=debug`，完成后取消设置：debug 日志可能在日志中暴露转发的请求标头，包括 provider 的 `Authorization` 标头。
 

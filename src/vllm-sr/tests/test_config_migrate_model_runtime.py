@@ -22,11 +22,11 @@ REMOVED_FIELDS = {"precision", "custom_ops_profile", "compilation_cache_dir"}
 REMOVED_PROVIDERS = {"candle", "ort", "openvino"}
 
 
-def _config(global_config=None, routing=None, recipes=None):
+def _config(global_config=None, routing=None, recipes=None, providers=None):
     config = {
         "version": "v0.3",
         "listeners": [],
-        "providers": {"defaults": {"model": "general"}},
+        "providers": {"defaults": {"model": "general"}, **(providers or {})},
         "routing": {"modelCards": [{"name": "general"}], **(routing or {})},
         "global": global_config or {},
     }
@@ -116,7 +116,6 @@ def test_native_deployments_become_model_runtime_deployments():
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Reranker",
         "device": "rocm:0",
-        "profile": "max_speed",
     }
     assert deployments["embedder"] == {
         "provider": "model_runtime",
@@ -131,8 +130,8 @@ def test_native_deployments_become_model_runtime_deployments():
     assert not any(note.action_required for note in notes)
 
 
-def test_existing_profile_wins_over_fp16_precision():
-    migrated, _ = _migrate(
+def test_fp16_precision_keeps_the_published_precision_and_names_dtype():
+    migrated, notes = _migrate(
         _config(
             {
                 "model_catalog": {
@@ -150,7 +149,83 @@ def test_existing_profile_wins_over_fp16_precision():
         )
     )
 
-    assert _catalog(migrated)["deployments"]["fast"]["profile"] == "batching"
+    assert _catalog(migrated)["deployments"]["fast"] == {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+        "device": "cuda:0",
+    }
+    messages = {note.path: note.message for note in notes}
+    assert (
+        "dtype: float16" in messages["global.model_catalog.deployments.fast.precision"]
+    )
+    assert "global.model_catalog.deployments.fast.profile" in messages
+
+
+def _profiled(**deployments):
+    return _config(
+        {
+            "model_catalog": {
+                "deployments": {
+                    name: {
+                        "provider": "model_runtime",
+                        "artifact": "vllm-sr/Decision-2.0-Kai-0.6B",
+                        **fields,
+                    }
+                    for name, fields in deployments.items()
+                }
+            }
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("profile", "engine_args"),
+    [
+        ("exact", {}),
+        ("batching", {}),
+        ("shared_context", {"enable_shared_context": True}),
+        ("max_speed", {"enable_shared_context": True}),
+    ],
+)
+def test_each_former_profile_becomes_its_engine_arguments(profile, engine_args):
+    migrated, notes = _migrate(_profiled(chosen={"profile": profile}))
+
+    assert _catalog(migrated)["deployments"]["chosen"] == {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Decision-2.0-Kai-0.6B",
+        **engine_args,
+    }
+    (note,) = [n for n in notes if n.path.endswith(".chosen.profile")]
+    assert note.message.startswith(f"{profile} -> ")
+    assert not note.action_required
+    again, more = _migrate(migrated)
+    assert again == migrated and not list(more)
+
+
+def test_exact_names_the_behaviour_change():
+    _, notes = _migrate(_profiled(chosen={"profile": "exact"}))
+
+    (note,) = list(notes)
+    assert "batches concurrent requests by default" in note.message
+
+
+def test_an_authored_engine_argument_wins_over_the_mapped_one():
+    migrated, _ = _migrate(
+        _profiled(
+            chosen={"profile": "max_speed", "enable_shared_context": False},
+        )
+    )
+
+    assert _catalog(migrated)["deployments"]["chosen"]["enable_shared_context"] is False
+
+
+def test_an_unknown_profile_is_removed_and_asks_for_engine_arguments():
+    migrated, notes = _migrate(_profiled(vendor={"profile": "vendor_low_latency"}))
+
+    assert "profile" not in _catalog(migrated)["deployments"]["vendor"]
+    (note,) = list(notes)
+    assert note.action_required
+    assert "max_num_seqs" in note.message and "dtype" in note.message
 
 
 def test_legacy_alias_artifact_moves_to_its_vela_replacement_and_drops_revision():
@@ -522,6 +597,7 @@ def test_every_field_the_router_rejects_leaves_the_configuration():
                             "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
                             "precision": "fp16",
                             "custom_ops_profile": "none",
+                            "profile": "exact",
                         }
                     },
                     "modules": {
@@ -540,7 +616,6 @@ def test_every_field_the_router_rejects_leaves_the_configuration():
     assert catalog["deployments"]["served"] == {
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
-        "profile": "max_speed",
     }
     assert catalog["modules"] == {"prompt_guard": {}, "hallucination_mitigation": {}}
     assert migrated["global"]["stores"]["response_cache"] == {}
@@ -894,7 +969,10 @@ def test_migrate_command_lists_changes_and_actions(tmp_path):
                             },
                         }
                     }
-                }
+                },
+                providers={
+                    "models": [{"name": "general", "provider_model_id": "gpt-4o-mini"}]
+                },
             )
         )
     )

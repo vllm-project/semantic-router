@@ -52,11 +52,14 @@ var (
 
 	routingProfileContractValidators = []configContractValidator{
 		validatePromptGuardBackend,
+		validatePIIContracts,
 		ValidatePIIWindow,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateActionContracts,
 		validateContextContracts,
+		validateContextCapacity,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,
@@ -74,6 +77,7 @@ var (
 		validateJailbreakContracts,
 		validateSignalStageContracts,
 		validateHallucinationSignalContracts,
+		validateTopicContinuityContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

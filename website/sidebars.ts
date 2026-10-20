@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/deployment-architecture',
             'installation/gateway-modes',
             'installation/support-matrix',
           ],
@@ -83,6 +84,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/action',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
@@ -92,6 +94,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
+                'tutorials/signal/heuristic/topic-continuity',
               ],
             },
             {
@@ -158,6 +161,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
                 'tutorials/algorithm/selection/decision',
+                'tutorials/algorithm/selection/random',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -172,6 +176,13 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
                 'tutorials/algorithm/looper/workflows',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'System One',
+              items: [
+                'tutorials/algorithm/native/cascade',
               ],
             },
           ],
@@ -200,6 +211,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/context-compression',
+                'tutorials/plugin/masking',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tool-selection',
@@ -268,7 +280,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'model-runtime/deploy',
-        'model-runtime/profiles',
+        'model-runtime/engine-args',
         'installation/runtime/external',
         'model-runtime/migrate',
         'model-runtime/troubleshooting',
@@ -371,6 +383,7 @@ const sidebars: SidebarsConfig = {
               items: [
                 'installation/amd-rocm',
                 'installation/nvidia-cuda',
+                'installation/ascend-npu',
               ],
             },
           ],
@@ -421,6 +434,7 @@ const sidebars: SidebarsConfig = {
             'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
+            'proposals/success-constrained-selection',
             'proposals/prompt-classification-routing',
           ],
         },
@@ -515,6 +529,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
+        'benchmarking/agent-routing-protection',
         {
           type: 'category',
           label: 'sr-bench 1.0',
