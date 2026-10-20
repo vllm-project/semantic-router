@@ -24,7 +24,7 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | The model is in the request body |
-| `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
+| `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration; in Engine mode, the listener's System One models, also as `models: [{name, description, release_date}]` for the System One SDKs |
 | `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
 | `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
 
@@ -32,6 +32,18 @@ Engine mode serves the native System One paths with recipe routing disabled.
 Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
 allowlist does not grant native access. Both APIs use the listener's API keys.
 See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+
+The System One paths read bodies compressed with one layer of gzip or zstd
+(`415` with `unsupported_media_type` for any other coding) and
+`multipart/form-data` bodies whose image parts are the request's `assets`.
+The Router decodes these before it reads the request and forwards the JSON
+request, with each part's image as `data_base64`, to the model. On
+`/v1/systemone` a request with a failed question is answered as a whole with
+`question_failed`, the question's `question_error`, fixed `reason` and ID,
+while `/v1/decisions` answers each question in place. A model the listener does
+not publish returns `403` `model_not_allowed` with the models it does publish.
+See [System One compatibility](../model-runtime/reference.md#system-one-compatibility)
+for assets, Box, track and long context.
 
 ### Route a System One request
 
@@ -139,10 +151,13 @@ compatibility promise:
   one release before it takes effect.
 
 The Router checks a request's `options` against this API before a model reads
-them. The options are `deadline_ms` (a number greater than 0), `max_tokens`
-(an integer of at least 1) and `return_meta` (`true` or `false`); `null` sets
-none. Any other option, or a value of another type, returns `400` with
-`invalid_request` and a message that names it. `options.profile` was removed in
+them. The options are `deadline_ms` (a number greater than 0),
+`long_context` (`true` or `false`), `max_tokens` (an integer of at least 1) and
+`return_meta` (`true` or `false`); `null` sets none. Any other option, or a value of another type, returns `400` with
+`invalid_request` and a message that names it. A request the Router sends to
+its model directly waits 30 seconds for the answer, or its `deadline_ms` when
+that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
+minutes, by default). `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
 runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
 and `meta` reports `dtype` and `numerics` instead of `profile`.
