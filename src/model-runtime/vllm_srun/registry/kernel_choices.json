@@ -10237,5 +10237,226 @@
       }
     },
     "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4"
+  },
+  "vllm-sr/d3-turbo": {
+    "choices": {
+      "rocm:gfx942": {
+        "fla": "0.5.2",
+        "kernels": {
+          "chunk_fwd_kernel_o": [
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BK": 128,
+                  "BV": 128
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 8
+              },
+              "key": [
+                48,
+                48,
+                128,
+                128,
+                64,
+                false,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32",
+                "torch.bfloat16",
+                "torch.int64",
+                "torch.int64"
+              ]
+            }
+          ],
+          "chunk_gated_delta_rule_fwd_kernel_h_blockdim64": [
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BV": 32
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 1,
+                "num_warps": 2
+              },
+              "key": [
+                48,
+                48,
+                128,
+                128,
+                64,
+                false,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32",
+                "torch.bfloat16",
+                "torch.float32",
+                "torch.int64",
+                "torch.int64"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BV": 32
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 1,
+                "num_warps": 2
+              },
+              "key": [
+                48,
+                48,
+                128,
+                128,
+                64,
+                false,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32",
+                "torch.bfloat16",
+                "torch.int64",
+                "torch.int64"
+              ]
+            }
+          ],
+          "chunk_gated_delta_rule_fwd_kkt_solve_kernel": [
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BK": 64
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                48,
+                48,
+                128,
+                16,
+                "torch.bfloat16",
+                "torch.float32",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.int64",
+                "torch.int64"
+              ]
+            }
+          ],
+          "chunk_local_cumsum_scalar_kernel": [
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                1,
+                48,
+                64,
+                true,
+                false,
+                "torch.float32",
+                "torch.float32",
+                "torch.int64",
+                "torch.int64"
+              ]
+            }
+          ],
+          "l2norm_fwd_kernel": [
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BT": 16
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 4
+              },
+              "key": [
+                128,
+                1,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BT": 8
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 4
+              },
+              "key": [
+                128,
+                3,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32"
+              ]
+            }
+          ],
+          "recompute_w_u_fwd_kernel": [
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 4
+              },
+              "key": [
+                48,
+                48,
+                128,
+                128,
+                64,
+                64,
+                64,
+                true,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32",
+                "torch.int64",
+                "torch.int64"
+              ]
+            }
+          ]
+        },
+        "triton": "3.7.0"
+      }
+    },
+    "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad"
   }
 }

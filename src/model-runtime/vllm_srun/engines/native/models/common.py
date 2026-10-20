@@ -13,6 +13,7 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from ..quantized import project
+from .branch import Branches, StaticBranches, branch_attention, is_branches
 from .packed import Packed, is_packed, packed_attention
 from .tree import Tree, is_tree, tree_attention
 
@@ -164,7 +165,7 @@ def attention(
     query: torch.Tensor,
     key: torch.Tensor,
     value: torch.Tensor,
-    mask: torch.Tensor | Tree | Packed | None,
+    mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
     *,
     groups: int,
     scaling: float,
@@ -172,10 +173,13 @@ def attention(
     """SDPA as Transformers dispatches it: GQA in-kernel only without a mask; returns [B, T, H, D].
 
     A shared-context ``Tree`` as the mask runs the tree attention instead, and
-    a ``Packed`` layout one variable-length attention over its rows.
+    state-once ``Branches`` the branched attention, a ``Packed`` layout one
+    variable-length attention over its rows.
     """
     if is_tree(mask):
         return tree_attention(query, key, value, mask, groups=groups, scaling=scaling)
+    if is_branches(mask):
+        return branch_attention(query, key, value, mask, groups=groups, scaling=scaling)
     if is_packed(mask):
         return packed_attention(
             kernels, query, key, value, mask, groups=groups, scaling=scaling
