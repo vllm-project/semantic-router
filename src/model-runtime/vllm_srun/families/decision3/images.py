@@ -1,7 +1,7 @@
 """Decision 3.0 image inputs: decoding and the Qwen2-VL image processor, as the released runtime reads them.
 
-A request's images are base64 PNG, JPEG or WebP data URLs of at most 8,000,000
-bytes and 16,000,000 pixels (the released server's strict loading); PIL
+A request's images are base64 PNG, JPEG or WebP data URLs of at most 16 MiB
+(System One's limit) and 16,000,000 pixels (the released server's strict loading); PIL
 decodes each and converts it to RGB, nothing else. The processor is the
 Transformers 5.17 ``Qwen2VLImageProcessor`` torchvision backend with the
 released runtime's pixel budget: ``smart_resize`` to a multiple of
@@ -34,7 +34,7 @@ from ...errors import MediaError
 
 MIN_PIXELS = 65_536
 MAX_PIXELS = 1_638_400
-MAX_IMAGE_BYTES = 8_000_000
+MAX_IMAGE_BYTES = 16 << 20
 MAX_SOURCE_PIXELS = 16_000_000
 IMAGE_FORMATS = ("PNG", "JPEG", "WEBP")
 DATA_URL_FORMATS = ("png", "jpeg", "jpg", "webp")

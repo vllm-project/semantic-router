@@ -23,6 +23,7 @@ import hashlib
 import math
 import os
 import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -123,6 +124,120 @@ def sample_indices(total: int, fps: float) -> list[int]:
     count = int(total / fps * FPS)
     count = min(max(count, MIN_FRAMES), MAX_FRAMES, total)
     return [int(i) for i in np.linspace(0, total - 1, count).round().astype(int)]
+
+
+def window_plan(total: int, fps: float, rate: int) -> list[list[int]]:
+    """Source frames of each track window: ``2 * rate`` frames per second over the whole clip, at most
+    ``MAX_FRAMES`` per window (16-s windows at 2 fps, 8-s windows at 4 fps), an even count of at least
+    ``MIN_FRAMES`` (the last frame repeats when needed)."""
+    step = fps / (FPS * rate)
+    count = max(1, int(total / step))
+    indices = [min(total - 1, round(k * step)) for k in range(count)]
+    windows = [indices[i : i + MAX_FRAMES] for i in range(0, len(indices), MAX_FRAMES)]
+    for window in windows:
+        if len(window) % 2:
+            window.append(window[-1])
+        while len(window) < MIN_FRAMES:
+            window.append(window[-1])
+    return windows
+
+
+class ClipTooLongError(ValueError):
+    """A clip longer than a video Box / track question reads, found from the container's frame count and rate
+    before any frame is decoded. ``seconds`` is None when the container gives no usable frame rate: the clip's
+    length cannot be read, so it is not shown to be within the limit."""
+
+    def __init__(self, seconds: float | None, limit: float) -> None:
+        super().__init__(
+            f"the clip's length cannot be read (its container gives no frame rate), so a video Box cannot show it "
+            f"is within {limit:g} seconds"
+            if seconds is None
+            else f"the clip is {seconds:.1f} seconds long, over the {limit:g} seconds a video Box reads"
+        )
+        self.seconds = seconds
+        self.limit = limit
+
+
+def decode_windows(
+    value: Any, rate: int, max_seconds: float | None = None
+) -> Iterator[Video]:
+    """A video data URL decoded once, in one pass, into its track windows (``window_plan``), yielded one at a time
+    (only one window's source frames are held); each window keeps its source frame numbers, so its timestamps are
+    the clip's own. A clip over ``max_seconds`` raises ``ClipTooLongError`` before any frame is read.
+    """
+    import cv2
+
+    payload = _payload(value)
+    digest = hashlib.sha256(payload).hexdigest()
+    with tempfile.NamedTemporaryFile(prefix="vllm-srun-video-", delete=False) as handle:
+        handle.write(payload)
+        path = handle.name
+    reader = None
+    try:
+        reader = cv2.VideoCapture(path)
+        if not reader.isOpened():
+            raise _malformed("the video could not be opened")
+        width = int(reader.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if width * height > MAX_SOURCE_PIXELS:
+            raise MediaError(
+                "video_pixels",
+                f"video frames must have at most {MAX_SOURCE_PIXELS:,} pixels",
+                MAX_SOURCE_PIXELS,
+            )
+        fps = float(reader.get(cv2.CAP_PROP_FPS) or 0.0)
+        if not (math.isfinite(fps) and SOURCE_FPS[0] <= fps <= SOURCE_FPS[1]):
+            if max_seconds is not None:
+                raise ClipTooLongError(None, max_seconds)
+            fps = UNKNOWN_FPS
+        total = int(reader.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        if total <= 0:
+            raise _malformed("the video has no frames")
+        if total / fps > MAX_SECONDS:
+            raise MediaError(
+                "video_too_long",
+                f"each video must be at most {MAX_SECONDS} seconds long",
+                MAX_SECONDS,
+            )
+        if max_seconds is not None and total / fps > max_seconds:
+            raise ClipTooLongError(total / fps, max_seconds)
+        windows = window_plan(total, fps, rate)
+        frames: dict[int, Any] = {}
+        current = 0
+        emitted = 0
+        number = 0
+        while current < len(windows):
+            window = windows[current]
+            while number <= window[-1]:
+                if not reader.grab():
+                    break
+                if number in window:
+                    ok, frame = reader.retrieve()
+                    if ok and frame is not None and frame.size:
+                        frames[number] = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                number += 1
+            kept = [index for index in window if index in frames]
+            if kept:
+                yield _video(
+                    [frames[i] for i in kept],
+                    list(kept),
+                    fps,
+                    total,
+                    f"{digest}:w{rate}:{current}",
+                )
+                emitted += 1
+            frames = {i: f for i, f in frames.items() if i > window[-1]}
+            current += 1
+            if number <= window[-1]:
+                break
+        if not emitted:
+            raise _malformed("no frame of the video could be decoded")
+    except cv2.error as exc:
+        raise _malformed(f"invalid video data ({exc.__class__.__name__})") from exc
+    finally:
+        if reader is not None:
+            reader.release()
+        os.unlink(path)
 
 
 FORMAT_MESSAGE = "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
