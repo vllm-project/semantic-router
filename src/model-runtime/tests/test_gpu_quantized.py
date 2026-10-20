@@ -458,6 +458,99 @@ def test_the_nvfp4_layer_replays_in_a_graph(blackwell):
     assert got.equal(want)
 
 
+def captured(module, x):
+    """``module(x)`` captured in a graph and replayed once."""
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        module(x)
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        got = module(x)
+    graph.replay()
+    torch.cuda.synchronize()
+    return got
+
+
+@pytest.fixture
+def mm_fp4(blackwell):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    product, reason = flashinfer_nvfp4.load(blackwell)
+    if product is None:
+        pytest.skip(reason)
+    return product
+
+
+@pytest.mark.parametrize(
+    "shape", [(384, 256, 1), (384, 256, 37), (5120, 17408, 128), (34816, 5120, 64)]
+)
+def test_flashinfer_writes_the_bytes_cublas_writes(blackwell, mm_fp4, shape):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    rows, columns, inputs = shape
+    module, _ = nvfp4_layer(rows, columns, blackwell)
+    x = torch.randn(inputs, columns, device=blackwell).to(torch.bfloat16)
+    q, scale = module.quantize(x, module.input_global)
+    got = flashinfer_nvfp4.product(
+        mm_fp4, q, scale, module.weight_t, module.weight_scale_t, module.alpha
+    )
+    assert got.equal(module._product(q, scale))
+
+
+def test_only_graph_captures_of_up_to_its_rows_take_flashinfer(blackwell):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    module, _ = nvfp4_layer(256, 512, blackwell)
+    calls = []
+
+    def product(q, weight_t, *_, **__):
+        calls.append(q.shape[0])
+        return torch.zeros(
+            q.shape[0], weight_t.shape[1], dtype=torch.bfloat16, device=q.device
+        )
+
+    module.flashinfer = product
+    small = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    big = torch.randn(flashinfer_nvfp4.ROWS + 1, 512, device=blackwell).to(
+        torch.bfloat16
+    )
+    assert module(small).abs().max() > 0 and not calls  # eager forwards keep cuBLAS
+    assert not captured(module, small).any() and calls == [37]
+    assert captured(module, big).equal(module(big)) and calls == [37]
+
+
+def test_shapes_flashinfer_multiplies_otherwise_keep_cublas(blackwell, monkeypatch):
+    from vllm_srun.accel import flashinfer_nvfp4
+    from vllm_srun.engines.native import quantized
+
+    wrong, _ = nvfp4_layer(256, 512, blackwell)
+    failing, _ = nvfp4_layer(128, 256, blackwell)
+    right, _ = nvfp4_layer(384, 256, blackwell)
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
+    assert quantized.use_flashinfer([right], blackwell) == {"skipped": "absent"}
+    assert right.flashinfer is None
+
+    def product(q, weight_t, scale, *_, **__):
+        columns = weight_t.shape[1]
+        if columns == 128:
+            raise RuntimeError("no tile for this shape")
+        if columns == 256:  # other bytes than cuBLAS's
+            return torch.zeros(q.shape[0], 256, dtype=torch.bfloat16, device=q.device)
+        return right._product(q, scale.flatten())
+
+    tuned = []
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (product, None))
+    monkeypatch.setattr(
+        flashinfer_nvfp4, "tune", lambda mm, shapes, device: tuned.extend(shapes)
+    )
+    receipt = quantized.use_flashinfer([wrong, failing, right], blackwell)
+    assert receipt["cublas_shapes"] == ["256x512", "128x256"]
+    assert wrong.flashinfer is None and failing.flashinfer is None
+    assert right.flashinfer is product and tuned == [(384, 256)]
+
+
 def test_projections_of_one_input_scale_share_its_quantization(blackwell):
     from vllm_srun.accel import triton_nvfp4
     from vllm_srun.engines.native.quantized import project
@@ -704,3 +797,56 @@ def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
     want = gpu_answers(packed)[0]
     # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
     assert (numbers(got) - numbers(want)).abs().max() < 0.02
+
+
+def served(package, dtype):
+    """Each fixture state answered twice (graphs capture on a shape's first uses) and the engine's receipt."""
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
+    from tests.test_quantized import QUESTIONS, STATES
+
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), device="cuda:0", dtype=dtype),)
+        )
+    )
+    runtime.start(background=False)
+    try:
+        bodies = [
+            asyncio.run(runtime.call("decisions", {"state": s, "questions": QUESTIONS}))
+            for _ in range(2)
+            for s in STATES
+        ]
+        return bodies[len(STATES) :], runtime.lookup(None).model.engine_model.receipt()
+    finally:
+        runtime.stop()
+
+
+def test_graphs_of_an_nvfp4_package_take_flashinfer_with_the_same_answers(
+    mm_fp4, tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    product, captured_calls = flashinfer_nvfp4.product, []
+
+    def counted(*args, **kwargs):
+        if torch.cuda.is_current_stream_capturing():
+            captured_calls.append(args[1].shape[0])
+        return product(*args, **kwargs)
+
+    monkeypatch.setattr(flashinfer_nvfp4, "product", counted)
+    # the fixture's forwards run 612 to 8,192 rows
+    monkeypatch.setattr(flashinfer_nvfp4, "ROWS", 8192)
+    got, receipt = served(packed, "auto")
+    assert receipt["nvfp4_product"] == {"graphs": "flashinfer-cutlass", "rows": 8192}
+    assert captured_calls
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
+    want, receipt = served(packed, "auto")
+    assert receipt["nvfp4_product"] == {"skipped": "absent"}
+    assert got == want
+    # an explicit --dtype runs exact kernels only, which keep cuBLAS
+    assert "nvfp4_product" not in served(packed, "float16")[1]

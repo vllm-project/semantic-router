@@ -141,11 +141,17 @@ class NativeEngineModel(EngineModel):
         )
         self.kernels.use_variants(spec.kernel_variants)
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
+        nvfp4: list[quantized.NVFP4Linear] = []
         for layer in self._quantized():
             if isinstance(layer, quantized.Int4Linear):
                 layer.fused = fused_int4 and self.device.type == "cuda"
             elif isinstance(layer, quantized.Float8Linear):
                 layer.unscaled_product &= self.kernels.allow_approximate
+            elif isinstance(layer, quantized.NVFP4Linear):
+                nvfp4.append(layer)
+        self.fast: dict[str, Any] = {}
+        if nvfp4 and self.kernels.allow_approximate and options.graphs:
+            self.fast["nvfp4_product"] = quantized.use_flashinfer(nvfp4, self.device)
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
@@ -164,7 +170,6 @@ class NativeEngineModel(EngineModel):
             *self.towers.values(),
         ):
             cast(models.Backbone, module).kernels = self.kernels
-        self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
         self.branch_graphs: fast.Graphs | None = None
