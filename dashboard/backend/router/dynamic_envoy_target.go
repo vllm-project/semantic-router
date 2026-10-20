@@ -70,7 +70,7 @@ func dynamicEnvoyListenerPort(target *url.URL, data []byte) (int, error) {
 		return 0, errors.New("runtime listener is unavailable")
 	}
 	port := listener.Port
-	if !isManagedEnvoyHostname(target.Hostname()) {
+	if !isManagedListenerHostname(target.Hostname()) {
 		if raw := strings.TrimSpace(os.Getenv("VLLM_SR_PORT_OFFSET")); raw != "" {
 			offset, parseErr := strconv.Atoi(raw)
 			if parseErr != nil || offset < 0 || port+offset > 65535 {
@@ -82,15 +82,22 @@ func dynamicEnvoyListenerPort(target *url.URL, data []byte) (int, error) {
 	return port, nil
 }
 
-func isManagedEnvoyHostname(host string) bool {
-	expected := strings.TrimSpace(os.Getenv("VLLM_SR_ENVOY_CONTAINER_NAME"))
-	if expected == "" {
-		stack := strings.TrimSpace(os.Getenv("VLLM_SR_STACK_NAME"))
-		if stack == "" || stack == "vllm-sr" {
-			expected = "vllm-sr-envoy-container"
-		} else {
-			expected = stack + "-vllm-sr-envoy-container"
-		}
+// isManagedListenerHostname reports whether host is the stack container that
+// serves the listeners inside the stack network: Envoy in an extproc stack, the
+// Router in a standalone stack. Those listeners keep their configured ports.
+func isManagedListenerHostname(host string) bool {
+	host = strings.TrimSpace(host)
+	return strings.EqualFold(host, managedContainerName("VLLM_SR_ENVOY_CONTAINER_NAME", "vllm-sr-envoy-container")) ||
+		strings.EqualFold(host, managedContainerName("VLLM_SR_ROUTER_CONTAINER_NAME", "vllm-sr-router-container"))
+}
+
+func managedContainerName(envName, defaultName string) string {
+	if name := strings.TrimSpace(os.Getenv(envName)); name != "" {
+		return name
 	}
-	return strings.EqualFold(strings.TrimSpace(host), expected)
+	stack := strings.TrimSpace(os.Getenv("VLLM_SR_STACK_NAME"))
+	if stack == "" || stack == "vllm-sr" {
+		return defaultName
+	}
+	return stack + "-" + defaultName
 }
