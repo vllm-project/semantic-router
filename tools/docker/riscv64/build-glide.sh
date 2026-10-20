@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Source fallback for the GLIDE FFI missing from the pinned Go module on RISC-V.
 set -euo pipefail
-root=$(cd "$(dirname "$0")/../.." && pwd)
+root=$(cd "$(dirname "$0")/../../.." && pwd)
 target=riscv64gc-unknown-linux-gnu
 archive=
 output=
@@ -39,7 +39,7 @@ checksum=$(sha256sum "$archive" | awk '{print $1}')
 }
 mkdir -p "$scratch/source"
 tar -xzf "$archive" -C "$scratch/source" --strip-components=1
-cp "$root/tools/docker/valkey-glide/Cargo.lock" "$scratch/source/ffi/Cargo.lock"
+cp "$root/tools/docker/riscv64/valkey-glide/Cargo.lock" "$scratch/source/ffi/Cargo.lock"
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$scratch/target}
 mkdir -p "$CARGO_TARGET_DIR"
 CARGO_TARGET_DIR=$(cd "$CARGO_TARGET_DIR" && pwd)

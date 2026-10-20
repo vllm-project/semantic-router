@@ -53,8 +53,11 @@ is enabled by default; `--no-cache` explicitly requests a cold build. The SDK
 uses checksummed toolchain archives and a digest-pinned base image. Package
 repositories and dependency downloads still require network access.
 
-The resulting image uses the `vllm-sr-attached` target without bundled PyTorch
-or `vllm-srun`. Configure reachable external endpoints before starting it.
+The native build first exports the Router binary from
+`tools/docker/riscv64/Dockerfile`. The independent
+`tools/docker/Dockerfile.attached` packages it in the `vllm-sr-attached` target
+without bundled PyTorch or `vllm-srun`; the bundled image Dockerfile is unchanged.
+Configure reachable external endpoints before starting it.
 Follow the repository's
 [native build and deployment guide](https://github.com/vllm-project/semantic-router/blob/main/tools/docker/riscv64/README.md)
 for the restricted-user `docker run` command, backend credentials and smoke

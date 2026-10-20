@@ -15,7 +15,7 @@ BASE = "docker.io/library/debian@sha256:c6d58429cec88e03b2fe5c3d285bf90517be50b2
 
 def validate_builder(description):
     if not re.search(r"(?m)^Driver:\s+docker\s*$", description):
-        raise ValueError("this local SDK handoff requires the buildx docker driver")
+        raise ValueError("local build-image handoffs require the buildx docker driver")
 
 
 def build_commands(args):
@@ -72,22 +72,43 @@ def build_commands(args):
     )
     if args.component == "sdk":
         return commands
-    dockerfile = "tools/docker/Dockerfile.extproc"
     build_args = {
         "GO_IMAGE": sdk,
         "IMAGE_REGISTRY": "",
         "RUST_IMAGE": sdk,
-        "ATTACHED_BASE_IMAGE": args.base_image,
-        "ASSETS_IMAGE": args.base_image,
     }
-    target = ["--target", "vllm-sr-attached"]
     if args.go_proxy:
         build_args["GOPROXY"] = args.go_proxy
-    command = [*common, "-f", dockerfile, *target]
+    command = [
+        *common,
+        "-f",
+        "tools/docker/riscv64/Dockerfile",
+        "--target",
+        "router-binary",
+    ]
     for key, value in build_args.items():
         command += ["--build-arg", key + "=" + value]
-    command += ["-t", "semantic-router-" + args.component + ":" + args.tag, "."]
-    return [*commands, command]
+    binary_image = "semantic-router-native-router:" + args.tag
+    command += ["-t", binary_image, "."]
+    runtime = [
+        *common,
+        "-f",
+        "tools/docker/Dockerfile.attached",
+        "--target",
+        "vllm-sr-attached",
+        "--build-arg",
+        "ROUTER_BUILD=" + binary_image,
+        "--build-arg",
+        "IMAGE_REGISTRY=",
+        "--build-arg",
+        "ATTACHED_BASE_IMAGE=" + args.base_image,
+        "--build-arg",
+        "ASSETS_IMAGE=" + args.base_image,
+        "-t",
+        "semantic-router-router:" + args.tag,
+        ".",
+    ]
+    return [*commands, command, runtime]
 
 
 def main():
@@ -134,10 +155,9 @@ def main():
         return
     if platform.system() != "Linux" or platform.machine() != "riscv64":
         parser.error("execute on native riscv64 Linux; --plan works on other hosts")
-    if not args.sdk_image:
-        validate_builder(
-            subprocess.check_output(["docker", "buildx", "inspect"], text=True)
-        )
+    validate_builder(
+        subprocess.check_output(["docker", "buildx", "inspect"], text=True)
+    )
     output = args.output or Path(tempfile.mkdtemp(prefix="vsr-public-build-"))
     output.mkdir(parents=True, exist_ok=True)
     receipt = {"machine": platform.machine(), "commands": commands, "steps": []}

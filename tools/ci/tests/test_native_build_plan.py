@@ -23,7 +23,7 @@ class NativeBuildPlanTests(unittest.TestCase):
 
     def test_router_constructs_sdk_then_attached_image_with_layer_cache(self):
         commands = self.plan()
-        self.assertEqual(len(commands), 2)
+        self.assertEqual(len(commands), 3)
         for command in commands:
             self.assertNotIn("--no-cache", command)
             self.assertNotIn("--cache-from", command)
@@ -31,7 +31,11 @@ class NativeBuildPlanTests(unittest.TestCase):
             self.assertIn("TARGETOS=linux", command)
             self.assertIn("BUILDPLATFORM=linux/riscv64", command)
         self.assertIn("tools/docker/riscv64/Dockerfile.toolchain", commands[0])
-        self.assertIn("vllm-sr-attached", commands[1])
+        self.assertIn("tools/docker/riscv64/Dockerfile", commands[1])
+        self.assertIn("router-binary", commands[1])
+        self.assertIn("tools/docker/Dockerfile.attached", commands[2])
+        self.assertIn("vllm-sr-attached", commands[2])
+        self.assertIn("ROUTER_BUILD=semantic-router-native-router:public", commands[2])
         self.assertIn("GO_IMAGE=semantic-router-native-sdk:public", commands[1])
         self.assertIn("RUST_IMAGE=semantic-router-native-sdk:public", commands[1])
 
@@ -41,7 +45,7 @@ class NativeBuildPlanTests(unittest.TestCase):
 
     def test_existing_sdk_skips_sdk_build(self):
         commands = self.plan("--sdk-image", "native-sdk:verified")
-        self.assertEqual(len(commands), 1)
+        self.assertEqual(len(commands), 2)
         self.assertIn("GO_IMAGE=native-sdk:verified", commands[0])
         self.assertIn("RUST_IMAGE=native-sdk:verified", commands[0])
 
@@ -66,8 +70,8 @@ class NativeBuildPlanTests(unittest.TestCase):
         base = "mirror.example/debian@sha256:" + "a" * 64
         commands = self.plan("--base-image", base)
         self.assertIn("BASE_IMAGE=" + base, commands[0])
-        self.assertIn("ATTACHED_BASE_IMAGE=" + base, commands[1])
-        self.assertIn("ASSETS_IMAGE=" + base, commands[1])
+        self.assertIn("ATTACHED_BASE_IMAGE=" + base, commands[2])
+        self.assertIn("ASSETS_IMAGE=" + base, commands[2])
 
     def test_mutable_base_is_rejected(self):
         result = subprocess.run(
