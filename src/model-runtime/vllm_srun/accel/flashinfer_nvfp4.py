@@ -4,8 +4,9 @@ For the few hundred rows of a request, cuBLASLt's block-scaled FP4 product
 (``torch.nn.functional.scaled_mm``) reads d3's NVFP4 weights below the GPU's
 memory bandwidth. FlashInfer's CUTLASS kernel for compute capability 12.x,
 its tile tuned per weight shape and power of two of rows (``tune``), reads
-them faster up to ``ROWS`` rows, and writes the bytes cuBLAS writes for every
-one of its tiles (``docs/records/decision3-quantized.md``). A call goes
+them faster up to ``GRAPH_ROWS`` rows. It sums in another order than CUDA
+13's cuBLAS (the bytes of CUDA 12.8's, for every one of its tiles), so it is
+an approximate kernel (``docs/records/decision3-quantized.md``). A call goes
 through FlashInfer's Python wrapper, about three times the host time of
 ``scaled_mm``, so only graph captures take it, where that time is spent once;
 eager forwards keep cuBLAS.
@@ -31,7 +32,7 @@ import torch
 
 # Rows up to which graph captures take FlashInfer's product. FlashInfer times its tiles at
 # each power of two up to here, and a call takes the tile of the power its rows round to.
-ROWS = 512
+GRAPH_ROWS = 512
 ARCH_LIST = "FLASHINFER_CUDA_ARCH_LIST"
 
 Product = Callable[..., torch.Tensor]
@@ -66,11 +67,11 @@ def load(device: torch.device) -> tuple[Product | None, str | None]:
 def tune(
     mm_fp4: Product, shapes: Iterable[tuple[int, int]], device: torch.device
 ) -> None:
-    """Time FlashInfer's tiles for each [out, in] weight shape up to ``ROWS`` rows; later calls take the fastest."""
+    """Time FlashInfer's tiles for each [out, in] weight shape up to ``GRAPH_ROWS`` rows; later calls take the fastest."""
     autotune = importlib.import_module("flashinfer").autotune
     for out_features, in_features in sorted(set(shapes)):
         q = torch.randint(
-            0, 256, (ROWS, in_features // 2), dtype=torch.uint8, device=device
+            0, 256, (GRAPH_ROWS, in_features // 2), dtype=torch.uint8, device=device
         )
         weight = torch.randint(
             0, 256, (out_features, in_features // 2), dtype=torch.uint8, device=device
@@ -80,7 +81,7 @@ def tune(
             product(
                 mm_fp4,
                 q,
-                _scales(ROWS, in_features, device),
+                _scales(GRAPH_ROWS, in_features, device),
                 weight.t(),
                 _scales(out_features, in_features, device)
                 .view(_padded(out_features), -1)

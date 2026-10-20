@@ -484,19 +484,21 @@ def mm_fp4(blackwell):
 
 
 @pytest.mark.parametrize(
-    "shape", [(384, 256, 1), (384, 256, 37), (5120, 17408, 128), (34816, 5120, 64)]
+    "shape", [(384, 256, 1), (384, 256, 37), (5120, 17408, 300), (34816, 5120, 512)]
 )
-def test_flashinfer_writes_the_bytes_cublas_writes(blackwell, mm_fp4, shape):
-    from vllm_srun.accel import flashinfer_nvfp4
+def test_flashinfer_multiplies_nvfp4_as_cublas_does(blackwell, mm_fp4, shape):
+    from vllm_srun.engines.native import quantized
 
     rows, columns, inputs = shape
     module, _ = nvfp4_layer(rows, columns, blackwell)
     x = torch.randn(inputs, columns, device=blackwell).to(torch.bfloat16)
     q, scale = module.quantize(x, module.input_global)
-    got = flashinfer_nvfp4.product(
-        mm_fp4, q, scale, module.weight_t, module.weight_scale_t, module.alpha
-    )
-    assert got.equal(module._product(q, scale))
+    got = module._flashinfer_product(mm_fp4, q, scale).float()
+    want = module._product(q, scale).float()
+    # the same FP4 products, summed in another order
+    assert ((got - want).norm() / want.norm()) < quantized.FLASHINFER_TOLERANCE
+    generator = torch.Generator(device=blackwell).manual_seed(0)
+    assert module.flashinfer_disagrees(mm_fp4, generator) is None
 
 
 def test_only_graph_captures_of_up_to_its_rows_take_flashinfer(blackwell):
@@ -513,7 +515,7 @@ def test_only_graph_captures_of_up_to_its_rows_take_flashinfer(blackwell):
 
     module.flashinfer = product
     small = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
-    big = torch.randn(flashinfer_nvfp4.ROWS + 1, 512, device=blackwell).to(
+    big = torch.randn(flashinfer_nvfp4.GRAPH_ROWS + 1, 512, device=blackwell).to(
         torch.bfloat16
     )
     assert module(small).abs().max() > 0 and not calls  # eager forwards keep cuBLAS
@@ -536,7 +538,7 @@ def test_shapes_flashinfer_multiplies_otherwise_keep_cublas(blackwell, monkeypat
         columns = weight_t.shape[1]
         if columns == 128:
             raise RuntimeError("no tile for this shape")
-        if columns == 256:  # other bytes than cuBLAS's
+        if columns == 256:  # far from cuBLAS's product
             return torch.zeros(q.shape[0], 256, dtype=torch.bfloat16, device=q.device)
         return right._product(q, scale.flatten())
 
@@ -546,9 +548,13 @@ def test_shapes_flashinfer_multiplies_otherwise_keep_cublas(blackwell, monkeypat
         flashinfer_nvfp4, "tune", lambda mm, shapes, device: tuned.extend(shapes)
     )
     receipt = quantized.use_flashinfer([wrong, failing, right], blackwell)
-    assert receipt["cublas_shapes"] == ["256x512", "128x256"]
+    assert receipt["cublas_shapes"] == {
+        "256x512": "relative error 1.0e+00 at 1 rows",
+        "128x256": "RuntimeError: no tile for this shape",
+    }
     assert wrong.flashinfer is None and failing.flashinfer is None
-    assert right.flashinfer is product and tuned == [(384, 256)]
+    assert right.flashinfer is product
+    assert tuned == [(256, 512), (128, 256), (384, 256)]  # tuned before the check
 
 
 def test_projections_of_one_input_scale_share_its_quantization(blackwell):
@@ -823,7 +829,7 @@ def served(package, dtype):
         runtime.stop()
 
 
-def test_graphs_of_an_nvfp4_package_take_flashinfer_with_the_same_answers(
+def test_graphs_of_an_nvfp4_package_take_flashinfer_with_close_answers(
     mm_fp4, tmp_path, d3_text_package, monkeypatch
 ):
     from vllm_srun.accel import flashinfer_nvfp4
@@ -840,13 +846,14 @@ def test_graphs_of_an_nvfp4_package_take_flashinfer_with_the_same_answers(
 
     monkeypatch.setattr(flashinfer_nvfp4, "product", counted)
     # the fixture's forwards run 612 to 8,192 rows
-    monkeypatch.setattr(flashinfer_nvfp4, "ROWS", 8192)
+    monkeypatch.setattr(flashinfer_nvfp4, "GRAPH_ROWS", 8192)
     got, receipt = served(packed, "auto")
     assert receipt["nvfp4_product"] == {"graphs": "flashinfer-cutlass", "rows": 8192}
     assert captured_calls
     monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
     want, receipt = served(packed, "auto")
     assert receipt["nvfp4_product"] == {"skipped": "absent"}
-    assert got == want
+    # the same FP4 products summed in another order
+    assert (numbers(got) - numbers(want)).abs().max() < 0.01
     # an explicit --dtype runs exact kernels only, which keep cuBLAS
     assert "nvfp4_product" not in served(packed, "float16")[1]
