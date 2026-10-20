@@ -184,18 +184,12 @@ def publisher_ready(client, repo: str, base: str) -> bool:
 
 
 def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
-    """A successful automatic workflow is not necessarily full qualification.
-
-    The publisher writes PR Gate onto this run's check suite before a later
-    reconciliation can observe it. Waiting approval leaves that check in
-    progress, so its missing conclusion is not a failed workflow job.
-    """
-    executed = [job for job in jobs if job.get("name") != CHECK]
+    """A successful automatic workflow is not necessarily full qualification."""
     if run.get("conclusion") != "success" or any(
-        job.get("conclusion") not in {"success", "skipped"} for job in executed
+        job.get("conclusion") not in {"success", "skipped"} for job in jobs
     ):
         return "failure"
-    by_name = {job.get("name"): job for job in executed}
+    by_name = {job.get("name"): job for job in jobs}
     if any(
         by_name.get(name, {}).get("conclusion") != "success"
         for name in ("CI / Gate", "CI Execution")
@@ -486,6 +480,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
                     client, repo, pull, run, "legacy", plan, checks, dry_run=dry_run
                 )
             return {"ignored": "legacy workflow owns PR Gate"}
+        # Ignore only this publisher's check. Another failed PR Gate still counts.
         publisher_ids = {check["id"] for check in checks}
         jobs = [job for job in jobs if job.get("id") not in publisher_ids]
         report = artifact(client, repo, run, "ci-gate", "gate.json", 256 * 1024)
