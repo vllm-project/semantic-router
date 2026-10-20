@@ -157,7 +157,8 @@ them. The options are `deadline_ms` (a number greater than 0),
 `invalid_request` and a message that names it. A request the Router sends to
 its model directly waits 30 seconds for the answer, or its `deadline_ms` when
 that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
-minutes, by default). `options.profile` was removed in
+minutes, by default); a `long_context` request without `deadline_ms` waits
+that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
 runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
 and `meta` reports `dtype` and `numerics` instead of `profile`.

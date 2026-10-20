@@ -195,10 +195,11 @@ says `video longer than 300 s` where the runtime says why in its own words.
 The Router answers a deployment whose workers are all busy the same way, 429
 `overloaded`, and one with no ready worker 503 `not_ready`; both carry
 `Retry-After` (1 and 5 seconds). In Engine mode a call that runs past the
-Router's 30-second budget returns 504 `systemone_deadline_exceeded`; a request
-whose `options.deadline_ms` is longer, such as a long-context one, waits that
-long instead, up to the listener's `systemone.max_deadline_ms` (10 minutes by
-default).
+Router's 30-second budget returns 504 `systemone_deadline_exceeded`, with a
+message that names `options.deadline_ms`; a request whose `options.deadline_ms`
+is longer waits that long instead, and a long-context request without one
+waits the listener's whole `systemone.max_deadline_ms` (10 minutes by default),
+which bounds both.
 A failed item of a request (one input or one question) carries its own error
 code and never fails the others; a failed question also carries a fixed
 `reason`. `POST /v1/systemone` is the exception: there a failed question fails
