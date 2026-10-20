@@ -81,6 +81,18 @@ request in 23.2 ms against BF16's 62.6 ms on an RTX PRO 6000. NVFP4 needs FP4
 tensor cores, which only NVIDIA Blackwell GPUs (compute capability 10.x or
 12.x) have; any other device refuses the package before its weights load.
 
+`vllm-sr/d3-turbo` (27B) is the Decision 3.0 model that reads a request's
+input once and answers every question from that reading, so asking many
+questions about one input costs little more than asking one
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/state-once.md)).
+Besides `choice`, `noul` and `score`, it answers `box` questions (where
+something is in an image, or in a video at the second given by `at`) and
+`track` questions (a box for each moment of a whole video, 1 or 2 per second),
+and a question or an option may hold an image of its own (`assets`). Each
+question reads up to 32,768 tokens by default and up to 262,144 with
+`options.long_context`, on one AMD Instinct MI325X. Start it with
+`vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm`.
+
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
