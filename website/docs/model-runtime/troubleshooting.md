@@ -6,7 +6,8 @@ description: Fix the common problems of the model runtime and answers to frequen
 
 # Troubleshooting and FAQ
 
-Start with what the runtime says about itself. For a runtime you started:
+Start with what the runtime says about itself. For an independent `vllm-srun`
+worker listening on port 8100:
 
 ```bash
 curl -s localhost:8100/health
@@ -21,6 +22,10 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 `vsr_model_runtime_ready{deployment="..."} 1` means the deployment answers.
 The router log names each managed runtime process and why it stopped.
+
+For `vllm-sr serve ARTIFACT --engine`, use the frontend listener and
+`/v1/systemone/models` instead. Public `/v1/models` describes Chat models, not
+the private worker inventory. Include the listener API key when configured.
 
 ## Startup waits for the models
 
@@ -38,6 +43,12 @@ deployment in `model_deployments` with its state:
 ```bash
 curl -s localhost:8080/startup-status
 ```
+
+An offline attached runtime does not block custom `decision` questions or
+explicit `decision.v1` task bindings from being prepared. Those tasks remain
+unavailable until current capability metadata is ready and compatible.
+Implicit and native-head bindings may still need metadata at startup. See
+[deployment readiness](./deploy.md#when-a-model-is-not-ready).
 
 A first start downloads the models, so it takes longer than the next ones. The
 wait ends after `VLLM_SRUN_READY_TIMEOUT` (10 minutes by default) with
@@ -123,9 +134,11 @@ reasons:
 | a file hash does not match | The download is damaged or the repository changed. Delete that model from the cache and start again. |
 | a revision is required | A repository that is not built in needs `revision` with a 40-character commit. |
 | access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. |
-| does not fit, out of memory | Use a smaller model, a GPU with more memory, or give the model its own `process`. |
+| needs about X GiB, Y GiB free; out of memory | The GPU has less free memory than the model needs: its weights in the dtype the GPU holds them in (BF16 for Decision 3.0, plus 10%) and 2 GiB. Free memory on that GPU, choose another with `--device-ids`, use a smaller model, or place replicas on separate GPUs. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
+| FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | The package holds FP8 weights and the device has no FP8 matrix units. Serve it on such a GPU, or serve the BF16 or int4 package of the model instead. The runtime does not retry it. |
+| NVFP4 packages need FP4 tensor cores; serve NVFP4 packages on a Blackwell GPU | The package holds NVFP4 weights and the device cannot multiply them: it is a CPU, a ROCm GPU or an NVIDIA GPU without FP4 tensor cores (compute capability other than 10.x or 12.x), or its PyTorch has no FP4 tensors or Triton is missing (the reason names which). Serve it on a Blackwell GPU with a recent PyTorch and Triton, or serve the BF16, FP8 or int4 package of the model instead. The runtime does not retry it. |
 | no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
 | a licence must be accepted | The model's licence restricts use. Pass `--accept-licence <id>` after you checked that you may use it. |
 
@@ -136,16 +149,26 @@ serving.
 
 `GET /v1/models` shows each model's self-check under `golden`. `matched`
 means its answers equal the released answers for that kind of device.
+`golden.reference` identifies the recorded reference that was checked. When a
+hardware reference is recorded, it takes precedence over the device-class
+reference: for example `cpu:x86_64:avx2:bf16_emulated` or `cuda:sm_89`. Other
+hardware keeps using the existing `cpu`, `rocm` or `cuda` reference when available.
+CPU keys use PyTorch's selected instruction set and native or emulated BF16
+capability. A mismatching selected reference still fails startup; the runtime
+does not try another reference or relax the tolerance.
+
 `unverified` means the model serves, but the runtime can't vouch for that:
 
 - **No `reason`, and `golden.reference` is empty:** there are no released
   answers for this device, for example for a model that is not built in or a
-  GPU without a validated record (CUDA). The runtime checked only that the
+  GPU architecture without a recorded reference. The runtime checked only that the
   answers are well formed and the same on every run.
-- **`reason` starts with `kernel choices not applied`:** on AMD Instinct
-  MI300X and MI325X GPUs, Decision 2.0 and Vela 2.0 run their kernels with
-  the configurations their release recorded with FLA 0.5.2, so every process
-  gives the same answers. When those can't run here, the model still loads,
+- **`reason` starts with `kernel choices not applied`:** models with recorded
+  GPU kernel choices run with those configurations so restarts reproduce
+  the recorded answers. The records also name the dependency versions used
+  for qualification. These include Decision 2.0 and
+  Vela 2.0 on AMD Instinct MI300X/MI325X, and D3-edge on NVIDIA L4.
+  When those can't run here, the model still loads,
   the log says `... runs without its recorded kernel choices: ...`, and its
   answers may differ from the released ones.
 
@@ -164,6 +187,7 @@ replace the recorded configurations.
 | Message mentions | Do this |
 | --- | --- |
 | `removed model execution fields`, `candle`, `ort`, `openvino`, `precision`, `variant`, `use_mmbert_32k`, `use_nli`, `polarity_guard` | Run `vllm-sr config migrate`. See [Migrate](model-runtime/migrate.md). |
+| `profile was removed`, and your `config.yaml` has no `profile` | The CLI wrote it: the router image is newer than the CLI. Reinstall the CLI from the same channel, or pass `--image` with the image built with your CLI; older development CLIs pull `:latest` instead of their own images. |
 | a binding does not match the model | The model has different labels, heads, dimensions or a smaller input limit than the feature needs. Bind a model made for that feature, or change `input`. |
 | `artifact must be a Hub repository ID or an absolute package path` | Use `owner/name` for a Hub model or an absolute path for a local copy. |
 | `revision must be a 40-hex commit` | Use the full commit hash, not a branch or tag. |
@@ -208,6 +232,13 @@ global:
           overflow: window
 ```
 
+For prompt guard and safety signals, if a native model rejects the length of
+one input, the router retries overlapping windows that cover the entire text,
+with bounded concurrency. It keeps the highest window risk and requires
+complete input coverage from each window. An unfinished scan stays unresolved;
+the scan budget and deadline still apply. Direct `/v1/decisions` calls retain
+the model's input limits.
+
 A jailbreak or PII rule matches content its model did not read in full: an
 input over the model's `max_tokens` under `reject`, over its cap, truncated, or
 not scanned within the signals' deadline. The match reports the type
@@ -247,14 +278,22 @@ not finish its safety scan within it.
 - For a runtime you started, look at `vllm_srun_request_duration_seconds` and
   `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
   `Server-Timing` header of its responses.
-- On CPU, models of one process share the CPU threads. Start the runtime with
-  `--threads` set to the cores you can give it.
+- Managed CPU workers default to half the router's available CPU budget,
+  rounded down, with a minimum of one thread and a maximum of 16. Set
+  `VLLM_SRUN_CPU_THREADS` before `vllm-sr serve` to choose a positive thread count
+  per worker, up to the full CPU budget. Compare real input lengths and concurrency:
+  fewer threads can reduce contention between busy models, while longer inputs
+  on dedicated cores may benefit from more. See [CPU threads](model-runtime/deploy.md#cpu-threads).
+  For a runtime you start and attach yourself, set its `--threads` instead;
+  models in that process share its threads.
 - CPU models slow down sharply when other work holds some of their cores,
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on
   the same host: give the CPU models cores of their own.
-- Decision models on a GPU can use `shared_context` or `batching`; see
-  [Profiles](./profiles.md).
+- Concurrent requests already share forwards. For many questions about one
+  input, turn on `enable_shared_context` where it is off; to trade throughput
+  for latency, lower `batch_window_ms` or `max_num_seqs`. See
+  [Engine arguments](./engine-args.md).
 
 ## FAQ
 
@@ -277,7 +316,8 @@ against its pinned hash before loading.
 router the same `endpoint`.
 
 **Can one runtime serve several models?** Yes. Pass several models to
-`vllm-sr serve`, or let the router group its deployments into processes.
+`vllm-srun serve` and attach deployments through `endpoint`. Router-managed
+deployments and replicas each use their own worker.
 
 **What happens to my cached and stored vectors when I change the embedding
 model?** They stay apart from new ones and are not reused. See

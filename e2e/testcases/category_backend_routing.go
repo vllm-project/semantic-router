@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -24,7 +25,7 @@ func testCategoryBackendRouting(ctx context.Context, client *kubernetes.Clientse
 		return err
 	}
 	defer stop()
-	resp, err := sendLocalChatCompletion(ctx, localPort, "auto", "__CATEGORY_BACKEND_MATH__ route this request", 30*time.Second)
+	resp, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", "__CATEGORY_BACKEND_MATH__ route this request", 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("remote category request: %w", err)
 	}

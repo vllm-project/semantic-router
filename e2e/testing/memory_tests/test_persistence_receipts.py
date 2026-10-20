@@ -487,7 +487,7 @@ class MemoryPersistenceReceiptTest(PersistenceReceiptSupport):
         response = requests.post(
             self.responses_url,
             json={
-                "model": "MoM",
+                "model": "vllm-sr/auto",
                 "input": [
                     {
                         "type": "message",

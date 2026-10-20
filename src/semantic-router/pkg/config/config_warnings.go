@@ -18,8 +18,7 @@ type ConfigWarning struct {
 }
 
 const (
-	warningLooperAliasShadowsModel = "looper_alias_shadows_model"
-	warningModalityDetectorOff     = "modality_detector_disabled"
+	warningModalityDetectorOff = "modality_detector_disabled"
 )
 
 // Warnings returns cfg's warnings in a stable order.
@@ -28,13 +27,6 @@ func Warnings(cfg *RouterConfig) []ConfigWarning {
 		return nil
 	}
 	var warnings []ConfigWarning
-	for _, collision := range cfg.looperAliasCollisions() {
-		warnings = append(warnings, ConfigWarning{
-			Code:    warningLooperAliasShadowsModel,
-			Field:   collision.field,
-			Message: fmt.Sprintf("%s lists %q, which is also a model name: %s", collision.field, collision.alias, collision.reason()),
-		})
-	}
 	if warning, ok := modalityDetectorOffWarning(cfg); ok {
 		warnings = append(warnings, warning)
 	}
@@ -82,7 +74,7 @@ func modalityDetectorOffWarning(cfg *RouterConfig) (ConfigWarning, bool) {
 }
 
 // logConfigWarnings logs each warning that has no event of its own when the
-// Router loads a configuration. warnLooperAliasCollisions logs its own.
+// Router loads a configuration.
 func logConfigWarnings(cfg *RouterConfig) error {
 	if cfg == nil || cfg.RoutingScope != "" {
 		return nil

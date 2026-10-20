@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -46,7 +47,7 @@ func testAnthropicChatCacheControl(
 
 	sessionID := fmt.Sprintf("chat-cache-%d", time.Now().UnixNano())
 	request := map[string]any{
-		"model":      "MoM",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 16,
 		"messages": []any{
 			map[string]any{

@@ -31,11 +31,11 @@ func routerConfigOf(t *testing.T, spec vllmv1alpha1.ConfigSpec) (*routerconfig.C
 }
 
 func TestTheDecisionModelReachesEveryModuleWithItsThresholds(t *testing.T) {
-	canonical, cfg := routerConfigOf(t, vllmv1alpha1.ConfigSpec{DecisionModel: "vela-2.0-9b"})
-	if system := canonical.Global.ModelCatalog.System; system != (routerconfig.CanonicalSystemModels{DecisionModel: "Vela-2.0-9B"}) {
+	canonical, cfg := routerConfigOf(t, decisionDeploymentSpec(t, "primary", "vllm-sr/Vela-2.0-9B"))
+	if system := canonical.Global.ModelCatalog.System; system != (routerconfig.CanonicalSystemModels{DecisionModel: routerconfig.DecisionModelBinding{Deployment: "primary"}}) {
 		t.Fatalf("the ConfigMap must name the decision model and pin no module, got %+v", system)
 	}
-	if cfg.DecisionModel != "Vela-2.0-9B" || cfg.PromptGuard.ModelID != "models/Vela-2.0-9B" || cfg.CategoryModel.ModelID != "models/Vela-2.0-9B" {
+	if cfg.DecisionModel != "primary" || cfg.PromptGuard.ModelID != "models/Vela-2.0-9B" || cfg.CategoryModel.ModelID != "models/Vela-2.0-9B" {
 		t.Fatalf("every module runs the 9B, got guard %q domain %q", cfg.PromptGuard.ModelID, cfg.CategoryModel.ModelID)
 	}
 	want := routerconfig.ModuleThresholdsOf("models/Vela-2.0-9B")
@@ -47,8 +47,9 @@ func TestTheDecisionModelReachesEveryModuleWithItsThresholds(t *testing.T) {
 
 func TestAGuardTheResourceSetsKeepsItsModelAndThreshold(t *testing.T) {
 	_, cfg := routerConfigOf(t, vllmv1alpha1.ConfigSpec{
-		DecisionModel: "Vela-2.0-0.8B",
-		PromptGuard:   &vllmv1alpha1.PromptGuardConfig{Enabled: true, ModelID: "models/Vela-1.0-Encoder-307M-Guard", Threshold: "0.6", UseCPU: true},
+		DecisionModel:    &vllmv1alpha1.DecisionModelBinding{Deployment: "primary"},
+		ModelDeployments: rawCanonicalRoutingJSON(t, `{"primary":{"provider":"model_runtime","artifact":"vllm-sr/Vela-2.0-0.8B"}}`),
+		PromptGuard:      &vllmv1alpha1.PromptGuardConfig{Enabled: true, ModelID: "models/Vela-1.0-Encoder-307M-Guard", Threshold: "0.6", UseCPU: true},
 	})
 	if cfg.PromptGuard.ModelID != "models/Vela-1.0-Encoder-307M-Guard" || cfg.PromptGuard.Threshold != 0.6 {
 		t.Fatalf("an explicit guard stays, got %q at %v", cfg.PromptGuard.ModelID, cfg.PromptGuard.Threshold)
@@ -57,18 +58,34 @@ func TestAGuardTheResourceSetsKeepsItsModelAndThreshold(t *testing.T) {
 		t.Fatalf("the other modules follow the decision model, got %q", cfg.CategoryModel.ModelID)
 	}
 	_, cfg = routerConfigOf(t, vllmv1alpha1.ConfigSpec{
-		DecisionModel: "Vela-2.0-0.8B",
-		PromptGuard:   &vllmv1alpha1.PromptGuardConfig{Enabled: true, UseCPU: true},
+		DecisionModel:    &vllmv1alpha1.DecisionModelBinding{Deployment: "primary"},
+		ModelDeployments: rawCanonicalRoutingJSON(t, `{"primary":{"provider":"model_runtime","artifact":"vllm-sr/Vela-2.0-0.8B"}}`),
+		PromptGuard:      &vllmv1alpha1.PromptGuardConfig{Enabled: true, UseCPU: true},
 	})
 	if cfg.PromptGuard.ModelID != "models/Vela-2.0-0.8B" || cfg.PromptGuard.Threshold != routerconfig.ModuleThresholdsOf("models/Vela-2.0-0.8B").PromptGuard {
 		t.Fatalf("a guard without model or threshold follows the decision model, got %q at %v", cfg.PromptGuard.ModelID, cfg.PromptGuard.Threshold)
 	}
 }
 
-func TestAnUnknownDecisionModelFailsReconciliation(t *testing.T) {
+func decisionDeploymentSpec(t *testing.T, name, artifact string) vllmv1alpha1.ConfigSpec {
+	t.Helper()
+	return vllmv1alpha1.ConfigSpec{
+		DecisionModel:    &vllmv1alpha1.DecisionModelBinding{Deployment: name},
+		ModelDeployments: rawCanonicalRoutingJSON(t, `{"`+name+`":{"provider":"model_runtime","artifact":"`+artifact+`"}}`),
+	}
+}
+
+func TestAnUnknownDecisionDeploymentFailsReconciliation(t *testing.T) {
 	r := &SemanticRouterReconciler{}
-	_, err := r.buildCanonicalConfig(context.Background(), &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: vllmv1alpha1.ConfigSpec{DecisionModel: "Decision-2.0-Kai-0.6B"}}})
-	if err == nil || !strings.Contains(err.Error(), "config.decision_model") || !strings.Contains(err.Error(), "is a Decision 2.0 model") {
-		t.Fatalf("want the decision model error, got %v", err)
+	_, err := r.buildCanonicalConfig(context.Background(), &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: vllmv1alpha1.ConfigSpec{DecisionModel: &vllmv1alpha1.DecisionModelBinding{Deployment: "missing"}}}})
+	if err == nil || !strings.Contains(err.Error(), "config.decision_model.deployment") {
+		t.Fatalf("want exact deployment error, got %v", err)
+	}
+}
+
+func TestDecisionModelFamilyIsNotAnOperatorAllowlist(t *testing.T) {
+	_, cfg := routerConfigOf(t, decisionDeploymentSpec(t, "kai", "vllm-sr/Decision-2.0-Kai-0.6B"))
+	if cfg.DecisionModel != "kai" {
+		t.Fatalf("default reference changed: %q", cfg.DecisionModel)
 	}
 }

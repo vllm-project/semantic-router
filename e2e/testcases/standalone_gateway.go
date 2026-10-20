@@ -80,7 +80,7 @@ func standaloneChat(ctx context.Context, client *kubernetes.Clientset, opts pkgt
 	defer session.Close()
 	response, err := fixtures.DoPOSTRequest(ctx, session.HTTPClient(60*time.Second), session.URL("/v1/chat/completions"),
 		fixtures.ChatCompletionsRequest{
-			Model:    "auto",
+			Model:    "vllm-sr/auto",
 			Messages: []fixtures.ChatMessage{{Role: "user", Content: content}},
 		})
 	if err != nil {

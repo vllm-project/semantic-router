@@ -228,8 +228,13 @@ func TestBuiltInSignalQuestionsFailPreparationTheyCannotServe(t *testing.T) {
 	if _, err := runtime.SequenceWindows(context.Background(), windowed, window); !errors.Is(err, binding.ErrCapability) {
 		t.Fatalf("a consumer window on a model that reads the whole text: %v", err)
 	}
+	// Built-in semantic judgments use question capability, regardless of family.
+	handle, err := runtime.Sequence(context.Background(), sequenceBinding("domain_classifier", "kai", endpoint))
+	if err != nil {
+		t.Fatalf("generic decision model must serve domain judgments: %v", err)
+	}
+	t.Cleanup(func() { _ = handle.Close() })
 	cases := map[string]config.ResolvedModelBinding{
-		"a System One model":  sequenceBinding("domain_classifier", "kai", endpoint),
 		"a custom classifier": sequenceBinding("classifier.topics", "vela", endpoint),
 		"a head": func() config.ResolvedModelBinding {
 			s := sequenceBinding("domain_classifier", "vela", endpoint)

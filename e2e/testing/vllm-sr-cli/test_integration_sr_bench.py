@@ -137,7 +137,7 @@ class TestManagedBenchmarkIntegration(ServeSessionMixin, CLITestBase):
                 {
                     "id": "missing-credential-fixture",
                     "kind": "mom",
-                    "model": "auto",
+                    "model": "vllm-sr/auto",
                     "base_url": "http://127.0.0.1:1/v1",
                     "preview_url": "http://127.0.0.1:1/api/v1/routing/preview",
                     "preview_api_key_env": "SR_BENCH_LIFECYCLE_MISSING_TOKEN",

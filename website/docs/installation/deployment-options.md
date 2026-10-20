@@ -10,9 +10,12 @@ Choose two things independently:
 1. where Semantic Router runs; and
 2. where the model backends run.
 
-The Router does not load or provision the model weights referenced by a custom
-configuration. It sends requests to reachable model endpoints, which can run on
-the same host, in a cluster, or behind a hosted API.
+Chat provider models run behind reachable endpoints on the same host, in a
+cluster, or at a hosted API. vLLM-SR does not provision those generation
+backends. Its own decision, classifier, embedding, and reranking models use
+managed or attached [model-runtime deployments](../model-runtime/deploy.md).
+For decision serving without Chat backends, start in
+[Engine mode](../model-runtime/quickstart.md).
 
 ## Choose the Router topology
 
@@ -34,7 +37,9 @@ front of it instead.
 
 Before committing to a path, check its project-maintained status, recurring
 test evidence, and external ownership boundary in the
-[Deployment Support](support-matrix).
+[Deployment Support](support-matrix). The responsibilities and versioning
+rules every path follows are defined in
+[Deployment Architecture](deployment-architecture).
 
 ## Choose the model backend
 

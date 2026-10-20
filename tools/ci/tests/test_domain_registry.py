@@ -28,6 +28,25 @@ class DomainRegistryTests(unittest.TestCase):
         self.assertFalse((REPO_ROOT / "tools/agent/test-domain-registry.yaml").exists())
         self.assertFalse((REPO_ROOT / "tools/agent/task-matrix.yaml").exists())
 
+    def test_experimental_gateway_examples_keep_only_static_checks(self) -> None:
+        for directory in (
+            "agentgateway",
+            "aibrix",
+            "dynamo",
+            "istio",
+            "llm-d",
+            "llmd-base",
+        ):
+            path = f"deploy/kubernetes/{directory}/values.yaml"
+            with self.subTest(path=path):
+                selected = classify([path])
+                self.assertIn(
+                    "experimental-gateway-examples", matching_domains((path,))
+                )
+                self.assertEqual(set(selected.selected_jobs), {"quality", "security"})
+                self.assertEqual(selected.profiles, ())
+                self.assertEqual(selected.pr_images, ())
+
     def test_path_matching_distinguishes_one_level_from_recursive(self) -> None:
         self.assertTrue(path_matches("e2e/root.go", "e2e/*.go"))
         self.assertFalse(path_matches("e2e/testcases/root.go", "e2e/*.go"))
@@ -144,6 +163,19 @@ class DomainRegistryTests(unittest.TestCase):
             "src/semantic-router/pkg/config/canonical.go",
             "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
             "dashboard/frontend/src/generated/routerConfigContract.ts",
+            "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
+            "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/decision1.py",
+            "src/model-runtime/vllm_srun/registry/tables/decision2.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/families/vela2/request.py",
+            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/common.py",
+            "src/model-runtime/vllm_srun/systemone.py",
+            "src/model-runtime/vllm_srun/families/decision1/family.py",
+            "src/model-runtime/vllm_srun/families/decision1/questions.py",
+            "src/model-runtime/vllm_srun/families/decision2/family.py",
+            "src/model-runtime/vllm_srun/families/decision3/family.py",
             "tools/codegen/configschema/main.go",
             "tools/codegen/openapi/main.go",
             "tools/codegen/embed_generated_index.py",
@@ -162,6 +194,7 @@ class DomainRegistryTests(unittest.TestCase):
                     "generated-contracts",
                     commands_for_domains(domains, "verifications"),
                 )
+                self.assertIn("generated-contracts", classify((path,)).selected_jobs)
 
     def test_router_configs_the_cli_suite_parses_select_it(self) -> None:
         for path in (
@@ -180,6 +213,29 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn("cli-unit", result.selected_jobs)
                 self.assertNotIn("vllm-sr-cli", result.domains)
 
+    def test_docs_whose_snippets_the_cli_suite_checks_select_it(self) -> None:
+        translated = "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current"
+        for path in (
+            "website/docs/model-runtime/reference.md",
+            "website/docs/model-runtime/guides/pii.md",
+            "website/docs/tutorials/signal/learned/decision.md",
+            f"{translated}/model-runtime/deploy.md",
+            f"{translated}/model-runtime/guides/decisions.md",
+            f"{translated}/tutorials/algorithm/selection/decision.md",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn(
+                    "make vllm-sr-test", commands_for_domains(result.domains, "checks")
+                )
+                self.assertIn("cli-unit", result.selected_jobs)
+                self.assertIn("documentation", result.domains)
+                self.assertNotIn("vllm-sr-cli", result.domains)
+        self.assertNotIn(
+            "cli-unit",
+            classify([f"{translated}/tutorials/global/overview.md"]).selected_jobs,
+        )
+
     def test_model_resolution_selects_the_published_model_contract(self) -> None:
         for path in (
             "src/semantic-router/pkg/config/registry.go",
@@ -188,6 +244,24 @@ class DomainRegistryTests(unittest.TestCase):
             "src/semantic-router/pkg/config/decision_model.go",
             "src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go",
             "src/semantic-router/pkg/classification/classifier_pii_window_default.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("published-model-tests", result.domains)
+                self.assertIn("platform.models-cpu", result.selected_jobs)
+
+    def test_vela2_serving_and_fusion_select_the_published_model_contract(self) -> None:
+        for path in (
+            "src/model-runtime/vllm_srun/families/vela2/encoder_layout.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/registry/golden_answers_vela2.json",
+            "src/model-runtime/vllm_srun/plugins/decisions.py",
+            "src/semantic-router/pkg/config/model_runtime_implicit.go",
+            "src/semantic-router/pkg/modelruntime/serving/signal_question.go",
+            "src/semantic-router/pkg/modelservice/bundle.go",
+            "src/semantic-router/pkg/modelservice/fusion_decisions.go",
+            "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
+            "src/semantic-router/pkg/classification/testdata/vela2_published_answers.json",
         ):
             with self.subTest(path=path):
                 result = classify([path])

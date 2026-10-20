@@ -95,6 +95,7 @@ def run_precommit(
         # and the trusted-base security scan one explicit execution owner each.
         owned_elsewhere = {
             "model-catalog-generated",
+            "decision-runtime-catalog-generated",
             "cli-reference-generated",
             "configuration-reference-generated",
             "public-agent-skill",

@@ -245,7 +245,7 @@ func run(opt options) error {
 // given (seed, context, answer) but carrying no real signal. Mirrors the
 // in-package test placebo so arm D weights on noise, isolating the score's signal.
 func placeboDetector(seed uint64) looper.HallucinationDetectFunc {
-	return func(_ context.Context, contextText, _, answer string) ([]string, float32, error) {
+	return func(_ context.Context, contextText, _, answer string) (looper.GroundingEvidence, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
@@ -255,7 +255,8 @@ func placeboDetector(seed uint64) looper.HallucinationDetectFunc {
 		_, _ = h.Write([]byte(answer))
 		// Deterministic seed for the placebo; the uint64->int64 wrap is harmless.
 		r := rand.New(rand.NewSource(int64(h.Sum64()))) //nolint:gosec // deterministic eval seed, overflow harmless
-		return []string{"placebo"}, float32(r.Float64()), nil
+		score := float32(float32(r.Float64()))
+		return looper.GroundingEvidence{Unsupported: true, Spans: []string{"placebo"}, Probability: &score}, nil
 	}
 }
 

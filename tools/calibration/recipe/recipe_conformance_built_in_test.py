@@ -45,7 +45,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
 
     def test_real_cli_composition_covers_every_entrypoint_and_authored_probe(self):
         bound = runtime.bind_runtime_entrypoints(self.config, self.probes)
-        runtime.verify_composed_policy(self.authored, self.config)
+        runtime.verify_composed_policy(self.authored, self.config, self.manifest)
         conformance.validate_probe_references(
             self.recipe / "probes.yaml", self.config, self.manifest, bound
         )
@@ -87,7 +87,67 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         changed = copy.deepcopy(self.config)
         changed["recipes"][0]["routing"]["decisions"][0]["priority"] += 1
         with self.assertRaisesRegex(ValueError, "changed authored routing policy"):
-            runtime.verify_composed_policy(self.authored, changed)
+            runtime.verify_composed_policy(self.authored, changed, self.manifest)
+
+    def test_composed_preview_uses_declared_probe_budget(self):
+        parser = importlib.import_module("cli.parser")
+        parsed = parser.parse_user_config(str(self.config_path), log_summary=False)
+        public = parsed.model_dump(by_alias=True)
+        preview = public["global"]["services"]["api"]["routing_preview"]
+        self.assertEqual(
+            preview["request_timeout_seconds"],
+            self.manifest["evaluation"]["request_timeout_seconds"],
+        )
+        self.assertNotIn(
+            "max_concurrency",
+            self.config["global"]["services"]["api"]["routing_preview"],
+        )
+
+    def test_explicit_preview_and_neighboring_policy_remain_authoritative(self):
+        authored = copy.deepcopy(self.authored)
+        authored["global"].setdefault("services", {})["api"] = {
+            "routing_preview": {"request_timeout_seconds": 100, "max_concurrency": 3}
+        }
+        authored["global"].setdefault("model_catalog", {})["signal_timeout_ms"] = 500
+        fixture = runtime.with_runtime_preview_budget(
+            {"global": runtime._builtin_runtime_global(authored)}, self.manifest
+        )
+        composed = copy.deepcopy(self.config)
+        composed["global"] = fixture["global"]
+        runtime.verify_composed_policy(authored, composed, self.manifest)
+        self.assertEqual(
+            composed["global"]["services"]["api"], authored["global"]["services"]["api"]
+        )
+        self.assertEqual(
+            composed["global"]["model_catalog"], authored["global"]["model_catalog"]
+        )
+        for path in (
+            ("services", "api", "routing_preview", "request_timeout_seconds"),
+            ("services", "api", "routing_preview", "max_concurrency"),
+            ("model_catalog", "signal_timeout_ms"),
+        ):
+            with self.subTest(path=path):
+                changed = copy.deepcopy(composed)
+                target = changed["global"]
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] += 1
+                with self.assertRaisesRegex(
+                    ValueError, "changed authored global policy"
+                ):
+                    runtime.verify_composed_policy(authored, changed, self.manifest)
+
+    def test_injected_preview_budget_is_not_a_broad_service_override(self):
+        for field, value in (("request_timeout_seconds", 301), ("max_concurrency", 32)):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(self.config)
+                changed["global"]["services"]["api"]["routing_preview"][field] = value
+                with self.assertRaisesRegex(
+                    ValueError, "changed authored global policy"
+                ):
+                    runtime.verify_composed_policy(
+                        self.authored, changed, self.manifest
+                    )
 
     def test_authored_global_learning_loss_or_change_is_rejected(self):
         for path, replacement in (
@@ -109,11 +169,12 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "changed authored global policy"
                 ):
-                    runtime.verify_composed_policy(self.authored, changed)
+                    runtime.verify_composed_policy(
+                        self.authored, changed, self.manifest
+                    )
 
     def test_global_overrides_are_limited_to_fixture_deployment_fields(self):
         authored = copy.deepcopy(self.authored)
-        authored["global"]["router"]["auto_model_names"] = ["MoM"]
         authored["global"].setdefault("services", {})["management_api"] = {
             "bind_address": "127.0.0.1",
             "auth": {"mode": "disabled"},
@@ -121,14 +182,13 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         }
         composed = copy.deepcopy(self.config)
         composed["global"]["services"]["management_api"]["port"] = 9080
-        runtime.verify_composed_policy(authored, composed)
-        self.assertEqual(authored["global"]["router"]["auto_model_names"], ["MoM"])
+        runtime.verify_composed_policy(authored, composed, self.manifest)
 
         # The fixture owns bind/auth, but cannot discard another authored field
         # merely because it shares the management_api parent mapping.
         del composed["global"]["services"]["management_api"]["port"]
         with self.assertRaisesRegex(ValueError, "changed authored global policy"):
-            runtime.verify_composed_policy(authored, composed)
+            runtime.verify_composed_policy(authored, composed, self.manifest)
 
     def test_composed_management_listener_is_reachable_in_split_runtime(self):
         parser = importlib.import_module("cli.parser")
@@ -203,11 +263,14 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                     }
                 ],
             )
+            hardware = {"decision-balance", "vela-amd"}
             self.assertTrue(
-                all("vela-amd" not in row["recipes"].split(",") for row in matrix)
+                all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
-            self.assertEqual(receipt["excluded"][0]["recipe"], "vela-amd")
+            self.assertEqual(
+                {excluded["recipe"] for excluded in receipt["excluded"]}, hardware
+            )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "built-in/latest").mkdir(parents=True)

@@ -1,7 +1,7 @@
 """A model runtime started by a test, and the JSON calls the tests send it.
 
-`ServeProcess` runs a serving command (`vllm-sr serve MODEL ...` in engine
-mode, or `vllm-srun serve ...`) on a free local port and stops it with
+`ServeProcess` runs a worker command (`vllm-srun serve ...`) on a free local
+port and stops it with
 SIGINT, as a reader would with Ctrl-C. `page_requests` reads the requests a
 docs page tells readers to send, so the tests send exactly those.
 `write_fixture` writes a tiny random-weight package with the runtime of the
@@ -27,7 +27,7 @@ HTTP_OK = 200
 DEFAULT_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 # A runtime request on a page: the path a curl command calls and its JSON body.
 CURL_REQUEST = re.compile(
-    r"curl[^\n]*?(/v1/(?:decisions|classify|embeddings|rerank|bundle))"
+    r"curl[^\n]*?(/v1/(?:decisions|systemone|classify|embeddings|rerank|bundle))"
     r"(?:(?!\ncurl).)*?-d '(\{.*?\})'",
     re.S,
 )
@@ -92,14 +92,19 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
-def call(base: str, path: str, body: dict | None = None) -> tuple[int, object]:
+def call(
+    base: str, path: str, body: dict | None = None, *, headers: dict | None = None
+) -> tuple[int, object]:
     """GET (no body) or POST a JSON body; the status and the decoded answer."""
     data = None if body is None else json.dumps(body).encode()
     request = urllib_request.Request(
         base + path,
         data=data,
         method="GET" if body is None else "POST",
-        headers={"Content-Type": "application/json"} if body is not None else {},
+        headers={
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            **(headers or {}),
+        },
     )
     try:
         with urllib_request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:

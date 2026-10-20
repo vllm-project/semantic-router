@@ -206,6 +206,8 @@ type robustnessPolicy struct {
 }
 
 type probeDecision struct {
+	ExpectedSignalErrors    yaml.Node `yaml:"expected_signal_errors"`
+	signalErrors            map[string]string
 	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
 	signalValueBounds       map[string]SignalValueBounds
 	ExpectedSelectionStatus *string             `yaml:"expected_selection_status"`
@@ -228,6 +230,8 @@ type probeDecision struct {
 }
 
 type probeVariant struct {
+	ExpectedSignalErrors    yaml.Node `yaml:"expected_signal_errors"`
+	signalErrors            map[string]string
 	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
 	signalValueBounds       map[string]SignalValueBounds
 	ExpectedSelectionStatus *string                `yaml:"expected_selection_status"`
@@ -342,6 +346,7 @@ func validateProbeDecision(
 		*issues = append(*issues, label+".expected_decision is required")
 	}
 	validateExpectedSelectionStatus(decision.ExpectedSelectionStatus, label, issues)
+	decision.signalErrors = validatedSignalErrors(decision.ExpectedSignalErrors, label, issues)
 	var valueErr error
 	decision.signalValueBounds, valueErr = parseSignalValueExpectations(decision.ExpectedSignalValues)
 	if valueErr != nil {
@@ -379,6 +384,7 @@ func validateProbeVariant(
 	label := fmt.Sprintf("%s.variants[%d]", decisionLabel, variantIndex)
 	validateProbeVariantIdentity(decisionID, variant.ID, label, probeIDs, issues)
 	validateExpectedSelectionStatus(variant.ExpectedSelectionStatus, label, issues)
+	variant.signalErrors = validatedSignalErrors(variant.ExpectedSignalErrors, label, issues)
 	var valueErr error
 	variant.signalValueBounds, valueErr = parseSignalValueExpectations(variant.ExpectedSignalValues)
 	if valueErr != nil {
@@ -602,6 +608,7 @@ func expectedAssertionsForDecision(decision probeDecision) ExpectedAssertions {
 		PluginMatch:      decision.PluginMatch,
 		Signals:          nonNilSignalMap(decision.ExpectedSignals),
 		SignalValues:     cloneSignalValueBounds(decision.signalValueBounds),
+		SignalErrors:     cloneSignalErrors(decision.signalErrors),
 		ForbiddenSignals: nonNilSignalMap(decision.ForbiddenSignals),
 		SignalMatch:      decision.SignalMatch,
 	}
@@ -621,6 +628,9 @@ func flattenProbe(
 	}
 	if variant.signalValueBounds != nil {
 		expected.SignalValues = cloneSignalValueBounds(variant.signalValueBounds)
+	}
+	if variant.signalErrors != nil {
+		expected.SignalErrors = cloneSignalErrors(variant.signalErrors)
 	}
 	shapes, preview := probePresentation(variant)
 	return ProbeDetail{

@@ -88,10 +88,6 @@ const graphiteSurfaceContracts = [
     ],
   },
   {
-    path: '../pages/ConfigPageTaxonomyClassifiers.module.css',
-    forbiddenPatterns: [/#f4ffe7\b/i, /rgba?\(\s*24\s*,\s*34\s*,\s*17\b/i],
-  },
-  {
     path: '../pages/topology/components/CustomNodes/CustomNodes.module.css',
     forbiddenPatterns: [/#e8efe1\b/i, /rgba?\(\s*20\s*,\s*30\s*,\s*20\b/i],
   },

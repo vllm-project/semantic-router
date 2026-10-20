@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 虚拟模型
 description: 在同一 Semantic Router 部署中，为客户端提供由隔离路由策略支撑的稳定虚拟模型名。
 translation:
   source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/entrypoints-and-recipes.md"
-  outdated: false
+  outdated: true
 ---
 
 # 虚拟模型
@@ -31,7 +32,11 @@ request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
 
 当请求的 `model` 匹配某个 `entrypoints[].model_names` 值时，Router 只评估映射的配方。虚拟模型名随后会被该配方选出的后端替换。
 
-顶层 `routing` 块仍是 `default` 配方。请求 `vllm-sr/auto`、`auto` 或其他已配置的 auto 别名时，使用该默认策略。若所选配方没有匹配的决策，Router 使用 `providers.defaults.model`。
+顶层 `routing` 块是 `default` 配方，默认发布为 `vllm-sr/auto`。
+显式声明 `recipe: default` 的入口会替换这个内置名称；如果客户端仍需使用
+`vllm-sr/auto`，请把它写入该入口的 `model_names`。`auto`、`vllm-sr/flow`
+等名称只有显式声明后才可用；算法由所选配方的决策决定。
+若所选配方没有匹配的决策，Router 使用 `providers.defaults.model`。
 
 具体后端模型名不同：它们会直接选择该模型并绕过配方路由。当客户端应按目标请求时使用虚拟入口；仅当有意需要那个精确后端时，才使用具体模型名。
 

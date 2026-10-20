@@ -137,13 +137,13 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
   bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-For a simple one-model deployment, start the stack. Plain `vllm-sr serve`
-keeps the Router and its models on the CPU; `--platform amd` runs the Router's
-models on the GPU as well
+For a simple one-model deployment, start the stack. Use `--platform cpu` to
+keep Router-side inference on the CPU. Plain `vllm-sr serve` uses automatic
+platform detection; `--platform rocm` selects the GPU-capable Router image
 ([Run Vela routing models on AMD](#run-vela-routing-models-on-amd)):
 
 ```bash
-vllm-sr serve
+vllm-sr serve --platform cpu
 ```
 
 Then open the Dashboard at `http://localhost:8700`, connect a model with
@@ -191,7 +191,7 @@ answer quality and operating behavior on the actual deployment.
 The Router's own models (the Vela classifiers, embeddings, reranker and
 decision models) run in the [model runtime](model-runtime/overview.md). On
 AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
-which is validated. `--platform amd` selects the AMD image, which ships the
+which is validated. `--platform rocm` selects the AMD image, which ships the
 runtime with the validated stack (PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and
 `causal-conv1d` 1.7.0 built for ROCm), and passes the GPUs to the Router.
 Every model checks its answers against references verified on that stack
@@ -212,7 +212,7 @@ GPU.
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
 The platform flag selects the image and device access. Each deployment's
@@ -279,7 +279,7 @@ benchmark rather than these configurations.
 
 | Setting | Paper benchmark | Current setting |
 | --- | --- | --- |
-| Router models | Three mmBERT-32K classifier sessions (270M parameters, FP16) for domain, jailbreak and PII | Vela AMD recipe: ten Vela 1.0 307M task models in the model runtime's exact FP32 profile; Domain, Guard and PII cover those three tasks |
+| Router models | Three mmBERT-32K classifier sessions (270M parameters, FP16) for domain, jailbreak and PII | Vela AMD recipe: ten Vela 1.0 307M task models at FP32 in the model runtime; Domain, Guard and PII cover those three tasks |
 | Execution | ONNX Runtime ROCm with CK Flash Attention for all three classifiers | PyTorch for ROCm in the model runtime; the request's model work arrives in one bundled call |
 | Prompt compression | On, with a 512-token budget | Off by default and in the Vela AMD recipe. The reference config enables it with `max_tokens: 4096` |
 | Weights for TextRank, position, TF-IDF and novelty | 0.20, 0.40, 0.35, 0.05 | Reference config: 0.4, 0.2, 0.3, 0.1 |

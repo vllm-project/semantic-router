@@ -13,8 +13,8 @@ environment.
 | Environment | Build | Serve |
 | --- | --- | --- |
 | CPU | `make vllm-sr-dev` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest vllm-sr serve --image-pull-policy never` |
-| AMD | `make vllm-sr-dev VLLM_SR_PLATFORM=amd` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest vllm-sr serve --image-pull-policy never --platform amd` |
-| NVIDIA | `VLLM_SR_PLATFORM=nvidia make vllm-sr-build` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest vllm-sr serve --platform nvidia --config <recipe> --image-pull-policy ifnotpresent` |
+| AMD | `make vllm-sr-dev VLLM_SR_PLATFORM=rocm` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest vllm-sr serve --image-pull-policy never --platform rocm` |
+| NVIDIA | `VLLM_SR_PLATFORM=cuda make vllm-sr-build` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest vllm-sr serve --platform cuda --config <recipe> --image-pull-policy ifnotpresent` |
 
 Make defaults to `latest`, while an editable CLI with a stable package version
 defaults to release-tagged images. These overrides select the local builds.

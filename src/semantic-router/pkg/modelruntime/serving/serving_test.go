@@ -32,6 +32,11 @@ func (f *fakeServices) Card(_ context.Context, deployment string) (modelservice.
 	return card, nil
 }
 
+func (f *fakeServices) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
+	card, ok := f.cards[deployment]
+	return card, ok
+}
+
 func (f *fakeServices) Classify(_ context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
 	f.mu.Lock()
 	f.requests = append(f.requests, request)
@@ -102,7 +107,7 @@ func spec(deployment, contract string, input config.ModelInputBudget) config.Res
 	return config.ResolvedModelBinding{
 		Recipe: "default", Name: deployment + "_consumer",
 		Binding:    config.ModelBinding{Deployment: deployment, Contract: contract},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cpu", Profile: "exact", Input: input},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cpu", Input: input},
 	}
 }
 

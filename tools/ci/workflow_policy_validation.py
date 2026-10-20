@@ -18,6 +18,11 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 LOCAL_WORKFLOW_PREFIX = "./.github/workflows/"
 REQUIRED_APPROVAL_CONDITION = "#approved-reviews-by >= 2"
 RELEASE_IMAGES = set(PRODUCTION_RELEASE_IMAGES)
+STATUS_PUBLISHER_TIMEOUT_MINUTES = 5
+PR_EXECUTION_NAME = (
+    "${{ needs.ci.outputs.publisher_ready == 'true' "
+    "&& 'CI Execution' || 'PR Gate' }}"
+)
 
 
 class WorkflowLike(Protocol):
@@ -75,6 +80,115 @@ def validate_gate_transport(gate: dict[str, Any], errors: list[str]) -> None:
         errors.append(
             "ci.yml gate must read the independently downloaded ci-plan artifact"
         )
+    reconciliation = reconciliations[0] if len(reconciliations) == 1 else {}
+    if reconciliation.get("env", {}).get("PUBLISHER_READY") != (
+        "${{ needs.plan.outputs.publisher_ready }}"
+    ) or 'if [[ "$PUBLISHER_READY" == true ]]; then flags+=(--allow-deferred); fi' not in (
+        reconciliation.get("run", "")
+    ):
+        errors.append(
+            "ci.yml gate may defer approval only with a trusted base publisher"
+        )
+    if "--output .agent-harness/ci/gate.json" not in reconciliation.get(
+        "run", ""
+    ) or not any(
+        step.get("uses", "").startswith("actions/upload-artifact@")
+        and step.get("if") == "always()"
+        and step.get("with", {}).get("name") == "ci-gate"
+        and step.get("with", {}).get("path") == ".agent-harness/ci/gate.json"
+        and step.get("with", {}).get("overwrite") is True
+        for step in steps
+    ):
+        errors.append(
+            "ci.yml gate must always publish its reconciled execution outcome"
+        )
+
+
+def validate_status_publisher(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    publisher = workflows.get("ci-status.yml")
+    if publisher is None:
+        errors.append("missing trusted PR CI status publisher")
+        return
+    trigger = publisher.events.get("workflow_run", {})
+    if trigger.get("workflows") != ["Pull Request"] or set(
+        trigger.get("types", [])
+    ) != {"in_progress", "completed"}:
+        errors.append("ci-status.yml must observe PR starts, reruns and completions")
+    job = publisher.jobs.get("publish", {})
+    condition = " ".join(job.get("if", "").split())
+    if condition != (
+        "github.event_name == 'workflow_run' || (github.event_name == "
+        "'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    ):
+        errors.append("ci-status.yml dispatch must execute only trusted main code")
+    if job.get("permissions") != {
+        "contents": "read",
+        "actions": "read",
+        "checks": "write",
+        "issues": "write",
+        "pull-requests": "write",
+    }:
+        errors.append("ci-status.yml must limit its publisher token permissions")
+    steps = job.get("steps", [])
+    checkouts = [
+        step for step in steps if step.get("uses", "").startswith("actions/checkout@")
+    ]
+    if len(checkouts) != 1 or checkouts[0].get("with") != {
+        "ref": "${{ github.sha }}",
+        "persist-credentials": False,
+    }:
+        errors.append("ci-status.yml must never check out or execute PR contents")
+    commands = [step.get("run") for step in steps if "run" in step]
+    if commands != ['python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH"']:
+        errors.append("ci-status.yml must use only the trusted publisher entrypoint")
+    if publisher.data.get("concurrency") != {
+        "group": "ci-status-${{ github.event.workflow_run.id || inputs.run_id }}",
+        "cancel-in-progress": False,
+    }:
+        errors.append("ci-status.yml must serialize observations of the same PR run")
+    if job.get("timeout-minutes") != STATUS_PUBLISHER_TIMEOUT_MINUTES:
+        errors.append("ci-status.yml must finish without occupying a waiting runner")
+
+
+def validate_publisher_bootstrap(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    for filename, owner in (("ci-changes.yml", "plan"), ("ci.yml", "plan")):
+        workflow = workflows.get(filename)
+        output = (
+            workflow.events.get("workflow_call", {})
+            .get("outputs", {})
+            .get("publisher_ready", {})
+            if workflow
+            else {}
+        )
+        if output.get("value") != "${{ jobs." + owner + ".outputs.publisher_ready }}":
+            errors.append(f"{filename}: must forward trusted publisher readiness")
+    planner = workflows.get("ci-changes.yml")
+    job = planner.jobs.get("plan", {}) if planner else {}
+    if (
+        job.get("outputs", {}).get("publisher_ready")
+        != "${{ steps.publisher.outputs.ready }}"
+    ):
+        errors.append("ci-changes.yml must expose the base publisher probe result")
+    probe = next(
+        (step for step in job.get("steps", []) if step.get("id") == "publisher"), {}
+    ).get("run", "")
+    if not all(
+        fragment in probe
+        for fragment in (
+            "ready=false",
+            '"$GITHUB_EVENT_NAME" == pull_request',
+            'git rev-parse --verify "$GITHUB_SHA^1"',
+            'git cat-file -e "$base:.github/workflows/ci-status.yml"',
+            'git cat-file -e "$base:tools/ci/pr_ci_status.py"',
+        )
+    ):
+        errors.append(
+            "ci-changes.yml must probe the actual merge first parent's publisher"
+        )
 
 
 def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
@@ -84,13 +198,15 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         return
     gate = dispatcher.jobs.get("pr-gate", {})
     if (
-        gate.get("name") != "PR Gate"
+        gate.get("name") != PR_EXECUTION_NAME
         or gate.get("if") != "always()"
         or needs(gate) != {"ci"}
     ):
         errors.append(
-            "pr.yml must retain the always-running stable PR Gate behind shared CI"
+            "pr.yml must retain strict execution and a legacy PR Gate until the base publisher exists"
         )
+    validate_status_publisher(workflows, errors)
+    validate_publisher_bootstrap(workflows, errors)
     for filename, profile in (
         ("pr.yml", "pr"),
         ("main.yml", "main"),
@@ -152,6 +268,21 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
     trigger = community.events.get("pull_request", {}) if community else {}
     if "synchronize" in (trigger or {}).get("types", []):
         errors.append("community metadata must not repeat on every synchronization")
+
+
+def validate_main_publishers(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    """A development CLI defaults to its commit's images, so they come first."""
+    main = workflows.get("main.yml")
+    pypi = main.jobs.get("pypi", {}) if main else {}
+    if "images" not in needs(pypi) or "needs.images.result == 'success'" not in (
+        pypi.get("if", "")
+    ):
+        errors.append(
+            ".github/workflows/main.yml: 'pypi' must wait for the successful "
+            "publication of its commit's images"
+        )
 
 
 def validate_release_contract(
@@ -435,6 +566,7 @@ def validate_workflow_policies(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
     validate_pr_contract(workflows, errors)
+    validate_main_publishers(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
     validate_removed_workflows(errors)

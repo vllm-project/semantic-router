@@ -82,7 +82,7 @@ func (r *OpenAIRouter) looperConstructionFailed(
 	err error,
 ) *ext_proc.ProcessingResponse {
 	r.logLooperConstructionFailure(decision, reqCtx, err)
-	return r.createErrorResponse(500, "Looper construction failed: "+err.Error())
+	return r.createErrorResponse(500, "Looper construction failed.")
 }
 
 func (r *OpenAIRouter) logLooperConstructionFailure(decision *config.Decision, reqCtx *RequestContext, err error) {
@@ -120,6 +120,9 @@ func (r *OpenAIRouter) handleLooperExecution(
 		}
 		defer r.WorkflowStateService.Release()
 	}
+	// Looper forwards the original tool-bearing request and never reaches
+	// handleToolSelection. The trusted-facts gate therefore runs inside Looper,
+	// per model attempt, at each attempt's own stage (see buildLooperRequest).
 	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil
@@ -179,7 +182,11 @@ func (r *OpenAIRouter) runLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*looper.Response, *ext_proc.ProcessingResponse) {
-	program, err := looper.Template(&r.Config.Looper, decision.Algorithm.Type, r.WorkflowStateService)
+	runtimeConfig := r.Config.Looper
+	for _, entrypoint := range r.Config.EffectiveEntrypoints(config.ChatAPI) {
+		runtimeConfig.EntrypointModels = append(runtimeConfig.EntrypointModels, entrypoint.ModelNames...)
+	}
+	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, r.WorkflowStateService)
 	if err != nil {
 		return nil, r.looperConstructionFailed(decision, reqCtx, err)
 	}
@@ -245,6 +252,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 					RecipeName:            reqCtx.Routing.RecipeName(),
 					OutputContract:        decision.OutputContract,
 					OutputContractSpec:    decision.OutputContractSpec,
+					ToolStageGate:         r.looperToolStageGate(request, decision, reqCtx),
 				}
 				if params := decision.GetRequestParamsConfig(); params != nil && params.MaxTokensLimit != nil {
 					limit := *params.MaxTokensLimit

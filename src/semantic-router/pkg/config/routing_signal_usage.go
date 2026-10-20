@@ -27,14 +27,14 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 
 	if len(c.Recipes) > 0 {
 		for i := range c.Recipes {
-			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+			if c.ConfigForRecipe(&c.Recipes[i]).profileUsesSignalType(normalizedType) {
 				return true
 			}
 		}
 		return false
 	}
 
-	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+	return c.profileUsesSignalType(normalizedType)
 }
 
 // UsesSignalTypeInReachableRouting reports whether a request-reachable routing
@@ -51,27 +51,20 @@ func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool 
 		return false
 	}
 	if c.RoutingScope != "" {
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	if len(c.Recipes) == 0 {
 		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
 			return false
 		}
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	for _, recipe := range c.ReachableRoutingRecipes() {
-		if recipeUsesSignalType(recipe, normalizedType) {
+		if c.ConfigForRecipe(recipe).profileUsesSignalType(normalizedType) {
 			return true
 		}
 	}
 	return false
-}
-
-func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
-	if recipe == nil {
-		return false
-	}
-	return decisionsUseSignalType(recipe.Profile.Decisions, recipe.Profile.Projections, signalType)
 }
 
 func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
@@ -101,7 +94,31 @@ func (c *RouterConfig) NeedsCategoryMappingForRouting() bool {
 // NeedsPIIMappingForRouting returns true when routing actually depends on the
 // local file-backed PII classifier assets.
 func (c *RouterConfig) NeedsPIIMappingForRouting() bool {
-	return c != nil && c.IsPIIClassifierEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypePII)
+	return c != nil && c.IsPIIClassifierEnabled() && c.UsesPIIClassifierInReachableRouting()
+}
+
+// UsesPIIClassifierInReachableRouting reports whether a request-reachable
+// routing profile depends on the PII classifier. It has two consumers: a
+// decision rule that reads a pii rule, and the masking plugin, which scans at
+// the dispatch boundary without declaring any rule. The signal-type walk
+// alone misses masking, the mapping then stays unloaded, IsPIIEnabled stays
+// false, and because masking fails closed every request on that route answers
+// 503 (#3566).
+func (c *RouterConfig) UsesPIIClassifierInReachableRouting() bool {
+	if c == nil {
+		return false
+	}
+	if c.UsesSignalTypeInReachableRouting(SignalTypePII) {
+		return true
+	}
+	decisions := c.routingConsumerDecisions()
+	for i := range decisions {
+		plugin := decisions[i].GetMaskingConfig()
+		if plugin != nil && plugin.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // NeedsJailbreakMappingForRouting returns true when routing actually depends on
@@ -398,4 +415,13 @@ func collectSignalNames(node *RuleNode, signalType string) []string {
 		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
 	}
 	return names
+}
+
+// profileUsesSignalType includes Replay's evidence dependency in addition to
+// decision and projection inputs.
+func (c *RouterConfig) profileUsesSignalType(signalType string) bool {
+	if signalType == SignalTypePII && c.ReplayNeedsPIIEvidence() {
+		return true
+	}
+	return decisionsUseSignalType(c.Decisions, c.Projections, signalType)
 }

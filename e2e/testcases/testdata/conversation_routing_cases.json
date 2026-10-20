@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Multi-turn user history match",
+    "description": "multi_turn_user matches once the conversation has two or more user messages",
+    "messages": [
+      {"role": "user", "content": "What's the weather like in Paris?"},
+      {"role": "assistant", "content": "It's currently sunny and 22C in Paris."},
+      {"role": "user", "content": "What about tomorrow?"}
+    ],
+    "expected_decision": "multi_turn_user_routing",
+    "expected_matched_signal": "multi_turn_user",
+    "should_match": true
+  },
+  {
+    "name": "Developer message match",
+    "description": "has_developer_message matches when the request includes a developer-role message",
+    "messages": [
+      {"role": "developer", "content": "Always answer in a formal tone."},
+      {"role": "user", "content": "What's the capital of France?"}
+    ],
+    "expected_decision": "has_developer_message_routing",
+    "expected_matched_signal": "has_developer_message",
+    "should_match": true
+  },
+  {
+    "name": "No conversation rule matches",
+    "description": "A single-turn request with no developer message matches neither multi_turn_user nor has_developer_message",
+    "messages": [
+      {"role": "user", "content": "What's a good recipe for pasta tonight?"}
+    ],
+    "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  }
+]

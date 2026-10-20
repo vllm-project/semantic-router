@@ -169,8 +169,8 @@ class RecipeConformanceTest(unittest.TestCase):
             ("vllm-sr/auto",),
         )
         self.assertEqual(len(by_name["accuracy"].entrypoints), 1)
-        self.assertEqual(by_name["multi-objective"].auto_entrypoints, ())
-        self.assertEqual(len(by_name["multi-objective"].entrypoints), 5)
+        self.assertEqual(by_name["multi-objective"].auto_entrypoints, ("vllm-sr/auto",))
+        self.assertEqual(len(by_name["multi-objective"].entrypoints), 6)
         self.assertEqual(
             {recipe.identity.id for recipe in inventory},
             set(by_name),
@@ -319,6 +319,7 @@ class RecipeConformanceTest(unittest.TestCase):
         )
         by_name = {recipe.name: recipe for recipe in inventory}
         self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
+        self.assertEqual(by_name["decision-balance"].required_devices, ("rocm",))
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -332,11 +333,14 @@ class RecipeConformanceTest(unittest.TestCase):
                 for shard in matrix["include"]
                 for name in shard["recipes"].split(",")
             }
-            self.assertEqual(planned, set(by_name) - {"vela-amd"})
+            self.assertEqual(planned, set(by_name) - {"decision-balance", "vela-amd"})
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
-                [{"recipe": "vela-amd", "required_devices": ["rocm:0"]}],
+                [
+                    {"recipe": "decision-balance", "required_devices": ["rocm"]},
+                    {"recipe": "vela-amd", "required_devices": ["rocm:0"]},
+                ],
             )
 
     def test_accelerator_requirements_follow_devices_not_recipe_names(self) -> None:
@@ -353,6 +357,30 @@ class RecipeConformanceTest(unittest.TestCase):
         del deployments["gpu"]
         del deployments["other"]
         self.assertEqual(recipe_conformance.configured_accelerators(config), ())
+
+    def test_decision_model_hardware_comes_from_the_declared_resource(self) -> None:
+        for device, expected in [
+            ("rocm", ("rocm",)),
+            ("cuda:0", ("cuda:0",)),
+            ("cpu", ()),
+        ]:
+            config = {
+                "global": {
+                    "model_catalog": {
+                        "system": {"decision_model": {"deployment": "primary"}},
+                        "deployments": {
+                            "primary": {
+                                "provider": "model_runtime",
+                                "artifact": "provider/model",
+                                "device": device,
+                            }
+                        },
+                    }
+                }
+            }
+            self.assertEqual(
+                recipe_conformance.configured_accelerators(config), expected
+            )
 
     def test_cpu_runner_rejects_hardware_before_any_stack_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -503,11 +531,9 @@ class RecipeConformanceTest(unittest.TestCase):
 
     def test_default_entrypoints_are_bound_round_robin(self) -> None:
         config = {
-            "global": {
-                "router": {
-                    "auto_model_name": "custom-auto",
-                }
-            }
+            "entrypoints": [
+                {"model_names": ["custom-auto", "second"], "recipe": "default"}
+            ]
         }
         probes = [
             recipe_conformance.Probe(
@@ -523,7 +549,7 @@ class RecipeConformanceTest(unittest.TestCase):
 
         self.assertEqual(
             [probe.model for probe in bound],
-            ["vllm-sr/auto", "auto", "custom-auto", "vllm-sr/auto"],
+            ["custom-auto", "second", "custom-auto", "second"],
         )
 
     def test_portable_recipe_defaults_do_not_create_runtime_entrypoints(self) -> None:
@@ -561,11 +587,8 @@ class RecipeConformanceTest(unittest.TestCase):
                 config = {**bundle, field: value}
                 entrypoints = recipe_conformance.config_entrypoints(config)
                 self.assertEqual(
-                    {
-                        name: entrypoints[name]
-                        for name in ("vllm-sr/auto", "auto", "MoM")
-                    },
-                    dict.fromkeys(("vllm-sr/auto", "auto", "MoM"), "default"),
+                    {name: entrypoints[name] for name in ("vllm-sr/auto",)},
+                    dict.fromkeys(("vllm-sr/auto",), "default"),
                 )
                 if field == "entrypoints":
                     self.assertEqual(entrypoints["route"], "balanced")

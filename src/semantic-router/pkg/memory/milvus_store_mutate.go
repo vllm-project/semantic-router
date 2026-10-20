@@ -39,8 +39,10 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 	memory.UpdatedAt = time.Now()
 
 	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
+	var existing *Memory
 	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
-		existing, err := m.Get(ctx, id)
+		var err error
+		existing, err = m.Get(ctx, id)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("memory not found: %s", id)
@@ -48,41 +50,21 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		if memory.CreatedAt.IsZero() {
 			memory.CreatedAt = existing.CreatedAt
 		}
-		if len(memory.Embedding) == 0 {
-			memory.Embedding = existing.Embedding
-		}
 	}
+	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, m.embeddingConfig)
+	if err != nil {
+		status = "error"
+		return err
+	}
+	writeMemory := *memory
+	writeMemory.Embedding = embedding
 
-	err := m.upsert(ctx, memory)
+	err = m.upsert(ctx, &writeMemory)
 	if err != nil {
 		status = "error"
 		return err
 	}
 	return nil
-}
-
-func (m *MilvusStore) recordRetrievalBatch(ids []string) {
-	m.retrievalUpdateMu.Lock()
-	defer m.retrievalUpdateMu.Unlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	for _, id := range ids {
-		if err := m.recordRetrieval(ctx, id); err != nil {
-			logging.Warnf("MilvusStore.recordRetrievalBatch: id=%s: %v", id, err)
-		}
-	}
-}
-
-func (m *MilvusStore) recordRetrieval(ctx context.Context, id string) error {
-	existing, err := m.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	existing.AccessCount++
-	existing.LastAccessed = time.Now()
-	existing.UpdatedAt = existing.LastAccessed
-	return m.Update(ctx, id, existing)
 }
 
 func (m *MilvusStore) Forget(ctx context.Context, id string) error {
@@ -109,10 +91,10 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 
 	logging.Debugf("MilvusStore.Forget: deleting memory id=%s", id)
 
-	// Build delete expression
-	// NOTE: IDs are system-generated UUIDs, so injection risk is minimal.
-	// For production with user-controlled IDs, consider escaping quotes or using parameterized queries.
-	deleteExpr := fmt.Sprintf("id == \"%s\"", id)
+	// Build delete expression — memory IDs go through the shared escaping
+	// helper milvusEqString so values containing '"' or '\\' cannot break out
+	// of the quoted literal (defence in depth alongside the HTTP API reject).
+	deleteExpr := milvusEqString("id", id)
 
 	err := m.retryWithBackoff(ctx, func() error {
 		return m.client.Delete(

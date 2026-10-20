@@ -60,7 +60,7 @@ func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
-	t.Setenv("VLLM_SR_PLATFORM", "amd")
+	t.Setenv("VLLM_SR_PLATFORM", "rocm")
 
 	got, err := syncRuntimeConfigForCurrentRuntime(configPath)
 	if err != nil || got != configPath {
@@ -89,13 +89,17 @@ global:
         use_cpu: true
         embedding_config:
           model_type: mmbert
+    modules:
+      classifier:
+        domain:
+          use_cpu: true
 `
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
-	t.Setenv("DASHBOARD_PLATFORM", "amd")
+	t.Setenv("DASHBOARD_PLATFORM", "rocm")
 	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -117,8 +121,8 @@ global:
 	if err != nil {
 		t.Fatalf("read runtime config: %v", err)
 	}
-	if !contains(string(runtimeData), "use_cpu: false") {
-		t.Fatalf("expected AMD runtime override to force GPU defaults, got:\n%s", string(runtimeData))
+	if !contains(string(runtimeData), "use_cpu: false") || !contains(string(runtimeData), "use_cpu: true") {
+		t.Fatalf("expected ROCm classifier GPU defaults and preserved embedding placement, got:\n%s", string(runtimeData))
 	}
 
 	sourceData, err := os.ReadFile(configPath)

@@ -96,6 +96,24 @@ class Row:
             roles |= set(question.roles)
         return roles
 
+    @property
+    def requires_full_input(self) -> bool:
+        return any(question.require_full_input for question in self.questions)
+
+    def require_complete_parts(self) -> None:
+        if self.requires_full_input and any(not part.complete for part in self.parts):
+            raise SchemaTooLongError("full input exceeds the tokenization budget")
+
+    def require_budget(self, budget: Budget, window_role: str | None = None) -> None:
+        """A window may replace one part; every other supplied part must survive."""
+        if self.requires_full_input and any(
+            part.role != window_role and budget.lengths[part.role] < len(part.ids)
+            for part in self.parts
+        ):
+            raise SchemaTooLongError(
+                "full input was clipped to fit the question schema"
+            )
+
     def shrink_role(self) -> str | None:
         read = self.read_roles()
         return next((role for role in self.roles if role not in read), None)
@@ -207,7 +225,7 @@ def fail_unscanned(
     over = {part.role for part in parts if len(part.ids) > budget}
     kept = []
     for question in questions:
-        if over.intersection(question.roles):
+        if over.intersection(question.roles) or (question.require_full_input and over):
             plan.errors[question.id] = {
                 "type": question.kind,
                 "error": SCAN_BUDGET_EXCEEDED,
@@ -271,3 +289,34 @@ def window_words(words: Words, start: int, end: int) -> tuple[Words, NDArray[np.
     """The words whose first token lies in ``[start, end)``, re-based to the window, and their global indices."""
     selected = np.nonzero((words.first >= start) & (words.first < end))[0]
     return Words(words.offsets[selected], words.first[selected] - start), selected
+
+
+def require_window_coverage(
+    row: Row, part: EncodedPart, intervals: list[tuple[int, int]]
+) -> None:
+    """Prove strict windows cover all tokens and each scored word completely.
+
+    Seeing a word's first token is insufficient when the word itself is longer
+    than a window: no resulting word score then observes its full text.
+    """
+    if not row.requires_full_input:
+        return
+    reached = 0
+    for start, end in sorted(intervals):
+        if start > reached:
+            raise SchemaTooLongError("full input has tokens outside the windows")
+        reached = max(reached, end)
+    if reached < len(part.ids):
+        raise SchemaTooLongError("full input has tokens outside the windows")
+    if part.words is None or not len(part.words):
+        return
+    assert part.offsets is not None
+    starts = part.offsets[:, 0]
+    if np.any(starts[1:] < starts[:-1]):
+        raise SchemaTooLongError("full word coverage cannot be established")
+    ends = np.searchsorted(starts, part.words.offsets[:, 1], side="left")
+    complete = np.zeros(len(part.words), dtype=bool)
+    for start, end in intervals:
+        complete |= (part.words.first >= start) & (ends <= end)
+    if not np.all(complete):
+        raise SchemaTooLongError("full input contains a word split across every window")

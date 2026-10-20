@@ -19,6 +19,7 @@ var (
 	errDuplicateJSONField = errors.New("duplicate JSON field")
 	errInvalidJSONUnicode = errors.New("invalid JSON Unicode escape")
 	errTrailingJSON       = errors.New("trailing JSON document")
+	errNonCanonicalField  = errors.New("non-canonical JSON field")
 )
 
 func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
@@ -34,14 +35,15 @@ func decodeWireValue(body []byte, target any, policy llmprotocol.Policy) error {
 }
 
 func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
-	if err := validateClientJSONDocument(body, policy, requireObject); err != nil {
+	var exactType reflect.Type
+	if rejectUnknownFields(body, policy) {
+		exactType = reflect.TypeOf(target)
+	}
+	if err := validateClientJSONDocument(body, policy, requireObject, exactType); err != nil {
 		return err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
-	if rejectUnknownFields(body, policy) {
-		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
-		}
+	if exactType != nil {
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(target); err != nil {
@@ -53,7 +55,9 @@ func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireO
 	return nil
 }
 
-func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool) error {
+// validateClientJSONDocument also checks member names against exactType when
+// it is non-nil; see walkJSONDocument.
+func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool, exactType reflect.Type) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "body_limit", "request body is empty or exceeds the configured limit", nil)
 	}
@@ -66,12 +70,15 @@ func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireO
 	if requireObject && !hasJSONObjectEnvelope(body) {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request body must be a JSON object", nil)
 	}
-	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
+	if err := walkJSONDocument(body, policy.Limits.JSONDepth, exactType); err != nil {
 		if errors.Is(err, errDuplicateJSONField) {
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "duplicate_json_field", "JSON contains a duplicate field", err)
 		}
 		if errors.Is(err, errTrailingJSON) {
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "trailing_json", "request body contains trailing JSON", err)
+		}
+		if errors.Is(err, errNonCanonicalField) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
 	}
@@ -113,19 +120,32 @@ func decodeProviderValueVendorAware(body []byte, target any, policy llmprotocol.
 }
 
 func decodeProviderJSONCanonical(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]byte, []string, error) {
-	if err := validateProviderJSONDocument(body, policy, requireObject); err != nil {
+	// Without vendor extensions the body is decoded as received, so its member
+	// names can be checked during the duplicate-key walk.
+	var exactType reflect.Type
+	if !providerVendorExtensionsAllowed(policy) && rejectUnknownFields(body, policy) {
+		exactType = reflect.TypeOf(target)
+	}
+	if err := validateProviderJSONDocument(body, policy, requireObject, exactType); err != nil {
 		return nil, nil, err
+	}
+	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenAICompatGateway {
+		// Anthropic-style usage counters ride inside an otherwise canonical
+		// usage object; map them onto the canonical names before the strict
+		// decode so the totals check sees a consistent usage object.
+		body = translateGatewayUsageCounters(body)
 	}
 	canonical := body
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	var dropped []string
 	if rejectUnknownFields(body, policy) {
-		if providerVendorExtensionsAllowed(policy) {
+		if exactType == nil {
 			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
-		}
-		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
-			// Keep field details in the private cause, not the client message.
-			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+			// The stripped body is either the checked original or re-encoded
+			// from it, so only its member names can fail here.
+			if err := walkJSONDocument(canonical, policy.Limits.JSONDepth, reflect.TypeOf(target)); err != nil {
+				return nil, nil, nonCanonicalUpstreamField(err)
+			}
 		}
 		decoder = json.NewDecoder(bytes.NewReader(canonical))
 		decoder.DisallowUnknownFields()
@@ -139,7 +159,14 @@ func decodeProviderJSONCanonical(body []byte, target any, policy llmprotocol.Pol
 	return canonical, dropped, nil
 }
 
-func validateProviderJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool) error {
+func nonCanonicalUpstreamField(err error) error {
+	// Keep field details in the private cause, not the client message.
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+}
+
+// validateProviderJSONDocument also checks member names against exactType when
+// it is non-nil, like validateClientJSONDocument.
+func validateProviderJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool, exactType reflect.Type) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit", "upstream response is empty or too large", nil)
 	}
@@ -152,12 +179,15 @@ func validateProviderJSONDocument(body []byte, policy llmprotocol.Policy, requir
 	if requireObject && !hasJSONObjectEnvelope(body) {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response body must be a JSON object", nil)
 	}
-	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
+	if err := walkJSONDocument(body, policy.Limits.JSONDepth, exactType); err != nil {
 		if errors.Is(err, errDuplicateJSONField) {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_duplicate_json_field", "upstream response contains a duplicate field", err)
 		}
 		if errors.Is(err, errTrailingJSON) {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
+		}
+		if errors.Is(err, errNonCanonicalField) {
+			return nonCanonicalUpstreamField(err)
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
 	}
@@ -170,66 +200,6 @@ func hasJSONObjectEnvelope(body []byte) bool {
 }
 
 var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
-
-// encoding/json matches struct fields case-insensitively. JSON object member
-// names are case-sensitive, and every supported wire schema publishes exact
-// names, so accepting variants such as "messAges" would let malformed input
-// bypass unknown-field rejection. Validate the concrete wire shape before the
-// standard decoder runs. Dynamic maps and RawMessage fields remain open by
-// design and are validated when a codec later decodes them into a typed union.
-func validateExactJSONFieldNames(body []byte, targetType reflect.Type) error {
-	return validateExactJSONValue(body, dereferenceJSONType(targetType))
-}
-
-func validateExactJSONValue(body []byte, targetType reflect.Type) error {
-	if targetType == nil || bytes.Equal(bytes.TrimSpace(body), []byte("null")) ||
-		reflect.PointerTo(targetType).Implements(jsonUnmarshalerType) {
-		return nil
-	}
-	switch targetType.Kind() {
-	case reflect.Struct:
-		return validateExactJSONObject(body, targetType)
-	case reflect.Slice, reflect.Array:
-		return validateExactJSONArray(body, targetType)
-	case reflect.Map, reflect.Interface:
-		return nil
-	}
-	return nil
-}
-
-func validateExactJSONObject(body []byte, targetType reflect.Type) error {
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(body, &object); err != nil {
-		return err
-	}
-	fields := exactJSONStructFields(targetType)
-	for name, value := range object {
-		fieldType, found := fields[name]
-		if !found {
-			return fmt.Errorf("unknown field %q", name)
-		}
-		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
-			return fmt.Errorf("field %q: %w", name, err)
-		}
-	}
-	return nil
-}
-
-func validateExactJSONArray(body []byte, targetType reflect.Type) error {
-	if targetType.Elem() == reflect.TypeOf(json.RawMessage{}) {
-		return nil
-	}
-	var elements []json.RawMessage
-	if err := json.Unmarshal(body, &elements); err != nil {
-		return err
-	}
-	for index, element := range elements {
-		if err := validateExactJSONValue(element, dereferenceJSONType(targetType.Elem())); err != nil {
-			return fmt.Errorf("element %d: %w", index, err)
-		}
-	}
-	return nil
-}
 
 // structFieldsByType caches exactJSONStructFields: every request body is
 // validated against the same few wire types.
@@ -415,15 +385,26 @@ func requireEOF(decoder *json.Decoder) error {
 }
 
 func validateNoDuplicateKeys(body []byte, maximumDepth int) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := consumeJSONValue(decoder, 0, maximumDepth); err != nil {
+	return walkJSONDocument(body, maximumDepth, nil)
+}
+
+// walkJSONDocument checks duplicate keys, depth and trailing data in one token
+// pass. When exactType is set it also checks member names against the wire
+// type: encoding/json matches struct fields case-insensitively, so variants
+// such as "messAges" would otherwise get past unknown-field rejection. Dynamic
+// maps and RawMessage fields stay open and are checked when a codec decodes
+// them into a typed union. A name error is only returned once the rest of the
+// document passes.
+func walkJSONDocument(body []byte, maximumDepth int, exactType reflect.Type) error {
+	walker := jsonWalker{decoder: json.NewDecoder(bytes.NewReader(body)), maximumDepth: maximumDepth}
+	walker.decoder.UseNumber()
+	if err := walker.value(0, exactJSONShape(exactType)); err != nil {
 		return err
 	}
-	if err := requireEOF(decoder); err != nil {
+	if err := requireEOF(walker.decoder); err != nil {
 		return fmt.Errorf("%w: %w", errTrailingJSON, err)
 	}
-	return nil
+	return walker.fieldErr
 }
 
 // isJSONObject accepts exactly one top-level JSON object. Streamed tool
@@ -434,32 +415,73 @@ func isJSONObject(body []byte, maximumDepth int) bool {
 	return llmprotocol.ValidateJSONObject(body, maximumDepth) == nil
 }
 
-func consumeJSONValue(decoder *json.Decoder, depth, maximumDepth int) error {
-	if maximumDepth <= 0 || depth > maximumDepth {
+var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+
+// exactJSONShape returns the struct, slice or array type whose member names
+// are checked, or nil when any value is accepted.
+func exactJSONShape(targetType reflect.Type) reflect.Type {
+	targetType = dereferenceJSONType(targetType)
+	if targetType == nil || reflect.PointerTo(targetType).Implements(jsonUnmarshalerType) {
+		return nil
+	}
+	switch targetType.Kind() {
+	case reflect.Struct:
+		return targetType
+	case reflect.Slice, reflect.Array:
+		if targetType.Elem() == jsonRawMessageType {
+			return nil
+		}
+		return targetType
+	}
+	return nil
+}
+
+type jsonWalker struct {
+	decoder      *json.Decoder
+	maximumDepth int
+	fieldErr     error
+}
+
+func (walker *jsonWalker) value(depth int, shape reflect.Type) error {
+	if walker.maximumDepth <= 0 || depth > walker.maximumDepth {
 		return fmt.Errorf("JSON nesting exceeds the configured limit")
 	}
-	token, err := decoder.Token()
+	token, err := walker.decoder.Token()
 	if err != nil {
 		return err
 	}
 	delimiter, ok := token.(json.Delim)
+	if shape != nil && token != nil {
+		want := json.Delim('[')
+		if shape.Kind() == reflect.Struct {
+			want = '{'
+		}
+		if !ok || delimiter != want {
+			walker.fieldError(fmt.Errorf("%w: %s value is not %q", errNonCanonicalField, shape, want))
+			shape = nil
+		}
+	}
 	if !ok {
 		return nil
 	}
 	switch delimiter {
 	case '{':
-		return consumeJSONObject(decoder, depth, maximumDepth)
+		return walker.object(depth, shape)
 	case '[':
-		return consumeJSONArray(decoder, depth, maximumDepth)
+		return walker.array(depth, shape)
 	default:
 		return fmt.Errorf("unexpected delimiter %q", delimiter)
 	}
 }
 
-func consumeJSONObject(decoder *json.Decoder, depth, maximumDepth int) error {
+func (walker *jsonWalker) object(depth int, shape reflect.Type) error {
+	var fields map[string]reflect.Type
+	if shape != nil {
+		fields = exactJSONStructFields(shape)
+	}
 	seen := make(map[string]struct{})
-	for decoder.More() {
-		keyToken, err := decoder.Token()
+	for walker.decoder.More() {
+		keyToken, err := walker.decoder.Token()
 		if err != nil {
 			return err
 		}
@@ -475,28 +497,47 @@ func consumeJSONObject(decoder *json.Decoder, depth, maximumDepth int) error {
 			return fmt.Errorf("%w %q", errDuplicateJSONField, key)
 		}
 		seen[canonicalKey] = struct{}{}
-		if err := consumeJSONValue(decoder, depth+1, maximumDepth); err != nil {
+		var memberShape reflect.Type
+		if fields != nil {
+			memberType, known := fields[key]
+			if known {
+				memberShape = exactJSONShape(memberType)
+			} else {
+				walker.fieldError(fmt.Errorf("%w: unknown field %q", errNonCanonicalField, key))
+			}
+		}
+		if err := walker.value(depth+1, memberShape); err != nil {
 			return err
 		}
 	}
-	closing, err := decoder.Token()
+	closing, err := walker.decoder.Token()
 	if err != nil || closing != json.Delim('}') {
 		return fmt.Errorf("unterminated object")
 	}
 	return nil
 }
 
-func consumeJSONArray(decoder *json.Decoder, depth, maximumDepth int) error {
-	for decoder.More() {
-		if err := consumeJSONValue(decoder, depth+1, maximumDepth); err != nil {
+func (walker *jsonWalker) array(depth int, shape reflect.Type) error {
+	var elementShape reflect.Type
+	if shape != nil {
+		elementShape = exactJSONShape(shape.Elem())
+	}
+	for walker.decoder.More() {
+		if err := walker.value(depth+1, elementShape); err != nil {
 			return err
 		}
 	}
-	closing, err := decoder.Token()
+	closing, err := walker.decoder.Token()
 	if err != nil || closing != json.Delim(']') {
 		return fmt.Errorf("unterminated array")
 	}
 	return nil
+}
+
+func (walker *jsonWalker) fieldError(err error) {
+	if walker.fieldErr == nil {
+		walker.fieldErr = err
+	}
 }
 
 func requestEnvelope(format llmprotocol.WireFormat, body []byte, generation uint64, policy llmprotocol.Policy) llmprotocol.Envelope {

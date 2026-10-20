@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 容器连通性
 sidebar_label: 容器连通性
 translation:
@@ -51,6 +52,8 @@ providers:
 ```
 
 当两个服务共享同一网络时，使用容器 DNS 名。对于直接跑在宿主机上的模型服务器，使用容器运行时支持的主机网关名，或容器可达的宿主机 IP。在 Kubernetes 上使用 Service DNS 名，而不是 Pod IP。
+
+`vllm-sr serve` 会把 `host.docker.internal` 映射到容器运行时的 `host-gateway`。Docker 从默认 bridge 网络推导该地址，因此在未配置默认 bridge 的守护进程上（`"bridge": "none"`），CLI 会跳过该映射并记录一条警告。设置 `VLLM_SR_HOST_GATEWAY_IP=<宿主机地址>` 可在任意运行时上把该名称映射到显式地址。
 
 ## 让后端监听回环以外的接口
 

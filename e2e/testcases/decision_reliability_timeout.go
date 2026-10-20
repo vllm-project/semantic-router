@@ -39,7 +39,7 @@ func testDecisionReliabilityTimeout(ctx context.Context, client *kubernetes.Clie
 	ask := func(prompt string) (int, time.Duration, []byte, error) {
 		started := time.Now()
 		resp, sendErr := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-			Model:    "MoM",
+			Model:    "vllm-sr/auto",
 			Messages: []fixtures.ChatMessage{{Role: "user", Content: prompt}},
 		}, nil)
 		if sendErr != nil {

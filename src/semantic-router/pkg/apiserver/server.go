@@ -430,7 +430,14 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 // handleHealth handles health check requests
 func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api"})
+	mode := "unknown"
+	if snapshot := s.activeConfigSnapshot(); snapshot != nil {
+		mode = "engine"
+		if snapshot.Config().RoutingEnabled() {
+			mode = "router"
+		}
+	}
+	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api", ServingMode: mode})
 }
 
 // handleReady reports whether router startup has completed enough for traffic.

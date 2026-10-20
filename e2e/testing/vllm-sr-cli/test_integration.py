@@ -391,6 +391,20 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
+    def test_host_gateway_ip_override_maps_host_alias(self):
+        """VLLM_SR_HOST_GATEWAY_IP replaces the derived host-gateway mapping."""
+        with self._running_serve(env={"VLLM_SR_HOST_GATEWAY_IP": "192.0.2.10"}):
+            return_code, extra_hosts, stderr = self.inspect_container(
+                "{{json .HostConfig.ExtraHosts}}"
+            )
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn("host.docker.internal:192.0.2.10", extra_hosts)
+            self.assertNotIn("host-gateway", extra_hosts)
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
     def test_envoy_log_level_is_safe_and_provider_key_is_not_logged(self):
         """Use a synthetic provider key to exercise the safe Envoy default."""
         canary = "synthetic-provider-key-canary"

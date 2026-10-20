@@ -11,6 +11,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -250,7 +251,7 @@ func (r *OpenAIRouter) handleProcessRequest(
 		}
 		return processUnknownRequest(stream, v)
 	case *ext_proc.ProcessingRequest_ResponseHeaders:
-		return r.processResponseHeaders(stream, v, ctx)
+		return r.processResponseHeaders(stream, req, v, ctx)
 	case *ext_proc.ProcessingRequest_ResponseBody:
 		return r.processResponseBody(stream, v, ctx)
 	default:
@@ -326,10 +327,17 @@ func (r *OpenAIRouter) sendRequestBodyResult(
 // routing or dispatch into an immediate client-facing response. Capability
 // mismatches (a request requiring capabilities the chosen backend wire cannot
 // express, e.g. image output on chat completions) are client errors, not
-// server failures; every other error keeps the caller's generic path.
+// server failures; every other error keeps the caller's generic path, except
+// a masking failure, which is answered with 503.
 func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
 	if err == nil {
 		return nil, false
+	}
+	var maskingErr *maskingDispatchError
+	if errors.As(err, &maskingErr) {
+		// A stream error would let failure_mode_allow forward the unmasked
+		// body upstream, so a masking failure always answers here (#3566).
+		return r.createErrorResponse(http.StatusServiceUnavailable, maskingUnavailableMessage), true
 	}
 	var protocolError *llmprotocol.ProtocolError
 	if !errors.As(err, &protocolError) {
@@ -345,9 +353,17 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 
 func (r *OpenAIRouter) processResponseHeaders(
 	stream ext_proc.ExternalProcessor_ProcessServer,
+	req *ext_proc.ProcessingRequest,
 	v *ext_proc.ProcessingRequest_ResponseHeaders,
 	ctx *RequestContext,
 ) error {
+	if v != nil {
+		var attributes map[string]*structpb.Struct
+		if req != nil {
+			attributes = req.GetAttributes()
+		}
+		captureUpstreamEndpointAddress(ctx, v.ResponseHeaders.GetHeaders(), attributes)
+	}
 	response, err := r.responseHeadersReply(v, ctx)
 	if err != nil {
 		return err

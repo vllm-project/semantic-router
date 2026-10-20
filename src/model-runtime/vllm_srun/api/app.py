@@ -17,14 +17,16 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.routing import Route
 
-from ..errors import RuntimeServiceError
+from ..errors import RequestError, RuntimeServiceError
+from ..plugins.decisions import as_systemone
 from ..runtime import Runtime
 from ..timing import ServerTiming
+from . import wire
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
 _SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
-API_VERSION = "2.2.0"
+API_VERSION = "3.2.0"
 # Recorded for a request whose client disconnected before its answer (nginx's code).
 CLIENT_CLOSED = 499
 
@@ -86,14 +88,18 @@ def create_app(runtime: Runtime) -> Starlette:
             time.perf_counter() - started
         )
 
-    def surface_route(surface: str) -> Callable[[Request], Awaitable[Response]]:
+    def surface_route(
+        surface: str, systemone: bool = False
+    ) -> Callable[[Request], Awaitable[Response]]:
         async def handle(request: Request) -> Response:
             endpoint = request.url.path
             started = time.perf_counter()
             timing = ServerTiming()
             status = 200
             try:
-                body, size = await _read_json(request, runtime.config.max_request_bytes)
+                body, size = await _read_json(
+                    request, runtime.config.max_request_bytes, surface == "decisions"
+                )
                 timing.parse = time.perf_counter() - started
                 outcome = await until_disconnect(
                     request, runtime.call(surface, body, size, timing)
@@ -102,6 +108,8 @@ def create_app(runtime: Runtime) -> Starlette:
                     status = CLIENT_CLOSED
                     return Response(status_code=CLIENT_CLOSED)
                 status, response = outcome
+                if systemone:
+                    status, response = as_systemone(status, response)
                 serializing = time.perf_counter()
                 answer = respond(response, status)
                 timing.serialize = time.perf_counter() - serializing
@@ -147,15 +155,21 @@ def create_app(runtime: Runtime) -> Starlette:
 
     async def models(request: Request) -> Response:
         # The first call imports every plugin to describe it; /health must not wait for that.
+        cards = await run_in_threadpool(runtime.model_cards)
         return JSON(
             {
                 "object": "list",
                 "api_version": API_VERSION,
-                "data": await run_in_threadpool(runtime.model_cards),
+                "data": cards,
                 "limits": {
                     "max_bundle_tasks": runtime.config.max_bundle_tasks,
                     "max_request_bytes": runtime.config.max_request_bytes,
                 },
+                "models": [
+                    listed(card)
+                    for card in cards
+                    if "decisions" in card.get("surfaces", [])
+                ],
             }
         )
 
@@ -194,11 +208,14 @@ def create_app(runtime: Runtime) -> Starlette:
             OPENAPI_PATH.read_text(encoding="utf-8"), media_type="application/yaml"
         )
 
-    decisions = surface_route("decisions")
     return Starlette(
         routes=[
-            Route("/v1/decisions", decisions, methods=["POST"]),
-            Route("/v1/systemone", decisions, methods=["POST"]),
+            Route("/v1/decisions", surface_route("decisions"), methods=["POST"]),
+            Route(
+                "/v1/systemone",
+                surface_route("decisions", systemone=True),
+                methods=["POST"],
+            ),
             Route("/v1/classify", surface_route("classify"), methods=["POST"]),
             Route("/v1/embeddings", surface_route("embeddings"), methods=["POST"]),
             Route("/v1/rerank", surface_route("rerank"), methods=["POST"]),
@@ -236,13 +253,36 @@ async def _disconnected(request: Request) -> None:
         pass
 
 
-async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
-    """The parsed body and its size in bytes."""
+def listed(card: dict[str, Any]) -> dict[str, str]:
+    """A decisions model as System One's model list describes one (``models`` in GET /v1/models)."""
+    kinds = ", ".join(card.get("question_types") or [])
+    inputs = ", ".join(card.get("modalities") or ["text"])
+    return {
+        "name": str(card.get("id", "")),
+        "description": f"{card.get('family', 'decision')} decision model ({kinds}; reads {inputs})",
+        "release_date": "",
+    }
+
+
+async def _read_json(
+    request: Request, limit: int, wire_forms: bool = False
+) -> tuple[Any, int]:
+    """The parsed body and its size in bytes as sent.
+
+    With ``wire_forms`` (the decisions routes) the body may be compressed
+    (one layer of gzip or zstd) and may be ``multipart/form-data`` with image
+    parts, which become the assets' bytes (``wire``).
+    """
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:
         raise RuntimeServiceError(
             "request_too_large", f"the request body exceeds {limit} bytes"
         )
+    coding = (
+        wire.content_encoding(request.headers.getlist("content-encoding"))
+        if wire_forms
+        else None
+    )
     chunks = []
     size = 0
     async for chunk in request.stream():
@@ -253,6 +293,17 @@ async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
             )
         chunks.append(chunk)
     raw = b"".join(chunks)
+    files: dict[str, tuple[str | None, bytes]] | None = None
+    try:
+        if coding is not None:
+            raw = await run_in_threadpool(wire.decode, raw, coding, limit)
+        mark = (
+            wire.boundary(request.headers.get("content-type")) if wire_forms else None
+        )
+        if mark is not None:
+            raw, files = wire.multipart(raw, mark)
+    except RequestError as exc:
+        raise RuntimeServiceError.invalid(exc) from exc
     try:
         body = json.loads(raw.decode("utf-8"))
         # Strict UTF-8 cannot carry a surrogate, so only a \uD800-\uDFFF escape
@@ -268,6 +319,11 @@ async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
         raise RuntimeServiceError(
             "invalid_request", f"the request body is not JSON: {exc}"
         ) from exc
+    if files is not None:
+        try:
+            wire.attach_parts(body, files)
+        except RequestError as exc:
+            raise RuntimeServiceError.invalid(exc) from exc
     return body, size
 
 

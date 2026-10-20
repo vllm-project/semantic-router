@@ -119,7 +119,6 @@ routing:
 
 global:
   router:
-    auto_model_name: MoM
 
   stores:
     response_cache:
@@ -153,3 +152,7 @@ global:
         model_ref: ""
         model_id: ""
         use_mmbert_32k: false
+
+entrypoints:
+  - model_names: ["MoM"]
+    recipe: default

@@ -153,7 +153,7 @@ completion budget that fits the actual input and leaves room for the final
 answer. When the request omits a limit, a configured
 `request_params.default_max_tokens` supplies the decision default; otherwise
 the backend default applies. For supported vLLM deployments,
-[`default_max_tokens: auto`](../installation/configuration#recipe-wide-candidate-and-replay-policies)
+[`default_max_tokens: auto`](../installation/configuration#recipe-candidate-requirements)
 uses each model's remaining native capacity. Keep the selector's output cost
 forecast separate from this capacity and report the effective deployment limits.
 

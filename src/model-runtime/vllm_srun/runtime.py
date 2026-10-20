@@ -12,6 +12,7 @@ worker. Requests name their model (optional while a process serves one);
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import gc
 import logging
 import math
@@ -27,13 +28,17 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
+from . import assets as assetlib
+from . import dtypes, media
 from .accel.autotune import KernelChoices, freeze_autotune
+from .accel.cpu import cap_threads
 from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
 from .errors import (
     PackageError,
     RuntimeServiceError,
     UnsupportedDeviceError,
     VerificationError,
+    with_reason,
 )
 from .placement import Placement, check_device, device_kind, place
 from .plugins import registry
@@ -47,7 +52,6 @@ from .plugins.base import (
     ModelFamily,
     ModelSpec,
     PackageRef,
-    Profile,
     RegistryOptions,
     Results,
     SurfacePlan,
@@ -58,6 +62,8 @@ from .plugins.base import (
 from .plugins.decisions import join_states, split_states
 from .registry import builtin
 from .registry.resolve import resolve
+from .scheduler import calibration
+from .scheduler.batching import Batcher, SharedContext
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
@@ -65,6 +71,21 @@ from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
+
+
+def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
+    """The backbone parameters the native engine holds in BF16 on a GPU at ``dtype`` (``DtypePolicy.bf16_resident``)."""
+    policy = dtypes.apply(spec, dtype, True).dtype
+    if (
+        not policy.bf16_resident
+        or policy.gpu_weights
+        or config.engine not in (AUTO_ENGINE, "native")
+        or device_kind(config.device) == "cpu"
+    ):
+        return 0
+    from .engines.native.engine import bf16_resident_parameters
+
+    return bf16_resident_parameters(spec.backbone)
 
 
 def _auto_rank(engine: str, preferred: str | None) -> tuple[int, int, str]:
@@ -82,12 +103,17 @@ def _auto_rank(engine: str, preferred: str | None) -> tuple[int, int, str]:
 
 
 def choose_engine(
-    name: str, spec: ModelSpec, device: DeviceInfo, preferred: str | None = None
+    name: str,
+    spec: ModelSpec,
+    device: DeviceInfo,
+    preferred: str | None = None,
+    dtype: str = "auto",
 ) -> tuple[str, Any]:
     """The named engine, or for ``auto`` the first that runs the spec on the device.
 
     ``auto`` tries ``preferred`` (the built-in table's engine for the device
-    class) first, then the engines in ``_auto_rank`` order.
+    class) first, then the engines in ``_auto_rank`` order. An engine runs
+    the spec only if it runs ``dtype`` (``Engine.dtypes``).
     """
     candidates = [name]
     if name == AUTO_ENGINE:
@@ -97,7 +123,12 @@ def choose_engine(
     reasons = []
     for candidate in candidates:
         engine = registry.instantiate("engines", candidate)
-        reason = engine.supports(spec, device)
+        reason = (
+            None
+            if dtype in engine.dtypes
+            else f"runs --dtype {', '.join(engine.dtypes)} only"
+        )
+        reason = reason or engine.supports(spec, device)
         if reason is None:
             return candidate, engine
         reasons.append(f"{candidate}: {reason}")
@@ -138,18 +169,43 @@ def freeze_heap() -> None:
     gc.freeze()
 
 
+def release_device_cache() -> None:
+    """Hand a failed attempt's cached GPU blocks back to the driver, whose free memory the next placement reads."""
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 __all__ = [
     "DEADLINE",
     "Runtime",
     "ServedModel",
     "freeze_heap",
     "planned_engine",
+    "release_device_cache",
     "with_overrides",
 ]
 
-GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
+GENERIC_OPTIONS = {"deadline_ms", "return_meta"}
+# Request options that were removed, and what replaced them.
+REMOVED_OPTIONS = {
+    "profile": (
+        "options.profile was removed: batching and numerics are the deployment's "
+        "engine arguments (max_num_seqs, max_num_batched_tokens, batch_window_ms, "
+        "enable_shared_context, dtype)"
+    ),
+}
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "options"},
+    "decisions": {
+        "model",
+        "state",
+        "questions",
+        "images",
+        "videos",
+        "assets",
+        "options",
+    },
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
@@ -173,7 +229,7 @@ SURFACE_FIELDS = {
     },
 }
 SURFACE_OPTIONS = {
-    "decisions": {"max_tokens"},
+    "decisions": {"max_tokens", "long_context"},
     "classify": {"overflow", "max_tokens", "window", "threshold", "return_tokens"},
     "embeddings": {"overflow", "max_tokens"},
     "rerank": {"overflow", "max_tokens"},
@@ -182,6 +238,10 @@ STATE_ORDER = {state: index for index, state in enumerate(STATES)}
 # Requests up to this many encoded bytes are planned on the event loop: their
 # rendering costs less than a hop to a worker thread.
 INLINE_PLAN_BYTES = 16 << 10
+# The call a task serves (``Runtime._serve``), until its work is submitted.
+_CALL: contextvars.ContextVar[object | None] = contextvars.ContextVar(
+    "vllm_srun_call", default=None
+)
 
 
 @dataclass
@@ -213,8 +273,9 @@ class _Lookup:
 class ResultCache:
     """Item results of one model by content key, least recently used out first.
 
-    Keys come from the family (``item.cache_key``) and the profile; a model
-    without cacheable items never touches the cache.
+    Keys come from the family (``item.cache_key``); a model without cacheable
+    items never touches the cache. A model's engine arguments are fixed for
+    the process, so its cached results are always its own.
     """
 
     def __init__(self, entries: int):
@@ -255,7 +316,15 @@ class ServedModel:
         self.model: LoadedModel[Any, Any] | None = None
         self.placement: Placement | None = None
         self.engine = config.engine
-        self.profiles: dict[str, Profile] = {}
+        # The engine arguments as configured, and as resolved for the model's device.
+        self.requested_args = config.engine_args(runtime.config.engine_args)
+        self.args = self.requested_args
+        self.limits_source = "the engine arguments"
+        # The dtype the model runs: "auto" (its published precision) or an explicit one.
+        self.dtype = "auto"
+        self.precision = "float32"
+        self.shared = False
+        self.numerics = "exact"
         self.scheduler: Scheduler | None = None
         self.cache = ResultCache(runtime.config.result_cache_entries)
         self.kernel_choices: KernelChoices | None = None
@@ -311,23 +380,43 @@ class ServedModel:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
-        placement = place(spec, config.device, parameters, budget)
+        dtype = self.requested_args.dtype
+        placement = place(
+            spec,
+            config.device,
+            parameters,
+            budget,
+            _bf16_parameters(spec, config, dtype),
+            dtype,
+        )
         device = placement.device
+        self.args, self.limits_source = calibration.resolve(self.requested_args, device)
+        # The dtype policy a device follows is its torch device's, as the engines read it.
+        gpu = placement.accelerator.torch_device(device).type != "cpu"
+        self.dtype = dtypes.resolve(self.args.dtype, spec.dtype, gpu)
+        self.precision = (
+            dtypes.published(spec.dtype, gpu) if self.dtype == "auto" else self.dtype
+        )
+        spec = dtypes.apply(spec, self.args.dtype, gpu)
+        # Choices are recorded at the published precision; another dtype's kernels
+        # tune their own (a BF16 block can need more shared memory than FP32 has).
         self._pin(
-            builtin.kernel_choices(
-                package.model_sha256, device.accelerator, device.arch
+            (
+                builtin.kernel_choices(
+                    package.model_sha256, device.accelerator, device.arch
+                )
+                or family.kernel_choices(package, device)
             )
-            or family.kernel_choices(package, device)
+            if self.dtype == "auto"
+            else {}
         )
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
         if known is not None and known.revision == package.ref.revision:
             preferred = known.engines.get(placement.device.accelerator)
         self.engine, engine = choose_engine(
-            config.engine, spec, placement.device, preferred
+            config.engine, spec, placement.device, preferred, self.dtype
         )
-        profiles = self._profiles()
-        default = profiles[config.profile]
         neighbors = frozenset(
             planned_engine(served)
             for served in process.served_models()
@@ -346,10 +435,21 @@ class ServedModel:
                 self.label,
                 ONNX_RUNTIME_SPIN_COUNT,
             )
-        engine_options = default.engine_options(
-            EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
+        # The kernels and copies a family consents to run at its published precision.
+        engine_options = EngineOptions(
+            exact_kernels_only=self.dtype != "auto",
+            reduced_precision=self.dtype == "auto",
+            threads=process.threads,
+            cpu_neighbors=neighbors,
         )
-        self.health.set("loading", f"loading weights on {placement.device.label}")
+        needed = f"needs about {placement.estimated_bytes / (1 << 30):.1f} GiB"
+        free = device.free_memory
+        self.health.set(
+            "loading",
+            f"loading weights on {device.label} ("
+            + (needed if free is None else f"{needed}, {free / (1 << 30):.1f} GiB free")
+            + ")",
+        )
         pinned = self.kernel_choices
 
         def execute(work: Any) -> Any:
@@ -372,7 +472,7 @@ class ServedModel:
             model,
         )
         try:
-            self._start(profiles, process, execute)
+            self._start(process, execute)
         except BaseException:
             self.stop()
             self.scheduler = self.model = None
@@ -385,46 +485,56 @@ class ServedModel:
             engine=self.engine,
             accelerator=placement.accelerator.name,
             device=placement.device.label,
-            profile=config.profile,
+            dtype=self.precision,
+            numerics=self.numerics,
         ).set(1)
         metrics.model_memory.labels(model=self.label).set(
             model.engine_model.memory_bytes()
         )
         self.health.set("ready", self.unpinned)
         log.info(
-            "serving %s on %s (profile %s)",
+            "serving %s on %s (max_num_seqs %d, max_num_batched_tokens %d from %s, "
+            "batch_window_ms %g, dtype %s, shared context %s, %s numerics)",
             self.label,
             placement.device.label,
-            config.profile,
+            self.args.max_num_seqs,
+            self.args.max_num_batched_tokens,
+            self.limits_source,
+            self.args.batch_window_ms,
+            self.precision,
+            "on" if self.shared else "off",
+            self.numerics,
         )
 
-    def _start(
-        self,
-        profiles: dict[str, Profile],
-        process: ServeConfig,
-        execute: Callable[[Any], Any],
-    ) -> None:
-        """Bind the profiles, start the worker and pass the golden check."""
+    def _start(self, process: ServeConfig, execute: Callable[[Any], Any]) -> None:
+        """Build the batcher from the engine arguments, start the worker and pass the golden check."""
         assert self.model is not None and self.placement is not None
         model, placement = self.model, self.placement
-        for name, profile in list(profiles.items()):
-            unavailable = profile.available(model)
-            if unavailable:
-                if name == self.config.profile:
-                    raise RuntimeError(
-                        f"profile {name!r} is unavailable: {unavailable}"
-                    )
-                profiles.pop(name)
-                continue
-            profile.bind(model)
-        self.profiles = profiles
+        sharing = SharedContext()
+        unavailable = sharing.unavailable(model)
+        requested = self.args.enable_shared_context
+        if requested and unavailable:
+            raise RuntimeError(f"enable_shared_context: {unavailable}")
+        self.shared = (
+            model.shared_context_default if requested is None else requested
+        ) and unavailable is None
+        batcher = Batcher(self.args, sharing if self.shared else None)
+        batcher.bind(model)
+        self.numerics = (
+            "exact"
+            if model.batch_invariant
+            and self.dtype == "auto"
+            and not self.shared
+            and not model.engine_model.approximate_kernels
+            else "approximate"
+        )
         self.scheduler = Scheduler(
             model,
-            profiles,
+            batcher,
             SchedulerLimits(
                 max_queue=process.max_queue,
                 max_queued_tokens=process.max_queued_tokens,
-                batch_window_ms=process.batch_window_ms,
+                batch_window_ms=self.args.batch_window_ms,
             ),
             observe=self.runtime.metrics.observe,
             execute=(
@@ -433,22 +543,53 @@ class ServedModel:
                 else self._inline()
             ),
             device_fault=placement.accelerator.device_fault,
+            planning=self.runtime.planning_before,
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
         assert self.family is not None and self.package is not None
+        goldens = self.family.golden(self.package)
+        if self.dtype != "auto":
+            # References are recorded at the published precision.
+            goldens = [{**golden, "expected": {}} for golden in goldens]
         self.health.golden = golden_check(
             self.golden_surface,
             model.golden_compare,
-            self.family.golden(self.package),
+            goldens,
             placement.device.accelerator,
+            placement.accelerator.golden_reference(placement.device),
         )
+        if self.dtype != "auto" and self.health.golden.status == "unverified":
+            self.health.golden = replace(
+                self.health.golden,
+                detail=f"golden references are recorded at --dtype auto, not {self.dtype}",
+            )
         if self.health.golden.status == "failed":
             raise VerificationError(self.health.golden.detail or "golden check failed")
         if self.unpinned and self.health.golden.status == "matched":
             self.health.golden = replace(
                 self.health.golden, status="unverified", detail=self.unpinned
             )
+        if (
+            self.requested_args.max_num_batched_tokens is None
+            and calibration.device_class(placement.device) is not None
+        ):
+            self.health.set("warming", "calibrating the token budget")
+            torch_device = placement.accelerator.torch_device(placement.device)
+            chosen = calibration.calibrate(
+                model,
+                execute,
+                batcher.max_num_batched_tokens,
+                calibration.gpu_memory(torch_device),
+            )
+            if chosen is not None:
+                self.args = replace(
+                    self.args, max_num_batched_tokens=chosen.max_num_batched_tokens
+                )
+                batcher.max_num_batched_tokens = chosen.max_num_batched_tokens
+                self.limits_source = f"{self.limits_source}, calibrated"
+                log.info("calibrated %s: %s", self.label, chosen.describe())
+        model.engine_model.begin_traffic()
 
     def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
         """How a model without a device thread runs its batches on the CPU: inline, in its choice scope if pinned."""
@@ -496,28 +637,22 @@ class ServedModel:
             f"no installed model family recognises {self.config.model!r}"
         )
 
-    def _profiles(self) -> dict[str, Profile]:
-        """``exact`` (golden checks run on it) and the model's own profile."""
-        names = dict.fromkeys(("exact", self.config.profile))
-        return {
-            name: registry.plugin("profiles", name)
-            .load()
-            .from_config(self.runtime.config)
-            for name in names
-        }
+    def answer_alone(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
+        """A request's response body (without ``model``, ``usage`` and ``meta``), alone in its released forwards.
 
-    def _golden(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
-        """A golden request's response body on the exact profile, before readiness."""
+        The golden check's path, which the parity tools also measure: it ignores
+        the engine arguments and the result cache, and runs before readiness.
+        """
         assert self.model is not None
-        request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
+        request = SurfaceRequest(surface, body, None, False, time.monotonic())
         plan = self.model.plan_surface(surface, request)
-        results = self.submit_items(plan.items, None, "exact").result()
+        results = self.submit_items(plan.items, None, reference=True).result()
         return self.model.finish_surface(plan, results)
 
     def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
         """The comparable values of a golden response (``LoadedModel.golden_values``)."""
         assert self.model is not None
-        return self.model.golden_values(surface, self._golden(surface, body))
+        return self.model.golden_values(surface, self.answer_alone(surface, body))
 
     # -- requests ------------------------------------------------------------
 
@@ -528,47 +663,47 @@ class ServedModel:
             )
 
     def submit_items(
-        self, items: list[Any], deadline: float | None, profile: str
+        self, items: list[Any], deadline: float | None, reference: bool = False
     ) -> Future[Results[Any]]:
-        return self.submit_items_group([items], [deadline], profile)[0]
+        return self.submit_items_group([items], [deadline], reference=reference)[0]
 
     def submit_items_group(
         self,
         item_lists: list[list[Any]],
         deadlines: list[float | None],
-        profile: str,
         timing: RunTiming | None = None,
+        reference: bool = False,
+        alone: bool = False,
     ) -> list[Future[Results[Any]]]:
         if self.scheduler is None:
             raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
         return self.scheduler.submit_group(
-            item_lists, deadlines=deadlines, profile=profile, timing=timing
+            item_lists,
+            deadlines=deadlines,
+            timing=timing,
+            reference=reference,
+            alone=alone,
         )
 
     def run_items_now(
         self,
         item_lists: list[list[Any]],
         deadlines: list[float | None],
-        profile: str,
         timing: RunTiming | None = None,
     ) -> list[Future[Results[Any]]] | None:
         """Run the group on this thread if the model's scheduler is idle (never on the event loop)."""
         if self.scheduler is None:
             return None
-        return self.scheduler.run_now(
-            item_lists, deadlines=deadlines, profile=profile, timing=timing
-        )
+        return self.scheduler.run_now(item_lists, deadlines=deadlines, timing=timing)
 
-    def meta(
-        self, profile_name: str, queue_ms: float, compute_ms: float
-    ) -> dict[str, Any]:
+    def meta(self, queue_ms: float, compute_ms: float) -> dict[str, Any]:
         assert self.model is not None and self.placement is not None
-        profile = self.profiles.get(profile_name)
         return {
+            "model_id": self.model.info.repo or self.model.info.id,
             "revision": self.model.info.revision,
             "model_sha256": self.model.info.model_sha256,
-            "profile": profile_name,
-            "numerics": profile.numerics if profile else "exact",
+            "dtype": self.precision,
+            "numerics": self.numerics,
             "engine": self.engine,
             "accelerator": self.placement.accelerator.name,
             "device": self.placement.device.label,
@@ -608,20 +743,13 @@ class ServedModel:
             "question_types": list(info.question_types),
             "limits": dict(info.limits),
             "licence": info.licence,
-            "profile": self.config.profile,
-            "profiles": [
-                {
-                    "name": name,
-                    "numerics": profile.numerics,
-                    "description": profile.description,
-                }
-                for name, profile in self.profiles.items()
-            ],
+            "engine_args": self.args.describe(self.shared),
+            "numerics": self.numerics,
             "engine": self.engine,
             "accelerator": self.placement.accelerator.name,
             "accelerator_validated": bool(self.placement.accelerator.validated),
             "device": self.placement.device.label,
-            "dtype": info.dtype,
+            "dtype": info.dtype if self.dtype == "auto" else self.dtype,
             "parameters": info.parameters,
             "ready": self.health.ready,
             "status": self.health.state,
@@ -671,6 +799,12 @@ class ServedModel:
             }
         if info.presets:
             card["presets"] = list(info.presets)
+        if "decisions" in info.surfaces:
+            card["modalities"] = list(info.modalities)
+            if "image" in info.modalities:
+                card["image_placements"] = list(info.image_placements or ("state",))
+            if info.usage is not None:
+                card["usage"] = info.usage
         return card
 
 
@@ -729,6 +863,11 @@ class Runtime:
     def __init__(self, config: ServeConfig, metrics: RuntimeMetrics | None = None):
         self.config = config
         self.metrics = metrics or RuntimeMetrics()
+        # Calls in ``_serve`` (on the event loop): a call serving alone submits jobs that need no window.
+        self._serving = 0
+        # Calls still being planned, with the time each was received: batching windows wait for them.
+        self._planning: dict[object, float] = {}
+        self._planning_lock = threading.Lock()
         self.served = [ServedModel(self, model) for model in config.served_models()]
         labels = [served.config.name for served in self.served if served.config.name]
         if len(labels) != len(set(labels)):
@@ -740,6 +879,14 @@ class Runtime:
     # -- lifecycle -----------------------------------------------------------
 
     def start(self, *, background: bool = True) -> None:
+        capped = cap_threads(self.config.threads)
+        if capped:
+            log.info(
+                "PyTorch CPU threads %d -> %d (the container's CPUs)",
+                capped["from"],
+                capped["to"],
+            )
+        media.configure(self.config.media_workers)
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True
@@ -757,6 +904,7 @@ class Runtime:
         self._stopping.set()
         for served in self.served:
             served.stop()
+        media.stop()
 
     def load(self) -> None:
         """Load every model in order, then ``freeze_heap``; the first failure is raised (foreground start)."""
@@ -812,6 +960,7 @@ class Runtime:
             freeze_heap()
             if not retry:
                 return
+            release_device_cache()
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
             if self._stopping.wait(delay):
                 return
@@ -848,7 +997,7 @@ class Runtime:
         surface: str,
         body: dict[str, Any],
         received: float | None = None,
-    ) -> tuple[float | None, str, bool, float]:
+    ) -> tuple[float | None, bool, float]:
         """Generic options; ``received`` is when the HTTP request arrived (default now).
 
         Every task of one bundle shares ``received``, so equal ``deadline_ms``
@@ -856,6 +1005,9 @@ class Runtime:
         """
         options = body.get("options") or {}
         allowed = GENERIC_OPTIONS | SURFACE_OPTIONS[surface]
+        for removed, message in REMOVED_OPTIONS.items():
+            if isinstance(options, dict) and removed in options:
+                raise RuntimeServiceError("invalid_request", message)
         if not isinstance(options, dict) or set(options) - allowed:
             raise RuntimeServiceError(
                 "invalid_request", f"options accepts only {sorted(allowed)}"
@@ -875,20 +1027,16 @@ class Runtime:
                     "invalid_request", "options.deadline_ms must be a positive number"
                 )
             deadline = received + float(value) / 1000.0
-        profile = options.get("profile", served.config.profile)
-        if not isinstance(profile, str) or (
-            served.profiles and profile not in served.profiles
-        ):
-            raise RuntimeServiceError(
-                "invalid_request",
-                f"options.profile must be one of {sorted(served.profiles) or ['exact']}",
-            )
         return_meta = options.get("return_meta", False)
         if not isinstance(return_meta, bool):
             raise RuntimeServiceError(
                 "invalid_request", "options.return_meta must be a boolean"
             )
-        return deadline, profile, return_meta, received
+        if not isinstance(options.get("long_context", False), bool):
+            raise RuntimeServiceError(
+                "invalid_request", "options.long_context must be a boolean"
+            )
+        return deadline, return_meta, received
 
     # -- every surface -------------------------------------------------------
 
@@ -924,18 +1072,14 @@ class Runtime:
                 "unsupported_surface",
                 f"model {served.label} does not serve /v1/{surface}",
             )
-        deadline, profile, return_meta, received = self._options(
-            served, surface, body, received
-        )
-        request = SurfaceRequest(
-            surface, body, deadline, profile, return_meta, received, part
-        )
+        deadline, return_meta, received = self._options(served, surface, body, received)
+        request = SurfaceRequest(surface, body, deadline, return_meta, received, part)
         try:
             plan = served.model.plan_surface(surface, request)
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            raise RuntimeServiceError.invalid(exc) from exc
         return Prepared(served, request, plan)
 
     def finish(
@@ -944,6 +1088,10 @@ class Runtime:
         served, request, plan = prepared.served, prepared.request, prepared.plan
         assert served.model is not None
         body = served.model.finish_surface(plan, results)
+        if request.surface == "decisions":
+            for answer in body.get("answers", {}).values():
+                if isinstance(answer, dict):
+                    with_reason(answer)
         for kind, outcome in served.model.outcomes(request.surface, body):
             self.metrics.questions.labels(type=kind, outcome=outcome).inc()
         response: dict[str, Any] = {"model": served.served_id, **body}
@@ -952,7 +1100,7 @@ class Runtime:
         )
         if request.return_meta:
             response["meta"] = {
-                **served.meta(request.profile, queue_ms, compute_ms),
+                **served.meta(queue_ms, compute_ms),
                 **response.get("meta", {}),
             }
         self.metrics.input_tokens.inc(plan.input_tokens)
@@ -1023,10 +1171,7 @@ class Runtime:
         lookup.submitted = time.monotonic()
         try:
             lookup.futures = prepared.served.run_items_now(
-                lookup.misses,
-                [prepared.request.deadline],
-                prepared.request.profile,
-                lookup.run,
+                lookup.misses, [prepared.request.deadline], lookup.run
             )
         except Exception as exc:
             lookup.futures = exc
@@ -1042,26 +1187,60 @@ class Runtime:
     ) -> list[tuple[int, dict[str, Any]]]:
         """Plan every request, run each model's share as one job group, finish in order.
 
-        A group holds a model's tasks of one profile, whatever their deadlines:
-        each job keeps its own. A lone request planned off the event loop runs
+        A group holds a model's tasks, whatever their deadlines: each job
+        keeps its own. A lone request planned off the event loop runs
         on its planning thread when its model's scheduler is idle. A decisions
         request with further ``states`` runs as one request per state, in its
         model's group, and their answers join into its response.
         """
         if timing is None:
             timing = ServerTiming()
+        call = object()
+        with self._planning_lock:
+            self._planning[call] = time.monotonic()
+        token = _CALL.set(call)
+        self._serving += 1
+        try:
+            return await self._serve_requests(requests, size, timing)
+        finally:
+            self._serving -= 1
+            _CALL.reset(token)
+            with self._planning_lock:
+                self._planning.pop(call, None)
+
+    def planning_before(self, opened: float) -> bool:
+        """Whether a call received before ``opened`` is still being planned (``Scheduler.planning``)."""
+        with self._planning_lock:
+            return any(received < opened for received in self._planning.values())
+
+    def _planned(self) -> None:
+        """The current call's requests are planned: batching windows stop waiting for it."""
+        call = _CALL.get()
+        if call is not None:
+            with self._planning_lock:
+                self._planning.pop(call, None)
+
+    async def _serve_requests(
+        self,
+        requests: list[tuple[str, Any]],
+        size: int | None,
+        timing: ServerTiming,
+    ) -> list[tuple[int, dict[str, Any]]]:
         received = time.monotonic()
         parts: list[tuple[str, Any, bool]] = []
         # Per request: where its parts start, and its states' names or the
         # error it already has.
         joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
-        for surface, body in requests:
+        for surface, sent in requests:
+            body = sent
             try:
+                if surface == "decisions" and isinstance(sent, dict):
+                    # Assets are checked once for the whole request: every one must be
+                    # used somewhere in it, whichever of its states uses it.
+                    body = assetlib.prepare(sent, self.config.max_request_bytes)
                 split = split_states(body) if surface == "decisions" else None
             except ValueError as exc:
-                failed = _error_outcome(
-                    RuntimeServiceError("invalid_request", str(exc))
-                )
+                failed = _error_outcome(RuntimeServiceError.invalid(exc))
                 joins.append((len(parts), None, failed))
                 continue
             if split is None:
@@ -1126,11 +1305,10 @@ class Runtime:
             await self._run_group([(0, first)], outcomes, timing, lookups[0])
             return [outcome for outcome in outcomes if outcome is not None]
         outcomes = [None] * len(requests)
-        groups: dict[tuple[int, str], list[tuple[int, Prepared]]] = {}
+        groups: dict[int, list[tuple[int, Prepared]]] = {}
         for index, prepared in enumerate(planned):
             if isinstance(prepared, Prepared):
-                key = (id(prepared.served), prepared.request.profile)
-                groups.setdefault(key, []).append((index, prepared))
+                groups.setdefault(id(prepared.served), []).append((index, prepared))
             else:
                 outcomes[index] = prepared
         await asyncio.gather(
@@ -1140,7 +1318,6 @@ class Runtime:
 
     def _lookup(self, members: list[tuple[int, Prepared]]) -> _Lookup:
         served = members[0][1].served
-        request = members[0][1].request
         values: dict[tuple[int, int], Any] = {}
         misses: list[list[Any]] = []
         slots: list[list[tuple[int, int, str | None]]] = []
@@ -1153,7 +1330,6 @@ class Runtime:
                     else None
                 )
                 if key is not None:
-                    key = f"{request.profile}:{key}"
                     hit, value = served.cache.get(key)
                     self.metrics.result_cache.labels(
                         model=served.label, outcome="hit" if hit else "miss"
@@ -1188,13 +1364,16 @@ class Runtime:
                 futures = served.submit_items_group(
                     lookup.misses,
                     [prepared.request.deadline for _, prepared in members],
-                    members[0][1].request.profile,
                     lookup.run,
+                    alone=self._serving == 1,
                 )
         except Exception as exc:
             for index, _ in members:
                 outcomes[index] = _error_outcome(exc)
             return
+        finally:
+            # Not before its jobs are queued: a window that stops waiting for this call must find them.
+            self._planned()
         results = await asyncio.gather(
             *(asyncio.wrap_future(future) for future in futures),
             return_exceptions=True,

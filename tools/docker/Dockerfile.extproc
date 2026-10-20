@@ -13,8 +13,9 @@
 # The CUDA image takes PyTorch from the official wheel, which carries its CUDA
 # user-space libraries. The ROCm image takes PyTorch and the ROCm user space
 # from vLLM's ROCm image (ROCM_TORCH_IMAGE, pinned by digest) and builds
-# causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx90a, gfx942 and gfx950:
-# Instinct MI200, MI300 and MI350). The host supplies only the GPU driver.
+# causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx90a, gfx942, gfx950 and
+# gfx1151: Instinct MI200, MI300 and MI350, and Ryzen AI Max / gfx1151). The
+# host supplies only the GPU driver.
 ARG IMAGE_REGISTRY=docker.io/
 ARG PYTHON_IMAGE=library/python:3.12-slim-bookworm
 ARG ROCM_TORCH_IMAGE=vllm/vllm-openai-rocm@sha256:1fd21abe66455b4df5a2e83629e97cdcc9d58913b16052d8118b92b239792339
@@ -95,7 +96,7 @@ RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
 FROM torch-rocm-base AS causal-conv1d-rocm
 ARG ROCM_SDK=7.2.3
 ARG CAUSAL_CONV1D=causal-conv1d==1.7.0
-ARG CAUSAL_CONV1D_ARCHS=gfx90a,gfx942,gfx950
+ARG CAUSAL_CONV1D_ARCHS=gfx90a,gfx942,gfx950,gfx1151
 RUN mkdir -p /etc/apt/keyrings && \
     python -c "import urllib.request; urllib.request.urlretrieve('https://repo.radeon.com/rocm/rocm.gpg.key', '/etc/apt/keyrings/rocm.asc')" && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.asc] https://repo.radeon.com/rocm/apt/$ROCM_SDK jammy main" \
@@ -124,7 +125,7 @@ FROM ${IMAGE_REGISTRY}${ROCM_TORCH_IMAGE} AS rocm-torch-release
 # links them), and the GEMM kernels and MIOpen databases of GPUs outside
 # ROCM_GPU_ARCHS, which must name every GPU in CAUSAL_CONV1D_ARCHS.
 FROM rocm-torch-release AS rocm-lib-slim
-ARG ROCM_GPU_ARCHS=gfx90a,gfx942,gfx950
+ARG ROCM_GPU_ARCHS=gfx90a,gfx942,gfx950,gfx1151
 RUN cd /opt/rocm-7.2.3 && \
     find lib -name '*.a' -delete && \
     rm -rf lib/llvm lib/rocfft/rocfft_kernel_cache.db lib/librocalution* lib/libhiptensor* && \
@@ -185,13 +186,18 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 
 # The model runtime: its third-party dependencies in one layer and the package
 # in the next, so a runtime code change does not reinstall its dependencies.
-# The multimodal extra decodes Vela Omni's images (Pillow). Every default model
+# The multimodal extra decodes Vela Omni's and Decision 3.0's images (Pillow)
+# and Decision 3.0's videos (OpenCV with its own FFmpeg). Every default model
 # runs on the native engine, so ONNX Runtime (the onnx extra) is not installed.
+# requirements-lock.txt pins every dependency except PyTorch and what only
+# PyTorch requires, which the accelerator stage owns, so every build of a
+# release installs the same versions.
 FROM torch-${ACCELERATOR} AS runtime
 ARG MODEL_RUNTIME_EXTRAS=multimodal
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
+    --mount=type=bind,source=src/model-runtime/requirements-lock.txt,target=/tmp/requirements-lock.txt \
     python - $MODEL_RUNTIME_EXTRAS >/tmp/runtime-requirements.txt <<'EOF' && \
-    pip install -r /tmp/runtime-requirements.txt && \
+    pip install -c /tmp/requirements-lock.txt -r /tmp/runtime-requirements.txt && \
     rm /tmp/runtime-requirements.txt
 import sys, tomllib
 project = tomllib.load(open("/tmp/pyproject.toml", "rb"))["project"]
@@ -228,6 +234,7 @@ COPY config/config.yaml /app/config/config.yaml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
+COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
 COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
 COPY --link --from=router-build /out/router /usr/local/bin/router
 EXPOSE 50051 8080 9190

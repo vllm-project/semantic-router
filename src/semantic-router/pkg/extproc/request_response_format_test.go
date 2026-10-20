@@ -30,7 +30,7 @@ const jsonSchemaProbeFormat = `{
 func requestBodyWithResponseFormat(t *testing.T, format string) []byte {
 	t.Helper()
 	body := map[string]json.RawMessage{
-		"model":    json.RawMessage(`"MoM"`),
+		"model":    json.RawMessage(`"vllm-sr/auto"`),
 		"messages": json.RawMessage(`[{"role":"user","content":"Write one sentence about mountains."}]`),
 	}
 	if format != "" {

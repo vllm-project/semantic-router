@@ -44,7 +44,6 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-
 	useReasoning := reasoningDecision.UseReasoning
 	logging.ComponentDebugEvent("extproc", "reasoning_decision_applied", map[string]interface{}{
 		"request_id":        ctx.RequestID,
@@ -99,7 +98,10 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
-	if !shouldStartRouterReplay(ctx) || !r.replayAllowedForRequest(ctx) {
+	if ctx != nil && ctx.RouterReplayPluginConfig == nil && r != nil && r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
+	}
+	if !shouldStartRouterReplay(ctx) {
 		return
 	}
 
@@ -110,12 +112,22 @@ func (r *OpenAIRouter) startRouterReplay(
 		return
 	}
 
-	configureReplayRecorder(recorder, ctx.RouterReplayPluginConfig)
+	policy := ctx.RouterReplayPluginConfig
+	recorder = recorder.WithCapturePolicy(routerreplay.CapturePolicy{
+		CaptureRequestBody:  policy.CaptureRequestBody,
+		CaptureResponseBody: policy.CaptureResponseBody,
+		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
+		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
+		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
+	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
+	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
 	}
+	appendPendingTrustedFactsOutcomes(ctx, recorder)
 }
 
 // populateReplayIdentity records the same explicit identity used by protection,
@@ -170,19 +182,6 @@ func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName s
 		return recorder
 	}
 	return r.ReplayRecorder
-}
-
-func configureReplayRecorder(
-	recorder *routerreplay.Recorder,
-	cfg *config.RouterReplayPluginConfig,
-) {
-	recorder.SetCapturePolicy(
-		cfg.CaptureRequestBody,
-		cfg.CaptureResponseBody,
-		resolveReplayMaxBodyBytes(cfg.MaxBodyBytes),
-	)
-	recorder.SetMaxToolTraceBytes(cfg.MaxToolTraceBytes)
-	recorder.SetMaxToolTraceSteps(cfg.MaxToolTraceSteps)
 }
 
 // replayUserTurnIndex groups tool continuations with the user message that
@@ -243,7 +242,7 @@ func buildReplayRoutingRecord(
 		SignalConfidences:        cloneReplayFloat64Map(ctx.VSRSignalConfidences),
 		SignalErrorMatches:       cloneReplayBoolMap(ctx.VSRSignalErrorMatches),
 		SignalValues:             cloneReplayFloat64Map(ctx.VSRSignalValues),
-		ToolTrace:                buildReplayRequestToolTrace(ctx),
+		ToolTrace:                replayRequestToolTrace(ctx),
 		Streaming:                ctx.ExpectStreamingResponse,
 		FromCache:                ctx.VSRCacheHit,
 
@@ -283,16 +282,49 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
+	// The sanitiser drops tool-result payloads on every route; a masking route
+	// additionally persists no request text at all, because Replay snapshots
+	// the request before masking runs (D3, #3566).
+	suppressBody := replaySuppressesBody(ctx)
 	if ctx.SemanticRequest != nil {
-		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
-			record.RequestBody = string(requestBody)
+		replayRequest := replaySafeSemanticRequest(*ctx.SemanticRequest)
+		prompt, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
+		// Tool definitions are operator-authored, not user content, so they
+		// are kept even when the prompt is suppressed.
+		record.ToolDefinitions = toolDefinitions
+		if !suppressBody {
+			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
+				record.RequestBody = string(requestBody)
+			}
+			record.Prompt = prompt
 		}
 	}
 
-	// Extract structured fields from neutral IR before recorder truncation.
-	record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(ctx.SemanticRequest)
-
 	return record
+}
+
+// replayRequestToolTrace drops the request trace on a masking route. It
+// carries user text and tool arguments and results, and every record is
+// written before masking runs -- including the Looper path and a failed
+// mask -- so suppression is the only option that cannot persist raw PII
+// (D3, #3566). The response trace is unaffected: the model only ever saw
+// masked content.
+func replayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
+	if replaySuppressesBody(ctx) {
+		return nil
+	}
+	return buildReplayRequestToolTrace(ctx)
+}
+
+// replaySuppressesBody reports whether a masking route must not persist the
+// pre-mask request. Replay snapshots the neutral request before dispatch, so
+// omitting the body is the only option that cannot store it raw (D3, #3566).
+func replaySuppressesBody(ctx *RequestContext) bool {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return false
+	}
+	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	return cfg != nil && cfg.Enabled
 }
 
 func replayDecisionMetadata(ctx *RequestContext) (int, int) {
@@ -456,7 +488,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
 func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
-	if ctx == nil || ctx.RouterReplayID == "" || !r.replayAllowedForRequest(ctx) {
+	if ctx == nil || ctx.RouterReplayID == "" {
 		return
 	}
 
@@ -468,13 +500,13 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
-	if len(responseBody) > 0 {
+	if len(responseBody) > 0 && replayResponseContentAllowed(ctx) {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
 	if isFinal {
 		attachPrimaryOutputDigest(ctx, recorder)
 	}
-	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
+	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); replayResponseContentAllowed(ctx) && responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
 		}
@@ -545,12 +577,18 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		return
 	}
 
+	spans := ctx.HallucinationSpans
+	details := hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo)
+	if !replayResponseContentAllowed(ctx) {
+		// Detector excerpts and explanations are response content too.
+		spans, details = nil, nil
+	}
 	err := recorder.UpdateHallucinationStatus(
 		ctx.RouterReplayID,
 		ctx.HallucinationDetected,
 		ctx.HallucinationConfidence,
-		ctx.HallucinationSpans,
-		hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo),
+		spans,
+		details,
 		routerreplay.HallucinationScore{Available: ctx.HallucinationScoreAvailable, Kind: ctx.HallucinationScoreKind},
 	)
 	if err != nil {

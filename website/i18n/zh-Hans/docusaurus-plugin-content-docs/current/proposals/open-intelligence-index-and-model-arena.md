@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Open Intelligence 架构
 description: 连接可复现评估、统一 Model Arena 和证据感知路由的版本化能力层级。
 created: 2026-09-09
