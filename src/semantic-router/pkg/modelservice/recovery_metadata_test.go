@@ -82,12 +82,12 @@ func TestRefreshDiscardsProbeFromExitedProcess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/health":
-			writeJSON(w, http.StatusOK, map[string]any{"api_version": "3.0.0", "status": "ready"})
+			writeJSON(w, http.StatusOK, map[string]any{"api_version": RuntimeAPIVersion, "status": "ready"})
 		case "/v1/models":
 			modelsOnce.Do(func() { close(modelsEntered) })
 			<-releaseModels
 			writeJSON(w, http.StatusOK, map[string]any{
-				"api_version": "3.0.0", "object": "list",
+				"api_version": RuntimeAPIVersion, "object": "list",
 				"data": []any{map[string]any{"id": "primary", "object": "model", "family": "fixture", "ready": true, "surfaces": []string{"decisions"}, "question_types": []string{"choice"}}},
 			})
 		default:
@@ -107,7 +107,11 @@ func TestRefreshDiscardsProbeFromExitedProcess(t *testing.T) {
 		defer close(refreshDone)
 		g.refresh(context.Background())
 	}()
-	<-modelsEntered
+	select {
+	case <-modelsEntered:
+	case <-refreshDone:
+		t.Fatal("refresh returned before discovery began")
+	}
 	g.processExited(errors.New("killed"), time.Minute)
 	close(releaseModels)
 	<-refreshDone
