@@ -175,11 +175,11 @@ Each question reads up to 32,768 tokens; a longer one is answered 400
 `invalid_request` with reason `question_tokens`. `"options": {"long_context":
 true}` raises that to the card's `max_input_tokens` (262,144), slower and
 less accurate than the validated length, and nothing is truncated. The Router
-waits 30 seconds for an answer; give a long request more time with
-`"deadline_ms"` in the same `options`, up to the listener's
-`systemone.max_deadline_ms` (10 minutes by default): one MI325X answers about
-127,000 tokens in 32 seconds, 213,000 in 142 and 262,000 in 203, with 154 GiB
-of its memory in use at that length.
+waits 30 seconds for an answer, and for a long-context request up to the
+listener's `systemone.max_deadline_ms` (10 minutes by default); `"deadline_ms"`
+in the same `options` sets another wait within that limit. One MI325X answers
+about 127,000 tokens in 32 seconds, 213,000 in 142 and 262,000 in 203, with
+154 GiB of its memory in use at that length.
 
 Use canonical YAML for additional deployments, task bindings, attached workers
 and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy.md).
