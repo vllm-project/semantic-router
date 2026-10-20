@@ -494,7 +494,7 @@ func validateReasoningEffort(request Request, limits Limits) error {
 
 func validateReasoningDisplay(request Request) error {
 	switch request.ReasoningDisplay {
-	case "", "summarized", "omitted":
+	case "", "summarized", "omitted", "updates":
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_display", "reasoning display mode is invalid", nil)
 	}
