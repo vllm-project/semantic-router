@@ -36,7 +36,7 @@ type responsesRequestWire struct {
 	Temperature          *float64                    `json:"temperature,omitempty"`
 	TopP                 *float64                    `json:"top_p,omitempty"`
 	MaxOutputTokens      *int64                      `json:"max_output_tokens,omitempty"`
-	Metadata             map[string]string           `json:"metadata,omitempty"`
+	Metadata             map[string]json.RawMessage  `json:"metadata,omitempty"`
 	Text                 *responsesTextWire          `json:"text,omitempty"`
 	Stream               bool                        `json:"stream,omitempty"`
 	Store                *bool                       `json:"store,omitempty"`
@@ -59,7 +59,7 @@ type responsesRequestWire struct {
 	ServiceTier          json.RawMessage             `json:"service_tier,omitempty"`
 	StreamOptions        *responsesStreamOptionsWire `json:"stream_options,omitempty"`
 	TopLogprobs          json.RawMessage             `json:"top_logprobs,omitempty"`
-	ClientMetadata       map[string]string           `json:"client_metadata,omitempty"`
+	ClientMetadata       map[string]json.RawMessage  `json:"client_metadata,omitempty"`
 }
 
 type responsesReasoningWire struct {
@@ -312,8 +312,12 @@ func decodeResponsesInclude(raw json.RawMessage, policy llmprotocol.Policy) ([]s
 
 func decodeResponsesBaseRequest(wire responsesRequestWire, conversationID string) llmprotocol.Request {
 	request := llmprotocol.Request{
-		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
-		EndUserID: wire.User, PreviousResponseID: wire.PreviousResponseID, ConversationID: conversationID,
+		Generation: 1, Model: wire.Model, Stream: wire.Stream,
+		Metadata:           stringifyWireMetadataJSON(wire.Metadata),
+		MetadataJSON:       cloneWireMetadataJSON(wire.Metadata),
+		EndUserID:          wire.User,
+		PreviousResponseID: wire.PreviousResponseID,
+		ConversationID:     conversationID,
 		Truncation: wire.Truncation, PromptCacheKey: wire.PromptCacheKey,
 		Store: wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,
 		Sampling: llmprotocol.Sampling{Temperature: wire.Temperature, TopP: wire.TopP, MaxOutputTokens: wire.MaxOutputTokens},
