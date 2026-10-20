@@ -40,7 +40,7 @@ class _Run:
 
 def parse_time(value: Any) -> float:
     """RFC 3339 time as epoch seconds; replay timestamps drop trailing zeros, so
-    they do not sort as strings. Unparseable values sort first."""
+    they do not sort as strings. Unparsable values sort first."""
     text = str(value or "").strip()
     if not text:
         return float("-inf")

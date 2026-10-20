@@ -432,4 +432,3 @@ def current_default_model(recipe: dict[str, Any] | None, decision: str) -> str:
             if refs and isinstance(refs[0], dict):
                 return str(refs[0].get("model") or "")
     return ""
-
