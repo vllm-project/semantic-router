@@ -134,3 +134,32 @@ model bindings, classifier requirements, and replay retention before using it;
 its checked-in configuration records request and response data. Use the
 [recipe evaluation workflow](../benchmarking/agent-evaluation-loop) to test
 representative tasks before adopting a policy change.
+
+## Keep agent calls on a warm prompt cache
+
+An agent resends its conversation on every call, so most of each prompt is a
+prefix the backend has already processed. Whether that prefix is still cached
+decides much of a call's latency and cost, and three things lose it.
+
+- **A model change.** A prompt cache belongs to one model, so a switch in the
+  middle of a run computes the whole context again on the new model. Keep each
+  run on one model as described above. The
+  [hybrid selector](../tutorials/algorithm/selection/hybrid) also favors the
+  model that served the session's previous turn.
+- **A replica change.** Each replica keeps its own prefix cache, and a model's
+  `lb_policy` (`round_robin` or `least_request`, see
+  [model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health))
+  does not keep a session on one replica. When several replicas serve agent
+  sessions, route the model to a pool whose scheduler places requests by prefix
+  cache and load, such as [llm-d](k8s/llm-d), instead of listing the replicas
+  as `backend_refs`.
+- **Eviction.** When the sessions in flight need more KV cache than the GPU
+  holds, a returning session finds its prefix evicted. A CPU offload tier on the
+  backend, such as LMCache for vLLM, returns those prefixes instead of computing
+  them again.
+
+Leave cross-model KV transfer (`global.integrations.kv_transfer`) off for agent
+entrypoints. The receiving model must serve with prefix caching disabled, and
+the [connector](https://github.com/vllm-project/semantic-router/tree/main/src/kv_connector)
+rejects scaled RoPE, so neither model can serve a context extended past its
+native length.
