@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -16,14 +17,34 @@ import (
 // Streamed replies are parsed as they arrive. A client that states no
 // preference is not taken to accept gzip, so a data plane that never hands the
 // router the reply body (response_body_mode NONE) still sends it identity.
-func appendUpstreamEncodingHeader(headersOut *[]*core.HeaderValueOption, ctx *RequestContext) {
+//
+// It returns the header it added, nil when it added none.
+func appendUpstreamEncodingHeader(headersOut *[]*core.HeaderValueOption, ctx *RequestContext) *core.HeaderValueOption {
 	if ctx == nil || isClientStreamingRequested(ctx) {
-		return
+		return nil
 	}
 	if !ctx.LooperRequest && !clientAcceptsGzip(ctx) {
+		return nil
+	}
+	negotiated := overwriteRequestHeader("accept-encoding", "gzip")
+	*headersOut = append(*headersOut, negotiated)
+	return negotiated
+}
+
+// yieldNegotiatedEncoding drops the negotiated Accept-Encoding when operator
+// policy, a decision's header_mutation or a request extension, removes the
+// header. Envoy and routing.ApplyHeaderMutation apply removals before sets, so
+// without this the negotiated value would outlive the deletion.
+func yieldNegotiatedEncoding(state *routeHeaderState, negotiated *core.HeaderValueOption) {
+	removed := slices.ContainsFunc(state.removeHeaders, func(name string) bool {
+		return strings.EqualFold(name, "accept-encoding")
+	})
+	if negotiated == nil || !removed {
 		return
 	}
-	*headersOut = append(*headersOut, overwriteRequestHeader("accept-encoding", "gzip"))
+	state.setHeaders = slices.DeleteFunc(state.setHeaders, func(header *core.HeaderValueOption) bool {
+		return header == negotiated
+	})
 }
 
 // clientAcceptsGzip reports whether the client's Accept-Encoding allows gzip.

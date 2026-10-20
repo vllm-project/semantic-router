@@ -242,7 +242,7 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	call := looperCall{
 		Route: r.Header.Get("X-Selected-Model"), Model: req.Model, Body: canonicalJSON(raw),
-		askedGzip: strings.Contains(strings.ToLower(r.Header.Get("Accept-Encoding")), "gzip"),
+		askedGzip: acceptsGzip(strings.Join(r.Header.Values("Accept-Encoding"), ", ")),
 	}
 	for name, values := range r.Header {
 		if name = strings.ToLower(name); strings.HasPrefix(name, "x-fixture-") {

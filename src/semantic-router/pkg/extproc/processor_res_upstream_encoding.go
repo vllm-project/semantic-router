@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -11,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -19,27 +21,51 @@ import (
 // as an oversized identity reply does.
 var maxDecodedUpstreamBodyBytes = int64(llmprotocol.DefaultPolicy().Limits.BodyBytes)
 
+// upstreamDecodeSlots bounds the replies being decompressed at once: a few
+// kilobytes on the wire may inflate to maxDecodedUpstreamBodyBytes, so, as
+// pkg/systemone bounds the request bodies it decodes, only a few inflate
+// together and the rest wait.
+var upstreamDecodeSlots = make(chan struct{}, 4)
+
+// maxFailedReplyExcerptBytes bounds the decoded excerpt of a failed reply the
+// native fallback records, as pkg/upstream bounds the bytes it hands over.
+const maxFailedReplyExcerptBytes = 64 << 10
+
 // isGzipContentEncoding reports whether a reply's Content-Encoding is exactly
 // one gzip coding. Identity entries are ignored; any other or stacked coding
 // is left as it arrived.
 func isGzipContentEncoding(headerMap *core.HeaderMap) bool {
-	codings, gzipped := 0, false
+	var values []string
 	for _, header := range headerMap.GetHeaders() {
-		if !strings.EqualFold(header.GetKey(), "content-encoding") {
-			continue
-		}
-		for _, coding := range strings.Split(extractHeaderValue(header), ",") {
-			switch strings.ToLower(strings.TrimSpace(coding)) {
-			case "", "identity":
-			case "gzip", "x-gzip":
-				codings++
-				gzipped = true
-			default:
-				codings++
-			}
+		if strings.EqualFold(header.GetKey(), "content-encoding") {
+			values = append(values, extractHeaderValue(header))
 		}
 	}
-	return gzipped && codings == 1
+	return isGzipCoding(values)
+}
+
+func isGzipCoding(contentEncoding []string) bool {
+	coding, single := httputil.ContentCoding(contentEncoding)
+	return single && coding == "gzip"
+}
+
+// failedReplyBody returns the body excerpt of a failed reply as the fallback
+// records it. pkg/upstream hands over the provider's bytes, bounded, so a gzip
+// excerpt is compressed and may be cut short; it is decoded as far as it
+// reads, matching the decoded reply the response-phase fallback records. A
+// gzip excerpt that does not decode is recorded without a body, as the
+// response phase continues an undecodable error reply with none.
+func failedReplyBody(outcome routing.Outcome) []byte {
+	if len(outcome.Body) == 0 || !isGzipCoding(outcome.Header.Values("content-encoding")) {
+		return outcome.Body
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(outcome.Body))
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = reader.Close() }()
+	body, _ := httputil.ReadTruncatedBody(reader, maxFailedReplyExcerptBytes)
+	return body
 }
 
 // decodeUpstreamResponseBody decodes a buffered gzip reply before any response
@@ -48,15 +74,18 @@ func isGzipContentEncoding(headerMap *core.HeaderMap) bool {
 // answered with failure, as any unreadable reply is. An error reply that does
 // not decode continues with an empty body, so the transport-error contract
 // keeps the provider's status.
+//
+// A buffered reply arrives as one body message, whose end_of_stream is false
+// when trailers follow; the non-streaming phases read that message as the
+// whole reply, so it is decoded whatever the flag says.
 func (r *OpenAIRouter) decodeUpstreamResponseBody(
 	body []byte,
-	endOfStream bool,
 	ctx *RequestContext,
 ) (out []byte, decoded bool, failure *ext_proc.ProcessingResponse) {
-	if ctx == nil || !ctx.UpstreamResponseGzip || ctx.IsStreamingResponse || !endOfStream || len(body) == 0 {
+	if ctx == nil || !ctx.UpstreamResponseGzip || ctx.IsStreamingResponse || len(body) == 0 {
 		return body, false, nil
 	}
-	out, err := gunzipBounded(body, maxDecodedUpstreamBodyBytes)
+	out, err := gunzipBounded(ctx.TraceContext, body, maxDecodedUpstreamBodyBytes)
 	if err == nil {
 		return out, true, nil
 	}
@@ -72,7 +101,19 @@ func (r *OpenAIRouter) decodeUpstreamResponseBody(
 	return nil, false, r.createErrorResponse(502, "The selected model returned an invalid response")
 }
 
-func gunzipBounded(body []byte, limit int64) ([]byte, error) {
+// gunzipBounded decodes body into at most limit bytes once a decode slot is
+// free, and gives up waiting when requestCtx, if any, is done.
+func gunzipBounded(requestCtx context.Context, body []byte, limit int64) ([]byte, error) {
+	var gone <-chan struct{}
+	if requestCtx != nil {
+		gone = requestCtx.Done()
+	}
+	select {
+	case upstreamDecodeSlots <- struct{}{}:
+	case <-gone:
+		return nil, context.Cause(requestCtx)
+	}
+	defer func() { <-upstreamDecodeSlots }()
 	reader, err := gzip.NewReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -81,17 +122,28 @@ func gunzipBounded(body []byte, limit int64) ([]byte, error) {
 	return httputil.ReadLimitedBody(reader, limit)
 }
 
-// deliverDecodedResponseBody sends the client the decoded reply unless a phase
-// already replaced the body, and drops the provider's encoding and compressed
-// length. An immediate response carries its own headers and is left alone.
-func deliverDecodedResponseBody(response *ext_proc.ProcessingResponse, decoded []byte) {
-	if response.GetResponseBody() == nil {
+// deliverUpstreamResponseBody keeps a buffered gzip reply's headers true to
+// the bytes the client receives. A decoded reply is sent decoded unless a
+// phase already replaced the body. Whenever the client receives anything but
+// the provider's own bytes, the decoded reply or a body a phase wrote, the
+// provider's encoding and compressed length are dropped. An immediate response
+// carries its own headers and is left alone.
+func deliverUpstreamResponseBody(
+	response *ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+	body []byte,
+	decoded bool,
+) {
+	if response.GetResponseBody() == nil || ctx == nil || !ctx.UpstreamResponseGzip || ctx.IsStreamingResponse {
 		return
 	}
-	if response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
-		setResponseBodyMutation(response, decoded)
+	if decoded && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+		setResponseBodyMutation(response, body)
 	}
 	common := response.GetResponseBody().GetResponse()
+	if common.GetBodyMutation() == nil {
+		return
+	}
 	if common.HeaderMutation == nil {
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
