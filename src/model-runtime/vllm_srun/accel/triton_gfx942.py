@@ -533,11 +533,11 @@ def attn_prep(
     k = torch.empty(B, kv_heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     rot = cos.shape[-1]
     rows = 16 if head_dim == 128 else 8
-    for src, weight, dst, count, width in (
+    for proj, weight, dst, count, width in (
         (q_proj_out, q_norm_w1, q, heads, 2 * head_dim if gated else head_dim),
         (k_proj_out, k_norm_w1, k, kv_heads, head_dim),
     ):
-        src = _row_view(src, count * width)
+        src = _row_view(proj, count * width)
         _head_prep_kernel[(triton.cdiv(B * T, rows), count)](
             src,
             weight,

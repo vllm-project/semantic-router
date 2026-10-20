@@ -636,7 +636,7 @@ def test_a_merged_nvfp4_layer_refuses_a_move_after_the_merge(blackwell):
     quantized.prepare(mlp)
     assert gate.merged is not None
     mlp.to(blackwell)  # where it already is: still views
-    with pytest.raises(RuntimeError, match="before quantized.prepare"):
+    with pytest.raises(RuntimeError, match=r"before quantized\.prepare"):
         mlp.to("cpu")
 
 

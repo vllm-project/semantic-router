@@ -522,7 +522,9 @@ class MergedGroup:
     ) -> list[torch.Tensor]:
         """Each part's output for ``x`` in ``order``: column slices (views) of one product."""
         columns = torch.split(self.layer(x), list(self.sizes), dim=-1)
-        outputs: dict[nn.Module, torch.Tensor] = dict(zip(self.parts, columns))
+        outputs: dict[nn.Module, torch.Tensor] = dict(
+            zip(self.parts, columns, strict=True)
+        )
         return [outputs[p] for p in order]
 
     def holds(self, part: NVFP4Linear) -> bool:
