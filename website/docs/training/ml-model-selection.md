@@ -22,7 +22,7 @@ provider models.
 | [KMeans](/docs/tutorials/algorithm/selection/kmeans) | Maps a request to a learned cluster | The workload forms stable clusters and lookup cost matters |
 | [SVM](/docs/tutorials/algorithm/selection/svm) | Uses a learned decision boundary | Candidate models separate cleanly in feature space |
 | [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector; the Router evaluates the trained artifact on CPU |
-| [HierShrink](/docs/tutorials/algorithm/selection/hiershrink) | Shrinks per-cluster quality toward each model's mean | A candidate has only a few dozen scored queries |
+| [HierShrink](../tutorials/algorithm/selection/hiershrink.md) | Shrinks per-cluster quality toward each model's mean | A candidate has only a few dozen scored queries |
 
 There is no universally best selector. Compare each candidate against simple
 baselines such as a fixed default, random choice, and the best single model on
