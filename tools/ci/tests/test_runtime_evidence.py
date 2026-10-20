@@ -15,6 +15,7 @@ from recipe_conformance import (
     load_probe_manifest,
 )
 from recipe_conformance_sources import (
+    CI_SHARDS_PER_SOURCE,
     discover_source_inventories,
     source_matrix_payload,
 )
@@ -64,9 +65,9 @@ class RuntimeEvidenceTests(unittest.TestCase):
             lambda root: cpu_inventory(discover_inventory(root)),
         )
         receipts = []
-        for job in source_matrix_payload(inventories, None, runtime_evidence.ROOT)[
-            "include"
-        ]:
+        for job in source_matrix_payload(
+            inventories, CI_SHARDS_PER_SOURCE, runtime_evidence.ROOT
+        )["include"]:
             receipt = directory / f"image-{job['shard']}.json"
             receipt.write_text(
                 json.dumps([{"id": "image:vllm-sr", "sha256": "a" * 64}])
@@ -103,9 +104,7 @@ class RuntimeEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)
             receipts = self.write_planned_recipe_outputs(path)
-            self.assertIn(
-                "image-built-in-latest-mom-v1.json", {r.name for r in receipts}
-            )
+            self.assertIn("image-built-in-latest-0.json", {r.name for r in receipts})
             result = runtime_evidence.recipe_evidence(path)
             self.assertEqual(collection_errors(result, "test"), [])
             self.assertEqual(len(result["artifacts"]), len(receipts))

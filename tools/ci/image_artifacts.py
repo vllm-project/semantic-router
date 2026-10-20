@@ -51,9 +51,19 @@ IMAGE_ENV = {
 }
 
 
+def file_digest(stream, digest="sha256"):
+    """Compute digest of a binary file stream with Python 3.10 fallback."""
+    if hasattr(hashlib, "file_digest"):
+        return hashlib.file_digest(stream, digest)
+    hasher = hashlib.new(digest) if isinstance(digest, str) else digest()
+    while chunk := stream.read(65536):
+        hasher.update(chunk)
+    return hasher
+
+
 def sha256(path: Path) -> str:
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        return file_digest(stream, "sha256").hexdigest()
 
 
 def source_sha() -> str:

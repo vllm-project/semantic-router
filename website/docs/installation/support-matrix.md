@@ -10,7 +10,9 @@ project maintains. It does not certify every platform, model server, model, or
 accelerator combination.
 
 If you are still choosing a topology, start with
-[Choose a Deployment](deployment-options). For wire formats and endpoint
+[Choose a Deployment](deployment-options). For the component
+responsibilities, configuration ownership, and versioning rules behind
+these classifications, see [Deployment Architecture](deployment-architecture). For wire formats and endpoint
 configuration, use [Protocol Compatibility](protocol-compatibility) and
 [Backend Target Compatibility](backend-target-compatibility).
 
@@ -23,9 +25,12 @@ configuration, use [Protocol Compatibility](protocol-compatibility) and
 | Experimental example | The files demonstrate a feature or test topology that you must qualify. |
 | Deprecated | The option remains temporarily for a documented migration. |
 
-Evidence tags show the strongest recurring check: **PR CI** runs an end-to-end
-profile, **Contract** validates static contracts without the external platform,
-and **Manual** requires an opt-in environment.
+Evidence tags show the strongest recurring check: **PR CI** runs a selected,
+committer-authorized end-to-end profile, **Contract** validates static contracts
+without the external platform, and **Manual** requires an opt-in environment.
+The maintained request entrypoints are standalone and ExtProc through Agent
+Router (formerly Envoy AI Gateway). Passing that ExtProc contract does not
+qualify another gateway's installation, control plane, or body-processing modes.
 
 ## Use one tested version set
 
@@ -44,20 +49,15 @@ external project.
 
 | Option | Classification | Project coverage |
 | --- | --- | --- |
-| [Helm chart](configuration-workflows#helm) | Maintained reference stack | **Contract.** Router, optional Dashboard, ingress, autoscaling, persistence, and observability resources. Gateways and storage remain external. |
+| [Helm chart](configuration-workflows#helm) | Maintained reference stack | **PR CI + Contract.** The default standalone Router serves requests through its own Service; tests cover backend fallback and configuration rollout. Static contracts cover optional chart resources. Gateways and storage remain external. |
 | [Local deployment](docker) | Maintained reference stack | **PR CI.** The CLI manages the Router, the Dashboard, and support services, and Envoy with `--gateway extproc`. You provide custom model endpoints and harden local defaults. |
-| [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract.** The project owns CRDs, reconciliation, Router workloads, Services, and routing APIs. Kubernetes schedules workloads; your gateway carries traffic. |
+| [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract.** One memory-backed deployment verifies reconciliation and an actual request through the reconciled Envoy and Router. Source contracts cover CRDs, configuration conversion, resources, and storage variants; this does not qualify every storage deployment. |
 
 ## Supported integrations
 
 | Integration | Classification | Project coverage |
 | --- | --- | --- |
-| [agentgateway](k8s/agentgateway) | Supported integration | **PR CI.** Router supplies ExtProc policy; agentgateway owns the data plane. Set request bodies to `FullDuplexStreamed`. |
 | [Agent Router](k8s/ai-gateway) | Supported integration | **PR CI.** Formerly Envoy AI Gateway. Router supplies routing policy; the gateways own provider traffic. Verify your provider separately. |
-| [AIBrix](k8s/aibrix) | Supported integration | **PR CI.** Router selects a model or pool; AIBrix owns deployment, autoscaling, and replicas. Use AIBrix's hardware support matrix. |
-| [NVIDIA Dynamo](k8s/dynamo) | Supported integration | **Manual.** Router selects a target; Dynamo owns graphs, workers, and frontends. Use the guide version; the older fixture is test-only. |
-| [Istio Gateway](k8s/istio) | Supported integration | **PR CI.** Router supplies ExtProc policy; Istio carries requests. Supplied GPU workloads are examples only. |
-| [llm-d](k8s/llm-d) | Supported integration | **PR CI + Contract.** Router selects a model or pool; llm-d owns discovery and replica routing. Do not add a competing direct-Service route. |
 | [Streaming with Agent Router](k8s/streamed-extproc) | Supported integration | **PR CI.** The gateway streams transport; Router uses the configured ExtProc body mode. Test that mode explicitly. |
 | [Valkey agentic memory](valkey-memory) | Supported integration | **Contract + Manual.** Router owns memory behavior; Valkey owns persistence and Search. You own security, retention, and backup. |
 | [Responses API state with Redis](../tutorials/global/api-and-observability#response-api) | Supported integration | **Manual.** Router owns Responses behavior; Redis stores state. You own Redis security, persistence, and eviction. |
@@ -68,12 +68,18 @@ external project.
 
 | Example | Classification | Use it for / not for |
 | --- | --- | --- |
+| [agentgateway](k8s/agentgateway) | Experimental example | Adapting ExtProc to agentgateway; no maintained gateway-specific E2E qualification. |
+| [AIBrix](k8s/aibrix) | Experimental example | Connecting Router model-pool selection to AIBrix; qualify deployment and replica routing with the selected upstream release. |
+| [NVIDIA Dynamo](k8s/dynamo) | Experimental example | Connecting Router model selection to a Dynamo frontend; no maintained Dynamo deployment or GPU qualification. |
+| [Istio Gateway](k8s/istio) | Experimental example | Adapting ExtProc to Istio; qualify its control plane, body mode, transport security, and telemetry yourself. |
+| [llm-d](k8s/llm-d) | Experimental example | Connecting Router model-pool selection to llm-d; qualify discovery and replica routing with the selected upstream release. |
 | KServe example | Experimental example | KServe integration smoke testing; not a qualified KServe or model-serving deployment. |
 | OpenShift example | Experimental example | Adapting resources to Routes and security constraints; not a hardened OpenShift profile. |
 | Hallucination policy demo | Experimental example | Fact-check policy behavior; not a qualified guardrail or model. |
 | Jailbreak error-handling demo | Experimental example | Classifier failure paths; not a secure production policy. |
 | Provider mocker and optional tiny-model smoke | Experimental example | Deterministic protocol fixtures; optional pinned Qwen3-0.6B real inference via the upstream llama.cpp server. |
 | PII remote backend demo | Experimental example | Remote token_spans.v1 PII backend and its on_error policy; not a qualified PII model or redaction policy. |
+| PII masking demo | Experimental example | Provider-bound masking across wire formats and its fail-closed path; not a qualified PII model or redaction policy. |
 | Observability demo | Experimental example | Prometheus, Grafana, alert, and Dashboard wiring; replace all example security and retention settings. |
 | Response jailbreak demo | Experimental example | Response-classifier window behavior; not a production guardrail model. |
 | Responses API Kubernetes demo | Experimental example | Redis persistence and restart behavior; not a hardened Redis deployment. |

@@ -95,6 +95,7 @@ type SignalMatches struct {
 	DecisionRules      []string // decision-model answers matched: noul/score rule names, "rule:choice" for choices
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
+	Observations       []SignalObservation
 	SignalConfidences  map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 	SignalValues       map[string]float64 // raw numeric values exposed by signal evaluators
 	SignalErrors       map[string]string  // signal evaluation errors keyed by "type:name"
@@ -418,8 +419,14 @@ func (e *DecisionEngine) evalLeaf(
 	}
 	if normalizedType == config.SignalTypeClassifier {
 		// Predicate-free classifier leaves are admitted only for a prepared
-		// operating point. Errors stay keyed by the rule, not its label.
-		matched = slices.Contains(signals.ClassifierRules, node.Name+":"+node.Label)
+		// operating point. Prefer the typed observation when present; legacy
+		// flat fields remain a compatibility path for callers that have not
+		// migrated to the versioned handoff.
+		if observation, present := classifierObservation(signals, node.Name); present {
+			matched, _ = classifierObservationMatched(observation, node.Label)
+		} else {
+			matched = slices.Contains(signals.ClassifierRules, node.Name+":"+node.Label)
+		}
 	}
 	if normalizedType == config.SignalTypeDecision {
 		reference := node.Name
@@ -485,6 +492,11 @@ func evaluatePredicateLeaf(
 }
 
 func signalFailed(signals *SignalMatches, signalType, name string) bool {
+	if signalType == config.SignalTypeClassifier {
+		if observation, present := classifierObservation(signals, name); present {
+			return classifierObservationError(observation) != ""
+		}
+	}
 	if signals == nil || signals.SignalErrors == nil {
 		return false
 	}
@@ -493,6 +505,11 @@ func signalFailed(signals *SignalMatches, signalType, name string) bool {
 }
 
 func signalError(signals *SignalMatches, signalType, name string) string {
+	if signalType == config.SignalTypeClassifier {
+		if observation, present := classifierObservation(signals, name); present {
+			return classifierObservationError(observation)
+		}
+	}
 	if signals == nil || signals.SignalErrors == nil {
 		return ""
 	}
@@ -520,6 +537,11 @@ func signalPredicateValue(
 	name string,
 	label string,
 ) (float64, bool) {
+	if signalType == config.SignalTypeClassifier {
+		if observation, present := classifierObservation(signals, name); present {
+			return classifierObservationValue(observation, label)
+		}
+	}
 	key := fmt.Sprintf("%s:%s", signalType, name)
 	if label != "" {
 		key += ":" + label
