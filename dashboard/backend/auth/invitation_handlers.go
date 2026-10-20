@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -59,7 +60,14 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				if writeAdminMutationAuthorizationError(w, err) {
 					return
 				}
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				if errors.Is(err, ErrInvalidInvitationKind) || errors.Is(err, ErrInvalidInvitationEmail) ||
+					errors.Is(err, ErrInvalidInvitationName) || errors.Is(err, ErrInvalidInvitationUses) ||
+					errors.Is(err, ErrInvitationUserExists) || errors.Is(err, ErrInvalidRole) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				log.Printf("failed to create invitation: %v", err)
+				http.Error(w, "failed to create invitation", http.StatusInternalServerError)
 				return
 			}
 			writeAudit(r, svc, "invitation.create", "dashboard-invitations", ac.UserID)
@@ -155,6 +163,7 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 			}
 			perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
 			if err != nil {
+				log.Printf("failed to load permissions after invitation accept: %v", err)
 				http.Error(w, "failed to open session", http.StatusInternalServerError)
 				return
 			}
@@ -174,5 +183,11 @@ func writeInvitationError(w http.ResponseWriter, err error) {
 		http.Error(w, "invitation is no longer available", http.StatusGone)
 		return
 	}
-	http.Error(w, err.Error(), http.StatusBadRequest)
+	if errors.Is(err, ErrInvalidInvitationEmail) || errors.Is(err, ErrInvalidInvitationName) ||
+		errors.Is(err, ErrInvitationUserExists) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Printf("invitation store error: %v", err)
+	http.Error(w, "failed to process invitation", http.StatusInternalServerError)
 }

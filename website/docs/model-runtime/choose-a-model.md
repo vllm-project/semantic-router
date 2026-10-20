@@ -67,15 +67,31 @@ d3-lite), and run on a GPU. Start one with, for example,
 MI325X. They answer `choice`, `noul` and `score` questions, and their answers
 match the packages' own runtime bit for bit
 ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).
-A d3 package with FP8 or int4 (GPTQ or AWQ) weights in the compressed-tensors
-format, and a `MODEL_MANIFEST.json`, is served the same way, from a local path
-or from its repository with `--revision` and the commit to load. The d3 packages are
-`vllm-sr/d3-FP8`, `vllm-sr/d3-W4A16-AWQ` and `vllm-sr/d3-W4A16-GPTQ`. On the test rows of its
+A d3 package with FP8, int4 (GPTQ or AWQ) or NVFP4 weights in the
+compressed-tensors format, and a `MODEL_MANIFEST.json`, is served the same way,
+from a local path or from its repository with `--revision` and the commit to load.
+The d3 packages are `vllm-sr/d3-FP8`, `vllm-sr/d3-W4A16-AWQ`, `vllm-sr/d3-W4A16-GPTQ`,
+`vllm-sr/d3-NVFP4` and `vllm-sr/d3-NVFP4-AWQ`. On the test rows of its
 [record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-quantized.md),
 an FP8 d3 keeps 99.1% of the BF16 answers in 31.9 GB instead of 52.2 GB (FP8
 needs an AMD Instinct MI300 or MI350 series GPU or an NVIDIA GPU of compute
-capability 8.9 or later), and an int4 d3 keeps about 98% in 16.5 GB, a little
-slower than BF16.
+capability 8.9 or later), an int4 d3 keeps about 98% in 16.5 GB, a little
+slower than BF16, and an NVFP4 d3 keeps about 97% in 17.2 GB and answers a
+request in 23.2 ms against BF16's 62.6 ms on an RTX PRO 6000. NVFP4 needs FP4
+tensor cores, which only NVIDIA Blackwell GPUs (compute capability 10.x or
+12.x) have; any other device refuses the package before its weights load.
+
+`vllm-sr/d3-turbo` (27B) is the Decision 3.0 model that reads a request's
+input once and answers every question from that reading, so asking many
+questions about one input costs little more than asking one
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/state-once.md)).
+Besides `choice`, `noul` and `score`, it answers `box` questions (where
+something is in an image, or in a video at the second given by `at`) and
+`track` questions (a box for each moment of a whole video, 1 or 2 per second),
+and a question or an option may hold an image of its own (`assets`). Each
+question reads up to 32,768 tokens by default and up to 262,144 with
+`options.long_context`, on one AMD Instinct MI325X. Start it with
+`vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm`.
 
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in

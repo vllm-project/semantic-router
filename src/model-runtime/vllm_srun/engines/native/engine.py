@@ -17,6 +17,7 @@ from ...accel.kernels import CONTIGUOUS
 from ...plugins.base import (
     Accelerator,
     BackboneSpec,
+    BranchBatch,
     DeviceInfo,
     EncoderBatch,
     EncoderOutput,
@@ -35,6 +36,16 @@ from ...scheduler.planner import padded
 from . import fast, models, quantized
 from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
+from .models import branch as branch_module
+from .models.branch import (
+    CAUSAL,
+    LAYOUTS,
+    PREFIX_BIDIR,
+    Branches,
+    StaticBranches,
+    pack_layout,
+    static_layout,
+)
 from .models.forest import ForestShape
 from .models.lora import attach
 from .models.packed import Packed, packed_unavailable
@@ -53,6 +64,22 @@ _T = TypeVar("_T")
 
 # FLA's gated-delta kernels index q / k / v with 32-bit offsets: one forward's stay within 2**30 elements.
 GATED_DELTA_ELEMENTS = 2**30 - 1
+# Branched forwards replay their static layout up to this many rows: their host work (two
+# gated-delta calls per layer, the gathers) stays a large share of a forward to longer lengths,
+# on a backbone of at most NARROW_HIDDEN features to NARROW_BRANCH_GRAPH_TOKENS rows.
+BRANCH_GRAPH_TOKENS = fast.MAX_GRAPH_TOKENS
+NARROW_BRANCH_GRAPH_TOKENS = 16384
+NARROW_HIDDEN = 2048
+BRANCH_GRAPH_BYTES = 16 << 30
+
+
+def branch_graph_tokens(backbone: Any) -> int:
+    """The rows up to which a backbone's branched forwards replay graphs (``BRANCH_GRAPH_TOKENS``)."""
+    config = getattr(backbone, "config", None)
+    hidden = config.get("hidden_size") if isinstance(config, dict) else None
+    if isinstance(hidden, int) and hidden <= NARROW_HIDDEN:
+        return NARROW_BRANCH_GRAPH_TOKENS
+    return BRANCH_GRAPH_TOKENS
 
 
 def graph_receipt(graphs: dict[str | None, EncoderGraphs]) -> dict[str, Any]:
@@ -117,7 +144,7 @@ class NativeEngineModel(EngineModel):
         for layer in self._quantized():
             if isinstance(layer, quantized.Int4Linear):
                 layer.fused = fused_int4 and self.device.type == "cuda"
-            else:
+            elif isinstance(layer, quantized.Float8Linear):
                 layer.unscaled_product &= self.kernels.allow_approximate
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
@@ -140,6 +167,7 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self.branch_graphs: fast.Graphs | None = None
         self._cpu_threads = options.threads or torch.get_num_threads()
         self.threads_resolver = (
             adaptive_threads.AdaptiveThreads(
@@ -177,7 +205,10 @@ class NativeEngineModel(EngineModel):
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs.
 
         A noncausal backbone builds its masks per forward as ``noncausal_masks``
-        does (``fast.NoncausalMasks``), so its graphs capture those.
+        does (``fast.NoncausalMasks``), so its graphs capture those. A
+        block-masked (state-once) backbone takes only the fused layers and
+        builds its row masks per forward (``state_once_mask``); its branched
+        forwards replay their own graphs (``branch_graphs``).
         """
         options, backbone = self.options, self.backbone
         if options.fused_kernels:
@@ -185,6 +216,20 @@ class NativeEngineModel(EngineModel):
             self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
             if reason:
                 self.fast["fused_skipped"] = reason
+        if getattr(backbone, "state_once", False) and options.graphs:
+            # Branched forwards replay per bucket (``models/branch.py`` ``static_layout``). A bucket
+            # of at most BRANCH_GRAPH_TOKENS rows is captured the first time it runs: its capture
+            # costs a few short forwards, and such buckets (concurrent short requests) recur. A
+            # longer one is captured the second time, so a bucket seen once runs eager.
+            self.branch_graphs = fast.Graphs(
+                backbone,
+                cast(Any, None),
+                max_tokens=branch_graph_tokens(backbone),
+                max_bytes=BRANCH_GRAPH_BYTES,
+                first_capture_tokens=BRANCH_GRAPH_TOKENS,
+            )
+        if not self.noncausal and getattr(backbone, "layout", "causal") != "causal":
+            return
         if (
             self.spec.backbone.lora is not None
             and self.residency is not None
@@ -212,6 +257,8 @@ class NativeEngineModel(EngineModel):
             )
         if self.graphs is not None:
             out["graphs"] = self.graphs.receipt()
+        if self.branch_graphs is not None:
+            out["branch_graphs"] = self.branch_graphs.receipt()
         if self.encoder_graphs:
             out["encoder_graphs"] = graph_receipt(self.encoder_graphs)
         if self.reduced:
@@ -456,6 +503,301 @@ class NativeEngineModel(EngineModel):
         resolver.record_base(tokens, (time.perf_counter() - started) * 1000.0)
         return result
 
+    def _state_once(self) -> models.StateOnceBackbone:
+        backbone = self.backbone
+        if not getattr(backbone, "state_once", False):
+            raise ValueError(
+                f"the {self.spec.name} backbone is not state-once "
+                f"(attention mode {getattr(backbone, 'layout', 'unknown')!r})"
+            )
+        return cast(models.StateOnceBackbone, backbone)
+
+    def _media_inputs(
+        self, images: ImageInputs, input_ids: torch.Tensor
+    ) -> tuple[tuple[torch.Tensor, int], tuple[torch.Tensor, int] | None, int]:
+        """A batch's image (and video) features with their token IDs, and the tower's merge size.
+
+        Checks that the placeholders match the features; runs the tower on
+        pixel values that come without features.
+        """
+        tower = self.towers.get(images.tower)
+        if tower is None or not hasattr(self.backbone, "embed"):
+            raise ValueError(f"the {self.spec.name} backbone reads no images")
+        merge = cast(Any, tower).merge
+        videos = images.videos
+        inputs = [("image", images.token_id, images.grids)]
+        if videos is not None:
+            inputs.append(("video", videos.token_id, videos.grids))
+        for kind, token_id, grids in inputs:
+            placeholders = int((input_ids == token_id).sum())
+            features = sum(t * h * w for t, h, w in grids) // merge**2
+            if placeholders != features:
+                raise ValueError(
+                    f"{placeholders} {kind} tokens but {features} {kind} features"
+                )
+        if images.features is not None:
+            image_features = images.features.to(self.device)
+        elif images.pixel_values is not None:
+            image_features = tower(images.pixel_values.to(self.device), images.grids)
+        else:
+            raise ValueError("image inputs need pixel values or features")
+        video_inputs = (
+            (videos.features.to(self.device), videos.token_id)
+            if videos is not None
+            else None
+        )
+        return (image_features, images.token_id), video_inputs, merge
+
+    def _forward_rows(self, batch: ForwardBatch) -> ForwardOutput:
+        """Each row alone under the backbone's state-once mask (``ForwardBatch.states``)."""
+        backbone = self._state_once()
+        assert batch.states is not None
+        input_ids = batch.input_ids.to(self.device)
+        attention_mask = batch.attention_mask.to(self.device)
+        padded = any(n != input_ids.shape[1] for n in batch.lengths)
+        with torch.inference_mode(), self.autocast():
+            if batch.images is not None:
+                images, videos, merge = self._media_inputs(
+                    batch.images, batch.input_ids
+                )
+                embeds = backbone.embed(input_ids, images, videos)
+                media = batch.images.videos
+                positions = rope_index(
+                    batch.input_ids.cpu(),
+                    batch.attention_mask.cpu(),
+                    batch.images.grids,
+                    batch.images.token_id,
+                    merge,
+                    video_grids=media.grids if media is not None else None,
+                    video_token_id=media.token_id if media is not None else None,
+                ).to(self.device)
+            else:
+                embeds = backbone.embed(input_ids)
+                counted = (attention_mask.cumsum(1) - 1).clamp(min=0)
+                positions = counted[None].expand(3, -1, -1)
+            hidden = backbone.forward_rows(
+                embeds, attention_mask, batch.states, positions, padded
+            )
+            rows = torch.arange(hidden.shape[0], device=hidden.device)
+            gathered = hidden[rows[:, None], batch.gather.to(self.device)]
+            queried = hidden[rows, batch.query.to(self.device)]
+        return ForwardOutput(gathered=gathered, query=queried)
+
+    def graph_captures(self) -> int:
+        """Backbone graphs captured or attempted so far (each such forward runs its body several times)."""
+        return sum(
+            graphs.stats["captures"] + graphs.stats["failed"]
+            for graphs in (self.graphs, self.branch_graphs)
+            if graphs is not None
+        )
+
+    def static_branches(self) -> bool:
+        """Whether text batches branch in a bucket's static layout: a GPU at half precision with varlen
+        attention and FLA's chunk-indexed rule, the kernels a captured layout replays.
+        """
+        dtype = self.spec.dtype
+        half = ("bfloat16", "float16")
+        return (
+            self.device.type == "cuda"
+            and (
+                dtype.autocast in half
+                or (dtype.autocast is None and dtype.gpu_weights in half)
+            )
+            and branch_module.VARLEN is not None
+            and self.kernels.has("chunk_gated_delta_rule_static")
+        )
+
+    def _segmented_prep(self) -> bool:
+        """Whether the fused gated-delta layers read a static layout by segment, so it needs no gap layout."""
+        if not self.fast.get("fused_layers") or not self.kernels.has("gdn_prep"):
+            return False
+        prep = self.kernels.select("gdn_prep")
+        return (
+            getattr(prep.fn, "segments", None) is not None
+            and prep.variant == self.kernels.select("causal_conv1d").variant
+        )
+
+    def _branch_static(
+        self,
+        backbone: models.StateOnceBackbone,
+        states: list[list[int]],
+        blocks: list[list[int]],
+        owners: list[int],
+        order: list[int],
+    ) -> torch.Tensor:
+        """Text states and blocks in the static layout of their bucket (``static_layout``), the forward
+        replayed from the bucket's graph once captured; eager runs compute what a replay computes.
+
+        Where states and blocks share their mask, a batch whose every state has
+        one block runs joined (each state and its block one row), and any other
+        attends in one call (``merged``).
+        """
+        window = max(
+            (
+                layer.linear_attn.conv_kernel_size
+                for layer in cast(Any, backbone).layers
+                if getattr(layer, "kind", None) == "linear_attention"
+            ),
+            default=1,
+        )
+        layout = backbone.layout
+        one_mask = layout in (PREFIX_BIDIR, CAUSAL)
+        joined = len(blocks) == len(states) and one_mask
+        rows = sum(map(len, states)) + sum(map(len, blocks))
+        # Past the graphs' token limit a forward keeps the device busy longer than its launches take:
+        # eager and unpadded, as the causal rows run.
+        graphs = self.branch_graphs
+        if graphs is not None and rows > graphs.max_tokens:
+            graphs = None
+        shape, values = static_layout(
+            states,
+            blocks,
+            owners,
+            window,
+            joined=joined,
+            gaps=not self._segmented_prep(),
+            exact=graphs is None,
+            merged=one_mask,
+        )
+        # The readout rows in the batch's order, so the forward's output needs no reordering.
+        last = values["last"][:]
+        for index, position in enumerate(order):
+            last[position] = values["last"][index]
+        values["last"] = last
+        ints32, ints64 = pack_layout(shape, values)
+        inputs = (ints32.to(self.device), ints64.to(self.device))
+
+        def forward(flat32: torch.Tensor, flat64: torch.Tensor) -> torch.Tensor:
+            view = StaticBranches(shape, layout, flat32, flat64, values)
+            embeds = backbone.embed(view.ids[None])
+            positions = view.positions.expand(3, -1)
+            return backbone.forward_branches(embeds, positions, view, view.last)[0]
+
+        with torch.inference_mode(), self.autocast():
+            if graphs is not None:
+                out = graphs.run(("branch", shape), inputs, forward, shape.rows)
+            else:
+                out = forward(*inputs)
+            # A replay rewrites the graph's one output buffer, so the blocks' rows are copied out.
+            return out[: len(blocks)].clone()
+
+    def branch(self, batch: BranchBatch) -> torch.Tensor:
+        """Each state once and every block branched from it, in one packed row (``models/branch.py``).
+
+        The blocks are laid out grouped by their state, the order the layout
+        needs, and their hidden states come back in the batch's order.
+        """
+        backbone = self._state_once()
+        if not batch.blocks or len(batch.owners) != len(batch.blocks):
+            raise ValueError("a branched batch needs one state per block")
+        used = sorted(set(batch.owners))
+        renumber = {state: index for index, state in enumerate(used)}
+        states = [batch.states[state] for state in used]
+        media = [
+            (batch.media[state] if batch.media is not None else None) for state in used
+        ]
+        order = sorted(
+            range(len(batch.blocks)), key=lambda i: renumber[batch.owners[i]]
+        )
+        blocks = [batch.blocks[i] for i in order]
+        owners = [renumber[batch.owners[i]] for i in order]
+        readouts = (
+            [batch.readouts[i] for i in order] if batch.readouts is not None else None
+        )
+        if (
+            self.static_branches()
+            and all(entry is None for entry in media)
+            and readouts is None
+        ):
+            return self._branch_static(backbone, states, blocks, owners, order)
+        ids = torch.tensor(
+            [token for sequence in (*states, *blocks) for token in sequence],
+            dtype=torch.long,
+        )
+        # Placeholders count only inside the states that carry media.
+        where = torch.zeros(len(ids), dtype=torch.bool)
+        offset = 0
+        for tokens, inputs in zip(states, media, strict=True):
+            if inputs is not None:
+                where[offset : offset + len(tokens)] = True
+            offset += len(tokens)
+        positions, starts = [], []
+        image_features: list[torch.Tensor] = []
+        video_features: list[torch.Tensor] = []
+        image_token = video_token = None
+        with torch.inference_mode(), self.autocast():
+            for tokens, inputs in zip(states, media, strict=True):
+                if inputs is None:
+                    positions.append(torch.arange(len(tokens)).expand(3, -1))
+                    starts.append(len(tokens))
+                    continue
+                state_ids = torch.tensor(tokens, dtype=torch.long)
+                images, videos, merge = self._media_inputs(inputs, state_ids)
+                image_features.append(images[0])
+                image_token = images[1]
+                if videos is not None:
+                    video_features.append(videos[0])
+                    video_token = videos[1]
+                place = rope_index(
+                    state_ids[None],
+                    torch.ones((1, len(tokens)), dtype=torch.long),
+                    inputs.grids,
+                    inputs.token_id,
+                    merge,
+                    video_grids=inputs.videos.grids if inputs.videos else None,
+                    video_token_id=inputs.videos.token_id if inputs.videos else None,
+                )[:, 0]
+                positions.append(place)
+                # A state ends in text, so its next position follows its last token's.
+                starts.append(int(place[0, -1]) + 1)
+            for owner, tokens in zip(owners, blocks, strict=True):
+                positions.append(
+                    torch.arange(starts[owner], starts[owner] + len(tokens)).expand(
+                        3, -1
+                    )
+                )
+            input_ids = ids[None].to(self.device)
+            embeds = backbone.embed(
+                input_ids,
+                (
+                    (torch.cat(image_features), image_token)
+                    if image_token is not None
+                    else None
+                ),
+                (
+                    (torch.cat(video_features), video_token)
+                    if video_token is not None
+                    else None
+                ),
+                where[None].to(self.device),
+            )
+            layout = Branches(
+                [len(tokens) for tokens in states],
+                [len(tokens) for tokens in blocks],
+                owners,
+                backbone.layout,
+                self.device,
+            )
+            hidden = backbone.forward_branches(
+                embeds, torch.cat(positions, dim=1).to(self.device), layout
+            )
+            if readouts is not None:
+                # Each block's readouts (offsets back from its last token), returned in the batch's block order.
+                ends = torch.as_tensor(layout.last, device=hidden.device).tolist()
+                picked = [
+                    [ends[slot] - offset for offset in readouts[slot]]
+                    for slot in range(len(blocks))
+                ]
+                by_batch: list[list[int]] = [[] for _ in blocks]
+                for slot, index in enumerate(order):
+                    by_batch[index] = picked[slot]
+                flat = [position for positions in by_batch for position in positions]
+                return hidden[0, torch.tensor(flat, device=hidden.device)]
+            last = hidden[0, layout.last]
+            restored = torch.empty_like(last)
+            restored[torch.tensor(order, device=last.device)] = last
+        return restored
+
     @property
     def supports_packed(self) -> bool:
         return self.packed_reason is None
@@ -468,6 +810,8 @@ class NativeEngineModel(EngineModel):
             return self._forward_tree(batch)
         if batch.packed:
             return self._forward_packed(batch)
+        if batch.states is not None:
+            return self._forward_rows(batch)
         input_ids = batch.input_ids.to(self.device)
         attention_mask = batch.attention_mask.to(self.device)
         gather = batch.gather.to(self.device)
@@ -537,21 +881,12 @@ class NativeEngineModel(EngineModel):
         forward never reads the device back.
         """
         images = cast(ImageInputs, batch.images)
-        tower = self.towers.get(images.tower)
-        if tower is None or not hasattr(self.backbone, "forward_images"):
+        if not hasattr(self.backbone, "forward_images"):
             raise ValueError(f"the {self.spec.name} backbone reads no images")
-        merge = cast(Any, tower).merge
+        (image_features, _), _video_inputs, merge = self._media_inputs(
+            images, batch.input_ids
+        )
         videos = images.videos
-        inputs = [("image", images.token_id, images.grids)]
-        if videos is not None:
-            inputs.append(("video", videos.token_id, videos.grids))
-        for kind, token_id, grids in inputs:
-            placeholders = int((batch.input_ids == token_id).sum())
-            features = sum(t * h * w for t, h, w in grids) // merge**2
-            if placeholders != features:
-                raise ValueError(
-                    f"{placeholders} {kind} tokens but {features} {kind} features"
-                )
         positions = rope_index(
             input_ids,
             attention_mask,
@@ -561,12 +896,6 @@ class NativeEngineModel(EngineModel):
             video_grids=videos.grids if videos is not None else None,
             video_token_id=videos.token_id if videos is not None else None,
         ).to(self.device)
-        if images.features is not None:
-            image_features = images.features.to(self.device)
-        elif images.pixel_values is not None:
-            image_features = tower(images.pixel_values.to(self.device), images.grids)
-        else:
-            raise ValueError("image inputs need pixel values or features")
         return positions, image_features
 
     def _forward_packed(self, batch: ForwardBatch) -> ForwardOutput:
@@ -747,7 +1076,9 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
-    def _quantized(self) -> list[quantized.Int4Linear | quantized.Float8Linear]:
+    def _quantized(
+        self,
+    ) -> list[quantized.Int4Linear | quantized.Float8Linear | quantized.NVFP4Linear]:
         return [
             layer for module in self._modules() for layer in quantized.layers(module)
         ]
@@ -830,6 +1161,7 @@ class NativeEngine(Engine):
             "outputs": ["gathered", "hidden"],
             "encoder_layouts": ["padded", "packed"],
             "shared_context": True,
+            "state_once": list(LAYOUTS),
             "lora": "peft-unmerged",
         }
 

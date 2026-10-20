@@ -1,8 +1,9 @@
 # Decision 3.0 quantized packages
 
 The native engine loads d3 packages whose projections are held as
-compressed-tensors FP8 (W8A8, `float-quantized`) or int4 (W4A16,
-`pack-quantized`) weights (`quantization.py`, `engines/native/quantized.py`).
+compressed-tensors FP8 (W8A8, `float-quantized`), int4 (W4A16,
+`pack-quantized`) or NVFP4 (W4A4, `nvfp4-pack-quantized`, below) weights
+(`quantization.py`, `engines/native/quantized.py`).
 A quantized package is its own model: its answers are the ones its weights
 give, and this record compares them with the BF16 package's.
 
@@ -51,13 +52,14 @@ without: the flips do not come from those layers.
 Median of a request answered a third time, so that its shape's graph replays,
 over the first 500 of those 1,000 train rows, each package against BF16 in the
 same process. Decision 3.0 forwards are captured as graphs only with the
-change of #4999, so the table also gives main as it is (the first 1,000 rows,
-answered a second time):
+change of #4999; without graphs, the first 1,000 rows are answered a second
+time. Measured on 2026-10-16 with this runtime as of 2026-10-14 and the graph
+capture of #4999:
 
-| Package | BF16 with graphs | Package with graphs | BF16, main | Package, main |
+| Package | BF16 with graphs | Package with graphs | BF16 without graphs | Package without graphs |
 | --- | --- | --- | --- | --- |
-| FP8 | 45.2 ms | 36.5 ms | 66.1 ms | 83.3 ms |
-| AWQ int4 | 45.1 ms | 60.2 ms | 67.5 ms | 86.1 ms |
+| FP8 | 46.4 ms | 36.8 ms | 67.1 ms | 80.9 ms |
+| AWQ int4 | 48.2 ms | 62.0 ms | 72.5 ms | 86.9 ms |
 
 FP8 pays per layer for one activation quantization and one scaled GEMM launch,
 which costs more host time than it saves without graphs. Triton's launcher binds
@@ -70,8 +72,8 @@ views at load saves another 6 us; one gate projection of 64 rows then takes
 bytes.
 Without graphs the FP8 package's median falls from 84.0 and 85.4 ms to 77.5 ms
 in alternating runs (d3 68.3 to 71.3 ms). After loading, the
-packages hold 52.3 GB (BF16), 32.2 GB (FP8) and 16.9 GB (AWQ) of device memory,
-and 52.9, 32.9 and 17.5 GB at the peak of the 20 longest of those 1,000 rows
+packages hold 52.2 GB (BF16), 31.9 GB (FP8) and 16.5 GB (AWQ) of weights,
+and 52.9, 32.8 and 17.5 GB at the peak of the 20 longest of those 1,000 rows
 (up to 5,928 characters of state), each in its own process. Int4 layers unpack
 their weights to BF16 on every call and then multiply in BF16: they save
 memory, not time.
@@ -81,13 +83,13 @@ memory, not time.
 Microseconds at 64, 256 and 1,024 rows, summed over one of each of d3's
 projection shapes (`in_proj_qkv`, `in_proj_z`, `out_proj`, `q_proj`, `k_proj`,
 `o_proj`, `gate_proj` twice for `up_proj`, `down_proj`), random weights,
-`triton.testing.do_bench`:
+`triton.testing.do_bench` (the MI300X on 2026-10-15):
 
 | Device | Rows | BF16 GEMM | FP8 (quantize + scaled GEMM) | int4 (unpack + GEMM) |
 | --- | --- | --- | --- | --- |
-| MI300X | 64 | 585 | 442 | 816 |
-| MI300X | 256 | 881 | 609 | 1,223 |
-| MI300X | 1,024 | 2,197 | 1,370 | 2,414 |
+| MI300X | 64 | 577 | 429 | 809 |
+| MI300X | 256 | 877 | 611 | 1,211 |
+| MI300X | 1,024 | 2,220 | 1,364 | 2,408 |
 | RTX 4070 Ti SUPER | 64 | 2,225 | 1,289 | 4,102 |
 | RTX 4070 Ti SUPER | 256 | 3,264 | 4,857 | 5,286 |
 | RTX 4070 Ti SUPER | 1,024 | 11,585 | 17,737 | 13,655 |
@@ -153,3 +155,68 @@ approximate kernels with the scaled product (largest probability change
 0.109); the other changes come from the fused element-wise kernels. One
 request at a time it saves little latency at these lengths; the gain is the
 kernel table's, at 256 rows and more, as batches of concurrent requests reach.
+
+## NVFP4 on Blackwell
+
+NVFP4 packages multiply on FP4 tensor cores, which only Blackwell GPUs have, so
+they were measured on one NVIDIA RTX PRO 6000 Blackwell Workstation Edition
+(compute capability 12.0; PyTorch 2.11.0+cu128), against the BF16 package on
+the same GPU, with the default engine options (graphs, fused kernels).
+
+| Package | Repository | Made by | Projections | Kept in BF16 | Weights file |
+| --- | --- | --- | --- | --- | --- |
+| NVFP4 | `vllm-sr/d3-NVFP4` `07fa5a04` | FP4 E2M1 weights rounded to nearest, groups of 16 with E4M3 block scales under an FP32 global scale per tensor; activations the same per request, under a global scale calibrated per layer on 512 prompts of the validation split | 400 | as AWQ int4 | 17.2 GB |
+| NVFP4 AWQ | `vllm-sr/d3-NVFP4-AWQ` `27dbfdc4` | AWQ smoothing (scales folded into the norms and `up_proj`) on 512 prompts of the validation split, then as NVFP4 | 400 | as AWQ int4 | 17.2 GB |
+
+The same 14,031 test requests as above; the BF16 package answers 0.8323 of
+them on this GPU:
+
+| Package | Changed | Agreement | Accuracy (BF16 0.8323) | Device memory (BF16 52.2 GB) |
+| --- | --- | --- | --- | --- |
+| NVFP4 | 472 | 96.64% | 0.8271 | 17.2 GB |
+| NVFP4 AWQ | 448 | 96.81% | 0.8292 | 17.2 GB |
+
+Two calibration states are also the states of 2 of these requests.
+
+Median latency as above (the first 500 of the 1,000 train rows answered a
+third time with graphs; all 1,000 answered a second time without), with exact
+kernels only and at `--dtype auto`, the default of `vllm-srun serve`. At
+`--dtype auto` a quantized package also runs the fused element-wise kernels the
+decision3 family allows it (norms, residual adds and gates; approximate on
+CUDA, `docs/records/cuda-fused-approximate.md`); the agreement above was
+answered so. A BF16 package keeps exact kernels at every dtype.
+
+| Package | Exact, graphs | Exact, without graphs | `--dtype auto`, graphs | `--dtype auto`, without graphs |
+| --- | --- | --- | --- | --- |
+| BF16 | 62.6 ms | 63.1 ms | as exact | as exact |
+| NVFP4, the JIT launch and torch scale layout | 30.2 ms | 60.0 ms | | |
+| NVFP4 | 28.5 ms | 48.0 ms | 23.2 ms | 37.4 ms |
+| NVFP4 AWQ | 28.5 ms | 47.7 ms | 23.2 ms | 37.8 ms |
+
+Without graphs an NVFP4 forward is host-bound: it launched 7,196 kernels, and
+the GPU was busy 46% of the time. Each layer now launches two of them. The
+Triton kernel writes the activation scales in cuBLAS's 32x4x4 layout, which
+replaces three torch kernels per call, and the layer skips copies of inputs
+that are already BF16 and contiguous. After a shape's first call, the compiled
+kernel is launched directly, as the FP8 quantization is. After loading, the
+NVFP4 packages hold 17.2 GB of device memory, and 17.9 GB at the peak of the 20
+longest rows (52.2 and 52.8 GB for BF16).
+
+In both NVFP4 packages, q / k / v and gate / up share one input global scale
+and one weight global scale in every layer (the Gated DeltaNet `in_proj_qkv` /
+`in_proj_z` share only the input scale, in all but one layer). Their weights
+are merged at load into one layer per group, so one quantization and one
+block-scaled product replace two or three. Each column comes out the same as
+the separate products from 1 to 9,000 rows, and the parts keep views of the
+merged weight, so device memory is unchanged. q and k reach `attn_prep`, and
+gate and up reach `silu_mul`, as column-slice views of the merged product, so a
+layer's projections peak no higher than the separate ones (89.1 MB both at
+2,048 rows of d3's q / k / v widths; copying q and k out took 142.6 MB). The
+`in_proj_qkv` / `in_proj_z` pair shares its input quantization. On the 1,000 test requests of the
+agreement table, every answer is the same byte for byte. At `--dtype auto`, two
+alternating runs of each:
+
+| NVFP4 | Graphs | Without graphs | Device memory after loading |
+| --- | --- | --- | --- |
+| Separate projections | 23.3 / 23.4 ms | 37.5 / 37.9 ms | 17.2 GB |
+| Merged projections | 21.5 / 21.5 ms | 36.5 / 36.5 ms | 17.2 GB |
