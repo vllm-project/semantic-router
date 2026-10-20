@@ -10,6 +10,7 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from .bert import BertBackbone
+from .branch import Branches, StaticBranches
 from .clap import ClapAudioBackbone
 from .forest import ForestShape
 from .modernbert import Layout, ModernBertBackbone
@@ -78,6 +79,38 @@ class TreeBackbone(Protocol):
     """A decoder that runs a shared-context request as one packed tree row (``tree.py``)."""
 
     def forward_tree(self, input_ids: torch.Tensor, tree: Tree) -> torch.Tensor: ...
+
+
+class StateOnceBackbone(Protocol):
+    """A decoder with a state-once layout: requests branched from their states (``branch.py``), or rows alone."""
+
+    layout: str
+    state_once: bool
+
+    def embed(
+        self,
+        input_ids: torch.Tensor,
+        images: tuple[torch.Tensor, int] | None = None,
+        videos: tuple[torch.Tensor, int] | None = None,
+        where: torch.Tensor | None = None,
+    ) -> torch.Tensor: ...
+
+    def forward_branches(
+        self,
+        embeds: torch.Tensor,
+        positions: torch.Tensor,
+        branches: Branches | StaticBranches,
+        rows: torch.Tensor | None = None,
+    ) -> torch.Tensor: ...
+
+    def forward_rows(
+        self,
+        embeds: torch.Tensor,
+        attention_mask: torch.Tensor,
+        states: list[int],
+        positions: torch.Tensor,
+        padded: bool,
+    ) -> torch.Tensor: ...
 
 
 class ForestBackbone(Protocol):
