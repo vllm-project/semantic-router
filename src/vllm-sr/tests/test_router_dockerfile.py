@@ -57,7 +57,7 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     graph = stages()
 
     # vllm-sr is the only image stage, and the default target of every build.
-    assert tuple(name for name in graph if name in STAGES) == STAGES
+    assert tuple(graph) == STAGES
     assert graph["runtime"][0] == "torch-${ACCELERATOR}"
     for stage in ("torch-cpu", "torch-rocm-base", "torch-cuda"):
         assert graph[stage][0] == "python-base", stage
@@ -66,8 +66,6 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     assert graph["rocm-lib-slim"][0] == "rocm-torch-release"
     assert graph["torch-rocm"][0] == "python-base"
     assert graph["vllm-sr"][0] == "runtime"
-    assert graph["vllm-sr-attached"][0] == "${IMAGE_REGISTRY}${ATTACHED_BASE_IMAGE}"
-    assert "COPY --from=router-files / /" in graph["vllm-sr-attached"][1]
     assert "ARG ACCELERATOR=cpu" in router_dockerfile()
 
 
@@ -75,6 +73,8 @@ def test_router_images_carry_no_native_model_bindings() -> None:
     text = router_dockerfile()
 
     for legacy in (
+        "cargo",
+        "rustup",
         "-binding",
         "onnxruntime_rocm",
         "migraphx",
@@ -86,10 +86,6 @@ def test_router_images_carry_no_native_model_bindings() -> None:
         "rocm/dev-ubuntu",
     ):
         assert legacy not in text, legacy
-    # Rust compiles the GLIDE dependency only, never a model runtime.
-    for stage in ("runtime", "vllm-sr", "vllm-sr-attached"):
-        assert "cargo" not in stages()[stage][1]
-        assert "rustup" not in stages()[stage][1]
 
 
 def test_router_binary_needs_only_the_target_c_linker() -> None:
@@ -273,13 +269,9 @@ def test_entrypoint_dispatches_flags_and_config_paths(tmp_path: Path) -> None:
 
 
 def test_base_images_are_fully_qualified_for_podman() -> None:
-    local = set(stages())
+    local = set(STAGES)
     for base, _ in stages().values():
-        if base in local or base in (
-            "scratch",
-            "torch-${ACCELERATOR}",
-            "glide-${TARGETARCH}",
-        ):
+        if base in local or base == "torch-${ACCELERATOR}":
             continue
         assert base.startswith("${IMAGE_REGISTRY}"), base
 

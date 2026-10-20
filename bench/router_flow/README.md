@@ -129,7 +129,8 @@ docker rm --force --volumes vsr-http-bench
 ```
 
 Use a free container name and free ports, and stop the provider after the run.
-For x86, build the same `vllm-sr-attached` Dockerfile target with an amd64 tag
+For x86, build the `vllm-sr-attached` target in
+`tools/docker/Dockerfile.attached` with an amd64 tag
 and substitute that tag above. Keep the source revision, CPU/memory limits,
 configuration and provider inputs the same across hosts.
 

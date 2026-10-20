@@ -4,7 +4,9 @@ This directory contains the Router image and lint toolchain Dockerfiles:
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile.extproc` | Every Router image: the Go router with the built-in model runtime. |
+| `Dockerfile.extproc` | Bundled Router images: the Go router with the built-in model runtime. |
+| `Dockerfile.attached` | Standalone Router with external model-runtime endpoints. |
+| `riscv64/Dockerfile` | Source-built RISC-V GLIDE FFI and Router binary. |
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |
 
 `Dockerfile.extproc` builds the three published Router images from one stage
@@ -57,14 +59,14 @@ and configuration often.
 
 ## External model runtime
 
-The same Dockerfile has an explicit `vllm-sr-attached` target for standalone
-deployments with external model-runtime endpoints. It shares the Router build,
-configuration assets and startup script with the bundled targets, but does
-not install PyTorch or `vllm-srun`. The default target remains `vllm-sr`.
+The independent `Dockerfile.attached` builds `vllm-sr-attached` for standalone
+deployments with external model-runtime endpoints. It uses the same Router
+source, configuration assets and startup script, without installing PyTorch
+or `vllm-srun`. `Dockerfile.extproc` and its bundled targets are unchanged.
 
 ```bash
 docker buildx build --platform linux/amd64 --target vllm-sr-attached \
-  -f tools/docker/Dockerfile.extproc -t vllm-sr-attached:local --load .
+  -f tools/docker/Dockerfile.attached -t vllm-sr-attached:local --load .
 ```
 
 Supply a canonical configuration with attached runtime endpoints and select
@@ -82,16 +84,19 @@ model weights. Docker layer caching is enabled by default; cold builds are an
 explicit option.
 
 RISC-V uses the real source-built GLIDE FFI; see
-[the dependency build instructions](valkey-glide/README.md). The `router-binary`
-target exports only the executable and can be cross-compiled without executing
-RISC-V userspace programs:
+[the dependency build instructions](riscv64/valkey-glide/README.md).
+`riscv64/Dockerfile` builds the FFI and Go binary separately from the runtime
+image. Its `router-binary` target exports `/out/router` and can be cross-compiled
+without executing RISC-V userspace programs:
 
 ```bash
 docker buildx build --platform linux/riscv64 --target router-binary \
-  -f tools/docker/Dockerfile.extproc --output type=local,dest=router-output .
+  -f tools/docker/riscv64/Dockerfile --output type=local,dest=router-output .
 ```
 
-For a complete native image, use a RISC-V BuildKit worker. `GO_IMAGE` and
+For a complete native image, the public runner first builds that binary image,
+then passes it as `ROUTER_BUILD` to `Dockerfile.attached`. Use a native RISC-V
+worker with the Docker buildx driver for this local-image handoff. `GO_IMAGE` and
 `RUST_IMAGE` must provide Go 1.25, Rust 1.90 and native Debian-compatible build
 tools. The default official builder images do not supply RISC-V variants.
 `ASSETS_IMAGE=library/debian:trixie-slim` supplies the Python asset stage there;

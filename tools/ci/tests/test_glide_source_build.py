@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = ROOT / "tools/docker/build-glide.sh"
+SCRIPT = ROOT / "tools/docker/riscv64/build-glide.sh"
 
 
 class GlideSourceBuildTests(unittest.TestCase):

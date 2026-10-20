@@ -17,6 +17,7 @@ import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
 ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
+ATTACHED_DOCKERFILE = "tools/docker/Dockerfile.attached"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
@@ -24,7 +25,7 @@ DEFINITIONS = {
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
-    "vllm-sr-riscv64": (".", ROUTER_DOCKERFILE, ["linux/riscv64"]),
+    "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
     "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
