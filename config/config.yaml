@@ -26,6 +26,9 @@ listeners:
     # Native System One inference has its own explicit public-model scope.
     systemone:
       models: [decision-public]
+      # The longest the listener waits for a model it calls directly, however
+      # long a request's options.deadline_ms asks for (10 minutes by default).
+      max_deadline_ms: 600000
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:

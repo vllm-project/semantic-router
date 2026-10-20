@@ -1,6 +1,12 @@
 name: Main
 
 on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Qualify and publish the complete development CLI and commit-addressed images.
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -8,6 +14,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  issues: read
 
 jobs:
   ci:
@@ -17,9 +24,11 @@ jobs:
       contents: read
       actions: read
       pull-requests: read
+      issues: read
       security-events: write
     with:
       profile: main
+      publish: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish }}
     secrets: inherit
 
   images:
