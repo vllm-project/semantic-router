@@ -485,9 +485,7 @@ def test_a_gpu_without_the_integrated_flag_keeps_mem_get_info(monkeypatch):
 
 
 def test_integrated_free_memory_clamps_to_the_device_size(monkeypatch):
-    _fake_cuda_host(
-        monkeypatch, integrated=True, cuda_free_gib=0.5, total_gib=120.0
-    )
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=0.5, total_gib=120.0)
     _fake_host_memory(monkeypatch, 200.0)
     (device,) = CUDAAccelerator().devices()
     assert device.free_memory == int(120.0 * GIB)
