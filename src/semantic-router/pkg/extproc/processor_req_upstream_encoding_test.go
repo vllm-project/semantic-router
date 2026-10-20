@@ -34,6 +34,30 @@ func TestAcceptsGzip(t *testing.T) {
 	}
 }
 
+// Accept-Encoding sent as several field lines is one list (RFC 9110 section
+// 5.3), so the client's preference is judged on every line, not the last.
+func TestClientAcceptsGzipReadsEveryAcceptEncodingLine(t *testing.T) {
+	for _, tc := range []struct {
+		lines []string
+		want  bool
+	}{
+		{lines: []string{"gzip;q=0", "*"}, want: false},
+		{lines: []string{"gzip", "br"}, want: true},
+		{lines: []string{"br", "deflate"}, want: false},
+		{lines: []string{"gzip, deflate"}, want: true},
+	} {
+		requestHeaders := &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":method", RawValue: []byte("POST")}}}
+		for _, line := range tc.lines {
+			requestHeaders.Headers = append(requestHeaders.Headers, &core.HeaderValue{Key: "accept-encoding", RawValue: []byte(line)})
+		}
+		ctx := &RequestContext{Headers: map[string]string{}}
+		captureRequestHeaders(&ext_proc.ProcessingRequest_RequestHeaders{
+			RequestHeaders: &ext_proc.HttpHeaders{Headers: requestHeaders},
+		}, ctx, false)
+		require.Equal(t, tc.want, clientAcceptsGzip(ctx), "Accept-Encoding lines %q", tc.lines)
+	}
+}
+
 // The provider is asked for gzip only when the router reads the whole reply and
 // its consumer accepts gzip: a buffered reply to a client that asked for gzip,
 // or a Looper hop, whose reply the router itself consumes. Everything else keeps
@@ -161,6 +185,26 @@ func TestProviderExtraHeadersOverrideNegotiatedEncoding(t *testing.T) {
 	require.Equal(t, "identity", providerAcceptEncoding(t, client, response))
 }
 
+// A decision's header_mutation is operator policy too. Removals apply before
+// sets, so a decision that deletes Accept-Encoding would otherwise still let
+// the negotiated gzip through; the provider must receive no Accept-Encoding.
+func TestDecisionHeaderDeletionOverridesNegotiatedEncoding(t *testing.T) {
+	router := routingTestRouter("worker")
+	request := testNeutralRequest("worker", "Summarize this note.")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.Headers["accept-encoding"] = "gzip"
+	ctx.VSRSelectedDecision = &config.Decision{Name: "strip-encoding", Plugins: []config.DecisionPlugin{{
+		Type:          config.DecisionPluginHeaderMutation,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"delete": []string{"Accept-Encoding"}}),
+	}}}
+
+	response, err := router.handleSpecifiedModelRouting(request, "worker", "", ctx)
+	require.NoError(t, err)
+	client := routing.Header{{Name: "accept-encoding", Value: "gzip"}}
+	header := providerHeaders(t, client, response)
+	require.False(t, header.Has("accept-encoding"), "the provider received accept-encoding %q", header.Get("accept-encoding"))
+}
+
 // An external gateway owns the backend and may read the reply itself, so the
 // router does not change the encoding that gateway negotiates.
 func TestExternalGatewayDispatchKeepsIdentityEncoding(t *testing.T) {
@@ -187,6 +231,12 @@ func TestExternalGatewayDispatchKeepsIdentityEncoding(t *testing.T) {
 // provider receives.
 func providerAcceptEncoding(t *testing.T, client routing.Header, bodyReplies ...*ext_proc.ProcessingResponse) string {
 	t.Helper()
+	return providerHeaders(t, client, bodyReplies...).Get("accept-encoding")
+}
+
+// providerHeaders is providerAcceptEncoding's whole header set.
+func providerHeaders(t *testing.T, client routing.Header, bodyReplies ...*ext_proc.ProcessingResponse) routing.Header {
+	t.Helper()
 	header := client.Clone()
 	replies := append([]*ext_proc.ProcessingResponse{
 		newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()),
@@ -196,5 +246,5 @@ func providerAcceptEncoding(t *testing.T, client routing.Header, bodyReplies ...
 		require.NoError(t, err)
 		require.NoError(t, routing.ApplyHeaderMutation(&header, effect.Header, false, routing.DefaultLimits))
 	}
-	return header.Get("accept-encoding")
+	return header
 }

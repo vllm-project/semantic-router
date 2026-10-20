@@ -167,6 +167,9 @@ func TestLoadCorpusRejectsAnUnsendableEncoding(t *testing.T) {
 		"unknown coding": "status: 200\n    body: x\n    encoding: br",
 		"chunked gzip":   "status: 200\n    chunks: [x]\n    encoding: gzip",
 		"empty gzip":     "status: 204\n    encoding: gzip",
+		// encoding writes the Content-Encoding header itself; a second one
+		// would make the reply a stacked coding no gateway decodes.
+		"gzip with its own content-encoding": "status: 200\n    body: x\n    encoding: gzip\n    headers: [[Content-Encoding, gzip]]",
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

@@ -3,9 +3,11 @@ package extproc
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -172,6 +174,84 @@ func TestIsGzipContentEncoding(t *testing.T) {
 	}
 }
 
+// A few kilobytes of gzip can inflate to the provider body limit, so only
+// cap(upstreamDecodeSlots) replies decode at once, as pkg/systemone bounds the
+// request bodies it decodes. A reply waits for a slot, and gives up waiting
+// once its request is gone.
+func TestGzipReplyDecodesWaitForASlot(t *testing.T) {
+	reply := gzipBytes(t, extProcResponseFixture(llmprotocol.OpenAIChatV1))
+	newContext := func(requestCtx context.Context) *RequestContext {
+		ctx := looperTransportContext(llmprotocol.OpenAIChatV1, false)
+		ctx.LooperRequest = false
+		ctx.UpstreamResponseGzip = true
+		ctx.TraceContext = requestCtx
+		return ctx
+	}
+	for range cap(upstreamDecodeSlots) {
+		upstreamDecodeSlots <- struct{}{}
+	}
+	held := cap(upstreamDecodeSlots)
+	t.Cleanup(func() {
+		for range held {
+			<-upstreamDecodeSlots
+		}
+	})
+	router := &OpenAIRouter{}
+
+	gone, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, decoded, failure := router.decodeUpstreamResponseBody(reply, newContext(gone))
+	require.False(t, decoded)
+	require.NotNil(t, failure.GetImmediateResponse(), "a request that is gone must not wait for a slot")
+
+	done := make(chan bool, 1)
+	go func() {
+		_, decoded, failure := router.decodeUpstreamResponseBody(reply, newContext(context.Background()))
+		done <- decoded && failure == nil
+	}()
+	select {
+	case <-done:
+		t.Fatal("a reply decoded while every slot was taken")
+	case <-time.After(50 * time.Millisecond):
+	}
+	<-upstreamDecodeSlots
+	held--
+	require.True(t, <-done, "the waiting reply must decode once a slot frees")
+}
+
+// In BUFFERED mode Envoy sends the whole reply in one body message, with
+// end_of_stream false when trailers follow it. That body is still the whole
+// reply, so it is decoded as one that ends the stream is.
+func TestGzipReplyBeforeTrailersIsDecoded(t *testing.T) {
+	reply := extProcResponseFixture(llmprotocol.OpenAIChatV1)
+	newContext := func() *RequestContext {
+		ctx := looperTransportContext(llmprotocol.OpenAIChatV1, false)
+		ctx.LooperRequest = false
+		return ctx
+	}
+	identity := runBufferedReply(t, &OpenAIRouter{}, newContext(), 200, reply, "")
+	gzipped := runBufferedReplyFrame(t, &OpenAIRouter{}, newContext(), 200, gzipBytes(t, reply), "gzip", false)
+
+	require.Nil(t, gzipped.body.GetImmediateResponse(), "gzip reply was rejected: %v", gzipped.body)
+	require.Equal(t, string(identity.clientBody), string(gzipped.clientBody))
+	assertDecodedReplyHeaders(t, gzipped.body)
+}
+
+// A gzip error reply with no body has nothing to decode, but the error
+// envelope written in its place is not gzip: the client must not receive it
+// under the provider's Content-Encoding.
+func TestEmptyGzipErrorReplyDropsTheEncoding(t *testing.T) {
+	ctx := looperTransportContext(llmprotocol.OpenAIChatV1, false)
+	ctx.LooperRequest = false
+	result := runBufferedReply(t, &OpenAIRouter{}, ctx, 503, nil, "gzip")
+
+	require.Nil(t, result.body.GetImmediateResponse(), "the provider's status must be kept: %v", result.body)
+	require.NotNil(t, result.body.GetResponseBody().GetResponse().GetBodyMutation(),
+		"the transport-error contract writes an error envelope")
+	require.Contains(t, string(result.clientBody), `"error"`)
+	assertDecodedReplyHeaders(t, result.body)
+}
+
 // Each reply is judged by its own headers: an identity reply that follows a
 // gzip one on the same request context is not decoded.
 func TestUpstreamEncodingIsJudgedPerReply(t *testing.T) {
@@ -233,11 +313,26 @@ func runBufferedReply(
 	encoding string,
 ) bufferedReplyResult {
 	t.Helper()
+	return runBufferedReplyFrame(t, router, ctx, status, body, encoding, true)
+}
+
+// runBufferedReplyFrame is runBufferedReply with the body message's
+// end_of_stream flag, which is false when trailers follow the body.
+func runBufferedReplyFrame(
+	t *testing.T,
+	router *OpenAIRouter,
+	ctx *RequestContext,
+	status int,
+	body []byte,
+	encoding string,
+	endOfStream bool,
+) bufferedReplyResult {
+	t.Helper()
 	headers, err := router.handleResponseHeaders(upstreamReplyHeaders(status, "application/json", encoding, len(body)), ctx)
 	require.NoError(t, err)
 	require.Nil(t, headers.GetImmediateResponse())
 	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
-		ResponseBody: &ext_proc.HttpBody{Body: body, EndOfStream: true},
+		ResponseBody: &ext_proc.HttpBody{Body: body, EndOfStream: endOfStream},
 	}, ctx)
 	require.NoError(t, err)
 	clientBody := body

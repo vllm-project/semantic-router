@@ -20,14 +20,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		defer recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	}
 
-	responseBody, decoded, failure := r.decodeUpstreamResponseBody(v.ResponseBody.Body, v.ResponseBody.GetEndOfStream(), ctx)
+	responseBody, decoded, failure := r.decodeUpstreamResponseBody(v.ResponseBody.Body, ctx)
 	if failure != nil {
 		return failure, nil
 	}
 	response := r.handleDecodedResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), completionLatency, ctx)
-	if decoded {
-		deliverDecodedResponseBody(response, responseBody)
-	}
+	deliverUpstreamResponseBody(response, ctx, responseBody, decoded)
 	return response, nil
 }
 

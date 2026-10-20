@@ -56,6 +56,9 @@ type Upstream struct {
 	Body     string     `yaml:"body"`
 	Chunks   []string   `yaml:"chunks"`
 	Encoding string     `yaml:"encoding"`
+
+	// wire is a gzip Body as sent, encoded once by LoadCorpus.
+	wire string
 }
 
 type corpusFile struct {
@@ -78,9 +81,18 @@ func LoadCorpus(dir string) (*Corpus, error) {
 		return nil, fmt.Errorf("parse %s: %w", filepath.Join(dir, "cases.yaml"), err)
 	}
 	for name, upstream := range file.Upstreams {
-		if upstream.Encoding != "" && (upstream.Encoding != "gzip" || upstream.Body == "" || len(upstream.Chunks) > 0) {
+		if upstream.Encoding == "" {
+			continue
+		}
+		if upstream.Encoding != "gzip" || upstream.Body == "" || len(upstream.Chunks) > 0 {
 			return nil, fmt.Errorf("upstream %q: encoding %q needs a gzip body without chunks", name, upstream.Encoding)
 		}
+		for _, pair := range upstream.Headers {
+			if len(pair) > 0 && strings.EqualFold(pair[0], "content-encoding") {
+				return nil, fmt.Errorf("upstream %q: encoding sets Content-Encoding; drop it from headers", name)
+			}
+		}
+		upstream.wire = storedGzip(upstream.Body)
 	}
 	for i := range file.Cases {
 		c := &file.Cases[i]
@@ -161,16 +173,24 @@ func (u *Upstream) Parts() []string {
 	return []string{u.wireBody()}
 }
 
-// wireBody returns Body as the backend sends it. A gzip body is stored, not
-// compressed, inside the gzip framing, so recorded bytes do not depend on the
-// Go release's deflate output.
+// wireBody returns Body as the backend sends it: a corpus fixture's gzip body
+// as LoadCorpus encoded it, or encoded here for a fixture built in code.
 func (u *Upstream) wireBody() string {
-	if u.Encoding != "gzip" {
+	switch {
+	case u.Encoding != "gzip":
 		return u.Body
+	case u.wire != "":
+		return u.wire
 	}
+	return storedGzip(u.Body)
+}
+
+// storedGzip stores body, not compressed, inside the gzip framing, so recorded
+// bytes do not depend on the Go release's deflate output.
+func storedGzip(body string) string {
 	var buf bytes.Buffer
 	writer, _ := gzip.NewWriterLevel(&buf, gzip.NoCompression)
-	_, _ = writer.Write([]byte(u.Body))
+	_, _ = writer.Write([]byte(body))
 	_ = writer.Close()
 	return buf.String()
 }
