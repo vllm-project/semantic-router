@@ -3,7 +3,11 @@ import threading
 import time
 
 import pytest
-from vllm_srun.config import EngineArgs
+from vllm_srun.config import (
+    DEFAULT_MAX_NUM_BATCHED_TOKENS,
+    DEFAULT_MAX_NUM_SEQS,
+    EngineArgs,
+)
 from vllm_srun.errors import RuntimeServiceError
 from vllm_srun.plugins.base import Job
 from vllm_srun.plugins.decisions import DecisionModel, RenderedItem
@@ -17,7 +21,12 @@ from vllm_srun.scheduler.batching import (
     reference,
 )
 from vllm_srun.scheduler.planner import cost, micro_batches
-from vllm_srun.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
+from vllm_srun.scheduler.scheduler import (
+    BURST_WINDOWS,
+    DEADLINE,
+    Scheduler,
+    SchedulerLimits,
+)
 from vllm_srun.timing import RunTiming
 
 ALONE = EngineArgs(max_num_seqs=1)
@@ -188,19 +197,28 @@ def test_admission_counts_every_job_until_it_is_answered(monkeypatch):
         scheduler.stop()
 
 
-def test_the_default_row_cap_never_binds_at_the_default_token_budget():
+def test_the_cpu_row_cap_never_binds_at_the_cpu_token_budget():
     args = EngineArgs()
-    assert (args.max_num_seqs, args.max_num_batched_tokens) == (8_192, 65_536)
+    assert (args.max_num_seqs, args.max_num_batched_tokens) == (None, None)
     assert args.batch_window_ms == 2.0 and args.dtype == "auto"
+    limits = Batcher(args)
+    assert (
+        (limits.max_num_seqs, limits.max_num_batched_tokens)
+        == (
+            DEFAULT_MAX_NUM_SEQS,
+            DEFAULT_MAX_NUM_BATCHED_TOKENS,
+        )
+        == (8_192, 65_536)
+    )
     # The shortest row pads to 8 tokens, the most a 65,536-token forward holds.
     shortest = job([item(f"r{i}", 1) for i in range(9_000)])
-    capped = coalesced([shortest], args.max_num_batched_tokens, args.max_num_seqs)
-    uncapped = coalesced([shortest], args.max_num_batched_tokens, 1 << 30)
+    capped = coalesced([shortest], limits.max_num_batched_tokens, limits.max_num_seqs)
+    uncapped = coalesced([shortest], limits.max_num_batched_tokens, 1 << 30)
     assert [len(b.items()) for b in capped] == [len(b.items()) for b in uncapped]
     assert [len(b.items()) for b in capped] == [8_192, 808]
     lengths = [1 + (i * 37) % 300 for i in range(4_000)]
     mixed = [job([item(f"m{i}", n)]) for i, n in enumerate(lengths)]
-    assert [b.items() for b in coalesced(mixed, 65_536, args.max_num_seqs)] == [
+    assert [b.items() for b in coalesced(mixed, 65_536, limits.max_num_seqs)] == [
         b.items() for b in coalesced(mixed, 65_536, 1 << 30)
     ]
 
@@ -230,6 +248,143 @@ def test_max_num_seqs_bounds_the_rows_of_one_forward():
     # A request's own questions are rows too: ten questions take ten rows.
     ten = job([item(f"q{i}", 8) for i in range(10)])
     assert [len(b.items()) for b in coalesced([ten], 65_536, 4)] == [4, 4, 2]
+
+
+class LaneModel(FakeModel):
+    """Rows named ``img*`` read images: a lane of their own, whose forwards take ``media_seconds``."""
+
+    def __init__(self, packs=False, media_seconds=0.0):
+        super().__init__()
+        self.packs_merged_rows = packs
+        self.media_seconds = media_seconds
+
+    def lane(self, item):
+        return "media" if item.question_id.startswith("img") else "text"
+
+    def run(self, items):
+        if self.media_seconds and any(self.lane(i) == "media" for i in items):
+            time.sleep(self.media_seconds)
+        return super().run(items)
+
+
+def test_merged_forwards_hold_one_lane_so_text_rows_are_not_padded_to_image_rows():
+    model = LaneModel()
+    planner = batcher(
+        model, EngineArgs(max_num_seqs=256, max_num_batched_tokens=65_536)
+    )
+    jobs = [
+        job([item("img0", 900), item("img1", 880)]),
+        job([item("t0", 40), item("t1", 33)]),
+        job([item("t2", 40)]),
+    ]
+    (turn,) = planner.plan(jobs, None)
+    assert turn.lane == "media+text" and not turn.exact
+    assert sorted(r.question_id for r in turn.items()) == [
+        "img0",
+        "img1",
+        "t0",
+        "t1",
+        "t2",
+    ]
+    assert [(b.lane, sorted(r.question_id for r in b.items())) for b in turn.sub] == [
+        ("media", ["img0", "img1"]),
+        ("text", ["t0", "t1", "t2"]),
+    ]
+    assert all(not b.exact for b in turn.sub)
+    text = turn.sub[1].items()
+    assert len(text) * max(len(r.ids) for r in text) == 120
+
+
+def test_packed_forwards_count_real_tokens_in_arrival_order():
+    rows = [item("a", 1000), item("b", 8), item("c", 8), item("d", 1000)]
+    padded_batches = coalesced([job(rows)], 2048, 256)
+    assert [sorted(r.question_id for r in b.items()) for b in padded_batches] == [
+        ["a", "d"],
+        ["b", "c"],
+    ]
+    packed_batches = coalesced([job(rows)], 2048, 256, packed=True)
+    assert [[r.question_id for r in b.items()] for b in packed_batches] == [
+        ["a", "b", "c", "d"]
+    ]
+    # A lane's budget still bounds its packed forwards, and a row over it runs alone.
+    split = coalesced([job([*rows, item("e", 3000)])], 2048, 256, packed=True)
+    assert [[r.question_id for r in b.items()] for b in split] == [
+        ["a", "b", "c", "d"],
+        ["e"],
+    ]
+
+
+def test_each_lane_takes_its_own_budget():
+    model = LaneModel(packs=True)
+    model.coalesced_token_budget = lambda lane="text": {"text": 64, "media": 2048}[lane]
+    planner = batcher(
+        model, EngineArgs(max_num_seqs=256, max_num_batched_tokens=65_536)
+    )
+    jobs = [
+        job(
+            [item(f"img{i}", 500) for i in range(4)]
+            + [item(f"t{i}", 32) for i in range(4)]
+        )
+    ]
+    turns = planner.plan(jobs, None)
+    # The n-th batches of the lanes share a turn: one turn per batch of the busiest lane.
+    assert [(b.lane, len(b.items())) for b in turns] == [
+        ("media+text", 6),
+        ("text", 2),
+    ]
+    assert [(b.lane, len(b.items())) for b in turns[0].sub] == [
+        ("media", 4),
+        ("text", 2),
+    ]
+
+
+def test_a_turn_answers_its_text_rows_before_its_image_forward_ends():
+    gate = threading.Event()
+
+    class Gated(LaneModel):
+        def run(self, items):
+            if any(self.lane(i) == "media" for i in items):
+                gate.wait(5)
+            return super().run(items)
+
+    model = Gated()
+    args = EngineArgs(max_num_seqs=256, max_num_batched_tokens=65_536)
+    scheduler = Scheduler(
+        model, batcher(model, args), SchedulerLimits(batch_window_ms=50.0)
+    )
+    scheduler.start()
+    try:
+        image, text = scheduler.submit_group(
+            [[item("img0", 900)], [item("t0", 40), item("t1", 40)]],
+            deadlines=[None, None],
+        )
+        # One turn holds both lanes; the text forward runs first and is answered at once.
+        assert text.result(timeout=5) == [[0.0, 40.0], [0.0, 40.0]]
+        assert not image.done()
+        gate.set()
+        assert image.result(timeout=5) == [[0.0, 900.0]]
+        assert model.calls == [["t0", "t1"], ["img0"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_image_forwards_do_not_raise_the_cost_of_text_rows():
+    model = LaneModel(media_seconds=0.05)
+    args = EngineArgs(max_num_seqs=256, max_num_batched_tokens=65_536)
+    scheduler = Scheduler(
+        model, batcher(model, args), SchedulerLimits(batch_window_ms=0.0)
+    )
+    scheduler.start()
+    try:
+        scheduler.submit([item("t0", 64)], deadline=None).result(timeout=5)
+        text = scheduler._token_cost["text"]
+        scheduler.submit([item("img0", 64)], deadline=None).result(timeout=5)
+        assert scheduler._token_cost["text"] == text
+        assert scheduler._token_cost["media"] >= 0.05 / 64
+        assert scheduler._token_cost["media"] > 10 * text
+    finally:
+        scheduler.stop()
 
 
 def test_a_reference_job_runs_alone_whatever_the_engine_arguments():
@@ -279,6 +434,75 @@ def test_other_forward_errors_fail_only_their_batch():
         assert scheduler.failure is None
     finally:
         scheduler.stop()
+
+
+@pytest.mark.parametrize("result_count", [0, 1, 3])
+@pytest.mark.parametrize("inline", [False, True], ids=["worker", "inline"])
+def test_wrong_result_count_fails_every_job_and_keeps_serving(
+    monkeypatch, result_count, inline
+):
+    model = FakeModel()
+    model.device_thread = not inline
+    run = model.run
+
+    def wrong_once(items):
+        values = run(items)
+        if len(model.calls) == 1:
+            return (values + values)[:result_count]
+        return values
+
+    monkeypatch.setattr(model, "run", wrong_once)
+    scheduler = Scheduler(model, batcher(model, EngineArgs(max_num_seqs=8)))
+    scheduler.start()
+    try:
+        submit = scheduler.run_now if inline else scheduler.submit_group
+        futures = submit([[item("a", 8)], [item("b", 8)]], deadlines=[None, None])
+        assert futures is not None
+        for future in futures:
+            with pytest.raises(
+                RuntimeError,
+                match=f"model result count mismatch: expected 2, got {result_count}",
+            ):
+                future.result(timeout=5)
+        assert model.calls == [["a", "b"]]
+        assert scheduler.failure is None
+        assert scheduler._thread.is_alive()
+        wait_until(lambda: scheduler._pending_jobs == 0)
+        served = scheduler.submit([item("later", 8)], deadline=None)
+        assert served.result(timeout=5) == [[0.0, 8.0]]
+        assert model.calls == [["a", "b"], ["later"]]
+    finally:
+        scheduler.stop()
+
+
+class OutOfMemoryModel(FakeModel):
+    def run(self, items):
+        import torch
+
+        raise torch.OutOfMemoryError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+
+def test_a_forward_out_of_device_memory_answers_request_too_large():
+    scheduler = Scheduler(
+        OutOfMemoryModel(), batcher(), device_fault=lambda error: False
+    )
+    scheduler.start()
+    try:
+        future = scheduler.submit([item("a", 4)], deadline=None)
+        with pytest.raises(RuntimeServiceError) as caught:
+            future.result(timeout=5)
+        assert caught.value.code == "request_too_large"
+        assert scheduler.failure is None
+    finally:
+        scheduler.stop()
+
+
+def test_a_shared_forward_out_of_device_memory_answers_overloaded():
+    import torch
+
+    error = scheduler_module._out_of_memory(torch.OutOfMemoryError("oom"), jobs=2)
+    assert error is not None and error.code == "overloaded"
+    assert scheduler_module._out_of_memory(RuntimeError("other"), jobs=1) is None
 
 
 class WorkerModel(FakeModel):
@@ -394,6 +618,70 @@ def test_batching_window_coalesces_concurrent_requests():
         for future in futures:
             future.result(timeout=5)
         assert len(model.calls) == 1 and sorted(model.calls[0]) == ["r0", "r1", "r2"]
+    finally:
+        scheduler.stop()
+
+
+def test_a_job_served_alone_does_not_wait_for_the_batching_window():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model, batcher(model, EngineArgs()), SchedulerLimits(batch_window_ms=2_000)
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit_group([[item("a", 8)]], deadlines=[None], alone=True)[
+            0
+        ].result(timeout=5)
+        assert time.monotonic() - started < 1.0
+    finally:
+        scheduler.stop()
+
+
+def test_a_window_waits_for_requests_still_being_planned_when_it_opened():
+    model = FakeModel()
+    planning = threading.Event()
+    planning.set()
+    opened: list[float] = []
+
+    def still_planning(window_opened: float) -> bool:
+        opened.append(window_opened)
+        return planning.is_set()
+
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs()),
+        SchedulerLimits(batch_window_ms=100),
+        planning=still_planning,
+    )
+    scheduler.start()
+    try:
+        first = scheduler.submit([item("a", 8)], deadline=None)
+        # Past the window, within BURST_WINDOWS of it: the second request is still on its way.
+        time.sleep(0.15)
+        second = scheduler.submit([item("b", 8)], deadline=None)
+        planning.clear()
+        first.result(timeout=5)
+        second.result(timeout=5)
+        assert len(model.calls) == 1 and opened
+    finally:
+        scheduler.stop()
+
+
+def test_a_window_waits_for_a_burst_at_most_burst_windows():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs()),
+        SchedulerLimits(batch_window_ms=100),
+        planning=lambda opened: True,
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit([item("a", 8)], deadline=None).result(timeout=5)
+        elapsed = time.monotonic() - started
+        assert 0.1 * BURST_WINDOWS - 0.05 <= elapsed < 0.1 * BURST_WINDOWS + 0.7
     finally:
         scheduler.stop()
 
@@ -568,7 +856,8 @@ class GatedModel(FakeModel):
 
 def started(model, limits=None, token_cost=None):
     scheduler = Scheduler(model, batcher(model), limits)
-    scheduler._token_cost = token_cost
+    if token_cost is not None:
+        scheduler._token_cost = {"text": token_cost}
     scheduler.start()
     return scheduler
 

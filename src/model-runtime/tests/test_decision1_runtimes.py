@@ -15,7 +15,7 @@ import time
 import pytest
 import torch
 from torch import nn
-from vllm_srun.config import EngineArgs, ModelConfig, ServeConfig
+from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, ModelConfig, ServeConfig
 from vllm_srun.families.decision1 import package as pkg
 from vllm_srun.families.decision1 import qwen, vela
 from vllm_srun.families.decision1.questions import KINDS
@@ -215,7 +215,7 @@ def test_vela_coalesces_within_the_cpu_budget_while_the_reference_keeps_its_batc
         Job(items=plan.items, deadline=None, enqueued=time.monotonic())
         for _ in range(4)
     ]
-    for batch in coalesced(jobs[1:], budget, EngineArgs().max_num_seqs):
+    for batch in coalesced(jobs[1:], budget, DEFAULT_MAX_NUM_SEQS):
         rows = batch.items()
         assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
     batches = reference(model, jobs[:1], budget)

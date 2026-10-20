@@ -222,23 +222,31 @@ def residual_add(residual: Any, delta: Any) -> Any:
 
 
 @triton.jit
-def _silu_mul_kernel(g_ptr, u_ptr, out_ptr, n_cols, BLOCK: tl.constexpr):
+def _silu_mul_kernel(
+    g_ptr, u_ptr, out_ptr, n_cols, g_stride, u_stride, BLOCK: tl.constexpr
+):
     row = tl.program_id(0).to(tl.int64)
     cols = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     mask = cols < n_cols
-    g = tl.load(g_ptr + row * n_cols + cols, mask=mask, other=0.0).to(tl.float32)
-    u = tl.load(u_ptr + row * n_cols + cols, mask=mask, other=0.0).to(tl.float32)
+    g = tl.load(g_ptr + row * g_stride + cols, mask=mask, other=0.0).to(tl.float32)
+    u = tl.load(u_ptr + row * u_stride + cols, mask=mask, other=0.0).to(tl.float32)
     s = (g / (1.0 + libdevice.exp(-g))).to(tl.bfloat16).to(tl.float32)
     tl.store(out_ptr + row * n_cols + cols, (s * u).to(tl.bfloat16), mask=mask)
 
 
+def _row_view(t: Any, n: int) -> Any:
+    """``t`` as rows of ``n`` contiguous values ``stride(0)`` apart: a view where one exists, else a copy."""
+    rows = t.reshape(-1, n)
+    return rows if rows.stride(-1) == 1 else rows.contiguous()
+
+
 def silu_mul(gate: Any, up: Any) -> Any:
-    """``silu(gate) * up`` of two contiguous BF16 tensors of one shape."""
+    """``silu(gate) * up`` of two BF16 tensors of one shape, whose rows may be column slices of wider ones."""
     n = gate.shape[-1]
-    rows = gate.numel() // n
+    g, u = (_row_view(t, n) for t in (gate, up))
     out = torch.empty(gate.shape, dtype=torch.bfloat16, device=gate.device)
-    _silu_mul_kernel[(rows, triton.cdiv(n, 1024))](
-        gate, up, out, n, BLOCK=1024, num_warps=4, **EXACT
+    _silu_mul_kernel[(g.shape[0], triton.cdiv(n, 1024))](
+        g, u, out, n, g.stride(0), u.stride(0), BLOCK=1024, num_warps=4, **EXACT
     )
     return out
 
@@ -437,6 +445,7 @@ def _head_prep_kernel(
     eps,
     inv_d,
     cs_bstride,
+    src_rstride,
     D: tl.constexpr,
     ROT: tl.constexpr,
     SRC_HEAD: tl.constexpr,
@@ -455,7 +464,7 @@ def _head_prep_kernel(
     d = tl.arange(0, D)
     half: tl.constexpr = ROT // 2
     partner = tl.where(d < half, d + half, tl.where(d < ROT, d - half, d))
-    src = src_ptr + (bt * (NH * SRC_HEAD) + hid * SRC_HEAD)[:, None]
+    src = src_ptr + (bt * src_rstride + hid * SRC_HEAD)[:, None]
     wp = w_ptr
     dst = dst_ptr + (((b * NH + hid) * T + t) * D)[:, None]
     x = tl.load(src + d[None, :], mask=rmask, other=0.0).to(tl.float32)
@@ -511,7 +520,8 @@ def attn_prep(
     head, the norms multiply by ``1 + w`` (passed as ``q_norm_w1`` / ``k_norm_w1``) and round to
     BF16 before the partial RoPE. Qwen3 (neither): ``q_proj_out`` is [B, T, H * D], the norms
     round ``x * rstd`` to BF16 and multiply by ``w`` in FP32, and the full RoPE runs in FP32.
-    ``k_proj_out`` [B, T, Hkv * D] is contiguous BF16 like ``q_proj_out``; ``cos`` / ``sin`` the
+    ``k_proj_out`` [B, T, Hkv * D] is BF16 like ``q_proj_out``, and the rows of either may be
+    column slices of a wider product (q / k / v multiplied at once); ``cos`` / ``sin`` the
     contiguous [B or 1, T, rotary dim] rotary tables in the stream's dtype (BF16 tables round the
     RoPE products and sum to BF16); the head dim is 128 or 256.
     """
@@ -523,10 +533,11 @@ def attn_prep(
     k = torch.empty(B, kv_heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     rot = cos.shape[-1]
     rows = 16 if head_dim == 128 else 8
-    for src, weight, dst, count, width in (
+    for proj, weight, dst, count, width in (
         (q_proj_out, q_norm_w1, q, heads, 2 * head_dim if gated else head_dim),
         (k_proj_out, k_norm_w1, k, kv_heads, head_dim),
     ):
+        src = _row_view(proj, count * width)
         _head_prep_kernel[(triton.cdiv(B * T, rows), count)](
             src,
             weight,
@@ -539,6 +550,7 @@ def attn_prep(
             eps,
             float(np.float32(1.0) / np.float32(head_dim)),
             0 if cos.shape[0] == 1 else T * rot,
+            src.stride(0),
             D=head_dim,
             ROT=rot,
             SRC_HEAD=width,

@@ -7,6 +7,7 @@ import shutil
 
 import pytest
 import torch
+from vllm_srun import media
 from vllm_srun.accel import cpu
 from vllm_srun.engines.native import fast
 from vllm_srun.errors import PackageError
@@ -156,7 +157,7 @@ def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": [huge]}
     )
-    assert status == 400 and "8,000,000 bytes" in body["error"]["message"]
+    assert status == 400 and "16,777,216 bytes" in body["error"]["message"]
     assert (body["error"]["reason"], body["error"]["limit"]) == (
         "image_too_large",
         img.MAX_IMAGE_BYTES,
@@ -652,8 +653,15 @@ FLA_KERNELS = {
 
 
 @pytest.mark.parametrize("model", DECISION3_MODELS, ids=lambda model: model.repo_id)
-def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+def test_every_model_records_goldens_and_kernel_choices(model):
+    expected = {"cpu", "rocm"}
+    devices = {"rocm:gfx942"}
+    if model.repo_id == "vllm-sr/d3-edge":
+        expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
+        devices.add("cuda:sm_89")
+    elif model.repo_id in ("vllm-sr/d3", "vllm-sr/d3-turbo"):
+        expected.add("cpu:x86_64:avx512:bf16_native")
+    assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {
             "difficulty",
@@ -662,10 +670,13 @@ def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
             "image_colour",
             "image_photo",
         }
-    assert set(model.kernel_choices) == {"rocm:gfx942"}
-    choices = model.kernel_choices["rocm:gfx942"]
-    assert choices["fla"] == "0.5.2"
-    assert set(choices["kernels"]) == FLA_KERNELS
+    assert set(model.kernel_choices) == devices
+    for device in devices:
+        choices = model.kernel_choices[device]
+        assert choices["fla"] == "0.5.2"
+        assert set(choices["kernels"]) == FLA_KERNELS
+    if "cuda:sm_89" in devices:
+        assert model.kernel_choices["cuda:sm_89"]["triton"] == "3.6.0"
 
 
 def test_threads_stay_within_the_container_unless_configured(monkeypatch):
@@ -702,6 +713,15 @@ def test_repeated_media_are_processed_once_and_answer_alike(
 
     monkeypatch.setattr(img, "decode", count_image)
     monkeypatch.setattr(vid, "decode", count_video)
+    # with media workers (16 CPUs or more) the decoding is a load in a worker process
+    submit = media.submit
+
+    def count_submit(fn, *args):
+        decoded["images"] += fn is img.load
+        decoded["videos"] += fn is vid.load
+        return submit(fn, *args)
+
+    monkeypatch.setattr(media, "submit", count_submit)
     body = {"state": "What is shown?", "questions": QUESTIONS, "images": [image]}
     first, second = call(d3_runtime, body), call(d3_runtime, body)
     assert first == second and first[0] == 200
@@ -740,7 +760,7 @@ def test_passes_of_one_size_reuse_the_tower_features_of_their_images(
     assert again == cached and calls == [BATCH_SIZE, BATCH_SIZE]
 
 
-def test_coalesced_batches_mix_requests_and_read_each_image_once(
+def test_coalesced_batches_mix_requests_and_read_their_images_in_one_call(
     d3_runtime, png_url, monkeypatch
 ):
     model = d3_runtime.lookup(None).model
@@ -756,32 +776,51 @@ def test_coalesced_batches_mix_requests_and_read_each_image_once(
     calls = []
     tower = model.engine_model.tower_features
 
-    def counted(name, pixel_values, grids):
-        calls.append(len(grids))
-        return tower(name, pixel_values, grids)
+    def counted(name, pixel_values, grids, packed=False):
+        calls.append((len(grids), packed))
+        return tower(name, pixel_values, grids, packed=packed)
 
     model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
     monkeypatch.setattr(model.engine_model, "tower_features", counted)
     mixed = model.run_approximate(items)
-    assert sorted(calls) == [1, 2]
+    assert calls == [(3, model.packs_merged_rows)]
     assert len(mixed) == len(exact)
     for got, want in zip(mixed, exact, strict=True):
         assert got is not None and want is not None
         assert max(abs(a - b) for a, b in zip(got, want, strict=True)) < 0.05
+    # Features of a merged tower call never stand in for a request's own forwards,
+    # which still read one copy of its images per question.
+    calls.clear()
+    assert [model.run(list(plan.items)) for plan in plans] == [
+        exact[:3],
+        exact[3:6],
+        exact[6:],
+    ]
+    assert sorted(calls) == [(3, False), (6, False)]
 
 
-def test_coalesced_forwards_follow_the_measured_cost_per_token(d3_runtime):
+def test_coalesced_forwards_follow_the_measured_cost_per_token_of_their_lane(
+    d3_runtime, png_url
+):
     from vllm_srun.families.decision3 import family
 
     model = d3_runtime.lookup(None).model
-    saved = model._token_seconds
+    saved = dict(model._token_seconds)
     try:
-        model._token_seconds = family.COALESCED_FORWARD_SECONDS / 10_000
+        model._token_seconds["text"] = family.COALESCED_FORWARD_SECONDS / 10_000
+        model._token_seconds["media"] = 1.0
         limit = model.forward_token_budget()
-        assert model.coalesced_token_budget() == (
+        assert model.coalesced_token_budget("text") == (
             10_000 if limit is None else min(10_000, limit)
         )
-        model._token_seconds = 1.0
-        assert model.coalesced_token_budget() == family.MIN_COALESCED_TOKENS
+        assert model.coalesced_token_budget("media") == family.MIN_COALESCED_TOKENS
+        text = model.plan("Merge two sorted lists.", QUESTIONS).items
+        image = model.plan_images("Shown?", QUESTIONS, [png_url(80, 60, 24)]).items
+        assert {model.lane(item) for item in text} == {"text"}
+        assert {model.lane(item) for item in image} == {"media"}
+        # A media pass moves the media lane's cost only.
+        model.run_approximate(list(image))
+        assert model._token_seconds["text"] == family.COALESCED_FORWARD_SECONDS / 10_000
+        assert model._token_seconds["media"] < 1.0
     finally:
         model._token_seconds = saved
