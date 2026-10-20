@@ -129,6 +129,14 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+When translating Chat history to an Anthropic Messages backend, empty text
+blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
+behaves like `content: null`. Empty tool results keep their call IDs and use
+`content: []`; an empty system prompt is omitted. Non-empty text, including
+whitespace, is preserved. A conversation message containing only empty text
+is rejected, as is an empty text block carrying a cache directive, because
+removing either would discard a conversation turn or cache boundary.
+
 For an Anthropic Messages client using a Chat Completions or Responses backend,
 `thinking.type: adaptive` uses the backend model's default reasoning behavior;
 `output_config.effort` is retained. `thinking.display: omitted` removes reasoning
@@ -224,6 +232,13 @@ schema, streaming, tools, or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- When an OpenAI-compatible Chat provider reports an error inside a successful
+  stream with an integer HTTP status as its `code`, as vLLM does, streamed
+  clients receive the provider's message. Responses and Anthropic Messages
+  clients get the Router's error frame, with the status as a string `code` for
+  Responses and the mapped error type for Messages. Chat clients get either the
+  Router's error frame with a string `code` or the provider's error event as
+  sent, depending on how the stream is split into body chunks.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
