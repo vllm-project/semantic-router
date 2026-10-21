@@ -1125,6 +1125,8 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pyarrow", version = "25.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pyarrow", version = "26.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "safetensors" },
     { name = "sentence-transformers" },
     { name = "torch" },
@@ -1133,6 +1135,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+dev = [
+    { name = "tokenizers" },
+]
 export = [
     { name = "onnx" },
     { name = "onnxruntime", version = "1.23.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1149,6 +1154,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.5.0,<5" },
     { name = "huggingface-hub", specifier = ">=0.36.0,<1" },
     { name = "numpy", specifier = ">=2.2.2,<3" },
+    { name = "pyarrow", specifier = ">=21.0.0,<27" },
     { name = "safetensors", specifier = ">=0.5.2,<1" },
     { name = "sentence-transformers", specifier = ">=5.3.0,<5.4" },
     { name = "torch", specifier = ">=2.10.0,<3" },
@@ -1157,6 +1163,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+dev = [{ name = "tokenizers", specifier = ">=0.22.0,<=0.23.0" }]
 export = [
     { name = "onnx", specifier = ">=1.16,<2" },
     { name = "onnxruntime", specifier = ">=1.18,<2" },

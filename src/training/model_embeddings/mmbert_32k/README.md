@@ -231,12 +231,15 @@ uv sync --locked --project src/training/model_embeddings/mmbert_32k
 `pyproject.toml` bounds each dependency and `uv.lock` pins the exact versions.
 The default PyPI `torch` wheel is a CUDA build on Linux and the platform
 default on macOS. A release run still uses the digest-pinned ROCm image in
-`runtime.json`. ROCm uses PyTorch's `cuda` device name. Keep that image, the
+`runtime.json`, which supplies PyTorch 2.10.0. The lock resolves a PyPI
+torch inside `torch>=2.10.0,<3`, so a local environment can be newer than
+that image. ROCm uses PyTorch's `cuda` device name. Keep that image, the
 resolved configuration, and output checksums with the run.
 
-Optional groups stay out of the default install. `local-corpus` adds
-`langdetect` for local foundation text. `export` adds `onnx`, `onnxruntime`,
-and `onnxscript` for the representation export tests:
+`uv sync` also installs the `dev` group, which adds `tokenizers` for the
+newbase tests. `local-corpus` and `export` stay out of that install.
+`local-corpus` adds `langdetect` for local foundation text. `export` adds
+`onnx`, `onnxruntime`, and `onnxscript` for the representation export tests:
 
 ```bash
 uv sync --locked --project src/training/model_embeddings/mmbert_32k \
@@ -394,6 +397,16 @@ The lightweight contract suite does not download models:
 
 ```bash
 uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m unittest discover \
+  -s src/training/model_embeddings/mmbert_32k/tests \
+  -p 'test_*.py'
+```
+
+The three representation export tests need the `export` group. The command
+above skips them until that group is installed:
+
+```bash
+uv run --locked --project src/training/model_embeddings/mmbert_32k --group export \
   python -m unittest discover \
   -s src/training/model_embeddings/mmbert_32k/tests \
   -p 'test_*.py'

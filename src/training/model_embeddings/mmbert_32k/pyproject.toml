@@ -11,10 +11,16 @@ dependencies = [
     # The documented `hf download` command comes from this package.
     "huggingface-hub>=0.36.0,<1",
     "numpy>=2.2.2,<3",
+    # foundation_integrity.py imports pyarrow.compute. Not in requirements.txt.
+    # datasets==4.5.0 requires pyarrow>=21. The cap is the next major after 26.
+    "pyarrow>=21.0.0,<27",
     "safetensors>=0.5.2,<1",
-    # requirements.txt pins 5.3.0. 5.7 changes Pooling and LambdaLoss, which these tests check.
+    # requirements.txt pins 5.3.0, so the range stays on that minor. 5.4 is a
+    # migration release. 5.7 also changes AdaptiveLayerLoss and Matryoshka2dLoss
+    # defaults, which this trainer uses.
     "sentence-transformers>=5.3.0,<5.4",
-    # runtime.json pins the release image at PyTorch 2.10.0. The default wheel is PyPI.
+    # runtime.json pins the release image at PyTorch 2.10.0. The default wheel
+    # is PyPI, so the lock can resolve a newer torch than that image.
     "torch>=2.10.0,<3",
     "tqdm>=4.67.1,<5",
     # 4.57.6 is part of the foundation YaRN contract, so the range stops before 4.58.
@@ -22,11 +28,14 @@ dependencies = [
 ]
 
 [dependency-groups]
+# tests/test_newbase_model.py and tests/test_newbase_scoring.py import tokenizers.
+# Not in requirements.txt. This is the range transformers 4.57.6 requires.
+dev = ["tokenizers>=0.22.0,<=0.23.0"]
 # foundation_data_local.py treats a missing langdetect import as optional.
 local-corpus = ["langdetect>=1.0.9,<2"]
-# Only the representation export test imports these.
+# Only the representation export tests import these. Not in requirements.txt.
+# The floors still publish Python 3.10 wheels; the caps are the next major.
 export = [
-    # Floors stay on releases that still publish Python 3.10 wheels.
     "onnx>=1.16,<2",
     "onnxruntime>=1.18,<2",
     "onnxscript>=0.1,<1",
