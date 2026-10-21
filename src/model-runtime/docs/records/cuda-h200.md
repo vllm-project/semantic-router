@@ -5,12 +5,11 @@ These records are the measured NVIDIA set (H200 `sm_90`, A100, Tesla T4)
 that closes CUDA accelerator validation. `CUDAAccelerator.validated` is
 true.
 
-Vela 2.0 0.3B at 32 tokens is **Level** on Tesla T4 (five rounds, the
-no-regression minimum). An H200 ten-round p50 Worse row is retained as a
-card-specific measurement, not a second gate. Fused kernels without
-bit-exact evidence stay off the exact profile. D3/Omni goldens and D3 CUDA
-FLA pins were not served by the published CUDA image and are not in this
-close-out.
+Vela 2.0 0.3B at 32 tokens is a **known regression** on H200: the ten-round
+p50 interval is wholly worse. Tesla T4 five-round p50 is Level on that
+card; that does not clear the H200 row. Fused kernels without bit-exact
+evidence stay off the exact profile. D3/Omni goldens and D3 CUDA FLA pins
+were not served by the published CUDA image and are not in this close-out.
 
 ## Provenance
 
@@ -31,7 +30,7 @@ RunPod image, not the published CUDA image.
 | Gate | Record | Result |
 | --- | --- | --- |
 | Image smoke (charts) | [`cuda-router-image.md`](cuda-router-image.md) | 7/7 chart models ready |
-| Goldens (30 published-image models) | [`cuda-golden-answers.md`](cuda-golden-answers.md) | those 30 within 0.02; D3/Omni captures exist locally and are not incorporated |
+| Goldens (30 published-image models) | [`cuda-golden-answers.md`](cuda-golden-answers.md) | those 30 under `cuda:sm_90`; D3/Omni captures exist locally and are not incorporated |
 | Decision 1.0 parity | [`cuda-decision1-parity.md`](cuda-decision1-parity.md) | 7/7, 400/400 identical on saved MMLU-Pro |
 | Decision 2.0 parity | [`cuda-decision2-parity.md`](cuda-decision2-parity.md) | 6/6, 400/400 identical including Vega |
 | Vela 2.0 parity | [`cuda-vela2-parity.md`](cuda-vela2-parity.md) | 300 comparison cases passed; 13 oversized 0.3B rows compared after excluding rejected questions |
@@ -39,5 +38,5 @@ RunPod image, not the published CUDA image.
 | Fused slots + FLA pins | [`cuda-fused-kernels.md`](cuda-fused-kernels.md) | slots stay off exact; D1/D2/Vela2 `cuda:sm_90` FLA pins recorded; D3 CUDA pins not merged |
 | Decision 1.0 performance | [`cuda-decision1-performance.md`](cuda-decision1-performance.md) | all end-to-end `call` intervals Level or Better |
 | Decision 2.0 vs released | [`cuda-decision2-performance.md`](cuda-decision2-performance.md) | all six models Better, including Vega |
-| Vela 2.0 performance | [`cuda-vela2-performance.md`](cuda-vela2-performance.md) | H200 follow-up 0.8B@512 and 4B@2048 pass; Tesla T4 five-round 0.3B@32 p50 **Level** (the no-regression pass); H200 0.3B@32 p50 Worse kept as a card-specific row; earlier 4×4 kept separate |
+| Vela 2.0 performance | [`cuda-vela2-performance.md`](cuda-vela2-performance.md) | H200 follow-up 0.8B@512 and 4B@2048 pass; H200 0.3B@32 p50 **known regression**; Tesla T4 five-round 0.3B@32 p50 Level on that card; earlier 4×4 kept separate |
 | Vela 1.0 vs CPU legacy | [`cuda-vela1-performance.md`](cuda-vela1-performance.md) | 11/11 Better on A100 |

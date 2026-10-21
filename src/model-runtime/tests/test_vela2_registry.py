@@ -95,7 +95,7 @@ def test_recorded_references_are_for_the_pinned_revisions(file_name) -> None:
 
 @pytest.mark.parametrize("model", MODELS, ids=size)
 def test_every_size_has_well_formed_reference_answers(model) -> None:
-    assert set(model.golden_answers) - {"npu"} == {"cpu", "rocm", "cuda"}
+    assert set(model.golden_answers) - {"npu"} == {"cpu", "rocm", "cuda:sm_90"}
     levels = GOLDEN_QUESTIONS["urgency"]["criteria"]
     for answers in model.golden_answers.values():
         assert set(answers) == GOLDEN_IDS
@@ -113,7 +113,7 @@ def test_every_size_has_well_formed_reference_answers(model) -> None:
     cpu, rocm, cuda = (
         model.golden_answers["cpu"],
         model.golden_answers["rocm"],
-        model.golden_answers["cuda"],
+        model.golden_answers["cuda:sm_90"],
     )
     assert compare_answers(cpu, rocm, GPU_TOLERANCE) == (
         len(GOLDEN_IDS),

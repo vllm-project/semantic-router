@@ -139,9 +139,9 @@ The Router's own models (classifiers, embeddings, decision models) run in the
 PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
 CUDA is validated. Records cover documented H200, A100, and Tesla T4
 workloads. D1 and D2 performance results meet the recorded benchmark
-criteria. Vela 2.0 0.3B at 32 tokens is Level on Tesla T4 (five-round
-no-regression); an H200 ten-round p50 Worse row is retained as a
-card-specific measurement. Fused kernels without bit-exact evidence remain
+criteria. Vela 2.0 0.3B at 32 tokens is a known regression on H200 (ten-round
+p50 wholly worse). Tesla T4 five-round p50 is Level on that card; that does
+not clear the H200 row. Fused kernels without bit-exact evidence remain
 excluded from the exact profile. Model coverage and measurement
 environments are in the source-tree records:
 

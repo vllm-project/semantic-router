@@ -5,7 +5,7 @@
   "head": "ec307ad6ed081dd220b5dbb3571a1f9987d06914",
   "date": "2026-10-20",
   "device": "cuda:0",
-  "acceptance": "pass: Tesla T4 five-round 0.3B@32 p50 Level is the NVIDIA no-regression gate. H200 ten-round 0.3B@32 p50 Worse is retained as a card-specific row."
+  "acceptance": "known regression: H200 ten-round 0.3B@32 p50 Worse. Tesla T4 five-round 0.3B@32 p50 Level is an additional card, not a replacement gate."
  },
  "t4_follow_up": {
   "hardware": "NVIDIA Tesla T4",
@@ -18,7 +18,7 @@
   "tokens": 32,
   "rounds": 5,
   "concurrency": 1,
-  "note": "Not pooled with the H200 ten-round follow-up. This Level interval is the passing NVIDIA no-regression gate for 0.3B@32.",
+  "note": "Not pooled with the H200 ten-round follow-up. Level on this T4 does not clear the H200 p50 Worse row.",
   "runtime_minus_reference": {
    "p50_ms": {
     "diff": -0.158,

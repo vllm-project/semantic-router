@@ -46,8 +46,9 @@ now supervises a separate worker for each replica of a logical deployment.
    bundled call.
 6. **Universal hardware, honestly labelled.** CPU, ROCm, and CUDA are
    validated. CUDA measurements are under `docs/records/cuda-*.md` (H200,
-   A100, Tesla T4). Fused kernels without bit-exact evidence stay excluded
-   from the exact profile; that is a valid outcome of item 4.
+   A100, Tesla T4). Vela 2.0 0.3B at 32 tokens is a known p50 regression on
+   H200. Fused kernels without bit-exact evidence stay excluded from the
+   exact profile; that is a valid outcome of item 4.
    `CUDAAccelerator.validated` is true. XPU and MPS are plugins marked
    unvalidated.
 7. **One stack.** After Phase 4 the router has no native model bindings: the Go
@@ -1117,7 +1118,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | validated (H200, A100, Tesla T4; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or

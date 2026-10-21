@@ -1,8 +1,11 @@
 # CUDA golden answers on one NVIDIA H200
 
 Golden requests for every built-in model the published CUDA image served on
-this card. The `cuda` device class is recorded next to `cpu` and `rocm` in
-the registry files. Decision 3.0 and Omni were not run.
+this card. They are recorded under `cuda:sm_90`, not the generic `cuda`
+class. Readiness prefers `Accelerator.golden_reference` and falls back to
+the class key; a class key would make every NVIDIA card check these H200
+answers and refuse to load on a mismatch. A100 and T4 did not record
+readiness `matched` against this set. Decision 3.0 and Omni were not run.
 
 Smoke of the same image is [`cuda-router-image.md`](cuda-router-image.md).
 
@@ -58,8 +61,8 @@ It is not byte-identical.
 ## Not in this record (published-image 30)
 
 This published-image run served the 30 models above. It did **not** serve
-Decision 3.0 or Omni, so those families are not in the committed `cuda`
-golden keys. Do not read "30" as all built-in models.
+Decision 3.0 or Omni, so those families are not in the committed
+`cuda:sm_90` golden keys. Do not read "30" as all built-in models.
 
 ## Later D3 and Omni captures (not incorporated)
 

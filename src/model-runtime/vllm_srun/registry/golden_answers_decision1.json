@@ -32,7 +32,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.2780699387288559,
      "legend": {
@@ -130,7 +130,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.0005162881370402994,
      "legend": {
@@ -228,7 +228,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.2386509743856362,
      "legend": {
@@ -326,7 +326,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.5433317550743659,
      "legend": {
@@ -424,7 +424,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.6375265712949876,
      "legend": {
@@ -543,7 +543,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.0005162397559231868,
      "legend": {
@@ -683,7 +683,7 @@
      "type": "noul"
     }
    },
-   "cuda": {
+   "cuda:sm_90": {
     "difficulty": {
      "confidence": 0.592251621956239,
      "legend": {
