@@ -219,6 +219,13 @@ before/after checks are separate observations, not a transaction or continuous
 monitor. If the baseline differs or a check fails, stop and inspect the response;
 do not apply the candidate or infer that the failure is an API defect.
 
+Distinguish a confirmed baseline mismatch from missing baseline evidence. If a
+required response field, ETag or state observation is missing or unreadable, stop
+and retain the artifacts. When reporting results, mark the affected guarantee and
+dependent conclusions as unverified; retain other conclusions only where the
+evidence supports them. Stopping alone does not prove the candidate incorrect.
+This walkthrough does not emit a structured pass/fail/unknown result.
+
 ## Recipe validation is a narrower alternative
 
 An agent may instead discover `GET /api/v1/config/recipes/default` and
