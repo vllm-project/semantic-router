@@ -263,7 +263,13 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                     }
                 ],
             )
-            hardware = {"decision-balance", "vela-amd"}
+            hardware = {
+                recipe.name
+                for recipe in conformance.discover_inventory(
+                    conformance.DEFAULT_RECIPE_ROOT
+                )
+                if recipe.required_devices
+            }
             self.assertTrue(
                 all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )

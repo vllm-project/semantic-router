@@ -26,6 +26,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,8 @@ REASONING_GTE = 0.5
 DIFFICULTY_GTE = 1.0
 CATALOG_FLOOR_GIB = 4
 LATENCY_SAMPLES = 20
+NVIDIA_SMI_FIELD_COUNT = 4
+IMAGE_PLATFORM_FIELD_COUNT = 2
 STACK_NAME = "gb10-qualification"
 PORT_OFFSET = 210
 API_PORT = 8080 + PORT_OFFSET
@@ -240,7 +243,7 @@ def parse_nvidia_smi(text: str) -> list[dict[str, Any]]:
     rows = []
     for index, line in enumerate(line for line in text.splitlines() if line.strip()):
         parts = [part.strip() for part in line.split(",")]
-        if len(parts) != 4:
+        if len(parts) != NVIDIA_SMI_FIELD_COUNT:
             raise QualificationError(f"unexpected nvidia-smi row: {line}")
         name, compute_cap, driver, memory = parts
         major, minor = compute_cap.split(".", 1)
@@ -260,7 +263,7 @@ def parse_nvidia_smi(text: str) -> list[dict[str, Any]]:
 
 def parse_image_platform(text: str) -> tuple[str, str]:
     parts = text.split()
-    if len(parts) != 2:
+    if len(parts) != IMAGE_PLATFORM_FIELD_COUNT:
         raise QualificationError(f"image inspect returned {text!r}")
     return parts[0], parts[1]
 
@@ -472,7 +475,7 @@ class RecordingStub:
         stub = self
 
         class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
+            def do_GET(self) -> None:
                 if self.path.startswith("/v1/models"):
                     body = json.dumps(
                         {"object": "list", "data": [{"id": stub.alias}]}
@@ -481,7 +484,7 @@ class RecordingStub:
                     return
                 self._send(404, b"")
 
-            def do_POST(self) -> None:  # noqa: N802
+            def do_POST(self) -> None:
                 length = int(self.headers.get("Content-Length", "0"))
                 self.rfile.read(length)
                 stub.requests.append(self.path)
@@ -587,7 +590,7 @@ def _wait_ready(deadline: float) -> None:
         except (urllib.error.URLError, TimeoutError, OSError):
             time.sleep(2)
             continue
-        if status == 200:
+        if status == HTTPStatus.OK:
             for deployment in body.get("deployments") or []:
                 device = str(deployment.get("device") or "")
                 if (
@@ -621,7 +624,7 @@ def _preview(prompt: str) -> dict[str, Any]:
         f"http://127.0.0.1:{API_PORT}/api/v1/routing/preview",
         {"text": prompt, "model": "vllm-sr/auto"},
     )
-    if status != 200:
+    if status != HTTPStatus.OK:
         raise QualificationError(f"routing preview failed with HTTP {status}: {body}")
     return answers_from_preview(body)
 
@@ -638,7 +641,7 @@ def _chat(prompt: str) -> tuple[str, float]:
         },
     )
     elapsed_ms = (time.monotonic() - started) * 1000
-    if status != 200:
+    if status != HTTPStatus.OK:
         raise QualificationError(f"chat completion failed with HTTP {status}")
     return headers.get("x-vsr-selected-model", ""), elapsed_ms
 
