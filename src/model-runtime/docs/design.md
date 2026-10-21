@@ -991,8 +991,12 @@ lane (a running average of that lane's recent forwards). Short work goes first, 
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
-waits for the forward in flight, not for the remaining windows of a long one;
-each job is answered as soon as its own batches have run. The order of
+waits for the forward in flight, not for the remaining windows of a long one.
+It plans them together with the jobs of planned batches that have not started,
+so requests that wait for the device share forwards up to the budget instead of
+keeping the batches their arrival formed; a started batch, a job split over
+forwards once one of them ran, and reference forwards keep their plan. Each job
+is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
