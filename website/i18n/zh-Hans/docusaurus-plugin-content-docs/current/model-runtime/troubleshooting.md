@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
