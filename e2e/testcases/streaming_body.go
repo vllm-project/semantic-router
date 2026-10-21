@@ -229,8 +229,11 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	}
 	defer backend.Close()
 
-	// Exercise a payload above 64 KiB. The provider observation verifies the
-	// complete messages without assuming a particular Envoy chunk count.
+	// Exercise a payload above 64 KiB. Size alone does not guarantee several
+	// ext_proc chunks: a body written at once can reach the Router as one
+	// chunk, so the body is written in several pieces. The provider
+	// observation verifies the complete messages without assuming a
+	// particular Envoy chunk count.
 	longContext := strings.Repeat("This is padding context to make the body large enough for multi-chunk delivery. ", 1000)
 	// The urgency decision has no system-prompt rewrite or response cache.
 	userMsg := "This is an urgent emergency, I need help immediately!"
@@ -254,8 +257,10 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	}
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
+	body := chunkedBody(ctx, jsonData, streamedBodyWrites)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
 	if err != nil {
+		body.Close()
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
