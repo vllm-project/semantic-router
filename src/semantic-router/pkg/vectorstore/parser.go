@@ -27,21 +27,29 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore/docformat"
 )
 
 // ExtractText extracts plain text from file content based on the file extension.
-// Supported extensions: .txt, .md, .json, .csv, .html
+// The formats it reads are the ones docformat lists; every other extension has
+// no text extractor.
 func ExtractText(content []byte, filename string) (string, error) {
-	ext := strings.ToLower(filepath.Ext(filename))
+	ext := docformat.Normalize(filepath.Ext(filename))
 
-	switch ext {
-	case ".txt", ".md":
+	extractor, ok := docformat.Formats[ext]
+	if !ok {
+		return "", fmt.Errorf("unsupported file format: %s", ext)
+	}
+
+	switch extractor {
+	case docformat.PlainText:
 		return string(content), nil
-	case ".json":
+	case docformat.JSON:
 		return extractJSON(content)
-	case ".csv":
+	case docformat.CSV:
 		return extractCSV(content)
-	case ".html", ".htm":
+	case docformat.HTML:
 		return extractHTML(content)
 	default:
 		return "", fmt.Errorf("unsupported file format: %s", ext)

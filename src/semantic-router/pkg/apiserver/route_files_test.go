@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore/docformat"
 )
 
 func TestHandleUploadFileStreamsToFileStore(t *testing.T) {
@@ -183,6 +184,19 @@ func vectorStoreUploadConfig(maxFileSizeMB int, formats ...string) *config.Route
 		MaxFileSizeMB:    maxFileSizeMB,
 		SupportedFormats: formats,
 	}}
+}
+
+// The upload route accepts the formats the text extractor reads, and nothing
+// else: a format it cannot read would be accepted and never indexed.
+func TestTheDefaultUploadExtensionsAreTheFormatsTheExtractorReads(t *testing.T) {
+	for _, ext := range docformat.Extensions() {
+		if !allowedExtensions[ext] {
+			t.Fatalf("the default upload extensions leave out %s, which the extractor reads", ext)
+		}
+	}
+	if allowedExtensions[".pdf"] {
+		t.Fatal("the default upload extensions name .pdf, which has no text extractor")
+	}
 }
 
 func TestUploadMaxBytesFallsBackOnOverflow(t *testing.T) {
