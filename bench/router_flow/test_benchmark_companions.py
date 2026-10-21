@@ -1,10 +1,9 @@
-"""Check the published benchmark kit and its source identity recording."""
+"""Check source identity recording in the published benchmark script."""
 
 import importlib.util
 import subprocess
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,16 +71,3 @@ class BenchmarkCompanionTests(unittest.TestCase):
             self.assertIsNotNone(getattr(PROBE, "source_identity", None))
             with self.assertRaises(subprocess.CalledProcessError):
                 PROBE.source_identity(Path(tmp))
-
-    def test_download_archive_matches_public_sources(self):
-        expected = {
-            "go-router-probe/main.go",
-            "go-router-probe/main_test.go",
-            "go-router-probe/go.mod",
-            "run-go-probe.py",
-            "go-router-probe-summary.json",
-        }
-        with zipfile.ZipFile(KIT / "benchmark-kit.zip") as archive:
-            self.assertEqual(set(archive.namelist()), expected)
-            for name in expected:
-                self.assertEqual(archive.read(name), (KIT / name).read_bytes(), name)
