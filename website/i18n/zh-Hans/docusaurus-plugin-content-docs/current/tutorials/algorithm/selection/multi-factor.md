@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
   source_file: "docs/tutorials/algorithm/selection/multi-factor.md"

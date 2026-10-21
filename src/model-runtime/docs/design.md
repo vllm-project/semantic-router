@@ -346,19 +346,21 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 | `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
 | `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
-| `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0) |
+| `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0, and state-once Decision 3.0 packages, whose requests always branch from their state: there it only decides whether whole requests share forwards) |
 
 Limits left unset take the device's memory class (`scheduler/calibration.py`:
 32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
 8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU and a device that reports no
 memory, such as MPS or a plugin's accelerator, keep 65,536 / 8,192). On a
 GPU the runtime then calibrates the token budget after the golden check, from
-merged forwards of the model's calibration rows (`calibration_items`) at
-doubling budgets: the largest budget whose cost per token is within 2% of
-the cheapest timed (on a flat curve the smallest would follow timing noise),
-but never more than one forward does in 0.3 s (interpolated between the timed
-forwards) nor than 85% of the free device memory holds. It logs the chosen
-values and their source, and `engine_args` reports them.
+merged forwards of the model's calibration rows (`calibration_items`; a
+state-once package's rows each branch from a state of their own, as a burst of
+one-question requests does) at doubling budgets: the largest budget whose cost
+per token is within 2% of the cheapest timed (on a flat curve the smallest
+would follow timing noise), but never more than one forward does in 0.3 s
+(interpolated between the timed forwards) nor than 85% of the free device
+memory holds. It logs the chosen values and their source, and `engine_args`
+reports them.
 
 The batcher (`scheduler/batching.py`) plans the rows of every queued request
 together (`coalesced`), one lane at a time (`LoadedModel.lane`; Decision 3.0:
@@ -435,18 +437,22 @@ Every surface and bundle response, errors included, carries a
 for the exchange to record each call's transport.
 A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
-404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
-(the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
-A forward out of device memory is 413 `request_too_large` for a request that
-had it alone and 429 `overloaded` for one that shared it (`scheduler.py`).
-Item-level failures (`max_length_exceeded`, `invalid_input`,
-`invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
-place and never fail sibling items.
+404 `model_not_found`, 413 `request_too_large`, 415 `unsupported_media_type`,
+422 `unsupported_surface` (the model does not serve this surface), 429
+`overloaded`, 503 `not_ready`. A forward out of device memory is 413
+`request_too_large` for a request that had it alone and 429 `overloaded` for
+one that shared it (`scheduler.py`). Item-level failures
+(`max_length_exceeded`, `invalid_input`, `invalid_model_output`,
+`deadline_exceeded`, `unavailable`) are reported in place with a fixed
+`reason` and never fail sibling items, except on `POST /v1/systemone`, where
+the first one answers the request (`question_failed`).
 
 ### 6.1 `POST /v1/decisions`
 
-Phase 1's strict superset of System One, with `POST /v1/systemone` as an
-alias. Every family validates the System One fields through one reader
+Phase 1's System One questions, extended. `POST /v1/systemone` takes the same
+requests and answers a request with a failed question as a whole, as System
+One does; the reference page's System One compatibility section documents its
+bodies, assets, Box and long context. Every family validates the System One fields through one reader
 (`systemone.read_question`): text is never blank, keys are unique non-blank
 strings, and a question takes only its type's fields plus those its family
 reads itself (`over`, `head`, `threshold`, `preset`); anything else is
@@ -681,7 +687,8 @@ separately, the last token of each option segment is that option's endpoint
 and the last token overall is the query position. The candidate head reads
 the endpoint and query rows in FP32. Answers follow the released runtime
 (per-level Score offsets, temperature, softmax, arg-max with first-option
-ties, P(true), expected level, normalised-entropy confidence). The native
+ties, P(true), expected level), with System One's published Choice and Score
+confidence, as every family reports it. The native
 engine implements the Qwen3 dense and Qwen3.5 hybrid backbones and Vega-27B's
 unmerged LoRA; on GPUs the backbone runs under BF16 autocast with BF16-resident
 Linear weights, FLA kernels with the released kernel choices pinned per model
@@ -898,10 +905,62 @@ kernel per call (plain torch on a CPU) and multiplies in BF16, which keeps the
 memory but not the time; NVFP4 quantizes the activations with one Triton kernel
 that writes their scales in cuBLAS's layout and multiplies in
 `torch.nn.functional.scaled_mm` with 1x16 block scales, which needs FP4 tensor
-cores (a Blackwell GPU). A
+cores (a Blackwell GPU). At load, NVFP4 projections of one input (q / k / v,
+gate / up) whose input and weight global scales agree are merged into one
+layer (`merge_siblings`): one quantization and one product per group, each
+part keeping views of the merged weight so device memory stays the same, and
+its outputs reaching the fused kernels as column-slice views. Projections that
+share only the input global scale (`in_proj_qkv` / `in_proj_z`) share its
+quantization (`project`). Each column is the one its separate product gives, so
+answers do not change. With approximate kernels on compute capability 12.x,
+graph captures of up to 512 rows multiply in FlashInfer's CUTLASS FP4 GEMM
+instead, where FlashInfer is installed and can tune its tiles (it compiles a
+delay kernel for its tuner with a CUDA 12.9 or later toolkit), each weight
+shape checked against cuBLAS first (`accel/flashinfer_nvfp4.py`,
+`use_flashinfer`); the receipt's `nvfp4_product` says which runs and why. A
 quantized package is its own model: its manifest's parameter counts are the
 logical ones, placement counts its files, and its answers are compared with
 the BF16 package's in `docs/records/decision3-quantized.md`.
+
+**State-once packages.** A package may declare an `attention_mode` under
+which no state token attends to a question (`StateOnceModel`,
+`families/decision3/state_once.py`):
+
+| `attention_mode` | Full-attention layers |
+| --- | --- |
+| `prefix_bidir` | The state attends within itself, both ways; a question block attends to the state and within itself, both ways |
+| `prefix_causal` | As `prefix_bidir`, with the state causal within itself |
+| `causal` | Every token attends to itself and the tokens before it |
+
+The Gated DeltaNet layers stay causal and positions run 0..L-1 over the row,
+as the checkpoint expects. The state block is the leading tokens of the rendered prompt
+that end within the state text: the system turn, the user turn's image and
+video placeholders, `State:` and the state. Each question block holds the
+rest: the blank line after the state (with any token that merges the state's
+last characters into it), the question, its coded options and the generation
+prompt. Because the text after the state is always `\n\nQuestion:`, the split
+depends on the state alone, and the reference implementation splits its rows the same way. A
+request's state block is tokenized and encoded once, its images and videos go
+through the tower once as part of it, and every question block branches from
+it (`EngineModel.branch`, `BranchBatch`). The native engine packs the states
+and blocks of a batch in one row (`models/branch.py`): a state attends within
+itself, and a block takes one softmax over its state's keys followed by its
+own (one variable-length call for all states, one for all blocks); a Gated
+DeltaNet block starts from its state's final recurrent state, its
+convolution window seeded with the state's last inputs, and the chunked rule
+runs every state and every block over `cu_seqlens`. On gfx942 the fused
+layers run on the packed row, the gated-delta preparation on the rows laid out
+with each block after its state's last inputs. The branched forward is the
+model's reference: the golden check, shared-context batches and batches that
+merge requests all run it, and whole requests share forwards up to the
+coalesced token budget (`merges_shared_batches`). A lone text question
+shares nothing, so it runs as its row under the same mask while the dense mask
+stays small; merged batches branch, since their dense masks cost more than the
+variable-length kernels save. `run_rows` runs each
+question as its own row under the same mask (`ForwardBatch.states`); the two
+differ only by rounding ([record](records/state-once.md)). A question costs its
+block and its share of the state, so `usage.input_tokens` counts the state once
+and each question's block.
 
 ## 9. Scheduler and planner
 
@@ -937,8 +996,12 @@ lane (a running average of that lane's recent forwards). Short work goes first, 
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
-waits for the forward in flight, not for the remaining windows of a long one;
-each job is answered as soon as its own batches have run. The order of
+waits for the forward in flight, not for the remaining windows of a long one.
+It plans them together with the jobs of planned batches that have not started,
+so requests that wait for the device share forwards up to the budget instead of
+keeping the batches their arrival formed; a started batch, a job split over
+forwards once one of them ran, and reference forwards keep their plan. Each job
+is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
@@ -1044,7 +1107,7 @@ Section 13.4.
 
 | Engine | Runs | Devices |
 | --- | --- | --- |
-| `native` | Qwen3, Qwen3.5 (GDN hybrid), ModernBERT, BERT, unmerged LoRA; Omni's SigLIP, Whisper and CLAP towers; hidden states, gathered rows, shared-context trees | Every accelerator |
+| `native` | Qwen3, Qwen3.5 (GDN hybrid), ModernBERT, BERT, unmerged LoRA; Omni's SigLIP, Whisper and CLAP towers; hidden states, gathered rows, shared-context trees, state-once branches | Every accelerator |
 | `onnxruntime` (optional: the `onnx` extra, not in the router images) | Package ONNX graphs (heads baked in) and prepared Omni bundles | CPU EP (validated); CUDA EP, ROCm / MIGraphX EPs and the OpenVINO EP when the installed build provides them (unvalidated until recorded) |
 
 | Accelerator | Status | Kernels |
@@ -1095,8 +1158,8 @@ answers their panels byte for byte. The official wheel still provides torch's
 Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
 ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
 machine code is the released build's. It carries
-code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
-`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for gfx90a, gfx942, gfx950 and gfx1151 (Instinct MI200, MI300 and
+MI350, and Ryzen AI Max; `CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
 code for rather than falling back. Triton's compiled kernels and
 MIOpen's databases live in the model volume, since the charts run the router
 on a read-only root without a home directory.

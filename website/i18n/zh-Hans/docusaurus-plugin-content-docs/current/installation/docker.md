@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Docker 部署
 description: 将 Semantic Router 作为本地或单主机容器栈运行，并连接你单独运维的模型后端。
 translation:

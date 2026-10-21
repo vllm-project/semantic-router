@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 
 PAGE_SIZE = 100
 PAGE_LIMIT = 20
 BOT_LOGIN = "github-actions[bot]"
+OPERATIONS = frozenset({"comment-lookup", "reaction", "comment", "reaction-cleanup"})
 FAILURES = (
     RuntimeError,
     OSError,
@@ -80,10 +82,18 @@ def command_event(event: dict) -> bool:
         return False
 
 
-def warning() -> None:
+def warning(operation: str, error: Exception) -> None:
     # API stderr and exception text can contain untrusted data or credentials.
+    label = operation if operation in OPERATIONS else "feedback"
+    status = getattr(error, "http_status", None)
+    diagnostic = (
+        f"HTTP {status}"
+        if type(status) is int and re.fullmatch(r"[45][0-9]{2}", str(status))
+        else "HTTP status unavailable"
+    )
     print(
-        "::warning::Could not update CI command feedback; authorization and execution are unchanged."
+        f"::warning::Could not update CI command feedback ({label}; {diagnostic}); "
+        "authorization and execution are unchanged."
     )
 
 
@@ -110,8 +120,8 @@ def feedback_for_event(client, event: dict, *, record: dict | None = None):
             or comment.get("user", {}).get("login") != actor
         ):
             return None
-    except FAILURES:
-        warning()
+    except FAILURES as error:
+        warning("comment-lookup", error)
         return None
     return CommandFeedback(client, repo, number, comment_id)
 
@@ -147,8 +157,8 @@ class CommandFeedback:
                 f"repos/{self.repo}/issues/comments/{self.comment_id}/reactions",
                 {"content": content},
             )
-        except FAILURES:
-            warning()
+        except FAILURES as error:
+            warning("reaction", error)
 
     def comment(self, message: str, *, create: bool) -> None:
         marker = f"<!-- semantic-router-ci-command:{self.comment_id} -->"
@@ -179,8 +189,8 @@ class CommandFeedback:
                 self.client.write(
                     f"repos/{self.repo}/issues/{self.number}/comments", {"body": body}
                 )
-        except FAILURES:
-            warning()
+        except FAILURES as error:
+            warning("comment", error)
 
     def received(self) -> None:
         self.reaction("eyes")
@@ -205,8 +215,8 @@ class CommandFeedback:
                     and positive_id(reaction.get("id"))
                 ):
                     self.client.request(f"{endpoint}/{reaction['id']}", method="DELETE")
-        except FAILURES:
-            warning()
+        except FAILURES as error:
+            warning("reaction-cleanup", error)
         self.comment(
             "Latest result: "
             f"[CI rerun requested](https://github.com/{self.repo}/actions/runs/{run_id}). "

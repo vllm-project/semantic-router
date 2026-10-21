@@ -3814,6 +3814,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "max_deadline_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
