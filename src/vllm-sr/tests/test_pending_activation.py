@@ -38,10 +38,12 @@ def test_the_heartbeat_covers_the_block(tmp_path):
     heartbeat = pending_activation.heartbeat_file(config)
 
     with pending_activation.serve_heartbeat(config, interval=0.01):
-        assert json.loads(heartbeat.read_text()) == {
-            "pid": os.getpid(),
-            "state": "starting",
-        }
+        published = json.loads(heartbeat.read_text())
+        assert published["pid"] == os.getpid()
+        assert published["state"] == "starting"
+        assert published.get("start_ticks") == pending_activation.process_start_ticks(
+            os.getpid()
+        )
         first = heartbeat.stat().st_mtime_ns
         deadline = time.monotonic() + 5
         while heartbeat.stat().st_mtime_ns == first and time.monotonic() < deadline:

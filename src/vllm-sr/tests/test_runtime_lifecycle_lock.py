@@ -1,8 +1,11 @@
+import json
 import os
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -11,6 +14,7 @@ from cli.runtime_lifecycle_lock import (
     _resolve_lock_directory,
     acquire_runtime_lifecycle_lock,
 )
+from cli.pending_activation import heartbeat_file
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX file lock contract")
 
@@ -86,6 +90,115 @@ def test_runtime_lifecycle_lock_contends_across_working_directories(
 
     assert contender.returncode != 0
     assert "another lifecycle operation in progress" in contender.stderr
+    assert f"pid {os.getpid()}" in contender.stderr
+    assert "command 'vllm-sr lifecycle'" in contender.stderr
+    assert "state active" in contender.stderr
+    assert "started " in contender.stderr
+    assert f"kill -TERM {os.getpid()}" in contender.stderr
+
+
+def _serve_holder(private_tmp_path: Path, state: str, script_name: str = "vllm-sr"):
+    lock_root = private_tmp_path / "locks"
+    config = private_tmp_path / "runtime-config.yaml"
+    script = private_tmp_path / script_name
+    script.write_text(
+        """import signal
+import sys
+import time
+from cli.pending_activation import serve_heartbeat, SERVE_WAITING, heartbeat_file
+from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
+
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+with acquire_runtime_lifecycle_lock(
+    runtime='docker', stack_name='audit-a', lock_root=sys.argv[2],
+    command='vllm-sr serve', state='starting',
+    heartbeat_path=heartbeat_file(sys.argv[3]),
+):
+    with serve_heartbeat(sys.argv[3], interval=60) as set_state:
+        if sys.argv[4] == 'waiting':
+            set_state(SERVE_WAITING)
+        while True:
+            time.sleep(1)
+""",
+        encoding="utf-8",
+    )
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    process = subprocess.Popen(
+        [sys.executable, str(script), "serve", str(lock_root), str(config), state],
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    deadline = time.monotonic() + 5
+    heartbeat = heartbeat_file(config)
+    while not heartbeat.exists() and time.monotonic() < deadline:
+        if process.poll() is not None:
+            pytest.fail(f"serve holder exited: {process.stderr.read()}")
+        time.sleep(0.01)
+    assert heartbeat.exists()
+    return process, lock_root, heartbeat
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"),
+    reason="safe process signaling requires Linux pidfd",
+)
+@pytest.mark.parametrize("operation", ["serve", "stop"])
+def test_waiting_serve_is_taken_over(private_tmp_path: Path, operation: str):
+    process, lock_root, _heartbeat = _serve_holder(private_tmp_path, "waiting")
+    try:
+        with acquire_runtime_lifecycle_lock(
+            runtime="docker",
+            stack_name="audit-a",
+            lock_root=lock_root,
+            command=f"vllm-sr {operation}",
+            take_over_waiting=True,
+        ):
+            assert process.wait(timeout=2) == 0
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        process.stderr.close()
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"),
+    reason="safe process signaling requires Linux pidfd",
+)
+@pytest.mark.parametrize(
+    "invalid", ["starting", "stale", "reused-pid", "wrong-command"]
+)
+def test_takeover_refuses_unverified_holder(private_tmp_path: Path, invalid: str):
+    state = "starting" if invalid == "starting" else "waiting"
+    process, lock_root, heartbeat = _serve_holder(
+        private_tmp_path,
+        state,
+        script_name="other-cli" if invalid == "wrong-command" else "vllm-sr",
+    )
+    try:
+        if invalid == "stale":
+            old = time.time() - 30
+            os.utime(heartbeat, (old, old))
+        elif invalid == "reused-pid":
+            record = json.loads(heartbeat.read_text(encoding="utf-8"))
+            record["start_ticks"] += 1
+            heartbeat.write_text(json.dumps(record), encoding="utf-8")
+        with pytest.raises(RuntimeLifecycleLockError, match="another lifecycle"):
+            acquire_runtime_lifecycle_lock(
+                runtime="docker",
+                stack_name="audit-a",
+                lock_root=lock_root,
+                command="vllm-sr stop",
+                take_over_waiting=True,
+            )
+        assert process.poll() is None
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+        process.stderr.close()
 
 
 def test_runtime_lifecycle_lock_separates_runtime_and_stack_keys(
