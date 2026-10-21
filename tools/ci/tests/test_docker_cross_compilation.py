@@ -23,6 +23,35 @@ def router_build_command(dockerfile: str = ROUTER_DOCKERFILE) -> str:
 
 
 class DockerCrossCompilationTests(unittest.TestCase):
+    def test_isolated_router_builds_do_not_use_local_vendor_dependencies(self):
+        for dockerfile in (
+            "tools/docker/Dockerfile.attached",
+            "tools/docker/riscv64/Dockerfile",
+        ):
+            with self.subTest(
+                dockerfile=dockerfile
+            ), tempfile.TemporaryDirectory() as tmp:
+                stubs = Path(tmp)
+                (stubs / "dpkg").write_text("#!/bin/sh\necho amd64\n")
+                (stubs / "go").write_text(
+                    '#!/bin/sh\ncase " $* " in *" -mod=mod "*) exit 0;; *) exit 23;; esac\n'
+                )
+                for stub in stubs.iterdir():
+                    stub.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-e", "-c", router_build_command(dockerfile)],
+                    env=os.environ
+                    | {"PATH": f"{stubs}:{os.environ['PATH']}", "TARGETARCH": "amd64"},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    "build must explicitly use module dependencies",
+                )
+
     def test_attached_rejects_amd64_target_on_arm64_builder(self):
         text = (
             (REPO_ROOT / "tools/docker/Dockerfile.attached")
