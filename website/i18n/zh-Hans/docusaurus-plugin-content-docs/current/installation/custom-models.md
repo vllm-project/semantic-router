@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 自定义模型
 description: 为私有、自托管或新发布的模型配置可选元数据和同构后端副本。
 translation:

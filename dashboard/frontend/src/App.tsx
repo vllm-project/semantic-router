@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
+import { CapabilitiesProvider } from './contexts/CapabilitiesContext'
 import { SetupProvider } from './contexts/SetupContext'
 import { AuthProvider } from './contexts/AuthContext'
 import AppRouter from './app/AppRouter'
@@ -69,9 +70,11 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <ReadonlyProvider>
-        <SetupProvider>
-          <AppRouter />
-        </SetupProvider>
+        <CapabilitiesProvider>
+          <SetupProvider>
+            <AppRouter />
+          </SetupProvider>
+        </CapabilitiesProvider>
       </ReadonlyProvider>
     </AuthProvider>
   )
