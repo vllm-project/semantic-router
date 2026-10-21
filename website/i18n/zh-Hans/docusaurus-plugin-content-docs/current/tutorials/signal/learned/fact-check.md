@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "e754075d1f11f729e985bf05b71114f5b807878f"
   source_file: "docs/tutorials/signal/learned/fact-check.md"

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。

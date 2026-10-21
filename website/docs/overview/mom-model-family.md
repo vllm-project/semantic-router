@@ -106,14 +106,18 @@ policy that fits your harness's model calls:
 
 | Public model | Recipe | Decisions |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | **Balance**: everyday quality, latency, and cost | `simple`, `medium`, `reasoning` |
+| `vllm-sr/mom-v1-blend` | **Balance**: reasoning effort only where a request needs it | `simple`, `medium`, `reasoning` |
 | `vllm-sr/mom-v1-lite` | **Cost**: economical serving with targeted escalation | `economy`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-flash` | **Speed**: responsive conversation and streaming | `fast`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-ultra` | **Accuracy**: strong answers and explicit orchestration | `simple`, `reasoning`, `review`, `agent` |
 | `vllm-sr/mom-v1-vault` | **Vault**: processing within your private deployment | `private`, `sensitive`, `guard` |
 
-Balance combines task difficulty, consequential advice, and answer-recovery
-signals. Speed and Cost use lighter routing signals. Accuracy normally selects
+Balance asks the router's decision model five routing questions in one call:
+the kind of work, how much reasoning it needs, whether exact facts matter, what
+a good answer needs, and whether the user is correcting an earlier answer. An
+effort score from those answers selects `simple`, `medium` or `reasoning`;
+corrections and tool work go to `reasoning`, and exact facts stay on `medium`.
+Speed and Cost use lighter routing signals. Accuracy normally selects
 one strong model; independent review and workflows require explicit intent.
 Long input or a subject label alone does not cause multi-model execution.
 
@@ -153,7 +157,7 @@ index at the assigned reasoning effort. **Preview** shows the signals, decision,
 and candidate-selection result. Send a real request to verify execution and
 latency before rollout.
 
-Policy version 3.0 keeps the decision names above and sends content risks to the sensitive pool. Validate new assignments before
+Policy version 4.0 keeps the decision names above; the decision model now selects Balance's decisions, and Vault sends content risks to the sensitive pool. Validate new assignments before
 publishing an upgrade; existing published versions remain unchanged. See the
 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)
 for the complete requirements and data-handling policy.

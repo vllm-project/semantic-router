@@ -6,7 +6,6 @@ import "testing"
 // they are controlled inputs, not embedding-model quality measurements.
 func TestBuiltinComplexityKeepsIndependentBoundariesAndMiddle(t *testing.T) {
 	for _, profile := range []struct{ name, ordinary, easy string }{
-		{"balance", "medium", "simple"},
 		{"speed", "fast", "fast"},
 		{"cost", "economy", "economy"},
 		{"accuracy", "simple", "simple"},
