@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9649d02f2582471642196bde2e086c34ccb9c88c"
   source_file: "docs/tutorials/plugin/prompt-cache.md"

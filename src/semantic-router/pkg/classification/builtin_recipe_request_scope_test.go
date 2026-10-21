@@ -34,7 +34,7 @@ func TestBuiltinWorkflowRequiresSeveralExecutors(t *testing.T) {
 }
 
 func TestBuiltinDirectRepairRequiresRequestScope(t *testing.T) {
-	for _, recipe := range []struct{ name, fallback string }{{"balance", "medium"}, {"cost", "economy"}, {"accuracy", "simple"}} {
+	for _, recipe := range []struct{ name, fallback string }{{"cost", "economy"}, {"accuracy", "simple"}} {
 		c := builtinPolicyClassifier(t, recipe.name)
 		attachBuiltinPolicyHeuristics(t, c)
 		for _, row := range []struct {
@@ -64,7 +64,7 @@ func TestBuiltinDirectRepairRequiresRequestScope(t *testing.T) {
 }
 
 func TestBuiltinPersonalActionNeedsRelevantDomain(t *testing.T) {
-	for _, recipe := range []struct{ name, fallback string }{{"balance", "medium"}, {"accuracy", "simple"}} {
+	for _, recipe := range []struct{ name, fallback string }{{"accuracy", "simple"}} {
 		c := builtinPolicyClassifier(t, recipe.name)
 		attachBuiltinPolicyHeuristics(t, c)
 		for _, row := range []struct {

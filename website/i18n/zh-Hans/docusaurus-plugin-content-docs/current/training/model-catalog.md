@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Vela 模型目录
 sidebar_label: 模型目录
 translation:

@@ -28,19 +28,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: website/package-lock.json
-
-      - name: Install website dependencies
-        working-directory: website
-        run: npm ci
 
       - name: Regenerate contributor leaderboard data
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: website
-        run: npm run contributors:rank
+        run: node scripts/generate-contributor-rank.mjs
 
       - name: Commit and push branch
         id: push
