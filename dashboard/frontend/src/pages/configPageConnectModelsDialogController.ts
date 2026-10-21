@@ -282,7 +282,15 @@ export function modelInventoryForProvider(
   catalog: BuiltInModelCatalog,
   providerID?: string,
 ): string[] {
-  return [...modelsForProvider(catalog, providerID).keys()]
+  const available = modelsForProvider(catalog, providerID)
+  const provider = catalog.providers.find((candidate) => candidate.id === providerID)
+  // Suppress old suggestions without losing metadata for explicitly entered IDs.
+  const hidden = new Set(
+    (provider?.models ?? [])
+      .filter((binding) => binding.restrictions?.suggested === false)
+      .map((binding) => binding.id),
+  )
+  return [...available.keys()].filter((id) => !hidden.has(id))
 }
 
 export function mergeModelInventory(current: string[], discovered: string[]): string[] {

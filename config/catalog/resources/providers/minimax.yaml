@@ -23,11 +23,67 @@ conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
+- catalog: minimax/minimax-m3.1-flash
+  relationship: first_party
+  id: MiniMax-M3.1-Flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_effort
+  reasoning_modes:
+  - adaptive
+  reasoning_efforts:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.15
+    cached_input_per_1m: 0.015
+    completion_per_1m: 0.60
+  restrictions:
+    context_window_size: 1000000
+    unsupported_request_fields:
+      openai/chat-completions@1:
+      - service_tier
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-10-20
+    source: https://platform.minimax.io/docs/guides/models-intro.md
+- catalog: minimax/minimax-m3
+  relationship: first_party
+  id: MiniMax-M3
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: thinking_object
+  reasoning_modes:
+  - disabled
+  - adaptive
+  - enabled
+  # Standard tier for input <=512k. Above 512k, all three prices double;
+  # priority adds a 1.5x multiplier. The published 512k boundary is not expanded.
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.30
+    cached_input_per_1m: 0.06
+    completion_per_1m: 1.20
+  restrictions:
+    context_window_size: 1000000
+    pricing_note: Standard <=512k input; >512k doubles prices; priority multiplies by 1.5.
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-10-20
+    source: https://platform.minimax.io/docs/pricing/overview.md
 - catalog: minimax/minimax-m2.5
   relationship: first_party
   id: MiniMax-M2.5
   protocols:
   - openai/chat-completions@1
+  restrictions:
+    suggested: false
   lifecycle: active
   verification:
     status: claimed
@@ -48,27 +104,7 @@ models:
     completion_per_1m: 1.20
   restrictions:
     context_window_size: 204800
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.minimax.io/docs/guides/models-intro
-- catalog: minimax/minimax-m3
-  relationship: first_party
-  id: MiniMax-M3
-  protocols:
-  - openai/chat-completions@1
-  reasoning_transport: thinking_object
-  reasoning_modes:
-  - disabled
-  - adaptive
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.60
-    cached_input_per_1m: 0.12
-    completion_per_1m: 2.40
-  restrictions:
-    context_window_size: 1000000
+    suggested: false
   lifecycle: active
   verification:
     status: claimed
