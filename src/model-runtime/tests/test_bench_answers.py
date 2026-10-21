@@ -6,9 +6,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from bench_answers import validate_answers  # noqa: E402
-from decision1_parity import _device_class, require_fla_pin  # noqa: E402
-
+from bench_answers import validate_answers
+from decision1_parity import _device_class, require_fla_pin
 
 QUESTIONS = {"domain": {"type": "choice", "criteria": ["a", "b"]}}
 
@@ -55,7 +54,7 @@ def test_cuda_pin_selection_never_invents_a_device(monkeypatch, device):
     from vllm_srun.accel.cuda import CUDAAccelerator
 
     monkeypatch.setattr(CUDAAccelerator, "devices", lambda self: [])
-    with pytest.raises(SystemExit, match="device|architecture"):
+    with pytest.raises(SystemExit, match=r"device|architecture"):
         _device_class(device)
 
 

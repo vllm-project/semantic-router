@@ -20,9 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import torch  # noqa: E402
-
 from kernel_parity import compare_tensors  # noqa: E402
-
 from vllm_srun.accel.kernels import attn_prep_ref  # noqa: E402
 
 DEFAULT_SHAPES = (
@@ -38,7 +36,7 @@ def parse_shape(spec: str) -> tuple[int, ...]:
     parts = [int(piece) for piece in spec.split(",")]
     if len(parts) != 7:
         raise SystemExit(f"shape {spec!r} must be B,T,H,Hkv,D,ROT,gated")
-    batch, length, heads, kv_heads, head_dim, rotary_dim, gated = parts
+    _batch, _length, heads, kv_heads, head_dim, rotary_dim, gated = parts
     if min(parts[:6]) < 1 or gated not in (0, 1):
         raise SystemExit("shape dimensions must be positive and gated must be 0 or 1")
     if head_dim not in (128, 256) or heads % kv_heads:

@@ -130,7 +130,7 @@ def gdn_prep_ref(
     b: torch.Tensor,
     a: torch.Tensor,
     conv_weight: torch.Tensor,
-    A_log: torch.Tensor,
+    a_log: torch.Tensor,
     dt_bias: torch.Tensor,
     k_heads: int,
     head_dim: int,
@@ -157,7 +157,7 @@ def gdn_prep_ref(
     key = key.reshape(batch, length, k_heads, head_dim)
     value = value.reshape(batch, length, value_dim // head_dim, head_dim)
     beta = b.sigmoid()
-    gate = -A_log.float().exp() * F.softplus(a.float() + dt_bias)
+    gate = -a_log.float().exp() * F.softplus(a.float() + dt_bias)
     return query, key, value, gate, beta
 
 

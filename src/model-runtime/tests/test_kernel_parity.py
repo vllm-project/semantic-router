@@ -9,7 +9,7 @@ import pytest
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from kernel_parity import compare_tensors  # noqa: E402
+from kernel_parity import compare_tensors
 
 
 def test_signed_zero_is_not_bit_exact():

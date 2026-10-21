@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
-from argparse import Namespace
 import weakref
+from argparse import Namespace
+from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-import decision2_bench as bench  # noqa: E402
+import decision2_bench as bench
 
 TOOL = Path(__file__).resolve().parents[1] / "tools" / "decision2_bench.py"
 
@@ -138,7 +138,7 @@ def test_failed_measurement_still_releases_model(monkeypatch, failure):
             closed.append(True)
 
     monkeypatch.setattr(bench, "native", lambda args: Side())
-    with pytest.raises(SystemExit, match="error|captures"):
+    with pytest.raises(SystemExit, match=r"error|captures"):
         bench._load_and_time("native", Namespace(warmup_passes=0), [BODY])
     assert closed == [True]
 

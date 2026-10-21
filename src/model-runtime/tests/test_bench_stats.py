@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from bench_stats import (  # noqa: E402
+from bench_stats import (
     inconclusive_worse,
     minus_baseline,
     should_extend,

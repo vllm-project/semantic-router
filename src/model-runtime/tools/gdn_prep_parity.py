@@ -27,9 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import torch  # noqa: E402
-
 from kernel_parity import compare_tensors  # noqa: E402
-
 from vllm_srun.accel.gpu import _optional, _wrap_conv  # noqa: E402
 from vllm_srun.accel.kernels import gdn_prep_ref  # noqa: E402
 
@@ -59,7 +57,7 @@ def parse_shape(spec: str) -> tuple[int, ...]:
     parts = [int(piece) for piece in spec.split(",")]
     if len(parts) != 6:
         raise SystemExit(f"shape {spec!r} must be B,T,C,KW,K_HEADS,HEAD_DIM")
-    batch, length, channels, kernel, k_heads, head_dim = parts
+    _batch, _length, channels, kernel, k_heads, head_dim = parts
     if min(parts) < 1 or kernel not in (2, 3, 4):
         raise SystemExit(
             "shape dimensions must be positive; convolution width must be 2, 3 or 4"

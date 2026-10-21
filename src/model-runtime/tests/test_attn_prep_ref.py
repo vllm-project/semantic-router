@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 import torch
-
 from vllm_srun.accel.kernels import attn_prep_ref
 from vllm_srun.engines.native.models.common import (
     RMSNorm,

@@ -49,7 +49,8 @@ from bench_stats import (  # noqa: E402
     summary,
 )
 from decision1_parity import panels, pin_status, require_fla_pin  # noqa: E402
-from gpu_parity import load as load_native, system_one  # noqa: E402
+from gpu_parity import load as load_native  # noqa: E402
+from gpu_parity import system_one  # noqa: E402
 
 
 def requests(args: argparse.Namespace) -> list[dict[str, Any]]:
