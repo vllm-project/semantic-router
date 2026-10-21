@@ -8,6 +8,7 @@ models, the per-model result cache, bundle fusion and per-model readiness.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import shutil
@@ -16,6 +17,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+import httpx
 import pytest
 from starlette.testclient import TestClient
 from vllm_srun.api.app import create_app
@@ -142,7 +144,7 @@ def test_models_describe_both_models_and_the_plugins(client):
     assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}
 
 
-def test_a_third_party_accelerator_and_profile_serve_a_model(
+def test_a_third_party_accelerator_serves_a_model_with_its_engine_arguments(
     example_plugin, keyword_package
 ):
     assert "example_host" in registry.names("accelerators")
@@ -152,7 +154,7 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         name="keywords",
         device="example_host",
         engine="example_counts",
-        profile="example_one_by_one",
+        max_num_seqs=1,
     )
     runtime = Runtime(ServeConfig(models=(config,)))
     runtime.start(background=False)
@@ -162,33 +164,66 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         assert (
             card["accelerator"] == "example_host" and card["device"] == "example_host"
         )
-        assert card["profile"] == "example_one_by_one"
+        assert card["engine_args"]["max_num_seqs"] == 1
+        assert card["engine_args"]["dtype"] == "auto"
         plugins = {(p["group"], p["name"]): p for p in card["plugins"]}
         assert plugins[("vllm_srun.accelerators", "example_host")]["capabilities"] == {
             "validated": False,
             "auto_priority": None,
         }
-        assert (
-            plugins[("vllm_srun.profiles", "example_one_by_one")]["capabilities"][
-                "numerics"
-            ]
-            == "exact"
-        )
+        assert plugins[("vllm_srun.engines", "example_counts")]["capabilities"][
+            "dtypes"
+        ] == ["auto"]
         body = client.post(
             "/v1/classify",
             json={
                 "input": ["Please refund the invoice", "Where is my parcel?"],
-                "options": {"profile": "example_one_by_one", "return_meta": True},
+                "options": {"return_meta": True},
             },
         ).json()
         assert [result["label"] for result in body["results"]] == [
             "billing",
             "shipping",
         ]
-        assert body["meta"]["profile"] == "example_one_by_one"
         assert body["meta"]["accelerator"] == "example_host"
+        assert body["meta"]["dtype"] == "float32"
     finally:
         runtime.stop()
+
+
+def test_an_engine_that_runs_only_the_published_precision_refuses_another_dtype(
+    example_plugin, keyword_package
+):
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        dtype="bfloat16",
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    with pytest.raises(RuntimeError, match="example_counts: runs --dtype auto only"):
+        runtime.start(background=False)
+    runtime.stop()
+
+
+def test_shared_context_is_refused_on_an_engine_without_a_shared_forward(
+    example_plugin, keyword_package
+):
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        enable_shared_context=True,
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    with pytest.raises(
+        RuntimeError,
+        match="enable_shared_context: the loaded engine model has no shared-context forward",
+    ):
+        runtime.start(background=False)
+    runtime.stop()
 
 
 @pytest.mark.parametrize("device_thread", [True, False])
@@ -384,6 +419,83 @@ def test_a_forward_error_fails_only_its_request(client, runtime, monkeypatch):
     )
     assert served.status_code == 200
     assert client.get("/health").status_code == 200
+
+
+@pytest.mark.parametrize("extra", [-1, 1], ids=["short", "long"])
+def test_wrong_result_count_fails_the_bundle_and_keeps_serving(
+    example_plugin, keyword_package, monkeypatch, extra
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+            ),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    try:
+        model = keyword_model(runtime)
+        run = model.run
+        calls = []
+
+        def wrong_once(items):
+            values = run(items)
+            calls.append(len(items))
+            if len(calls) == 1:
+                return (values + values)[: len(items) + extra]
+            return values
+
+        monkeypatch.setattr(model, "run", wrong_once)
+        body = {
+            "tasks": [
+                {"id": name, "classify": {"model": "keywords", "input": [text]}}
+                for name, text in (("a", "refund invoice"), ("b", "parcel delivery"))
+            ]
+        }
+
+        async def scenario():
+            transport = httpx.ASGITransport(app=create_app(runtime))
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                broken = await asyncio.wait_for(
+                    client.post("/v1/bundle", json=body), timeout=5
+                )
+                assert broken.status_code == 200
+                check("BundleResponse", broken.json())
+                results = broken.json()["results"]
+                assert [result["status"] for result in results] == [500, 500]
+                for result in results:
+                    assert result["error"]["code"] == "internal_error"
+                    assert (
+                        f"model result count mismatch: expected 2, got {2 + extra}"
+                        in result["error"]["message"]
+                    )
+                served = await asyncio.wait_for(
+                    client.post("/v1/bundle", json=body), timeout=5
+                )
+                assert served.status_code == 200
+                check("BundleResponse", served.json())
+                results = served.json()["results"]
+                assert [result["status"] for result in results] == [200, 200]
+                assert [
+                    result["classify"]["results"][0]["label"] for result in results
+                ] == [
+                    "billing",
+                    "shipping",
+                ]
+                assert (await client.get("/health")).status_code == 200
+
+        asyncio.run(scenario())
+        assert calls == [2, 2]
+    finally:
+        runtime.stop()
 
 
 def test_a_non_finite_answer_fails_only_its_task(client, runtime, monkeypatch):
@@ -584,6 +696,43 @@ def test_a_failed_load_is_retried_unless_the_answers_are_wrong(
             )
         else:
             assert flaky_health.reason == "VerificationError: golden mismatch"
+    finally:
+        runtime.stop()
+
+
+def test_a_retry_first_returns_the_failed_attempts_cached_gpu_memory(
+    example_plugin, keyword_package, monkeypatch
+):
+    import torch
+    import vllm_srun.runtime as runtime_module
+
+    load = runtime_module.ServedModel.load
+    events = []
+
+    def flaky(self):
+        events.append("load")
+        if len(events) == 1:
+            # the attempt's tensors are freed, but PyTorch keeps their blocks cached
+            raise RuntimeError("out of memory in the golden check")
+        return load(self)
+
+    monkeypatch.setattr(runtime_module.ServedModel, "load", flaky)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: events.append("empty"))
+    models = (
+        ModelConfig(
+            model=str(keyword_package),
+            name="flaky",
+            device="cpu",
+            engine="example_counts",
+        ),
+    )
+    runtime = Runtime(ServeConfig(models=models, load_retry_seconds=0.01))
+    runtime.start(background=True)
+    try:
+        runtime.wait(timeout=60)
+        assert runtime.lookup("flaky").health.ready
+        assert events[:3] == ["load", "empty", "load"]
     finally:
         runtime.stop()
 

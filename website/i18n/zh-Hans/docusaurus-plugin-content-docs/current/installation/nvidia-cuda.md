@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
@@ -102,7 +103,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml --platform cpu
 ```
 
-要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
+要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`），开发版本的 CLI 则选择从它自己的 `main` commit 发布、以该 commit SHA 为 tag 的镜像，除非显式指定镜像：
 
 ```bash
 vllm-sr config validate --config config.yaml

@@ -292,3 +292,36 @@ func TestSwitchTimestampsWindowCount(t *testing.T) {
 		t.Fatalf("switch timestamps lost across restart: ok=%v %+v", ok, recovered)
 	}
 }
+
+func TestRouterSessionMemoryRecordsTieredCacheWriteUsage(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	t.Cleanup(ResetRouterSessionMemoryForTesting)
+	now := time.Now()
+
+	RecordSessionUsage(SessionUsageParams{
+		SessionID:          "tiered-writes",
+		Model:              "anthropic/claude-3-7-sonnet",
+		PromptTokens:       1000,
+		CachedPromptTokens: 200,
+		CacheWrite5mTokens: 300,
+		CacheWrite1hTokens: 100,
+		CompletionTokens:   50,
+		Cost:               0.005,
+		Timestamp:          now,
+	})
+
+	snapshot, ok := GetRouterSessionSnapshot("tiered-writes", now)
+	if !ok {
+		t.Fatal("expected session snapshot")
+	}
+	if snapshot.CumulativePromptTokens != 1000 {
+		t.Fatalf("prompt tokens = %d, want 1000", snapshot.CumulativePromptTokens)
+	}
+	if snapshot.CumulativeCachedTokens != 200 {
+		t.Fatalf("cached tokens = %d, want 200", snapshot.CumulativeCachedTokens)
+	}
+	// Derived from 5m (300) + 1h (100) = 400
+	if snapshot.CumulativeCacheWriteTokens != 400 {
+		t.Fatalf("cache write tokens = %d, want 400", snapshot.CumulativeCacheWriteTokens)
+	}
+}

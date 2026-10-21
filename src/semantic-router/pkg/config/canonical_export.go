@@ -573,15 +573,16 @@ func canonicalProviderBackendRefs(
 func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
 		// Import adds exactly one model namespace; remove only that generated prefix.
-		Name:       strings.TrimPrefix(endpoint.Name, modelName+"_"),
-		Protocol:   endpoint.Protocol,
-		Weight:     endpoint.Weight,
-		Provider:   profile.Type,
-		BaseURL:    profile.BaseURL,
-		AuthHeader: profile.AuthHeader,
-		APIVersion: profile.APIVersion,
-		ChatPath:   profile.ChatPath,
-		APIKey:     endpoint.APIKey,
+		Name:                strings.TrimPrefix(endpoint.Name, modelName+"_"),
+		Protocol:            endpoint.Protocol,
+		Weight:              endpoint.Weight,
+		Provider:            profile.Type,
+		BaseURL:             profile.BaseURL,
+		AuthHeader:          profile.AuthHeader,
+		APIVersion:          profile.APIVersion,
+		ChatPath:            profile.ChatPath,
+		OpenAICompatGateway: profile.OpenAICompatGateway,
+		APIKey:              endpoint.APIKey,
 	}
 	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
 		prefix := profile.AuthPrefix

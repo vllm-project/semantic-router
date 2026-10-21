@@ -1,7 +1,7 @@
 """Decision 3.0 image inputs: decoding and the Qwen2-VL image processor, as the released runtime reads them.
 
-A request's images are base64 PNG, JPEG or WebP data URLs of at most 8,000,000
-bytes and 16,000,000 pixels (the released server's strict loading); PIL
+A request's images are base64 PNG, JPEG or WebP data URLs of at most 16 MiB
+(System One's limit) and 16,000,000 pixels (the released server's strict loading); PIL
 decodes each and converts it to RGB, nothing else. The processor is the
 Transformers 5.17 ``Qwen2VLImageProcessor`` torchvision backend with the
 released runtime's pixel budget: ``smart_resize`` to a multiple of
@@ -25,6 +25,8 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+from ...errors import MediaError
+
 # Preprocessing runs on one thread: PyTorch's OpenMP backend keeps a thread team
 # per calling thread, and a team per request thread outnumbers the cores, so every
 # parallel region of the resize and normalization would pay a wake-up.
@@ -32,7 +34,7 @@ _PREPROCESS = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vllm-sr-imag
 
 MIN_PIXELS = 65_536
 MAX_PIXELS = 1_638_400
-MAX_IMAGE_BYTES = 8_000_000
+MAX_IMAGE_BYTES = 16 << 20
 MAX_SOURCE_PIXELS = 16_000_000
 IMAGE_FORMATS = ("PNG", "JPEG", "WEBP")
 DATA_URL_FORMATS = ("png", "jpeg", "jpg", "webp")
@@ -76,9 +78,19 @@ class ProcessedImage:
     digest: str
 
 
+def _too_large() -> MediaError:
+    return MediaError(
+        "image_too_large",
+        f"each image must be at most {MAX_IMAGE_BYTES:,} bytes",
+        MAX_IMAGE_BYTES,
+    )
+
+
 def _payload(value: Any) -> bytes:
     if not isinstance(value, str) or not value.startswith("data:"):
-        raise ValueError("images must be base64 PNG, JPEG or WebP data URLs")
+        raise MediaError(
+            "image_format", "images must be base64 PNG, JPEG or WebP data URLs"
+        )
     header, separator, encoded = value.partition(",")
     kind = header.strip().lower()
     if (
@@ -86,17 +98,21 @@ def _payload(value: Any) -> bytes:
         or not kind.startswith("data:image/")
         or not kind.endswith(";base64")
     ):
-        raise ValueError("a data URL image is data:image/<format>;base64,<data>")
+        raise MediaError(
+            "image_format", "a data URL image is data:image/<format>;base64,<data>"
+        )
     if kind[len("data:image/") : -len(";base64")] not in DATA_URL_FORMATS:
-        raise ValueError("images must be base64 PNG, JPEG or WebP data URLs")
+        raise MediaError(
+            "image_format", "images must be base64 PNG, JPEG or WebP data URLs"
+        )
     if len(encoded) > 4 * -(-MAX_IMAGE_BYTES // 3):
-        raise ValueError(f"each image must be at most {MAX_IMAGE_BYTES:,} bytes")
+        raise _too_large()
     try:
         payload = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
-        raise ValueError("invalid base64 image data") from exc
+        raise MediaError("image_malformed", "invalid base64 image data") from exc
     if len(payload) > MAX_IMAGE_BYTES:
-        raise ValueError(f"each image must be at most {MAX_IMAGE_BYTES:,} bytes")
+        raise _too_large()
     return payload
 
 
@@ -108,10 +124,12 @@ def decode(value: Any) -> tuple[Any, str]:
     try:
         with Image.open(io.BytesIO(payload)) as image:
             if image.format not in IMAGE_FORMATS:
-                raise ValueError("images must be PNG, JPEG or WebP")
+                raise MediaError("image_format", "images must be PNG, JPEG or WebP")
             if image.width * image.height > MAX_SOURCE_PIXELS:
-                raise ValueError(
-                    f"each image must have at most {MAX_SOURCE_PIXELS:,} pixels"
+                raise MediaError(
+                    "image_pixels",
+                    f"each image must have at most {MAX_SOURCE_PIXELS:,} pixels",
+                    MAX_SOURCE_PIXELS,
                 )
             image.verify()
         with Image.open(io.BytesIO(payload)) as image:
@@ -122,7 +140,9 @@ def decode(value: Any) -> tuple[Any, str]:
         UnidentifiedImageError,
         Image.DecompressionBombError,
     ) as exc:
-        raise ValueError(f"invalid image data ({type(exc).__name__})") from exc
+        raise MediaError(
+            "image_malformed", f"invalid image data ({type(exc).__name__})"
+        ) from exc
 
 
 def smart_resize(
@@ -130,9 +150,11 @@ def smart_resize(
 ) -> tuple[int, int]:
     """Transformers' ``smart_resize``: both sides a multiple of ``factor``, the area within the budget."""
     if max(height, width) / min(height, width) > MAX_ASPECT_RATIO:
-        raise ValueError(
+        raise MediaError(
+            "image_aspect_ratio",
             f"absolute aspect ratio must be smaller than {MAX_ASPECT_RATIO}, got "
-            f"{max(height, width) / min(height, width)}"
+            f"{max(height, width) / min(height, width)}",
+            MAX_ASPECT_RATIO,
         )
     h_bar = round(height / factor) * factor
     w_bar = round(width / factor) * factor
@@ -187,7 +209,32 @@ def preprocess(image: Any, digest: str, settings: ProcessorSettings) -> Processe
     return _PREPROCESS.submit(_preprocess, image, digest, settings).result()
 
 
+def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
+    """``decode`` and the resize, as a media worker process runs them (``vllm_srun.media``): uint8 pixels and the digest.
+
+    The worker returns the resized uint8 pixels as a NumPy array, an eighth of
+    the FP32 patch rows they become, and ``loaded`` finishes them on the
+    preprocessing thread. The resize computes each output pixel alone, so the
+    worker's thread count leaves the pixels bit for bit as ``preprocess``
+    gives them.
+    """
+    picture, digest = decode(value)
+    return _resized(picture, settings).numpy(), digest
+
+
+def loaded(pixels: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
+    """A ``load`` result through the rest of the processor (on the preprocessing thread)."""
+    return _PREPROCESS.submit(
+        _patches, torch.from_numpy(pixels), digest, settings
+    ).result()
+
+
 def _preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
+    return _patches(_resized(image, settings), digest, settings)
+
+
+def _resized(image: Any, settings: ProcessorSettings) -> torch.Tensor:
+    """An RGB PIL image as uint8 ``[1, 3, height, width]`` at the processor's size."""
     import numpy as np
 
     pixels = torch.as_tensor(np.array(image, copy=True))
@@ -197,7 +244,14 @@ def _preprocess(image: Any, digest: str, settings: ProcessorSettings) -> Process
     height, width = smart_resize(
         old_height, old_width, settings.factor, settings.min_pixels, settings.max_pixels
     )
-    resized = _resize(stacked, height, width)
+    return _resize(stacked, height, width).contiguous()
+
+
+def _patches(
+    resized: torch.Tensor, digest: str, settings: ProcessorSettings
+) -> ProcessedImage:
+    """Resized uint8 pixels rescaled, normalized and laid out as the tower's FP32 patch rows."""
+    height, width = resized.shape[-2:]
     mean = torch.tensor(settings.image_mean) * (1.0 / settings.rescale_factor)
     std = torch.tensor(settings.image_std) * (1.0 / settings.rescale_factor)
     normalized = (

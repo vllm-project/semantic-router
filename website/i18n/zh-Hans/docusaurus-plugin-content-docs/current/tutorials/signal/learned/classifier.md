@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/classifier.md"
@@ -138,7 +139,7 @@ global:
 
 替换 SHA256 占位符，并使用产物声明的完整有序标签。文档 token 预算必须与工作点文件一致。省略 `predicate` 时，使用该标签的固定阈值（`score >= threshold`）；可同时匹配多个标签，也可全部不匹配。显式谓词查询原始独立分数，分数不要求合计为一。单标签分类器和未绑定工作点的分类器仍要求数值谓词。
 
-模型运行时以精确的 FP32 `exact` 配置执行该策略。工作点文件以 SHA256 绑定权重、tokenizer 和窗口几何；产物变化会被拒绝。文档总预算与每个窗口的执行预算相互独立。
+模型运行时以模型发布的 FP32 精度（`dtype: auto`）执行该策略。工作点文件以 SHA256 绑定权重、tokenizer 和窗口几何；产物变化会被拒绝。文档总预算与每个窗口的执行预算相互独立。
 
 模型只分词一次，按声明的重叠窗口覆盖原始内容 token，恢复特殊 token 并重置位置，然后对每个标签取各窗口 sigmoid 分数的最大值。文档超长、扫描不完整、产物变化或执行方式不受支持时会报错。版本 1 缺少必要的身份信息，因此不能直接使用；现有 Safety/Hazard 组合方式不变。
 

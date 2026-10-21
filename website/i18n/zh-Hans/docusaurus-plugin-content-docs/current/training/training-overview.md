@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 训练 Vela Router 模型
 sidebar_label: 概览
 translation:

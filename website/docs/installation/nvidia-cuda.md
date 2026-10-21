@@ -156,8 +156,9 @@ NVIDIA validation, or performance of the published CUDA image from the
 separate RunPod benchmark stack. Measure other NVIDIA GPUs on your
 hardware.
 A stable CLI selects the matching published release image
-(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
-use `:latest` unless an image is specified explicitly:
+(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`), and a development CLI
+build selects the image published from its own `main` commit, tagged with that
+commit's SHA, unless an image is specified explicitly:
 
 ```bash
 vllm-sr config validate --config config.yaml

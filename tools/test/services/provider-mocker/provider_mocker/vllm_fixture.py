@@ -1,10 +1,11 @@
-"""Captured vLLM stop and reasoning behavior, opt-in for codec regression E2E."""
+"""Captured vLLM stop, reasoning and in-stream error behavior, opt-in for codec regression E2E."""
 
 import json
-from collections.abc import Iterator
+from asyncio import sleep
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .chat_request import ChatRequest
 from .chat_wire import build_chat_usage, chat_contains
@@ -132,3 +133,93 @@ def reasoning_answer_reply(
         ],
         "usage": build_chat_usage(req, REASONING_TEXT + ANSWER_TEXT),
     }
+
+
+STREAM_ERROR_MARKER = "__mock_vllm_stream_error__"
+MIDSTREAM_ERROR_MARKER = "__mock_vllm_midstream_error__"
+# The same streams, with [DONE] in a later write than the error event.
+STREAM_ERROR_SPLIT_MARKER = "__mock_vllm_stream_error_split__"
+MIDSTREAM_ERROR_SPLIT_MARKER = "__mock_vllm_midstream_error_split__"
+DONE_EVENT = "data: [DONE]\n\n"
+# A delay, not a guarantee: Envoy normally hands the Router [DONE] in a later
+# body chunk. The ExtProc tests pin each read layout exactly.
+SPLIT_PAUSE_SECONDS = 0.3
+
+# Captured from vLLM 0.30.0 for a json_schema whose regex does not compile:
+# streamed, after HTTP 200, as an SSE event; buffered, as the HTTP 400 body.
+GRAMMAR_ERROR = {
+    "message": "Grammar error: regex parse error:\n    [\n    ^\nerror: unclosed character class",
+    "type": "BadRequestError",
+    "param": None,
+    "code": 400,
+}
+
+# Synthetic: vLLM 0.30.0's shape for an error raised during generation
+# (GenerationError), not captured.
+GENERATION_ERROR = {
+    "message": "Internal server error",
+    "type": "InternalServerError",
+    "param": None,
+    "code": 500,
+}
+
+
+def error_stream(
+    req: ChatRequest, created_ts: int, error: dict[str, Any], content: str = ""
+) -> Iterator[str]:
+    """Any content first, then the error event with its integer HTTP status
+    (json.dumps spacing, as captured) and [DONE] in one write, so the Router
+    normally reads them together."""
+    if content:
+        base = {
+            "id": "chatcmpl-mock-vllm-error",
+            "object": "chat.completion.chunk",
+            "created": created_ts,
+            "model": req.model,
+        }
+        for delta in ({"role": "assistant", "content": ""}, {"content": content}):
+            choice = {
+                "index": 0,
+                "delta": delta,
+                "logprobs": None,
+                "finish_reason": None,
+            }
+            yield "data: " + json.dumps(
+                dict(base, choices=[choice]), separators=(",", ":")
+            ) + "\n\n"
+    yield "data: " + json.dumps({"error": error}) + "\n\n" + DONE_EVENT
+
+
+async def split_before_done(events: Iterator[str]) -> AsyncIterator[str]:
+    """The same bytes, but [DONE] goes in its own write after a pause, so the
+    Router normally reads it later than the error event."""
+    for event in events:
+        if event.endswith(DONE_EVENT):
+            yield event.removesuffix(DONE_EVENT)
+            await sleep(SPLIT_PAUSE_SECONDS)
+            yield DONE_EVENT
+        else:
+            yield event
+
+
+def error_reply(
+    req: ChatRequest, created_ts: int
+) -> JSONResponse | StreamingResponse | None:
+    """vLLM's replies for the error markers, or None for any other request."""
+    stream_split = chat_contains(req, STREAM_ERROR_SPLIT_MARKER)
+    midstream_split = chat_contains(req, MIDSTREAM_ERROR_SPLIT_MARKER)
+    if stream_split or chat_contains(req, STREAM_ERROR_MARKER):
+        if not req.stream:
+            return JSONResponse(status_code=400, content={"error": GRAMMAR_ERROR})
+        events = error_stream(req, created_ts, GRAMMAR_ERROR)
+    elif req.stream and (midstream_split or chat_contains(req, MIDSTREAM_ERROR_MARKER)):
+        events = error_stream(req, created_ts, GENERATION_ERROR, content="partial")
+    else:
+        return None
+    if stream_split or midstream_split:
+        events = split_before_done(events)
+    return StreamingResponse(
+        events,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )

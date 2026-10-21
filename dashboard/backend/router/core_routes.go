@@ -187,6 +187,9 @@ func registerToolRoutes(mux routeRegistrar, cfg *config.Config) {
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/web-search", auth.PermToolsUse, "tools.web_search", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/tools/web-search/stats", auth.PermToolsUse, auth.SensitivityOperational, auth.ResourceOwnerTools, http.MethodGet).Describe(http.MethodGet, webSearchStatsOperation), handlers.WebSearchRateLimitStatsHandler())
+	log.Printf("Web Search rate-limit stats API endpoint registered: /api/tools/web-search/stats")
+
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/open-web", auth.PermToolsUse, "tools.open_web", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
@@ -243,10 +246,7 @@ func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialPr
 }
 
 func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store) {
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/availability", auth.PermMlPipeline, auth.SensitivityOperational, auth.ResourceOwnerML, http.MethodGet), handlers.MLPipelineAvailabilityHandler(cfg))
 	if !cfg.MLPipelineEnabled {
-		cfg.MLPipelineAvailable = false
-		cfg.MLPipelineUnavailableReason = "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true."
 		log.Printf("ML Pipeline feature disabled")
 		return
 	}
@@ -275,8 +275,6 @@ func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workfl
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/download/", auth.PermMlPipeline, auth.SensitivitySecret, auth.ResourceOwnerML, http.MethodGet), mlHandler.DownloadOutputHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/stream/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.StreamProgressHandler())
 	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
-	cfg.MLPipelineAvailable = true
-	cfg.MLPipelineUnavailableReason = ""
 
 	if trainingDir != "" {
 		log.Printf("ML Training scripts directory: %s", trainingDir)

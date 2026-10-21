@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
-import { dashboardSettingsResponse, mockAuthenticatedAppShell } from '../support/auth'
+import {
+  dashboardCapabilitiesResponse,
+  dashboardSettingsResponse,
+  mockAuthenticatedAppShell,
+} from '../support/auth'
 import type {
   DatasetPreparationJob,
   PreparationBenchmark,
@@ -426,11 +430,11 @@ test('waits for verified settings before opening the interactive preparation cat
 })
 
 for (const status of [403, 503]) {
-  test(`recovers a ${status} settings response through Refresh access without submitting a download`, async ({
+  test(`recovers a ${status} capabilities response through Refresh access without submitting a download`, async ({
     page,
   }) => {
     const state = await setup(page)
-    let settingsReads = 0
+    let capabilityReads = 0
     let sessionReads = 0
     await page.route('**/api/auth/me', async (route) => {
       sessionReads += 1
@@ -445,12 +449,12 @@ for (const status of [403, 503]) {
         },
       })
     })
-    await page.route('**/api/settings', async (route) => {
-      settingsReads += 1
+    await page.route('**/api/v1/capabilities', async (route) => {
+      capabilityReads += 1
       await route.fulfill(
-        settingsReads === 1
-          ? { status, json: { error: 'Settings unavailable' } }
-          : { json: dashboardSettingsResponse() },
+        capabilityReads === 1
+          ? { status, json: { error: 'Capabilities unavailable' } }
+          : { json: dashboardCapabilitiesResponse() },
       )
     })
     await page.goto('/evaluation?view=datasets&prepare=1')
@@ -461,8 +465,8 @@ for (const status of [403, 503]) {
     await expect(
       page.getByText(
         status === 403
-          ? 'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
-          : 'Dashboard access settings are unavailable. Refresh access to retry.',
+          ? 'Access to Dashboard feature availability was denied. Refresh access or contact an administrator.'
+          : 'Dashboard feature availability is unavailable. Refresh access to retry.',
       ),
     ).toBeVisible()
     await expect(panel).toHaveCount(0)
@@ -473,7 +477,7 @@ for (const status of [403, 503]) {
     await expect(panel.getByRole('combobox', { name: 'Benchmark to download' })).toBeEnabled()
     await expect(panel.getByRole('combobox', { name: 'Dataset size' })).toBeEnabled()
     await expect(panel.getByRole('button', { name: 'Refresh access' })).toHaveCount(0)
-    expect(settingsReads).toBeGreaterThanOrEqual(2)
+    expect(capabilityReads).toBeGreaterThanOrEqual(2)
     expect(sessionReads).toBeGreaterThan(previousSessionReads)
     expect(state.writes).toEqual([])
   })

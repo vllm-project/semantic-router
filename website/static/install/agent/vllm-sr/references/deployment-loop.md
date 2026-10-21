@@ -48,8 +48,10 @@ workers and are not automatically exposed by this frontend. Use `vllm-sr stop`
 with the same stack identity to stop the persistent stack.
 
 MODEL replaces only the configured default judgment deployment's artifact.
-Other model flags are optional: `--runtime-profile` preserves the configured
-value unless supplied; `--revision` resolves a branch, tag or full commit once
+Other model flags are optional: the engine flags (`--max-num-seqs`,
+`--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`,
+`--enable-shared-context`) preserve the configured engine arguments unless
+supplied; `--revision` resolves a branch, tag or full commit once
 before startup and records the immutable pin for every replica. Built-in
 models use their release pin by default. Bare serve keeps the configured
 default deployment, or starts with Vela 2.0 0.3B for a new config.

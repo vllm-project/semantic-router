@@ -7,8 +7,8 @@
         --prompts NAME:REQUESTS.jsonl:COUNT --output OUT.json [--threads N] [--router QUESTIONS.json]
     python3 tools/decision1_bench.py native --model REPO --revision REV --cache-dir DIR \\
         --device cpu|rocm:0 --prompts NAME:REQUESTS.jsonl:COUNT --output OUT.json \\
-        [--profile P] [--concurrency 1 4 16] [--threads N] [--router QUESTIONS.json] \\
-        [--max-batch-tokens N]
+        [--max-num-seqs N] [--max-num-batched-tokens N] [--enable-shared-context] \\
+        [--concurrency 1 4 16] [--threads N] [--router QUESTIONS.json]
 
 Single requests: every prompt once as one request, sequentially, after an
 untimed warm-up pass (GPU graphs captured, caches filled); p50, p95 and mean
@@ -18,9 +18,9 @@ one request at a time, so its sequential rate is its throughput.
 ``paired`` loads both sides in one process and times every request on each
 path back to back, rotating their order, so a shared machine's load changes
 hit all paths alike: ``bundled`` (the package's ``system_one``), ``direct``
-(the family's planning and ``run`` on the exact profile's physical batches:
-the same work as ``bundled``), ``scheduler`` (planning and the scheduler, no
-API layer) and ``call`` (end to end through ``Runtime.call``). ``bundled`` and
+(the family's planning and ``run`` on the released physical batches: the same
+work as ``bundled``), ``scheduler`` (planning and the scheduler with the engine
+arguments, no API layer) and ``call`` (end to end through ``Runtime.call``). ``bundled`` and
 ``direct`` run on the thread the scheduler runs batches on, so every path
 uses the same CPU thread pool. ``native`` alone also measures throughput through the
 scheduler with C concurrent requests per wave. ``--router QUESTIONS.json``
@@ -104,6 +104,18 @@ def bundled(args: argparse.Namespace) -> Callable[[dict[str, Any]], None]:
     return call
 
 
+def engine_args(args: argparse.Namespace) -> Any:
+    """The served model's engine arguments: the defaults, with the ones given on the command line."""
+    from vllm_srun.config import EngineArgs
+
+    given = {
+        name: getattr(args, name)
+        for name in ("max_num_seqs", "max_num_batched_tokens", "enable_shared_context")
+        if getattr(args, name, None) is not None
+    }
+    return EngineArgs(**given)
+
+
 def reference_device(device: str) -> str:
     """The bundled runtime's name for a device (it predates ``rocm:N``)."""
     return device.replace("rocm", "cuda")
@@ -116,30 +128,23 @@ class Native:
         from vllm_srun.config import ModelConfig, ServeConfig
         from vllm_srun.runtime import Runtime
 
-        overrides = (
-            {"max_batch_tokens": args.max_batch_tokens} if args.max_batch_tokens else {}
-        )
         self.runtime = Runtime(
             ServeConfig(
                 models=(
                     ModelConfig(
-                        model=args.model,
-                        revision=args.revision,
-                        device=args.device,
-                        profile=args.profile,
+                        model=args.model, revision=args.revision, device=args.device
                     ),
                 ),
                 cache_dir=args.cache_dir,
                 offline=True,
                 threads=args.threads,
-                **overrides,
+                engine_args=engine_args(args),
             )
         )
         self.runtime.start(background=False)
         self.served = self.runtime.lookup(None)
-        self.profile = args.profile
         self.loop = asyncio.new_event_loop()
-        self.options = {"return_meta": False, "profile": args.profile}
+        self.options = {"return_meta": False}
 
     def call(self, body: dict[str, Any]) -> None:
         """End to end through ``Runtime.call``, as the HTTP server calls it."""
@@ -154,10 +159,10 @@ class Native:
         """Planning and the scheduler, without the API layer."""
         model = self.served.model
         plan = model.plan(body["state"], body["questions"])
-        self.served.submit_items(plan.items, None, self.profile).result()
+        self.served.submit_items(plan.items, None).result()
 
     def direct(self, body: dict[str, Any]) -> None:
-        """Planning and ``run`` on the exact physical batches, on the calling thread."""
+        """Planning and ``run`` on the released physical batches, on the calling thread."""
         model = self.served.model
         items = model.plan(body["state"], body["questions"]).items
         batches = model.exact_batches(items)
@@ -225,7 +230,7 @@ def run_native(args: argparse.Namespace) -> dict[str, Any]:
         timed(native.call, bodies[: args.warmup])
         result = {
             "side": "native",
-            "profile": args.profile,
+            "engine_args": native.served.args.describe(native.served.shared),
             "single": summary(timed(native.call, bodies)),
             "single_scheduler": summary(timed(native.scheduler, bodies)),
             "throughput": {
@@ -343,11 +348,12 @@ def main() -> int:
         command.add_argument("--model", required=True)
         command.add_argument("--revision")
         command.add_argument("--cache-dir")
-        command.add_argument("--profile", default="exact")
+        command.add_argument("--max-num-seqs", type=int)
+        command.add_argument("--max-num-batched-tokens", type=int)
         command.add_argument(
-            "--max-batch-tokens",
-            type=int,
-            help="padded tokens a coalesced batch may hold (default: the server's)",
+            "--enable-shared-context",
+            action=argparse.BooleanOptionalAction,
+            default=None,
         )
     for command in (reference, native, paired):
         command.add_argument("--device", default="cpu")
@@ -373,7 +379,6 @@ def main() -> int:
         threads=args.threads,
         prompts=args.prompts,
         router=bool(args.router),
-        max_batch_tokens=getattr(args, "max_batch_tokens", None),
         started_unix=started,
     )
     Path(args.output).write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")

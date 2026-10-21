@@ -279,7 +279,8 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath: provider.Instance.ChatPath,
+		ChatPath:            provider.Instance.ChatPath,
+		OpenAICompatGateway: provider.Instance.OpenAICompatGateway,
 	}
 }
 
@@ -404,7 +405,8 @@ func modelPricingFromCatalog(pricing modelcatalog.Pricing) ModelPricing {
 	return ModelPricing{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CompletionPer1M: pricing.CompletionPer1M, CachedInputPer1M: pricing.CachedInputPer1M,
-		CacheWritePer1M: pricing.CacheWritePer1M,
+		CacheWritePer1M:   pricing.CacheWritePer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
 	}
 }
 
