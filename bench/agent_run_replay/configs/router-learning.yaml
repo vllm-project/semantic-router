@@ -1,0 +1,94 @@
+version: v0.3
+
+# Router for replay.py learn, in standalone mode without Envoy or models.
+# Inference on 18899, management API on 18080, the recorded backend on 18771.
+# The model names match the recordings' model field, so the recorded backend
+# answers each run with the recording of the model the Router chose. Router
+# Learning adaptation samples between them and learns from posted outcomes.
+# Pricing is the providers' public list price per million tokens.
+
+listeners:
+  - name: http-18899
+    address: 127.0.0.1
+    port: 18899
+    timeout: 300s
+    identity:
+      trust_headers: true
+      trusted_peers: ["127.0.0.0/8"]
+
+providers:
+  defaults:
+    model: gpt-5-mini
+  models:
+    - name: gpt-5-mini
+      provider_model_id: gpt-5-mini
+      api_format: openai
+      pricing: {currency: USD, prompt_per_1m: 0.25, cached_input_per_1m: 0.025, completion_per_1m: 2.0}
+      backend_refs:
+        - name: recorded-gpt-5-mini
+          endpoint: 127.0.0.1:18771
+          protocol: http
+          provider: vllm
+    - name: deepseek-v3.2
+      provider_model_id: deepseek-v3.2
+      api_format: openai
+      pricing: {currency: USD, prompt_per_1m: 0.28, cached_input_per_1m: 0.028, completion_per_1m: 0.42}
+      backend_refs:
+        - name: recorded-deepseek-v3-2
+          endpoint: 127.0.0.1:18771
+          protocol: http
+          provider: vllm
+
+routing:
+  modelCards:
+    - name: gpt-5-mini
+    - name: deepseek-v3.2
+  decisions:
+    - name: coding
+      description: Agent traffic. Adaptation chooses between the candidates.
+      priority: 100
+      rules: {}
+      modelRefs: [{model: gpt-5-mini}, {model: deepseek-v3.2}]
+      algorithm: {type: static}
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default
+
+global:
+  router:
+    learning:
+      enabled: true
+      adaptation:
+        enabled: true
+        strategy: routing_sampling
+        candidate_set: decision
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+      state_store:
+        backend: local
+  stores:
+    response_cache:
+      enabled: false
+  services:
+    observability:
+      tracing:
+        enabled: false
+    management_api:
+      bind_address: 127.0.0.1
+      port: 18080
+      auth:
+        mode: disabled
+    router_replay:
+      enabled: true
+      store_backend: memory
+      async_writes: false
+      capture_personal_data: false
+      capture_request_body: false
+      capture_response_body: false
+      max_records: 100000
