@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 2
 title: 使用 Agent 安装
 description: 向编码 Agent 提供一条提示词，即可通过 CLI 和 Router API 在 CPU 或 GPU 主机上完成 vLLM Semantic Router 的安装、配置与验证。
