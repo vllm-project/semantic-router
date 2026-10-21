@@ -154,6 +154,9 @@ then exports `image.tar` and `manifest.json`. The shared artifact verifier check
 the source revision, archive checksum and actual Linux/RISC-V64 platform.
 Artifact export requires a clean Git checkout; keep build outputs outside it.
 The source revision is checked before the build and again before sealing.
+Artifact export requires the default Docker context. To select another local
+daemon, set `DOCKER_CONTEXT=default` and `DOCKER_HOST` so Docker and Skopeo use
+the same endpoint.
 `--artifact-mode` selects `pr` (default), `main`, `nightly` or `release`; for a
 release, `--tag` must match the release version.
 

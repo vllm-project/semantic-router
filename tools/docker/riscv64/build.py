@@ -30,8 +30,18 @@ def require_clean_source(expected=None):
     return revision
 
 
+def require_export_context():
+    context = subprocess.check_output(["docker", "context", "show"], text=True).strip()
+    if context != "default":
+        raise ValueError(
+            "artifact export requires the default Docker context; "
+            "use DOCKER_CONTEXT=default and DOCKER_HOST to select another daemon"
+        )
+
+
 def export_artifact(image, directory, mode, tag, build_args, source_revision=None):
     revision = require_clean_source(source_revision)
+    require_export_context()
     directory.mkdir(parents=True, exist_ok=True)
     if any((directory / name).exists() for name in ("image.tar", "manifest.json")):
         raise ValueError("artifact directory already contains an image or manifest")
@@ -230,6 +240,8 @@ def main():
         parser.error("--artifact-directory requires skopeo")
     if platform.system() != "Linux" or platform.machine() != "riscv64":
         parser.error("execute on native riscv64 Linux; --plan works on other hosts")
+    if args.artifact_directory:
+        require_export_context()
     validate_builder(
         subprocess.check_output(["docker", "buildx", "inspect"], text=True)
     )
