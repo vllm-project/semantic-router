@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 统一配置契约 v0.3
 description: 记录路由器、CLI、仪表盘、Helm、operator 和 DSL 共享的已实现配置契约。
 created: 2026-03-17
@@ -6,7 +7,7 @@ status: Implemented
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
-  outdated: false
+  outdated: true
 ---
 
 > **状态：** 已实现 · **创建日期：** 2026-03-17

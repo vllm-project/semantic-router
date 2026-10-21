@@ -44,18 +44,23 @@ checkpoint's compressed tensors as they are stored:
   loading; ``prepare`` lays the weight scales out as cuBLAS reads them
   (``accel/nvfp4.py``, ``swizzle``) in place of the stored ones. Inputs of more
   than ``NVFP4_ROWS`` rows multiply in slices: rows quantize independently, so
-  the slices compute the same values while holding less at once.
+  the slices compute the same values while holding less at once. With
+  approximate kernels on compute capability 12.x, graph captures of up to
+  ``flashinfer_nvfp4.GRAPH_ROWS`` rows multiply in FlashInfer's CUTLASS FP4 GEMM
+  instead where it is installed and can tune it (``use_flashinfer``), which is
+  faster there (``accel/flashinfer_nvfp4.py``).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import torch
 from torch import nn
 
+from ...accel import flashinfer_nvfp4
 from ...errors import PackageError
 from ...quantization import FLOAT8, FLOAT8_DEVICES, NVFP4, PACK, QuantizedWeights
 
@@ -70,6 +75,10 @@ UNSCALED_ROWS = 256
 ROWWISE_CAPTURE_SAFE = torch.torch_version.TorchVersion(torch.__version__) >= "2.12"
 # Rows per NVFP4 product: longer inputs multiply in slices (their FP4 copy and output stay bounded).
 NVFP4_ROWS = 8192
+# Rows at which FlashInfer's tuned NVFP4 product is checked against cuBLAS's, and the relative
+# error it may reach (it sums in another order: up to 4e-5 for d3's widths, docs/records).
+FLASHINFER_CHECK_ROWS = (1, 37, 300, flashinfer_nvfp4.GRAPH_ROWS)
+FLASHINFER_TOLERANCE = 1e-3
 # Sibling projections that read one input: merged into one NVFP4 product where their global scales agree.
 SIBLINGS = (("q_proj", "k_proj", "v_proj"), ("gate_proj", "up_proj"))
 # The FP8 format each ROCm architecture's matrix units multiply.
@@ -298,6 +307,8 @@ class NVFP4Linear(nn.Module):
     weight_scale: torch.Tensor
     weight_global_scale: torch.Tensor
     input_global_scale: torch.Tensor
+    # FlashInfer's FP4 GEMM, for graph captures of up to flashinfer_nvfp4.GRAPH_ROWS rows (``use_flashinfer``)
+    flashinfer: Callable[..., torch.Tensor] | None = None
 
     def __init__(self, linear: nn.Linear):
         super().__init__()
@@ -384,8 +395,19 @@ class NVFP4Linear(nn.Module):
         self.scaling = [ScalingType.BlockWise1x16, ScalingType.TensorWise]
         self.swizzling = [SwizzleType.SWIZZLE_32_4_4, SwizzleType.NO_SWIZZLE]
         self.quantize = quantize
+        # FlashInfer reads the swizzled weight scales as their padded [rows, K / 16] matrix
+        padded = -(-self.out_features // 128) * 128
+        self.weight_t = self.weight_packed.t()
+        self.weight_scale_t = self.weight_scale.view(padded, -1).t()
+        self.alpha = self.input_decode * self.weight_decode
 
     def _product(self, q: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+        if (
+            self.flashinfer is not None
+            and q.shape[0] <= flashinfer_nvfp4.GRAPH_ROWS
+            and torch.cuda.is_current_stream_capturing()
+        ):
+            return self._flashinfer_product(self.flashinfer, q, scale)
         # the kernel writes the activation scales in cuBLAS's layout already
         return nn.functional.scaled_mm(
             q.view(torch.float4_e2m1fn_x2),
@@ -398,6 +420,35 @@ class NVFP4Linear(nn.Module):
             swizzle_b=self.swizzling,
             output_dtype=torch.bfloat16,
         )
+
+    def _flashinfer_product(
+        self, mm_fp4: Callable[..., torch.Tensor], q: torch.Tensor, scale: torch.Tensor
+    ) -> torch.Tensor:
+        return flashinfer_nvfp4.product(
+            mm_fp4, q, scale, self.weight_t, self.weight_scale_t, self.alpha
+        )
+
+    def flashinfer_disagrees(
+        self, mm_fp4: Callable[..., torch.Tensor], generator: torch.Generator
+    ) -> str | None:
+        """Why FlashInfer's product of random inputs strays from cuBLAS's here (``FLASHINFER_TOLERANCE``); None when not."""
+        for rows in FLASHINFER_CHECK_ROWS:
+            x = torch.randn(
+                rows,
+                self.in_features,
+                device=self.weight_packed.device,
+                generator=generator,
+            )
+            q, scale = self.quantize(x.to(torch.bfloat16), self.input_global)
+            want = self._product(q, scale).float()
+            try:
+                got = self._flashinfer_product(mm_fp4, q, scale).float()
+            except Exception as e:
+                return f"{type(e).__name__}: {e}"
+            error = ((got - want).norm() / want.norm()).item()
+            if not error <= FLASHINFER_TOLERANCE:  # NaN strays too
+                return f"relative error {error:.1e} at {rows} rows"
+        return None
 
     def _finish(self, x: torch.Tensor, products: list[torch.Tensor]) -> torch.Tensor:
         """The layer's output for ``x`` from its products, one per slice of ``_slices``."""
@@ -588,6 +639,42 @@ def merge_siblings(module: nn.Module) -> int:
                 _merge(cast(list[NVFP4Linear], parts))
                 merged += 1
     return merged
+
+
+def use_flashinfer(nvfp4: list[NVFP4Linear], device: torch.device) -> dict[str, Any]:
+    """Let graph captures multiply ``nvfp4`` in FlashInfer's FP4 GEMM (``flashinfer_nvfp4``); the receipt.
+
+    FlashInfer's tiles are tuned for every weight shape, a merged group's
+    included; then each shape takes them where one of its layers multiplies
+    as cuBLAS does (``NVFP4Linear.flashinfer_disagrees``). The other shapes
+    keep cuBLAS, and the receipt says why.
+    """
+    mm_fp4, reason = flashinfer_nvfp4.load(device)
+    if mm_fp4 is None:
+        return {"skipped": reason}
+    products = {id(p): p for p in nvfp4} | {
+        id(p.merged.layer): p.merged.layer for p in nvfp4 if p.merged is not None
+    }
+    shapes: dict[tuple[int, int], NVFP4Linear] = {}
+    for layer in products.values():
+        shapes.setdefault((layer.out_features, layer.in_features), layer)
+    flashinfer_nvfp4.tune(mm_fp4, shapes, device)
+    generator = torch.Generator(device=device).manual_seed(0)
+    cublas_shapes = {
+        f"{n}x{k}": why
+        for (n, k), layer in shapes.items()
+        if (why := layer.flashinfer_disagrees(mm_fp4, generator)) is not None
+    }
+    for layer in products.values():
+        if f"{layer.out_features}x{layer.in_features}" not in cublas_shapes:
+            layer.flashinfer = mm_fp4
+    receipt: dict[str, Any] = {
+        "graphs": "flashinfer-cutlass",
+        "rows": flashinfer_nvfp4.GRAPH_ROWS,
+    }
+    if cublas_shapes:
+        receipt["cublas_shapes"] = cublas_shapes
+    return receipt
 
 
 def prepare(module: nn.Module) -> None:
