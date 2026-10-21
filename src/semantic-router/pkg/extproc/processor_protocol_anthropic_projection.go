@@ -70,8 +70,9 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
 	if changed {
 		projected.Generation++ // The source envelope no longer describes this request.
 	}
-	projected, diagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
-	return projected, diagnostics, nil
+	projected, systemDiagnostics := llmprotocol.ProjectAnthropicSystemMessages(projected, target)
+	projected, cacheDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
+	return projected, append(systemDiagnostics, cacheDiagnostics...), nil
 }
 
 func anthropicBackendCanDisableReasoning(family *config.ReasoningFamilyConfig) bool {
