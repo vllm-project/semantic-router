@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -559,7 +560,7 @@ func responseEnvelope(format llmprotocol.WireFormat, body []byte, generation uin
 }
 
 func appendLossy(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat, field, reason string) error {
-	if policy.LossyFeatures == llmprotocol.LossyReject {
+	if policy.LossyFeatures == llmprotocol.LossyReject && !slices.Contains(policy.AllowedLossyFields, field) {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation", "translation would lose "+field, nil)
 	}
 	if len(*diagnostics) < policy.Limits.Diagnostics {
