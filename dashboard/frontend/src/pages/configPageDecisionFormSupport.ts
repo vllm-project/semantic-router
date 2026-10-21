@@ -63,6 +63,7 @@ export const decisionRulesForSave = (
   if (rules.operator !== 'AND' && conditions.length === 0) {
     throw new Error(`The root ${rules.operator} group needs at least one condition.`)
   }
+  if (rules.on_error) throw new Error('on_error only applies to leaf conditions.')
   conditions.forEach((condition, index) => validateCondition(condition, `Condition #${index + 1}`))
   if (rules.on_unknown && conditions.some((condition) => conditionUsesOnError(condition))) {
     throw new Error('Rules on_unknown cannot be combined with condition on_error.')
