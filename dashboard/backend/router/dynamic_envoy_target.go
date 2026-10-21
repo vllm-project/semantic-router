@@ -70,7 +70,7 @@ func dynamicEnvoyListenerPort(target *url.URL, data []byte) (int, error) {
 		return 0, errors.New("runtime listener is unavailable")
 	}
 	port := listener.Port
-	if !isManagedEnvoyHostname(target.Hostname()) {
+	if !isManagedEnvoyHostname(target.Hostname()) && !isStandaloneRouterHostname(target.Hostname()) {
 		if raw := strings.TrimSpace(os.Getenv("VLLM_SR_PORT_OFFSET")); raw != "" {
 			offset, parseErr := strconv.Atoi(raw)
 			if parseErr != nil || offset < 0 || port+offset > 65535 {
@@ -90,6 +90,27 @@ func isManagedEnvoyHostname(host string) bool {
 			expected = "vllm-sr-envoy-container"
 		} else {
 			expected = stack + "-vllm-sr-envoy-container"
+		}
+	}
+	return strings.EqualFold(strings.TrimSpace(host), expected)
+}
+
+// isStandaloneRouterHostname reports whether host names the Router container
+// that serves the listeners directly in a standalone stack. The CLI points the
+// dashboard's target at the Router container there, and like the managed Envoy
+// container it is dialed over the stack network, where the port offset only
+// applies to host publication, so the offset must not shift its port.
+func isStandaloneRouterHostname(host string) bool {
+	if strings.TrimSpace(os.Getenv("VLLM_SR_GATEWAY")) != "standalone" {
+		return false
+	}
+	expected := strings.TrimSpace(os.Getenv("VLLM_SR_ROUTER_CONTAINER_NAME"))
+	if expected == "" {
+		stack := strings.TrimSpace(os.Getenv("VLLM_SR_STACK_NAME"))
+		if stack == "" || stack == "vllm-sr" {
+			expected = "vllm-sr-router-container"
+		} else {
+			expected = stack + "-vllm-sr-router-container"
 		}
 	}
 	return strings.EqualFold(strings.TrimSpace(host), expected)
