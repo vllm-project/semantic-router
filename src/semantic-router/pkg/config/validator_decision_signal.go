@@ -61,14 +61,20 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 // validateDecisionDeployment checks the deployment a decision question or
 // selector asks: a declared model_runtime deployment, or, when it names none,
 // the decision model, which must support the requested task.
+//
+// The decision model answers a question that names no deployment, so its own
+// input budget is checked the same way: decision models never truncate, and a
+// budget a decision model cannot honour is a mistake the loader refuses
+// instead of ignoring at request time.
 func validateDecisionDeployment(cfg *RouterConfig, deployment, asker string) error {
 	if deployment != "" {
 		return validateModelRuntimeReference(cfg, deployment)
 	}
-	if _, _, _, err := cfg.DecisionModelDeployment(); err != nil {
+	name, fallback, _, err := cfg.DecisionModelDeployment()
+	if err != nil {
 		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
 	}
-	return nil
+	return fallback.ValidateDecisionInput(name)
 }
 
 // validateSetLabelAnswerKeys rejects a rule whose name equals the answer key
