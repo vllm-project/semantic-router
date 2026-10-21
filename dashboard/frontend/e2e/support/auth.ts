@@ -23,6 +23,8 @@ type BootstrapOptions = {
   user?: SessionUser
   setupState?: Record<string, unknown>
   settings?: Record<string, unknown>
+  /** Per-capability field overrides for GET /api/v1/capabilities. */
+  capabilities?: Record<string, Record<string, unknown>>
 }
 
 const defaultUser: SessionUser = {
@@ -69,19 +71,41 @@ const defaultSettings = {
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
-  srBenchAvailable: true,
-  srBenchUnavailableReason: '',
-  mlPipelineAvailable: true,
-  mlPipelineUnavailableReason: '',
 }
 
 export const dashboardSettingsResponse = (
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> => ({ ...defaultSettings, ...overrides })
 
+const capabilityIDs = ['setup', 'config', 'evaluation', 'mlPipeline', 'mcp']
+
+/** Every capability available unless overridden, e.g. `{ evaluation: unavailableCapability(...) }`. */
+export const dashboardCapabilitiesResponse = (
+  overrides: Record<string, Record<string, unknown>> = {},
+): Record<string, unknown> => ({
+  capabilities: capabilityIDs.map((id) => ({
+    id,
+    enabled: true,
+    configured: true,
+    reachable: true,
+    authorized: true,
+    degraded: false,
+    state: 'available',
+    ...(overrides[id] ?? {}),
+  })),
+})
+
+/** An unreachable capability with the remediation the route gate shows. */
+export const unavailableCapability = (remediation: string): Record<string, unknown> => ({
+  reachable: false,
+  state: 'unreachable',
+  reason: 'upstream_unreachable',
+  remediation,
+})
+
 export async function mockAuthenticatedSession(
   page: Page,
-  { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
+  { token = 'test-auth-token', user = defaultUser, capabilities = {} }: BootstrapOptions = {},
 ): Promise<{ token: string; user: SessionUser }> {
   // The app authenticates with the HttpOnly vsr_session cookie the server sets at login,
   // so tests seed a cookie rather than localStorage. httpOnly is what makes the suite
@@ -101,6 +125,14 @@ export async function mockAuthenticatedSession(
       status: 404,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Unmocked browser-test API request' } }),
+    })
+  })
+
+  await page.route('**/api/v1/capabilities', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dashboardCapabilitiesResponse(capabilities)),
     })
   })
 
