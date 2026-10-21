@@ -16,7 +16,22 @@ ROOT = Path(__file__).resolve().parents[3]
 BASE = "docker.io/library/debian@sha256:c6d58429cec88e03b2fe5c3d285bf90517be50b20bc1151b1b5a436d05865a9d"
 
 
-def export_artifact(image, directory, mode, tag, build_args):
+def require_clean_source(expected=None):
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    changed = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=ROOT, text=True
+    )
+    if changed:
+        raise ValueError("artifact export requires a clean source checkout")
+    if expected is not None and revision != expected:
+        raise ValueError("source revision changed during the native build")
+    return revision
+
+
+def export_artifact(image, directory, mode, tag, build_args, source_revision=None):
+    revision = require_clean_source(source_revision)
     directory.mkdir(parents=True, exist_ok=True)
     if any((directory / name).exists() for name in ("image.tar", "manifest.json")):
         raise ValueError("artifact directory already contains an image or manifest")
@@ -29,6 +44,7 @@ def export_artifact(image, directory, mode, tag, build_args):
         ],
         check=True,
     )
+    require_clean_source(revision)
     subprocess.run(
         [
             sys.executable,
@@ -47,6 +63,7 @@ def export_artifact(image, directory, mode, tag, build_args):
         check=True,
         env=os.environ
         | {
+            "GITHUB_SHA": revision,
             "CI_IMAGE_BUILD_ARGS": "\n".join(build_args),
             "CI_IMAGE_BUILD_DATE": datetime.now(timezone.utc).strftime("%Y%m%d"),
         },
@@ -210,6 +227,7 @@ def main():
     validate_builder(
         subprocess.check_output(["docker", "buildx", "inspect"], text=True)
     )
+    source_revision = require_clean_source() if args.artifact_directory else None
     output = args.output or Path(tempfile.mkdtemp(prefix="vsr-public-build-"))
     output.mkdir(parents=True, exist_ok=True)
     receipt = {"machine": platform.machine(), "commands": commands, "steps": []}
@@ -256,6 +274,7 @@ def main():
                     "NATIVE_BUILD_COMMANDS="
                     + json.dumps(commands, separators=(",", ":"))
                 ],
+                source_revision=source_revision,
             )
             receipt["artifact"] = {
                 "directory": str(args.artifact_directory.resolve()),

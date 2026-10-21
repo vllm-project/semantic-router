@@ -15,9 +15,76 @@ from test_image_artifacts import archive_image
 SCRIPT = Path(__file__).resolve().parents[2] / "docker/riscv64/build.py"
 sys.path.insert(0, str(SCRIPT.parents[2] / "ci"))
 import image_artifacts as images  # noqa: E402
+from classify_pr_changes import classify  # noqa: E402
 
 
 class NativeBuildPlanTests(unittest.TestCase):
+    def test_native_build_sources_select_harness_contracts(self):
+        for source in (
+            "tools/docker/riscv64/build.py",
+            "tools/docker/riscv64/Dockerfile",
+            "tools/docker/Dockerfile.attached",
+            "tools/test/smoke/riscv64-standalone.py",
+        ):
+            with self.subTest(source=source):
+                self.assertIn("harness-tools", classify([source]).selected_jobs)
+
+    def test_artifact_source_requires_clean_matching_checkout(self):
+        module = self.native_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            tracked = root / "input"
+            tracked.write_text("original\n")
+            subprocess.run(["git", "-C", str(root), "add", "input"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "-c",
+                    "user.name=Build Test",
+                    "-c",
+                    "user.email=build@example.invalid",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ],
+                check=True,
+            )
+            revision = subprocess.check_output(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+            ).strip()
+            with patch.object(module, "ROOT", root):
+                guard = getattr(module, "require_clean_source", None)
+                self.assertIsNotNone(
+                    guard, "native artifact export needs a source guard"
+                )
+                self.assertEqual(guard(), revision)
+                with self.assertRaisesRegex(ValueError, "revision changed"):
+                    guard("0" * 40)
+                tracked.write_text("modified\n")
+                with self.assertRaisesRegex(ValueError, "clean"):
+                    guard()
+                with self.assertRaisesRegex(ValueError, "clean"):
+                    module.export_artifact(
+                        "router:test", root / "artifact", "pr", "test", []
+                    )
+                self.assertFalse((root / "artifact").exists())
+                subprocess.run(["git", "-C", str(root), "add", "input"], check=True)
+                with self.assertRaisesRegex(ValueError, "clean"):
+                    guard()
+                subprocess.run(
+                    ["git", "-C", str(root), "restore", "--staged", "input"], check=True
+                )
+                tracked.write_text("original\n")
+                (root / "extra").write_text("untracked input\n")
+                with self.assertRaisesRegex(ValueError, "clean"):
+                    guard()
+
     def native_module(self):
         spec = importlib.util.spec_from_file_location("native_build", SCRIPT)
         module = importlib.util.module_from_spec(spec)
@@ -53,7 +120,9 @@ class NativeBuildPlanTests(unittest.TestCase):
 
             with patch.object(
                 module.subprocess, "run", side_effect=external
-            ), patch.object(images, "source_sha", return_value="a" * 40):
+            ), patch.object(images, "source_sha", return_value="a" * 40), patch.object(
+                module, "require_clean_source", return_value="a" * 40, create=True
+            ):
                 module.export_artifact(
                     "router:test", directory, "pr", "test", ["BASE_IMAGE=pinned"]
                 )
@@ -68,7 +137,9 @@ class NativeBuildPlanTests(unittest.TestCase):
             directory = Path(tmp)
             original = directory / "image.tar"
             original.write_bytes(b"existing")
-            with self.assertRaisesRegex(ValueError, "already contains"):
+            with patch.object(
+                module, "require_clean_source", return_value="a" * 40, create=True
+            ), self.assertRaisesRegex(ValueError, "already contains"):
                 module.export_artifact("router:test", directory, "pr", "test", [])
             self.assertEqual(original.read_bytes(), b"existing")
 
@@ -80,7 +151,11 @@ class NativeBuildPlanTests(unittest.TestCase):
                 module.subprocess,
                 "run",
                 side_effect=subprocess.CalledProcessError(1, "skopeo"),
-            ), self.assertRaises(subprocess.CalledProcessError):
+            ), patch.object(
+                module, "require_clean_source", return_value="a" * 40, create=True
+            ), self.assertRaises(
+                subprocess.CalledProcessError
+            ):
                 module.export_artifact("router:test", directory, "pr", "test", [])
             self.assertFalse((directory / "manifest.json").exists())
 
