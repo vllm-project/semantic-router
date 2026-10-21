@@ -26,3 +26,11 @@ func TestSplitBodyKeepsBytesInOrder(t *testing.T) {
 		}
 	}
 }
+
+// withoutWritePause removes the pause between chunked writes for one test.
+func withoutWritePause(t *testing.T) {
+	t.Helper()
+	pause := streamedWritePause
+	streamedWritePause = 0
+	t.Cleanup(func() { streamedWritePause = pause })
+}

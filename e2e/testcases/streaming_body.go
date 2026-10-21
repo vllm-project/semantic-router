@@ -22,7 +22,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("streaming-keyword-routing", pkgtestcases.TestCase{
-		Description: "Verify keyword routing works identically with streamed request body mode",
+		Description: "Verify every keyword routing case selects its decision when the request body arrives in several streamed chunks",
 		Tags:        []string{"streaming", "routing", "keyword"},
 		Fn:          testStreamingKeywordRouting,
 	})
@@ -85,12 +85,17 @@ func checkStreamingKeywordRouting(ctx context.Context, localPort string, opts pk
 
 	passed := 0
 	for _, tc := range cases {
-		resp, err := sendNonStreamingRequest(ctx, tc.query, "vllm-sr/auto", localPort)
+		resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(tc.query, "vllm-sr/auto", false), streamedBodyWrites)
 		if err != nil {
 			fmt.Printf("[Streaming] FAIL %s: %v\n", tc.name, err)
 			continue
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("[Streaming] FAIL %s: status %d: %s\n", tc.name, resp.StatusCode, truncateString(string(body), 200))
+			continue
+		}
 
 		decision := resp.Header.Get("x-vsr-selected-decision")
 		actualDec := strings.TrimSuffix(decision, "_decision")
@@ -450,11 +455,10 @@ func validateStreamingCacheStream(headers http.Header, body []byte, wantText str
 
 // streamedBodyWrites and streamedWritePause make the client write a request
 // body in several pieces, so Envoy hands it to the Router in STREAMED mode as
-// more than one ext_proc chunk.
-const (
-	streamedBodyWrites = 3
-	streamedWritePause = 500 * time.Millisecond
-)
+// more than one ext_proc chunk. Unit tests without Envoy drop the pause.
+const streamedBodyWrites = 3
+
+var streamedWritePause = 500 * time.Millisecond
 
 // chatRequestBody returns a one-message Chat Completions request.
 func chatRequestBody(question, model string, stream bool) []byte {
