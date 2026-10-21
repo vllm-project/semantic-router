@@ -1,8 +1,8 @@
 """Core management functions for vLLM Semantic Router."""
 
+import sys
 from contextlib import nullcontext
 from pathlib import Path
-import sys
 
 from cli.bootstrap import DASHBOARD_SETUP_MODE_ENV, SETUP_MODE_ENV
 from cli.commands.runtime_management_credentials import (

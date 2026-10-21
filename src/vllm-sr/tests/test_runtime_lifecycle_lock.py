@@ -9,12 +9,12 @@ import time
 from pathlib import Path
 
 import pytest
+from cli.pending_activation import heartbeat_file
 from cli.runtime_lifecycle_lock import (
     RuntimeLifecycleLockError,
     _resolve_lock_directory,
     acquire_runtime_lifecycle_lock,
 )
-from cli.pending_activation import heartbeat_file
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX file lock contract")
 
