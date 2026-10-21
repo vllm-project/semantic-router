@@ -230,6 +230,17 @@ def parse_extra_headers(values: list[str]) -> dict[str, str]:
     return headers
 
 
+def apply_required_debug_header(
+    headers: dict[str, str], args: argparse.Namespace
+) -> None:
+    if not getattr(args, "require_router_diagnostics", False):
+        return
+    for name in headers:
+        if name.lower() == "x-vsr-debug":
+            return
+    headers["x-vsr-debug"] = "true"
+
+
 def post_json(
     url: str, body: dict[str, Any], headers: dict[str, str], timeout: float
 ) -> dict[str, Any]:
@@ -429,6 +440,7 @@ def run_benchmark(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.api_key:
         headers["Authorization"] = f"Bearer {args.api_key}"
     headers.update(parse_extra_headers(args.extra_header))
+    apply_required_debug_header(headers, args)
 
     workers = max(1, min(args.concurrency, args.sessions))
     rows: list[dict[str, Any]] = []
