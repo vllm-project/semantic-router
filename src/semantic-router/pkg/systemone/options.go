@@ -72,13 +72,29 @@ func publicOptions(raw []byte) (json.RawMessage, string) {
 }
 
 // requestWait is how long the public API waits for a model it calls directly:
-// publicWait, or the request's deadline_ms when longer, at most limit.
+// publicWait, or the request's deadline_ms when longer, at most limit. A
+// long-context request without deadline_ms waits limit: reading up to a
+// model's max_input_tokens takes minutes, far past publicWait.
 func requestWait(options json.RawMessage, limit time.Duration) time.Duration {
 	wait := publicWait
 	var parsed api.RequestOptions
-	if json.Unmarshal(options, &parsed) == nil && parsed.DeadlineMs != nil {
-		ms := min(*parsed.DeadlineMs, float64(limit/time.Millisecond))
-		wait = max(time.Duration(ms*float64(time.Millisecond)), publicWait)
+	if json.Unmarshal(options, &parsed) == nil {
+		switch {
+		case parsed.DeadlineMs != nil:
+			ms := min(*parsed.DeadlineMs, float64(limit/time.Millisecond))
+			wait = max(time.Duration(ms*float64(time.Millisecond)), publicWait)
+		case parsed.LongContext != nil && *parsed.LongContext:
+			wait = limit
+		}
 	}
 	return min(wait, limit)
+}
+
+// deadlineExceeded is the message of a request the public API stopped waiting
+// for: how long it waited, and how a request waits longer when it can.
+func deadlineExceeded(wait, limit time.Duration) string {
+	if wait < limit {
+		return fmt.Sprintf("no answer within %s; options.deadline_ms waits longer, up to this listener's systemone.max_deadline_ms (%d ms)", wait, limit.Milliseconds())
+	}
+	return fmt.Sprintf("no answer within %s, this listener's systemone.max_deadline_ms", wait)
 }
