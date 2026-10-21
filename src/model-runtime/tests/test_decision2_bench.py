@@ -67,13 +67,13 @@ BODY = {"id": "p0", "state": [], "questions": {"q": {"type": "choice"}}}
 ANSWERS = {"q": {"choice": "a"}}
 
 
-def test_close_releases_model_and_bound_profile():
+def test_close_releases_the_loaded_model():
     class Model:
         pass
 
     model = Model()
     ref = weakref.ref(model)
-    side = bench.BenchmarkSide(model, "cpu", Namespace(model=model))
+    side = bench.BenchmarkSide(model, "cpu", native=True)
     del model
     side.close()
     assert ref() is None

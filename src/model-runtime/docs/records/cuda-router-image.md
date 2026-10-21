@@ -34,4 +34,3 @@ Guard, FactCheck, Feedback. Per-model fields are in `chart_models` in
 **7 / 7 ready.** The CUDA golden keys for this image, including the 23
 models beyond the chart set, are in
 [`cuda-golden-answers.md`](cuda-golden-answers.md).
-

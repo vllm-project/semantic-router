@@ -51,8 +51,6 @@ from bench_stats import (  # noqa: E402
 from decision1_parity import panels, pin_status, require_fla_pin  # noqa: E402
 from gpu_parity import load as load_native, system_one  # noqa: E402
 
-from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
-
 
 def requests(args: argparse.Namespace) -> list[dict[str, Any]]:
     bodies = [
@@ -78,32 +76,27 @@ class BenchmarkSide:
 
     model: Any
     device: str
-    profile: ExactProfile | None = None
+    native: bool = False
 
     def __call__(self, body: dict[str, Any]) -> dict[str, Any]:
-        if self.profile is None:
+        if self.native:
+            response = system_one(self.model, None, body["state"], body["questions"])
+        else:
             response = self.model.system_one(
                 state=body["state"], questions=body["questions"]
-            )
-        else:
-            response = system_one(
-                self.model, self.profile, body["state"], body["questions"]
             )
         synchronize(self.device)
         return response["answers"]
 
     def graph_stats(self) -> dict[str, int]:
         """Read native graph counters; the released runtime has none here."""
-        if self.profile is None:
+        if not self.native:
             return {}
         receipt = self.model.engine_model.receipt()
         counters = receipt.get("graphs", receipt.get("encoder_graphs", {}))
         return {key: int(counters.get(key, 0)) for key in GRAPH_COUNTERS}
 
     def close(self) -> None:
-        # ExactProfile also holds the model. Drop both before collecting cycles
-        # and releasing unused CUDA allocations for the next sequential side.
-        self.profile = None
         self.model = None
         gc.collect()
         if self.device != "cpu":
@@ -152,13 +145,7 @@ def native(args: argparse.Namespace) -> BenchmarkSide:
         no_fused=args.no_fused,
     )
     model = load_native(ns)
-    profile = ExactProfile()
-    unavailable = profile.available(model)
-    if unavailable:
-        raise SystemExit(f"exact profile unavailable: {unavailable}")
-    profile.bind(model)
-
-    return BenchmarkSide(model, args.device.replace("rocm", "cuda"), profile)
+    return BenchmarkSide(model, args.device.replace("rocm", "cuda"), native=True)
 
 
 def time_answers(

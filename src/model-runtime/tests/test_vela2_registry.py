@@ -123,7 +123,9 @@ def test_every_size_has_well_formed_reference_answers(model) -> None:
         len(GOLDEN_IDS),
         len(GOLDEN_IDS),
     )
-    assert cpu["domain"]["choice"] == rocm["domain"]["choice"] == cuda["domain"]["choice"]
+    assert (
+        cpu["domain"]["choice"] == rocm["domain"]["choice"] == cuda["domain"]["choice"]
+    )
 
 
 @pytest.mark.parametrize("model", DECODERS, ids=size)

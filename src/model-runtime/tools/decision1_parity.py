@@ -47,6 +47,7 @@ from vllm_srun.registry.artifacts import (  # noqa: E402
     canonical_json as canonical,
 )
 
+
 def _device_class(device: str) -> str | None:
     kind, _, index = device.partition(":")
     if kind == "rocm":
