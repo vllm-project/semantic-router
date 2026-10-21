@@ -28,7 +28,7 @@ RUN if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ];
       export CC=aarch64-linux-gnu-gcc; \
     fi && \
     CGO_ENABLED=1 GOOS=linux GOARCH="$TARGETARCH" \
-      go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/router ./cmd
+      go build -mod=mod -trimpath -buildvcs=false -ldflags="-s -w" -o /out/router ./cmd
 
 FROM ${ROUTER_BUILD} AS router-artifact
 

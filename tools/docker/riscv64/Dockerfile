@@ -37,7 +37,7 @@ RUN if [ "$(dpkg --print-architecture)" != riscv64 ]; then \
       export CC=riscv64-linux-gnu-gcc; \
     fi && \
     CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 \
-      go build -trimpath -buildvcs=false -ldflags="-s -w -extldflags=-L/out/glide" \
+      go build -mod=mod -trimpath -buildvcs=false -ldflags="-s -w -extldflags=-L/out/glide" \
       -o /out/router ./cmd
 
 FROM scratch AS router-binary
