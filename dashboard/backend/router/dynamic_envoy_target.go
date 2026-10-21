@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
@@ -87,17 +88,6 @@ func dynamicEnvoyListenerPort(target *url.URL, data []byte) (int, error) {
 // Router in a standalone stack. Those listeners keep their configured ports.
 func isManagedListenerHostname(host string) bool {
 	host = strings.TrimSpace(host)
-	return strings.EqualFold(host, managedContainerName("VLLM_SR_ENVOY_CONTAINER_NAME", "vllm-sr-envoy-container")) ||
-		strings.EqualFold(host, managedContainerName("VLLM_SR_ROUTER_CONTAINER_NAME", "vllm-sr-router-container"))
-}
-
-func managedContainerName(envName, defaultName string) string {
-	if name := strings.TrimSpace(os.Getenv(envName)); name != "" {
-		return name
-	}
-	stack := strings.TrimSpace(os.Getenv("VLLM_SR_STACK_NAME"))
-	if stack == "" || stack == "vllm-sr" {
-		return defaultName
-	}
-	return stack + "-" + defaultName
+	return strings.EqualFold(host, handlers.ManagedContainerName("envoy")) ||
+		strings.EqualFold(host, handlers.ManagedContainerName("router"))
 }
