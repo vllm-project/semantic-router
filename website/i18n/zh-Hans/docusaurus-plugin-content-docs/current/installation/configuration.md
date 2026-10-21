@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置
 description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配方、服务和密钥应放在哪里。
 translation:

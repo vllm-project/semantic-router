@@ -58,6 +58,17 @@ Workflow owns tool interruption and resume. Fusion and confidence routes may
 return a tool call only from the final selected model. Multi-response routes do
 not attempt to merge independent tool trajectories.
 
+Two objectives also ask the router's decision model in the same call as their
+other judgments. The accuracy objective asks which way of working a request
+needs (`direct`, `workstreams` or `independent_review`); a matching answer with
+probability at least 0.6 can stand in for the workflow or fusion keywords, and
+the workflow and fusion projections still gate both routes. The privacy
+objective asks whether a request tries to override the assistant's instructions
+or extract hidden instructions, secrets or other users' data; an answer of at
+least 0.9 contains the request like a jailbreak or attack keyword. On the
+default Vela 2.0 0.3B, attack probes scored 0.96 to 0.99 and the highest other
+request, a long personal-data record, 0.61.
+
 ## Requirements
 
 - Reachable OpenAI-compatible endpoints for every provider alias used by the
@@ -65,6 +76,9 @@ not attempt to merge independent tool trajectories.
 - Live latency and load observations for objectives that use them.
 - The embedding, feedback, fact-check, PII, jailbreak, language, complexity,
   and privacy-KB assets referenced by [`config.yaml`](config.yaml).
+- The router's decision model for the decision signals. A new configuration
+  uses Vela 2.0 0.3B on the CPU; set `global.model_catalog.system.decision_model`
+  for a larger model, and recalibrate the thresholds for it.
 - Redis for the response API and startup-status service.
 - Postgres for Router Replay. Local `vllm-sr serve` provisions managed Redis
   and Postgres services with development-only runtime defaults. Direct Router,
