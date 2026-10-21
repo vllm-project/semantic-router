@@ -5,7 +5,7 @@ created: 2026-10-21
 status: Proposal
 ---
 
-> **Status:** Proposal · **Created:** 2026-10-21 · **Epic:** [#&lt;epic&gt;](https://github.com/vllm-project/semantic-router/issues)
+> **Status:** Proposal · **Created:** 2026-10-21 · **Epic:** [#5378](https://github.com/vllm-project/semantic-router/issues/5378)
 
 ## Problem
 
@@ -26,7 +26,7 @@ For coding agents, switching models between the requests of one run is not where
 
 ## Evidence
 
-Sources, chosen for provenance. Production session traces: SemiAnalysis cc-traces-weka-with-subagents (Apache-2.0, 336 Claude Code sessions with token counts and 64-token KV block hashes, no text). Multi-model trajectories: Terminal-Bench 2.0 leaderboard trajectories (Apache-2.0), TwinRouterBench's static track (Apache-2.0), OpenHands trajectories from nebius/SWE-rebench-openhands-trajectories (CC-BY-4.0), SWE-Router's SWE-Smith and SWE-bench Verified trajectories (arXiv 2607.00053) and mini-SWE-agent runs from the public SWE-bench Verified submissions, both used for aggregate results only. Public leaderboard rows from Terminal-Bench 4.0. Router replay of recorded runs and live Claude Code runs, both ours. Every number is a single run unless stated, and the research issues #&lt;R1&gt; (prefix reuse), #&lt;R2&gt; (CPU KV tier and placement) and #&lt;R3&gt; (escalation) carry the code and data behind them. The evaluation lanes below fetch only data whose license allows it and rerun the Terminal-Bench 2.0 numbers from it. The SWE-Router and SWE-bench trajectories are local inputs.
+Sources, chosen for provenance. Production session traces: SemiAnalysis cc-traces-weka-with-subagents (Apache-2.0, 336 Claude Code sessions with token counts and 64-token KV block hashes, no text). Multi-model trajectories: Terminal-Bench 2.0 leaderboard trajectories (Apache-2.0), TwinRouterBench's static track (Apache-2.0), OpenHands trajectories from nebius/SWE-rebench-openhands-trajectories (CC-BY-4.0), SWE-Router's SWE-Smith and SWE-bench Verified trajectories (arXiv 2607.00053) and mini-SWE-agent runs from the public SWE-bench Verified submissions, both used for aggregate results only. Public leaderboard rows from Terminal-Bench 4.0. Router replay of recorded runs and live Claude Code runs, both ours. Every number is a single run unless stated, and the research issues #5357 (prefix reuse), #5358 (CPU KV tier and placement) and #5374 (escalation) carry the code and data behind them. The evaluation lanes below fetch only data whose license allows it and rerun the Terminal-Bench 2.0 numbers from it. The SWE-Router and SWE-bench trajectories are local inputs.
 
 **What the Router does with agent traffic on main.**
 

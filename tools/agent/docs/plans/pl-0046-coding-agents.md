@@ -1,4 +1,4 @@
-# PL-0046: Coding Agents Through the Router (Epic #&lt;epic&gt;)
+# PL-0046: Coding Agents Through the Router (Epic #5378)
 
 ## Goal
 
@@ -81,6 +81,7 @@ Steps 6 and 7 wait for the evaluation lanes.
 - [Agent-Aware Router Contracts proposal](../../../../website/docs/proposals/agent-based-routing.md)
 - [Success-Constrained Model Selection proposal](../../../../website/docs/proposals/success-constrained-selection.md)
 - [Connect an agent harness](../../../../website/docs/installation/agent-harness.md)
+- [Epic #5378](https://github.com/vllm-project/semantic-router/issues/5378)
 - [Epic #2973](https://github.com/vllm-project/semantic-router/issues/2973)
 - [Feature #3379](https://github.com/vllm-project/semantic-router/issues/3379)
 - [Feature #3412](https://github.com/vllm-project/semantic-router/issues/3412)
