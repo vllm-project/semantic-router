@@ -2,114 +2,15 @@
 # SIGNALS
 # =============================================================================
 
-SIGNAL keyword escalation_domain_override {
-  operator: "OR"
-  keywords: ["matrix", "determinant", "invertibility", "shareholder equity", "amortized time complexity", "reinforcement schedule"]
-}
-
-SIGNAL keyword local_domain_override {
-  operator: "OR"
-  keywords: ["blood cells", "transporting oxygen", "contract law", "legal consideration", "ideal transformer", "measured in joules", "share electron pairs"]
-}
-
 SIGNAL conversation knowledge_has_images {
   description: "Request contains at least one image content part."
   feature: { source: { type: "image_content" }, type: "exists" }
 }
 
-SIGNAL kb best_biology {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "biology" }
-  match: "best"
-}
-
-SIGNAL kb best_business {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "business" }
-  match: "best"
-}
-
-SIGNAL kb best_computing {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "computer science" }
-  match: "best"
-}
-
-SIGNAL kb best_economics {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "economics" }
-  match: "best"
-}
-
-SIGNAL kb best_engineering {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "engineering" }
-  match: "best"
-}
-
-SIGNAL kb best_health {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "health" }
-  match: "best"
-}
-
-SIGNAL kb best_history {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "history" }
-  match: "best"
-}
-
-SIGNAL kb best_law {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "law" }
-  match: "best"
-}
-
-SIGNAL kb best_math {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "math" }
-  match: "best"
-}
-
-SIGNAL kb best_other {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "other" }
-  match: "best"
-}
-
-SIGNAL kb best_philosophy {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "philosophy" }
-  match: "best"
-}
-
-SIGNAL kb best_physics {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "physics" }
-  match: "best"
-}
-
-SIGNAL kb best_psychology {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "psychology" }
-  match: "best"
-}
-
-SIGNAL kb best_chemistry {
-  kb: "mmlu_kb"
-  target: { kind: "label", value: "chemistry" }
-  match: "best"
-}
-
-PROJECTION score escalation_pressure {
-  method: "weighted_sum"
-  inputs: [{ type: "kb_metric", weight: 1, kb: "mmlu_kb", metric: "escalate_vs_keep", value_source: "score" }]
-}
-
-PROJECTION mapping escalation_band {
-  source: "escalation_pressure"
-  method: "threshold_bands"
-  outputs: [{ name: "no_escalation", lt: 2 }, { name: "escalation_signal", gte: 2 }]
+SIGNAL decision knowledge_subject {
+  description: "The subject a knowledge question is about."
+  question: { choices: [{ description: "Biology, cells, organisms and genetics", key: "biology" }, { description: "Business, accounting, finance and management", key: "business" }, { description: "Computer science, algorithms and programming", key: "computer_science" }, { description: "Economics, markets and macroeconomics", key: "economics" }, { description: "Engineering, circuits, machines and materials", key: "engineering" }, { description: "Health, medicine, anatomy and nutrition", key: "health" }, { description: "History, wars, empires and historical events", key: "history" }, { description: "Law, contracts, courts and legal rules", key: "law" }, { description: "Mathematics, algebra, matrices and proofs", key: "math" }, { description: "Philosophy, ethics and logic", key: "philosophy" }, { description: "Physics, energy, forces and units", key: "physics" }, { description: "Chemistry, reactions, bonds and solutions", key: "chemistry" }, { description: "Psychology, behavior and learning", key: "psychology" }, { description: "General knowledge, geography, culture and everything else", key: "other" }], instructions: "Which subject is this question about?", type: "choice" }
+  predicate: { gte: 0.4 }
 }
 
 # =============================================================================
@@ -140,17 +41,16 @@ ROUTE omni (description = "Understand image-bearing knowledge requests with the 
   ALGORITHM static
 }
 
-ROUTE escalate_72b (description = "Escalate high-uplift MMLU domains to the frontier 72B lane.") {
+ROUTE escalate_72b (description = "Subjects where the larger model gains most (knowledge_subject: biology, business, computer science, economics, history, math, philosophy, psychology or other) escalate to the frontier 72B lane.", on_unknown = "no_match") {
   PRIORITY 200
   TIER 1
-  WHEN (kb("best_biology") OR kb("best_business") OR kb("best_computing") OR kb("best_economics") OR kb("best_history") OR kb("best_math") OR kb("best_other") OR kb("best_philosophy") OR kb("best_psychology") OR keyword("escalation_domain_override")) AND NOT keyword("local_domain_override")
+  WHEN (decision("knowledge_subject", label: "biology") OR decision("knowledge_subject", label: "business") OR decision("knowledge_subject", label: "computer_science") OR decision("knowledge_subject", label: "economics") OR decision("knowledge_subject", label: "history") OR decision("knowledge_subject", label: "math") OR decision("knowledge_subject", label: "other") OR decision("knowledge_subject", label: "philosophy") OR decision("knowledge_subject", label: "psychology"))
   MODEL "cloud/frontier-72b" (reasoning = false)
 }
 
-ROUTE keep_7b (description = "Keep lower-uplift MMLU domains on the local 7B lane.") {
+ROUTE keep_7b (description = "Lower-uplift subjects (engineering, health, law, physics, chemistry) and questions whose subject is unclear or unknown stay on the local 7B lane.") {
   PRIORITY 100
   TIER 2
-  WHEN (projection("no_escalation") OR keyword("local_domain_override"))
   MODEL "local/small-7b" (reasoning = false)
 }
 
