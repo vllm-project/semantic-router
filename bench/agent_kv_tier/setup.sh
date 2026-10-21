@@ -30,5 +30,7 @@ fi
 git -C kv-cache-tester checkout -q "$TESTER_REF"
 
 [ -f "$MODEL_DIR/config.json" ] || python3 -c "from huggingface_hub import snapshot_download as s; s('Qwen/Qwen3-14B', revision='$MODEL_REV', local_dir='$MODEL_DIR')"
-[ -d traces ] && [ -n "$(ls traces)" ] || python3 "$HERE/prepare_traces.py" --out "$WORK/traces"
+if [ ! -d traces ] || [ -z "$(ls traces)" ]; then
+  python3 "$HERE/prepare_traces.py" --out "$WORK/traces"
+fi
 echo "setup done in $WORK"
