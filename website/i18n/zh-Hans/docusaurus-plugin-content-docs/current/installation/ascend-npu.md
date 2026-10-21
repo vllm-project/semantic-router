@@ -1,6 +1,7 @@
 ---
 title: 昇腾 NPU
 description: 通过 npu 加速器在昇腾 NPU 上运行路由器的本地信号模型。
+is_mtpe: false
 ---
 
 # 使用昇腾 NPU 部署

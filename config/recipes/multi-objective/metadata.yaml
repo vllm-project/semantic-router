@@ -1,7 +1,7 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: multi-objective
 name: Multi-Objective Mixture-of-Models
-version: 0.1.0
+version: 0.2.0
 description: >-
   Exposes isolated balanced, latency, cost, accuracy, and privacy objectives as
   stable request-facing unified model entrypoints over one shared model catalog.
@@ -11,6 +11,7 @@ authors:
 license: Apache-2.0
 tags:
   - cost
+  - decision-model
   - latency
   - mixture-of-models
   - multimodal
