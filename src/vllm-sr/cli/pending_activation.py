@@ -187,6 +187,7 @@ def wait_for_pending_activation(
     *,
     dashboard_running: Callable[[], bool],
     interval: float = HEARTBEAT_SECONDS,
+    on_waiting: Callable[[], None] | None = None,
 ) -> PendingActivation | None:
     """Wait until the Dashboard records an activation.
 
@@ -199,6 +200,8 @@ def wait_for_pending_activation(
 
     previous = signal.signal(signal.SIGTERM, stop)
     try:
+        if on_waiting is not None:
+            on_waiting()
         while True:
             pending = read_pending_activation(runtime_config)
             if pending is not None:

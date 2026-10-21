@@ -328,7 +328,6 @@ def _start_vllm_sr_locked(
         if setup_mode:
             # Until setup activates a config this command changes nothing, and
             # the Dashboard's activation needs the runtime config lock.
-            heartbeat(SERVE_WAITING)
             with runtime_lock.released() if runtime_lock else nullcontext():
                 maybe_finish_setup_mode(
                     setup_mode,
@@ -338,7 +337,9 @@ def _start_vllm_sr_locked(
                     envoy=runs_envoy(gateway),
                 )
                 activated = _wait_for_setup_activation(
-                    runtime_config_file, stack_layout
+                    runtime_config_file,
+                    stack_layout,
+                    on_waiting=lambda: heartbeat(SERVE_WAITING),
                 )
             if not activated:
                 return
@@ -440,7 +441,9 @@ def _start_support_services(
 
 
 def _wait_for_setup_activation(
-    runtime_config_file, stack_layout: RuntimeStackLayout
+    runtime_config_file,
+    stack_layout: RuntimeStackLayout,
+    on_waiting=None,
 ) -> bool:
     """Wait until the Dashboard activates a config."""
 
@@ -456,6 +459,7 @@ def _wait_for_setup_activation(
         wait_for_pending_activation(
             runtime_config_file,
             dashboard_running=lambda: container_status(dashboard) == "running",
+            on_waiting=on_waiting,
         )
         is not None
     )
