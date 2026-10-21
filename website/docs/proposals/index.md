@@ -29,6 +29,7 @@ memory, and tools around a routed request.
 | --- | --- | --- | --- |
 | [Router Flow Workflows](./router-flow-workflows) | 2026-06-30 | Implemented | Bounded static and dynamic multi-model workflows. |
 | [Agent-Aware Router Contracts](./agent-based-routing) | 2026-08-29 | Proposal | Bounded agentic facts and external-runtime handoff at Router seams ([Epic #2994](https://github.com/vllm-project/semantic-router/issues/2994)). |
+| [Coding Agents Through the Router](./coding-agents) | 2026-10-21 | Proposal | Harness compatibility, run-level control, cache-aware placement, and outcome-driven model choice for coding agents ([Epic #&lt;epic&gt;](https://github.com/vllm-project/semantic-router/issues)). |
 | [Deliberation Algorithms](./deliberation-algorithms) | 2026-06-17 | Proposal | Grounding-aware multi-model synthesis. |
 | [Agentic Memory](./agentic-memory) | 2026-02-09 | Proof of concept | Cross-session memory retrieval and persistence. |
 | [OpenAI RAG Integration](./agentic-rag) | 2026-01-23 | Implemented | Retrieval through OpenAI Files and Vector Stores. |
