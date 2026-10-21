@@ -62,11 +62,12 @@ func newCapabilityFixture(t *testing.T, setupMode bool) capabilityFixture {
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("CAPABILITY_FIXTURE_SR_BENCH_TOKEN", "fixture-token")
 	return capabilityFixture{
 		cfg: &config.Config{
 			AbsConfigPath: configPath, RuntimeConfigWritable: true,
-			SRBenchAvailable: true, MCPEnabled: true,
-			MLPipelineEnabled: true, MLPipelineAvailable: true,
+			SRBenchTokenEnv: "CAPABILITY_FIXTURE_SR_BENCH_TOKEN", MCPEnabled: true,
+			MLPipelineEnabled: true,
 		},
 		setup: setupmode.New(configPath, false),
 	}
@@ -143,6 +144,11 @@ func TestCollectCapabilitiesReasons(t *testing.T) {
 			writeServeHeartbeat(t, f.cfg.AbsConfigPath)
 			return []string{auth.PermConfigRead}
 		}, CapabilityUnauthorized, reasonPermissionRequired},
+		{"setup on a read-only Dashboard", "setup", func(t *testing.T, f *capabilityFixture, _ map[string]probeResult) []string {
+			writeServeHeartbeat(t, f.cfg.AbsConfigPath)
+			f.cfg.ReadonlyMode = true
+			return allCapabilityPermissions
+		}, CapabilityUnconfigured, reasonServerReadonly},
 		{"setup with no serve attached", "setup", func(*testing.T, *capabilityFixture, map[string]probeResult) []string {
 			return allCapabilityPermissions
 		}, CapabilityDegraded, reasonServeNotAttached},
@@ -169,7 +175,7 @@ func TestCollectCapabilitiesReasons(t *testing.T) {
 			return allCapabilityPermissions
 		}, CapabilityDegraded, reasonRuntimeConfigNotWritable},
 		{"sr-bench token missing", "evaluation", func(_ *testing.T, f *capabilityFixture, _ map[string]probeResult) []string {
-			f.cfg.SRBenchAvailable = false
+			f.cfg.SRBenchTokenEnv = "CAPABILITY_FIXTURE_UNSET_TOKEN"
 			return allCapabilityPermissions
 		}, CapabilityUnconfigured, reasonSRBenchAuthUnconfigured},
 		{"sr-bench down", "evaluation", func(_ *testing.T, _ *capabilityFixture, probes map[string]probeResult) []string {
@@ -183,10 +189,6 @@ func TestCollectCapabilitiesReasons(t *testing.T) {
 			f.cfg.MLPipelineEnabled = false
 			return allCapabilityPermissions
 		}, CapabilityDisabled, reasonMLPipelineDisabled},
-		{"ml pipeline failed to start", "mlPipeline", func(_ *testing.T, f *capabilityFixture, _ map[string]probeResult) []string {
-			f.cfg.MLPipelineAvailable = false
-			return allCapabilityPermissions
-		}, CapabilityUnconfigured, reasonMLPipelineUnavailable},
 		{"ml sidecar down", "mlPipeline", func(_ *testing.T, f *capabilityFixture, probes map[string]probeResult) []string {
 			f.cfg.MLServiceURL = "http://ml-service:8686"
 			probes[probeMLService] = probeResult{checkedAt: time.Now()}

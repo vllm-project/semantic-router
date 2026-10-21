@@ -76,7 +76,7 @@ global:
 | `input` | For task models: the longest input in tokens (`max_tokens`) and what to do with longer input (`overflow`: `reject`, `truncate` or `window`). |
 | `replicas` | Explicit managed `device` or attached `endpoint`/`served_name` placements for this model. Omit for one worker. |
 | `endpoint` | Attach to a runtime you run instead of starting one. |
-| `served_name` | The model's name on an attached runtime that serves several models (default: the deployment name). |
+| `served_name` | The model's ID on an attached runtime, as its `GET /v1/models` lists it (default: the deployment name). |
 
 Then connect a feature to the deployment with a **binding**:
 
@@ -264,8 +264,14 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Lux-9B
         endpoint: http://gpu-runtime.internal:8100
-        served_name: vllm-sr/Decision-2.0-Lux-9B
+        served_name: Decision-2.0-Lux-9B
 ```
+
+`served_name` is the ID the runtime lists in `GET /v1/models`. A runtime lists a
+published model under its repository name without the organization, here
+`Decision-2.0-Lux-9B`, unless `--served-model-name` gives it another one.
+Without `served_name` the router asks for the deployment name. A name the
+runtime does not serve leaves the deployment unavailable.
 
 `endpoint` takes `http://host:port`, `https://host:port` or a Unix socket,
 `unix:///path/to/runtime.sock`. The router does not start, restart or stop an

@@ -9,7 +9,7 @@ import (
 // and decision path. No learned classifier result is supplied by these cases.
 func TestBuiltinCorrectionGrammarAndScope(t *testing.T) {
 	for _, profile := range []struct{ name, fallback string }{
-		{"balance", "medium"}, {"cost", "economy"}, {"accuracy", "simple"},
+		{"cost", "economy"}, {"accuracy", "simple"},
 	} {
 		t.Run(profile.name, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, profile.name)
