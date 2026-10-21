@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="881.28pt" height="538.56pt" viewBox="0 0 881.28 538.56" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-21T03:17:49.188521</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.6.3, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 538.56 
+L 881.28 538.56 
+L 881.28 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 246.7584 441.6192 
+L 801.9648 441.6192 
+L 801.9648 156.1824 
+L 246.7584 156.1824 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 246.7584 441.6192 
+L 246.7584 156.1824 
+" clip-path="url(#p120783080c)" style="fill: none; stroke: #e7ebef; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: middle" x="246.7584" y="464.536544" transform="rotate(-0 246.7584 464.536544)">0.0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 370.1376 441.6192 
+L 370.1376 156.1824 
+" clip-path="url(#p120783080c)" style="fill: none; stroke: #e7ebef; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: middle" x="370.1376" y="464.536544" transform="rotate(-0 370.1376 464.536544)">0.5</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 493.5168 441.6192 
+L 493.5168 156.1824 
+" clip-path="url(#p120783080c)" style="fill: none; stroke: #e7ebef; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: middle" x="493.5168" y="464.536544" transform="rotate(-0 493.5168 464.536544)">1.0</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 616.896 441.6192 
+L 616.896 156.1824 
+" clip-path="url(#p120783080c)" style="fill: none; stroke: #e7ebef; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: middle" x="616.896" y="464.536544" transform="rotate(-0 616.896 464.536544)">1.5</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 740.2752 441.6192 
+L 740.2752 156.1824 
+" clip-path="url(#p120783080c)" style="fill: none; stroke: #e7ebef; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: middle" x="740.2752" y="464.536544" transform="rotate(-0 740.2752 464.536544)">2.0</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: middle" x="524.3616" y="492.989356" transform="rotate(-0 524.3616 492.989356)">Average CPU cores</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_11"/>
+     <g id="text_7">
+      <text style="fill: #172430; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: end" x="236.7584" y="207.439472" transform="rotate(-0 236.7584 207.439472)">Load generator</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="fill: #172430; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'" transform="translate(109.367306 297.133066)">Fixed-response</text>
+      <text style="fill: #172430; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'" transform="translate(164.946681 316.169347)">backend</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_13"/>
+     <g id="text_9">
+      <text style="fill: #172430; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: end" x="236.7584" y="403.279472" transform="rotate(-0 236.7584 403.279472)">Router</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 246.7584 441.6192 
+L 801.9648 441.6192 
+" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 246.7584 169.1568 
+L 353.975778 169.1568 
+L 353.975778 197.5536 
+L 246.7584 197.5536 
+z
+" clip-path="url(#p120783080c)" style="fill: #0072b2"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 246.7584 267.0768 
+L 327.988635 267.0768 
+L 327.988635 295.4736 
+L 246.7584 295.4736 
+z
+" clip-path="url(#p120783080c)" style="fill: #0072b2"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 246.7584 364.9968 
+L 732.671796 364.9968 
+L 732.671796 393.3936 
+L 246.7584 393.3936 
+z
+" clip-path="url(#p120783080c)" style="fill: #0072b2"/>
+   </g>
+   <g id="text_10">
+    <text style="fill: #172430; font: 700 18px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="361.975778" y="188.322075" transform="rotate(-0 361.975778 188.322075)">0.43</text>
+   </g>
+   <g id="text_11">
+    <text style="fill: #172430; font: 700 18px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="335.988635" y="286.242075" transform="rotate(-0 335.988635 286.242075)">0.33</text>
+   </g>
+   <g id="text_12">
+    <text style="fill: #172430; font: 700 18px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="740.671796" y="384.162075" transform="rotate(-0 740.671796 384.162075)">1.97</text>
+   </g>
+   <g id="patch_7">
+    <path d="M 246.7584 204.408 
+L 315.97057 204.408 
+L 315.97057 232.8048 
+L 246.7584 232.8048 
+z
+" clip-path="url(#p120783080c)" style="fill: #e6b422"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 246.7584 302.328 
+L 291.310652 302.328 
+L 291.310652 330.7248 
+L 246.7584 330.7248 
+z
+" clip-path="url(#p120783080c)" style="fill: #e6b422"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 246.7584 400.248 
+L 737.318762 400.248 
+L 737.318762 428.6448 
+L 246.7584 428.6448 
+z
+" clip-path="url(#p120783080c)" style="fill: #e6b422"/>
+   </g>
+   <g id="text_13">
+    <text style="fill: #172430; font: 700 18px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="323.97057" y="223.573275" transform="rotate(-0 323.97057 223.573275)">0.28</text>
+   </g>
+   <g id="text_14">
+    <text style="fill: #172430; font: 700 18px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="299.310652" y="321.493275" transform="rotate(-0 299.310652 321.493275)">0.18</text>
+   </g>
+   <g id="text_15">
+    <text style="fill: #172430; font: 700 18px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="745.318762" y="419.413275" transform="rotate(-0 745.318762 419.413275)">1.99</text>
+   </g>
+   <g id="legend_1">
+    <g id="patch_10">
+     <path d="M 249.154272 125.291029 
+L 279.154272 125.291029 
+L 279.154272 114.791029 
+L 249.154272 114.791029 
+z
+" style="fill: #0072b2"/>
+    </g>
+    <g id="text_16">
+     <text style="fill: #172430; font: 15px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="291.154272" y="125.291029" transform="rotate(-0 291.154272 125.291029)">X60 (RISC-V)</text>
+    </g>
+    <g id="patch_11">
+     <path d="M 416.624584 125.291029 
+L 446.624584 125.291029 
+L 446.624584 114.791029 
+L 416.624584 114.791029 
+z
+" style="fill: #e6b422"/>
+    </g>
+    <g id="text_17">
+     <text style="fill: #172430; font: 15px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="458.624584" y="125.291029" transform="rotate(-0 458.624584 125.291029)">Ryzen 9 9950X (x86)</text>
+    </g>
+   </g>
+  </g>
+  <g id="text_18">
+   <text style="fill: #172430; font: 700 30px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="57.2832" y="53.856" transform="rotate(-0 57.2832 53.856)">Where the CPU time goes</text>
+  </g>
+  <g id="text_19">
+   <text style="fill: #5f6b76; font: 17px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="57.2832" y="86.1696" transform="rotate(-0 57.2832 86.1696)">Concurrency 16 · Router quota: two CPUs · Median of three runs</text>
+  </g>
+  <g id="text_20">
+   <text style="fill: #5f6b76; font: 13px 'DejaVu Sans', 'Noto Sans CJK JP'; text-anchor: start" x="57.2832" y="519.7104" transform="rotate(-0 57.2832 519.7104)">Average CPU cores used. Client and backend are outside the Router quota.</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p120783080c">
+   <rect x="246.7584" y="156.1824" width="555.2064" height="285.4368"/>
+  </clipPath>
+ </defs>
+</svg>
