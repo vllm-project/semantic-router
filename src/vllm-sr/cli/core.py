@@ -2,6 +2,7 @@
 
 from contextlib import nullcontext
 from pathlib import Path
+import sys
 
 from cli.bootstrap import DASHBOARD_SETUP_MODE_ENV, SETUP_MODE_ENV
 from cli.commands.runtime_management_credentials import (
@@ -444,10 +445,13 @@ def _wait_for_setup_activation(
     """Wait until the Dashboard activates a config."""
 
     dashboard = stack_layout.dashboard_container_name
-    log.info(
+    message = (
         "Waiting for setup: the Router starts here once you activate a config "
-        "in the Dashboard (Ctrl-C stops waiting)"
+        "in the Dashboard"
     )
+    if sys.stdin.isatty():
+        message += " (Ctrl-C stops waiting)"
+    log.info(message)
     activated = (
         wait_for_pending_activation(
             runtime_config_file,
