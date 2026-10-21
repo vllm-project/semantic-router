@@ -71,10 +71,19 @@ python policy_eval.py --rows tb2_rows.jsonl --cheap deepseek-v3.2 --strong claud
     --scores tb2_end_scores.jsonl --boundary-scores tb2_task_scores.jsonl
 ```
 
-The repository ships no scores. With d3-turbo's probability that a stronger
-model is needed, read from the finished trial (instruction, commands, last
-outputs and final message), the report for deepseek-v3.2 and Claude Opus 4.6
-over 373 trials of 87 tasks is:
+The judge's answers ship in `data/` (see below). The score files above come
+from them:
+
+```bash
+python d3_judge.py scores --answers data/tb2_end.d3-turbo.answers.jsonl \
+    --question outcome --index 1 --out tb2_end_scores.jsonl
+python d3_judge.py scores --answers data/tb2_task.d3-turbo.answers.jsonl \
+    --question outcome --index 1 --out tb2_task_scores.jsonl
+```
+
+With d3-turbo's probability that a stronger model is needed, read from the
+finished trial (instruction, commands, last outputs and final message), the
+report for deepseek-v3.2 and Claude Opus 4.6 over 373 trials of 87 tasks is:
 
 ```text
    score AUROC for the cheap attempt failing: overall 0.856, within task 0.737 over 118 pairs
@@ -86,6 +95,43 @@ over 373 trials of 87 tasks is:
 With gpt-5-mini as the cheap model the same judge reaches 0.683 and escalation
 loses to the best single model at every value. With 87 tasks the intervals
 cross zero.
+
+## Judge answers
+
+`data/` holds the answers of vllm-sr/d3-turbo (Apache-2.0, revision
+17a01e225d5e) for the public sources, so the reports above and the
+TwinRouterBench result run without the model:
+
+| File | Rows | State the judge read | Questions |
+| --- | --- | --- | --- |
+| `tb2_end.d3-turbo.answers.jsonl` | 809, one per Terminal-Bench 2.0 trial in the rows | instruction, commands, last four actions, final message | `questions/end.json` |
+| `tb2_task.d3-turbo.answers.jsonl` | 89, one per task | the instruction alone | `questions/end.json` |
+| `twinrouterbench.d3-turbo.answers.jsonl` | 970, one per static-track row | the benchmark's own classifier prompt | `questions/twinrouterbench.json` |
+
+Each row is `{"id", "k", "probs"}` with one probability list per question, in
+the order of the question's criteria. Thirteen TwinRouterBench rows are longer
+than the model's validated length and were answered under its long-context
+cap, marked `"long": true`.
+
+`d3_judge.py` regenerates them. `requests` builds the states from the pinned
+sources (the Terminal-Bench 2.0 parquet files, a checkout of
+harbor-framework/terminal-bench-2 for the instructions, and a checkout of
+CommonstackAI/TwinRouterBench, at the commits it names), `answer` runs a d3
+package on a GPU, and `scores` writes `{"id", "score"}` files for
+`policy_eval.py`. The states it builds are identical to the ones the shipped
+answers were computed from.
+
+```bash
+python d3_judge.py requests --source tb2 --tb2-tasks terminal-bench-2 --out-dir req
+python d3_judge.py answer --model-dir d3-turbo --requests req/tb2_end.requests.jsonl \
+    --questions questions/end.json --out tb2_end.answers.jsonl
+python twinrouterbench_eval.py --checkout TwinRouterBench
+python twinrouterbench_eval.py --checkout TwinRouterBench --constant low
+```
+
+On the static track, d3-turbo's arg-max tier scores 56.83 combined, against
+63.68 for always choosing the low tier, because 71% of the rows are labelled
+low.
 
 ## Other recordings
 
