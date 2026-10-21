@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -162,22 +163,28 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) startupstatus.StatusWriter {
-	writer := registry.StartupStatusWriter(buildStartupWriter(cfg, configPath))
+func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) (startupstatus.StatusWriter, func() error) {
+	backend := buildStartupWriter(cfg, configPath, registry.InstanceID())
+	closeWriter := func() error { return nil }
+	if closer, ok := backend.(io.Closer); ok {
+		closeWriter = closer.Close
+	}
+	writer := registry.StartupStatusWriter(backend)
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
 		Message: "Router process booting...",
 	}, "Failed to write initial startup status")
-	return writer
+	return writer, closeWriter
 }
 
-func buildStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
+func buildStartupWriter(cfg *config.RouterConfig, configPath, instanceID string) startupstatus.StatusWriter {
 	if cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
 		rw, err := startupstatus.NewRedisWriter(startupstatus.RedisWriterConfig{
-			Address:  cfg.StartupStatus.Redis.Address,
-			Password: cfg.StartupStatus.Redis.Password,
-			DB:       cfg.StartupStatus.Redis.DB,
+			InstanceID: instanceID,
+			Address:    cfg.StartupStatus.Redis.Address,
+			Password:   cfg.StartupStatus.Redis.Password,
+			DB:         cfg.StartupStatus.Redis.DB,
 		})
 		if err != nil {
 			logging.ComponentWarnEvent("router", "startup_status_redis_fallback", map[string]interface{}{
