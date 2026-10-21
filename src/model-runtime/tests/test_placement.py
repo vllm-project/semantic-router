@@ -517,3 +517,101 @@ def test_gb10_integrated_gpu_admits_a_model_from_host_memory(monkeypatch):
     _fake_cuda_host(monkeypatch, integrated=False, cuda_free_gib=2.2, total_gib=121.0)
     with pytest.raises(PlacementError, match=r"2\.2 GiB free"):
         place(SPEC, "cuda:0", 1_000_000_000)
+
+
+def _write_cgroup(root, *parts, content):
+    target = root.joinpath(*parts)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content)
+    return target
+
+
+def test_cgroup_limit_subtracts_current_usage(tmp_path, monkeypatch):
+    limit, used = int(8.0 * GIB), (617 * 1024 * 1024)
+    _write_cgroup(tmp_path, "memory.max", content=str(limit))
+    _write_cgroup(tmp_path, "memory.current", content=str(used))
+    proc = _write_cgroup(tmp_path, "cgroup", content="0::/\n")
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == limit - used
+    monkeypatch.setattr(gpu, "_host_mem_available_bytes", lambda: int(60.0 * GIB))
+    assert (
+        gpu._integrated_free_bytes(
+            int(120.0 * GIB), cgroup_root=str(tmp_path), proc_path=str(proc)
+        )
+        == limit - used
+    )
+
+
+def test_nested_service_cgroup_reads_the_service_limit(tmp_path, monkeypatch):
+    limit, used = int(1.0 * GIB), (100 * 1024 * 1024)
+    _write_cgroup(tmp_path, "memory.max", content="max\n")
+    _write_cgroup(
+        tmp_path,
+        "system.slice/myservice.service/memory.max",
+        content=str(limit),
+    )
+    _write_cgroup(
+        tmp_path,
+        "system.slice/myservice.service/memory.current",
+        content=str(used),
+    )
+    proc = _write_cgroup(
+        tmp_path, "cgroup", content="0::/system.slice/myservice.service\n"
+    )
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == limit - used
+    _fake_cuda_host(monkeypatch, integrated=True, cuda_free_gib=0.5)
+    monkeypatch.setattr(gpu, "_CGROUP_ROOT", str(tmp_path))
+    monkeypatch.setattr(gpu, "_PROC_SELF_CGROUP", str(proc))
+    monkeypatch.setattr(gpu, "_host_mem_available_bytes", lambda: int(98.74 * GIB))
+    (device,) = CUDAAccelerator().devices()
+    assert device.free_memory == limit - used
+
+
+def test_host_cgroupns_container_reads_its_nested_limit(tmp_path, monkeypatch):
+    limit, used = int(8.0 * GIB), (300 * 1024 * 1024)
+    _write_cgroup(tmp_path, "memory.max", content="max\n")
+    _write_cgroup(tmp_path, "docker/abc123/memory.max", content=str(limit))
+    _write_cgroup(tmp_path, "docker/abc123/memory.current", content=str(used))
+    proc = _write_cgroup(tmp_path, "cgroup", content="0::/docker/abc123\n")
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == limit - used
+
+
+def test_v1_nested_limit_subtracts_usage(tmp_path):
+    limit, used = int(8.0 * GIB), (617 * 1024 * 1024)
+    _write_cgroup(
+        tmp_path, "memory/memory.limit_in_bytes", content="9223372036854771712\n"
+    )
+    _write_cgroup(
+        tmp_path,
+        "memory/kubepods/pod123/memory.limit_in_bytes",
+        content=str(limit),
+    )
+    _write_cgroup(
+        tmp_path,
+        "memory/kubepods/pod123/memory.usage_in_bytes",
+        content=str(used),
+    )
+    proc = _write_cgroup(
+        tmp_path,
+        "cgroup",
+        content="2:memory:/kubepods/pod123\n1:name=systemd:/kubepods/pod123\n",
+    )
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == limit - used
+
+
+def test_nested_limits_take_the_minimum_ancestor(tmp_path):
+    parent, child = int(4.0 * GIB), int(8.0 * GIB)
+    _write_cgroup(tmp_path, "memory.max", content="max\n")
+    _write_cgroup(tmp_path, "parent/memory.max", content=str(parent))
+    _write_cgroup(tmp_path, "parent/memory.current", content="0\n")
+    _write_cgroup(tmp_path, "parent/child/memory.max", content=str(child))
+    _write_cgroup(tmp_path, "parent/child/memory.current", content="0\n")
+    proc = _write_cgroup(tmp_path, "cgroup", content="0::/parent/child\n")
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == parent
+
+
+def test_unresolvable_cgroup_falls_back_to_the_root_files(tmp_path):
+    limit, used = int(8.0 * GIB), (617 * 1024 * 1024)
+    _write_cgroup(tmp_path, "memory.max", content=str(limit))
+    _write_cgroup(tmp_path, "memory.current", content=str(used))
+    missing = tmp_path / "no-cgroup"
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(missing)) == limit - used

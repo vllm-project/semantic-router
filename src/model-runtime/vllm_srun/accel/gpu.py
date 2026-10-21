@@ -32,10 +32,18 @@ DEVICE_FAULT_MARKERS = (
 )
 
 
-def _host_mem_available_bytes() -> int | None:
+_CGROUP_ROOT = "/sys/fs/cgroup"
+_PROC_SELF_CGROUP = "/proc/self/cgroup"
+_MEMINFO = "/proc/meminfo"
+# cgroup v1 reports a huge value when no limit is set.
+_V1_UNLIMITED = 1 << 60
+
+
+def _host_mem_available_bytes(meminfo_path: str | None = None) -> int | None:
     """Reclaimable system memory in bytes (``MemAvailable``), None when unreadable."""
+    path = meminfo_path if meminfo_path is not None else _MEMINFO
     try:
-        with open("/proc/meminfo", encoding="utf-8") as stream:
+        with open(path, encoding="utf-8") as stream:
             for line in stream:
                 if line.startswith("MemAvailable:"):
                     return int(line.split()[1]) * 1024
@@ -44,37 +52,167 @@ def _host_mem_available_bytes() -> int | None:
     return None
 
 
-def _cgroup_limit_bytes() -> int | None:
-    """This container's memory limit in bytes (cgroup v2, then v1), None when unlimited."""
-    for path in (
-        "/sys/fs/cgroup/memory.max",
-        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
-    ):
+def _cgroup_rel_paths(
+    proc_path: str | None = None,
+) -> tuple[str | None, str | None]:
+    """This process's cgroup paths: (v2 path, v1 memory path), None when unresolvable."""
+    path = proc_path if proc_path is not None else _PROC_SELF_CGROUP
+    try:
+        with open(path, encoding="utf-8") as stream:
+            lines = stream.read().splitlines()
+    except OSError:
+        return None, None
+    v2: str | None = None
+    v1: str | None = None
+    for line in lines:
         try:
-            with open(path, encoding="utf-8") as stream:
-                value = stream.read().strip()
-        except OSError:
-            continue
-        if value == "max":
-            continue
-        try:
-            return int(value)
+            hid, controllers, cgroup = line.split(":", 2)
         except ValueError:
             continue
-    return None
+        if not cgroup.startswith("/"):
+            continue
+        if hid == "0" and controllers == "":
+            v2 = cgroup
+        elif "memory" in controllers.split(","):
+            v1 = cgroup
+    return v2, v1
 
 
-def _integrated_free_bytes(total: int | None) -> int | None:
+def _ancestor_dirs(root: str, rel: str | None) -> list[str]:
+    """``root`` joined with ``rel`` and each parent down to ``root``."""
+    base = root.rstrip("/") or "/"
+    if not rel or rel == "/":
+        return [base]
+    if ".." in rel.split("/"):
+        return [base]
+    parts = [part for part in rel.split("/") if part not in ("", ".")]
+    if not parts:
+        return [base]
+    dirs = [base + "/" + "/".join(parts[:index]) for index in range(len(parts), 0, -1)]
+    dirs.append(base)
+    return dirs
+
+
+def _v2_remaining(directory: str) -> int | None:
+    """Remaining bytes under a v2 limit (``memory.max`` minus ``memory.current``)."""
+    prefix = directory.rstrip("/") or "/"
+    try:
+        with open(prefix + "/memory.max", encoding="utf-8") as stream:
+            value = stream.read().strip()
+    except OSError:
+        return None
+    if value == "max" or not value:
+        return None
+    try:
+        limit = int(value)
+    except ValueError:
+        return None
+    if limit <= 0:
+        return 0
+    try:
+        with open(prefix + "/memory.current", encoding="utf-8") as stream:
+            current = int(stream.read().strip())
+    except (OSError, ValueError):
+        current = 0
+    return max(0, limit - max(0, current))
+
+
+def _v1_remaining(directory: str) -> int | None:
+    """Remaining bytes under a v1 limit (``limit_in_bytes`` minus ``usage``)."""
+    prefix = directory.rstrip("/") or "/"
+    try:
+        with open(prefix + "/memory.limit_in_bytes", encoding="utf-8") as stream:
+            limit = int(stream.read().strip())
+    except (OSError, ValueError):
+        return None
+    if limit >= _V1_UNLIMITED:
+        return None
+    if limit <= 0:
+        return 0
+    try:
+        with open(prefix + "/memory.usage_in_bytes", encoding="utf-8") as stream:
+            current = int(stream.read().strip())
+    except (OSError, ValueError):
+        current = 0
+    return max(0, limit - max(0, current))
+
+
+def _cgroup_limit_bytes(
+    cgroup_root: str | None = None, proc_path: str | None = None
+) -> int | None:
+    """Remaining bytes under this container's memory limit, None when unlimited.
+
+    ``memory.max`` is the total, not the free bytes, so each level contributes
+    its limit minus its current usage. Nested limits all apply, so this is the
+    minimum over the process's cgroup and its ancestors (v2 and v1). Falls
+    back to the root files when the process's cgroup is unresolvable.
+    """
+    root = cgroup_root if cgroup_root is not None else _CGROUP_ROOT
+    proc = proc_path if proc_path is not None else _PROC_SELF_CGROUP
+    try:
+        v2_rel, v1_rel = _cgroup_rel_paths(proc)
+    except OSError:
+        v2_rel, v1_rel = None, None
+    remaining: list[int] = []
+    if v2_rel is not None:
+        for directory in _ancestor_dirs(root, v2_rel):
+            try:
+                value = _v2_remaining(directory)
+            except OSError:
+                continue
+            if value is not None:
+                remaining.append(value)
+    else:
+        try:
+            value = _v2_remaining(root)
+        except OSError:
+            value = None
+        if value is not None:
+            remaining.append(value)
+    v1_base = root.rstrip("/") + "/memory"
+    if v1_rel is not None:
+        for directory in _ancestor_dirs(v1_base, v1_rel):
+            try:
+                value = _v1_remaining(directory)
+            except OSError:
+                continue
+            if value is not None:
+                remaining.append(value)
+    else:
+        try:
+            value = _v1_remaining(v1_base)
+        except OSError:
+            value = None
+        if value is not None:
+            remaining.append(value)
+    if not remaining:
+        return None
+    return min(remaining)
+
+
+def _integrated_free_bytes(
+    total: int | None,
+    cgroup_root: str | None = None,
+    proc_path: str | None = None,
+    meminfo_path: str | None = None,
+) -> int | None:
     """Usable bytes on an integrated GPU, which shares memory with the CPU.
 
     ``torch.cuda.mem_get_info`` stays low there while reclaimable page cache
     shows as used, so this reads the host's ``MemAvailable`` instead, capped
-    by the container limit where present and by the device size.
+    by the container's remaining (limit minus usage where present) and by the
+    device size. ``MemAvailable`` already excludes unreclaimable memory.
     """
-    available = _host_mem_available_bytes()
+    if meminfo_path is not None:
+        available = _host_mem_available_bytes(meminfo_path)
+    else:
+        available = _host_mem_available_bytes()
     if available is None:
         return None
-    limit = _cgroup_limit_bytes()
+    if cgroup_root is not None or proc_path is not None:
+        limit = _cgroup_limit_bytes(cgroup_root, proc_path)
+    else:
+        limit = _cgroup_limit_bytes()
     if limit is not None:
         available = min(available, limit)
     if total is not None:
