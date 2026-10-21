@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:

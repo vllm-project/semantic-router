@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
