@@ -1,0 +1,22 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: gb10
+name: GB10 Kai
+version: 0.1.0
+description: >-
+  Routes each request from one CUDA placement of Decision 2.0 Kai 0.6B.
+  Code requests that Kai scores as multi-step and at least moderately
+  difficult use the external generation backend. Every other answered
+  request uses the local generation backend. A missing decision-model
+  answer fails the request.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - gb10
+  - cuda
+  - decision-model
+  - kai
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/gb10
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/gb10/README.md
