@@ -42,6 +42,25 @@ MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_native_build_sources_select_harness_contracts(self):
+        for source in (
+            "tools/docker/riscv64/build.py",
+            "tools/docker/riscv64/Dockerfile",
+            "tools/docker/Dockerfile.attached",
+            "tools/test/smoke/riscv64-standalone.py",
+        ):
+            with self.subTest(source=source):
+                self.assertIn("harness-tools", classify([source]).selected_jobs)
+
+    def test_published_probe_selects_benchmark_tests(self):
+        for source in (
+            "website/static/files/ospp-riscv64/go-router-probe/main.go",
+            "website/static/files/ospp-riscv64/run-go-probe.py",
+        ):
+            with self.subTest(source=source):
+                self.assertIn("bench-tools", classify([source]).selected_jobs)
+                self.assertFalse(classify([source]).signals["docs_only"])
+
     def test_shared_e2e_oracles_select_their_live_consumers(self):
         expected_by_source = {
             "signal_routing_helpers.go": {

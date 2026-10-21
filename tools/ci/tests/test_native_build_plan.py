@@ -2,15 +2,88 @@
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from test_image_artifacts import archive_image
 
 SCRIPT = Path(__file__).resolve().parents[2] / "docker/riscv64/build.py"
+sys.path.insert(0, str(SCRIPT.parents[2] / "ci"))
+import image_artifacts as images  # noqa: E402
 
 
 class NativeBuildPlanTests(unittest.TestCase):
+    def native_module(self):
+        spec = importlib.util.spec_from_file_location("native_build", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(
+            callable(getattr(module, "export_artifact", None)),
+            "native builds must produce the registered OCI artifact",
+        )
+        return module
+
+    def test_native_export_is_accepted_by_shared_artifact_verification(self):
+        module = self.native_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "artifact"
+
+            def external(command, **kwargs):
+                if command[0] == "skopeo":
+                    self.assertEqual(
+                        command[1:3], ["copy", "docker-daemon:router:test"]
+                    )
+                    self.assertEqual(
+                        command[3], "oci-archive:" + str(directory / "image.tar")
+                    )
+                    archive_image(directory / "image.tar", ("riscv64",))
+                else:
+                    self.assertEqual(
+                        Path(command[1]), SCRIPT.parents[2] / "ci/image_artifacts.py"
+                    )
+                    with patch.object(sys, "argv", command[1:]), patch.dict(
+                        os.environ, kwargs["env"]
+                    ):
+                        images.main()
+
+            with patch.object(
+                module.subprocess, "run", side_effect=external
+            ), patch.object(images, "source_sha", return_value="a" * 40):
+                module.export_artifact(
+                    "router:test", directory, "pr", "test", ["BASE_IMAGE=pinned"]
+                )
+                manifest = images.verify(directory, "vllm-sr-riscv64")
+            self.assertEqual(manifest["images"][0]["platform"], "linux/riscv64")
+            self.assertEqual(manifest["build_args"], ["BASE_IMAGE=pinned"])
+            self.assertRegex(manifest["date"], r"^\d{8}$")
+
+    def test_native_export_does_not_replace_existing_artifacts(self):
+        module = self.native_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            original = directory / "image.tar"
+            original.write_bytes(b"existing")
+            with self.assertRaisesRegex(ValueError, "already contains"):
+                module.export_artifact("router:test", directory, "pr", "test", [])
+            self.assertEqual(original.read_bytes(), b"existing")
+
+    def test_failed_native_export_does_not_seal_a_manifest(self):
+        module = self.native_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            with patch.object(
+                module.subprocess,
+                "run",
+                side_effect=subprocess.CalledProcessError(1, "skopeo"),
+            ), self.assertRaises(subprocess.CalledProcessError):
+                module.export_artifact("router:test", directory, "pr", "test", [])
+            self.assertFalse((directory / "manifest.json").exists())
+
     def plan(self, *args):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--plan", *args],

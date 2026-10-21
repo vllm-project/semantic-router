@@ -9,7 +9,11 @@ ARG ROUTER_BUILD=router-build
 
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_IMAGE} AS router-build
 ARG TARGETARCH
-RUN if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ]; then \
+RUN if [ "$TARGETARCH" = amd64 ] && [ "$(dpkg --print-architecture)" = arm64 ]; then \
+      echo "Use a native amd64 builder for an amd64 attached image; ARM64-to-amd64 cross-builds are not supported." >&2; \
+      exit 1; \
+    fi && \
+    if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ]; then \
       apt-get update && \
       apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross && \
       rm -rf /var/lib/apt/lists/*; \

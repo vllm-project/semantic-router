@@ -136,19 +136,30 @@ the unused model-cache mount; they are not persistent storage. The mounted input
 configuration remains read-only. This does not qualify every possible plugin
 or model under a read-only deployment.
 
-## Maintenance and verification
+## CI artifacts
 
-The attached image is an opt-in build without the managed model runtime.
-The artifact name `vllm-sr-riscv64` records its platform independently from
-bundled images; it is not a promise of a published registry tag or recurring
-native CI. The public support matrix labels this path experimental. The
-existing `Dockerfile.extproc` does not gain RISC-V stages or dependencies.
+The `vllm-sr-riscv64` artifact uses the native build runner. Install `skopeo`
+alongside Docker/buildx to export its result in the shared CI format:
 
-The Python contracts run through the existing tools test discovery. Native smoke
-is an explicit command for a real RISC-V worker, not a claim of hosted RISC-V CI.
-Attach its build/image identity and result receipt when proposing support. Image
-publication and a continuously maintained native runner require a separate
-maintainer decision; no inactive runner labels are added here.
+```bash
+python3 tools/docker/riscv64/build.py --tag local \
+  --output /tmp/vsr-native-build \
+  --artifact-directory /tmp/vsr-native-artifact
+python3 tools/ci/image_artifacts.py verify --image vllm-sr-riscv64 \
+  --directory /tmp/vsr-native-artifact
+```
+
+Use fresh directories. This builds the SDK, Router binary and attached runtime,
+then exports `image.tar` and `manifest.json`. The shared artifact verifier checks
+the source revision, archive checksum and actual Linux/RISC-V64 platform.
+`--artifact-mode` selects `pr` (default), `main`, `nightly` or `release`; for a
+release, `--tag` must match the release version.
+
+The generic buildx workflow rejects this native build strategy. A native worker
+can build and qualify the artifact before it enters the project's publication
+process. Official registry publication remains to be coordinated with maintainers.
+
+## Dependency updates
 
 The GLIDE lock file is necessary because the pinned release omits the FFI lock
 and the Go module omits the RISC-V static archive. Its Go version, source hash
