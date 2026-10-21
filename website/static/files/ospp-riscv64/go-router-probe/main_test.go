@@ -20,13 +20,13 @@ import (
 func TestBackendContract(t *testing.T) {
 	s := httptest.NewServer(backendHandler())
 	defer s.Close()
-	r, err := http.Get(s.URL + "/health")
-	if err != nil {
-		t.Fatal(err)
+	healthResponse, healthErr := http.Get(s.URL + "/health")
+	if healthErr != nil {
+		t.Fatal(healthErr)
 	}
-	r.Body.Close()
-	if r.StatusCode != 200 {
-		t.Fatal(r.Status)
+	healthResponse.Body.Close()
+	if healthResponse.StatusCode != http.StatusOK {
+		t.Fatal(healthResponse.Status)
 	}
 	for _, model := range []string{"code-model", "general-model"} {
 		c := newClient(1)
@@ -45,7 +45,7 @@ func TestBackendContract(t *testing.T) {
 			t.Fatalf("body %q: status %d", body, r.StatusCode)
 		}
 	}
-	r, err = http.Post(s.URL+"/prefix/chat/completions", "application/json", strings.NewReader(`{"model":"code-model","stream":false}`))
+	r, err := http.Post(s.URL+"/prefix/chat/completions", "application/json", strings.NewReader(`{"model":"code-model","stream":false}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,9 @@ func TestResponseValidation(t *testing.T) {
 			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", tc.media)
 				w.WriteHeader(tc.status)
-				io.WriteString(w, tc.body)
+				if _, writeErr := io.WriteString(w, tc.body); writeErr != nil {
+					t.Errorf("write fixture response: %v", writeErr)
+				}
 			}))
 			defer s.Close()
 			c := newClient(1)
@@ -249,7 +251,11 @@ func TestBenchOutput(t *testing.T) {
 			}
 		}
 		var q map[string]json.RawMessage
-		json.NewDecoder(r.Body).Decode(&q)
+		if decodeErr := json.NewDecoder(r.Body).Decode(&q); decodeErr != nil {
+			t.Errorf("decode fixture request: %v", decodeErr)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
 		if string(q["model"]) == `"vllm-sr/auto"` {
 			model := "general-model"
 			if strings.Contains(strings.ToLower(string(q["messages"])), "write code") {
@@ -266,8 +272,8 @@ func TestBenchOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runBench(cfg); err != nil {
-		t.Fatal(err)
+	if runErr := runBench(cfg); runErr != nil {
+		t.Fatal(runErr)
 	}
 	data, err := os.ReadFile(file)
 	if err != nil {
@@ -299,7 +305,7 @@ func TestFailedPhaseAndPersistence(t *testing.T) {
 	var calls atomic.Int64
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) > 1 {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		backendHandler().ServeHTTP(w, r)
@@ -345,7 +351,11 @@ func TestRoutingHeaderHistogram(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "application/json")
 				var q struct{ Messages []struct{ Content string } }
-				json.NewDecoder(r.Body).Decode(&q)
+				if decodeErr := json.NewDecoder(r.Body).Decode(&q); decodeErr != nil {
+					t.Errorf("decode fixture request: %v", decodeErr)
+					http.Error(w, "invalid request", http.StatusBadRequest)
+					return
+				}
 				model := "general-model"
 				if strings.Contains(strings.ToLower(q.Messages[0].Content), "write code") {
 					model = "code-model"

@@ -59,6 +59,11 @@ and configuration often.
 
 ## External model runtime
 
+The attached Dockerfile supports native amd64 and arm64 builders, and amd64
+builders targeting arm64. ARM64-to-amd64 cross-builds are unsupported; use a
+native amd64 builder for that target. RISC-V uses the separate native build
+runner described in [riscv64/README.md](riscv64/README.md).
+
 The independent `Dockerfile.attached` builds `vllm-sr-attached` for standalone
 deployments with external model-runtime endpoints. It uses the same Router
 source, configuration assets and startup script, without installing PyTorch

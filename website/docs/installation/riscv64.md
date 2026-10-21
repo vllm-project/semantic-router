@@ -29,10 +29,8 @@ configuration independently.
 | Dashboard, CLI-managed stack and Operator | Outside this RISC-V qualification |
 | Optional storage and plugin combinations | Qualify the selected configuration separately |
 
-The transport smoke uses a deterministic provider fixture. It checks selected
-models and response content, not medical, financial or general model quality.
-Building GLIDE proves that the native dependency links; it does not qualify
-every Valkey feature or persistence configuration.
+The smoke test uses fixed responses to check model selection and transport.
+Valkey-backed features and persistence configurations need separate integration tests.
 
 ## Build and run
 

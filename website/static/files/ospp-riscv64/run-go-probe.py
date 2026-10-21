@@ -16,6 +16,16 @@ MIN_CPU_SAMPLES = 2
 LISTENER_COUNT = 4
 
 
+def source_identity(source):
+    revision = subprocess.check_output(
+        ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+    ).strip()
+    status = subprocess.check_output(
+        ["git", "-C", str(source), "status", "--porcelain"], text=True
+    )
+    return {"source_revision": revision, "source_dirty": bool(status.strip())}
+
+
 def docker(*args):
     return subprocess.check_output(
         ["docker", *args], text=True, stderr=subprocess.STDOUT, timeout=120
@@ -115,7 +125,7 @@ def main():
     attempted = False
     receipt = {
         "passed": False,
-        "source_revision": "2e89999771dc3bb2458e1bc86ef00c4e918dd591",
+        **source_identity(args.source),
         "machine": platform.machine(),
         "kernel": platform.release(),
         "router_cpus": 2,

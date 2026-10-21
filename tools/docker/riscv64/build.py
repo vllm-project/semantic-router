@@ -2,15 +2,55 @@
 
 import argparse
 import json
+import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 BASE = "docker.io/library/debian@sha256:c6d58429cec88e03b2fe5c3d285bf90517be50b20bc1151b1b5a436d05865a9d"
+
+
+def export_artifact(image, directory, mode, tag, build_args):
+    directory.mkdir(parents=True, exist_ok=True)
+    if any((directory / name).exists() for name in ("image.tar", "manifest.json")):
+        raise ValueError("artifact directory already contains an image or manifest")
+    subprocess.run(
+        [
+            "skopeo",
+            "copy",
+            "docker-daemon:" + image,
+            "oci-archive:" + str(directory / "image.tar"),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/ci/image_artifacts.py"),
+            "seal",
+            "--image",
+            "vllm-sr-riscv64",
+            "--directory",
+            str(directory),
+            "--mode",
+            mode,
+            "--tag",
+            tag,
+        ],
+        cwd=ROOT,
+        check=True,
+        env=os.environ
+        | {
+            "CI_IMAGE_BUILD_ARGS": "\n".join(build_args),
+            "CI_IMAGE_BUILD_DATE": datetime.now(timezone.utc).strftime("%Y%m%d"),
+        },
+    )
 
 
 def validate_builder(description):
@@ -133,9 +173,19 @@ def main():
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument(
+        "--artifact-directory",
+        type=Path,
+        help="Export image.tar and a verified CI manifest (requires skopeo)",
+    )
+    parser.add_argument(
+        "--artifact-mode", choices=("pr", "main", "nightly", "release"), default="pr"
+    )
+    parser.add_argument(
         "--plan", action="store_true", help="Print commands without running Docker"
     )
     args = parser.parse_args()
+    if args.artifact_directory and args.component != "router":
+        parser.error("--artifact-directory requires --component router")
     if args.jobs is not None and args.jobs < 1:
         parser.error("--jobs must be positive")
     if args.sdk_image:
@@ -153,6 +203,8 @@ def main():
     if args.plan:
         print(json.dumps({"commands": commands}, indent=2))
         return
+    if args.artifact_directory and not shutil.which("skopeo"):
+        parser.error("--artifact-directory requires skopeo")
     if platform.system() != "Linux" or platform.machine() != "riscv64":
         parser.error("execute on native riscv64 Linux; --plan works on other hosts")
     validate_builder(
@@ -194,6 +246,21 @@ def main():
             "id": config["Id"],
             "architecture": config["Architecture"],
         }
+        if args.artifact_directory:
+            export_artifact(
+                image,
+                args.artifact_directory.resolve(),
+                args.artifact_mode,
+                args.tag,
+                [
+                    "NATIVE_BUILD_COMMANDS="
+                    + json.dumps(commands, separators=(",", ":"))
+                ],
+            )
+            receipt["artifact"] = {
+                "directory": str(args.artifact_directory.resolve()),
+                "manifest": "manifest.json",
+            }
     finally:
         result_file.write_text(json.dumps(receipt, indent=2) + "\n")
 
