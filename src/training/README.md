@@ -55,6 +55,26 @@ this table with every `uv.lock` under this tree.
 | [`model_experiment/mmlu_pro_solver_lora`](model_experiment/mmlu_pro_solver_lora/) | yes | `uv sync --locked` |
 | [`model_selection/ml_model_selection`](model_selection/ml_model_selection/) | yes | `uv sync --locked` |
 | [`model_selection/rl_model_selection`](model_selection/rl_model_selection/) | no | no `uv.lock` yet |
+## Torch build
+
+Areas that train on a GPU choose the `torch` build with an extra.
+[`model_embeddings/multimodal/small`](model_embeddings/multimodal/small/) is
+the reference. Run one of these in the area's directory:
+
+| Machine | Command |
+| --- | --- |
+| NVIDIA GPU | `uv sync --locked --extra cuda` |
+| No GPU | `uv sync --locked --extra cpu` |
+| AMD GPU (Linux) | `uv sync --locked --extra rocm` |
+
+- `cuda` installs the default PyPI wheel, which is the CUDA build on Linux.
+- `cpu` installs from `https://download.pytorch.org/whl/cpu`.
+- `rocm` installs from `https://download.pytorch.org/whl/rocm7.1`, applies on
+  Linux only, and also installs `triton-rocm` from that index.
+- The three extras are declared as conflicts in `[tool.uv]`, so only one can be
+  installed. Without an extra, `uv sync --locked` installs no `torch`.
+- Areas that do not declare these extras install the default PyPI `torch` with
+  `uv sync --locked`.
 
 ## Training control-plane contract
 
