@@ -23,6 +23,29 @@ def router_build_command(dockerfile: str = ROUTER_DOCKERFILE) -> str:
 
 
 class DockerCrossCompilationTests(unittest.TestCase):
+    def test_attached_rejects_amd64_target_on_arm64_builder(self):
+        text = (
+            (REPO_ROOT / "tools/docker/Dockerfile.attached")
+            .read_text()
+            .replace("\\\n", " ")
+        )
+        stage = text.split(" AS router-build", 1)[1].split("\nFROM ", 1)[0]
+        command = re.findall(r"(?m)^RUN (.+)$", stage)[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            stubs = Path(tmp)
+            (stubs / "dpkg").write_text("#!/bin/sh\necho arm64\n")
+            (stubs / "dpkg").chmod(0o755)
+            result = subprocess.run(
+                ["bash", "-e", "-c", command],
+                env=os.environ
+                | {"PATH": f"{stubs}:{os.environ['PATH']}", "TARGETARCH": "amd64"},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("native amd64 builder", result.stderr)
+
     def test_separate_native_builder_selects_the_riscv_linker_and_ffi(self):
         command = router_build_command("tools/docker/riscv64/Dockerfile")
         for host, linker in (("amd64", "riscv64-linux-gnu-gcc"), ("riscv64", "")):

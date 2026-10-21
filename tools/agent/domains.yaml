@@ -22,6 +22,9 @@ domains:
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
+      - tools/docker/Dockerfile.attached
+      - tools/docker/riscv64/**
+      - tools/test/smoke/riscv64-standalone.py
       - tools/linter/**
       - tools/make/**
     checks: [make harness-check]
@@ -644,8 +647,10 @@ domains:
 
   router-flow-bench:
     owner: evaluation-quality
+    documentation_check: true
     paths:
       - bench/router_flow/**
+      - website/static/files/ospp-riscv64/**
       - tools/make/tooling.mk
     checks: [make test-router-flow-bench]
     verifications: [bench-tools]

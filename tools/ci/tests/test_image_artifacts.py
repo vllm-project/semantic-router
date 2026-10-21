@@ -87,6 +87,8 @@ class ImageArtifactTests(unittest.TestCase):
                 values = output.read_text()
                 self.assertIn("platforms=linux/riscv64\n", values)
                 self.assertIn("target=vllm-sr-attached\n", values)
+                self.assertIn("build_strategy=native\n", values)
+                self.assertIn("build_script=tools/docker/riscv64/build.py\n", values)
 
     def test_native_router_seal_accepts_only_riscv64_content(self):
         for architecture in ("riscv64", "amd64"):

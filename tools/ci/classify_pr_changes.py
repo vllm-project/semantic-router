@@ -62,6 +62,10 @@ def _compact_json(values: tuple[str, ...]) -> str:
 
 
 def is_documentation_path(path: str) -> bool:
+    if path.startswith("website/static/files/") and (
+        Path(path).suffix in {".go", ".py"} or Path(path).name in {"go.mod", "go.sum"}
+    ):
+        return False
     return (
         path.startswith("website/")
         or path.endswith((".md", ".mdx"))

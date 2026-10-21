@@ -297,6 +297,12 @@ def main() -> None:
             "accelerator": accelerator,
             "platforms": ",".join(platforms),
             "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
+            "build_strategy": "native" if args.image == "vllm-sr-riscv64" else "buildx",
+            "build_script": (
+                "tools/docker/riscv64/build.py"
+                if args.image == "vllm-sr-riscv64"
+                else ""
+            ),
         }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():
