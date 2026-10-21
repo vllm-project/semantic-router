@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Standalone 模式
 description: Router 自己提供 OpenAI 兼容接口并在进程内执行路由流水线，Envoy 变为可选。一个与传输无关的路由核心，配 ext_proc 和原生 HTTP 两个适配器；借鉴 Envoy 的上游层，带 timeout、retry、fallback；进程内请求图；以及支持热更新和回滚的版本化配置快照。
 created: 2026-10-06

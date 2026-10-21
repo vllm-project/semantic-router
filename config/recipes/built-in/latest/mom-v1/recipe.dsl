@@ -10,7 +10,7 @@
 # RECIPE balance
 # =============================================================================
 
-RECIPE balance (description = "Everyday routing with measured tradeoffs between quality, responsiveness, and cost.") {
+RECIPE balance (description = "Spends reasoning only where a request needs it. One decision-model call answers every routing question, and an effort score selects the pool.") {
   # =============================================================================
   # ROUTING PROFILE
   # =============================================================================
@@ -24,153 +24,73 @@ RECIPE balance (description = "Everyday routing with measured tradeoffs between 
   # SIGNALS
   # =============================================================================
 
-  SIGNAL domain health {
-    description: "Medical and health information."
-    mmlu_categories: ["health"]
-  }
-
-  SIGNAL domain law {
-    description: "Legal information and interpretation."
-    mmlu_categories: ["law"]
-  }
-
-  SIGNAL domain business {
-    description: "Business information and commercial decisions."
-    mmlu_categories: ["business"]
-  }
-
-  SIGNAL domain economics {
-    description: "Economic information and financial decisions."
-    mmlu_categories: ["economics"]
-  }
-
-  SIGNAL keyword deliberate {
+  SIGNAL keyword brief_request {
     operator: "OR"
-    keywords: ["analyze the tradeoffs", "from first principles", "root cause", "reason step by step", "compare the alternatives carefully", "分析取舍", "第一性原理", "根因分析", "逐步推理", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "トレードオフを分析", "根本原因", "kompromisse analysieren", "ursache analysieren", "analisar as compensações", "causa raiz", "트레이드오프를 분석", "근본 원인", "حلل المفاضلات", "السبب الجذري", "समझौतों का विश्लेषण", "मूल कारण", "проанализируй компромиссы", "первопричина"]
-    method: "regex"
-  }
-
-  SIGNAL keyword verify {
-    operator: "OR"
-    keywords: ["verify the answer", "cite sources", "fact-check", "check the evidence", "核实答案", "引用来源", "verificar la respuesta", "citer les sources", "答えを検証", "quellen zitieren", "verificar a resposta", "답변을 검증", "تحقق من الإجابة", "उत्तर सत्यापित करें", "проверь ответ"]
-    method: "regex"
-  }
-
-  SIGNAL keyword no_analysis {
-    operator: "OR"
-    keywords: ["do not analyze", "don't analyze", "without analysis", "不要分析", "无需分析", "no analices", "sans analyse", "分析しない", "nicht analysieren", "sem análise", "분석하지 마", "دون تحليل", "विश्लेषण मत करो", "без анализа"]
-    method: "regex"
-  }
-
-  SIGNAL keyword correction {
-    operator: "OR"
-    keywords: ["that's wrong", "wrong answer", "\\b(is|was|were) wrong\\b", "\\banswer was incorrect\\b", "\\bcorrect (it|this|the answer)\\b", "please correct the answer", "try again", "回答错了", "请纠正答案", "la respuesta es incorrecta", "corrige la respuesta", "la réponse est incorrecte", "corrige la réponse", "回答が間違っています", "bitte korrigiere die antwort", "a resposta está errada", "답변이 틀렸습니다", "الإجابة خاطئة", "उत्तर गलत है", "ответ неверный"]
-    method: "regex"
-  }
-
-  SIGNAL keyword answer_error {
-    operator: "OR"
-    keywords: ["(answer|response|result|solution|output|calculation|value|recommendation|explanation|assessment).{0,64}(wrong|incorrect|erroneous|error|inconsistent|mistake)", "(wrong|incorrect|erroneous|inconsistent).{0,32}(answer|response|result|solution|output|calculation|value|recommendation|explanation|assessment)", "(回答|答案|结果|解答|输出|计算|数值).{0,32}(错|不正确|不一致|有误)", "(الإجابة|الجواب|النتيجة|الناتج|الحساب|القيمة).{0,40}(خاط|خطأ|غير صحيح|غير متسق)", "(antwort|ergebnis|lösung|ausgabe|berechnung|wert).{0,48}(falsch|fehler|nicht korrekt|widersprüch)", "(respuesta|resultado|solución|salida|cálculo|valor).{0,48}(incorrect|erróne|error|equivoc|incoherent)", "(回答|答え|結果|解答|出力|計算|値).{0,32}(間違|誤り|誤って|不正確|矛盾)", "(réponse|résultat|solution|calcul).{0,48}(faux|fausse|incorrect|erron|erreur)", "(resposta|resultado|solução|cálculo).{0,48}(errad|incorret|erro|equivoc)", "(답변|답|계산|결과).{0,24}(틀|잘못|오류|맞지)", "(उत्तर|जवाब|गणना|परिणाम).{0,32}(गलत|त्रुटि|अशुद्ध)", "(ответ|решени|расчёт|результат).{0,48}(невер|неправиль|ошиб)", "(?:错误|不正确|有误|不一致)的?(?:回答|答案|结果|解答|计算|数值)", "(?:إجابتك|اجابتك|جوابك).{0,32}(?:خاط|خطأ|غير صحيح)", "(?:falsche|fehlerhafte|inkorrekte)[nrs]?\\s+(?:antwort|ergebnis|lösung|berechnung)", "(?:誤った|間違った|不正確な)(?:回答|答え|結果|解答|計算)", "(?:respuesta|resultado|solución|cálculo).{0,48}defectuos"]
-    method: "regex"
-  }
-
-  SIGNAL keyword answer_revision {
-    operator: "OR"
-    keywords: ["(?:^|[.!?;,:。！？；，、\\n])\\s*(?:(?:please|then|and|now)\\s+)*(?:(?:I want you to|I would like you to|could you|can you)\\s+)?(?:\\b(correct|fix|revise|replace|recheck|recalculate|recompute|redo|try again|check again)\\b)", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:请|然后|再|并|接着)*(?:(?:把|将).{0,24})?(?:(请|重新|再).{0,16}(检查|核对|计算|推导|修改|纠正|更正|修正)|纠正|更正|修正|重算|重做)", "(?:^|[.!?;,:。！？；，、؛؟،\\n])\\s*(?:(?:من فضلك|ثم|رجاء)\\s+)*(?:(صحح|صحّح|صوّب|عدّل|راجع|أعد|اعد).{0,40}(الإجابة|الجواب|النتيجة|الناتج|الحساب|القيمة|حساب|فحص|النظر)|أعد الحساب)", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:(?:bitte|dann|und|jetzt)\\s+)*(?:(korrigiere|berichtige|überprüfe|prüfe|berechne|überarbeite|wiederhole))", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:(?:por favor|después|luego|ahora|y)\\s+)*(?:(corrige|corrija|rectifica|revisa|recalcula|vuelve a calcular|comprueba de nuevo))", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:まず|次に|そして)?(?:(訂正|修正|直して|やり直|再計算|確認して|見直して|検算))", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:s\\x27il vous plaît[, ]*|s\\x27il te plaît[, ]*|puis\\s+)?(corrigez|corrige|rectifiez|rectifie|recalculez|recalcule)\\b", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:por favor[, ]*)?(corrija|corrige|corrigir|retifique|recalcule)\\b", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:제발\\s*|다시\\s*)?(?:(?:답변|답|결과|설명|풀이|내용)(?:을|를)\\s*)?(수정|정정|고쳐|바로잡)", "(?:^|[.!?;,:।\\n])\\s*(?:कृपया\\s*)?(?:इसे\\s*|उत्तर\\s*|जवाब\\s*)?(सुधारें|सुधारो|सही करें|ठीक करें)", "(?:^|[.!?;,:。！？；，、\\n])\\s*(?:пожалуйста[, ]*)?(исправь|исправьте|скорректируй|скорректируйте|пересчитай|пересчитайте)", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:请|然后|再|并)*(?:替换|更换|换掉|修改)[^。！？\\n]{0,32}(?:回答|答案|结果|解答|计算)", "(?:^|[.!?;,:。！？；：，、؛؟،\\n])\\s*(?:(?:من فضلك|ثم|رجاء)\\s+)*(?:استبدل|بدّل|بدل|صحح|صحّح|عدّل|عدل)[^.!?؛\\n]{0,48}(?:إجابت|اجابت|جواب|النتيجة|الإجابة|الجواب)", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:(?:bitte|dann|und|jetzt)\\s+)*(?:ersetze|tausche|ändern|ändere)\\b", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:(?:por favor|después|luego|ahora|y)\\s+)*(?:sustituye|reemplaza|sustituya|reempláce)\\b", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:まず|次に|そして)?(?:その|この|前の|先ほどの)?[^。！？\\n]{0,24}(?:回答|答え|結果|解答|計算)(?:を|は)[^。！？\\n]{0,24}(?:訂正|修正|置き換え|直して|再計算|やり直)"]
-    method: "regex"
-  }
-
-  SIGNAL keyword no_revision {
-    operator: "OR"
-    keywords: ["(do not|don't|never).{0,24}(correct|fix|revise|replace|recheck|recalculate|redo)", "(不要|无需|不必).{0,12}(纠正|更正|修正|修改|重算|重做|核对)", "لا.{0,12}(تصحح|تعدّل|تعدل|تراجع|تعد الحساب)", "(nicht|keinesfalls).{0,24}(korrigieren|berichtigen|überarbeiten|ändern)|korrigiere.{0,24}nicht", "no.{0,12}(corrijas|corrija|rectifiques|revises|recalcules)", "(訂正|修正|変更|再計算).{0,8}(しないで|不要)|直さないで", "不要.{0,12}(重新检查|重新计算|检查|计算)|别.{0,12}(纠正|修正|重算)", "لا.{0,12}(تصحّح|تراجع|تعد حساب|تعد فحص)", "(prüfe|überprüfe|berechne|überarbeite|berichtige).{0,24}nicht", "no.{0,12}(corrijas|rectifiques|revises|recalcules|vuelvas a calcular)", "(やり直さない|見直さない|確認しない|再計算しない)", "ne.{0,24}(corrige|rectifie|recalcule).{0,16}pas", "não.{0,16}(corrija|corrige|corrigir|retifique|recalcule)", "(수정|정정|고치|고쳐|바로잡).{0,12}(하지 마|지 마|말아|필요 없)", "(सुधार|सही|ठीक).{0,12}(न करें|मत करो|मत करें)|मत.{0,12}(सुधार|करो)", "(?:^|[\\s.!?;,:])не\\s+(исправ|корректир|пересчит)", "(?:不要|无需|不必|别).{0,12}(?:替换|更换|换掉|修改|纠正|重算|重新计算)", "لا.{0,12}(?:تستبدل|تبدّل|تبدل)", "(?:ersetze|tausche|ändere).{0,32}nicht", "\\bno\\s+(?:sustituyas|reemplaces|sustituya|reemplaza)\\b", "(?:置き換え|やり直|再計算|訂正|修正).{0,8}(?:ないで|しない|不要)|直さないで"]
-    method: "regex"
-  }
-
-  SIGNAL keyword answer_repair {
-    operator: "OR"
-    keywords: ["(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:(?:please|then|now|and)\\s+)*(?:(?:can|could) you\\s+)?(?:(?:correct|fix)\\s+(?:(?:the|your|previous|last)\\s+){0,3}(?:answer|response|result|solution|calculation|recommendation|explanation|assessment|it|this)\\b|(?:recalculate|recompute)\\b)", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:请|然后|再|并)*(?:(?:把|将).{0,24})?(?:(?:纠正|更正|修正)[^。！？\\n]{0,16}(?:回答|答案|结果|解答|计算)|重算|重新计算|重新核算)", "(?:^|[.!?;,:。！？；：，、؛؟،\\n])\\s*(?:(?:من فضلك|ثم|رجاء)\\s+)*(?:(?:صحح|صحّح|صوّب)[^.!?؛\\n]{0,24}(?:الإجابة|الجواب|النتيجة|الحساب|إجابتك)|أعد الحساب|اعد الحساب)", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:(?:bitte|dann|und|jetzt)\\s+)*(?:(?:korrigiere|berichtige)\\s+(?:(?:die|das|deine|dein|vorherige|vorheriges)\\s+)*(?:antwort|ergebnis|lösung|berechnung)\\b|berechne neu\\b)", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:(?:por favor|después|luego|ahora|y)\\s+)*(?:(?:corrige|corrija|rectifica)\\s+(?:(?:la|el|tu|su)\\s+)?(?:respuesta|resultado|solución|cálculo)\\b|recalcula\\b)", "(?:^|[.!?;,:。！？；：，、\\n])\\s*(?:まず|次に|そして)?(?:その|この|前の|先ほどの)?(?:回答|答え|結果|解答|計算)(?:を|は)?[^。！？\\n]{0,24}(?:訂正して|修正して|直して|再計算して|やり直して)(?:ください)?"]
-    method: "regex"
-  }
-
-  SIGNAL keyword care_request {
-    operator: "OR"
-    keywords: ["\\b(?:what should I (?:do|take)|should I (?:take|stop|change|sign|pay|invest)|is it safe for me to|can I safely)\\b", "(?:我(?:该|应该|应当|能否|可不可以|能不能).{0,16}(?:做|服用|停药|继续|签署|支付|投资)|我该怎么办)", "(?:ماذا (?:يجب|ينبغي) أن أفعل|هل (?:يجب|ينبغي|يمكنني).{0,32}(?:أتناول|أوقف|أستمر|أوقع|أدفع|أستثمر))", "\\b(?:was soll ich (?:tun|nehmen)|soll(?:te)? ich [^.!?;:\\n]{0,48}(?:einnehmen|absetzen|nehmen|unterschreiben|zahlen|investieren)|ist es für mich sicher)\\b", "\\b(?:qué (?:debo|debería) hacer|debo (?:tomar|dejar|continuar|firmar|pagar|invertir)|es seguro para mí)\\b", "(?:私は.{0,24}(?:飲む|服用|やめる|続ける|署名|支払|投資).{0,8}(?:べき|よい|良い)|どうすれば(?:よい|いい|良い)|どうするべき)"]
-    method: "regex"
-  }
-
-  SIGNAL embedding consequential {
-    prototype_scoring: { best_weight: 0.75, enabled: false, top_m: 2 }
-    threshold: 0.7
-    candidates: ["Help choose an action when a mistaken choice could cause material harm or an irreversible loss.", "Evaluate practical alternatives and recommend a course of action while accounting for consequential uncertainty.", "当错误选择可能造成实质伤害或不可逆损失时，帮助选择行动。", "评估现实可行的方案，并在考虑重大不确定性的基础上建议行动路线。", "ساعد في اختيار تصرف عندما قد يؤدي القرار الخاطئ إلى ضرر ملموس أو خسارة لا يمكن تداركها.", "قيّم البدائل العملية واقترح مساراً للعمل مع مراعاة عدم اليقين ذي العواقب المهمة.", "Hilf bei der Wahl einer Handlung, wenn eine falsche Entscheidung erheblichen Schaden oder einen unumkehrbaren Verlust verursachen könnte.", "Bewerte praktische Alternativen und empfehle ein Vorgehen unter Berücksichtigung folgenreicher Unsicherheit.", "Ayuda a elegir una acción cuando una decisión equivocada podría causar un daño importante o una pérdida irreversible.", "Evalúa alternativas prácticas y recomienda una línea de acción teniendo en cuenta la incertidumbre y sus consecuencias.", "誤った選択が重大な被害や取り返しのつかない損失を招く可能性があるとき、行動の選択を支援してください。", "現実的な選択肢を評価し、重大な結果につながる不確実性を考慮して行動方針を勧めてください。"]
-    aggregation_method: "max"
-  }
-
-  SIGNAL embedding informational {
-    prototype_scoring: { best_weight: 0.75, enabled: false, top_m: 2 }
-    threshold: 0.7
-    candidates: ["Explain the meaning of a concept neutrally without advising anyone to act.", "Describe background information for learning or quotation, without making a practical recommendation.", "客观解释一个概念的含义，不建议任何人采取行动。", "介绍用于学习或引用的背景信息，不提供现实行动建议。", "اشرح معنى مفهوم بشكل محايد من دون أن تنصح أحداً باتخاذ إجراء.", "قدّم معلومات خلفية للتعلم أو الاقتباس من دون تقديم توصية عملية.", "Erkläre die Bedeutung eines Begriffs neutral, ohne jemandem zu einer Handlung zu raten.", "Beschreibe Hintergrundinformationen zum Lernen oder Zitieren, ohne eine praktische Empfehlung zu geben.", "Explica el significado de un concepto de forma neutral sin aconsejar a nadie que actúe.", "Describe información de contexto para aprender o citar, sin hacer una recomendación práctica.", "誰かに行動を勧めることなく、概念の意味を中立的に説明してください。", "学習や引用のための背景情報を説明し、実際の行動については助言しないでください。"]
-    aggregation_method: "max"
-  }
-
-  SIGNAL fact_check needs_fact_check {
-    description: "The task calls for checking factual claims; this signal does not verify an answer."
+    keywords: ["answer briefly", "brief answer", "quick answer", "keep it short", "in one sentence", "one-word answer", "just the answer", "only the answer", "tl;dr", "简短回答", "简单回答", "一句话", "只要答案", "直接给答案"]
   }
 
   SIGNAL user_feedback wrong_answer {
-    description: "The user rejects the correctness of an earlier answer."
+    description: "The user says an earlier answer was wrong; recovery also needs the correction question."
   }
 
-  SIGNAL reask repeat {
-    threshold: 0.8
-    lookback_turns: 1
+  SIGNAL conversation has_tools {
+    description: "The request declares at least one tool."
+    feature: { source: { type: "tool_definition" }, type: "exists" }
   }
 
-  SIGNAL structure quoted_request {
-    description: "Vocabulary mentioned for explanation or translation is not an execution request."
-    feature: { source: { pattern: "(?i)(?:(\\b(define|translate|explain)\\b.{0,48}\\b(phrase|term|expression)\\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(defina|traduza|explique).{0,48}(frase|expressão|ter(?:mo))|(정의|번역|설명).{0,16}(문구|표현|용어|“|「)|(عرّف|ترجم|اشرح).{0,32}(العبارة|التعبير|المصطلح)|(परिभाषित|अनुवाद|समझाइए).{0,32}(वाक्यांश|अभिव्यक्ति|शब्द)|(определи|переведи|объясни).{0,48}(фразу|выражение|термин)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「)|([\"“「][^\"”」]{1,120}[\"”」]).{0,80}(define|translate|explain|설명|정의|번역|اشرح|عرّف|ترجم|समझाइए|परिभाषित|अनुवाद|объясни|определи|переведи|解释|定义|翻译|説明|翻訳))|(?:^|[.!?;。！？；\\n])\\s*(?:please\\s+)?(?:translate|quote)\\b[^.!?;:\\n]{0,64}[:：]|(?:^|[.!?;。！？；\\n])\\s*(?:请)?(?:翻译|引用)[^。！？；：\\n]{0,32}[:：]|(?:^|[.!?;。！？；\\n])\\s*(?:(?:من فضلك|رجاء)\\s+)?(?:ترجم|اقتبس)[^.!?؛:\\n]{0,48}[:：]|(?:^|[.!?;。！？；\\n])\\s*(?:bitte\\s+)?(?:übersetze|zitiere)\\b[^.!?;:\\n]{0,64}[:：]|(?:^|[.!?;。！？；\\n])\\s*(?:por favor\\s+)?(?:traduce|cita)\\b[^.!?;:\\n]{0,64}[:：]|(?:^|[.!?;。！？；\\n])\\s*(?:以下を|次を)?(?:翻訳|引用)(?:して(?:ください)?)?[:：])", type: "regex" }, type: "exists" }
-  }
-
-  SIGNAL conversation has_answer {
-    feature: { source: { role: "assistant", type: "message" }, type: "exists" }
+  SIGNAL conversation tool_disabled {
+    description: "The client sets tool_choice to none."
+    feature: { source: { type: "tool_choice_none" }, type: "exists" }
   }
 
   SIGNAL conversation tool_loop {
+    description: "The request continues an active tool loop."
     feature: { source: { type: "active_tool_loop" }, type: "exists" }
   }
 
-  SIGNAL conversation tool_required {
-    feature: { source: { type: "tool_choice_required" }, type: "exists" }
+  SIGNAL conversation has_prior_answer {
+    description: "The conversation already holds an assistant answer."
+    feature: { source: { role: "assistant", type: "message" }, type: "exists" }
   }
 
-  SIGNAL complexity difficulty {
-    prototype_scoring: { best_weight: 0.75, enabled: false, top_m: 2 }
-    hard_above: 0.025
-    easy_below: -0.08
-    description: "Separate direct tasks from analysis and synthesis. Length and language do not determine difficulty."
-    hard: { candidates: ["Find an outcome satisfying interacting constraints and justify why the nearest alternatives fail.", "Reconcile conflicting evidence, identify unsupported assumptions, and defend a conclusion under uncertainty.", "Design a multi-stage solution whose intermediate choices remain consistent with the final objective.", "找出满足相互影响的约束的结果，并说明最接近的其他方案为何不成立。", "协调冲突的证据，识别没有依据的假设，并在不确定性下论证结论。", "设计一个多阶段方案，使中间选择始终与最终目标一致。", "أوجد نتيجة تحقق قيوداً متفاعلة، وبيّن لماذا لا تصلح البدائل الأقرب.", "وفّق بين الأدلة المتعارضة، وحدد الافتراضات غير المدعومة، ودافع عن استنتاج في ظل عدم اليقين.", "صمّم حلاً متعدد المراحل تبقى خياراته الوسيطة متسقة مع الهدف النهائي.", "Finde ein Ergebnis, das zusammenwirkende Bedingungen erfüllt, und begründe, warum die nächstliegenden Alternativen scheitern.", "Gleiche widersprüchliche Belege ab, erkenne unbelegte Annahmen und verteidige eine Schlussfolgerung unter Unsicherheit.", "Entwirf eine mehrstufige Lösung, deren Zwischenentscheidungen mit dem Endziel vereinbar bleiben.", "Encuentra un resultado que satisfaga restricciones interdependientes y justifica por qué fallan las alternativas más cercanas.", "Concilia pruebas contradictorias, identifica supuestos sin fundamento y defiende una conclusión ante la incertidumbre.", "Diseña una solución de varias etapas cuyas decisiones intermedias sigan siendo coherentes con el objetivo final.", "相互に影響する制約を満たす結果を見つけ、近い代替案が成立しない理由を示してください。", "矛盾する証拠を整理し、裏付けのない仮定を特定して、不確実な状況でも結論を論証してください。", "中間の選択が最終目標と一貫する、多段階の解決策を設計してください。", "Design a reliable service architecture, compare alternatives and explain the latency, cost and failure-recovery tradeoffs.", "Diagnose the underlying cause of a failure using incomplete logs and conflicting observations, and justify the proposed fix.", "Derive an algorithm, prove its correctness and analyze its time and space complexity.", "Combine conflicting research findings into a supported conclusion and identify which additional evidence would change it.", "设计可靠的服务架构，比较备选方案，并解释延迟、成本和故障恢复之间的取舍。", "结合不完整日志和相互矛盾的观察诊断故障根因，并论证修复方案。", "推导一个算法，证明其正确性并分析时间和空间复杂度。", "综合相互冲突的研究结果，得出有依据的结论，并指出哪些额外证据会改变该结论。", "Diseña una arquitectura de servicio fiable, compara alternativas y explica los compromisos entre latencia, coste y recuperación ante fallos.", "Diagnostica la causa de un fallo con registros incompletos y observaciones contradictorias, y justifica la solución propuesta.", "Deduce un algoritmo, demuestra su corrección y analiza su complejidad temporal y espacial.", "Integra resultados de investigación contradictorios en una conclusión fundamentada e identifica qué pruebas adicionales la cambiarían.", "Entwirf eine zuverlässige Dienstarchitektur, vergleiche Alternativen und erläutere die Zielkonflikte zwischen Latenz, Kosten und Wiederherstellung nach Ausfällen.", "Diagnostiziere die Ursache eines Fehlers anhand unvollständiger Protokolle und widersprüchlicher Beobachtungen und begründe die vorgeschlagene Lösung.", "Leite einen Algorithmus her, beweise seine Korrektheit und analysiere seine Zeit- und Speicherkomplexität.", "Führe widersprüchliche Forschungsergebnisse zu einer belegten Schlussfolgerung zusammen und benenne zusätzliche Belege, die sie ändern würden.", "صمّم بنية خدمة موثوقة، وقارن البدائل، واشرح المفاضلات بين زمن الاستجابة والتكلفة والتعافي من الأعطال.", "شخّص السبب الجذري لعطل باستخدام سجلات غير مكتملة وملاحظات متعارضة، وبرّر الإصلاح المقترح.", "اشتق خوارزمية، وأثبت صحتها، وحلّل تعقيدها الزمني والمكاني.", "ادمج نتائج أبحاث متعارضة للوصول إلى استنتاج مدعوم، وحدد الأدلة الإضافية التي قد تغيّره.", "信頼性の高いサービス構成を設計し、代替案を比較して、遅延、費用、障害復旧のトレードオフを説明してください。", "不完全なログと矛盾する観測から障害の根本原因を診断し、修正案の根拠を説明してください。", "アルゴリズムを導出し、正しさを証明して、時間と空間の計算量を分析してください。", "相反する研究結果を統合して根拠のある結論を示し、どの追加証拠が結論を変えるかを特定してください。"] }
-    easy: { candidates: ["Copy explicitly supplied information into the requested structure without adding an inference.", "Apply one local edit while preserving the meaning and all other stated details.", "Retrieve a directly stated fact and give a concise answer without combining separate arguments.", "把明确提供的信息复制到指定结构中，不添加推断。", "只做一处局部修改，保留原意以及所有其他已述细节。", "提取直接陈述的事实，简洁作答，不合并不同论证。", "انسخ المعلومات المقدمة صراحةً إلى البنية المطلوبة من دون إضافة استنتاج.", "أجر تعديلاً موضعياً واحداً مع الحفاظ على المعنى وجميع التفاصيل الأخرى المذكورة.", "استخرج حقيقة مذكورة مباشرةً وقدّم إجابة موجزة من دون دمج حجج منفصلة.", "Übertrage ausdrücklich bereitgestellte Informationen in die verlangte Struktur, ohne eine Schlussfolgerung hinzuzufügen.", "Nimm eine einzige lokale Änderung vor und erhalte dabei die Bedeutung und alle anderen genannten Einzelheiten.", "Entnimm eine direkt genannte Tatsache und antworte knapp, ohne getrennte Argumente zu verbinden.", "Copia la información proporcionada explícitamente en la estructura solicitada sin añadir inferencias.", "Aplica una sola modificación local conservando el significado y todos los demás detalles indicados.", "Extrae un hecho expresado directamente y responde de forma concisa sin combinar argumentos separados.", "明示された情報を指定の構造にそのまま移し、推論を加えないでください。", "意味と他のすべての記載事項を保ちながら、一か所だけ修正してください。", "直接述べられた事実を取り出し、別々の論点を組み合わせずに簡潔に答えてください。", "Return the order number explicitly shown on this receipt.", "Look up the requested service status using the provided function.", "Translate this short message while preserving its meaning.", "Summarize the facts stated in this paragraph in one sentence.", "返回这张收据上明确写出的订单编号。", "使用提供的函数查询指定服务的当前状态。", "翻译这条简短消息并保留原意。", "用一句话概括这段文字中陈述的事实。", "Devuelve el número de pedido que aparece explícitamente en este recibo.", "Consulta el estado del servicio solicitado mediante la función proporcionada.", "Traduce este mensaje breve conservando su significado.", "Resume en una frase los hechos expuestos en este párrafo.", "Gib die auf diesem Beleg ausdrücklich angegebene Bestellnummer zurück.", "Frage den Zustand des gewünschten Dienstes mit der bereitgestellten Funktion ab.", "Übersetze diese kurze Nachricht und erhalte ihre Bedeutung.", "Fasse die in diesem Absatz genannten Fakten in einem Satz zusammen.", "أعِد رقم الطلب المذكور صراحةً في هذا الإيصال.", "استعلم عن حالة الخدمة المطلوبة باستخدام الدالة المتاحة.", "ترجم هذه الرسالة القصيرة مع الحفاظ على معناها.", "لخّص الحقائق الواردة في هذه الفقرة في جملة واحدة.", "この領収書に明記された注文番号を返してください。", "提供された関数で指定サービスの現在の状態を調べてください。", "この短いメッセージを意味を保って翻訳してください。", "この段落に書かれた事実を一文に要約してください。"] }
+  SIGNAL decision task {
+    description: "What kind of work the request asks for."
+    question: { choices: [{ description: "Casual conversation, greetings, opinions or everyday advice", key: "chat" }, { description: "Writing, rewriting, translating or summarizing text", key: "writing" }, { description: "Writing, explaining, reviewing or debugging code", key: "code" }, { description: "A mathematics, science or engineering problem", key: "stem" }, { description: "Looking up a specific fact, name, date, number or quote", key: "facts" }, { description: "Comparing options, planning or reasoning through a question", key: "analysis" }, { description: "Multi-step work that uses tools, files, systems or the web", key: "agentic" }, { description: "Questions about a document, table or long text in the request", key: "document" }], instructions: "What kind of work does this request ask for?", type: "choice" }
   }
 
-  PROJECTION score recovery {
+  SIGNAL decision difficulty {
+    description: "How much reasoning a strong expert needs, from 0 (none) to 4 (research level)."
+    question: { instructions: "How much reasoning does a strong expert need to answer this request well?", levels: ["Answer immediately, with no thinking", "A little thought, one or two simple steps", "Multi-step reasoning or a careful check", "Deep expert reasoning on a hard problem", "Research-level work on an open or frontier problem"], type: "score" }
+    predicate: { gte: 2 }
+  }
+
+  SIGNAL decision precise_facts {
+    description: "The answer depends on specific facts that most people would have to look up."
+    question: { choices: [{ description: "Common knowledge, reasoning or creativity is enough", key: "false" }, { description: "Specific facts that most people would have to look up", key: "true" }], instructions: "Does a correct answer depend on recalling specific facts that are easy to misremember, such as exact dates, figures, names or citations that most people would have to look up?", type: "noul" }
+    predicate: { gte: 0.8 }
+  }
+
+  SIGNAL decision needs {
+    description: "What a good answer needs."
+    question: { instructions: "What does a good answer to this request need?", labels: [{ description: "A derivation, proof or careful step-by-step check", key: "deliberation" }, { description: "Calling tools or functions, running code or browsing", key: "tools" }, { description: "Checking facts against sources or citing references", key: "verification" }, { description: "A long answer such as a full program, report or essay", key: "long_output" }, { description: "Original creative writing such as a story, poem or slogan", key: "creativity" }], type: "set" }
+  }
+
+  SIGNAL decision correction {
+    description: "The user says the assistant's previous answer was wrong."
+    question: { choices: [{ description: "No: the user continues, asks something new, or is satisfied", key: "false" }, { description: "Yes: the user says the previous answer was wrong", key: "true" }], instructions: "In the latest message, does the user say the assistant's previous answer was wrong and ask for a corrected answer?", type: "noul" }
+    predicate: { gte: 0.6 }
+  }
+
+  PROJECTION score effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "user_feedback", weight: 1, name: "wrong_answer" }, { type: "reask", weight: 0.5, name: "repeat" }, { type: "keyword", weight: 0.5, name: "correction" }]
+    inputs: [{ type: "decision", weight: 0.3, name: "difficulty", value_source: "raw" }, { type: "decision", weight: 0.35, name: "needs:deliberation", value_source: "raw" }, { type: "decision", weight: 0.1, name: "needs:verification", value_source: "raw" }, { type: "keyword", weight: -0.35, name: "brief_request" }]
   }
 
-  PROJECTION score care_margin {
-    method: "weighted_sum"
-    inputs: [{ type: "embedding", weight: 1, name: "consequential", value_source: "raw" }, { type: "embedding", weight: -1, name: "informational", value_source: "raw" }]
-  }
-
-  PROJECTION mapping recovery_band {
-    source: "recovery"
+  PROJECTION mapping effort {
+    source: "effort_score"
     method: "threshold_bands"
-    outputs: [{ name: "retry", gte: 1 }]
-  }
-
-  PROJECTION mapping care_margin_direction {
-    source: "care_margin"
-    method: "threshold_bands"
-    outputs: [{ name: "actionable_care", gt: 0 }]
+    calibration: { method: "sigmoid_distance", slope: 10 }
+    outputs: [{ name: "effort_off", lt: 0.4 }, { name: "effort_medium", gte: 0.4, lt: 0.675 }, { name: "effort_high", gte: 0.675, lt: 1.15 }, { name: "effort_max", gte: 1.15 }]
   }
 
   # =============================================================================
@@ -183,9 +103,9 @@ RECIPE balance (description = "Everyday routing with measured tradeoffs between 
   # ROUTES
   # =============================================================================
 
-  ROUTE reasoning (description = "Use a stronger quality pool for hard tasks, factual stakes, or answer recovery.", on_unknown = "no_match") {
+  ROUTE reasoning (description = "Deep reasoning: research-level and hard problems, tool work, and answers the user says were wrong.", on_unknown = "no_match") {
     PRIORITY 300
-    WHEN (complexity("difficulty:hard") OR (keyword("deliberate") OR keyword("verify")) AND NOT keyword("no_analysis") AND NOT structure("quoted_request") OR conversation("has_answer") AND projection("retry") AND NOT structure("quoted_request") OR projection("actionable_care") AND (fact_check("needs_fact_check") OR domain("health") OR domain("law") OR domain("business") OR domain("economics")) OR keyword("answer_error") AND keyword("answer_revision") AND NOT keyword("no_revision") AND NOT structure("quoted_request") OR conversation("has_answer") AND keyword("answer_repair") AND NOT keyword("no_revision") AND NOT structure("quoted_request") OR keyword("care_request") AND (domain("health") OR domain("law") OR domain("business") OR domain("economics")) AND NOT structure("quoted_request"))
+    WHEN (conversation("has_prior_answer") AND NOT conversation("tool_loop") AND decision("correction") AND user_feedback("wrong_answer") OR conversation("tool_loop") OR conversation("has_tools") AND NOT conversation("tool_disabled") AND (decision("task", label: "agentic") OR decision("needs", label: "tools", predicate: { gte: 0.5 })) OR projection("effort_max") OR projection("effort_high") AND NOT decision("task", label: "code") AND NOT (decision("precise_facts") AND (decision("task", label: "facts") OR decision("task", label: "analysis") OR decision("task", label: "writing"))) OR decision("task", label: "stem") AND decision("difficulty"))
     ALGORITHM multi_factor {
       latency_metric: "tpot"
       latency_percentile: 95
@@ -199,9 +119,9 @@ RECIPE balance (description = "Everyday routing with measured tradeoffs between 
     }
   }
 
-  ROUTE simple (description = "Use an efficient model when the task is positively identified as simple.", on_unknown = "no_match") {
+  ROUTE simple (description = "Requests that need no reasoning, positively identified by the decision model.", on_unknown = "no_match") {
     PRIORITY 100
-    WHEN complexity("difficulty:easy") AND NOT conversation("has_answer") AND NOT conversation("tool_loop") AND NOT conversation("tool_required") AND NOT (projection("actionable_care") AND (fact_check("needs_fact_check") OR domain("health") OR domain("law") OR domain("business") OR domain("economics"))) AND NOT (keyword("care_request") AND (domain("health") OR domain("law") OR domain("business") OR domain("economics")) AND NOT structure("quoted_request"))
+    WHEN projection("effort_off") AND NOT (decision("precise_facts") AND (decision("task", label: "facts") OR decision("task", label: "analysis") OR decision("task", label: "writing")))
     ALGORITHM multi_factor {
       latency_metric: "ttft"
       latency_percentile: 95
@@ -215,7 +135,7 @@ RECIPE balance (description = "Everyday routing with measured tradeoffs between 
     }
   }
 
-  ROUTE medium (description = "Keep ambiguous, conversational, and ordinary tool requests in a balanced pool.") {
+  ROUTE medium (description = "Code, exact facts and requests that need some reasoning; also the fallback when a routing answer is unknown.") {
     PRIORITY 10
     ALGORITHM multi_factor {
       latency_metric: "ttft"
