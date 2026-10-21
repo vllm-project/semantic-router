@@ -308,8 +308,12 @@ func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
 		{nil, `,"options":{"deadline_ms":5000}`, 30 * time.Second},
 		{nil, `,"options":{"long_context":true,"deadline_ms":120000}`, 2 * time.Minute},
 		{nil, `,"options":{"deadline_ms":1e12}`, 10 * time.Minute},
+		{nil, `,"options":{"long_context":true}`, 10 * time.Minute},
+		{nil, `,"options":{"long_context":false}`, 30 * time.Second},
+		{nil, `,"options":{"long_context":true,"deadline_ms":5000}`, 30 * time.Second},
 		{&twoMinutes, `,"options":{"deadline_ms":90000}`, 90 * time.Second},
 		{&twoMinutes, `,"options":{"deadline_ms":1e12}`, 2 * time.Minute},
+		{&twoMinutes, `,"options":{"long_context":true}`, 2 * time.Minute},
 		{&tenSeconds, ``, 10 * time.Second},
 		{&tenSeconds, `,"options":{"deadline_ms":120000}`, 10 * time.Second},
 	} {
@@ -324,6 +328,28 @@ func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"`+test.options+`}`)))
 		if response.Code != 200 || wait > test.want || wait < test.want-time.Second {
 			t.Fatalf("limit %s, options %q: %d, waited %s, want %s", listener.SystemOne.MaxDeadline(), test.options, response.Code, wait, test.want)
+		}
+	}
+}
+
+func TestPublicNativeDeadlineSaysHowToWaitLonger(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+		return 0, nil, context.DeadlineExceeded
+	})
+	for options, want := range map[string]string{
+		``:                                 "no answer within 30s; options.deadline_ms waits longer, up to this listener's systemone.max_deadline_ms (600000 ms)",
+		`,"options":{"long_context":true}`: "no answer within 10m0s, this listener's systemone.max_deadline_ms",
+	} {
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"`+options+`}`)))
+		var got struct {
+			Error struct{ Code, Message string } `json:"error"`
+		}
+		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != 504 || got.Error.Code != "systemone_deadline_exceeded" || got.Error.Message != want {
+			t.Fatalf("options %q: got %d %s, want message %q", options, response.Code, response.Body.String(), want)
 		}
 	}
 }

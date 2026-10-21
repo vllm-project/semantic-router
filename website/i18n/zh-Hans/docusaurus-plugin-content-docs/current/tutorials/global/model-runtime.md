@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/global/model-runtime.md"
