@@ -121,6 +121,9 @@ class NativeBuildPlanTests(unittest.TestCase):
 
             with (
                 patch.object(module.subprocess, "run", side_effect=external),
+                patch.object(
+                    module.subprocess, "check_output", return_value="default\n"
+                ),
                 patch.object(images, "source_sha", return_value="a" * 40),
                 patch.object(
                     module, "require_clean_source", return_value="a" * 40, create=True
@@ -144,6 +147,9 @@ class NativeBuildPlanTests(unittest.TestCase):
                 patch.object(
                     module, "require_clean_source", return_value="a" * 40, create=True
                 ),
+                patch.object(
+                    module.subprocess, "check_output", return_value="default\n"
+                ),
                 self.assertRaisesRegex(ValueError, "already contains"),
             ):
                 module.export_artifact("router:test", directory, "pr", "test", [])
@@ -155,6 +161,7 @@ class NativeBuildPlanTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch.dict(os.environ, {"DOCKER_HOST": "unix:///test/docker.sock"}),
             patch.object(module, "require_clean_source", return_value="a" * 40),
+            patch.object(module.subprocess, "check_output", return_value="default\n"),
             patch.object(module.subprocess, "run") as external,
         ):
             module.export_artifact("router:test", Path(tmp), "pr", "test", [])
@@ -165,6 +172,63 @@ class NativeBuildPlanTests(unittest.TestCase):
             )
             self.assertEqual(command[4], "docker-daemon:router:test")
 
+    def test_native_export_rejects_context_before_creating_artifacts(self):
+        module = self.native_module()
+        for context in ("rootless", "remote"):
+            with (
+                self.subTest(context=context),
+                tempfile.TemporaryDirectory() as tmp,
+                patch.dict(os.environ, {"DOCKER_HOST": "unix:///test/docker.sock"}),
+                patch.object(module, "require_clean_source", return_value="a" * 40),
+                patch.object(module.subprocess, "check_output", return_value=context),
+                patch.object(module.subprocess, "run"),
+            ):
+                directory = Path(tmp) / "artifact"
+                with self.assertRaisesRegex(ValueError, "default Docker context"):
+                    module.export_artifact("router:test", directory, "pr", "test", [])
+                self.assertFalse(directory.exists())
+
+    def test_native_artifact_build_rejects_context_before_creating_outputs(self):
+        module = self.native_module()
+
+        def inspect(command, **kwargs):
+            if command[1:3] == ["buildx", "inspect"]:
+                return "Driver: docker\n"
+            if command[1:3] == ["context", "show"]:
+                return "rootless\n"
+            return json.dumps(
+                [{"Architecture": "riscv64", "Os": "linux", "Id": "sha256:test"}]
+            )
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(module.platform, "system", return_value="Linux"),
+            patch.object(module.platform, "machine", return_value="riscv64"),
+            patch.object(module.shutil, "which", return_value="/usr/bin/skopeo"),
+            patch.object(module, "require_clean_source", return_value="a" * 40),
+            patch.object(module.subprocess, "check_output", side_effect=inspect),
+            patch.object(module.subprocess, "run") as process,
+        ):
+            process.return_value.returncode = 0
+            output, artifact = Path(tmp) / "build", Path(tmp) / "artifact"
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        str(SCRIPT),
+                        "--output",
+                        str(output),
+                        "--artifact-directory",
+                        str(artifact),
+                    ],
+                ),
+                self.assertRaisesRegex(ValueError, "default Docker context"),
+            ):
+                module.main()
+            self.assertFalse(output.exists())
+            self.assertFalse(artifact.exists())
+
     def test_failed_native_export_does_not_seal_a_manifest(self):
         module = self.native_module()
         with tempfile.TemporaryDirectory() as tmp:
@@ -174,6 +238,9 @@ class NativeBuildPlanTests(unittest.TestCase):
                     module.subprocess,
                     "run",
                     side_effect=subprocess.CalledProcessError(1, "skopeo"),
+                ),
+                patch.object(
+                    module.subprocess, "check_output", return_value="default\n"
                 ),
                 patch.object(
                     module, "require_clean_source", return_value="a" * 40, create=True
