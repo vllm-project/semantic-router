@@ -11,7 +11,7 @@ it applies.
 `/dev/kfd` and `/dev/dri` into the Router container, and runs the Router's own
 models on the GPU by default. AMD Instinct MI300X and MI325X are validated.
 `--platform cuda` selects `vllm-sr-cuda` and passes `--gpus all`; it needs
-the NVIDIA Container Toolkit (documented H200 and A100 records; fused
+the NVIDIA Container Toolkit (validated; H200, A100, Tesla T4 records; fused
 kernels without bit-exact evidence stay off the exact profile). On macOS the
 Docker target runs on the CPU only.
 

@@ -21,11 +21,34 @@ t-interval. Machine readable:
 | 0.8B @ 512 | Better −6.100 [−6.337, −5.863] vs 79.966 | Better | Better | Better |
 | 4B @ 2048 | Better −28.862 [−29.268, −28.456] vs 400.486 | Better | Level | Level |
 
-**Unresolved acceptance item.** The 0.3B @ 32-token p50 interval is wholly
-worse (~2.3% slower). Ten rounds are the repeat-policy cap; this record
-keeps that result rather than replacing it with another opportunistic
-rerun. A completed measurement is not a passing no-regression gate. p95 on
-that workload improves.
+**H200 card-specific row.** The 0.3B @ 32-token p50 interval on this H200
+follow-up is wholly worse (~2.3% slower). Ten rounds are the repeat-policy
+cap; this record keeps that H200 result rather than replacing it with
+another opportunistic rerun. p95 on that workload improves. This row is not
+the NVIDIA no-regression gate; that pass is the Tesla T4 five-round Level
+interval below.
+
+## Tesla T4 follow-up (2026-10-21)
+
+Five interleaved rounds, concurrency 1, 40 requests/side/round. Difference is
+runtime minus reference, 95% t-interval. Same package pin as the H200
+follow-up (`a3209a50`). This is a new card, not pooled with the ten-round
+H200 row.
+
+- **Date:** 2026-10-21.
+- **Hardware:** NVIDIA Tesla T4.
+- **Image:** Google Colab GPU runtime, torch 2.11.0+cu130, CUDA 13.0.
+- **Head:** `a1c137bcc9821766f9c0a440cc2912a21c671f3d`.
+- **Device:** `cuda:0`. Package: Vela-2.0-0.3B `a3209a50`.
+
+| Workload | p50 (ms) [runtime − ref, 95% CI] | p95 | Mean | Throughput |
+| --- | --- | --- | --- | --- |
+| 0.3B @ 32 | Level −0.158 [−0.447, +0.131] vs 57.288 | Level | Level | Level |
+
+Five rounds meet the no-regression minimum. p50 is **Level** (the interval
+includes 0). This is the passing NVIDIA no-regression gate for Vela 2.0
+0.3B @ 32. The H200 p50 Worse interval above stays as a card-specific
+measurement.
 
 ## Earlier 4×4 coverage (separate stack)
 

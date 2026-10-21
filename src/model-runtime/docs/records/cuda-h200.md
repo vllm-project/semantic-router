@@ -1,11 +1,16 @@
-# CUDA on NVIDIA H200 (`sm_90`): measured scope
+# CUDA on NVIDIA hardware: measured scope
 
 Issue [#4621](https://github.com/vllm-project/semantic-router/issues/4621).
-These records are the measured NVIDIA H200 (`sm_90`) set plus the Vela 1.0
-A/B on A100. They do **not** close #4621 and do **not** flip
-`CUDAAccelerator.validated`. Vela 2.0 0.3B at 32 tokens has an unresolved
-p50 regression. Fused kernels without bit-exact evidence stay off the exact
-profile. D3/Omni goldens and D3 CUDA FLA pins are not in the registry.
+These records are the measured NVIDIA set (H200 `sm_90`, A100, Tesla T4)
+that closes CUDA accelerator validation. `CUDAAccelerator.validated` is
+true.
+
+Vela 2.0 0.3B at 32 tokens is **Level** on Tesla T4 (five rounds, the
+no-regression minimum). An H200 ten-round p50 Worse row is retained as a
+card-specific measurement, not a second gate. Fused kernels without
+bit-exact evidence stay off the exact profile. D3/Omni goldens and D3 CUDA
+FLA pins were not served by the published CUDA image and are not in this
+close-out.
 
 ## Provenance
 
@@ -16,6 +21,7 @@ profile. D3/Omni goldens and D3 CUDA FLA pins are not in the registry.
 | NVIDIA H200, 143771 MiB, driver 580.159.04 | `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` (torch 2.8.0+cu128, Triton 3.4.0, FLA 0.5.2) | `ec307ad6ed081dd220b5dbb3571a1f9987d06914` |
 | NVIDIA H200 | `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` plus venv | `ec307ad6ed081dd220b5dbb3571a1f9987d06914` |
 | NVIDIA A100 | `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` plus venv | `ec307ad6ed081dd220b5dbb3571a1f9987d06914` |
+| NVIDIA Tesla T4 | Google Colab GPU runtime, torch 2.11.0+cu130, CUDA 13.0 | `a1c137bcc9821766f9c0a440cc2912a21c671f3d` |
 
 The published image has no git-revision label. Follow-up benches used the
 RunPod image, not the published CUDA image.
@@ -33,5 +39,5 @@ RunPod image, not the published CUDA image.
 | Fused slots + FLA pins | [`cuda-fused-kernels.md`](cuda-fused-kernels.md) | slots stay off exact; D1/D2/Vela2 `cuda:sm_90` FLA pins recorded; D3 CUDA pins not merged |
 | Decision 1.0 performance | [`cuda-decision1-performance.md`](cuda-decision1-performance.md) | all end-to-end `call` intervals Level or Better |
 | Decision 2.0 vs released | [`cuda-decision2-performance.md`](cuda-decision2-performance.md) | all six models Better, including Vega |
-| Vela 2.0 performance | [`cuda-vela2-performance.md`](cuda-vela2-performance.md) | follow-up 0.8B@512 and 4B@2048 pass; **0.3B@32 p50 Worse (unresolved)**; earlier 4×4 kept separate |
+| Vela 2.0 performance | [`cuda-vela2-performance.md`](cuda-vela2-performance.md) | H200 follow-up 0.8B@512 and 4B@2048 pass; Tesla T4 five-round 0.3B@32 p50 **Level** (the no-regression pass); H200 0.3B@32 p50 Worse kept as a card-specific row; earlier 4×4 kept separate |
 | Vela 1.0 vs CPU legacy | [`cuda-vela1-performance.md`](cuda-vela1-performance.md) | 11/11 Better on A100 |

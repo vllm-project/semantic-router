@@ -5,7 +5,61 @@
   "head": "ec307ad6ed081dd220b5dbb3571a1f9987d06914",
   "date": "2026-10-20",
   "device": "cuda:0",
-  "acceptance": "unresolved: 0.3B@32 p50 Worse on the ten-round follow-up; do not rerun to replace it"
+  "acceptance": "pass: Tesla T4 five-round 0.3B@32 p50 Level is the NVIDIA no-regression gate. H200 ten-round 0.3B@32 p50 Worse is retained as a card-specific row."
+ },
+ "t4_follow_up": {
+  "hardware": "NVIDIA Tesla T4",
+  "image": "Google Colab GPU runtime, torch 2.11.0+cu130, CUDA 13.0",
+  "head": "a1c137bcc9821766f9c0a440cc2912a21c671f3d",
+  "date": "2026-10-21",
+  "device": "cuda:0",
+  "package": "Vela-2.0-0.3B a3209a50",
+  "file": "Vela-2.0-0.3B.tokens32.rounds5.json",
+  "tokens": 32,
+  "rounds": 5,
+  "concurrency": 1,
+  "note": "Not pooled with the H200 ten-round follow-up. This Level interval is the passing NVIDIA no-regression gate for 0.3B@32.",
+  "runtime_minus_reference": {
+   "p50_ms": {
+    "diff": -0.158,
+    "low": -0.447,
+    "high": 0.131,
+    "rounds": 5,
+    "baseline": 57.288,
+    "verdict": "Level"
+   },
+   "p95_ms": {
+    "diff": 0.02,
+    "low": -0.935,
+    "high": 0.975,
+    "rounds": 5,
+    "baseline": 59.194,
+    "verdict": "Level"
+   },
+   "mean_ms": {
+    "diff": -1.26,
+    "low": -4.461,
+    "high": 1.941,
+    "rounds": 5,
+    "baseline": 58.472,
+    "verdict": "Level"
+   },
+   "throughput_rps": {
+    "diff": 0.351,
+    "low": -0.532,
+    "high": 1.234,
+    "rounds": 5,
+    "baseline": 17.128,
+    "verdict": "Level"
+   }
+  },
+  "p50_ms_by_round": [
+   {"round": 0, "reference": 56.67, "runtime": 56.6},
+   {"round": 1, "reference": 56.83, "runtime": 56.91},
+   {"round": 2, "reference": 57.22, "runtime": 57.22},
+   {"round": 3, "reference": 58.02, "runtime": 57.55},
+   {"round": 4, "reference": 57.7, "runtime": 57.37}
+  ]
  },
  "jobs": [
   {

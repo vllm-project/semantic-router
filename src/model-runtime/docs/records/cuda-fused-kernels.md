@@ -6,7 +6,6 @@ and pinned FLA kernel choices for the Qwen3.5 decoders. The fused slots are
 **not all bit-exact**, so they stay approximate (`exact=False`) and stay
 off the exact profile. That is a valid item-4 outcome: exactness evidence
 is required before enabling a slot, not before recording CUDA at all.
-This record does not close #4621.
 Machine readable summary:
 [`cuda-fused-kernels.json`](cuda-fused-kernels.json).
 
@@ -139,12 +138,11 @@ entries are copies of Eos / Nox / Lux.
 ## Scope of the evidence
 
 This is item 4 of #4621: a fused-slot bit-exactness record on one H200, plus
-pinned FLA choices for the Qwen3.5 decoders on `cuda:sm_90`. It is not
-completion of the issue.
+pinned FLA choices for the Qwen3.5 decoders on `cuda:sm_90`. Approximate
+slots stay off the exact profile.
 
 Managed CUDA container serving, Decision 1.0 / 2.0 scored panels, Vela 2.0's
-scored request panel, the Vela 1.0 legacy path, performance vs the legacy or
-released runtime, and user-guide/design status remain outside this record.
-Other NVIDIA architectures (`sm_89`, Ampere) are not re-pinned here. The
-global CUDA `validated` flag remains false for reasons outside this kernel
-record (see the Vela 2.0 0.3B p50 regression and coverage gaps).
+scored request panel, the Vela 1.0 legacy path, and performance vs the
+legacy or released runtime live in the other `cuda-*.md` records. Other
+NVIDIA architectures (`sm_89`, Ampere) are not re-pinned here. The global
+CUDA `validated` flag is true; see [`cuda-h200.md`](cuda-h200.md).

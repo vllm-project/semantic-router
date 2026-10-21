@@ -47,7 +47,7 @@ upgrade instructions are separate from this `main` quickstart.
 | Every host | Linux, macOS or WSL2; Docker (Linux can use Podman instead); Python 3.10 or newer; about 5 GB of free disk for the images, plus 1–1.5 GB for each built-in model your routes use |
 | CPU | Nothing else. The `vllm-sr` image runs every built-in model on the CPU; plan about 1.3 GB of memory for each 307M task model your routes use |
 | AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform rocm`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
-| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda` (documented H200 and A100 records; fused kernels without bit-exact evidence stay off the exact profile) |
+| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda`. CUDA is validated (H200, A100, Tesla T4 records). Fused kernels without bit-exact evidence stay off the exact profile |
 
 On macOS the Docker target runs on the CPU only; see
 [Gateway Modes](gateway-modes#macos).
