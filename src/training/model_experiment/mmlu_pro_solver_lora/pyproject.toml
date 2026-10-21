@@ -8,7 +8,7 @@ dependencies = [
     # upper bounds stop at the next major of the current release.
     "accelerate>=0.26,<2",
     # requirements.txt has datasets>=2.0.0; raise to a floor that still installs.
-    "datasets>=2.19,<5",
+    "datasets>=2.19,<6",
     # requirements.txt has numpy>=1.21.0; raise to a floor that still installs.
     "numpy>=1.24,<3",
     "peft>=0.13,<1",

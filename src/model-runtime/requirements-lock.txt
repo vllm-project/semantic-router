@@ -2,7 +2,7 @@
 #    echo torch==2.10.0 | uv pip compile src/model-runtime/pyproject.toml - --extra multimodal --python-version 3.12 --python-platform x86_64-manylinux_2_28 --torch-backend cpu --no-annotate --no-emit-package torch --no-emit-package jinja2 --no-emit-package markupsafe --no-emit-package mpmath --no-emit-package networkx --no-emit-package setuptools --no-emit-package sympy -o src/model-runtime/requirements-lock.txt
 anyio==4.15.1
 backports-zstd==1.8.0
-certifi==2026.7.22
+certifi==2026.10.19
 click==8.5.0
 filelock==4.0.12
 fsspec==2026.9.0
