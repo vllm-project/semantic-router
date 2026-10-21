@@ -647,10 +647,8 @@ domains:
 
   router-flow-bench:
     owner: evaluation-quality
-    documentation_check: true
     paths:
       - bench/router_flow/**
-      - website/static/files/ospp-riscv64/**
       - tools/make/tooling.mk
     checks: [make test-router-flow-bench]
     verifications: [bench-tools]

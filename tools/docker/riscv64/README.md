@@ -152,10 +152,13 @@ python3 tools/ci/image_artifacts.py verify --image vllm-sr-riscv64 \
 Use fresh directories. This builds the SDK, Router binary and attached runtime,
 then exports `image.tar` and `manifest.json`. The shared artifact verifier checks
 the source revision, archive checksum and actual Linux/RISC-V64 platform.
+Artifact export requires a clean Git checkout; keep build outputs outside it.
+The source revision is checked before the build and again before sealing.
 `--artifact-mode` selects `pr` (default), `main`, `nightly` or `release`; for a
 release, `--tag` must match the release version.
 
-The generic buildx workflow rejects this native build strategy. A native worker
+The generic buildx workflow and hosted AMD64 artifact loader reject this native
+build strategy. A native worker
 can build and qualify the artifact before it enters the project's publication
 process. Official registry publication remains to be coordinated with maintainers.
 
