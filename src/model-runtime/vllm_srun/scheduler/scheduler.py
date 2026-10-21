@@ -19,8 +19,11 @@ first, yet a long job still runs once the work queued before its expected
 finish is done, so nothing starves. Between two forwards the worker takes the
 jobs that arrived meanwhile (on a model whose batcher coalesces, once they
 have waited one batching window), so a short request waits for the forward in
-flight, not for the rest of a long request. The order of forwards never
-changes what a batch contains, so answers are unchanged.
+flight, not for the rest of a long request, and plans them together with the
+jobs of planned batches that have not started, so concurrent requests fill
+forwards up to their budget instead of keeping the batches their arrival
+formed. The order of forwards never changes what a batch contains, so answers
+are unchanged.
 
 A model whose batches need no device thread may also run a request on the
 thread that planned it (``run_now``), but only when the scheduler is idle:
@@ -304,11 +307,41 @@ class Scheduler:
                 self._abandon()
                 return
             try:
-                self._plan(taken)
+                self._plan(self._unstarted() + taken if taken else taken)
                 if self._ready:
                     self._run(heapq.heappop(self._ready))
             finally:
                 self._release()
+
+    def _unstarted(self) -> list[_Pending]:
+        """Take back the planned batches whose jobs have not started, to plan them with new arrivals.
+
+        A planning round sees only the jobs that arrived during the forward
+        before it, so without this, concurrent requests would keep the small
+        batches their arrival formed and never fill a forward's budget. Only
+        whole jobs of no other batch come back; reference jobs keep their
+        released forwards.
+        """
+        batches: dict[int, int] = {}
+        for entry in self._ready:
+            for pending in entry.owners:
+                batches[id(pending)] = batches.get(id(pending), 0) + 1
+        back: list[_Pending] = []
+        kept: list[_Planned] = []
+        for entry in self._ready:
+            if all(
+                not pending.started
+                and not pending.job.reference
+                and batches[id(pending)] == 1
+                for pending in entry.owners
+            ):
+                back.extend(entry.owners)
+            else:
+                kept.append(entry)
+        if back:
+            heapq.heapify(kept)
+            self._ready = kept
+        return sorted(back, key=lambda pending: pending.job.enqueued)
 
     def _take(self, *, wait: bool) -> list[_Pending] | None:
         """Own the model and take queued jobs to plan, or None once stopped.

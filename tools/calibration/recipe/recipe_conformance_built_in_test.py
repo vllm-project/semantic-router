@@ -19,7 +19,7 @@ conformance = importlib.import_module("recipe_conformance")
 runtime = importlib.import_module("recipe_conformance_runtime")
 sources = importlib.import_module("recipe_conformance_sources")
 http = importlib.import_module("router_calibration_http")
-EXPECTED_BUILTIN_PROBES = 315
+EXPECTED_BUILTIN_PROBES = 346
 
 
 class BuiltInRecipeConformanceTest(unittest.TestCase):
@@ -49,7 +49,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         conformance.validate_probe_references(
             self.recipe / "probes.yaml", self.config, self.manifest, bound
         )
-        self.assertEqual(len(bound), 315)
+        self.assertEqual(len(bound), 346)
         self.assertEqual(
             {probe.model for probe in bound},
             {
@@ -257,7 +257,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                         "source": "built-in-latest",
                         "shard": "built-in-latest-0",
                         "recipes": "mom-v1",
-                        "variants": 315,
+                        "variants": 346,
                         "recipes_root": "config/recipes/built-in/latest",
                         "report_dir": "built-in/latest",
                     }
@@ -321,7 +321,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             self.assertNotIn(("standalone", "vela-amd"), expected)
 
     def test_eval_rejects_zero_or_partial_probe_execution(self):
-        for count in (0, 314, 315):
+        for count in (0, 345, 346):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 probes = runtime.bind_runtime_entrypoints(self.config, self.probes)
                 evaluation = {
@@ -371,11 +371,11 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 )
 
     def test_consolidation_fails_missing_partial_or_empty_results(self):
-        for count in (None, 0, 314, 315):
+        for count in (None, 0, 345, 346):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "inventory.json").write_text(
-                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 315}]})
+                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 346}]})
                 )
                 if count is not None:
                     (root / "mom-v1").mkdir()
