@@ -230,6 +230,9 @@ def main() -> None:
         names = json.loads(args.images)
         if not isinstance(names, list) or not names or len(set(names)) != len(names):
             raise ValueError("Image inventory must be a nonempty unique list")
+        for name in names:
+            if name in DEFINITIONS and "linux/amd64" not in DEFINITIONS[name][2]:
+                raise ValueError("Hosted image loading requires a Linux AMD64 artifact")
         receipts = []
         for name in names:
             if name not in DEFINITIONS:

@@ -53,9 +53,9 @@ test-hallucination-bench: $(HARNESS_VENV_DEPS) ## Test hallucination trajectory 
 test-reasoning-bench: bench-test-deps ## Test reasoning-mode config patches and Router accounting offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/reasoning
 
-test-router-flow-bench: $(HARNESS_VENV_DEPS) harness-go-bootstrap ## Test the Router Flow helpers and published Go probe without a remote host
+test-router-flow-bench: $(HARNESS_VENV_DEPS) harness-go-bootstrap ## Test the Router Flow helpers and standalone HTTP probe without a remote host
 	@"$(AGENT_PYTHON)" -m pytest -q bench/router_flow
-	@cd website/static/files/ospp-riscv64/go-router-probe && go test ./...
+	@cd bench/router_flow/standalone_http/go-router-probe && go test ./...
 
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew

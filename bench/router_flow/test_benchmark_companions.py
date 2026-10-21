@@ -1,4 +1,4 @@
-"""Check source identity recording in the published benchmark script."""
+"""Check source identity recording in the standalone HTTP benchmark."""
 
 import importlib.util
 import subprocess
@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-KIT = ROOT / "website/static/files/ospp-riscv64"
+KIT = Path(__file__).resolve().parent / "standalone_http"
 SPEC = importlib.util.spec_from_file_location(
     "published_probe", KIT / "run-go-probe.py"
 )
