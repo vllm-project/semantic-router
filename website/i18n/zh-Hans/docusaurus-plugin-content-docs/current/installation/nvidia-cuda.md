@@ -3,7 +3,7 @@ is_mtpe: false
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "56dbe50035d3cfeebdfdfed9124fadf0da2158c2"
   source_file: "docs/installation/nvidia-cuda.md"
   outdated: false
 ---

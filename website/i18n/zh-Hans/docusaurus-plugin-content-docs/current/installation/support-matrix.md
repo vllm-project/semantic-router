@@ -3,7 +3,7 @@ is_mtpe: false
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
-  source_commit: "49fd62932eb54334c4e4bbc64977733f1c7ed5fa"
+  source_commit: "56dbe50035d3cfeebdfdfed9124fadf0da2158c2"
   source_file: "docs/installation/support-matrix.md"
   outdated: false
 ---
