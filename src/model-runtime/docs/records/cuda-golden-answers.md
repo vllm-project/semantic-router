@@ -5,12 +5,9 @@ this card. The `cuda` device class is recorded next to `cpu` and `rocm` in
 the registry files. Decision 3.0 and Omni were not run.
 
 Smoke of the same image is [`cuda-router-image.md`](cuda-router-image.md).
-An earlier A100 80GB run that did not use the published image and could not
-load Vega-27B is the local note `cuda-a100-golden.md`.
 
 - **Date:** 2026-10-12.
-- **Hardware:** one NVIDIA H200 (sm_90, 143771 MiB total). Driver 575.57.08.
-  Probe free memory 139.29 GiB; BF16 supported. Pod `dq8ck6v4xloqff`.
+- **Hardware:** NVIDIA H200 (sm_90, 143771 MiB). Driver 575.57.08.
 - **Image:** `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest`, digest
   `sha256:2f05113e5c7399874ef2b1651ecb3745a5dafeff7ef2f9725acd01b643c06730`,
   config created `2026-10-12T07:07:54Z`. Inside the image: Debian 12, Python
@@ -58,8 +55,29 @@ tolerance:
 The largest gap is Decision 1.0 Sol-2B, 0.005973 vs CPU. That is under 0.02.
 It is not byte-identical.
 
-## Not in this record
+## Not in this record (published-image 30)
 
-Decision 3.0 (`d3` and the smaller `d3-*` packages) and Vela 1.0 Omni were
-not served on this run, so `golden_answers_decision3.json` and
-`golden_answers_omni.json` still have only `cpu` and `rocm`.
+This published-image run served the 30 models above. It did **not** serve
+Decision 3.0 or Omni, so those families are not in the committed `cuda`
+golden keys. Do not read "30" as all built-in models.
+
+## Later D3 and Omni captures (not incorporated)
+
+Local CUDA answer captures exist for six Decision 3 models and two Omni
+models. They are **not** merged into the current registry.
+
+- Some capture logs report `readiness.status: unverified` (successful
+  execution is not a passing reference check).
+- Compared with the committed CPU goldens, five of six D3 models stay under
+  the 0.02 numeric tolerance used for the published-image set. **d3-edge**
+  does not: `image_colour.probabilities.green` differs by **0.024475**
+  (CPU 0.331480 vs CUDA capture 0.307005). That is a different check from
+  the 21-case D3 panel.
+- Omni Mini / Nano CUDA captures vs committed CPU stay well under 0.02
+  (max |Δ| about 6e-6 and 5e-5).
+- Inventory: `vllm-sr/d3`, `d3-edge`, `d3-flash`, `d3-lite`, `d3-mini`,
+  `d3-nano`, `Vela-1.0-Omni-Mini`, `Vela-1.0-Omni-Nano`.
+
+Until those captures are compared as the registry golden path compares
+them, and the d3-edge excess is investigated or excluded with a reason,
+CUDA goldens remain the 30 published-image models.

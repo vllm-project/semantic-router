@@ -6,8 +6,7 @@ charts run it: one runtime process per model inside the published image, uid
 readable summary: [`cuda-router-image-smoke.json`](cuda-router-image-smoke.json).
 
 - **Date:** 2026-10-12.
-- **Hardware:** one NVIDIA H200 (sm_90, 143771 MiB total). Driver 575.57.08.
-  Probe free memory 139.29 GiB; BF16 supported. Pod `dq8ck6v4xloqff`.
+- **Hardware:** NVIDIA H200 (sm_90, 143771 MiB). Driver 575.57.08.
 - **Image:** `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest`, digest
   `sha256:2f05113e5c7399874ef2b1651ecb3745a5dafeff7ef2f9725acd01b643c06730`,
   config created `2026-10-12T07:07:54Z`. Inside the image: Debian 12, Python

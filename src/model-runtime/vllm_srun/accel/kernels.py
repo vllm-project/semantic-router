@@ -103,6 +103,42 @@ def causal_conv1d_ref(
     return out.to(hidden_states.dtype)
 
 
+def gdn_prep_ref(
+    mixed_qkv: torch.Tensor,
+    b: torch.Tensor,
+    a: torch.Tensor,
+    conv_weight: torch.Tensor,
+    A_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    k_heads: int,
+    head_dim: int,
+    conv_fn=None,
+    conv_bias: torch.Tensor | None = None,
+    activation: str | None = "silu",
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Released GatedDeltaNet prep: conv + SiLU, split q/k/v, sigmoid beta, softplus gate.
+
+    Layout matches ``triton_gfx942.gdn_prep`` (q/k at ``k_heads``, before GQA repeat).
+    ``mixed_qkv`` is ``[B, T, C]``, ``conv_weight`` is ``[C, KW]``. ``conv_fn`` is the
+    ``causal_conv1d`` slot (``[B, C, T]``); the torch reference runs when it is omitted.
+    """
+    conv = conv_fn or causal_conv1d_ref
+    channels_time = mixed_qkv.transpose(1, 2).contiguous()
+    mixed = conv(
+        channels_time, conv_weight, bias=conv_bias, activation=activation
+    ).transpose(1, 2)
+    batch, length, channels = mixed.shape
+    key_dim = k_heads * head_dim
+    value_dim = channels - 2 * key_dim
+    query, key, value = torch.split(mixed, [key_dim, key_dim, value_dim], dim=-1)
+    query = query.reshape(batch, length, k_heads, head_dim)
+    key = key.reshape(batch, length, k_heads, head_dim)
+    value = value.reshape(batch, length, value_dim // head_dim, head_dim)
+    beta = b.sigmoid()
+    gate = -A_log.float().exp() * F.softplus(a.float() + dt_bias)
+    return query, key, value, gate, beta
+
+
 def chunk_gated_delta_rule_ref(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -185,6 +221,59 @@ def chunk_gated_delta_rule_ref(
         initial_dtype, memory_format=torch.contiguous_format
     )
     return core_attn_out, last_recurrent_state
+
+
+def attn_prep_ref(
+    q_proj_out: torch.Tensor,
+    k_proj_out: torch.Tensor,
+    q_norm_w1: torch.Tensor,
+    k_norm_w1: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    heads: int,
+    kv_heads: int,
+    head_dim: int,
+    eps: float,
+    *,
+    gated: bool = True,
+    zero_centred: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Eager ``attn_prep``: per-head RMSNorm then rotary, matching the native decoder.
+
+    Qwen3.5 (``gated`` and ``zero_centred``): ``q_proj_out`` is ``[B, T, H * 2D]``
+    (query then unused gate), norms multiply by the already-offset ``*_w1`` and
+    round to the input dtype before partial RoPE. Qwen3 (neither): norms round
+    ``x * rstd`` to the input dtype, multiply by ``w`` in FP32, and apply full
+    RoPE. Layout out is ``[B, H, T, D]`` / ``[B, Hkv, T, D]``.
+    """
+    batch, length = q_proj_out.shape[:2]
+    q_width = 2 * head_dim if gated else head_dim
+    query = q_proj_out.view(batch, length, heads, q_width)[..., :head_dim]
+    key = k_proj_out.view(batch, length, kv_heads, head_dim)
+
+    def rms(x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        scaled = x.float() * torch.rsqrt(x.float().pow(2).mean(-1, keepdim=True) + eps)
+        if zero_centred:
+            return (scaled * weight.float()).to(x.dtype)
+        return scaled.to(x.dtype).float() * weight.float()
+
+    query = rms(query, q_norm_w1).transpose(1, 2)
+    key = rms(key, k_norm_w1).transpose(1, 2)
+    rotary_dim = cos.shape[-1]
+    cos_h = cos.unsqueeze(1)
+    sin_h = sin.unsqueeze(1)
+
+    def rotate_half(x: torch.Tensor) -> torch.Tensor:
+        half = x.shape[-1] // 2
+        return torch.cat((-x[..., half:], x[..., :half]), dim=-1)
+
+    def embed(x: torch.Tensor) -> torch.Tensor:
+        rot, passthrough = x[..., :rotary_dim], x[..., rotary_dim:]
+        spun = (rot * cos_h) + (rotate_half(rot) * sin_h)
+        out = torch.cat([spun, passthrough], dim=-1) if passthrough.numel() else spun
+        return out.to(q_proj_out.dtype)
+
+    return embed(query), embed(key)
 
 
 def rotary_half_ref(

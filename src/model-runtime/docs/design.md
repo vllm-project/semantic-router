@@ -40,9 +40,14 @@ now supervises a separate worker for each replica of a logical deployment.
 5. **One call per request.** A runtime process can serve several models, and
    the router sends all of a request's model work for one runtime as one
    bundled call.
-6. **Universal hardware, honestly labelled.** CPU and ROCm are validated, CUDA
-   is implemented and unit-tested but marked unvalidated, and XPU and MPS are
-   plugins marked unvalidated.
+6. **Universal hardware, honestly labelled.** CPU and ROCm are validated.
+   CUDA has documented H200 measurements and a separate A100 Vela 1.0
+   comparison under `docs/records/cuda-*.md`. Fused kernels without
+   bit-exact evidence stay excluded from the exact profile; that is a valid
+   outcome of item 4, not by itself a block on labelling the accelerator.
+   `CUDAAccelerator.validated` stays false while Vela 2.0 0.3B @ 32 tokens
+   has an unresolved p50 regression and coverage gaps (D3/Omni goldens, D3
+   CUDA FLA pins) remain. XPU and MPS are plugins marked unvalidated.
 7. **One stack.** After Phase 4 the router has no native model bindings: the Go
    router is free of cgo model code, and every model runs in the runtime.
 
@@ -60,7 +65,7 @@ running packaged remote code (`trust_remote_code`).
 | Naming | Domain `src/model-runtime/`, distribution and command `vllm-srun`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. The distribution ships in the router images and is not published to PyPI. Router mode keeps working and the router manages the runtime's lifecycle. |
 | Numerics | The default path is byte-identical to the released packages' runtime. Shared context, cross-request batching and max speed are opt-in profiles, each with a measured accuracy impact. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
-| Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
+| Hardware | ROCm (MI300 / MI325X) and CPU validated. CUDA measured on NVIDIA H200 and A100 under `docs/records/cuda-*.md`; accelerator flag still unvalidated. |
 
 ### 2.2 Phases 2–4
 
@@ -943,7 +948,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | implemented, unit-tested; measured on NVIDIA H200 and A100 (`docs/records/cuda-*.md`); `validated` flag **false** | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -1386,8 +1391,8 @@ files carry `!windows && cgo` build tags only because of these imports.
 The legacy driver calls the legacy router's diagnostics API
 (`/api/v1/diagnostics/...`), built from `main` before this change, so the
 reference is exactly what the router served. Each record states the commit,
-image, device, inputs and every disagreement. CUDA stays implemented,
-unit-tested and unvalidated.
+image, device, inputs and every disagreement. CUDA records are
+`docs/records/cuda-*.md`; the accelerator `validated` flag stays false.
 
 ## 18. Performance
 

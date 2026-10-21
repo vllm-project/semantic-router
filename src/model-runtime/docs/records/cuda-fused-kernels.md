@@ -3,8 +3,10 @@
 Issue [#4621](https://github.com/vllm-project/semantic-router/issues/4621)
 item 4: bit-exactness of each fused gfx942 slot on CUDA before enabling it,
 and pinned FLA kernel choices for the Qwen3.5 decoders. The fused slots are
-**not all bit-exact**, so they stay approximate (`exact=False`).
-`CUDAAccelerator.validated` stays **false**. This does not close #4621.
+**not all bit-exact**, so they stay approximate (`exact=False`) and stay
+off the exact profile. That is a valid item-4 outcome: exactness evidence
+is required before enabling a slot, not before recording CUDA at all.
+This record does not close #4621.
 Machine readable summary:
 [`cuda-fused-kernels.json`](cuda-fused-kernels.json).
 
@@ -13,10 +15,8 @@ is [`cuda-fused-approximate.md`](cuda-fused-approximate.md). Golden answers
 from the published image are [`cuda-golden-answers.md`](cuda-golden-answers.md).
 
 - **Date:** 2026-10-12.
-- **Hardware:** one NVIDIA H200 (sm_90, 143771 MiB total). Driver 580.178.04.
-  Native BF16. Kernel probe and Decision 2.0 Eos / Sol / Nox / Lux FLA pins:
-  Secure Cloud pod with a 100 GB workspace disk. Vega-27B FLA pin: Secure
-  Cloud pod `mr8uxlkhub0n6l` in US-CA-2, volume `sr-models-us-ca-2`.
+- **Hardware:** NVIDIA H200 (sm_90, 143771 MiB). Driver 580.178.04. Native
+  BF16.
 - **Image:** not the published `vllm-sr-cuda` image. RunPod
   `pytorch:1.0.2-cu1281-torch280-ubuntu2404` plus a venv with torch
   2.10.0+cu128, CUDA 12.8, Triton 3.6.0, fla-core 0.5.2, matching the CUDA
@@ -38,21 +38,46 @@ slots is enabled as exact on CUDA.
 | `residual_add` | Exact on 1024 / 2560 / 4096 (0 mismatches). |
 | `silu_mul` | Exact against the kernel's documented rounding (SiLU to BF16, then multiply). Not exact against ATen `silu` in FP32 then multiply: 1149524 / 4194304 mismatches on 4096×1024 (~27%), max abs 0.0625. |
 | `rotary_half` | Exact on query and key (`[2, 8, 64, 128]` views). |
-| `attn_prep` | Deterministic on repeat (0 mismatches vs a second launch). Not compared to an eager reference. |
+| `attn_prep` | 2026-10-12: deterministic on repeat (0 mismatches vs a second launch). Not compared to an eager reference on that day. |
 | `add_rmsnorm` | Hidden stream and normed BF16 output differ from ATen CUDA. The kernel sums in ATen's ROCm reduction order (64-lane wavefront, four accumulators), not CUDA's. On 4096×4096: 9019529 / 16777216 hidden mismatches, max abs 0.015625; 3357157 / 16777216 normed mismatches, max abs 0.125. |
 | `gated_rmsnorm` | Not exact: 136416 / 524288 mismatches on 4096×128, max abs 0.125. |
 | `sigmoid_gate` | Not exact: 34092 / 131072 mismatches, max abs 0.03125. The kernel rounds `libdevice.exp` sigmoid to BF16 before the multiply. |
-| `gdn_prep` | Launched and deterministic. No `causal-conv1d` reference, so not scored exact. |
+| `gdn_prep` | 2026-10-12: launched and deterministic. No `causal-conv1d` reference that day, so not scored exact. |
 
 ```text
 residual_add:        exact on all three shapes
 silu_mul.kernel_round: exact; silu_mul.aten: not exact
 rotary_half.q/k:     exact
 add_rmsnorm / gated_rmsnorm / sigmoid_gate: not exact
-gdn_prep:            deterministic; no causal-conv1d reference
-CUDAAccelerator.validated: false
-fused slots remain exact=False
+gdn_prep:            deterministic; no causal-conv1d reference that day
+fused slots remain exact=False (off the exact profile)
 ```
+
+## 2026-10-20 supplement (`gdn_prep` / `attn_prep`)
+
+Preserve the 12 October rows above. A later H200 follow-up compared the
+fused slots to eager references (`tools/gdn_prep_parity.py`,
+`tools/attn_prep_parity.py`). They do not enable either slot.
+
+- **`attn_prep` vs eager `attn_prep_ref`:** failed the shape set. Gated
+  Qwen3.5 shapes were exact; the ungated Qwen3 shape `1,8,4,2,128,128,0`
+  was not (q 1321/4096 mismatches, max abs 0.03125; k 716/2048, max abs
+  0.125). `passed: false`.
+- **`gdn_prep` vs `causal-conv1d`:** exact on the three shapes that JSON
+  recorded (`1,16,512,…`, `2,32,512,…`, `1,64,512,…`). The tool's default
+  longer shape (`1,65,2048,…`) is not in that file. The slot stays
+  unenabled because the rest of the fused decoder path is not exact and
+  item 4 requires exactness before enable.
+
+## Decision 3 CUDA FLA pins
+
+All six D3 entries in `registry/kernel_choices.json` currently contain
+ROCm choices only. Local CUDA choice dumps exist for `d3`, `d3-edge`,
+`d3-flash`, `d3-lite`, and `d3-nano`. They are not merged.
+
+The newer d3-mini workload emitted no autotune files; an older cache
+exists but remains unvalidated (`d3-mini.cache-validation.json`:
+`fit_for_release_pin: false`). Do not treat that cache as a release pin.
 
 ## FLA kernel choices (`cuda:sm_90`)
 
@@ -70,7 +95,7 @@ Decision 2.0 table in Python (`registry/tables/decision1.py`). Vela 2.0 0.8B /
 | Decision 2.0 Sol-2B | recorded |
 | Decision 2.0 Nox-4B | recorded |
 | Decision 2.0 Lux-9B | recorded |
-| Decision 2.0 Vega-27B | recorded on US-CA-2 volume `sr-models-us-ca-2` (pod `mr8uxlkhub0n6l`) |
+| Decision 2.0 Vega-27B | recorded |
 | Decision 1.0 Eos / Sol / Nox / Lux | same architecture as Decision 2.0 (Python copy) |
 | Vela 2.0 0.8B / 4B / 9B | Eos / Nox / Lux |
 
@@ -86,8 +111,9 @@ Vega-27B golden check on that capture: `checked: 3, matched: 3, reference: cuda`
 
 ## Coverage and checks
 
-- Registry: every Qwen3.5 decoder used by Decision 1.0, Decision 2.0 and
-  Vela 2.0 now resolves `cuda:sm_90` through `builtin.kernel_choices`.
+- Registry: Qwen3.5 decoders used by Decision 1.0, Decision 2.0 and
+  Vela 2.0 resolve `cuda:sm_90` through `builtin.kernel_choices`. Decision 3
+  does not.
 - CPU tests: `tests/test_vela2_registry.py`, `tests/test_readiness.py`,
   `tests/test_kernel_choices.py`, `tests/test_decision1_package.py`
   (`not gpu and not prod_weights`).
@@ -119,6 +145,6 @@ completion of the issue.
 Managed CUDA container serving, Decision 1.0 / 2.0 scored panels, Vela 2.0's
 scored request panel, the Vela 1.0 legacy path, performance vs the legacy or
 released runtime, and user-guide/design status remain outside this record.
-`gdn_prep` has no `causal-conv1d` reference compare. Other NVIDIA
-architectures (`sm_89`, Ampere) are not re-pinned here. The global CUDA
-`validated` flag remains false.
+Other NVIDIA architectures (`sm_89`, Ampere) are not re-pinned here. The
+global CUDA `validated` flag remains false for reasons outside this kernel
+record (see the Vela 2.0 0.3B p50 regression and coverage gaps).

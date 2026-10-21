@@ -137,7 +137,24 @@ The Router's own models (classifiers, embeddings, decision models) run in the
 [model runtime](model-runtime/overview.md). To run them on CUDA, use
 `--platform cuda`: the CUDA image ships the runtime with the CUDA build of
 PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
-CUDA support works but is not yet validated; measure it on your hardware.
+CUDA validation records cover the documented H200 workloads and a separate
+A100 comparison of Vela 1.0 against the CPU legacy runtime. D1 and D2
+performance results meet the recorded benchmark criteria. Vela 2.0 0.3B at
+32 tokens has an unresolved p50 regression. Fused kernels without
+bit-exact evidence remain excluded from the exact profile. Model coverage
+and measurement environments are in the source-tree records:
+
+- [CUDA image smoke](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-router-image.md)
+- [Goldens](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-golden-answers.md)
+- [Decision 1.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision1-performance.md)
+- [Decision 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision2-performance.md)
+- [Vela 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela2-performance.md)
+- [Vela 1.0 vs CPU legacy](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela1-performance.md)
+
+Do not treat this as issue completion, all-built-in coverage, universal
+NVIDIA validation, or performance of the published CUDA image from the
+separate RunPod benchmark stack. Measure other NVIDIA GPUs on your
+hardware.
 A stable CLI selects the matching published release image
 (for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
 use `:latest` unless an image is specified explicitly:
