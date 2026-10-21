@@ -44,34 +44,34 @@ def archive_image(path, architectures=("amd64",)):
 
 class ImageArtifactTests(unittest.TestCase):
     def test_hosted_loader_rejects_native_only_image_before_download(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with (
-                patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "image_artifacts.py",
-                        "load",
-                        "--images",
-                        '["vllm-sr-riscv64"]',
-                        "--directory",
-                        tmp,
-                    ],
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "image_artifacts.py",
+                    "load",
+                    "--images",
+                    '["vllm-sr-riscv64"]',
+                    "--directory",
+                    tmp,
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {"GITHUB_RUN_ID": "fixture", "GITHUB_REPOSITORY": "test/fixture"},
+            ),
+            patch.object(
+                images.subprocess,
+                "run",
+                side_effect=AssertionError(
+                    "native-only artifact must be rejected before download"
                 ),
-                patch.dict(
-                    os.environ,
-                    {"GITHUB_RUN_ID": "fixture", "GITHUB_REPOSITORY": "test/fixture"},
-                ),
-                patch.object(
-                    images.subprocess,
-                    "run",
-                    side_effect=AssertionError(
-                        "native-only artifact must be rejected before download"
-                    ),
-                ),
-            ):
-                with self.assertRaisesRegex(ValueError, "AMD64"):
-                    images.main()
+            ),
+            self.assertRaisesRegex(ValueError, "AMD64"),
+        ):
+            images.main()
 
     def test_gate_uses_declared_primary_platform_for_native_artifacts(self):
         for identity, architecture, accepted in (
