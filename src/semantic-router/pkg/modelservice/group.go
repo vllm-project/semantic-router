@@ -49,6 +49,10 @@ type group struct {
 	failedLoads int
 	restarts    int
 	everReady   bool
+	// generation counts the process starts this group has seen. A refresh
+	// that began in an earlier generation describes a process that is gone,
+	// so it commits nothing.
+	generation uint64
 }
 
 // servedModel is one model of a process and the deployments that call it.
@@ -162,6 +166,12 @@ func (g *group) everyReady() bool {
 func (g *group) refresh(ctx context.Context) {
 	probe, cancel := context.WithTimeout(ctx, healthTimeout)
 	defer cancel()
+	// The probe describes the process of this generation. A process that
+	// exits while the probe is in flight starts another one, and this
+	// refresh must not publish the exited process's health.
+	g.mu.Lock()
+	generation := g.generation
+	g.mu.Unlock()
 	health, err := g.client.health(probe)
 	if ctx.Err() != nil {
 		return
@@ -177,6 +187,12 @@ func (g *group) refresh(ctx context.Context) {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.generation != generation {
+		// The process exited while this probe was in flight. Its health and
+		// cards describe a process that is gone, so the next probe of the
+		// restarted process decides the state.
+		return
+	}
 	changed := false
 	for _, served := range g.models {
 		state, reason := "unreachable", ""
@@ -277,6 +293,9 @@ func (g *group) processExited(err error, ran time.Duration) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.restarts++
+	// A refresh that began before this exit describes the process that is
+	// gone; the generation tells it to commit nothing.
+	g.generation++
 	for _, served := range g.models {
 		served.ready.Store(false)
 		served.state = "restarting"
