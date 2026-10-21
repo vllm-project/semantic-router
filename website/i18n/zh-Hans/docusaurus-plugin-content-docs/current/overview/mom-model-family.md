@@ -91,13 +91,13 @@ MoM V1 提供五个内置配方。连接自己的后端，再选择适合 harnes
 
 | 公开模型 | 配方 | 决策 |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | **Balance**：兼顾日常质量、延迟和成本 | `simple`、`medium`、`reasoning` |
+| `vllm-sr/mom-v1-blend` | **Balance**：只在请求需要时投入推理 | `simple`、`medium`、`reasoning` |
 | `vllm-sr/mom-v1-lite` | **Cost**：经济处理，按需升级 | `economy`、`tools`、`reasoning` |
 | `vllm-sr/mom-v1-flash` | **Speed**：快速对话和流式输出 | `fast`、`tools`、`reasoning` |
 | `vllm-sr/mom-v1-ultra` | **Accuracy**：高质量回答和显式编排 | `simple`、`reasoning`、`review`、`agent` |
 | `vllm-sr/mom-v1-vault` | **Vault**：在指定的私有部署中处理请求 | `private`、`sensitive`、`guard` |
 
-Balance 综合任务难度、重要建议和回答纠错信号。Speed 与 Cost 使用更轻量的路由信号。Accuracy 通常选择一个强模型；独立评审和工作流需要明确的执行意图。长输入或领域标签本身不会触发多模型执行。
+Balance 用一次调用让路由器的决策模型回答五个路由问题：任务类型、需要多少推理、是否依赖精确事实、好的回答需要什么，以及用户是否在纠正上一轮回答。由这些回答得出的推理强度分数选择 `simple`、`medium` 或 `reasoning`；纠错和工具任务交给 `reasoning`，精确事实留在 `medium`。Speed 与 Cost 使用更轻量的路由信号。Accuracy 通常选择一个强模型；独立评审和工作流需要明确的执行意图。长输入或领域标签本身不会触发多模型执行。
 
 Vault 的每条路径都禁用客户端工具、记忆、响应缓存和新的 Responses 对象写入。回放采集单独配置且默认开启，详见 [Router Replay](../tutorials/plugin/router-replay)。`guard` 会直接拦截检测到的提示攻击。Safety 和 Hazard 将内容风险交给 `sensitive`，让已批准的模型提供负责任的帮助、解释风险材料，或拒绝有害协助。Hazard 使用模型发布的类别阈值。其他决策也需要分配满足隐私要求的后端；配方无法保证后端的物理位置或提供方的数据保留行为。
 
@@ -113,7 +113,7 @@ vllm-sr serve
 
 声明模型能力、输入输出限制，并为实际配置的推理强度提供对应质量指标。**Preview** 展示信号、决策和候选选择结果；上线前再发送真实请求，验证执行结果与延迟。
 
-策略版本 3.0 保留上表的决策名称，并将内容风险交给敏感请求模型池。升级前先验证新分配，再发布；已发布的旧版本保持不变。完整要求和数据处理策略见 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)。
+策略版本 4.0 保留上表的决策名称，Balance 的决策改由决策模型选择；Vault 仍将内容风险交给敏感请求模型池。升级前先验证新分配，再发布；已发布的旧版本保持不变。完整要求和数据处理策略见 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)。
 
 ## 何时 MoM 不是合适的抽象
 

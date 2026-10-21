@@ -236,7 +236,7 @@ and process deadlines. This can take longer to finish than two concurrent jobs.
 | `standalone-0` | Standalone `multi-objective` | 129 |
 | `standalone-1` | Standalone `balance`, `knowledge` | 87 |
 | `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 100 |
-| `built-in-latest-0` | Built-in latest `mom-v1` | 315 |
+| `built-in-latest-0` | Built-in latest `mom-v1` | 346 |
 
 All eight recipes remain. Weights count authored probe variants, not measured
 seconds. The heavy built-in recipe remains alone: its historical median job
