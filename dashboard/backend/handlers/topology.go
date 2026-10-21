@@ -27,9 +27,13 @@ const (
 
 // TestQueryRequest represents a test query request
 type TestQueryRequest struct {
-	Query string        `json:"query"`
-	Mode  TestQueryMode `json:"mode"`
-	Model string        `json:"model,omitempty"`
+	Query    string            `json:"query"`
+	Mode     TestQueryMode     `json:"mode"`
+	Model    string            `json:"model,omitempty"`
+	Recipe   string            `json:"recipe,omitempty"`
+	Messages []json.RawMessage `json:"messages,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	Tools    []json.RawMessage `json:"tools,omitempty"`
 }
 
 // MatchedSignal represents a matched signal
@@ -58,6 +62,9 @@ type EvaluatedRule struct {
 
 // TestQueryResult represents the test query result
 type TestQueryResult struct {
+	RequestedModel              string            `json:"requestedModel,omitempty"`
+	Recipe                      string            `json:"recipe,omitempty"`
+	Algorithm                   string            `json:"algorithm,omitempty"`
 	HTTPStatus                  int               `json:"-"`
 	EvalTrace                   json.RawMessage   `json:"evalTrace,omitempty"`
 	SignalErrors                map[string]string `json:"signalErrors,omitempty"`
@@ -102,8 +109,10 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string, credentialProvide
 			return
 		}
 
-		if strings.TrimSpace(req.Query) == "" {
-			http.Error(w, "Query cannot be empty", http.StatusBadRequest)
+		req.Model = strings.TrimSpace(req.Model)
+		req.Recipe = strings.TrimSpace(req.Recipe)
+		if strings.TrimSpace(req.Query) == "" && len(req.Messages) == 0 {
+			http.Error(w, "Query or messages are required", http.StatusBadRequest)
 			return
 		}
 
@@ -143,11 +152,14 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string, credentialProvide
 	}
 }
 
-// RouterIntentRequest is the request body for Router's /api/v1/diagnostics/classify/intent
+// RouterIntentRequest forwards the supported routing preview envelope unchanged.
 type RouterIntentRequest struct {
-	Text    string               `json:"text"`
-	Model   string               `json:"model,omitempty"`
-	Options *RouterIntentOptions `json:"options,omitempty"`
+	Text     string               `json:"text,omitempty"`
+	Messages []json.RawMessage    `json:"messages,omitempty"`
+	Metadata map[string]string    `json:"metadata,omitempty"`
+	Tools    []json.RawMessage    `json:"tools,omitempty"`
+	Model    string               `json:"model,omitempty"`
+	Options  *RouterIntentOptions `json:"options,omitempty"`
 }
 
 type RouterIntentOptions struct {
@@ -176,6 +188,7 @@ type RouterMatchedSignals struct {
 }
 
 type RouterEvalDecisionResult struct {
+	Algorithm           string                `json:"algorithm,omitempty"`
 	Confidence          *float64              `json:"confidence"`
 	ConfidenceAvailable *bool                 `json:"confidence_available,omitempty"`
 	DecisionName        string                `json:"decision_name"`
@@ -186,7 +199,9 @@ type RouterEvalDecisionResult struct {
 
 // RouterEvalResponse is the response from Router's /api/v1/routing/preview endpoint.
 type RouterEvalResponse struct {
-	Error *struct {
+	RequestedModel string `json:"requested_model,omitempty"`
+	Recipe         string `json:"recipe,omitempty"`
+	Error          *struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -217,12 +232,18 @@ func failedTestQueryResult(req TestQueryRequest, warning string, status int) *Te
 
 // callRouterAPI calls the real Router API and preserves its evaluation diagnostics.
 func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, configPath string, credentialProvider ...routerauth.CredentialProvider) *TestQueryResult {
+	if failure := validateTopologyScope(req, configPath); failure != nil {
+		return failure
+	}
 	ctx, cancel := context.WithTimeout(ctx, topologyPreviewTimeout(configPath))
 	defer cancel()
 	intentReq := RouterIntentRequest{
-		Text:    req.Query,
-		Model:   req.Model,
-		Options: &RouterIntentOptions{ReturnProbabilities: true},
+		Text:     req.Query,
+		Messages: req.Messages,
+		Metadata: req.Metadata,
+		Tools:    req.Tools,
+		Model:    req.Model,
+		Options:  &RouterIntentOptions{ReturnProbabilities: true},
 	}
 	reqBody, err := json.Marshal(intentReq)
 	if err != nil {
@@ -268,6 +289,9 @@ func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, conf
 		}
 		result := failedTestQueryResult(req, warning, status)
 		if decodeErr == nil && (routerResp.DecisionError != "" || len(routerResp.EvalTrace) > 0) {
+			if failure := verifyTopologyScope(req, &routerResp); failure != nil {
+				return failure
+			}
 			result = convertRouterResponse(req, &routerResp, configPath)
 			result.IsAccurate = false
 			result.HTTPStatus = status
@@ -280,6 +304,9 @@ func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, conf
 	if decodeErr != nil {
 		log.Printf("Failed to decode Router API preview: %v", decodeErr)
 		return failedTestQueryResult(req, "Failed to parse Router API response", http.StatusBadGateway)
+	}
+	if failure := verifyTopologyScope(req, &routerResp); failure != nil {
+		return failure
 	}
 	return convertRouterResponse(req, &routerResp, configPath)
 }
