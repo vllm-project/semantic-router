@@ -624,7 +624,7 @@ def _read_credential() -> str:
 
 
 def _container_status(name: str) -> str:
-    result = _run_raw(["inspect", "--format", "{{.State.Status}}", name])
+    result = _run_raw(["container", "inspect", "--format", "{{.State.Status}}", name])
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).lower()
         if any(
@@ -683,7 +683,7 @@ def _validate_storage_snapshot_isolation(snapshot: dict[str, Any]) -> None:
 
 
 def _inspect(name: str) -> dict[str, Any]:
-    result = _run_raw(["inspect", name])
+    result = _run_raw(["container", "inspect", name])
     if result.returncode != 0:
         raise TopologyReconcileError(
             f"managed container could not be inspected: {name}"

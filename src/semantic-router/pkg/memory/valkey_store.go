@@ -21,7 +21,7 @@ var errValkeyMemoryAlreadyExists = errors.New("valkey memory already exists")
 // ValkeyStore provides memory storage and retrieval using Valkey with the Search module.
 // Implements the Store interface with HASH-based storage and FT.SEARCH for vector similarity.
 type ValkeyStore struct {
-	client           *glide.Client
+	client           valkeyMemoryClient
 	config           config.MemoryConfig
 	valkeyConfig     *config.MemoryValkeyConfig
 	enabled          bool
@@ -33,6 +33,17 @@ type ValkeyStore struct {
 	metricType       string
 	dimension        int
 }
+
+// valkeyMemoryClient is the subset of Glide used by ValkeyStore. Keeping the
+// constructor's public client type concrete preserves its lifecycle contract.
+type valkeyMemoryClient interface {
+	CustomCommand(ctx context.Context, args []string) (any, error)
+	HGetAll(ctx context.Context, key string) (map[string]string, error)
+	HSet(ctx context.Context, key string, fields map[string]string) (int64, error)
+	Del(ctx context.Context, keys []string) (int64, error)
+}
+
+var _ valkeyMemoryClient = (*glide.Client)(nil)
 
 // ValkeyStoreOptions contains configuration for creating a ValkeyStore.
 type ValkeyStoreOptions struct {
@@ -308,11 +319,7 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 	}
 
 	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
-		}
-		go v.recordRetrievalBatch(ids)
+		go v.recordRetrievalBatch(retrieveResultIDs(results))
 	}
 
 	return results
@@ -521,8 +528,10 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 	memory.UpdatedAt = time.Now()
 
 	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
+	var existing *Memory
 	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
-		existing, err := v.Get(ctx, id)
+		var err error
+		existing, err = v.Get(ctx, id)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("memory not found: %s", id)
@@ -530,12 +539,16 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 		if memory.CreatedAt.IsZero() {
 			memory.CreatedAt = existing.CreatedAt
 		}
-		if len(memory.Embedding) == 0 {
-			memory.Embedding = existing.Embedding
-		}
 	}
+	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, v.embeddingConfig)
+	if err != nil {
+		status = "error"
+		return err
+	}
+	writeMemory := *memory
+	writeMemory.Embedding = embedding
 
-	err := v.upsert(ctx, memory)
+	err = v.upsert(ctx, &writeMemory)
 	if err != nil {
 		status = "error"
 		return err

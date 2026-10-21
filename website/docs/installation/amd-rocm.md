@@ -279,7 +279,7 @@ benchmark rather than these configurations.
 
 | Setting | Paper benchmark | Current setting |
 | --- | --- | --- |
-| Router models | Three mmBERT-32K classifier sessions (270M parameters, FP16) for domain, jailbreak and PII | Vela AMD recipe: ten Vela 1.0 307M task models in the model runtime's exact FP32 profile; Domain, Guard and PII cover those three tasks |
+| Router models | Three mmBERT-32K classifier sessions (270M parameters, FP16) for domain, jailbreak and PII | Vela AMD recipe: ten Vela 1.0 307M task models at FP32 in the model runtime; Domain, Guard and PII cover those three tasks |
 | Execution | ONNX Runtime ROCm with CK Flash Attention for all three classifiers | PyTorch for ROCm in the model runtime; the request's model work arrives in one bundled call |
 | Prompt compression | On, with a 512-token budget | Off by default and in the Vela AMD recipe. The reference config enables it with `max_tokens: 4096` |
 | Weights for TextRank, position, TF-IDF and novelty | 0.20, 0.40, 0.35, 0.05 | Reference config: 0.4, 0.2, 0.3, 0.1 |

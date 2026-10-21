@@ -47,7 +47,6 @@ func TestDecisionMediaWireAndIdentity(t *testing.T) {
 func TestDecisionMediaFusedStates(t *testing.T) {
 	client := &Client{}
 	client.bundleTasks.Store(64)
-	client.apiMinor.Store(3)
 	var calls []*bundleCall
 	for i, media := range []string{"a", "b", "a"} {
 		id := []string{"q1", "q2", "q3"}[i]
@@ -112,7 +111,6 @@ func TestDecisionMediaCardValidation(t *testing.T) {
 func TestDecisionMediaFusionRespectsSerializedLimit(t *testing.T) {
 	client := &Client{}
 	client.bundleTasks.Store(64)
-	client.apiMinor.Store(3)
 	var calls []*bundleCall
 	for _, id := range []string{"a", "b"} {
 		r := Request{State: id, Images: []string{strings.Repeat(id, 500)}, Questions: []Question{choiceQuestion("q")}}

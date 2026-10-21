@@ -262,7 +262,7 @@ An uncalibrated rule can inspect these observations:
 | Field | Meaning |
 | --- | --- |
 | `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)` |
-| `confidence` | The confidence reported by the native model, when present |
+| `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/next/model-runtime/reference#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
 | `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin |
 
 Predicates use `gt`, `gte`, `lt`, or `lte`, with bounds in `[0, 1]`. A rule can target a `question_type`, a named `question`, or both, and optionally a named `state`. All required answers need rule coverage. A stage-local `accept` rule adds a condition; it cannot weaken the algorithm's common quality rule.
@@ -277,7 +277,7 @@ To prepare a `systemone-calibration/v1` artifact:
 
 1. Freeze the task's question instructions, criteria and inference options, the policy, and each probability bin's acceptance decision. Input text can vary; changing a question creates a different task template. `options.return_meta` controls evidence visibility and does not change the task identity.
 2. Collect a fresh certification cohort independently from training and threshold selection. Count source bundles, rather than their questions or augmented copies. The statistical assumption is i.i.d. draws from the declared conditional population; a stratified benchmark average does not automatically satisfy it.
-3. Record the full native arrival history and actual model identity from each response. The runtime checks the model, revision, content hash, engine, profile, numerics and accelerator. A model name alone is insufficient.
+3. Record the full native arrival history and actual model identity from each response. The runtime checks the model, revision, content hash, engine, dtype, numerics and accelerator. A model name alone is insufficient.
 4. Record bundle-error counts in each frozen bin and retain the source manifest, labeling rules and gate-definition digest for audit. A bundle is erroneous when any required answer fails the cohort's predeclared correctness rule. The artifact's `certification` identifies this evaluated population and declares the independent sampling method.
 
 The runtime computes a one-sided Clopper–Pearson upper bound from the counts, with a Bonferroni correction across all declared bins. Every predeclared accepting bin must meet `max_risk`, or loading fails. Counts cannot turn a previously rejecting bin into an accepting bin: doing so would change the arrival population of later stages. An unvisited bin can have zero samples only when it remains rejecting.

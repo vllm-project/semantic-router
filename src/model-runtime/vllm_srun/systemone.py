@@ -13,6 +13,7 @@ the options into their own prompt formats.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,13 +23,22 @@ from .registry.artifacts import canonical_json
 MIN_OPTIONS = 2
 MAX_OPTIONS = 255
 QUESTION_TYPES = ("choice", "noul", "score")
+# Questions that locate what their instructions describe: in an image (box), at a moment of a video (box
+# with ``at``), or at every sampled moment of a video (track).
+BOX_TYPES = ("box", "track")
+# A track's updates per second (``rate``), the default first.
+TRACK_RATES = (1, 2)
 MIN_LEVELS, MAX_LEVELS = 2, 10
 NOUL_KEYS = ("false", "true")
 FIELDS = {
     "choice": frozenset({"type", "instructions", "criteria", "choices"}),
     "noul": frozenset({"type", "instructions", "criteria", "choices"}),
     "score": frozenset({"type", "instructions", "criteria", "levels"}),
+    "box": frozenset({"type", "instructions", "at"}),
+    "track": frozenset({"type", "instructions", "rate"}),
 }
+# What a question without instructions asks (System One lets Choice, Score and a described Noul omit them).
+DEFAULT_INSTRUCTIONS = "Choose the best matching option."
 
 
 canonical = canonical_json
@@ -154,15 +164,31 @@ def read_question(
         raise _invalid("a question must be an object")
     kind = question.get("type")
     if kind not in QUESTION_TYPES:
-        raise _invalid(f"type must be one of {list(QUESTION_TYPES)}")
+        raise QuestionError(
+            INVALID_QUESTION,
+            f"type must be one of {list(QUESTION_TYPES)}",
+            reason="type_unsupported",
+        )
     require_full_input(question)
     unknown = set(question) - FIELDS[kind] - extra_fields - {"require_full_input"}
     if unknown:
         raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
-    if "instructions" not in question:
-        raise _invalid("instructions is required")
-    instructions = content(question["instructions"], "instructions")
     criteria = question.get("criteria")
+    if question.get("instructions") is None:
+        described = isinstance(criteria, dict) and any(
+            value is not None for value in criteria.values()
+        )
+        listed = isinstance(question.get("choices"), list) and any(
+            isinstance(option, dict) and option.get("description") is not None
+            for option in question["choices"]
+        )
+        if kind == "noul" and not (described or listed):
+            raise _invalid(
+                "a noul question needs instructions or criteria describing an outcome"
+            )
+        instructions: Any = DEFAULT_INSTRUCTIONS
+    else:
+        instructions = content(question["instructions"], "instructions")
     superset = "levels" if kind == "score" else "choices"
     if question.get(superset) is not None:
         if criteria is not None:
@@ -191,6 +217,83 @@ def read_question(
         }
         return Question(kind, instructions, given)
     return Question(kind, instructions, named_options(criteria))
+
+
+@dataclass(frozen=True)
+class BoxQuestion:
+    """One valid box or track question: its type, instructions, ``at`` for a box at a moment of a video and
+    ``rate`` for a track."""
+
+    kind: str
+    instructions: Any
+    at: float | None = None
+    rate: int | None = None
+
+
+def read_box(question: Any) -> BoxQuestion:
+    """Validate a box or track question; raises ``QuestionError(invalid_question)``."""
+    if not isinstance(question, dict) or question.get("type") not in BOX_TYPES:
+        raise _invalid(f"type must be one of {list(BOX_TYPES)}")
+    kind = question["type"]
+    unknown = set(question) - FIELDS[kind]
+    if unknown:
+        raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
+    if question.get("instructions") is None:
+        raise _invalid(f"a {kind} question needs instructions: what to locate")
+    instructions = content(question["instructions"], "instructions")
+    at = question.get("at")
+    if at is not None and (
+        isinstance(at, bool)
+        or not isinstance(at, (int, float))
+        or not math.isfinite(at)
+        or at < 0
+    ):
+        raise _invalid(
+            "at must be a number of seconds from the start of the video, at least 0"
+        )
+    return BoxQuestion(
+        kind,
+        instructions,
+        None if at is None else float(at),
+        track_rate(question) if kind == "track" else None,
+    )
+
+
+def track_rate(question: dict[str, Any]) -> int:
+    """A track question's ``rate``: 1 or 2 updates per second, 1 when absent or null; raises ``QuestionError``."""
+    rate = question.get("rate")
+    if rate is None:
+        return TRACK_RATES[0]
+    if (
+        isinstance(rate, bool)
+        or not isinstance(rate, (int, float))
+        or rate not in TRACK_RATES
+    ):
+        raise _invalid(
+            f"rate must be {TRACK_RATES[0]} or {TRACK_RATES[1]} updates per second"
+        )
+    return int(rate)
+
+
+def choice_confidence(probabilities: Sequence[float]) -> float:
+    """System One's Choice confidence: how far the top probability sits above an even split, 0 to 1."""
+    count = len(probabilities)
+    if count <= 1:
+        return 1.0
+    value = (max(probabilities) - 1 / count) / (1 - 1 / count)
+    return max(0.0, min(1.0, value))
+
+
+def score_confidence(probabilities: Sequence[float]) -> float:
+    """System One's Score confidence: the spread around the most likely level against an even spread's, 0 to 1."""
+    count = len(probabilities)
+    if count <= 1:
+        return 1.0
+    values = list(probabilities)
+    mode = values.index(max(values))
+    spread = sum(p * abs(level - mode) for level, p in enumerate(values))
+    even = sum(abs(level - (count - 1) / 2) for level in range(count)) / count
+    return max(0.0, min(1.0, 1 - spread / even))
 
 
 def named_options(criteria: Any, minimum: int = MIN_OPTIONS) -> dict[str, Any]:

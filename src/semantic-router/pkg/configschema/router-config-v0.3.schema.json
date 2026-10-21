@@ -572,6 +572,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "openai_compat_gateway": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -876,16 +879,14 @@
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              },
-              "profile": "exact"
+              }
             },
             "primary": {
               "artifact": "vllm-sr/Vela-2.0-0.3B",
               "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
               "provider": "model_runtime",
               "device": "cpu",
-              "input": {},
-              "profile": "max_speed"
+              "input": {}
             }
           }
         },
@@ -2544,6 +2545,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "masking"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/MaskingPluginConfig"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -2554,6 +2574,7 @@
             "fast_response",
             "hallucination",
             "header_mutation",
+            "masking",
             "memory",
             "prompt_cache",
             "rag",
@@ -2909,7 +2930,7 @@
           "type": "string"
         },
         "llm_timeout_seconds": {
-          "type": "integer"
+          "type": "number"
         },
         "parser_type": {
           "type": "string"
@@ -3649,6 +3670,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3814,6 +3838,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "max_deadline_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4063,6 +4090,30 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "placeholders": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -4660,8 +4711,20 @@
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },
-        "profile": {
+        "max_num_seqs": {
+          "type": "integer"
+        },
+        "max_num_batched_tokens": {
+          "type": "integer"
+        },
+        "batch_window_ms": {
+          "type": "number"
+        },
+        "dtype": {
           "type": "string"
+        },
+        "enable_shared_context": {
+          "type": "boolean"
         },
         "endpoint": {
           "type": "string"
@@ -4727,6 +4790,9 @@
           "type": "number"
         },
         "cache_write_per_1m": {
+          "type": "number"
+        },
+        "cache_write_1h_per_1m": {
           "type": "number"
         }
       },
@@ -7407,6 +7473,9 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        },
+        "trusted_facts": {
+          "$ref": "#/$defs/TrustedFactsConfig"
         }
       },
       "additionalProperties": false,
@@ -7518,6 +7587,33 @@
         },
         "rate": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TrustedFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "enforcement": {
+          "type": "string"
+        },
+        "trust_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness_seconds": {
+          "type": "integer"
+        },
+        "stage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -8478,6 +8574,12 @@
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
         "schema_ref": "#/$defs/ShadowDispatchPluginConfig"
+      },
+      {
+        "type": "masking",
+        "display_name": "Masking",
+        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],
     "projections": [

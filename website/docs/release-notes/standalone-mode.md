@@ -159,8 +159,9 @@ saved routing configuration. Mode is selected at startup, not in Dashboard.
   and the listener's API keys. Chat model permissions stay separate.
 - Configure listener addresses and ports, multiple logical deployments and
   replicas in the canonical `--config` document.
-- Positional MODEL, `--revision`, `--runtime-profile`, `-dp` and `--device-ids`
-  configure the default judgment deployment without changing listener grants.
+- Positional MODEL, `--revision`, the engine flags (such as `--max-num-seqs`
+  and `--dtype`), `-dp` and `--device-ids` configure the default judgment
+  deployment without changing listener grants.
 - Worker-level APIs such as classify, embeddings and rerank remain on
   `vllm-srun`; they are not automatically public frontend endpoints.
 
