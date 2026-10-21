@@ -9,6 +9,10 @@ prefix a KV cache could serve. Reported:
   sub_first  a subagent's first call against the parent's stream and against earlier sibling subagents
   sub_later  a subagent's later calls against that subagent's own earlier calls
   gaps       requests that arrive after an idle gap longer than a cache TTL on their own stream
+  low_reuse  main-agent turns that reuse under half their prompt: after a model change, short calls, the first
+             long turn, a restart (the prompt at most halves against the conversation so far and the next turn
+             continues it, which is how a history compaction or a cleared conversation looks, and block ids
+             cannot tell the two apart), and other
 
 plus the share of tokens subagents carry and the models each stream used. No inference, standard library
 only. The traces are fetched at a pinned revision and never committed.
@@ -35,6 +39,8 @@ REVISION = "8a5df339ba3c31a48dd79a2f5ceb81e08679266b"
 TRACES_FILE = "traces.jsonl"
 TRACES_SHA256 = "954157040cbae47fef3bec70532bdb3406c75ed894e207e502461d70fa06639c"
 NEAR_FULL_SHARE = 0.9
+RESTART_MIN_TOKENS = 4096
+LOW_REUSE_KINDS = ("model_change", "short", "first_long", "restart", "other")
 
 
 def lead(blocks, seen):
@@ -59,22 +65,58 @@ def flatten(trace):
     return sorted(out, key=lambda r: r["t"])
 
 
+def low_reuse_kind(request, following, previous_model, previous_length):
+    """Why a main-agent turn reuses under half its prompt, as far as models and block ids can tell."""
+    blocks = request["hash_ids"]
+    n = len(blocks)
+    if request.get("model") != previous_model:
+        return "model_change"
+    if n * BLOCK < RESTART_MIN_TOKENS:
+        return "short"
+    if not previous_length:
+        return "first_long"
+    if (
+        n <= previous_length / 2
+        and following is not None
+        and lead(following, set(blocks)) >= NEAR_FULL_SHARE * n
+    ):
+        return "restart"
+    return "other"
+
+
 def analyse(trace, ttls):
     """Per-request observations for one trace."""
     rows = collections.defaultdict(list)
     main_seen = set()
     sub_seen = collections.defaultdict(set)
     last_end = {}
-    for request in flatten(trace):
+    requests = flatten(trace)
+    main_calls = [r for r in requests if r["stream"][0] == "main" and r.get("hash_ids")]
+    following = {id(a): b["hash_ids"] for a, b in zip(main_calls, main_calls[1:])}
+    main_model, main_length = None, 0
+    for request in requests:
         blocks = request.get("hash_ids") or []
         if not blocks:
             continue
         kind, agent = request["stream"]
         n = len(blocks)
         if kind == "main":
+            kind_of_drop = None
             if main_seen:
-                rows["main"].append((lead(blocks, main_seen), n))
+                cached = lead(blocks, main_seen)
+                rows["main"].append((cached, n))
+                if cached < 0.5 * n:
+                    kind_of_drop = low_reuse_kind(
+                        request, following.get(id(request)), main_model, main_length
+                    )
+                    rows["low_reuse"].append((kind_of_drop, cached, n))
             main_seen.update(blocks)
+            main_model = request.get("model")
+            # The conversation's length ignores side calls under half of it, and a restart starts it over.
+            if n * BLOCK >= RESTART_MIN_TOKENS and (
+                n >= main_length / 2 or kind_of_drop == "restart"
+            ):
+                main_length = n
             stream = "main"
         else:
             own = sub_seen[agent]
@@ -108,13 +150,15 @@ def summarise(traces, ttls=(300.0, 3600.0)):
     """Aggregate the observations of every trace into the reported numbers."""
     rows = collections.defaultdict(list)
     n_traces = with_subagents = 0
-    subagent_groups = 0
+    subagent_groups = with_restart = 0
     for trace in traces:
         n_traces += 1
         groups = sum(1 for r in trace["requests"] if r.get("type") == "subagent")
         with_subagents += bool(groups)
         subagent_groups += groups
-        for key, values in analyse(trace, ttls).items():
+        observed = analyse(trace, ttls)
+        with_restart += any(k == "restart" for k, _, _ in observed["low_reuse"])
+        for key, values in observed.items():
             rows[key].extend(values)
 
     main, first, later = rows["main"], rows["sub_first"], rows["sub_later"]
@@ -151,7 +195,19 @@ def summarise(traces, ttls=(300.0, 3600.0)):
         "models_sub": collections.Counter(rows["model_sub"]).most_common(4),
         "requests": requests,
         "idle_gaps": {},
+        "main_low_reuse": {},
+        "traces_with_restart": with_restart,
     }
+    uncached = sum(n - c for c, n in main)
+    for kind in LOW_REUSE_KINDS:
+        picked = [(c, n) for k, c, n in rows["low_reuse"] if k == kind]
+        report["main_low_reuse"][kind] = {
+            "turns": len(picked),
+            "uncached_token_share": sum(n - c for c, n in picked) / max(1, uncached),
+            "median_cached_prefix_tokens": (
+                statistics.median(c for c, _ in picked) * BLOCK if picked else 0
+            ),
+        }
     for ttl in ttls:
         gaps = rows[("gap", ttl)]
         report["idle_gaps"][str(int(ttl))] = {
@@ -219,6 +275,12 @@ def _print(report):
             f"after an idle gap over {ttl} s: {row['requests']} of {report['requests']} requests ({row['request_share']:.3f}), "
             f"median prompt {row['median_prompt_tokens']:.0f} tokens, {row['input_token_share']:.3f} of input tokens"
         )
+    for kind, row in report["main_low_reuse"].items():
+        print(
+            f"main turns reusing under half their prompt, {kind}: {row['turns']} turns, "
+            f"{row['uncached_token_share']:.3f} of main uncached tokens, median cached prefix {row['median_cached_prefix_tokens']:.0f} tokens"
+        )
+    print(f"traces with a restart {report['traces_with_restart']}")
 
 
 def main(argv=None):

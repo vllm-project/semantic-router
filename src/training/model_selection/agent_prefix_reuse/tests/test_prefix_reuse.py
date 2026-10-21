@@ -105,6 +105,36 @@ class PrefixArithmeticTest(unittest.TestCase):
         self.assertEqual(report["traces_with_subagents"], 1)
         self.assertEqual(report["subagent_groups"], 1)
 
+    def test_low_reuse_turns_split_into_model_change_restart_and_other(self):
+        restart = list(range(50)) + list(range(1000, 1070))
+        calls = [
+            call(0, [0]),
+            call(1, list(range(200))),  # first long turn after a short one
+            call(2, list(range(300))),
+            call(3, [5000, 5001]),  # a short side call
+            call(4, list(range(4000, 4100))),  # a long side call under half of 300
+            call(5, restart),  # keeps 50 of 120 blocks, under half of 300
+            call(6, restart + list(range(1070, 1080))),
+            call(7, list(range(2000, 2100)), model="x"),
+        ]
+        report = prefix_reuse.summarise([{"requests": calls}], ttls=())
+        low = report["main_low_reuse"]
+        self.assertEqual(
+            [low[k]["turns"] for k in prefix_reuse.LOW_REUSE_KINDS], [1, 1, 1, 1, 1]
+        )
+        self.assertEqual(
+            low["restart"]["median_cached_prefix_tokens"], 50 * prefix_reuse.BLOCK
+        )
+        # Uncached blocks: 199 + 100 + 2 + 100 + 70 + 10 + 100.
+        self.assertAlmostEqual(low["restart"]["uncached_token_share"], 70 / 581)
+        self.assertEqual(report["traces_with_restart"], 1)
+
+        # A shorter prompt the next turn does not continue is not a restart.
+        calls[6] = call(6, list(range(3000, 3130)))
+        report = prefix_reuse.summarise([{"requests": calls}], ttls=())
+        self.assertEqual(report["main_low_reuse"]["restart"]["turns"], 0)
+        self.assertEqual(report["traces_with_restart"], 0)
+
     def test_report_cli_reads_jsonl_and_verify_rejects_a_wrong_digest(self):
         trace = {"requests": [call(0, [1, 2]), call(10, [1, 2, 3])]}
         with tempfile.TemporaryDirectory() as tmp:

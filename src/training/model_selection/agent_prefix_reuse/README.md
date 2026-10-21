@@ -42,6 +42,12 @@ python prefix_reuse.py report /tmp/sa-traces/traces.jsonl --json
 | Subagent share of input and output tokens | 0.100 and 0.098 |
 | Requests after more than 5 minutes idle on their stream | 1,511 of 93,994 (1.6%), median prompt 185,728 tokens, 2.6% of input tokens |
 | Requests after more than 1 hour idle | 341 (0.4%), median prompt 220,160 tokens, 0.6% of input tokens |
+| Main turns reusing under half their prompt | 3,995, carrying 0.400 of the main agent's uncached tokens |
+| of which after a model change | 675 turns, 0.032 of uncached tokens |
+| of which short calls under 4,096 tokens | 1,863 turns, 0.020 |
+| of which the first long turn of a session | 267 turns, 0.048 |
+| of which restarts | 56 turns in 37 sessions, 0.015, median cached prefix 21,888 tokens |
+| of which other | 1,134 turns, 0.286 |
 
 Calls by model: main agents 67,769 on claude-opus-4-8, 4,726 on claude-haiku-4-5, 3,388 on
 claude-opus-4-6 and 1,355 on claude-opus-4-7. Subagents 5,343, 4,795, 3,451 and 1,111 on the same models.
@@ -55,6 +61,10 @@ claude-opus-4-6 and 1,355 on claude-opus-4-7. Subagents 5,343, 4,795, 3,451 and 
   prompt, so subagents of one run belong on one model, or on a shared cache pool.
 - Subagents carry a tenth of the tokens, which bounds what routing them alone can save.
 - Cold resumes are rare by count, but each reloads a long prefix, which is where an offloaded KV tier pays.
+- A restart is a turn whose prompt is at most half of the conversation so far and that the next turn
+  continues, which is how a history compaction or a cleared conversation looks. Block ids cannot tell the
+  two apart, and restarts carry 1.5% of the main agent's uncached tokens, so neither is where these
+  sessions lose their prefix. The other low-reuse turns are not explained by the block ids either.
 
 The Coding Agents Through the Router proposal cites these numbers.
 
