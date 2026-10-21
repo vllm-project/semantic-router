@@ -113,15 +113,18 @@ class NativeBuildPlanTests(unittest.TestCase):
                     self.assertEqual(
                         Path(command[1]), SCRIPT.parents[2] / "ci/image_artifacts.py"
                     )
-                    with patch.object(sys, "argv", command[1:]), patch.dict(
-                        os.environ, kwargs["env"]
+                    with (
+                        patch.object(sys, "argv", command[1:]),
+                        patch.dict(os.environ, kwargs["env"]),
                     ):
                         images.main()
 
-            with patch.object(
-                module.subprocess, "run", side_effect=external
-            ), patch.object(images, "source_sha", return_value="a" * 40), patch.object(
-                module, "require_clean_source", return_value="a" * 40, create=True
+            with (
+                patch.object(module.subprocess, "run", side_effect=external),
+                patch.object(images, "source_sha", return_value="a" * 40),
+                patch.object(
+                    module, "require_clean_source", return_value="a" * 40, create=True
+                ),
             ):
                 module.export_artifact(
                     "router:test", directory, "pr", "test", ["BASE_IMAGE=pinned"]
@@ -137,24 +140,45 @@ class NativeBuildPlanTests(unittest.TestCase):
             directory = Path(tmp)
             original = directory / "image.tar"
             original.write_bytes(b"existing")
-            with patch.object(
-                module, "require_clean_source", return_value="a" * 40, create=True
-            ), self.assertRaisesRegex(ValueError, "already contains"):
+            with (
+                patch.object(
+                    module, "require_clean_source", return_value="a" * 40, create=True
+                ),
+                self.assertRaisesRegex(ValueError, "already contains"),
+            ):
                 module.export_artifact("router:test", directory, "pr", "test", [])
             self.assertEqual(original.read_bytes(), b"existing")
+
+    def test_native_export_uses_the_selected_docker_daemon(self):
+        module = self.native_module()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.dict(os.environ, {"DOCKER_HOST": "unix:///test/docker.sock"}),
+            patch.object(module, "require_clean_source", return_value="a" * 40),
+            patch.object(module.subprocess, "run") as external,
+        ):
+            module.export_artifact("router:test", Path(tmp), "pr", "test", [])
+            command = external.call_args_list[0].args[0]
+            self.assertEqual(
+                command[:4],
+                ["skopeo", "copy", "--src-daemon-host", "unix:///test/docker.sock"],
+            )
+            self.assertEqual(command[4], "docker-daemon:router:test")
 
     def test_failed_native_export_does_not_seal_a_manifest(self):
         module = self.native_module()
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            with patch.object(
-                module.subprocess,
-                "run",
-                side_effect=subprocess.CalledProcessError(1, "skopeo"),
-            ), patch.object(
-                module, "require_clean_source", return_value="a" * 40, create=True
-            ), self.assertRaises(
-                subprocess.CalledProcessError
+            with (
+                patch.object(
+                    module.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, "skopeo"),
+                ),
+                patch.object(
+                    module, "require_clean_source", return_value="a" * 40, create=True
+                ),
+                self.assertRaises(subprocess.CalledProcessError),
             ):
                 module.export_artifact("router:test", directory, "pr", "test", [])
             self.assertFalse((directory / "manifest.json").exists())

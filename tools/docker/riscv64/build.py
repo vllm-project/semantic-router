@@ -35,10 +35,16 @@ def export_artifact(image, directory, mode, tag, build_args, source_revision=Non
     directory.mkdir(parents=True, exist_ok=True)
     if any((directory / name).exists() for name in ("image.tar", "manifest.json")):
         raise ValueError("artifact directory already contains an image or manifest")
+    source_options = (
+        ["--src-daemon-host", os.environ["DOCKER_HOST"]]
+        if os.environ.get("DOCKER_HOST")
+        else []
+    )
     subprocess.run(
         [
             "skopeo",
             "copy",
+            *source_options,
             "docker-daemon:" + image,
             "oci-archive:" + str(directory / "image.tar"),
         ],
