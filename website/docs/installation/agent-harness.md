@@ -180,6 +180,12 @@ decides much of a call's latency and cost, and three things lose it.
   backend, such as LMCache for vLLM, returns those prefixes instead of computing
   them again.
 
+The harness can also start the prompt over itself. When it compacts its history,
+replacing earlier turns with a summary to stay within the context window, the
+backend computes most of the new prompt again on the same model and replica.
+The Router neither causes nor prevents this, so a drop in prefix reuse right
+after a compaction is not a routing or placement fault.
+
 Leave cross-model KV transfer (`global.integrations.kv_transfer`) off for agent
 entrypoints. The receiving model must serve with prefix caching disabled, and
 the [connector](https://github.com/vllm-project/semantic-router/tree/main/src/kv_connector)
