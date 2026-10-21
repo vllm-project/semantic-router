@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -90,7 +91,7 @@ func TestPublicSystemOneChecksOptionsBeforeAModelReadsThem(t *testing.T) {
 	forwarded = nil
 	for body, message := range map[string]string{
 		`{"model":"vllm-sr/test","options":{"profile":"exact"}}`:        "options.profile was removed: batching and numerics are the deployment's engine arguments (max_num_seqs, max_num_batched_tokens, batch_window_ms, enable_shared_context, dtype)",
-		`{"model":"vllm-sr/test","options":{"verbose":true}}`:           "options.verbose is not a System One option; the options are deadline_ms, max_tokens and return_meta",
+		`{"model":"vllm-sr/test","options":{"verbose":true}}`:           "options.verbose is not a System One option; the options are deadline_ms, long_context, max_tokens and return_meta",
 		`{"model":"vllm-sr/test","options":{"max_tokens":0}}`:           "options.max_tokens must be an integer of at least 1",
 		`{"model":"vllm-sr/test","options":"fast"}`:                     "options must be an object",
 		`{"model":"vllm-sr/test","options":{},"options":{"profile":1}}`: "options may appear only once",
@@ -254,6 +255,101 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus ||
 			got.Error.Code != test.wantCode || got.Error.Message != test.wantMessage || strings.Contains(response.Body.String(), "private") {
 			t.Fatalf("runtime %d %s => %d %s", test.status, test.body, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestPublicNativeRequestTokenRefusalsCarryTheLimit(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	for _, test := range []struct {
+		body        string
+		wantLimit   *int
+		wantMessage string
+	}{
+		{
+			`{"error":{"code":"invalid_request","reason":"request_tokens","limit":262144,"message":"/private/models/test: 300000 tokens"}}`,
+			func() *int { limit := 262144; return &limit }(),
+			"the request has more tokens than the model reads (at most 262,144: the state once and every question's own)",
+		},
+		{`{"error":{"code":"invalid_request","reason":"request_tokens","message":"x"}}`, nil, "the request has more tokens than the model reads"},
+		{`{"error":{"code":"invalid_request","reason":"image_too_large","limit":16777216,"message":"x"}}`, nil, "image exceeds 16,777,216 bytes"},
+	} {
+		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+			return http.StatusBadRequest, []byte(test.body), nil
+		})
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+		var got struct {
+			Error struct {
+				Code, Reason, Message string
+				Limit                 *int
+			} `json:"error"`
+		}
+		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != http.StatusBadRequest || got.Error.Code != "invalid_request" ||
+			got.Error.Message != test.wantMessage || (got.Error.Limit == nil) != (test.wantLimit == nil) ||
+			(test.wantLimit != nil && *got.Error.Limit != *test.wantLimit) || strings.Contains(response.Body.String(), "private") {
+			t.Fatalf("runtime %s => %d %s", test.body, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	twoMinutes, tenSeconds := 120_000, 10_000
+	for _, test := range []struct {
+		maxDeadlineMs *int
+		options       string
+		want          time.Duration
+	}{
+		{nil, ``, 30 * time.Second},
+		{nil, `,"options":{"deadline_ms":5000}`, 30 * time.Second},
+		{nil, `,"options":{"long_context":true,"deadline_ms":120000}`, 2 * time.Minute},
+		{nil, `,"options":{"deadline_ms":1e12}`, 10 * time.Minute},
+		{nil, `,"options":{"long_context":true}`, 10 * time.Minute},
+		{nil, `,"options":{"long_context":false}`, 30 * time.Second},
+		{nil, `,"options":{"long_context":true,"deadline_ms":5000}`, 30 * time.Second},
+		{&twoMinutes, `,"options":{"deadline_ms":90000}`, 90 * time.Second},
+		{&twoMinutes, `,"options":{"deadline_ms":1e12}`, 2 * time.Minute},
+		{&twoMinutes, `,"options":{"long_context":true}`, 2 * time.Minute},
+		{&tenSeconds, ``, 10 * time.Second},
+		{&tenSeconds, `,"options":{"deadline_ms":120000}`, 10 * time.Second},
+	} {
+		listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}, MaxDeadlineMs: test.maxDeadlineMs}}
+		var wait time.Duration
+		handler := Handler(cfg, listener, func(ctx context.Context, _ string, _ json.RawMessage) (int, []byte, error) {
+			deadline, _ := ctx.Deadline()
+			wait = time.Until(deadline)
+			return 200, []byte(`{"model":"private","answers":{"q":{"type":"noul","noul":0.5}}}`), nil
+		})
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"`+test.options+`}`)))
+		if response.Code != 200 || wait > test.want || wait < test.want-time.Second {
+			t.Fatalf("limit %s, options %q: %d, waited %s, want %s", listener.SystemOne.MaxDeadline(), test.options, response.Code, wait, test.want)
+		}
+	}
+}
+
+func TestPublicNativeDeadlineSaysHowToWaitLonger(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+		return 0, nil, context.DeadlineExceeded
+	})
+	for options, want := range map[string]string{
+		``:                                 "no answer within 30s; options.deadline_ms waits longer, up to this listener's systemone.max_deadline_ms (600000 ms)",
+		`,"options":{"long_context":true}`: "no answer within 10m0s, this listener's systemone.max_deadline_ms",
+	} {
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"`+options+`}`)))
+		var got struct {
+			Error struct{ Code, Message string } `json:"error"`
+		}
+		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != 504 || got.Error.Code != "systemone_deadline_exceeded" || got.Error.Message != want {
+			t.Fatalf("options %q: got %d %s, want message %q", options, response.Code, response.Body.String(), want)
 		}
 	}
 }

@@ -24,6 +24,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"rag":                 pluginFieldsRAG,
 	"header_mutation":     pluginFieldsHeaderMutation,
 	"response_jailbreak":  pluginFieldsResponseJailbreak,
+	"masking":             pluginFieldsStructuredConfiguration,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
