@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from importlib.resources import files
 from pathlib import Path
 
 import huggingface_hub
 from huggingface_hub import constants
+
+_log = logging.getLogger(__name__)
 
 COMMIT = re.compile(r"[0-9a-fA-F]{40}\Z")
 RELEASE_FILENAME = "releases.generated.json"
@@ -88,3 +91,24 @@ def resolve_model_revision(artifact: str, revision: str | None) -> str | None:
             f"Hub did not return an immutable model revision for {artifact}"
         )
     return commit.lower()
+
+
+def warn_saved_revision_mismatch(artifact: str, saved_revision: str) -> None:
+    """Warn once when a persisted revision differs from this CLI's release pin."""
+    releases = builtin_releases()
+    pinned = next(
+        (pin for name, pin in releases.items() if name.lower() == artifact.lower()),
+        None,
+    )
+    if pinned is None:
+        return
+    if saved_revision.lower() == pinned:
+        return
+    _log.warning(
+        "Saved revision %.7s differs from this vllm-sr's pin %.7s for %s; "
+        "pass --revision %s to switch",
+        saved_revision,
+        pinned,
+        artifact,
+        pinned[:MIN_REVISION_PREFIX_LENGTH],
+    )
