@@ -103227,7 +103227,7 @@ const builtInCatalogJSON = `{
         "tools",
         "multimodal"
       ],
-      "description": "Balances measured quality, latency, and cost across reasoning, simple, and general requests.",
+      "description": "Spends reasoning only where a request needs it; one decision-model call per request selects the reasoning, medium, or simple pool.",
       "display_name": "MoM V1 Blend",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -103248,7 +103248,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103268,7 +103268,8 @@ const builtInCatalogJSON = `{
           "required": true,
           "traits": [
             "chat",
-            "reasoning"
+            "reasoning",
+            "tools"
           ]
         },
         {
@@ -103306,7 +103307,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103338,7 +103339,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103396,7 +103397,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103430,7 +103431,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103489,7 +103490,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103524,7 +103525,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103601,7 +103602,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103633,7 +103634,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103671,7 +103672,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }

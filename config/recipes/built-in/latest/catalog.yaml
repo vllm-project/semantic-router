@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+  sha256: sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f
 protocols:
 - id: vllm-sr/systemone@1
   display_name: System One
@@ -9549,7 +9549,8 @@ models:
   released_at: '2026-04-07'
 - id: vllm-sr/mom-v1-blend
   display_name: MoM V1 Blend
-  description: Balances measured quality, latency, and cost across reasoning, simple, and general requests.
+  description: Spends reasoning only where a request needs it; one decision-model call per request selects the reasoning,
+    medium, or simple pool.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -9561,7 +9562,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9590,6 +9591,7 @@ models:
     traits:
     - chat
     - reasoning
+    - tools
     recommended_pool:
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
@@ -9615,7 +9617,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9630,7 +9632,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9682,7 +9684,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9697,7 +9699,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9752,7 +9754,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9767,7 +9769,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9837,7 +9839,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -9852,7 +9854,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9890,7 +9892,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:e433a88df4df8d97c5d0af6d1e0d086b5f974370982b799a76be7fd376ffc36f
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro

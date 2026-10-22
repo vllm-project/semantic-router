@@ -15,6 +15,7 @@ runs:
   using: composite
   steps:
     - name: Reclaim disk space
+      if: ${{ runner.environment == 'github-hosted' }}
       shell: bash
       env:
         SHOW_USAGE: ${{ inputs.show-usage }}
