@@ -326,6 +326,42 @@ Apply least-privilege RBAC and restrict who can read the generated ConfigMaps,
 Secrets, logs, and custom resources. See
 [Security Hardening](../security-hardening).
 
+## Model download without direct hub access
+
+The Router downloads its models inside the Router pod at startup and reads the
+endpoint from `HF_ENDPOINT`. A cluster that cannot reach the model hub directly
+must point that endpoint at an approved mirror.
+
+A chart release sets it from one value, which renders the single `HF_ENDPOINT`
+entry on the Router pod and defaults to `https://huggingface.co`:
+
+```yaml
+modelDownload:
+  hfEndpoint: https://your-approved-hugging-face-mirror.example
+```
+
+```bash
+helm upgrade --install my-router deploy/helm/semantic-router \
+  --set modelDownload.hfEndpoint=https://your-approved-hugging-face-mirror.example
+```
+
+Do not add `HF_ENDPOINT` to `env` or `extraEnv`: the chart rejects it so a pod
+never carries two entries for the same name.
+
+An Operator-managed Router takes the same setting through the custom resource,
+where `spec.env` is the Router container environment and no chart value applies:
+
+```yaml
+spec:
+  env:
+    - name: HF_ENDPOINT
+      value: https://your-approved-hugging-face-mirror.example
+```
+
+Without a reachable endpoint the model step fails at startup
+(`ensure models are downloaded: failed to download 1 out of 1 models`) and the
+release stays `not ready`.
+
 ## Verify the deployment
 
 ```bash
