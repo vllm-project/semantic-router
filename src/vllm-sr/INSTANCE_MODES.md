@@ -51,6 +51,9 @@ The optional `MODEL` argument replaces the artifact in the default deployment
 selected by `global.model_catalog.system.decision_model.deployment`. Omitting
 it keeps that deployment; a new configuration defaults to Vela 2.0 0.3B.
 Only explicitly supplied model or placement options override saved settings.
+That includes the model's revision, which stays when you upgrade `vllm-sr`:
+serving the same model warns when the saved revision is not the one this
+`vllm-sr` pins, and `--revision` switches it.
 
 ```bash
 # Scale the selected model to two independent workers on two AMD GPUs.
