@@ -20,7 +20,10 @@ def validate_response(payload, headers, *, model, nonce):
     if payload.get("model") != model:
         raise ValueError("response model does not match the selected model")
     echo = json.loads(payload["choices"][0]["message"]["content"])
-    if echo.get("mock") != "mock-vllm" or echo.get("protocol") != "chat_completions":
+    if (
+        echo.get("mock") != "provider-mocker"
+        or echo.get("protocol") != "chat_completions"
+    ):
         raise ValueError("response did not come from the request-observing backend")
     if echo.get("model") != model or echo.get("user") != [nonce]:
         raise ValueError(
@@ -38,7 +41,7 @@ def main():
     request = Request(
         args.url.rstrip("/") + "/v1/chat/completions",
         data=json.dumps(
-            {"model": "auto", "messages": [{"role": "user", "content": nonce}]}
+            {"model": "vllm-sr/auto", "messages": [{"role": "user", "content": nonce}]}
         ).encode(),
         headers={"Content-Type": "application/json", "x-vsr-debug": "true"},
         method="POST",

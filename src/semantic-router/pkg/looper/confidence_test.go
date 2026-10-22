@@ -12,7 +12,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 )
 
@@ -699,8 +698,8 @@ func assertMissingMarginResult(t *testing.T, response *Response, err error, want
 func TestConfidenceHopOmitsInheritedStageBoundWhenClientIsBlocked(t *testing.T) {
 	var clientHeader, stageHeader string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clientHeader = r.Header.Get(headers.VSRLooperClientMaxOutputTokens)
-		stageHeader = r.Header.Get(headers.VSRLooperStageMaxOutputTokens)
+		clientHeader = r.Header.Get(testHopClientMaxOutputTokens)
+		stageHeader = r.Header.Get(testHopStageMaxOutputTokens)
 		choice := map[string]interface{}{
 			"index":         0,
 			"message":       map[string]interface{}{"role": "assistant", "content": "small answer"},
@@ -738,7 +737,7 @@ func TestConfidenceHopOmitsInheritedStageBoundWhenClientIsBlocked(t *testing.T) 
 	}}
 	request.ModelParams = map[string]config.ModelParams{"small": {ParamSize: "1b"}}
 
-	if _, err := NewConfidenceLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(
+	if _, err := newConfidenceLooper(&config.LooperConfig{}, borrowClient(hopsTo(&config.LooperConfig{}, server.URL))).Execute(
 		context.Background(),
 		request,
 	); err != nil {

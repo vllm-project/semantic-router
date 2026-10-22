@@ -24,6 +24,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -69,6 +70,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
 	modelName, stage, role string,
+	toolStage llmprotocol.TrustedStage,
 	streaming bool,
 	iteration int,
 	logprobsConfig *LogprobsConfig,
@@ -95,6 +97,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	if baseReq != nil {
 		attemptCtx = contextWithRoutingRecipe(attemptCtx, baseReq.RecipeName)
 	}
+	options.ToolStage = toolStage
 	response, err := l.client.CallModelWithOptions(
 		attemptCtx,
 		*stageReq,
@@ -253,6 +256,14 @@ func serializedMessagesTokenEstimate(messages []openai.ChatCompletionMessagePara
 		return 0, err
 	}
 	return contextcompression.EstimateTokens(string(encoded)), nil
+}
+
+func positiveInt64Ptr(value *int64) *int64 {
+	if value == nil || *value < 1 {
+		return nil
+	}
+	copied := *value
+	return &copied
 }
 
 func attachOutputTokenBounds(options *CallOptions, req *Request) {

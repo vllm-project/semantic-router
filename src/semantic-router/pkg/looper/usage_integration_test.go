@@ -29,11 +29,12 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // newUsageBackend returns an httptest server that mimics an OpenAI-compatible
-// backend reporting a fixed usage block per call (like mock-vllm-simple.py and
-// llm-katan do in the e2e suite). It counts how many calls it received.
+// backend reporting a fixed usage block per call (like provider-mocker in the
+// e2e suite). It counts how many calls it received.
 func newUsageBackend(t *testing.T, prompt, completion, total int64) (*httptest.Server, *int64) {
 	t.Helper()
 	var calls int64
@@ -133,7 +134,7 @@ func TestLooperCacheWriteAliasesReachAttemptReceipts(t *testing.T) {
 				defer span.End()
 				var aggregate TokenUsage
 				for i, model := range []string{"model-a", "model-b"} {
-					response, attempt, err := l.startConfidenceModelAttempt(ctx, req, req.OriginalRequest, model, "candidate", "subject", streaming, i+1, nil, "")
+					response, attempt, err := l.startConfidenceModelAttempt(ctx, req, req.OriginalRequest, model, "candidate", "subject", llmprotocol.TrustedStageCandidate, streaming, i+1, nil, "")
 					if err != nil {
 						if !streaming || !conflict {
 							t.Fatal(err)

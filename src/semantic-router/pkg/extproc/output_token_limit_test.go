@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestPrepareProviderDispatchComposesPerModelRefLimit(t *testing.T) {
@@ -340,14 +341,19 @@ func TestPrepareProviderDispatchBlockedLooperClientLetsModelRefWin(t *testing.T)
 	request := testNeutralRequest(model, "hello")
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	clientBound := int64(256)
 	ctx.LooperRequest = true
-	ctx.Headers[headers.VSRLooperClientMaxOutputTokens] = "256"
+	ctx.Headers = map[string]string{headers.VSRLooperClientMaxOutputTokens: "9999"}
+	ctx.Hop = &routing.Hop{ClientMaxOutputTokens: &clientBound}
 	ctx.ClientMaxOutputTokens = llmprotocol.Int64(256)
 	ctx.VSRSelectedDecision = decision
 
-	parseLooperOutputTokenBoundHeaders(ctx)
+	applyLooperHopOutputTokenBounds(ctx)
+	if ctx.ClientMaxOutputTokens == nil || *ctx.ClientMaxOutputTokens != 256 {
+		t.Fatalf("client bound = %v, want hop 256 rather than the header", ctx.ClientMaxOutputTokens)
+	}
 	if ctx.AlgorithmStageMaxOutputTokens != nil {
-		t.Fatalf("missing stage header must not populate AlgorithmStage, got %v", ctx.AlgorithmStageMaxOutputTokens)
+		t.Fatalf("missing stage bound must not populate AlgorithmStage, got %v", ctx.AlgorithmStageMaxOutputTokens)
 	}
 
 	if _, err := router.prepareProviderDispatch(request, model, decision.Name, false, ctx); err != nil {
@@ -361,15 +367,21 @@ func TestPrepareProviderDispatchBlockedLooperClientLetsModelRefWin(t *testing.T)
 	}
 }
 
-func TestParseLooperOutputTokenBoundHeaders(t *testing.T) {
+func TestApplyLooperHopOutputTokenBounds(t *testing.T) {
+	clientBound := int64(256)
+	stageBound := int64(512)
 	ctx := &RequestContext{
 		LooperRequest: true,
 		Headers: map[string]string{
-			headers.VSRLooperClientMaxOutputTokens: "256",
-			headers.VSRLooperStageMaxOutputTokens:  "512",
+			headers.VSRLooperClientMaxOutputTokens: "9999",
+			headers.VSRLooperStageMaxOutputTokens:  "1",
+		},
+		Hop: &routing.Hop{
+			ClientMaxOutputTokens: &clientBound,
+			StageMaxOutputTokens:  &stageBound,
 		},
 	}
-	parseLooperOutputTokenBoundHeaders(ctx)
+	applyLooperHopOutputTokenBounds(ctx)
 	if ctx.ClientMaxOutputTokens == nil || *ctx.ClientMaxOutputTokens != 256 {
 		t.Fatalf("client bound = %v, want 256", ctx.ClientMaxOutputTokens)
 	}
@@ -417,29 +429,87 @@ func TestBuildLooperRequestForwardsBlockedClientTokenLimit(t *testing.T) {
 	}
 }
 
-func TestParseLooperOutputTokenBoundHeadersClearsBodySnapshotWhenClientOmitted(t *testing.T) {
+func TestApplyLooperHopOutputTokenBoundsClearsBodySnapshotWhenHopOmitsThem(t *testing.T) {
 	ctx := &RequestContext{
 		LooperRequest:         true,
 		ClientMaxOutputTokens: llmprotocol.Int64(256),
-		Headers:               map[string]string{},
+		Headers: map[string]string{
+			headers.VSRLooperClientMaxOutputTokens: "256",
+		},
+		Hop: &routing.Hop{},
 	}
-	parseLooperOutputTokenBoundHeaders(ctx)
+	applyLooperHopOutputTokenBounds(ctx)
 	if ctx.ClientMaxOutputTokens != nil || ctx.AlgorithmStageMaxOutputTokens != nil {
-		t.Fatalf("omitted Looper headers must clear body snapshots: %+v", ctx)
+		t.Fatalf("an omitted hop bound must clear body snapshots and ignore headers: %+v", ctx)
 	}
 }
 
-func TestParseLooperOutputTokenBoundHeadersIgnoresNonPositive(t *testing.T) {
+func TestApplyLooperHopOutputTokenBoundsIgnoresNonPositive(t *testing.T) {
+	zero := int64(0)
+	negative := int64(-4)
 	ctx := &RequestContext{
 		LooperRequest: true,
-		Headers: map[string]string{
-			headers.VSRLooperClientMaxOutputTokens: "0",
-			headers.VSRLooperStageMaxOutputTokens:  "-4",
+		Hop: &routing.Hop{
+			ClientMaxOutputTokens: &zero,
+			StageMaxOutputTokens:  &negative,
 		},
 	}
-	parseLooperOutputTokenBoundHeaders(ctx)
+	applyLooperHopOutputTokenBounds(ctx)
 	if ctx.ClientMaxOutputTokens != nil || ctx.AlgorithmStageMaxOutputTokens != nil {
-		t.Fatalf("non-positive headers must be ignored: %+v", ctx)
+		t.Fatalf("non-positive hop bounds must be ignored: %+v", ctx)
+	}
+}
+
+func TestPrepareProviderDispatchUsesSelectedLoRAOrBaseCeiling(t *testing.T) {
+	router, base := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	params := router.Config.ModelConfig[base]
+	params.LoRAs = []config.LoRAAdapter{{Name: "adapter"}}
+	router.Config.ModelConfig[base] = params
+	adapterCeiling := 1024
+	baseCeiling := 32
+	orders := [][]config.ModelRef{
+		{
+			{Model: base, LoRAName: "adapter", MaxCompletionTokens: &adapterCeiling},
+			{Model: base, MaxCompletionTokens: &baseCeiling},
+		},
+		{
+			{Model: base, MaxCompletionTokens: &baseCeiling},
+			{Model: base, LoRAName: "adapter", MaxCompletionTokens: &adapterCeiling},
+		},
+	}
+	for _, refs := range orders {
+		decision := &config.Decision{Name: "mixed-lora", ModelRefs: refs}
+		for _, attempt := range []struct {
+			model string
+			want  int64
+		}{
+			{model: base, want: int64(baseCeiling)},
+			{model: "adapter", want: int64(adapterCeiling)},
+		} {
+			alias := modelRefMaxCompletionTokens(router, decision, "provider-model")
+			if alias == nil || *alias != int64(baseCeiling) {
+				t.Fatalf("provider alias ceiling = %v, want bare base %d", alias, baseCeiling)
+			}
+			request := testNeutralRequest(attempt.model, "hello")
+			request.Sampling.MaxOutputTokens = llmprotocol.Int64(8000)
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+			ctx.ClientMaxOutputTokens = llmprotocol.Int64(8000)
+			ctx.VSRSelectedDecision = decision
+
+			if _, err := router.prepareProviderDispatch(request, attempt.model, decision.Name, false, ctx); err != nil {
+				t.Fatalf("prepareProviderDispatch(%s): %v", attempt.model, err)
+			}
+			if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != attempt.want {
+				t.Fatalf("%s MaxOutputTokens = %v, want %d", attempt.model, request.Sampling.MaxOutputTokens, attempt.want)
+			}
+			diagnostics := buildReplayRouteDiagnostics(ctx, attempt.model, attempt.model, decision.Name, 0, 0)
+			if diagnostics.EffectiveMaxOutputTokens == nil || *diagnostics.EffectiveMaxOutputTokens != attempt.want {
+				t.Fatalf("%s replay effective = %v, want %d", attempt.model, diagnostics.EffectiveMaxOutputTokens, attempt.want)
+			}
+			if diagnostics.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
+				t.Fatalf("%s replay source = %q, want %s", attempt.model, diagnostics.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)
+			}
+		}
 	}
 }
 

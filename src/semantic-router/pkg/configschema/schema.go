@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/invopop/jsonschema"
 
@@ -113,6 +114,12 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	); err != nil {
 		return nil, fmt.Errorf("load catalog Go comments: %w", err)
 	}
+	if err := reflector.AddGoComments(
+		"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback",
+		moduleRoot+"/pkg/fallback",
+	); err != nil {
+		return nil, fmt.Errorf("load fallback Go comments: %w", err)
+	}
 
 	// Publish the steady-state Router contract. CanonicalConfigDocument also
 	// carries the Dashboard's transient setup marker, which is intentionally not
@@ -124,6 +131,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 
 	addRecipeRoutingDefinition(schema)
 	setCoreEnums(schema)
+	addNativeAlgorithmConditions(schema)
 	deployments := definitionProperty(schema, "CanonicalModelCatalog", "deployments")
 	if deployments == nil {
 		return nil, fmt.Errorf("canonical model deployment schema is missing")
@@ -140,6 +148,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 		return nil, err
 	}
 	addPluginPayloadConditions(schema, pluginRefs)
+	addAlgorithmExtensionBlocks(reflector, schema)
 	extension, err := buildExtension(schema, pluginRefs)
 	if err != nil {
 		return nil, err
@@ -217,6 +226,15 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 			},
 		}
 	}
+	if value == reflect.TypeOf(time.Duration(0)) {
+		return &jsonschema.Schema{
+			Description: "A duration string (e.g. '30s', '100ms') or nanoseconds integer.",
+			OneOf: []*jsonschema.Schema{
+				{Type: "string"},
+				{Type: "integer"},
+			},
+		}
+	}
 	return nil
 }
 
@@ -266,6 +284,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 	})
 	setDefinitionPropertyEnum(root, "ProjectionScoreInput", "type", routerconfig.SupportedProjectionInputTypes())
 	setDefinitionPropertyEnum(root, "InputModalityRule", "modality", routerconfig.SupportedInputModalities())
+	setDefinitionPropertyEnum(root, "ActionRule", "name", routerconfig.SupportedActions())
 	setDefinitionPropertyEnum(root, "CanonicalRouting", "strategy", []string{
 		string(routerconfig.RoutingStrategyPriority),
 		string(routerconfig.RoutingStrategyConfidence),
@@ -422,6 +441,32 @@ func addPluginDefinitions(
 	return refs, nil
 }
 
+// addAlgorithmExtensionBlocks adds the block of every algorithm type
+// registered outside the Router to AlgorithmConfig, under the type's name.
+func addAlgorithmExtensionBlocks(reflector *jsonschema.Reflector, root *jsonschema.Schema) {
+	algorithm := root.Definitions["AlgorithmConfig"]
+	if algorithm == nil {
+		return
+	}
+	samples := routerconfig.DecisionAlgorithmPayloadSamples()
+	types := make([]string, 0, len(samples))
+	for typ := range samples {
+		types = append(types, typ)
+	}
+	sort.Strings(types)
+	for _, typ := range types {
+		reflector.ExpandedStruct = false
+		block := reflector.Reflect(samples[typ])
+		reflector.ExpandedStruct = true
+		for name, definition := range block.Definitions {
+			if root.Definitions[name] == nil {
+				root.Definitions[name] = definition
+			}
+		}
+		algorithm.Properties.Set(typ, &jsonschema.Schema{Ref: block.Ref})
+	}
+}
+
 func addPluginPayloadConditions(root *jsonschema.Schema, pluginRefs map[string]string) {
 	plugin := root.Definitions["DecisionPlugin"]
 	if plugin == nil {
@@ -495,6 +540,9 @@ func buildExtension(root *jsonschema.Schema, pluginRefs map[string]string) (sche
 		"type",
 		"minimum_candidates",
 		"on_error",
+		"quality",
+		"stages",
+		"budget",
 	); err != nil {
 		return schemaExtension{}, err
 	}

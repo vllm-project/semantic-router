@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -15,6 +15,16 @@ type preparedBindingInventory interface {
 }
 
 func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
+	return preparedModelsInfoMatching(service, nil)
+}
+
+func preparedEmbeddingModelsInfo(service classificationService) ([]ModelInfo, bool) {
+	return preparedModelsInfoMatching(service, func(capability binding.Capability) bool {
+		return capability.Embedding != nil
+	})
+}
+
+func preparedModelsInfoMatching(service classificationService, include func(binding.Capability) bool) ([]ModelInfo, bool) {
 	inventory, ok := service.(preparedBindingInventory)
 	if !ok {
 		return nil, false
@@ -26,6 +36,9 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 	models := make([]ModelInfo, 0, len(entries))
 	for _, entry := range entries {
 		id, capability := entry.Identity, entry.Capability
+		if include != nil && !include(capability) {
+			continue
+		}
 		name, modelType := preparedModelNameAndType(id)
 		model := ModelInfo{
 			Name: name, Recipe: id.Recipe, Type: modelType, Loaded: true,
@@ -104,8 +117,6 @@ func preparedModelNameAndType(id binding.Identity) (string, string) {
 		return id.Name, "fact_check_classification"
 	case "hallucination_detector":
 		return id.Name, "hallucination_detection"
-	case "hallucination_explainer":
-		return id.Name, "nli_explainer"
 	case "feedback_detector":
 		return id.Name, "feedback_detection"
 	}
@@ -122,7 +133,7 @@ func modelsUseGPU(models []ModelInfo) bool {
 		}
 		device, _, _ := strings.Cut(model.Metadata["device"], ":")
 		switch device {
-		case "cuda", "rocm", "migraphx", "metal":
+		case "cuda", "rocm", "xpu", "mps":
 			return true
 		}
 	}

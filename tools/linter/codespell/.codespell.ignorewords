@@ -1,5 +1,6 @@
 # Multilingual test case words (not spelling errors)
 Analise
+CANN
 Ignora
 Prozess
 Responde
@@ -111,3 +112,6 @@ espace
 analise
 # Evaluation terminology (grading saved answers again)
 regrading
+
+# Model reasoning-mode toggle terms (not spelling errors)
+nothink

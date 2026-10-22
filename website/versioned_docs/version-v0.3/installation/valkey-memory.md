@@ -286,5 +286,5 @@ To switch an existing deployment from Milvus to Valkey:
 4. Existing memories in Milvus are **not** automatically migrated
 
 :::warning
-Switching backends does not migrate data. If you need to preserve existing memories, export them from Milvus and re-import via the memory API before switching.
+Switching backends does not migrate data, and the two backends do not share storage. The router apiserver can list and delete memories but has no import or bulk export endpoint, so after the switch the Valkey store starts empty and repopulates from new traffic.
 :::

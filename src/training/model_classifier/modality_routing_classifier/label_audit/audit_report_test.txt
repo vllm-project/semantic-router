@@ -1,0 +1,78 @@
+judged 759/759 rows of test | rubric hashes {'75a64835': 759}
+agreement original vs judge (strict):    703/759 = 0.9262  kappa=0.884
+agreement original vs judge (inclusive): 721/759 = 0.9499  (inclusive = strict, but AR+vh counts as BOTH)
+
+confusion, rows=original cols=judge (strict), order AR/DIFFUSION/BOTH:
+  AR         [299, 1, 0]
+  DIFFUSION  [15, 285, 0]
+  BOTH       [40, 0, 119]
+
+disagreements: 56 | by judge confidence {'H': 36, 'M': 20} | vh among judge=AR: 22/354
+tags: {'truncated': 106, 'non_english': 44, 'prompt_writing': 8, 'no_request': 4, 'about_images': 8, 'ambiguous': 1, 'deliverable_visual': 1}
+
+model accuracy on the judged rows: vs original | vs judge strict | vs judge inclusive
+  published_baseline     0.9684 | 0.9170 | 0.9354
+  clean_baseline         0.9710 | 0.9341 | 0.9473
+  candidate              0.9631 | 0.9157 | 0.9368
+  scx_finetuned          0.9960 | 0.9302 | 0.9513
+  lfm25_lora             0.9816 | 0.9302 | 0.9486
+
+self-consistency (re-judged 76 rows): agreement 1.0000 kappa=1.000 | flips []
+
+--- disagreements (original -> judge), confident ones first, showing 56 ---
+  25 BOTH->AR H vh  | What does the chambers of the heart look like in detail?
+  53 BOTH->AR H vh  | I need to tile a bathroom floor, what are the steps?
+  86 BOTH->AR H vh  | Teach me macramé for beginners
+  88 BOTH->AR H vh  | How do I install a dimmer switch?
+  89 BOTH->AR H vh  | How do I set up a home darkroom for film?
+ 119 DIFFUSION->AR H no_request | You keep on creepin', let the night be scary
+ 120 BOTH->AR H vh  | Walk me through watercolor wet-on-wet step by step
+ 173 DIFFUSION->AR H  | how to make a picture stay in the top left corner of a webpage using css
+ 195 BOTH->AR H vh  | Guide me through bone fracture repair from start to finish
+ 224 BOTH->AR H vh  | Help me understand the layout of a commercial airplane cockpit
+ 227 DIFFUSION->AR H truncated | Educational Content Creator ⦁ Designed curriculum for online study App for ages 3-8. ⦁ Designed main character
+ 229 BOTH->AR H vh  | How do I install a garbage disposal?
+ 283 DIFFUSION->AR H prompt_writing | Hello! Can you give prompts to create a picture according to the description with Spock
+ 286 BOTH->AR H vh  | How do I check and replace brake pads on a car?
+ 287 BOTH->AR H vh  | How do I build a bookshelf?
+ 297 BOTH->AR H vh  | What does the structure of a muscle fiber look like in detail?
+ 304 BOTH->AR H vh  | What is the correct batting stance in baseball?
+ 379 BOTH->AR H vh  | How is a mechanical watch put together?
+ 430 BOTH->AR H vh  | Teach me cake decorating with fondant for beginners
+ 436 DIFFUSION->AR H about_images,truncated | You are CreativeGeniusGPT a creative genius that brings innovative ideas to the table that change the existing
+ 455 DIFFUSION->AR H prompt_writing | write a midjourney prompt to create an image of a 8 year old caucasian boy with a white tank top on holding a 
+ 569 DIFFUSION->AR H about_images,no_request | Today we are gonna create Images with a Diffusion model. I am gonna feed you some information about it. Unders
+ 578 DIFFUSION->AR H about_images | How do I create an image with AI?
+ 618 DIFFUSION->AR H about_images | With 4-5 photos, design and create a Photo Essay (Visual Storytelling) with the theme: "Ani Ng Sining, Bunga N
+ 633 BOTH->AR H vh deliverable_visual | Make presentation about "Flange Facing Types"
+ 644 BOTH->AR H  | make this text longer and better: For each video tutorial, creating a script will be necessary even though a v
+ 647 DIFFUSION->AR H about_images | can you create images?
+ 652 BOTH->AR H vh  | I need to replace a toilet fill valve, what are the steps?
+ 667 BOTH->AR H vh  | How do I perform CPR on an adult?
+ 670 DIFFUSION->AR H prompt_writing | can you create stable diffusion prompts?
+ 673 DIFFUSION->AR H prompt_writing | I want to use StableDiffusion to generate a picture that can show the Chinese Dragon Boat Festival, including 
+ 675 BOTH->AR H vh  | How is a telescope put together?
+ 709 DIFFUSION->AR H  | Write a concise summary of the following. Be sure to preserve important details: For best AI art results, it’s
+ 718 BOTH->AR H vh  | Guide me through concrete curing from start to finish
+ 731 DIFFUSION->AR H about_images | can you generate images
+ 748 DIFFUSION->AR H prompt_writing | can you generate image prompts for stable diffusion?
+  46 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Steam Cauliflower': Cauliflower is a highly nutritious, 
+  72 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Eat Fajitas': If you've gathered all the ingredients for
+  77 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make Nettle Tea': Despite the painful stings the fresh p
+  92 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Care for Hardwood Floors': Taking proper care of hardwoo
+ 180 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make Vegan Fish and Chips': Vegans can enjoy a plate of 
+ 252 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Read for Pleasure Using the Public Library': Libraries h
+ 332 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make a BLT Sandwich': Basic, no-frills BLT sandwiches co
+ 353 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make a Shadow Box': None You need to assist human user t
+ 364 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Celebrate a Fall Harvest': Harvest time during fall (aut
+ 385 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make a Paper Mask': Making a mask is a fun, easy and ine
+ 502 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Eat Dried Dates': A date is a sweet and versatile fruit 
+ 528 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make Tea Eggs': Tea eggs are a year-round street food in
+ 534 AR->DIFFUSION M ambiguous | Stable Diffusion promts young Disney man a beige miniskirt, dark brown turtleneck sweater, small neckless, cut
+ 536 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make Sweet and Sour Pork': Sweet and sour pork is so muc
+ 556 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Prepare a Boat for Fishing': Fishing from a boat provide
+ 566 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make Pea and Pecan Salad': Combining peas and pecans mak
+ 573 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Zest a Lime': The zest of a lime is the outer green laye
+ 608 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make an Illuminated Bird Bath': Ideal for a wedding or r
+ 710 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Make Watercolors Using Magic Markers': Watercolor paints
+ 712 BOTH->AR M truncated | In this task, you are given a high-level goal 'How to Efficiently Pack Goods in Storage': Packing your stuff i

@@ -3,6 +3,7 @@ package extproc
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -21,6 +22,12 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	body []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
+	if r.shouldAttemptFallback(ctx) {
+		if fallbackResp := r.maybeExecuteFallback(body, ctx); fallbackResp != nil {
+			return fallbackResp
+		}
+	}
+
 	// Error envelopes use the selected backend's response policy too.
 	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	engine, err := r.protocolEngineForBackend(ctx)
@@ -44,10 +51,14 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		}
 		translated.Body = encoded
 	}
+	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, translated.Diagnostics...)
 	response := buildResponseBodyContinueResponse(nil, nil)
 	setResponseBodyMutation(response, translated.Body)
 	setResponseContentType(response, "application/json")
+	if warning, ok := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody); ok {
+		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, warning)
+	}
 	r.attachRouterReplayResponse(ctx, translated.Body, true)
 	return response
 }

@@ -5,18 +5,14 @@ import PlaygroundRailAccountControl from './PlaygroundRailAccountControl'
 
 interface ChatComponentSidebarShellProps {
   children?: ReactNode
-  createDisabled?: boolean
   isOpen: boolean
-  isTeamRoomView: boolean
   onCreate: () => void
   onToggleSidebar: () => void
 }
 
 export default function ChatComponentSidebarShell({
   children,
-  createDisabled = false,
   isOpen,
-  isTeamRoomView,
   onCreate,
   onToggleSidebar,
 }: ChatComponentSidebarShellProps) {
@@ -43,9 +39,8 @@ export default function ChatComponentSidebarShell({
           type="button"
           className={styles.playgroundSidebarCreate}
           onClick={onCreate}
-          disabled={createDisabled}
-          title={isTeamRoomView ? 'New room' : 'New conversation'}
-          aria-label={isTeamRoomView ? 'New room' : 'New conversation'}
+          title="New conversation"
+          aria-label="New conversation"
         >
           <svg
             width="18"
@@ -62,7 +57,7 @@ export default function ChatComponentSidebarShell({
             />
             <path d="M17 3v6M14 6h6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {isOpen ? <span>{isTeamRoomView ? 'New room' : 'New chat'}</span> : null}
+          {isOpen ? <span>New chat</span> : null}
         </button>
         {children ? (
           <div className={styles.playgroundSidebarPanel} aria-hidden={!isOpen}>

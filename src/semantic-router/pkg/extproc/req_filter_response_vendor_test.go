@@ -38,6 +38,59 @@ func TestResolveResponseVendorAzure(t *testing.T) {
 	}
 }
 
+// Snowflake Cortex is resolved by provider id, not by host: its account-scoped
+// host also fronts the Snowflake SQL API, whose bodies are not this provider's
+// failure envelope, so a host match would classify those as a vendor envelope.
+func TestResolveResponseVendorSnowflake(t *testing.T) {
+	tests := []struct {
+		name         string
+		providerType string
+		baseURL      string
+		vendor       llmprotocol.ResponseVendor
+	}{
+		{name: "canonical snowflake profile", providerType: "snowflake-cortex", vendor: llmprotocol.ResponseVendorSnowflake},
+		{name: "snowflake host without the provider id", providerType: "openai", baseURL: "https://my-account.snowflakecomputing.com/api/v2/cortex/v1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := &config.ProviderProfile{Type: tt.providerType, BaseURL: tt.baseURL}
+
+			// See TestResolveResponseVendorAzure: resolving the vendor must not
+			// disturb the profile's reasoning transport.
+			before := resolveProviderReasoningTransport(profile)
+
+			assert.Equal(t, tt.vendor, resolveResponseVendor(profile))
+
+			assert.Equal(t, before, resolveProviderReasoningTransport(profile))
+		})
+	}
+}
+
+// The gateway allowance is opt-in per profile: a vLLM-type profile earns it
+// only by declaring the relay, and a plain vLLM keeps the strict contract.
+func TestResolveResponseVendorOpenAICompatGateway(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile *config.ProviderProfile
+		vendor  llmprotocol.ResponseVendor
+	}{
+		{
+			name:    "vllm profile with the gateway opt-in",
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://relay.example.com/v1", OpenAICompatGateway: true},
+			vendor:  llmprotocol.ResponseVendorOpenAICompatGateway,
+		},
+		{
+			name:    "plain vllm profile without the opt-in",
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://vllm.example.com/v1"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.vendor, resolveResponseVendor(tt.profile))
+		})
+	}
+}
+
 // Every other backend keeps the strict contract: no vendor allowance at all.
 func TestResolveResponseVendorGrantsNoAllowanceByDefault(t *testing.T) {
 	tests := []struct {
@@ -49,6 +102,8 @@ func TestResolveResponseVendorGrantsNoAllowanceByDefault(t *testing.T) {
 		{name: "official deepseek", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com/v1"}},
 		{name: "openrouter", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"}},
 		{name: "generic openai compatible", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://llm.example.com/v1"}},
+		// A vLLM profile without the gateway opt-in keeps the strict contract.
+		{name: "vllm without the gateway opt-in", profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://vllm.example.com/v1"}},
 		// A host that merely mentions azure is not an Azure endpoint.
 		{name: "azure lookalike host", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://azure.example.com/v1"}},
 		// Suffix matching must not fire on a bare label match either.

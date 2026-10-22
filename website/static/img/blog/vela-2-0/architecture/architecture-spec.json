@@ -1,0 +1,63 @@
+{
+  "inference_entry": "AutoModel(..., trust_remote_code=True).system_one(...)",
+  "analysis": "Static config and source inspection; weights were not loaded or executed.",
+  "models": {
+    "0.3B": {
+      "repo": "vllm-sr/Vela-2.0-0.3B",
+      "revision": "7162ab91b808bf36201cdd2bc87212f9d2c5c4db",
+      "hidden": 768,
+      "layers": 22,
+      "ffn": 1152,
+      "q_heads": 12,
+      "kv_heads": 12,
+      "linear_k": null,
+      "linear_v": null,
+      "runtime_context": 8192,
+      "head_projection": 256,
+      "card_reported_parameters": "307M"
+    },
+    "0.8B": {
+      "repo": "vllm-sr/Vela-2.0-0.8B",
+      "revision": "f21e7359e267f7e34af02502d3bc79eb7c8244c4",
+      "hidden": 1024,
+      "layers": 24,
+      "ffn": 3584,
+      "q_heads": 8,
+      "kv_heads": 2,
+      "linear_k": 16,
+      "linear_v": 16,
+      "runtime_context": 16384,
+      "head_projection": 256,
+      "card_reported_parameters": "756M"
+    },
+    "4B": {
+      "repo": "vllm-sr/Vela-2.0-4B",
+      "revision": "d90b6f11c13a1776e5d33c50b89f8343006f68fa",
+      "hidden": 2560,
+      "layers": 32,
+      "ffn": 9216,
+      "q_heads": 16,
+      "kv_heads": 4,
+      "linear_k": 16,
+      "linear_v": 32,
+      "runtime_context": 16384,
+      "head_projection": 256,
+      "card_reported_parameters": "4.2B"
+    },
+    "9B": {
+      "repo": "vllm-sr/Vela-2.0-9B",
+      "revision": "dd7f4da485a3f3df5ef7c30cef3b5245660b313e",
+      "hidden": 4096,
+      "layers": 32,
+      "ffn": 12288,
+      "q_heads": 16,
+      "kv_heads": 4,
+      "linear_k": 16,
+      "linear_v": 32,
+      "runtime_context": 16384,
+      "head_projection": 256,
+      "card_reported_parameters": "7.9B"
+    }
+  },
+  "parameter_count_note": "Card-reported rounded counts, not an audit of all registered or executed model parameters. Main figures identify the checkpoint by name."
+}

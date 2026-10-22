@@ -54,10 +54,18 @@ def run_git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def resolve_base_ref(base_ref: str | None) -> str | None:
-    requested = base_ref or os.getenv("BASE_REF") or "origin/main"
-    for candidate in (requested, "HEAD^"):
-        if run_git("rev-parse", "--verify", candidate).returncode == 0:
+    requested = base_ref or os.getenv("BASE_REF")
+    candidates = (requested,) if requested else ("origin/main", "HEAD^")
+    for candidate in candidates:
+        if (
+            run_git(
+                "rev-parse", "--verify", "--end-of-options", f"{candidate}^{{commit}}"
+            ).returncode
+            == 0
+        ):
             return candidate
+    if requested:
+        raise ValueError(f"invalid base ref '{requested}'")
     return None
 
 

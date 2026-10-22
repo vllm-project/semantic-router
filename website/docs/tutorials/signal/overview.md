@@ -83,6 +83,7 @@ detectors. They do not require a general-purpose classifier model.
 
 | Signal | Use it to |
 | ------ | --------- |
+| [Action](./heuristic/action) | route by the operation a request asks for, such as explain, fix, or refactor |
 | [Authz](./heuristic/authz) | route from trusted identity, role, or tenant policy |
 | [Conversation](./heuristic/conversation) | detect multi-turn, tool-heavy, or agentic request structure |
 | [Context](./heuristic/context) | route by effective context-window needs |
@@ -102,6 +103,7 @@ each page's data-handling notes before choosing a remote provider.
 | ------ | --------- |
 | [Classifier](./learned/classifier) | expose labels from a custom local classifier or external LLM |
 | [Complexity](./learned/complexity) | estimate easy, medium, or hard reasoning traffic |
+| [Decision](./learned/decision) | ask typed questions with the selected decision model |
 | [Domain](./learned/domain) | classify the request topic |
 | [Embedding](./learned/embedding) | match semantic intent from representative examples |
 | [Modality](./learned/modality) | classify text, image-generation, or mixed output intent |

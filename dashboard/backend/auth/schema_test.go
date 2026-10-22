@@ -42,7 +42,7 @@ func containsPermission(permissions []string, target string) bool {
 	return false
 }
 
-func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
+func TestAllRolesHaveFeedbackSubmitAndReplayRead(t *testing.T) {
 	t.Parallel()
 
 	for _, role := range SupportedRoles {
@@ -57,8 +57,8 @@ func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
 				hasReplay = true
 			}
 		}
-		if hasFeedback != (role != RoleRead) {
-			t.Fatalf("role %q feedback permission = %v", role, hasFeedback)
+		if !hasFeedback {
+			t.Fatalf("role %q should have %q permission", role, PermFeedbackSubmit)
 		}
 		if !hasReplay {
 			t.Fatalf("role %q should have %q permission", role, PermReplayRead)

@@ -10,15 +10,16 @@ This directory holds smoke, demo, and harness manifests that the repository uses
 
 `config.hallucination.yaml` is the local hallucination router config used by the
 `hallucination-demo` targets in `tools/make/build-run-test.mk` (and
-`e2e/testing/hallucination-demo/`). It runs the in-process Candle detector with
-NLI so the flow can be exercised locally with `./bin/router -config=e2e/config/config.hallucination.yaml`.
+`e2e/testing/hallucination-demo/`). It runs the default Vela Halu detector in a
+router-managed model runtime, so the flow can be exercised locally with
+`./bin/router -config=e2e/config/config.hallucination.yaml` once the runtime is
+installed (`make model-runtime-install`).
 
-The endpoint-backed detector
-(`global.model_catalog.modules.hallucination_mitigation.detector.backend: endpoint`)
-is exercised by the Kubernetes E2E `hallucination` profile
-(`e2e/profiles/hallucination/values.yaml`). That profile deploys an
+The endpoint-backed detector (a `hallucination_detector` binding to an
+`http_chat` deployment in `global.model_catalog.bindings`) is exercised by the
+Kubernetes E2E `hallucination` profile (`e2e/profiles/hallucination/values.yaml`). That profile deploys an
 OpenAI-compatible mock detector (`deploy/kubernetes/hallucination/mock-hallucination-detector.yaml`,
-served by the shared `tools/test/services/mock-vllm` image) and asserts the
+served by the shared `tools/test/services/provider-mocker` image) and asserts the
 `x-vsr-response-warnings: hallucination` header. Run it with
 `make e2e-test E2E_PROFILE=hallucination`.
 `config.remote-embedding-smoke.yaml` is a manual local smoke config for validating
@@ -35,7 +36,8 @@ Run it against the current local image with:
 
 ```bash
 make vllm-sr-dev
-OPENAI_API_KEY="<provider-key>" vllm-sr serve \
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  OPENAI_API_KEY="<provider-key>" vllm-sr serve \
   --config e2e/config/config.remote-embedding-smoke.yaml \
   --image-pull-policy never \
   --minimal

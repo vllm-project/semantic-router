@@ -6,13 +6,18 @@ import "testing"
 // they are controlled inputs, not embedding-model quality measurements.
 func TestBuiltinComplexityKeepsIndependentBoundariesAndMiddle(t *testing.T) {
 	for _, profile := range []struct{ name, ordinary, easy string }{
-		{"balance", "medium", "simple"},
 		{"speed", "fast", "fast"},
 		{"cost", "economy", "economy"},
 		{"accuracy", "simple", "simple"},
 	} {
 		t.Run(profile.name, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, profile.name)
+			models, _ := preparedJudgmentModels(t)
+			models.cfg = c.Config
+			judgment, err := prepareDecisionComplexity(models, c.Config.ComplexityRules)
+			if err != nil || judgment != nil {
+				t.Fatalf("shipped prototype rules changed to native decision scoring: %v", err)
+			}
 			rule := c.Config.ComplexityRules[0]
 			if rule.Name != "difficulty" || rule.Threshold != 0 || rule.HardAbove == nil || rule.EasyBelow == nil {
 				t.Fatal("difficulty must use an explicit pair instead of a symmetric threshold")

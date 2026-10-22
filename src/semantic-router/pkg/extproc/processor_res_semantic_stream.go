@@ -23,6 +23,7 @@ type semanticResponseStreamState struct {
 	responseID string
 	model      string
 	stop       llmprotocol.StopReason
+	stopSeq    string
 	usage      llmprotocol.Usage
 	items      map[int]*semanticStreamItem
 	order      []int
@@ -71,6 +72,7 @@ func (r *OpenAIRouter) initializeSemanticResponseStream(ctx *RequestContext) {
 type semanticStreamBuffers struct {
 	translated []byte
 	public     []byte
+	errorFrame []byte
 	streamErr  error
 }
 
@@ -86,6 +88,9 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		if frame := failureFrame(frames, events); frame != nil {
+			buffers.errorFrame = frame
+		}
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
@@ -93,8 +98,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
 	if ctx.ProtocolResponseStream != nil {
+		// A failure the Router raised, in this read or an earlier one, is not the
+		// provider's error event, so its frame stays on the abort path.
+		routerFailed := buffers.streamErr != nil || ctx.StreamingAborted
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		if frame := failureFrame(frames, events); frame != nil && !routerFailed {
+			buffers.errorFrame = frame
+		}
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
@@ -135,7 +146,28 @@ func observeProtocolStream(
 	ctx.SemanticStreamState.observe(events)
 }
 
+// failureFrame returns the frame the encoder wrote for an upstream failure in
+// this batch. The Chat encoder writes a failure as the batch's last frame
+// (TestChatStreamFailureEndsItsBatch).
+func failureFrame(frames [][]byte, events []llmprotocol.Event) []byte {
+	for _, event := range events {
+		if event.Type == llmprotocol.EventResponseFailed && len(frames) > 0 {
+			return frames[len(frames)-1]
+		}
+	}
+	return nil
+}
+
 func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *ext_proc.ProcessingResponse {
+	// A Chat client of a Chat upstream gets the public filter's output up to an
+	// upstream error event, then the Router's error frame for it, however the
+	// upstream body is split into reads. A client that needs a rewrite keeps the
+	// codec's frames.
+	if ctx.PublicChatUsageFilter.UpstreamFailed() && len(buffers.errorFrame) > 0 && !requiresClientResponseRewrite(ctx) {
+		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{Body: append(buffers.public, buffers.errorFrame...)},
+		}, nil)
+	}
 	if ctx.ProtocolResponseStream != nil &&
 		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted) {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
@@ -189,21 +221,19 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
-	var mutation protocolcodec.StreamEventMutation
+	mutation := clientStreamMutation(ctx, source)
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		streamContext.ResponseID = responseID
-		mutation = func(event *llmprotocol.Event) error {
-			event.ResponseID = responseID
-			return nil
-		}
 	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
-	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 && !streamUsageRequestedByClient(ctx) {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
+		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
+			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
+		)
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -266,6 +296,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				item.toolCall = &llmprotocol.ToolCall{}
 			}
 			if event.ToolCall != nil {
+				if event.ToolCall.Kind != "" {
+					item.toolCall.Kind = event.ToolCall.Kind
+				}
 				if event.ToolCall.ID != "" {
 					item.toolCall.ID = event.ToolCall.ID
 				}
@@ -283,6 +316,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
+			state.stopSeq = event.MatchedStopSequence
 		case llmprotocol.EventResponseFailed:
 			state.terminal = true
 			state.failed = event.Error
@@ -345,7 +379,8 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 	}
 	return &llmprotocol.Response{
 		Generation: 1, ID: state.responseID, CreatedAt: time.Now().UTC(),
-		Model: state.model, Output: output, StopReason: state.stop, Usage: state.usage,
+		Model: state.model, Output: output, StopReason: state.stop,
+		MatchedStopSequence: state.stopSeq, Usage: state.usage,
 	}, nil
 }
 
@@ -370,10 +405,12 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 		}
 	}
-	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	inflight.End(ctx.InflightModel, ctx.InflightToken)
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
+	// Decoded stream events carry the client-facing model, not the provider's.
+	observeUpstreamResponse(ctx, "", usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
@@ -398,6 +435,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		return
 	}
 	r.updateResponseCache(ctx, encoded)
+	r.updateKVAddressRegistry(ctx)
 	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.persistResponseObject(ctx)
 	r.attachRouterReplayResponse(ctx, encoded, true)

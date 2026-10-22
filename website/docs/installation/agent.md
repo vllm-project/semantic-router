@@ -1,7 +1,7 @@
 ---
 sidebar_position: 2
 title: Install with an agent
-description: Give an agent one prompt to install, configure, and verify vLLM Semantic Router through its CLI and Router API.
+description: Give a coding agent one prompt to install, configure, and verify vLLM Semantic Router on a CPU or GPU host, through its CLI and Router API.
 ---
 
 import CodeBlock from '@theme/CodeBlock'
@@ -12,40 +12,53 @@ import {
 
 # Install with an agent
 
-Paste this prompt into a coding agent that can use a terminal and access the
-machine where you want to run vLLM Semantic Router:
+Paste this prompt into a coding agent with terminal access to the target machine:
 
 <CodeBlock language="text">{AGENT_INSTALL_PROMPT}</CodeBlock>
 
-That is the complete bootstrap prompt. It points the agent to the public,
-self-contained <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a>; installation details
-stay in the Skill instead of being copied into every prompt. The Dashboard is
-optional; the agent can verify it when you request Dashboard or Playground work.
+The <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a> takes the agent from a host
+with Docker to a verified, routed request. Dashboard and Playground checks are
+optional. Add the model endpoint to use, such as a local Ollama or vLLM server
+or a hosted API, and any constraints; the agent asks before it changes anything
+outside the stack.
+
+Once the Router is running, [connect your agent harness](agent-harness).
+
+:::note Release channel
+The Skill follows `main`, as these pages do. It installs the stable release
+when that release has standalone mode, and the development channel otherwise.
+Stable `0.4.0` predates standalone mode and the model runtime, so for now the
+agent installs the development channel and tells you so.
+:::
 
 ## What the agent does
 
-The Skill directs the agent to:
+1. **Preflight**, without changing anything: Docker access, Python and its
+   `venv` support, free disk and ports, AMD or NVIDIA GPU devices, and any
+   `vllm-sr` stack that already runs.
+2. **Chooses the path:** the release channel; the platform, `--platform rocm` or
+   `--platform cuda` when the host has those GPUs; standalone mode, or
+   `--gateway extproc` when you need Envoy; Docker or Kubernetes; and the model
+   endpoint, checked the way the Router container will reach it.
+3. **Installs the CLI** with the curl installer, without starting a stack.
+4. **Writes a configuration** for your model, with the inference API bound to
+   `127.0.0.1` and one keyword route that proves signals reach decisions, and
+   validates it with `vllm-sr config validate`.
+5. **Starts the stack** with `vllm-sr serve --config config.yaml`, never in
+   setup mode, which would wait for a person.
+6. **Verifies it** against explicit criteria: `vllm-sr status`,
+   `GET /v1/models`, `vllm-sr route preview`, a routed request with its
+   `x-vsr-selected-decision` and `x-vsr-selected-model` headers, and
+   `vllm-sr route probe`. On a GPU host it also serves one Router model on the
+   GPU in engine mode.
+7. **Hands off** the version and channel, the configuration path, the
+   endpoints, the Dashboard's first-administrator step, and what each check
+   returned.
 
-1. Inspect the host, existing installation, container runtime, accelerator, and
-   available model endpoints without changing them.
-2. Install the latest published dev CLI when needed, then verify its supported
-   commands before changing a runtime. Discover configuration progressively from
-   the CLI and the selected Router's schema and OpenAPI contract.
-3. Create or update canonical YAML for the available model pool while keeping
-   credentials in environment variables. Reuse packaged built-in Recipes through
-   `vllm-sr recipe builtin list`, `export`, and `init` when requested.
-4. For a new stack, validate locally, launch, and wait for readiness. For an
-   existing stack, validate and plan before applying; listener or provider
-   topology changes require an authorized deployment restart.
-5. Preview the routing decision without backend generation, then send a real
-   end-to-end request through the routed inference endpoint.
-6. Leave the config path, active revision, validation result, and routing
-   evidence for review.
-
-Tell the agent your model endpoint URLs, routing objective, or deployment
-constraints in the same message when they are already known. Otherwise, the
-agent will discover what it can and ask only when a choice or permission is
-required.
+Every step is safe to rerun: an existing configuration or running stack is
+verified, not replaced. The Skill's references cover GPU details, Envoy,
+Kubernetes, configuration changes, troubleshooting, recipe tuning, and
+evaluation.
 
 ## Direct contracts
 
@@ -59,23 +72,27 @@ Playground output when requested.
 | Inspect an operation | `GET /openapi.json?path=...&method=...` |
 | Discover configuration | `vllm-sr config schema` or `GET /api/v1/config/schema` |
 | Discover packaged Recipes | `vllm-sr recipe builtin list` |
-| First launch | `vllm-sr config validate`, then `vllm-sr serve` and readiness |
+| First launch | `vllm-sr config validate`, then `vllm-sr serve --config config.yaml` |
+| Check the stack | `vllm-sr status` |
 | Plan an existing-stack change | `vllm-sr config validate`, then `vllm-sr config plan` |
 | Apply a hot-reloadable change | `vllm-sr config apply`, which plans again before applying |
 | Test routing logic | `vllm-sr route preview` |
 | Test the complete data path | `vllm-sr route probe` |
+| Serve a Router model alone | `vllm-sr serve ARTIFACT --engine` |
 
-The management origin serves health, discovery, configuration, and OpenAPI.
-The routed inference origin separately serves OpenAI-compatible requests. An
-agent must discover both rather than infer one from the other.
+The management origin, port 8080 on a local stack, serves health, discovery,
+configuration, and OpenAPI. The inference listener, port 8899, separately
+serves the [supported inference protocols](protocol-compatibility). An agent
+must discover both rather than infer one from the other.
 
 ## Safety boundaries
 
 - Keep API keys and provider credentials in environment variables; do not put
   secret values in prompts, YAML, command arguments, or logs.
 - Keep changes within the requested deployment and existing authorization;
-  obtain missing authorization before destructive changes, public exposure, or
-  disruption of an unrelated service.
+  obtain missing authorization before installing packages, publishing a port
+  beyond loopback, other destructive changes, or disruption of an unrelated
+  service such as a stack the agent didn't start.
 - A routing preview runs routing signals without backend generation. A route
   probe is the end-to-end check that reaches the selected backend.
 - Use the running Router's discovery, schema, and OpenAPI responses as the
@@ -102,3 +119,7 @@ without a repository checkout.
 `make agent-skill-check`, pre-commit, and `make harness-check` reject missing or
 stale generated files. The repository and website therefore share one workflow
 while keeping their respective skill names and installation paths.
+
+Change the Skill together with the CLI behavior it describes, and follow it on a
+fresh host before publishing: its commands and expected outputs are the
+contract an agent runs.

@@ -50,6 +50,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.NgramArity != 0 {
 		fields["ngram_arity"] = IntValue{V: kw.NgramArity}
 	}
+	if kw.IncludeHistory {
+		fields["include_history"] = BoolValue{V: true}
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 
@@ -66,6 +69,16 @@ func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	}
 	if emb.AggregationMethodConfiged != "" {
 		fields["aggregation_method"] = StringValue{V: string(emb.AggregationMethodConfiged)}
+	}
+	for _, list := range []struct {
+		name   string
+		values []string
+	}{
+		{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
+	} {
+		if len(list.values) > 0 {
+			fields[list.name] = stringsToArray(list.values)
+		}
 	}
 	if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
 		fields["query_modality"] = StringValue{V: string(emb.QueryModality)}
@@ -220,9 +233,6 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 
 func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
 	fields := make(map[string]Value)
-	if rule.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
 	if rule.Description != "" {
 		fields["description"] = StringValue{V: rule.Description}
 	}
@@ -265,6 +275,9 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	}
 	if pii.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
+	}
+	if pii.Source != "" {
+		fields["source"] = StringValue{V: pii.Source}
 	}
 	if pii.Description != "" {
 		fields["description"] = StringValue{V: pii.Description}
@@ -382,10 +395,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
 		}
-		// Pull param_size from model_config.
-		if mc, ok := d.cfg.ModelConfig[mr.Model]; ok {
-			ref.ParamSize = mc.ParamSize
-		}
+		ref.ParamSize = routeParamSize(d.cfg.ModelConfig, mr.Model)
 		route.Models = append(route.Models, ref)
 	}
 
@@ -550,11 +560,18 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	if mr.MaxCompletionTokens != nil {
 		opts = append(opts, fmt.Sprintf("max_completion_tokens = %d", *mr.MaxCompletionTokens))
 	}
-	// Pull param_size from model_config.
-	if mc, ok := modelConfig[mr.Model]; ok {
-		if mc.ParamSize != "" {
-			opts = append(opts, fmt.Sprintf("param_size = %q", mc.ParamSize))
-		}
+	if size := routeParamSize(modelConfig, mr.Model); size != "" {
+		opts = append(opts, fmt.Sprintf("param_size = %q", size))
 	}
 	return strings.Join(opts, ", ")
+}
+
+// routeParamSize is the param_size a route repeats from model_config. A
+// catalog-backed model's size belongs to its built-in card, not to the route.
+func routeParamSize(modelConfig map[string]config.ModelParams, model string) string {
+	mc, ok := modelConfig[model]
+	if !ok || mc.Catalog != "" {
+		return ""
+	}
+	return mc.ParamSize
 }

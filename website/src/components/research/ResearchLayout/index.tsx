@@ -24,6 +24,7 @@ export const RESEARCH_NAV_GROUPS: ResearchNavGroup[] = [
       { key: 'publications', label: 'Papers & Talks', to: '/publications' },
       { key: 'white-paper', label: 'White Paper', to: '/white-paper' },
       { key: 'vision-paper', label: 'Vision Paper', to: '/vision-paper' },
+      { key: 'decision-paper', label: 'Decision Paper', to: '/decision-paper' },
     ],
   },
 ]

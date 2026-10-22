@@ -108,7 +108,7 @@ func TestSelectionTracePreviewAndLiveLatencyCoverage(t *testing.T) {
 				if stage.Action != wantAction || stage.Available != wantAvailable || stage.Total != 2 {
 					t.Fatalf("latency evidence=%+v", stage)
 				}
-				recorded := buildReplayRouteDiagnostics(ctx, "auto", selected.Model, decision.Name, 0, 0)
+				recorded := buildReplayRouteDiagnostics(ctx, "vllm-sr/auto", selected.Model, decision.Name, 0, 0)
 				if !reflect.DeepEqual(recorded.SelectionTrace, preview.MultiFactor) {
 					t.Fatal("replay lost the evaluated objective stages")
 				}

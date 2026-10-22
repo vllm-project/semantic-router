@@ -16,7 +16,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -36,7 +35,7 @@ const (
 	delayPortForwardReady        = 2 * time.Second
 
 	// Image constants
-	imageRepository = "ghcr.io/vllm-project/semantic-router/extproc"
+	imageRepository = "ghcr.io/vllm-project/semantic-router/vllm-sr"
 	imagePullPolicy = "Never"
 	llamaStackImage = "llamastack/distribution-starter:0.5.0"
 
@@ -254,6 +253,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		Namespace:   namespaceSemanticRouter,
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
+			"gateway.mode":     "extproc",
 			"image.repository": imageRepository,
 			"image.tag":        opts.ImageTag,
 			"image.pullPolicy": imagePullPolicy,

@@ -39,11 +39,19 @@ func TestReferenceConfigCoversCanonicalPublicSurface(t *testing.T) {
 
 func TestReferenceConfigCoversSupportedRoutingSurfaces(t *testing.T) {
 	root := loadReferenceConfigRaw(t)
-	decisions := mustSliceAt(t, root, "routing", "decisions")
+	decisions := referenceRecipeDecisions(t, root)
 
 	assertSupportedSignalTypesInReferenceConfig(t, root)
 	assertReferenceLoRACatalogCoverage(t, root)
 	assertSupportedAlgorithmsInReferenceConfig(t, decisions)
 	assertSupportedPluginsInReferenceConfig(t, decisions)
 	assertDecisionRuleCompositionInReferenceConfig(t, decisions)
+}
+
+// referenceRecipeDecisions includes API-specific examples without requiring
+// incompatible native algorithms in the default Chat recipe.
+func referenceRecipeDecisions(t testingT, root map[string]interface{}) []interface{} {
+	result := append([]interface{}(nil), mustSliceAt(t, root, "routing", "decisions")...)
+	profiles := collectChildMapsFromSlice(t, mustSliceAt(t, root, "recipes"), "routing", "recipes")
+	return append(result, collectNestedSliceItems(t, profiles, "decisions", "recipes[].routing")...)
 }

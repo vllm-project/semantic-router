@@ -30,6 +30,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
+	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
 	signalInput.requestFacts.Context = ctx.TraceContext
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
@@ -96,6 +97,13 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	if method == selection.MethodPrompt && algorithm != nil &&
 		algorithm.Prompt != nil {
 		return r.newDecisionPromptSelector(*algorithm.Prompt)
+	}
+	if method == selection.MethodDecision && algorithm != nil &&
+		algorithm.Decision != nil {
+		return r.newDecisionModelSelector(*algorithm.Decision)
+	}
+	if selector := r.extensionAlgorithmSelector(method, algorithm, ctx); selector != nil {
+		return selector
 	}
 	registry := r.modelSelectorForRequest(ctx)
 	if registry == nil {
@@ -436,7 +444,7 @@ func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRe
 
 	// Missing model window metadata is valid; the estimator treats it as a
 	// neutral fit score rather than as an error.
-	return &selection.CacheAffinityContext{
+	affinity := &selection.CacheAffinityContext{
 		TurnIndex:           reqCtx.TurnIndex,
 		PreviousModel:       reqCtx.PreviousModel,
 		PreviousResponseID:  reqCtx.PreviousResponseID,
@@ -444,6 +452,13 @@ func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRe
 		ContextTokens:       reqCtx.VSRContextTokenCount,
 		ModelContextWindows: r.modelContextWindows(modelRefs),
 	}
+	if reqCtx.SemanticRequest != nil {
+		affinity.PromptCacheKey = strings.TrimSpace(reqCtx.SemanticRequest.PromptCacheKey)
+	}
+	if affinity.PreviousModel == "" {
+		affinity.PreviousModel = promptCacheKeyModel(reqCtx)
+	}
+	return affinity
 }
 
 // getSelectionMethod determines which selection algorithm to use.

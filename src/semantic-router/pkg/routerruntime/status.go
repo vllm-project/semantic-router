@@ -1,6 +1,7 @@
 package routerruntime
 
 import (
+	"slices"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -57,7 +58,9 @@ type StartupObservation struct {
 }
 
 type ConfigStatus struct {
-	ActiveHash       string `json:"active_hash,omitempty"`
+	ActiveHash string `json:"active_hash,omitempty"`
+	// ActiveVersion is the version of the configuration snapshot that serves.
+	ActiveVersion    uint64 `json:"active_version,omitempty"`
 	ObservedHash     string `json:"observed_hash,omitempty"`
 	ObservedAttempt  uint64 `json:"observed_attempt"`
 	ActivationStatus string `json:"activation_status,omitempty"`
@@ -80,18 +83,55 @@ type localStartupWriter struct {
 	writer   startupstatus.StatusWriter
 }
 
+type localStartupSnapshot struct {
+	state      startupstatus.State
+	observedAt time.Time
+}
+
+func cloneStartupState(state startupstatus.State) startupstatus.State {
+	state.PendingModels = slices.Clone(state.PendingModels)
+	state.ModelDeployments = slices.Clone(state.ModelDeployments)
+	if state.EmbeddingProvider != nil {
+		provider := *state.EmbeddingProvider
+		if provider.APIKeyEnvSet != nil {
+			value := *provider.APIKeyEnvSet
+			provider.APIKeyEnvSet = &value
+		}
+		if provider.Healthy != nil {
+			value := *provider.Healthy
+			provider.Healthy = &value
+		}
+		state.EmbeddingProvider = &provider
+	}
+	return state
+}
+
 // StartupStatusWriter retains local facts even when their external store is unavailable.
 func (r *Registry) StartupStatusWriter(writer startupstatus.StatusWriter) startupstatus.StatusWriter {
 	return &localStartupWriter{registry: r, writer: writer}
 }
 
 func (w *localStartupWriter) Write(state startupstatus.State) error {
+	snapshot := cloneStartupState(state)
 	w.registry.mu.Lock()
-	w.registry.startupStatus = &StartupObservation{
-		Phase: state.Phase, Ready: state.Ready, ObservedAt: time.Now().UTC(),
-	}
+	observedAt := time.Now().UTC()
+	snapshot.UpdatedAt = observedAt.Format(time.RFC3339)
+	w.registry.startupStatus = &localStartupSnapshot{state: snapshot, observedAt: observedAt}
 	w.registry.mu.Unlock()
 	return w.writer.Write(state)
+}
+
+func (r *Registry) StartupState() *startupstatus.State {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.startupStatus == nil {
+		return nil
+	}
+	state := cloneStartupState(r.startupStatus.state)
+	return &state
 }
 
 // Status returns an atomic observation of this registry without reading shared storage.
@@ -104,8 +144,11 @@ func (r *Registry) Status() StatusReport {
 		ObservedAt:    time.Now().UTC(),
 	}
 	if r.startupStatus != nil {
-		startup := *r.startupStatus
-		report.Startup = &startup
+		report.Startup = &StartupObservation{
+			Phase:      r.startupStatus.state.Phase,
+			Ready:      r.startupStatus.state.Ready,
+			ObservedAt: r.startupStatus.observedAt,
+		}
 	}
 	active := r.config != nil && r.classificationService != nil
 	if active && r.acquireGeneration != nil {
@@ -119,6 +162,9 @@ func (r *Registry) Status() StatusReport {
 		report.Config.ObservedHash = r.config.DocumentHash
 		if active {
 			report.Config.ActiveHash = r.config.DocumentHash
+			if r.configSnapshot != nil {
+				report.Config.ActiveVersion = r.configSnapshot.Version()
+			}
 		}
 	}
 	if r.configActivation.Attempt != 0 {

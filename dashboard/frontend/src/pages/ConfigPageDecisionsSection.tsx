@@ -31,6 +31,8 @@ import {
   DECISION_ADAPTATIONS_SCHEMA,
   DECISION_DECLARATIVE_SCHEMA,
   DECISION_OUTPUT_CONTRACT_SCHEMA,
+  DECISION_FALLBACK_SCHEMA,
+  DECISION_RELIABILITY_SCHEMA,
 } from './configPageDecisionAdvancedSchemas'
 import {
   decisionModelRefsForForm,
@@ -207,6 +209,36 @@ export default function ConfigPageDecisionsSection({
           ),
           fullWidth: true,
         },
+        ...(decision.reliability && Object.keys(decision.reliability).length > 0
+          ? [
+              {
+                label: 'Timeouts & Retries',
+                value: (
+                  <ConfigPageSchemaFieldsEditor
+                    schema={DECISION_RELIABILITY_SCHEMA}
+                    value={decision.reliability}
+                    readOnly
+                  />
+                ),
+                fullWidth: true,
+              },
+            ]
+          : []),
+        ...(decision.fallback && Object.keys(decision.fallback).length > 0
+          ? [
+              {
+                label: 'Fallback',
+                value: (
+                  <ConfigPageSchemaFieldsEditor
+                    schema={DECISION_FALLBACK_SCHEMA}
+                    value={decision.fallback}
+                    readOnly
+                  />
+                ),
+                fullWidth: true,
+              },
+            ]
+          : []),
         ...(decision.plugins?.length
           ? [
               {
@@ -281,6 +313,8 @@ export default function ConfigPageDecisionsSection({
       action: {},
       algorithm: undefined,
       adaptations: {},
+      reliability: {},
+      fallback: {},
       declarative: {},
       rules: {},
       modelRefs: [
@@ -308,6 +342,8 @@ export default function ConfigPageDecisionsSection({
             action: decision.action || {},
             algorithm: decision.algorithm,
             adaptations: decision.adaptations || {},
+            reliability: decision.reliability || {},
+            fallback: decision.fallback || {},
             declarative: {
               candidateIterations: decision.candidateIterations || [],
               emits: decision.emits || [],
@@ -433,6 +469,36 @@ export default function ConfigPageDecisionsSection({
         ),
       },
       {
+        name: 'reliability',
+        label: 'Timeouts & Retries',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description:
+          "Overrides the provider model's timeouts and retries for this decision. Retry conditions and status codes add to the provider model's.",
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_RELIABILITY_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
+        name: 'fallback',
+        label: 'Fallback',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description:
+          "Overrides the recipe's cross-model fallback for this decision, field by field. The candidates stay this decision's ranked models.",
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_FALLBACK_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
         name: 'plugins',
         label: 'Plugins',
         section: 'Selection & runtime',
@@ -503,6 +569,8 @@ export default function ConfigPageDecisionsSection({
       const plugins = decisionPluginsForSave(formData.plugins)
       const action = configuredObject(formData.action)
       const adaptations = configuredObject(formData.adaptations)
+      const reliability = configuredObject(formData.reliability)
+      const fallback = configuredObject(formData.fallback)
       const outputContractSpec = configuredObject(formData.output_contract_spec)
       const declarative = formData.declarative || {}
       if (action) {
@@ -532,6 +600,8 @@ export default function ConfigPageDecisionsSection({
         action: action as DecisionConfig['action'],
         algorithm: formData.algorithm,
         adaptations,
+        reliability,
+        fallback,
         candidateIterations: Array.isArray(declarative.candidateIterations)
           ? (declarative.candidateIterations as Array<Record<string, unknown>>)
           : undefined,

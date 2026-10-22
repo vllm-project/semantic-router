@@ -362,6 +362,20 @@ export function buildInsightsRecordSections(
     ],
   })
 
+  if (record.outcomes?.length) {
+    sections.push({
+      title: 'Outcomes',
+      fields: record.outcomes.map((outcome, index) => ({
+        label: `Outcome ${index + 1}`,
+        value: [
+          outcome.timestamp ? formatDateTime(outcome.timestamp) : 'Unknown time',
+          `${outcome.source} → ${outcome.target}`,
+          outcome.verdict,
+        ].join(' · '),
+      })),
+    })
+  }
+
   const projectionTraceFields = buildProjectionTraceFields(record)
   if (projectionTraceFields.length > 0) {
     sections.push({

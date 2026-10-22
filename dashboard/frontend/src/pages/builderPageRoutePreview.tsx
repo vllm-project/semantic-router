@@ -1,6 +1,12 @@
 import React, { useMemo } from 'react'
 
-import { astModelToInput, getAlgorithmFieldSchema, serializeFields } from '@/lib/dslMutations'
+import {
+  astModelToInput,
+  formatDslName,
+  getAlgorithmFieldSchema,
+  quoteDSLString,
+  serializeFields,
+} from '@/lib/dslMutations'
 import type { ASTAlgoSpec, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
@@ -19,8 +25,10 @@ function generateRouteDslPreview(
   algorithm: RouteAlgoInput | undefined,
   plugins: RoutePluginInput[],
 ): string {
-  const descPart = description.trim() ? ` (description = "${description.trim()}")` : ''
-  const lines: string[] = [`ROUTE ${routeName}${descPart} {`]
+  const descPart = description.trim()
+    ? ` (description = ${quoteDSLString(description.trim())})`
+    : ''
+  const lines: string[] = [`ROUTE ${formatDslName(routeName)}${descPart} {`]
   lines.push(`  PRIORITY ${priority}`)
   if (whenExpr.trim()) {
     lines.push('')
@@ -33,8 +41,8 @@ function generateRouteDslPreview(
       .map((m) => {
         const attrs: string[] = []
         if (m.reasoning) attrs.push(`reasoning = true`)
-        if (m.effort) attrs.push(`effort = "${m.effort}"`)
-        if (m.paramSize) attrs.push(`param_size = "${m.paramSize}"`)
+        if (m.effort) attrs.push(`effort = ${quoteDSLString(m.effort)}`)
+        if (m.paramSize) attrs.push(`param_size = ${quoteDSLString(m.paramSize)}`)
         if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
         if (
           typeof m.maxCompletionTokens === 'number' &&
@@ -44,7 +52,7 @@ function generateRouteDslPreview(
           attrs.push(`max_completion_tokens = ${m.maxCompletionTokens}`)
         }
         const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
-        return `"${m.model}"${attrStr}`
+        return `${quoteDSLString(m.model)}${attrStr}`
       })
     if (modelStrs.length === 1) {
       lines.push(`  MODEL ${modelStrs[0]}`)
@@ -69,11 +77,11 @@ function generateRouteDslPreview(
     plugins.forEach((p) => {
       if (p.fields && Object.keys(p.fields).length > 0) {
         const pluginFields = serializeFields(filterPreviewFields(p.fields), '    ')
-        lines.push(`  PLUGIN ${p.name} {`)
+        lines.push(`  PLUGIN ${formatDslName(p.name)} {`)
         if (pluginFields.trim()) lines.push(pluginFields)
         lines.push(`  }`)
       } else {
-        lines.push(`  PLUGIN ${p.name}`)
+        lines.push(`  PLUGIN ${formatDslName(p.name)}`)
       }
     })
   }

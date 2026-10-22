@@ -144,3 +144,30 @@ func containsNegationCue(tokens []string) bool {
 	}
 	return false
 }
+
+// negationGuardOutcome classifies a pair the guard accepted. Only a change made
+// entirely of negation cues is one the English lexicon can judge; any other
+// changed word may carry a negation it cannot see, such as "unsafe" or "nicht".
+func negationGuardOutcome(incoming, cached []string) NegationGuardOutcome {
+	differences := 0
+	for i, j := 0, 0; i < len(incoming) || j < len(cached); {
+		var token string
+		switch {
+		case i < len(incoming) && j < len(cached) && incoming[i] == cached[j]:
+			i++
+			j++
+			continue
+		case j == len(cached) || (i < len(incoming) && incoming[i] < cached[j]):
+			token = incoming[i]
+			i++
+		default:
+			token = cached[j]
+			j++
+		}
+		differences++
+		if _, cue := negationCues[token]; !cue || differences > tokenDiffLimit {
+			return NegationGuardNotApplicable
+		}
+	}
+	return NegationGuardChecked
+}

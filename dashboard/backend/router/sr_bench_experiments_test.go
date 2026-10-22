@@ -74,6 +74,7 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 	}
 	const experiment = "/experiments/exp-0123456789abcdef0123456789abcdef"
 	writes := []struct{ method, path string }{
+		{http.MethodPost, "/dataset-preparations"},
 		{http.MethodPost, "/experiments"},
 		{http.MethodPost, experiment + "/runs"},
 		{http.MethodPost, "/runs/run-1/candidate-plan"},
@@ -113,7 +114,7 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 		t.Fatal(err)
 	}
 	role = auth.RoleRead
-	for _, path := range []string{"/experiments", experiment, experiment + "/runs", "/datasets/selection", "/replay-options", "/comparison-options"} {
+	for _, path := range []string{"/experiments", experiment, experiment + "/runs", "/datasets/selection", "/replay-options", "/comparison-options", "/dataset-preparations", "/dataset-preparations/options", "/dataset-preparations/prep-0123456789abcdef0123456789abcdef"} {
 		response := request(http.MethodGet, path, "", "", true)
 		if response.Code != http.StatusOK {
 			t.Fatalf("viewer could not read %s: %d", path, response.Code)

@@ -1,3 +1,6 @@
+# The gateway in front of the Router calls it over ext_proc.
+gateway:
+  mode: extproc
 replicaCount: 1
 
 # ExtProc-only Responses state and protocol conversion. The external gateway
@@ -44,10 +47,8 @@ configOverride:
       embeddings:
         semantic:
           qwen3_model_path: ""
-          gemma_model_path: ""
           mmbert_model_path: ""
           multimodal_model_path: ""
-          bert_model_path: ""
           embedding_config:
             preload_embeddings: false
             enable_soft_matching: false
@@ -57,7 +58,6 @@ configOverride:
         pii_classifier: ""
         fact_check_classifier: ""
         hallucination_detector: ""
-        hallucination_explainer: ""
         feedback_detector: ""
       kbs: []
       modules:
@@ -87,9 +87,6 @@ configOverride:
             model_ref: ""
             model_id: ""
           detector:
-            model_ref: ""
-            model_id: ""
-          explainer:
             model_ref: ""
             model_id: ""
         feedback_detector:

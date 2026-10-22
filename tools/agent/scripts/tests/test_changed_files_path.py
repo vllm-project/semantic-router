@@ -1,5 +1,6 @@
 import importlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -59,7 +60,12 @@ class ChangedFilesTests(unittest.TestCase):
         self,
     ) -> None:
         outputs = {
-            ("rev-parse", "--verify", "origin/main"): (0, "base\n"),
+            (
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                "origin/main^{commit}",
+            ): (0, "base\n"),
             ("merge-base", "HEAD", "origin/main"): (0, "base\n"),
             ("diff", "--name-only", "--no-renames", "-z", "base...HEAD"): (
                 0,
@@ -165,15 +171,116 @@ class ImpactTests(unittest.TestCase):
         result = harness.build_impact(["tools/make/agent.mk"], "cpu")
 
         self.assertEqual(
-            result["domains"], [{"name": "harness", "owner": "maintainers"}]
+            result["domains"],
+            [
+                {"name": "harness", "owner": "maintainers"},
+                {"name": "component-execution", "owner": "maintainers"},
+            ],
         )
         self.assertEqual(result["checks"], ["make harness-check"])
+        self.assertEqual(
+            {job["name"] for job in result["candidate_ci_jobs"]},
+            {
+                "quality",
+                "security",
+                "cli-unit",
+                "model-runtime",
+                "bench-tools",
+                "training",
+                "onnx-artifacts",
+                "mock-provider",
+                "learning-tools",
+                "harness-tools",
+                "e2e-unit",
+                "soak-tools",
+            },
+        )
+        self.assertEqual(result["optional_e2e_profiles"], [])
+        self.assertEqual(result["pr_images"], [])
         self.assertNotIn("primary_skill", result)
         self.assertNotIn("completion_boundary", result)
         self.assertNotIn("loop_mode", result)
 
     def test_verify_requires_an_explicit_selection(self) -> None:
         self.assertEqual(harness.run_verify((), ()), 2)
+
+
+class BaseReferenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.git("init", "--quiet")
+        (self.root / "file.txt").write_text("first\n", encoding="utf-8")
+        self.git("add", "file.txt")
+        self.git("commit", "--quiet", "--signoff", "-m", "First")
+        (self.root / "file.txt").write_text("second\n", encoding="utf-8")
+        self.git("commit", "--quiet", "--signoff", "-am", "Second")
+        patch = mock.patch.object(changed_files, "REPO_ROOT", self.root)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            args=[
+                "git",
+                "-c",
+                "user.name=Test Author",
+                "-c",
+                "user.email=test@example.org",
+                *args,
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    def test_missing_explicit_reference_does_not_fall_back(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid base ref 'missing-base'"):
+            changed_files.resolve_base_ref("missing-base")
+
+    def test_missing_environment_reference_does_not_fall_back(self) -> None:
+        with (
+            mock.patch.dict(os.environ, {"BASE_REF": "missing-base"}),
+            self.assertRaisesRegex(ValueError, "invalid base ref 'missing-base'"),
+        ):
+            changed_files.resolve_base_ref(None)
+
+    def test_explicit_reference_takes_precedence(self) -> None:
+        with mock.patch.dict(os.environ, {"BASE_REF": "missing-base"}):
+            self.assertEqual(changed_files.resolve_base_ref("HEAD"), "HEAD")
+
+    def test_non_commit_reference_is_rejected(self) -> None:
+        for reference in ("HEAD:file.txt", "HEAD^{tree}"):
+            with (
+                self.subTest(reference=reference),
+                self.assertRaisesRegex(ValueError, "invalid base ref"),
+            ):
+                changed_files.resolve_base_ref(reference)
+
+    def test_default_reference_keeps_its_fallback(self) -> None:
+        with mock.patch.dict(os.environ, {"BASE_REF": ""}):
+            self.assertEqual(changed_files.resolve_base_ref(None), "HEAD^")
+            self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+            self.assertEqual(changed_files.resolve_base_ref(None), "origin/main")
+
+    def test_cli_reports_invalid_base_without_a_traceback(self) -> None:
+        result = subprocess.run(
+            args=[
+                sys.executable,
+                str(SCRIPT_DIR / "harness.py"),
+                "changed-files",
+                "--base-ref",
+                "refs/heads/missing-base-reference-test",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid base ref", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

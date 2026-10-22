@@ -81,7 +81,7 @@ func TestTieredSelectionSameKindPoolRanksByConfidence(t *testing.T) {
 	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
 		{Name: "legal_route", Tier: 1, Priority: 180, Rules: config.RuleNode{Type: "domain", Name: "law"}},
 		{Name: "health_route", Tier: 1, Priority: 60, Rules: config.RuleNode{Type: "domain", Name: "health"}},
-	}, "priority")
+	}, "confidence")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		DomainRules:       []string{"law", "health"},

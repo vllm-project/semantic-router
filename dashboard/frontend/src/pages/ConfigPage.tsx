@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { lazy, Suspense, useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
@@ -6,13 +6,6 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
 import { canRunEvaluation, canWriteConfig } from '../utils/accessControl'
-import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
-import ConfigPageModelsSection from './ConfigPageModelsSection'
-import ConfigPageSignalsSection from './ConfigPageSignalsSection'
-import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
-import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
-import ConfigPageEntrypointsRecipesSection from './ConfigPageEntrypointsRecipesSection'
-import ConfigPageMCPSection from './ConfigPageMCPSection'
 import ProductLoadingState from '../components/ProductLoadingState'
 import {
   canonicalizeConfigForManagerSave,
@@ -27,7 +20,19 @@ import {
   getReasoningFamiliesMap,
 } from './configPageSupport'
 import { getNormalizedModels } from './configPageModelNormalization'
+import { responseErrorMessage } from './configPageRequestErrors'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
+import { withRequestTimeout } from '../utils/boundedRequest'
+
+const ConfigPageRouterConfigSection = lazy(() => import('./ConfigPageRouterConfigSection'))
+const ConfigPageModelsSection = lazy(() => import('./ConfigPageModelsSection'))
+const ConfigPageSignalsSection = lazy(() => import('./ConfigPageSignalsSection'))
+const ConfigPageProjectionsSection = lazy(() => import('./ConfigPageProjectionsSection'))
+const ConfigPageDecisionsSection = lazy(() => import('./ConfigPageDecisionsSection'))
+const ConfigPageEntrypointsRecipesSection = lazy(
+  () => import('./ConfigPageEntrypointsRecipesSection'),
+)
+const ConfigPageMCPSection = lazy(() => import('./ConfigPageMCPSection'))
 
 interface ConfigPageProps {
   activeSection?: ConfigSection
@@ -88,12 +93,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
 
     void fetchConfig()
-    void fetchRouterDefaults()
   }, [isMCPSection])
 
-  // Fetch tools database when config is loaded
   useEffect(() => {
-    if (isMCPSection) return
+    if (activeSection === 'global-config') void fetchRouterDefaults()
+  }, [activeSection])
+
+  // Fetch tools database only for the section that displays it.
+  useEffect(() => {
+    if (activeSection !== 'global-config') return
 
     const toolsDBPath =
       routerDefaults?.integrations?.tools?.tools_db_path ||
@@ -107,18 +115,20 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     config?.global?.integrations?.tools?.tools_db_path,
     config?.tools?.tools_db_path,
     routerDefaults?.integrations?.tools?.tools_db_path,
-    isMCPSection,
+    activeSection,
   ])
 
   const fetchConfig = async (showLoading = true): Promise<boolean> => {
     if (showLoading) setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/router/config/all')
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      const data = await response.json()
+      const data = await withRequestTimeout(async (signal) => {
+        const response = await fetch('/api/router/config/all', { signal })
+        if (!response.ok) {
+          throw new Error(await responseErrorMessage(response))
+        }
+        return await response.json()
+      })
       const normalized = projectCanonicalConfigForManager(data)
       setConfig(normalized)
       // Detect config format
@@ -139,13 +149,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
   const fetchRouterDefaults = async () => {
     try {
-      const response = await fetch('/api/router/config/global')
-      if (!response.ok) {
-        console.warn('Global runtime config not available:', response.statusText)
-        setRouterDefaults(null)
-        return
-      }
-      const data = await response.json()
+      const data = await withRequestTimeout(async (signal) => {
+        const response = await fetch('/api/router/config/global', { signal })
+        if (!response.ok) {
+          throw new Error(`Global runtime config not available: ${response.status}`)
+        }
+        return await response.json()
+      })
       setRouterDefaults(data)
     } catch (err) {
       console.warn('Failed to fetch global runtime config:', err)
@@ -157,11 +167,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     setToolsLoading(true)
     setToolsError(null)
     try {
-      const response = await fetch('/api/tools-db')
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      const data = await response.json()
+      const data = await withRequestTimeout(async (signal) => {
+        const response = await fetch('/api/tools-db', { signal })
+        if (!response.ok) {
+          throw new Error(await responseErrorMessage(response))
+        }
+        return await response.json()
+      })
       setToolsData(data)
     } catch (err) {
       setToolsError(err instanceof Error ? err.message : 'Failed to fetch tools database')
@@ -188,23 +200,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       })
 
       if (!response.ok) {
-        // Try to read error message from response body
-        const errorText = await response.text()
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-        if (errorText) {
-          try {
-            const errorJson = JSON.parse(errorText)
-            if (errorJson.error || errorJson.message) {
-              errorMessage = errorJson.message || errorJson.error
-            } else {
-              errorMessage = errorText
-            }
-          } catch {
-            // If not JSON, use the text as-is
-            errorMessage = errorText
-          }
-        }
-        throw new Error(errorMessage)
+        throw new Error(await responseErrorMessage(response))
       }
 
       // Refresh config after save
@@ -395,18 +391,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             <div>
               <h3>Error Loading Config</h3>
               <p>{error}</p>
+              <button type="button" className={styles.button} onClick={() => fetchConfig()}>
+                Retry
+              </button>
             </div>
           </div>
         )}
 
         {isMCPSection && (
           <div className={styles.contentArea}>
-            <ConfigPageMCPSection />
+            <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
+              <ConfigPageMCPSection />
+            </Suspense>
           </div>
         )}
 
         {!isMCPSection && config && !pageLoading && !error && (
-          <div className={styles.contentArea}>{renderActiveSection()}</div>
+          <div className={styles.contentArea}>
+            <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
+              {renderActiveSection()}
+            </Suspense>
+          </div>
         )}
       </div>
 

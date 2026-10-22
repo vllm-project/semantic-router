@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -105,6 +106,14 @@ func newModelVerificationHandler(configPath string, options modelVerificationOpt
 			return
 		}
 
+		// Resolving the request and rate limit can outlive the permission check
+		// performed when the route was entered. Check again before using the
+		// configured provider credential for an outbound inference call.
+		if dashboardauth.RejectRevokedMutation(w, r) {
+			status = http.StatusForbidden
+			errorCode = "permission_revoked"
+			return
+		}
 		response, err := service.Verify(r.Context(), strings.TrimSpace(request.Model))
 		if err != nil {
 			var verificationErr *modelVerificationError
@@ -156,7 +165,7 @@ func auditModelVerificationAttempt(
 	})
 	auditContext, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), modelVerificationAuditTimeout)
 	defer cancel()
-	_ = auditor.AddAuditLog(auditContext, dashboardauth.AuditLog{
+	if err := auditor.AddAuditLog(auditContext, dashboardauth.AuditLog{
 		UserID:     actor,
 		Action:     "model.inference_verify",
 		Resource:   "models",
@@ -167,7 +176,9 @@ func auditModelVerificationAttempt(
 		StatusCode: status,
 		CreatedAt:  time.Now().Unix(),
 		ExtraJSON:  string(extra),
-	})
+	}); err != nil {
+		log.Printf("audit log write failed for model.inference_verify: %v", err)
+	}
 }
 
 func decodeModelVerificationRequest(w http.ResponseWriter, r *http.Request, target *ModelVerificationRequest) error {

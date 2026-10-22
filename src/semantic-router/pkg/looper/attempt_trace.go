@@ -228,7 +228,8 @@ func modelPricingRates(pricing config.ModelPricing) modelpricing.Rates {
 	return modelpricing.Rates{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CachedInputPer1M: pricing.CachedInputPer1M, CacheWritePer1M: pricing.CacheWritePer1M,
-		CompletionPer1M: pricing.CompletionPer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
+		CompletionPer1M:   pricing.CompletionPer1M,
 	}
 }
 
@@ -547,11 +548,21 @@ func composeAttemptOutputTokenLimit(
 
 func modelRefMaxCompletionTokens(refs []config.ModelRef, model string) *int64 {
 	for _, ref := range refs {
-		if ref.Model == model || ref.LoRAName == model {
+		if looperModelRefIdentity(ref) == model {
 			return outputtokens.FromInt(ref.MaxCompletionTokens)
 		}
 	}
 	return nil
+}
+
+// looperModelRefIdentity is the selected candidate: a LoRA adapter's own name,
+// or the bare base model when the reference has no adapter. A sibling adapter
+// does not match its base.
+func looperModelRefIdentity(ref config.ModelRef) string {
+	if ref.LoRAName != "" {
+		return ref.LoRAName
+	}
+	return ref.Model
 }
 
 // estimatedAttemptCost prices the estimated input and reserved output tokens.

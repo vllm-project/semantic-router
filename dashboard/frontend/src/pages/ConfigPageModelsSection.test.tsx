@@ -1,5 +1,21 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import useBuiltInModelCatalog from '../hooks/useBuiltInModelCatalog'
+import catalog from '../modelCatalogDocument'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
+
+vi.mock('../hooks/useBuiltInModelCatalog')
+
+beforeEach(() => {
+  vi.mocked(useBuiltInModelCatalog).mockReturnValue({
+    catalog: catalog as unknown as BuiltInModelCatalog,
+    ready: true,
+    loading: false,
+    error: null,
+    source: 'bundled',
+    retry: vi.fn(),
+  })
+})
 
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import type { ConfigPageModelsSectionProps } from './configPageModelsSectionTypes'
@@ -32,6 +48,21 @@ const props: ConfigPageModelsSectionProps = {
 }
 
 describe('Models page inventories', () => {
+  it('keeps model forms usable while built-in evaluation evidence is still loading', () => {
+    vi.mocked(useBuiltInModelCatalog).mockReturnValue({
+      catalog: catalog as unknown as BuiltInModelCatalog,
+      ready: false,
+      loading: true,
+      error: null,
+      source: 'bundled',
+      retry: vi.fn(),
+    })
+    const html = renderToStaticMarkup(<ConfigPageModelsSection {...props} />)
+    expect(html).toContain('custom-model-4')
+    expect(html).toContain('Loading model evaluations')
+    expect(html).not.toContain('0 built-in · 0 configured')
+  })
+
   it('defaults all three lists to five rows and keeps no-evidence models viewable', () => {
     const html = renderToStaticMarkup(<ConfigPageModelsSection {...props} />)
     expect(html.match(/value="5" selected=""/g)).toHaveLength(3)

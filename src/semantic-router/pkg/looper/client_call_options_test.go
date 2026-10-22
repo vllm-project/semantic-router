@@ -32,23 +32,28 @@ import (
 
 func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if got := request.Header.Get(headers.VSRLooperDecision); got != "decision-a" {
-			t.Errorf("%s = %q, want decision-a", headers.VSRLooperDecision, got)
+		if got := request.Header.Get(testHopDecision); got != "decision-a" {
+			t.Errorf("hop decision = %q, want decision-a", got)
 		}
-		if got := request.Header.Get(headers.VSRLooperIteration); got != "2" {
-			t.Errorf("%s = %q, want 2", headers.VSRLooperIteration, got)
-		}
-		if got := request.Header.Get(headers.VSRFusionDepth); got != "1" {
-			t.Errorf("%s = %q, want 1", headers.VSRFusionDepth, got)
+		if got := request.Header.Get(testHopIteration); got != "2" {
+			t.Errorf("hop iteration = %q, want 2", got)
 		}
 		if got := request.Header.Get("Authorization"); got != "Bearer secret-a" {
 			t.Errorf("Authorization = %q, want Bearer secret-a", got)
 		}
-		if got := request.Header.Get(headers.VSRLooperClientMaxOutputTokens); got != "256" {
-			t.Errorf("%s = %q, want 256", headers.VSRLooperClientMaxOutputTokens, got)
+		if got := request.Header.Get(testHopClientMaxOutputTokens); got != "256" {
+			t.Errorf("%s = %q, want 256", testHopClientMaxOutputTokens, got)
 		}
-		if got := request.Header.Get(headers.VSRLooperStageMaxOutputTokens); got != "128" {
-			t.Errorf("%s = %q, want 128", headers.VSRLooperStageMaxOutputTokens, got)
+		if got := request.Header.Get(testHopStageMaxOutputTokens); got != "128" {
+			t.Errorf("%s = %q, want 128", testHopStageMaxOutputTokens, got)
+		}
+		for _, internal := range []string{
+			headers.VSRLooperClientMaxOutputTokens, headers.VSRLooperStageMaxOutputTokens,
+			headers.VSRInternalAuth, headers.VSRLooperRequest,
+		} {
+			if got := request.Header.Get(internal); got != "" {
+				t.Errorf("hop sent retired internal header %s = %q", internal, got)
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -65,7 +70,7 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(&config.LooperConfig{Endpoint: server.URL})
+	client := hopsTo(&config.LooperConfig{}, server.URL)
 	request := openai.ChatCompletionNewParams{
 		Model:    "original-model",
 		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
@@ -77,7 +82,6 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 		CallOptions{
 			DecisionName:          "decision-a",
 			Iteration:             2,
-			FusionDepth:           1,
 			Mode:                  ResponseJSON,
 			ClientMaxOutputTokens: looperTestInt64(256),
 			StageMaxOutputTokens:  looperTestInt64(128),
@@ -94,63 +98,35 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	}
 }
 
-func TestRequestHeadersUsesContextFusionDepthAsFallback(t *testing.T) {
-	client := NewClient(&config.LooperConfig{})
-	ctx := contextWithFusionDepth(context.Background(), 1)
+func TestCallModelWithOptionsOmitsNonPositiveOutputTokenBounds(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get(testHopClientMaxOutputTokens); got != "" {
+			t.Errorf("non-positive client bound = %q", got)
+		}
+		if got := request.Header.Get(testHopStageMaxOutputTokens); got != "" {
+			t.Errorf("non-positive stage bound = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"choices": []map[string]interface{}{{
+				"message": map[string]interface{}{"role": "assistant", "content": "ok"},
+			}},
+		})
+	}))
+	defer server.Close()
 
-	header := client.requestHeaders(
-		ctx,
-		ModelTarget{},
-		CallOptions{DecisionName: "decision-a", Iteration: 1},
-	)
-	if got := header.Get(headers.VSRFusionDepth); got != "1" {
-		t.Fatalf("context %s = %q, want 1", headers.VSRFusionDepth, got)
-	}
-
-	header = client.requestHeaders(
-		ctx,
-		ModelTarget{},
-		CallOptions{DecisionName: "decision-a", Iteration: 1, FusionDepth: 2},
-	)
-	if got := header.Get(headers.VSRFusionDepth); got != "2" {
-		t.Fatalf("explicit %s = %q, want 2", headers.VSRFusionDepth, got)
-	}
-}
-
-func TestRequestHeadersCarriesPositiveOutputTokenBounds(t *testing.T) {
-	client := NewClient(&config.LooperConfig{})
-	header := client.requestHeaders(
+	client := hopsTo(&config.LooperConfig{}, server.URL)
+	if _, err := client.CallModelWithOptions(
 		context.Background(),
-		ModelTarget{},
+		openai.ChatCompletionNewParams{Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")}},
+		ModelTarget{Name: "model-a"},
 		CallOptions{
-			DecisionName:          "decision-a",
-			Iteration:             1,
-			ClientMaxOutputTokens: looperTestInt64(256),
-			StageMaxOutputTokens:  looperTestInt64(64),
-		},
-	)
-	if got := header.Get(headers.VSRLooperClientMaxOutputTokens); got != "256" {
-		t.Fatalf("%s = %q, want 256", headers.VSRLooperClientMaxOutputTokens, got)
-	}
-	if got := header.Get(headers.VSRLooperStageMaxOutputTokens); got != "64" {
-		t.Fatalf("%s = %q, want 64", headers.VSRLooperStageMaxOutputTokens, got)
-	}
-
-	header = client.requestHeaders(
-		context.Background(),
-		ModelTarget{},
-		CallOptions{
-			DecisionName:          "decision-a",
 			Iteration:             1,
 			ClientMaxOutputTokens: looperTestInt64(0),
 			StageMaxOutputTokens:  looperTestInt64(-8),
 		},
-	)
-	if got := header.Get(headers.VSRLooperClientMaxOutputTokens); got != "" {
-		t.Fatalf("non-positive client bound header = %q", got)
-	}
-	if got := header.Get(headers.VSRLooperStageMaxOutputTokens); got != "" {
-		t.Fatalf("non-positive stage bound header = %q", got)
+	); err != nil {
+		t.Fatalf("CallModelWithOptions() error = %v", err)
 	}
 }
 
@@ -159,7 +135,6 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 		model         string
 		decision      string
 		iteration     string
-		fusionDepth   string
 		authorization string
 	}
 
@@ -183,9 +158,8 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 		}
 		observed <- observedRequest{
 			model:         body.Model,
-			decision:      request.Header.Get(headers.VSRLooperDecision),
-			iteration:     request.Header.Get(headers.VSRLooperIteration),
-			fusionDepth:   request.Header.Get(headers.VSRFusionDepth),
+			decision:      request.Header.Get(testHopDecision),
+			iteration:     request.Header.Get(testHopIteration),
 			authorization: request.Header.Get("Authorization"),
 		}
 		<-release
@@ -194,7 +168,7 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(&config.LooperConfig{Endpoint: server.URL})
+	client := hopsTo(&config.LooperConfig{}, server.URL)
 	type call struct {
 		target  ModelTarget
 		options CallOptions
@@ -206,7 +180,7 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 		},
 		{
 			target:  ModelTarget{Name: "model-b", AccessKey: "secret-b"},
-			options: CallOptions{DecisionName: "decision-b", Iteration: 2, FusionDepth: 1, Mode: ResponseJSON},
+			options: CallOptions{DecisionName: "decision-b", Iteration: 2, Mode: ResponseJSON},
 		},
 	}
 
@@ -236,7 +210,7 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 
 	want := map[string]observedRequest{
 		"model-a": {model: "model-a", decision: "decision-a", iteration: "1", authorization: "Bearer secret-a"},
-		"model-b": {model: "model-b", decision: "decision-b", iteration: "2", fusionDepth: "1", authorization: "Bearer secret-b"},
+		"model-b": {model: "model-b", decision: "decision-b", iteration: "2", authorization: "Bearer secret-b"},
 	}
 	for model, wantRequest := range want {
 		if gotRequest := got[model]; gotRequest != wantRequest {
@@ -272,11 +246,6 @@ func TestCallModelWithOptionsValidatesRequiredFields(t *testing.T) {
 			name:    "negative iteration",
 			target:  ModelTarget{Name: "model-a"},
 			options: CallOptions{Iteration: -1, Mode: ResponseJSON},
-		},
-		{
-			name:    "negative fusion depth",
-			target:  ModelTarget{Name: "model-a"},
-			options: CallOptions{Iteration: 1, FusionDepth: -1, Mode: ResponseJSON},
 		},
 		{
 			name:    "unsupported mode",

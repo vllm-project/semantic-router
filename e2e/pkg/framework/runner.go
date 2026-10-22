@@ -83,9 +83,13 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 
 	buildOpts := docker.BuildOptions{
 		Dockerfile:   "tools/docker/Dockerfile.extproc",
-		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/extproc:%s", r.opts.ImageTag),
+		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/vllm-sr:%s", r.opts.ImageTag),
 		BuildContext: ".",
 		BuildArgs:    localDockerBuildArgs(),
+	}
+
+	for name, value := range r.profileCapabilities.RouterBuildArgs {
+		buildOpts.BuildArgs[name] = value
 	}
 
 	prebuilt := os.Getenv("E2E_PREBUILT_EXT_PROC_IMAGE")
@@ -289,16 +293,43 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 		},
 	}
 
-	err := tc.Fn(ctx, kubeClient, opts)
+	attempts := r.opts.FlakeAttempts
+	if attempts < 1 {
+		attempts = 1
+	}
+	if tc.MutatesClusterState && attempts > 1 {
+		r.log("↻ Not retrying %s: it changes cluster state", tc.Name)
+		attempts = 1
+	}
+
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if attempt > 1 {
+			r.log("↻ Retrying test %s (attempt %d/%d)", tc.Name, attempt, attempts)
+		}
+		err = tc.Fn(ctx, kubeClient, opts)
+		result.Attempts = attempt
+		if err == nil {
+			break
+		}
+		if attempt < attempts {
+			r.log("⚠️ Test %s failed on attempt %d/%d: %v", tc.Name, attempt, attempts, err)
+		}
+	}
+
 	duration := time.Since(start)
 
 	result.Passed = err == nil
 	result.Error = err
+	result.Flaked = result.Passed && result.Attempts > 1
 	result.Duration = duration.String()
 
-	if err != nil {
+	switch {
+	case err != nil:
 		r.log("❌ Test %s failed: %v", tc.Name, err)
-	} else {
+	case result.Flaked:
+		r.log("⚠️ Test %s passed on attempt %d/%d — flaky (%s)", tc.Name, result.Attempts, attempts, duration)
+	default:
 		r.log("✅ Test %s passed (%s)", tc.Name, duration)
 	}
 
@@ -312,24 +343,37 @@ func (r *Runner) printResults(results []TestResult) {
 
 	passed := 0
 	failed := 0
+	flaked := 0
 
 	for _, result := range results {
 		status := "✅ PASSED"
-		if !result.Passed {
+		switch {
+		case !result.Passed:
 			status = "❌ FAILED"
 			failed++
-		} else {
+		case result.Flaked:
+			status = "⚠️ FLAKY"
+			passed++
+			flaked++
+		default:
 			passed++
 		}
 
 		fmt.Printf("%s - %s (%s)\n", status, result.Name, result.Duration)
+		if result.Flaked {
+			fmt.Printf("  Passed on attempt %d after failing earlier\n", result.Attempts)
+		}
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
 	}
 
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("Total: %d | Passed: %d | Failed: %d\n", len(results), passed, failed)
+	fmt.Printf("Total: %d | Passed: %d | Failed: %d", len(results), passed, failed)
+	if flaked > 0 {
+		fmt.Printf(" | Flaky: %d", flaked)
+	}
+	fmt.Println()
 	fmt.Println(strings.Repeat("=", 80))
 }
 
@@ -346,11 +390,23 @@ func resolveWorkspaceModelsDir() (string, error) {
 	}
 
 	modelsDir := filepath.Join(workingDir, "models")
-	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
-		return "", fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
+	if err := ensureWorkspaceModelsDir(modelsDir); err != nil {
+		return "", err
 	}
 
 	return modelsDir, nil
+}
+
+func ensureWorkspaceModelsDir(modelsDir string) error {
+	if err := os.MkdirAll(modelsDir, 0o777); err != nil {
+		return fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
+	}
+	// MkdirAll honors the host umask. Kind's non-root Router must be able to
+	// create Hugging Face cache and lock files in this opt-in test directory.
+	if err := os.Chmod(modelsDir, 0o777); err != nil {
+		return fmt.Errorf("make workspace models directory writable %s: %w", modelsDir, err)
+	}
+	return nil
 }
 
 func localDockerBuildArgs() map[string]string {
@@ -423,7 +479,7 @@ func (r *Runner) collectSemanticRouterLogs(ctx context.Context, client *kubernet
 	}
 
 	// Write logs to file
-	logFilename := "semantic-router-logs.txt"
+	logFilename := reportPath("semantic-router-logs.txt")
 	if err := os.WriteFile(logFilename, []byte(allLogs.String()), 0o644); err != nil {
 		return fmt.Errorf("failed to write log file: %w", err)
 	}
@@ -515,14 +571,12 @@ func validateCaseInventory(names []string) error {
 
 func prebuiltFixtureImage(dockerfile string) string {
 	switch dockerfile {
-	case "tools/test/services/mock-vllm/Dockerfile":
-		return os.Getenv("E2E_PREBUILT_MOCK_VLLM_IMAGE")
+	case "tools/test/services/provider-mocker/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_PROVIDER_MOCKER_IMAGE")
 	case "dashboard/backend/Dockerfile":
 		return os.Getenv("VLLM_SR_DASHBOARD_IMAGE")
-	case "e2e/testing/llm-katan/Dockerfile":
-		return os.Getenv("E2E_PREBUILT_LLM_KATAN_IMAGE")
-	case "e2e/testing/anthropic-shim/Dockerfile":
-		return os.Getenv("E2E_PREBUILT_ANTHROPIC_SHIM_IMAGE")
+	case "src/model-runtime/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_MODEL_RUNTIME_IMAGE")
 	default:
 		return ""
 	}

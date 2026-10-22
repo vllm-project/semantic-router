@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -119,11 +120,15 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope}, err
 	}
-	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
-		return RequestResult{Request: request, Envelope: envelope}, err
+	projected, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, format)
+	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, format)
+	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, verbosityDiagnostics, engine.policy.Limits.Diagnostics)
+	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(projected)); err != nil {
+		return RequestResult{Request: projected, Envelope: envelope, Diagnostics: projectionDiagnostics}, err
 	}
-	body, diagnostics, encodeRequestErr := pair.buffered.EncodeRequest(request, envelope, engine.policy)
-	return RequestResult{Request: request, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
+	body, encodeDiagnostics, encodeRequestErr := pair.buffered.EncodeRequest(projected, envelope, engine.policy)
+	diagnostics := appendDiagnostics(projectionDiagnostics, encodeDiagnostics, engine.policy.Limits.Diagnostics)
+	return RequestResult{Request: projected, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
 }
 
 // EncodeResponse validates and encodes an already-neutral response. Settlement
@@ -171,6 +176,10 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
+	request, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, target)
+	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
+	request, projectionDiagnostics = llmprotocol.ProjectTextVerbosity(request, target)
+	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -185,6 +194,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 		return ResponseResult{}, translateResponseErr
 	}
 	decodePolicy := engine.translationDecodePolicy(source, target, mutate != nil)
+	decodePolicy.ProviderStopSequences = engine.carriesMatchedStopSequence(target)
 	response, envelope, diagnostics, translateResponseErr := sourcePair.buffered.DecodeResponse(body, decodePolicy)
 	if translateResponseErr != nil {
 		return ResponseResult{Diagnostics: diagnostics}, translateResponseErr
@@ -205,12 +215,72 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
+	if !engine.carriesMatchedStopSequence(target) {
+		diagnostics = appendDiagnostics(diagnostics,
+			projectMatchedStopSequence(source, target, &response), engine.policy.Limits.Diagnostics)
+	}
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
 	encoded, encodeDiagnostics, translateResponseErr := targetPair.buffered.EncodeResponse(response, envelope, engine.policy)
 	diagnostics = appendDiagnostics(diagnostics, encodeDiagnostics, engine.policy.Limits.Diagnostics)
 	return ResponseResult{Response: response, Envelope: envelope, Body: encoded, Diagnostics: diagnostics}, translateResponseErr
+}
+
+// projectMatchedStopSequence drops a matched stop sequence the client format
+// cannot carry, projecting the terminal to the generic stop it can represent
+// instead of failing the whole reply. SourceStopReason keeps the provider's
+// terminal and the drop is diagnosed, so the loss is never silent; targets
+// that carry CapabilityMatchedStopSequence keep the exact terminal.
+func projectMatchedStopSequence(
+	source, target llmprotocol.WireFormat,
+	response *llmprotocol.Response,
+) llmprotocol.Diagnostics {
+	stopReason, diagnostics := projectedMatchedStop(source, target, response.StopReason, response.MatchedStopSequence)
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	response.StopReason = stopReason
+	response.MatchedStopSequence = ""
+	return diagnostics
+}
+
+// projectMatchedStopSequenceEvent is the streaming counterpart of
+// projectMatchedStopSequence: it rewrites the completion event before the
+// capability gate, so a stream that ends on a stop sequence finishes with the
+// client's success terminal instead of an error frame after its content.
+func projectMatchedStopSequenceEvent(
+	source, target llmprotocol.WireFormat,
+	event *llmprotocol.Event,
+) llmprotocol.Diagnostics {
+	stopReason, diagnostics := projectedMatchedStop(source, target, event.StopReason, event.MatchedStopSequence)
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	event.StopReason = stopReason
+	event.MatchedStopSequence = ""
+	return diagnostics
+}
+
+// projectedMatchedStop is the shared projection core for the buffered and
+// streaming matched-stop rewrites: a terminal that ends on a matched stop
+// sequence projects to the generic stop with a drop diagnostic, and anything
+// else comes back untouched. Keeping the condition and the diagnostic in one
+// place is what stops the buffered and stream paths from drifting apart.
+func projectedMatchedStop(
+	source, target llmprotocol.WireFormat,
+	stopReason llmprotocol.StopReason,
+	matched string,
+) (llmprotocol.StopReason, llmprotocol.Diagnostics) {
+	if stopReason != llmprotocol.StopSequence || matched == "" {
+		return stopReason, nil
+	}
+	return llmprotocol.StopEndTurn, llmprotocol.Diagnostics{{
+		Source: source, Target: target,
+		Field:  "matched_stop_sequence",
+		Action: llmprotocol.DiagnosticDropped,
+		Reason: "matched stop sequence has no representation in the client format; the terminal projects to the generic stop",
+	}}
 }
 
 // TranslateTransportError translates an HTTP non-2xx body through the neutral
@@ -292,6 +362,11 @@ func (engine *Engine) translationDecodePolicy(source, target llmprotocol.WireFor
 	return policy
 }
 
+func (engine *Engine) carriesMatchedStopSequence(target llmprotocol.WireFormat) bool {
+	pair, err := engine.codec(target)
+	return err == nil && pair.buffered.Capabilities().Supports(llmprotocol.CapabilityMatchedStopSequence)
+}
+
 func (engine *Engine) EncodeError(format llmprotocol.WireFormat, protocolError *llmprotocol.ProtocolError) ([]byte, error) {
 	if protocolError == nil {
 		protocolError = llmprotocol.NewError(llmprotocol.ErrorInternal, "internal", "request failed", nil)
@@ -318,9 +393,12 @@ func (engine *Engine) NewStream(source, target llmprotocol.WireFormat, context l
 }
 
 // StreamEventMutation applies request-scoped policy to decoded neutral events
-// before they reach a public wire encoder. It cannot observe provider bytes or
-// HTTP headers and therefore keeps protocol translation provider-neutral.
+// before they reach a public wire encoder. Returning ErrOmitStreamEvent removes
+// an event from public output and from the accepted semantic event stream.
+// It cannot observe provider bytes or HTTP headers.
 type StreamEventMutation func(*llmprotocol.Event) error
+
+var ErrOmitStreamEvent = errors.New("omit neutral stream event")
 
 func (engine *Engine) NewStreamWithMutation(
 	source,
@@ -343,10 +421,12 @@ func (engine *Engine) NewStreamWithMutation(
 	context.Source = source
 	context.Target = target
 	streamPolicy := engine.strictStreamPolicy()
+	streamPolicy.ProviderStopSequences = engine.carriesMatchedStopSequence(target)
 	return &StreamEngine{
 		decoder:            sourcePair.stream.NewDecoder(context, streamPolicy),
 		encoder:            targetPair.stream.NewEncoder(context, streamPolicy),
 		mutation:           mutation,
+		sourceFormat:       source,
 		targetFormat:       target,
 		targetCapabilities: targetPair.buffered.Capabilities(),
 		maxDiagnostics:     engine.policy.Limits.Diagnostics,
@@ -487,7 +567,9 @@ func validatePolicy(policy llmprotocol.Policy) error {
 		return fmt.Errorf("source-preservation policy is invalid")
 	}
 	if policy.ResponseVendor != "" && policy.ResponseVendor != llmprotocol.ResponseVendorAzure &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare {
+		policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare &&
+		policy.ResponseVendor != llmprotocol.ResponseVendorSnowflake &&
+		policy.ResponseVendor != llmprotocol.ResponseVendorOpenAICompatGateway {
 		return fmt.Errorf("response-vendor policy is invalid")
 	}
 	if !positiveProtocolLimits(policy.Limits) {
@@ -533,6 +615,7 @@ type StreamEngine struct {
 	decoder            llmprotocol.StreamDecoder
 	encoder            llmprotocol.StreamEncoder
 	mutation           StreamEventMutation
+	sourceFormat       llmprotocol.WireFormat
 	targetFormat       llmprotocol.WireFormat
 	targetCapabilities llmprotocol.CapabilitySet
 	maxDiagnostics     int
@@ -589,11 +672,15 @@ func (engine *StreamEngine) encodeEvents(
 	frames := make([][]byte, 0, len(events))
 	accepted := make([]llmprotocol.Event, 0, len(events))
 	for index := range events {
-		if err := engine.prepareEvent(&events[index]); err != nil {
+		eventDiagnostics, err := engine.prepareEvent(&events[index])
+		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
+		if errors.Is(err, ErrOmitStreamEvent) {
+			continue
+		} else if err != nil {
 			return frames, accepted, diagnostics, err
 		}
-		encoded, eventDiagnostics, err := engine.encoder.Push(events[index])
-		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
+		encoded, encoderDiagnostics, err := engine.encoder.Push(events[index])
+		diagnostics = appendDiagnostics(diagnostics, encoderDiagnostics, engine.maxDiagnostics)
 		if err != nil {
 			return frames, accepted, diagnostics, err
 		}
@@ -604,13 +691,17 @@ func (engine *StreamEngine) encodeEvents(
 	return frames, accepted, diagnostics, nil
 }
 
-func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) error {
+func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) (llmprotocol.Diagnostics, error) {
 	if engine.mutation != nil {
 		if err := engine.mutation(event); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return llmprotocol.RequireCapabilities(
+	var diagnostics llmprotocol.Diagnostics
+	if !engine.targetCapabilities.Supports(llmprotocol.CapabilityMatchedStopSequence) {
+		diagnostics = projectMatchedStopSequenceEvent(engine.sourceFormat, engine.targetFormat, event)
+	}
+	return diagnostics, llmprotocol.RequireCapabilities(
 		engine.targetFormat,
 		engine.targetCapabilities,
 		llmprotocol.RequiredEventCapabilities(*event),

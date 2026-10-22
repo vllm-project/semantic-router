@@ -8,9 +8,11 @@ for adapters, dataset preparation, manifests and accounting details.
 ## Choose the scope
 
 **Profile controls the questions:** Smoke checks the pipeline cheaply; Quick/dev
-supports tuning; reserve Standard for a frozen candidate. Check prior case IDs
-and input fingerprints before calling it an unseen holdout; a profile name or
-new seed does not remove prior exposure. Select
+supports tuning; reserve Standard for a frozen candidate. Reconcile prior case IDs
+with source provenance before calling it an unseen holdout; a profile name or
+new seed does not remove prior exposure. For repeat holdouts, discover
+`benchmark dataset exclusions --help` and the product guide; disclose unresolved
+history and freeze retest roles explicitly. Select
 benchmarks relevant to the capability change and inspect the planned case count
 and limits. A slice is not a full benchmark score. Whole agent tasks may consume
 many generation, simulator and judge calls.

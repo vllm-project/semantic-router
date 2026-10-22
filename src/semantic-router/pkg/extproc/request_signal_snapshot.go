@@ -16,6 +16,7 @@ type requestSignalSnapshot struct {
 	HasAssistantReply bool
 	LastUserHasText   bool
 	FirstImageURL     string
+	FirstAudio        string
 	ImageContentCount int
 	// InputModality holds the structural input-modality counts for the
 	// input_modality signal family, scoped to user messages.

@@ -9,8 +9,11 @@ Every probe reports "not ready" rather than raising: status output must survive
 a container that is up but not answering yet.
 """
 
+import yaml
+
 from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT
 from cli.container_cli import container_exec, container_status
+from cli.decision_model import configured_decision_model
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import fields
 from cli.utils import get_logger
@@ -45,8 +48,27 @@ def report_service_status(service: str, stack_layout) -> None:
         container_name = runtime_service_container_name(service, stack_layout)
         is_running = checker(container_name)
         _log_service_status(label, is_running, detail if is_running else None)
+        if service == "router" and is_running:
+            decision_model = active_decision_model(stack_layout)
+            if decision_model:
+                fields((("Decision model", decision_model),))
     except Exception as exc:
         log.error(f"Failed to check {service} status: {exc}")
+
+
+def active_decision_model(stack_layout: RuntimeStackLayout) -> str | None:
+    """The decision model of the Router's active config, or None when unreadable."""
+
+    try:
+        return_code, stdout, _stderr = container_exec(
+            stack_layout.service_container_name("router"),
+            ["sh", "-c", 'cat "$VLLM_SR_RUNTIME_CONFIG_PATH"'],
+        )
+        if return_code != 0:
+            return None
+        return configured_decision_model(yaml.safe_load(stdout) or {})
+    except Exception:  # status output must survive an unreadable config
+        return None
 
 
 def _check_router_status(container_name: str) -> bool:

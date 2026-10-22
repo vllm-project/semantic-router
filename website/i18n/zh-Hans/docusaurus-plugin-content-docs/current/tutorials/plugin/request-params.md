@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "bef43a20a96e7b329d314473083be6aa4bad0f03"
   source_file: "docs/tutorials/plugin/request-params.md"
-  outdated: false
+  outdated: true
 ---
 
 # 请求参数

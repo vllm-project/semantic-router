@@ -3,11 +3,14 @@ package classification
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 const (
@@ -28,29 +31,15 @@ func (c *Classifier) evaluateGenericClassifierSignals(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var waitGroup sync.WaitGroup
+	var rules []config.ClassifierSignalRule
 	for _, rule := range c.Config.ClassifierRules {
-		if !signalRuleUsed(usedSignals, config.SignalTypeClassifier, rule.Name) {
-			continue
+		if signalRuleUsed(usedSignals, config.SignalTypeClassifier, rule.Name) && c.genericClassifiers[rule.Name] != nil {
+			rules = append(rules, rule)
 		}
-		classifier := c.genericClassifiers[rule.Name]
-		if classifier == nil {
-			continue
-		}
-		waitGroup.Add(1)
-		go func(rule config.ClassifierSignalRule, classifier labelClassifier) {
-			defer waitGroup.Done()
-			c.evaluateGenericClassifierRule(
-				ctx,
-				results,
-				mu,
-				text,
-				rule,
-				classifier,
-			)
-		}(rule, classifier)
 	}
-	waitGroup.Wait()
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		c.evaluateGenericClassifierRule(ctx, results, mu, text, rules[i], c.genericClassifiers[rules[i].Name])
+	})
 	elapsed := time.Since(start)
 	mu.Lock()
 	results.Metrics.Classifier.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -73,20 +62,17 @@ func (c *Classifier) evaluateGenericClassifierRule(
 		time.Since(start).Seconds(),
 	)
 	if err != nil {
+		code := genericClassifierError(err)
 		mu.Lock()
-		results.SignalErrors[signalConfidenceKey(
-			config.SignalTypeClassifier,
-			rule.Name,
-		)] = genericClassifierError(err)
+		results.SignalErrors[signalConfidenceKey(config.SignalTypeClassifier, rule.Name)] = code
+		appendClassifierObservation(results, rule, nil, nil, code)
 		mu.Unlock()
 		return
 	}
 	if !classifierScoresFinite(rule.Labels, result.Scores) || (result.Thresholds != nil && !classifierScoresFinite(rule.Labels, result.Thresholds)) {
 		mu.Lock()
-		results.SignalErrors[signalConfidenceKey(
-			config.SignalTypeClassifier,
-			rule.Name,
-		)] = genericClassifierInvalidScoreCode
+		results.SignalErrors[signalConfidenceKey(config.SignalTypeClassifier, rule.Name)] = genericClassifierInvalidScoreCode
+		appendClassifierObservation(results, rule, nil, nil, genericClassifierInvalidScoreCode)
 		mu.Unlock()
 		return
 	}
@@ -101,6 +87,7 @@ func (c *Classifier) evaluateGenericClassifierRule(
 	}
 	bestLabel := ""
 	bestLabelScore := -1.0
+	matchedLabels := make([]string, 0, len(rule.Labels))
 	for _, label := range rule.Labels {
 		score := result.Scores[label]
 		key := classifierLabelKey(rule.Name, label)
@@ -114,12 +101,14 @@ func (c *Classifier) evaluateGenericClassifierRule(
 			bestLabelScore = score
 		}
 		if result.Thresholds != nil && score >= result.Thresholds[label] {
+			matchedLabels = append(matchedLabels, label)
 			labelMatch := rule.Name + ":" + label
 			results.MatchedClassifierRules = append(results.MatchedClassifierRules, labelMatch)
 			c.recordSignalMatch(config.SignalTypeClassifier, labelMatch)
 		}
 	}
 	if result.Thresholds == nil && bestLabel != "" {
+		matchedLabels = append(matchedLabels, bestLabel)
 		labelMatch := rule.Name + ":" + bestLabel
 		results.MatchedClassifierRules = append(
 			results.MatchedClassifierRules,
@@ -127,6 +116,38 @@ func (c *Classifier) evaluateGenericClassifierRule(
 		)
 		c.recordSignalMatch(config.SignalTypeClassifier, labelMatch)
 	}
+	appendClassifierObservation(results, rule, &result, matchedLabels, "")
+}
+
+func appendClassifierObservation(
+	results *SignalResults,
+	rule config.ClassifierSignalRule,
+	result *labelClassification,
+	matchedLabels []string,
+	errorCode string,
+) {
+	observation := decision.SignalObservation{
+		Version:      decision.SignalObservationVersionV1,
+		SignalType:   config.SignalTypeClassifier,
+		Name:         rule.Name,
+		Availability: decision.SignalObservationUnavailable,
+		Provenance: decision.SignalObservationProvenance{
+			Evaluator: config.SignalTypeClassifier,
+			Backend:   rule.Type,
+		},
+		PayloadType: config.RemoteClassifierContractLabelDistribution,
+		ErrorCode:   errorCode,
+	}
+	if result != nil {
+		observation.Availability = decision.SignalObservationAvailable
+		observation.Payload = &decision.LabelDistributionObservation{
+			Scores:        maps.Clone(result.Scores),
+			Thresholds:    maps.Clone(result.Thresholds),
+			MatchedLabels: append([]string(nil), matchedLabels...),
+			Rationale:     result.Rationale,
+		}
+	}
+	results.Observations = append(results.Observations, observation)
 }
 
 func genericClassifierError(err error) string {

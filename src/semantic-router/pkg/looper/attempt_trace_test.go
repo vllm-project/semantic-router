@@ -140,6 +140,32 @@ func TestComposeAttemptOutputTokenLimitUsesCurrentModelRef(t *testing.T) {
 	}
 }
 
+func TestComposeAttemptOutputTokenLimitDistinguishesLoRAFromBase(t *testing.T) {
+	adapterLimit := 1024
+	baseLimit := 32
+	orders := [][]config.ModelRef{
+		{
+			{Model: "base", LoRAName: "adapter", MaxCompletionTokens: &adapterLimit},
+			{Model: "base", MaxCompletionTokens: &baseLimit},
+		},
+		{
+			{Model: "base", MaxCompletionTokens: &baseLimit},
+			{Model: "base", LoRAName: "adapter", MaxCompletionTokens: &adapterLimit},
+		},
+	}
+	for _, refs := range orders {
+		req := &Request{ModelRefs: refs}
+		baseResult := composeAttemptOutputTokenLimit(req, nil, "base")
+		if baseResult.Effective == nil || *baseResult.Effective != 32 || baseResult.Source != outputtokens.SourceModelRef {
+			t.Fatalf("base compose = %+v, want 32 from model_ref", baseResult)
+		}
+		adapterResult := composeAttemptOutputTokenLimit(req, nil, "adapter")
+		if adapterResult.Effective == nil || *adapterResult.Effective != 1024 || adapterResult.Source != outputtokens.SourceModelRef {
+			t.Fatalf("adapter compose = %+v, want 1024 from model_ref", adapterResult)
+		}
+	}
+}
+
 func TestComposeAttemptOutputTokenLimitStageCannotWidenClient(t *testing.T) {
 	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(128)}
 	result := composeAttemptOutputTokenLimit(

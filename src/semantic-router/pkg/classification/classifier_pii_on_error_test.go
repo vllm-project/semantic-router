@@ -76,6 +76,9 @@ func TestPIISignalTruncatedResponseRoutesThroughOnError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			classifier, _, mockModel := newTestPIIClassifier()
 			classifier.Config.PIIModel.OnError = tc.onError
+			// The on_error contract, which a truncated read follows only when
+			// on_unscanned is allow.
+			classifier.Config.PIIModel.OnUnscanned = config.OnErrorAllow
 			classifier.Config.PIIRules = []config.PIIRule{{Name: "no_pii", Threshold: 0.7}}
 			mockModel.setMockResponse(text, tc.entities, tc.err)
 
@@ -150,5 +153,30 @@ func TestPIIFailClosedMatchIsMarkedAsErrorDriven(t *testing.T) {
 				t.Fatalf("SignalErrors[%q] is empty; an error-driven match reads as a real detection", key)
 			}
 		})
+	}
+}
+
+// By default a provider's declared truncation is content the model did not
+// read: the rule matches it as unscanned whatever on_error says.
+func TestPIISignalTruncatedResponseMatchesAsUnscannedByDefault(t *testing.T) {
+	text := "my email is alice@example.com and more text"
+	for _, onError := range []string{config.OnErrorAllow, config.OnErrorBlock} {
+		classifier, _, mockModel := newTestPIIClassifier()
+		classifier.Config.PIIModel.OnError = onError
+		classifier.Config.PIIRules = []config.PIIRule{{Name: "no_pii", Threshold: 0.7}}
+		mockModel.setMockResponse(text, nil, ErrTokenSpansTruncated)
+		results := &SignalResults{
+			Metrics:           &SignalMetricsCollection{},
+			SignalConfidences: make(map[string]float64),
+			SignalValues:      make(map[string]float64),
+			SignalErrors:      make(map[string]string),
+		}
+		classifier.evaluatePIISignal(context.Background(), results, &sync.Mutex{}, text, nil)
+		if !results.PIIDetected || !slices.Contains(results.PIIEntities, PIIUnscannedType) {
+			t.Fatalf("%s: PIIDetected = %v, entities %v", onError, results.PIIDetected, results.PIIEntities)
+		}
+		if results.SignalErrors["pii:no_pii"] != signalInputLimitCode || !results.SignalErrorMatches["pii:no_pii"] {
+			t.Fatalf("%s: errors %v, error matches %v", onError, results.SignalErrors, results.SignalErrorMatches)
+		}
 	}
 }

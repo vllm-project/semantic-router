@@ -177,6 +177,41 @@ var _ = Describe("Manager store listing", func() {
 			Expect(storeIDs(stores)).To(Equal([]string{created[0].ID, created[1].ID, created[2].ID}))
 		})
 
+		It("should use ID as a tie-breaker for identical creation times", func() {
+			stores := []*VectorStore{
+				{ID: "vs_b", CreatedAt: 1},
+				{ID: "vs_c", CreatedAt: 1},
+				{ID: "vs_a", CreatedAt: 1},
+			}
+
+			sortVectorStores(stores, "desc")
+			Expect(storeIDs(stores)).To(Equal([]string{"vs_c", "vs_b", "vs_a"}))
+
+			sortVectorStores(stores, "asc")
+			Expect(storeIDs(stores)).To(Equal([]string{"vs_a", "vs_b", "vs_c"}))
+		})
+
+		It("should paginate stores with identical creation times without duplicates or omissions", func() {
+			mgr.mu.Lock()
+			for _, store := range mgr.stores {
+				store.CreatedAt = 1
+			}
+			mgr.mu.Unlock()
+
+			for _, order := range []string{"asc", "desc"} {
+				expected := mgr.ListStores(ListStoresParams{Order: order, Limit: 100})
+				params := ListStoresParams{Order: order, Limit: 2}
+				var paged []*VectorStore
+
+				for page := mgr.ListStores(params); len(page) > 0 && len(paged) < len(expected)*2; page = mgr.ListStores(params) {
+					paged = append(paged, page...)
+					params.After = page[len(page)-1].ID
+				}
+
+				Expect(storeIDs(paged)).To(Equal(storeIDs(expected)))
+			}
+		})
+
 		It("should handle empty result", func() {
 			emptyMgr := NewManager(NewMemoryBackend(MemoryBackendConfig{}), NewMemoryMetadataRegistry(), 768, BackendTypeMemory)
 			stores := emptyMgr.ListStores(ListStoresParams{})

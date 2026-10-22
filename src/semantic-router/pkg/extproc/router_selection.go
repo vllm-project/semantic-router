@@ -51,7 +51,7 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 func createModelSelectorRegistry(
 	cfg *config.RouterConfig,
 	lt lookuptable.LookupTableStorage,
-	embed func(string, selection.EmbeddingConfig) ([]float32, error),
+	embed func(context.Context, string, selection.EmbeddingConfig) ([]float32, error),
 	defaultEmbeddingConfig selection.EmbeddingConfig,
 ) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
@@ -64,7 +64,7 @@ func createModelSelectorRegistry(
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(embed, defaultEmbeddingConfig)
+	selectionFactory = selectionFactory.WithContextEmbeddingFunc(embed, defaultEmbeddingConfig)
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
@@ -84,13 +84,9 @@ func createModelSelectorRegistry(
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(context.Context, string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = models.EmbeddingBackend()
-	}
-	modelType := selectionEmbeddingModelType(models, backend)
+	modelType := selectionEmbeddingModelType(models, models.EmbeddingBackend())
 	defaultConfig := selection.EmbeddingConfig{
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),
@@ -100,26 +96,18 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.
 	if len(sets) > 0 {
 		prepared = sets[0]
 	}
-	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
-		if backend == config.EmbeddingBackendOpenVINO {
-			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
-		}
+	return func(ctx context.Context, text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
 		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
 		if err != nil {
 			return nil, err
 		}
-		return provider.Embed(context.Background(), text)
+		return provider.Embed(ctx, text)
 	}, defaultConfig
 }
 
 func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
-	// Normalized once here so every downstream consumer -- the batched-FFI
-	// capability check, GetEmbeddingBatched, and GetEmbeddingWithModelType's
-	// own exact-match validation -- sees the same casing. Config validation
-	// already accepts "Qwen3" case-insensitively without rewriting the
-	// configured value, so an unnormalized modelType would otherwise pass
-	// SupportsBatchedEmbedding's tolerant check and then fail the FFI's
-	// strict one, or fail GetEmbeddingWithModelType's exact match either way.
+	// Config validation accepts model names case-insensitively; the prepared
+	// provider set uses normalized keys for every execution backend.
 	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
 	if modelType != "" {
 		return modelType
@@ -335,8 +323,8 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 	mlCfg := intelligentRouting.ModelSelection.ML
 	// Same normalization as selectionEmbeddingModelType, and for the same
 	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
-	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
-	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
+	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and miss
+	// the prepared provider, which is keyed by the normalized name.
 	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
 	if mlCfg.ModelsPath == "" &&
 		mlCfg.KNN.PretrainedPath == "" &&

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -10,12 +9,24 @@ import secrets
 import sqlite3
 import stat
 import subprocess
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - managed packages are Linux-only today.
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore[assignment]
+
+from cli.container_services import _is_port_in_use
 from cli.runtime_env_names import runtime_env_name_is_allowed
-from cli.runtime_stack import RuntimeStackLayout
+from cli.runtime_stack import BENCH_PORT_ENV, PORT_OFFSET_ENV, RuntimeStackLayout
 
 BENCH_CONFIG_ENV = ("SR_BENCH_URL", "SR_BENCH_TOKEN_ENV", "SR_BENCH_STORE")
 BENCH_TOKEN_ENV = "SR_BENCH_TOKEN"
@@ -43,11 +54,17 @@ def _private_token(path: Path) -> str:
     flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags, 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        elif msvcrt is not None:
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        if not stat.S_ISREG(info.st_mode) or (
+            hasattr(info, "st_nlink") and info.st_nlink != 1
+        ):
             raise ValueError("sr-bench credential must be a regular private file")
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "r+", encoding="utf-8", closefd=False) as stream:
             token = stream.read().strip()
             if not token:
@@ -61,6 +78,10 @@ def _private_token(path: Path) -> str:
                 )
             return token
     finally:
+        if msvcrt is not None:
+            with suppress(OSError):
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
         os.close(fd)
 
 
@@ -131,6 +152,10 @@ def prepare_bench_runtime(
     os.chmod(store, 0o700)
     token = environment.get(token_ref) or _private_token(root / "service-token")
     values = {token_ref: token}
+    # The service owns gated source downloads; never send this credential to the
+    # browser or include its value in preparation requests or job receipts.
+    if environment.get("HF_TOKEN"):
+        values["HF_TOKEN"] = environment["HF_TOKEN"]
     for ref in _target_secret_refs(store):
         value = environment.get(ref)
         if not value:
@@ -161,13 +186,23 @@ def bench_command_identity(command: list[str], credentials: dict[str, str]) -> s
     ).hexdigest()
 
 
+class BenchWorkerKeptError(ValueError):
+    """The existing sr-bench worker stays as it is; the rest of the stack starts."""
+
+
 def reconcile_bench_container(
     command: list[str], container_name: str, credentials: dict[str, str]
 ) -> str | None:
-    """Reuse a matching worker, or remove an owned idle worker for an image upgrade.
+    """Reuse a matching worker, replace an owned idle one, or keep it running.
 
-    Identity covers every launch argument and credential. The previous image is
-    the only permitted difference; even legacy workers carry the full identity.
+    Identity covers every launch argument and credential, so only an identical
+    worker is reused. Any other change (image, host alias, port, credential or
+    store) replaces the worker once its own journal shows no active work.
+    A worker that cannot be replaced safely is kept and reported with
+    ``BenchWorkerKeptError``: sr-bench is independent of the Router and Dashboard,
+    and refusing it must not leave the stack down. A worker that never started
+    is removed whatever its identity: it holds no ledger state, and left in
+    place its name would fail every later serve.
     """
     expected = next(
         (
@@ -182,10 +217,11 @@ def reconcile_bench_container(
     result = subprocess.run(
         [
             command[0],
+            "container",
             "inspect",
             "--format",
             '{"id":{{json .Id}},"status":{{json .State.Status}},'
-            '"labels":{{json .Config.Labels}},"image":{{json .Config.Image}}}',
+            '"labels":{{json .Config.Labels}},"args":{{json .Args}}}',
             container_name,
         ],
         capture_output=True,
@@ -201,22 +237,36 @@ def reconcile_bench_container(
         labels = existing["labels"]
     except (ValueError, KeyError, TypeError):
         return None
+    if status == "created" and existing.get("id"):
+        subprocess.run(
+            [command[0], "rm", existing["id"]],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        host_port = int(command[command.index("-p") + 1].rsplit(":", 2)[-2])
+        if _is_port_in_use(host_port):
+            raise ValueError(
+                f"sr-bench port {host_port} is already in use, so {container_name} "
+                f"could not start. Stop the process using port {host_port}, set "
+                f"{BENCH_PORT_ENV} for both serve and benchmark, or set a different "
+                f"{PORT_OFFSET_ENV}."
+            )
+        return None
     if status != "running":
-        raise ValueError(
-            "The sr-bench service is stopped; inspect its saved ledger before an explicit service restart"
+        raise BenchWorkerKeptError(
+            f"The sr-bench service {container_name} is stopped; inspect its saved "
+            "ledger before an explicit service restart. Benchmarks stay "
+            "unavailable until then."
         )
     if isinstance(labels, dict) and labels.get(BENCH_IDENTITY_LABEL) == expected:
         return "reuse"
-    previous = _previous_image_command(command, existing.get("image"))
-    if (
-        previous is None
-        or not isinstance(labels, dict)
-        or labels.get(BENCH_IDENTITY_LABEL)
-        != bench_command_identity(previous, credentials)
-        or not existing.get("id")
-    ):
-        raise ValueError(
-            "The running sr-bench service has a different identity, store or credential; reconcile it before replacing the service"
+    store = _running_worker_store(existing)
+    if store is None or not existing.get("id"):
+        raise BenchWorkerKeptError(
+            f"{container_name} is not an sr-bench worker this CLI started; it was "
+            "left unchanged. Remove it to let serve start a new worker."
         )
     image = command[command.index("cli.sr_bench.service") - 2]
     subprocess.run(
@@ -226,34 +276,31 @@ def reconcile_bench_container(
         check=True,
         timeout=10,
     )
-    store = Path(previous[previous.index("--store") + 1])
-    _remove_idle_bench_container(command[0], existing["id"], store)
+    try:
+        _remove_idle_bench_container(command[0], existing["id"], store)
+    except ValueError as exc:
+        raise BenchWorkerKeptError(
+            f"{exc}. The running sr-bench worker was kept with its previous "
+            "settings; run serve again once it is idle to update it."
+        ) from exc
     return "replace"
 
 
-def _previous_image_command(command: list[str], image: str | None) -> list[str] | None:
-    """Reconstruct the legacy identity without changing any non-image argument."""
-    if not isinstance(image, str) or not image:
+def _running_worker_store(existing: dict) -> Path | None:
+    """The store a labelled worker was launched with, read from its arguments."""
+    labels = existing.get("labels")
+    args = existing.get("args")
+    if not isinstance(labels, dict) or BENCH_IDENTITY_LABEL not in labels:
         return None
-    previous = list(command)
+    if not isinstance(args, list) or "cli.sr_bench.service" not in args:
+        return None
     try:
-        label = next(
-            i
-            for i, arg in enumerate(previous)
-            if arg.startswith(BENCH_IDENTITY_LABEL + "=")
-        )
-        if previous[label - 1] != "--label":
-            return None
-        del previous[label - 1 : label + 1]
-        module = previous.index("cli.sr_bench.service")
-        if previous[module - 1] != "-m" or previous[module - 2] == image:
-            return None
-        previous[module - 2] = image
-        if previous[module + 1] != "--store":
-            return None
-    except (StopIteration, ValueError, IndexError):
+        store = args[args.index("--store") + 1]
+    except (ValueError, IndexError):
         return None
-    return previous
+    if not isinstance(store, str) or not os.path.isabs(store):
+        return None
+    return Path(store)
 
 
 def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -> None:
@@ -293,7 +340,42 @@ def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -
             ) from exc
         if busy:
             raise ValueError(
-                "The sr-bench service has active runs; finish or cancel them before an image upgrade"
+                "The sr-bench service has active runs; finish or cancel them before it is replaced"
+            )
+        # Preparation workers share this service lifecycle but have their own
+        # durable journal. Inspect it while admission and its children are frozen.
+        from cli.sr_bench.preparations import ACTIVE, JOB_ID  # noqa: PLC0415
+
+        try:
+            preparations = store / "dataset-preparations"
+            if preparations.is_symlink() or (
+                preparations.exists() and not preparations.is_dir()
+            ):
+                raise ValueError("Invalid preparation journal directory")
+            preparing = False
+            if preparations.exists():
+                for path in preparations.iterdir():
+                    if not path.name.startswith("prep-") or path.suffix != ".json":
+                        continue
+                    if path.is_symlink() or not JOB_ID.fullmatch(path.stem):
+                        raise ValueError("Invalid preparation journal file")
+                    job = json.loads(path.read_text())
+                    if (
+                        not isinstance(job, dict)
+                        or job.get("id") != path.stem
+                        or job.get("status") not in ACTIVE | {"completed", "failed"}
+                    ):
+                        raise ValueError("Invalid preparation journal record")
+                    if job["status"] in ACTIVE:
+                        preparing = True
+                        break
+        except (OSError, ValueError, TypeError) as exc:
+            raise ValueError(
+                "Cannot verify dataset preparations; leaving the sr-bench worker unchanged"
+            ) from exc
+        if preparing:
+            raise ValueError(
+                "The sr-bench service has active dataset preparations; wait for them to finish before it is replaced"
             )
         # No benchmark can be dispatched after the idle check while frozen.
         # SQLite's durable journal survives removal; only the owned ID is removed.

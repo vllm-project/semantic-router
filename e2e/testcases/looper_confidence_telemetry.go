@@ -48,7 +48,7 @@ func testLooperConfidenceTelemetry(ctx context.Context, client *kubernetes.Clien
 	defer stop()
 
 	response, err := sendLocalChatJSON(ctx, localPort, map[string]interface{}{
-		"model":                 "MoM",
+		"model":                 "vllm-sr/auto",
 		"max_completion_tokens": 8000,
 		"messages": []map[string]string{
 			{"role": "user", "content": looperConfidenceTraceProbe},

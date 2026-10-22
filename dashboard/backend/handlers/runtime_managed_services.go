@@ -16,12 +16,18 @@ const (
 	defaultDashboardContainerName = "vllm-sr-dashboard-container"
 )
 
-func managedContainerNameForService(service string) string {
+// managedStackNamePattern matches the CLI's STACK_NAME_PATTERN.
+var managedStackNamePattern = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
+
+// ManagedContainerName returns the container name the CLI gives a stack
+// service: the name it exports into every stack container, else the default
+// name scoped to the stack the way the CLI scopes it.
+func ManagedContainerName(service string) string {
 	switch service {
 	case "router":
-		return envOrDefaultTrimmed(routerContainerNameEnv, defaultRouterContainerName)
+		return envOrDefaultTrimmed(routerContainerNameEnv, stackScopedContainerName(defaultRouterContainerName))
 	case "envoy":
-		return envOrDefaultTrimmed(envoyContainerNameEnv, defaultEnvoyContainerName)
+		return envOrDefaultTrimmed(envoyContainerNameEnv, stackScopedContainerName(defaultEnvoyContainerName))
 	case "dashboard":
 		return managedDashboardContainerName()
 	default:
@@ -30,11 +36,17 @@ func managedContainerNameForService(service string) string {
 }
 
 func managedContainerNameForStorage(backend string) string {
+	return stackScopedContainerName("vllm-sr-" + backend)
+}
+
+// stackScopedContainerName prefixes a default container name with the
+// normalized stack name, except on the default stack.
+func stackScopedContainerName(name string) string {
 	stack := normalizedManagedStackName(os.Getenv("VLLM_SR_STACK_NAME"))
 	if stack == "" || stack == "vllm-sr" {
-		return "vllm-sr-" + backend
+		return name
 	}
-	return stack + "-vllm-sr-" + backend
+	return stack + "-" + name
 }
 
 func normalizedManagedStackName(raw string) string {
@@ -42,75 +54,26 @@ func normalizedManagedStackName(raw string) string {
 	if value == "" {
 		return "vllm-sr"
 	}
-	value = regexp.MustCompile(`[^A-Za-z0-9_.-]+`).ReplaceAllString(value, "-")
+	value = managedStackNamePattern.ReplaceAllString(value, "-")
 	return strings.Trim(value, "._-")
 }
 
 func managedDashboardContainerName() string {
-	return envOrDefaultTrimmed(dashboardContainerNameEnv, defaultDashboardContainerName)
+	return envOrDefaultTrimmed(dashboardContainerNameEnv, stackScopedContainerName(defaultDashboardContainerName))
 }
 
-func managedRuntimeSyncContainerName() string {
-	return managedDashboardContainerName()
+// managedStackRunsEnvoy reports whether an Envoy container serves the
+// listeners in front of the Router. The CLI sets VLLM_SR_GATEWAY on every
+// container of the stack; in a standalone stack the Router serves them and no
+// Envoy container exists. Stacks from earlier releases always ran Envoy.
+func managedStackRunsEnvoy() bool {
+	return strings.TrimSpace(os.Getenv("VLLM_SR_GATEWAY")) != "standalone"
 }
 
 func managedRuntimeUsesSplitContainers() bool {
 	dashboardContainer := managedDashboardContainerName()
-	return managedContainerNameForService("router") != dashboardContainer ||
-		managedContainerNameForService("envoy") != dashboardContainer
-}
-
-func managedContainerNamesForComponent(component string) []string {
-	switch component {
-	case "router", "envoy", "dashboard":
-		return uniqueNonEmptyStrings([]string{managedContainerNameForService(component)})
-	case "all":
-		return uniqueNonEmptyStrings([]string{
-			managedContainerNameForService("router"),
-			managedContainerNameForService("envoy"),
-			managedContainerNameForService("dashboard"),
-		})
-	default:
-		return uniqueNonEmptyStrings([]string{managedContainerNameForService(component)})
-	}
-}
-
-func managedServiceForContainerName(containerName string) string {
-	switch containerName {
-	case managedContainerNameForService("router"):
-		return "router"
-	case managedContainerNameForService("envoy"):
-		return "envoy"
-	case managedContainerNameForService("dashboard"):
-		return "dashboard"
-	default:
-		return ""
-	}
-}
-
-func managedRuntimeContainerStatus() string {
-	fallbackStatus := ""
-	for _, containerName := range managedContainerNamesForComponent("all") {
-		switch status := getDockerContainerStatus(containerName); status {
-		case "running":
-			return status
-		case "not found":
-			continue
-		case "exited":
-			if fallbackStatus == "" {
-				fallbackStatus = status
-			}
-		default:
-			if fallbackStatus == "" {
-				fallbackStatus = status
-			}
-		}
-	}
-
-	if fallbackStatus != "" {
-		return fallbackStatus
-	}
-	return "not found"
+	return ManagedContainerName("router") != dashboardContainer ||
+		ManagedContainerName("envoy") != dashboardContainer
 }
 
 func managedEnvoyReadyURL() string {
@@ -127,23 +90,6 @@ func managedEnvoyReadyURL() string {
 	}
 
 	return "http://localhost:8801/ready"
-}
-
-func uniqueNonEmptyStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
 }
 
 func envOrDefaultTrimmed(key string, fallback string) string {

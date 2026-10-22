@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -21,16 +20,16 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/jailbreak-onerror/gwapi-resources.yaml",
 }
 
 // waitDeployments are the mock backends the profile must wait on before
-// running tests. mock-vllm exists only to satisfy config validation (a
+// running tests. provider-mocker exists only to satisfy config validation (a
 // modelRef needs a real backend) - the request path under test never
 // reaches it, since on_error: block short-circuits before model selection.
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 }
 
 // Profile implements the PromptGuardConfig.OnError test profile.

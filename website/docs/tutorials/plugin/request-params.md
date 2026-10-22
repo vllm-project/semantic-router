@@ -12,6 +12,7 @@
   stage bound, and automatic rendered capacity as strictest-wins.
 - Blocks sensitive parameters such as `logprobs` / `top_logprobs` for tiers that should not expose token distributions.
 - Optionally strips unknown top-level JSON fields to reduce surprise passthrough behavior.
+- Can remove a client `prompt_cache_key` with `blocked_params: [prompt_cache_key]` before backend dispatch.
 
 ## What Problem Does It Solve?
 

@@ -18,3 +18,14 @@ func TestRequestParamsBlockedOutputIsDefaultedBeforeCap(t *testing.T) {
 		t.Fatalf("wrong policy effects: %+v, request %+v", result, request)
 	}
 }
+
+func TestRequestParamsBlocksPromptCacheKey(t *testing.T) {
+	request := &llmprotocol.Request{PromptCacheKey: "codex-session"}
+	result, err := ApplyRequestParams(request, &config.RequestParamsPluginConfig{BlockedParams: []string{"prompt_cache_key"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.PromptCacheKey != "" || !result.Changed || len(result.Blocked) != 1 || result.Blocked[0] != "prompt_cache_key" {
+		t.Fatalf("request params did not block prompt_cache_key: request=%+v result=%+v", request, result)
+	}
+}

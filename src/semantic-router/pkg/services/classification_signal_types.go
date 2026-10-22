@@ -93,6 +93,8 @@ type MatchedSignals struct {
 	Metadata      []string `json:"metadata,omitempty"`
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Action        []string `json:"action,omitempty"`
+	Decision      []string `json:"decision,omitempty"`
 	Projection    []string `json:"projection,omitempty"`
 }
 
@@ -136,6 +138,7 @@ type EvalResponse struct {
 	SignalValues           map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
 	SignalErrors           map[string]string                       `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies map[string]string                       `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking        *decision.RankingTrace                  `json:"decision_ranking,omitempty"` // How selection ordered the matched decisions
 	DecisionError          string                                  `json:"decision_error,omitempty"`
 }
 

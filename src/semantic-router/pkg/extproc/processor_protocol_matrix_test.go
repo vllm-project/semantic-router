@@ -50,6 +50,94 @@ func TestExtProcBufferedResponseProtocolMatrix(t *testing.T) {
 	}
 }
 
+func TestExtProcAcceptsAnthropicToolUseCallerProvenance(t *testing.T) {
+	router := &OpenAIRouter{}
+
+	t.Run("provider response", func(t *testing.T) {
+		ctx := &RequestContext{
+			SourceFormat: llmprotocol.AnthropicMessagesV1,
+			TargetFormat: llmprotocol.AnthropicMessagesV1,
+			TraceContext: t.Context(),
+		}
+		body := []byte(`{
+			"id":"msg_1","type":"message","role":"assistant","model":"m",
+			"content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"caller":{"type":"direct"}}],
+			"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}
+		}`)
+		response := router.handleNonStreamingResponseBody(body, ctx, 0)
+		if response.GetImmediateResponse() != nil || response.GetResponseBody() == nil {
+			t.Fatalf("successful Anthropic tool response was rejected: %+v", response)
+		}
+		if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
+			t.Fatalf("same-format response should preserve the original caller bytes: %+v", mutation)
+		}
+		if ctx.SemanticResponse == nil || len(ctx.SemanticResponse.Output) != 1 ||
+			len(ctx.SemanticResponse.Output[0].Content) != 1 ||
+			ctx.SemanticResponse.Output[0].Content[0].ToolCall == nil ||
+			ctx.SemanticResponse.Output[0].Content[0].ToolCall.ID != "call_1" {
+			t.Fatalf("tool response semantics changed: %+v", ctx.SemanticResponse)
+		}
+	})
+
+	t.Run("request history", func(t *testing.T) {
+		ctx := &RequestContext{
+			SourceFormat: llmprotocol.AnthropicMessagesV1,
+			TargetFormat: llmprotocol.AnthropicMessagesV1,
+			TraceContext: t.Context(),
+		}
+		body := []byte(`{
+			"model":"m","max_tokens":16,"messages":[
+				{"role":"user","content":"What is the weather?"},
+				{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"caller":{"type":"direct"}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"sunny"}]}
+			]
+		}`)
+		request, immediate := router.prepareProtocolRequest(body, ctx)
+		if immediate != nil || request == nil {
+			t.Fatalf("Anthropic request history was rejected: request=%+v immediate=%+v", request, immediate)
+		}
+		if len(request.Messages) != 3 || len(request.Messages[1].Content) != 1 ||
+			request.Messages[1].Content[0].ToolCall == nil ||
+			request.Messages[1].Content[0].ToolCall.ID != "call_1" {
+			t.Fatalf("request tool semantics changed: %+v", request.Messages)
+		}
+	})
+
+	t.Run("streaming provider response", func(t *testing.T) {
+		ctx := &RequestContext{
+			SourceFormat: llmprotocol.AnthropicMessagesV1,
+			TargetFormat: llmprotocol.AnthropicMessagesV1,
+			RequestModel: "public-model",
+			TraceContext: t.Context(),
+		}
+		body := []byte(strings.Join([]string{
+			"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n",
+			"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"lookup\",\"input\":{},\"caller\":{\"type\":\"direct\"}}}\n\n",
+			"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}\n\n",
+			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":1}}\n\n",
+			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+		}, ""))
+		response := router.handleSemanticStreamingResponseBody(body, true, ctx)
+		if ctx.StreamingAborted || !ctx.StreamingComplete {
+			t.Fatalf("Anthropic tool stream did not complete: aborted=%v complete=%v", ctx.StreamingAborted, ctx.StreamingComplete)
+		}
+		if response.GetResponseBody() == nil {
+			t.Fatalf("Anthropic tool stream returned no response: %+v", response)
+		}
+		if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
+			t.Fatalf("same-format stream should preserve the original caller bytes: %+v", mutation)
+		}
+		if ctx.SemanticResponse == nil || len(ctx.SemanticResponse.Output) != 1 ||
+			len(ctx.SemanticResponse.Output[0].Content) != 1 ||
+			ctx.SemanticResponse.Output[0].Content[0].ToolCall == nil ||
+			ctx.SemanticResponse.Output[0].Content[0].ToolCall.ID != "call_1" ||
+			ctx.SemanticResponse.Output[0].Content[0].ToolCall.Arguments != `{"city":"Paris"}` {
+			t.Fatalf("streamed tool response semantics changed: %+v", ctx.SemanticResponse)
+		}
+	})
+}
+
 // HTTP failures have a separate wire contract from failed model-generation
 // resources. This matrix locks the response-header/body seam so every backend
 // error envelope is rendered for every client without becoming a 2xx response.

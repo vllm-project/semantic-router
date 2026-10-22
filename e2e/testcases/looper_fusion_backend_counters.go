@@ -36,7 +36,7 @@ func openFusionBackendCounters(
 	backendOpts := opts
 	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
 		Namespace:   "default",
-		Name:        "looper-fake-backend",
+		Name:        "looper-provider-mocker",
 		ServicePort: "8000",
 	}
 	session, err := fixtures.OpenServiceSession(ctx, client, backendOpts)

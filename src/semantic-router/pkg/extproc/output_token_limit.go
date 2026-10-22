@@ -2,11 +2,9 @@ package extproc
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
@@ -19,30 +17,27 @@ func snapshotClientMaxOutputTokens(request llmprotocol.Request, ctx *RequestCont
 	ctx.ClientMaxOutputTokens = outputtokens.Clone(request.Sampling.MaxOutputTokens)
 }
 
-func parseLooperOutputTokenBoundHeaders(ctx *RequestContext) {
+// applyLooperHopOutputTokenBounds copies the ceilings the Router put on the
+// typed hop. Client headers are ignored: a request cannot pose as a hop or
+// widen the selected model's bound.
+func applyLooperHopOutputTokenBounds(ctx *RequestContext) {
 	if ctx == nil || !ctx.LooperRequest {
 		return
 	}
 	ctx.ClientMaxOutputTokens = nil
 	ctx.AlgorithmStageMaxOutputTokens = nil
-	if value, ok := parsePositiveInt64Header(ctx, headers.VSRLooperClientMaxOutputTokens); ok {
-		ctx.ClientMaxOutputTokens = &value
+	if ctx.Hop == nil {
+		return
 	}
-	if value, ok := parsePositiveInt64Header(ctx, headers.VSRLooperStageMaxOutputTokens); ok {
-		ctx.AlgorithmStageMaxOutputTokens = &value
-	}
+	ctx.ClientMaxOutputTokens = positiveOutputTokenBound(ctx.Hop.ClientMaxOutputTokens)
+	ctx.AlgorithmStageMaxOutputTokens = positiveOutputTokenBound(ctx.Hop.StageMaxOutputTokens)
 }
 
-func parsePositiveInt64Header(ctx *RequestContext, name string) (int64, bool) {
-	raw := strings.TrimSpace(headerValueCI(ctx, name))
-	if raw == "" {
-		return 0, false
+func positiveOutputTokenBound(value *int64) *int64 {
+	if value == nil || *value < 1 {
+		return nil
 	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value < 1 {
-		return 0, false
-	}
-	return value, true
+	return outputtokens.Clone(value)
 }
 
 // prepareAutomaticDispatchWithOutputLimit renders automatic output first, then
@@ -168,16 +163,22 @@ func modelRefMaxCompletionTokens(router *OpenAIRouter, decision *config.Decision
 		return nil
 	}
 	for _, ref := range decision.ModelRefs {
-		matchesModel := ref.Model == modelName || ref.LoRAName == modelName
-		if router != nil && router.Config != nil {
-			matchesModel = router.Config.ModelNameMatches(ref.Model, modelName) || ref.LoRAName == modelName
-		}
-		if !matchesModel {
+		if !selectedModelRefMatches(router, ref, modelName) {
 			continue
 		}
 		return outputtokens.FromInt(ref.MaxCompletionTokens)
 	}
 	return nil
+}
+
+// selectedModelRefMatches distinguishes a LoRA adapter from the bare base it
+// belongs to. An adapter matches only its own name; a base reference matches
+// that base, including a provider alias, and not a sibling adapter.
+func selectedModelRefMatches(router *OpenAIRouter, ref config.ModelRef, modelName string) bool {
+	if router != nil {
+		return router.modelRefMatchesCandidate(ref, modelName)
+	}
+	return candidateModelIdentity(ref) == modelName
 }
 
 func wireFormatSupportsOutputTokenLimit(dispatch *providerDispatch) bool {

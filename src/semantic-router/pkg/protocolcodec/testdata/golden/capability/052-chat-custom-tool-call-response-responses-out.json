@@ -1,0 +1,47 @@
+{
+  "cases": [
+    {
+      "name": "custom_tool_call",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "chatcmpl_custom_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "call_id": "call_1",
+              "id": "item_68f26e3ce4ea5094995aa366",
+              "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
+              "name": "apply_patch",
+              "type": "custom_tool_call"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 4,
+            "input_tokens_details": {
+              "cache_write_tokens": null,
+              "cached_tokens": null
+            },
+            "output_tokens": 3,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 7
+          }
+        }
+      }
+    }
+  ]
+}

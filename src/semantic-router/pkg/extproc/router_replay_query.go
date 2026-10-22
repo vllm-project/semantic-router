@@ -27,7 +27,7 @@ func (r *OpenAIRouter) routerReplayReaders() []*routerreplay.Recorder {
 			seen[reader] = true
 		}
 	}
-	if len(readers) == 0 && r.ReplayRecorder != nil {
+	if r.ReplayRecorder != nil && !seen[r.ReplayRecorder] {
 		readers = append(readers, r.ReplayRecorder)
 	}
 	return readers
