@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a
+  sha256: sha256:bdc7d6ae08913461f61b08c61d041ae432fd88734b77221529e6848a8353ab75
 protocols:
 - id: vllm-sr/systemone@1
   display_name: System One
@@ -9505,8 +9505,8 @@ models:
   released_at: '2026-04-07'
 - id: vllm-sr/mom-v1-blend
   display_name: MoM V1 Blend
-  description: Spends reasoning only where a request needs it; one decision-model call per request selects the reasoning,
-    medium, or simple pool.
+  description: Spends reasoning only where a request needs it; one decision-model call per request selects one of ten lanes,
+    from thinking off to maximum effort.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -9541,7 +9541,36 @@ models:
   - tools
   - multimodal
   roles:
-  - name: reasoning
+  - name: long_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - long_context
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    recommended_pool:
+    - zai/glm-5.3-flash
+  - name: recovery
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: agentic
     required: true
     minimum_candidates: 1
     traits:
@@ -9549,19 +9578,62 @@ models:
     - reasoning
     - tools
     recommended_pool:
+    - zai/glm-5.3-flash
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: simple
+  - name: facts
     required: true
     minimum_candidates: 1
     traits:
     - chat
     recommended_pool:
+    - zai/glm-5.3-flash
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: medium
+  - name: frontier
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: code
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: hard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: standard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: fast
     required: true
     minimum_candidates: 1
     traits:
@@ -9573,7 +9645,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a
+    asset_sha256: sha256:bdc7d6ae08913461f61b08c61d041ae432fd88734b77221529e6848a8353ab75
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9640,7 +9712,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a
+    asset_sha256: sha256:bdc7d6ae08913461f61b08c61d041ae432fd88734b77221529e6848a8353ab75
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9710,7 +9782,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a
+    asset_sha256: sha256:bdc7d6ae08913461f61b08c61d041ae432fd88734b77221529e6848a8353ab75
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9795,7 +9867,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a
+    asset_sha256: sha256:bdc7d6ae08913461f61b08c61d041ae432fd88734b77221529e6848a8353ab75
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -9848,7 +9920,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a
+    asset_sha256: sha256:bdc7d6ae08913461f61b08c61d041ae432fd88734b77221529e6848a8353ab75
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro

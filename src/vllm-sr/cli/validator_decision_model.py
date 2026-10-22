@@ -310,8 +310,11 @@ def _selector_errors(
             _reference_error(deployments, decision_model) if decision_model else None
         )
     models = [ref.model for ref in decision.modelRefs or []]
-    if message is None and not (
-        MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
+    # A model-free built-in Recipe receives its candidates through assignments.
+    if (
+        message is None
+        and models
+        and not MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
     ):
         message = (
             f"needs {MIN_SELECTOR_CANDIDATES}..{MAX_SELECTOR_CANDIDATES} "

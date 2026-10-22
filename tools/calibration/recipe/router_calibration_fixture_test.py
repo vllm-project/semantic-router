@@ -729,10 +729,10 @@ fixtures:
         )
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
-        self.assertEqual(len(probes), 347)
-        added_probes = probes[307:317]
+        self.assertEqual(len(probes), 365)
+        added_probes = probes[325:335]
         self.assertEqual(
-            {probe.decision_id for probe in probes[317:321]},
+            {probe.decision_id for probe in probes[335:339]},
             {
                 "contract-direct-result-repair",
                 "contract-plural-workflow-start",
@@ -756,7 +756,7 @@ fixtures:
             },
         )
         self.assertEqual(
-            {probe.decision_id for probe in probes[343:]},
+            {probe.decision_id for probe in probes[361:]},
             {
                 f"accuracy_v2_facts_{domain}"
                 for domain in ("health", "law", "business", "economics")
@@ -765,10 +765,10 @@ fixtures:
         # Pin all maintained message fixtures, including the bounded Vault context
         # and meaningful repeated-text records used by context-band probes.
         receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(receipt["message_probes"], 105)
+        self.assertEqual(receipt["message_probes"], 108)
         self.assertEqual(receipt["generated_probes"], 44)
-        self.assertEqual(receipt["image_parts"], 51)
-        self.assertEqual(receipt["text_bytes"], 19_066_470)
+        self.assertEqual(receipt["image_parts"], 53)
+        self.assertEqual(receipt["text_bytes"], 19_066_596)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -788,11 +788,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "a5dce2874cdbbaabd1540c42e68ca2d7e59828929b4c60bad8d00be6e50f314f",
+            "7b394194f0591bec78a026b25a003fe9f3a3aedce82cc56a5a8e6fd1d97aa970",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "16e04f02ae4a813c34859f2edb77a7aa65d7d1494b9b97e661baaaa0c3d4dd06",
+            "1771f585aa3efed07459fab510040b742fb1a702377a459bed2ec8d4c516ec84",
         )
         by_id = {probe.probe_id: probe for probe in probes}
         self.assertEqual(len(by_id), len(probes))
