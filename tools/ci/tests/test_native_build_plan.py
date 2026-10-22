@@ -24,7 +24,6 @@ class NativeBuildPlanTests(unittest.TestCase):
             "tools/docker/riscv64/build.py",
             "tools/docker/riscv64/Dockerfile",
             "tools/docker/Dockerfile.attached",
-            "tools/test/smoke/riscv64-standalone.py",
         ):
             with self.subTest(source=source):
                 self.assertIn("harness-tools", classify([source]).selected_jobs)

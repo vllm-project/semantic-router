@@ -24,7 +24,6 @@ domains:
       - tools/docker/Dockerfile.precommit
       - tools/docker/Dockerfile.attached
       - tools/docker/riscv64/**
-      - tools/test/smoke/riscv64-standalone.py
       - tools/linter/**
       - tools/make/**
     checks: [make harness-check]
