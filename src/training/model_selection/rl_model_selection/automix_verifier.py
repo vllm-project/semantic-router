@@ -168,8 +168,10 @@ Is this answer correct?"""
 
             prompt_tokens += input_tokens
             completion_tokens += outputs.shape[-1] - input_tokens
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = response[len(prompt) :].strip().upper()
+            response = self.tokenizer.decode(
+                outputs[0, input_tokens:], skip_special_tokens=True
+            )
+            response = response.strip().upper()
             sample_responses.append(response)
 
             # Check if verified

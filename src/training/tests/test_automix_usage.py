@@ -10,6 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+PROMPT_TOKENS = 7
+
 
 def load_verifier():
     path = (
@@ -35,8 +37,9 @@ class Tensor:
     def to(self, _device):
         return self
 
-    def __getitem__(self, _index):
-        return self
+    def __getitem__(self, index):
+        tokens = list(range(self.shape[-1]))
+        return tokens[index[1]] if isinstance(index, tuple) else tokens
 
 
 class Tokenizer:
@@ -44,10 +47,10 @@ class Tokenizer:
 
     def __call__(self, prompt, **_kwargs):
         self.prompt = prompt
-        return {"input_ids": Tensor(7)}
+        return {"input_ids": Tensor(PROMPT_TOKENS)}
 
-    def decode(self, _tokens, **_kwargs):
-        return self.prompt + "YES"
+    def decode(self, tokens, **_kwargs):
+        return "YES" if tokens[0] >= PROMPT_TOKENS else self.prompt + "YES"
 
 
 class Model:
@@ -56,7 +59,7 @@ class Model:
 
     def generate(self, **_kwargs):
         self.calls += 1
-        return Tensor(7 + self.calls + 1)
+        return Tensor(PROMPT_TOKENS + self.calls + 1)
 
 
 class AutoMixUsageTest(unittest.TestCase):
@@ -82,6 +85,21 @@ class AutoMixUsageTest(unittest.TestCase):
         self.assertEqual(
             usage, {"prompt_tokens": 14, "completion_tokens": 5, "total_tokens": 19}
         )
+
+    def test_decodes_generated_tokens_after_prompt_truncation(self):
+        class TruncatedTokenizer(Tokenizer):
+            def decode(self, tokens, **kwargs):
+                if tokens[0] == 0:
+                    return "truncated promptYES"
+                return super().decode(tokens, **kwargs)
+
+        verifier = self.verifier()
+        verifier.tokenizer = TruncatedTokenizer()
+        _, samples, usage = verifier.verify_with_usage(
+            "question", "answer", context="context " * 100
+        )
+        self.assertEqual(samples, ["YES", "YES"])
+        self.assertEqual(usage["total_tokens"], 19)
 
     def test_existing_tuple_interface_is_preserved(self):
         self.assertEqual(
