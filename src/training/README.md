@@ -27,6 +27,27 @@ Start with the public [model training guide](../../website/docs/training/trainin
 to choose a model family. Use the README beside a trainer for its environment,
 data preparation, commands, evaluation, and artifact format.
 
+## Torch build
+
+Areas that train on a GPU choose the `torch` build with an extra.
+[`model_embeddings/multimodal/small`](model_embeddings/multimodal/small/) is
+the reference. Run one of these in the area's directory:
+
+| Machine | Command |
+| --- | --- |
+| NVIDIA GPU | `uv sync --locked --extra cuda` |
+| No GPU | `uv sync --locked --extra cpu` |
+| AMD GPU (Linux) | `uv sync --locked --extra rocm` |
+
+- `cuda` installs the default PyPI wheel, which is the CUDA build on Linux.
+- `cpu` installs from `https://download.pytorch.org/whl/cpu`.
+- `rocm` installs from `https://download.pytorch.org/whl/rocm7.1`, applies on
+  Linux only, and also installs `triton-rocm` from that index.
+- The three extras are declared as conflicts in `[tool.uv]`, so only one can be
+  installed. Without an extra, `uv sync --locked` installs no `torch`.
+- Areas that do not declare these extras install the default PyPI `torch` with
+  `uv sync --locked`.
+
 ## Training control-plane contract
 
 `semantic-router.training/v2` defines shared resources and messages for selector
