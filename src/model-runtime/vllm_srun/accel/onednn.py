@@ -23,6 +23,7 @@ def available() -> bool:
     if not torch.backends.mkldnn.is_available():
         return False
     try:
+        torch.ops.mkldnn._reorder_linear_weight  # noqa: B018 - resolves the op or raises
         torch.ops.mkldnn._linear_pointwise  # noqa: B018 - resolves the op or raises
     except (AttributeError, RuntimeError):
         return False

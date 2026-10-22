@@ -25,9 +25,23 @@ def test_packed_linear_is_available_on_arm64(monkeypatch, machine):
     monkeypatch.setattr(
         onednn.torch.ops,
         "mkldnn",
-        SimpleNamespace(_linear_pointwise=object()),
+        SimpleNamespace(
+            _reorder_linear_weight=object(),
+            _linear_pointwise=object(),
+        ),
     )
     assert onednn.available()
+
+
+def test_packed_linear_needs_the_reorder_op(monkeypatch):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: "aarch64")
+    monkeypatch.setattr(onednn.torch.backends.mkldnn, "is_available", lambda: True)
+    monkeypatch.setattr(
+        onednn.torch.ops,
+        "mkldnn",
+        SimpleNamespace(_linear_pointwise=object()),
+    )
+    assert not onednn.available()
 
 
 def runnable(kind):
