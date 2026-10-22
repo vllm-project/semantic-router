@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 import subprocess
@@ -11,8 +12,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
+sys.path.insert(0, str(REPO_ROOT / "tools/calibration/recipe"))
 
 from ci_plan import make_plan  # noqa: E402
+from recipe_conformance_sources import CI_SHARDS_PER_SOURCE  # noqa: E402
 from run_component_batch import commands  # noqa: E402
 from validate_workflows import Workflow, load_workflows, needs  # noqa: E402
 
@@ -37,7 +40,7 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
             {"inventory", "live-cpu", "report"},
         )
         self.assertIn("plan-all", self.text)
-        self.assertNotIn("--shards 3", self.text)
+        self.assertIn("--shards 3", self.text)
         self.assertIn("matrix.recipes_root", self.text)
         self.assertIn("matrix.report_dir", self.text)
         self.assertNotIn("live-cpu-built-in", self.text)
@@ -50,18 +53,13 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
         self.assertIn('--recipe "${recipe}"', self.runner)
         self.assertIn("VSR_MGMT_TOKEN", self.runner)
 
-    def test_plan_keeps_the_per_recipe_matrix_that_evidence_expects(self) -> None:
+    def test_plan_and_evidence_share_the_bounded_source_matrix(self) -> None:
         plan = next(
             step
             for step in self.workflow.jobs["inventory"]["steps"]
             if step.get("id") == "plan"
         )
-        self.assertIn("plan-all", plan["run"])
-        self.assertNotIn(
-            "--shards",
-            plan["run"],
-            "runtime_evidence.py reads one image receipt per recipe job",
-        )
+        self.assertIn(f"--shards {CI_SHARDS_PER_SOURCE}", plan["run"])
         self.assertIn("image-$SHARD.json", self.text)
 
     def test_report_fails_closed_on_the_source_aware_live_matrix(self) -> None:
@@ -77,13 +75,36 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
         self.assertIn("**/conformance-report.md", self.text)
         self.assertIn("if-no-files-found: error", self.text)
 
+    def test_rerun_report_cannot_reimport_a_stale_aggregate(self) -> None:
+        artifacts = {
+            "recipe-conformance-inventory",
+            "recipe-conformance-live-standalone-0",
+            "recipe-conformance-live-built-in-latest-mom-v1-0",
+            "recipe-conformance-report",
+        }
+        selected = set()
+        for step in self.workflow.jobs["report"]["steps"]:
+            if step.get("uses") != "actions/download-artifact@v4":
+                continue
+            settings = step["with"]
+            selected.update(
+                name
+                for name in artifacts
+                if name == settings.get("name")
+                or fnmatch.fnmatch(name, settings.get("pattern", ""))
+            )
+        self.assertEqual(selected, artifacts - {"recipe-conformance-report"})
+
     def test_full_cpu_allocation_only_targets_serial_probe_manifests(self) -> None:
         allocation = next(
             step
             for step in self.workflow.jobs["live-cpu"]["steps"]
             if "VLLM_SRUN_CPU_THREADS=" in step.get("run", "")
         )
-        condition = re.fullmatch(r"matrix\.shard == '([^']+)'", allocation["if"])
+        condition = re.fullmatch(
+            r"matrix\.source == '([^']+)' && matrix\.recipes == '([^']+)'",
+            allocation["if"],
+        )
         self.assertIsNotNone(condition, "Full CPU allocation must select one shard")
         assert condition is not None
         matrix = json.loads(
@@ -92,13 +113,18 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
                     sys.executable,
                     str(REPO_ROOT / "tools/calibration/recipe/recipe_conformance.py"),
                     "plan-all",
+                    "--shards",
+                    "3",
                 ],
                 cwd=REPO_ROOT,
                 text=True,
             )
         )
         shard = next(
-            row for row in matrix["include"] if row["shard"] == condition.group(1)
+            row
+            for row in matrix["include"]
+            if row["source"] == condition.group(1)
+            and row["recipes"] == condition.group(2)
         )
         for recipe in shard["recipes"].split(","):
             manifest = REPO_ROOT / shard["recipes_root"] / recipe / "probes.yaml"

@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -36,7 +37,7 @@ func init() {
 		Fn:          testStreamingLargeBody,
 	})
 	pkgtestcases.Register("streaming-sse-cache", pkgtestcases.TestCase{
-		Description: "Verify SSE streaming responses are cached and replayed correctly",
+		Description: "Verify a cached Chat response is replayed as a complete SSE stream",
 		Tags:        []string{"streaming", "cache", "sse"},
 		Fn:          testStreamingSSECache,
 	})
@@ -56,23 +57,29 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 		return err
 	}
 	defer stop()
+	return checkStreamingKeywordRouting(ctx, localPort, opts)
+}
 
+func checkStreamingKeywordRouting(ctx context.Context, localPort string, opts pkgtestcases.TestCaseOptions) error {
 	cases := []struct {
-		name     string
-		query    string
-		wantDec  string
-		keywords []string
+		name    string
+		query   string
+		wantDec string
 	}{
 		{
-			name:     "code_keyword_bm25",
-			query:    "Can you help me implement a function to debug this algorithm?",
-			wantDec:  "code_keywords",
-			keywords: []string{"code_keywords"},
+			name:    "code_keyword_bm25",
+			query:   "Can you help me implement a function to debug this algorithm?",
+			wantDec: "code_keywords",
 		},
 		{
 			name:    "urgent_ngram",
 			query:   "This is an urgent emergency, I need help immediately!",
 			wantDec: "urgent_request",
+		},
+		{
+			name:    "general_fallback",
+			query:   "Explain why the sky is blue.",
+			wantDec: "general",
 		},
 	}
 
@@ -108,8 +115,8 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 		})
 	}
 
-	if passed == 0 {
-		return fmt.Errorf("streaming keyword routing: 0/%d passed", len(cases))
+	if passed != len(cases) {
+		return fmt.Errorf("streaming keyword routing: %d/%d passed", passed, len(cases))
 	}
 	return nil
 }
@@ -211,18 +218,24 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	}
 	defer stop()
 
-	// Build a long system prompt + user message that is large enough to be
-	// split across multiple Envoy ext_proc chunks (Envoy default chunk size
-	// is ~64 KiB, so anything > 64 KiB guarantees multi-chunk delivery).
-	longContext := strings.Repeat("This is padding context to make the body large enough for multi-chunk delivery. ", 1000)
-	userMsg := "Given all that context, please implement a function to sort a linked list."
+	backend, err := fixtures.OpenServiceEndpointSession(ctx, client, opts, "default", fullDuplexSelected, "8000")
+	if err != nil {
+		return fmt.Errorf("reach large-body observation backend: %w", err)
+	}
+	defer backend.Close()
 
+	// Exercise a payload above 64 KiB. The provider observation verifies the
+	// complete messages without assuming a particular Envoy chunk count.
+	longContext := strings.Repeat("This is padding context to make the body large enough for multi-chunk delivery. ", 1000)
+	// The urgency decision has no system-prompt rewrite or response cache.
+	userMsg := "This is an urgent emergency, I need help immediately!"
+	messages := []map[string]string{
+		{"role": "system", "content": longContext},
+		{"role": "user", "content": userMsg},
+	}
 	requestBody := map[string]interface{}{
-		"model": "vllm-sr/auto",
-		"messages": []map[string]string{
-			{"role": "system", "content": longContext},
-			{"role": "user", "content": userMsg},
-		},
+		"model":    "vllm-sr/auto",
+		"messages": messages,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -241,14 +254,19 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	sessionID := fmt.Sprintf("streaming-large-body-%d", time.Now().UnixNano())
+	req.Header.Set(fullDuplexSession, sessionID)
 
 	httpClient := &http.Client{Timeout: 60 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("large body request failed: %w", err)
 	}
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, readErr := io.ReadAll(resp.Body)
 	resp.Body.Close()
+	if readErr != nil {
+		return fmt.Errorf("read large-body response: %w", readErr)
+	}
 
 	decision := resp.Header.Get("x-vsr-selected-decision")
 
@@ -261,30 +279,41 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 		})
 	}
 
-	// A 400 from the upstream mock (context length exceeded) is acceptable —
-	// it proves the router successfully reassembled the multi-chunk body and
-	// forwarded it. Only true failures (502 from Envoy, no routing headers)
-	// indicate a streaming body problem.
-	switch {
-	case resp.StatusCode == http.StatusOK:
-		if opts.Verbose {
-			fmt.Printf("[Streaming] PASS: large body accepted by upstream (status 200)\n")
-		}
-	case resp.StatusCode == http.StatusBadRequest:
-		if opts.Verbose {
-			fmt.Printf("[Streaming] PASS: large body forwarded to upstream, rejected due to context length (expected for %d KiB body)\n", bodySizeKB)
-		}
-	default:
-		return fmt.Errorf("large body returned unexpected status %d: %s", resp.StatusCode, truncateString(string(respBody), 200))
-	}
-
-	if decision != "" {
-		trimmedDec := strings.TrimSuffix(decision, "_decision")
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Router decision: %s\n", trimmedDec)
+	var observed map[string]interface{}
+	if resp.StatusCode == http.StatusOK {
+		observed, err = lookupStreamingUsageDispatch(ctx, backend, sessionID)
+		if err != nil {
+			return fmt.Errorf("observe large-body dispatch: %w", err)
 		}
 	}
+	if err := validateStreamingLargeBodyDispatch(resp.StatusCode, decision, observed, messages); err != nil {
+		return fmt.Errorf("%w (response: %s)", err, truncateString(string(respBody), 200))
+	}
+	return nil
+}
 
+func validateStreamingLargeBodyDispatch(status int, decision string, observed map[string]interface{}, expected []map[string]string) error {
+	if status != http.StatusOK {
+		return fmt.Errorf("large body returned status %d, expected 200", status)
+	}
+	if decision != "urgent_request_decision" {
+		return fmt.Errorf("large body selected decision %q, expected urgent_request_decision", decision)
+	}
+	messages, ok := observed["messages"].([]interface{})
+	if !ok || len(messages) != len(expected) {
+		return fmt.Errorf("large body provider did not receive the original %d messages", len(expected))
+	}
+	for i, want := range expected {
+		got, ok := messages[i].(map[string]interface{})
+		if !ok || len(got) != len(want) {
+			return fmt.Errorf("large body provider message %d has a different shape", i)
+		}
+		for key, value := range want {
+			if got[key] != value {
+				return fmt.Errorf("large body provider message %d changed %s", i, key)
+			}
+		}
+	}
 	return nil
 }
 
@@ -304,86 +333,114 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 	defer stop()
 
 	question := "What is the speed of light in a vacuum?"
-
-	// 1) Send a non-streaming request to prime the cache (more reliable than
-	//    SSE since the mock backend may not support streaming responses).
-	resp1, err := sendNonStreamingRequest(ctx, question, "vllm-sr/auto", localPort)
+	body, wantText, err := primeStreamingResponseCache(ctx, question, "vllm-sr/auto", localPort)
 	if err != nil {
-		return fmt.Errorf("first request failed: %w", err)
-	}
-	body1, _ := io.ReadAll(resp1.Body)
-	resp1.Body.Close()
-
-	if opts.Verbose {
-		fmt.Printf("[Streaming] First response: status=%d, len=%d, decision=%s\n",
-			resp1.StatusCode, len(body1), resp1.Header.Get("x-vsr-selected-decision"))
+		return err
 	}
 
-	// 2) Retry similar non-streaming request with backoff until cache hit.
-	similarQ := "How fast does light travel through empty space?"
-	var cacheHit string
-	var body2 []byte
+	// Response mode is part of cache identity. Reuse the identical streaming
+	// request; streaming-cache-roundtrip owns semantic similarity matching.
 	for attempt := 1; attempt <= 4; attempt++ {
-		wait := time.Duration(attempt) * time.Second
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Waiting %v before cache-hit check (attempt %d/4)\n", wait, attempt)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * time.Second):
 		}
-		time.Sleep(wait)
-
-		resp2, requestErr := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
-		if requestErr != nil {
-			if attempt == 4 {
-				return fmt.Errorf("similar request failed: %w", requestErr)
-			}
+		stream, err := sendStreamingRequest(ctx, question, "vllm-sr/auto", localPort)
+		if err != nil {
+			return fmt.Errorf("request cached SSE replay: %w", err)
+		}
+		streamBody, readErr := io.ReadAll(stream.Body)
+		_ = stream.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("read cached SSE replay: %w", readErr)
+		}
+		if stream.Header.Get("x-vsr-cache-hit") != "true" && attempt < 4 {
 			continue
 		}
-		body2, _ = io.ReadAll(resp2.Body)
-		resp2.Body.Close()
-
-		cacheHit = resp2.Header.Get("x-vsr-cache-hit")
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Similar request: status=%d, cache-hit=%s, decision=%s\n",
-				resp2.StatusCode, cacheHit, resp2.Header.Get("x-vsr-selected-decision"))
+		if err := validateStreamingCacheReplay(stream.Header, streamBody, wantText); err != nil {
+			return err
 		}
-		if cacheHit == "true" {
-			break
+		if opts.SetDetails != nil {
+			opts.SetDetails(map[string]interface{}{
+				"original_body_len": len(body),
+				"stream_body_len":   len(streamBody),
+				"stream_cache_hit":  true,
+				"replay_verified":   true,
+			})
 		}
+		return nil
 	}
+	return fmt.Errorf("cached SSE replay never became available")
+}
 
-	// 3) Optionally test streaming cache hit — send a streaming request for a
-	//    similar question. If the backend supports SSE, validate the stream;
-	//    otherwise just check the cache-hit header.
-	var cacheHit3 string
-	resp3, err := sendStreamingRequest(ctx, "What is the velocity of light in vacuum?", "vllm-sr/auto", localPort)
+func primeStreamingResponseCache(ctx context.Context, question, model, localPort string) ([]byte, string, error) {
+	resp, err := sendStreamingRequest(ctx, question, model, localPort)
 	if err != nil {
-		if opts.Verbose {
-			fmt.Printf("[Streaming] Streaming similar request failed (mock may not support SSE): %v\n", err)
+		return nil, "", fmt.Errorf("prime streaming cache: %w", err)
+	}
+	body, readErr := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if readErr != nil {
+		return nil, "", fmt.Errorf("read priming stream: %w", readErr)
+	}
+	wantText, err := extractProtocolStructuredOutputStreamText("/v1/chat/completions", body)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode priming stream: %w", err)
+	}
+	if err := validateStreamingCacheStream(resp.Header, body, wantText); err != nil {
+		return nil, "", fmt.Errorf("validate priming stream: %w", err)
+	}
+	return body, wantText, nil
+}
+
+func validateStreamingCacheReplay(headers http.Header, body []byte, wantText string) error {
+	if headers.Get("x-vsr-cache-hit") != "true" {
+		return fmt.Errorf("expected cached SSE replay, got cache-hit=%q", headers.Get("x-vsr-cache-hit"))
+	}
+	return validateStreamingCacheStream(headers, body, wantText)
+}
+
+func validateStreamingCacheStream(headers http.Header, body []byte, wantText string) error {
+	if !strings.HasPrefix(headers.Get("Content-Type"), "text/event-stream") {
+		return fmt.Errorf("cached response is not SSE: %q", headers.Get("Content-Type"))
+	}
+	if wantText == "" {
+		return fmt.Errorf("cached SSE comparison requires nonempty priming output")
+	}
+	frames := protocolSSEDataFrames(body)
+	if len(frames) == 0 || frames[len(frames)-1] != "[DONE]" {
+		return fmt.Errorf("cached SSE replay must end with [DONE]")
+	}
+	finished := false
+	for _, data := range frames {
+		if data == "[DONE]" {
+			continue
 		}
-	} else {
-		cacheHit3 = resp3.Header.Get("x-vsr-cache-hit")
-		// Drain body regardless of format
-		io.Copy(io.Discard, resp3.Body)
-		resp3.Body.Close()
+		var chunk chatTextStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			return fmt.Errorf("decode cached SSE frame: %w", err)
+		}
+		for _, choice := range chunk.Choices {
+			if finished {
+				return fmt.Errorf("cached SSE replay contains a choice after its finish reason")
+			}
+			if choice.FinishReason != nil {
+				finished = true
+			}
+		}
+		// A final usage-only chunk has no choices and may follow the finish.
 	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"original_body_len":    len(body1),
-			"non_stream_cache_hit": cacheHit,
-			"non_stream_body_len":  len(body2),
-			"stream_cache_hit":     cacheHit3,
-		})
+	if err := validateChatProtocolStream(body, wantText); err != nil {
+		return fmt.Errorf("cached SSE replay: %w", err)
 	}
-
-	if opts.Verbose {
-		fmt.Printf("[Streaming] Non-streaming similar: cache-hit=%s, len=%d\n", cacheHit, len(body2))
-		fmt.Printf("[Streaming] Streaming similar:     cache-hit=%s\n", cacheHit3)
+	text, err := extractProtocolStructuredOutputStreamText("/v1/chat/completions", body)
+	if err != nil {
+		return fmt.Errorf("decode cached SSE output: %w", err)
 	}
-
-	if cacheHit != "true" {
-		return fmt.Errorf("expected cache hit for non-streaming similar question, got %q", cacheHit)
+	if text != wantText {
+		return fmt.Errorf("cached SSE output differs from priming output")
 	}
-
 	return nil
 }
 

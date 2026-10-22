@@ -217,3 +217,39 @@ def test_an_unknown_tower_architecture_is_refused(tmp_path):
 
     reason = NativeEngine().supports(replace(spec, towers=towers), CPU)
     assert reason == "no native 'video_tower' backbone"
+
+
+class GPUBound(CPUAccelerator):
+    """Reads a model as for a GPU; ``_host`` only asks which device it is for."""
+
+    def torch_device(self, device):
+        return torch.device("cuda")
+
+
+@pytest.mark.parametrize("accelerator, private", [(CPUAccelerator, True), (GPUBound, False)])  # fmt: skip
+def test_only_a_cpu_model_copies_its_checkpoint_into_process_memory(
+    tmp_path, monkeypatch, accelerator, private
+):
+    from vllm_srun.engines.native import weights
+
+    seen = []
+    set_parameter = weights.set_parameter
+
+    def recorded(root, name, tensor, dtype=torch.float32, private=True):
+        seen.append(private)
+        set_parameter(root, name, tensor, dtype, private)
+
+    monkeypatch.setattr(weights, "set_parameter", recorded)
+    NativeEngine()._host(tower_spec(tmp_path), accelerator(), CPU, EngineOptions())
+    assert seen and set(seen) == {private}
+
+
+def test_a_shared_checkpoint_tensor_stays_the_files_view():
+    from vllm_srun.engines.native.weights import set_parameter
+
+    module = torch.nn.Linear(4, 4, bias=False)
+    stored = torch.randn(4, 4)
+    set_parameter(module, "weight", stored, private=False)
+    assert module.weight.data_ptr() == stored.data_ptr()
+    set_parameter(module, "weight", stored)
+    assert module.weight.data_ptr() != stored.data_ptr()

@@ -157,20 +157,13 @@ func (r *Registry) AcquireResponseCache() (*cache.ResponseCacheService, func()) 
 	return service, release
 }
 
-func (r *Registry) SetResponseCache(service *cache.ResponseCacheService) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	r.responseCache = service
-	r.mu.Unlock()
-}
-
 // LearningRuntime is the narrow API-server seam for Router Learning state.
 // The implementation lives with the router runtime; the API server only needs
-// to forward typed outcomes without depending on extproc internals.
+// to forward typed outcomes and read typed experience without depending on
+// extproc internals.
 type LearningRuntime interface {
 	OutcomeRuntime
+	ExperienceRuntime
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {

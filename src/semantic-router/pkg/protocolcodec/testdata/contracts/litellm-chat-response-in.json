@@ -1,0 +1,33 @@
+{
+  "id": "chatcmpl-litellm-fixture",
+  "created": 1791782944,
+  "model": "Qwen/Qwen3.8-27B",
+  "object": "chat.completion",
+  "system_fingerprint": "vllm-0.26.1rc1.dev1177+ga9a17e709-tp2-58b79d32",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\nok",
+        "role": "assistant",
+        "reasoning_content": "We need to respond with exactly ok.",
+        "provider_specific_fields": {
+          "reasoning": "We need to respond with exactly ok.\n",
+          "refusal": null
+        }
+      },
+      "provider_specific_fields": {
+        "routed_experts": null,
+        "token_ids": null,
+        "stop_reason": null
+      }
+    }
+  ],
+  "usage": {
+    "completion_tokens": 29,
+    "prompt_tokens": 57,
+    "total_tokens": 86,
+    "completion_tokens_details": {"reasoning_tokens": 25}
+  }
+}

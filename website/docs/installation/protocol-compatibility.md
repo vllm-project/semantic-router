@@ -232,6 +232,14 @@ schema, streaming, tools, or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- When an OpenAI-compatible Chat provider reports an error inside a successful
+  stream with an integer HTTP status as its `code`, as vLLM does, streamed
+  clients receive the provider's message. Responses and Anthropic Messages
+  clients get the Router's error frame, with the status as a string `code` for
+  Responses and the mapped error type for Messages. Chat clients get the stream
+  as the Router passes it up to the error event, then the Router's error frame
+  with a string `code` and no `[DONE]`, however the stream is split into body
+  chunks, as long as each frame is within the Router's SSE frame limit.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).

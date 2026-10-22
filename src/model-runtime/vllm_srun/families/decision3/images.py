@@ -1,7 +1,7 @@
 """Decision 3.0 image inputs: decoding and the Qwen2-VL image processor, as the released runtime reads them.
 
-A request's images are base64 PNG, JPEG or WebP data URLs of at most 8,000,000
-bytes and 16,000,000 pixels (the released server's strict loading); PIL
+A request's images are base64 PNG, JPEG or WebP data URLs of at most 16 MiB
+(System One's limit) and 16,000,000 pixels (the released server's strict loading); PIL
 decodes each and converts it to RGB, nothing else. The processor is the
 Transformers 5.17 ``Qwen2VLImageProcessor`` torchvision backend with the
 released runtime's pixel budget: ``smart_resize`` to a multiple of
@@ -34,7 +34,7 @@ _PREPROCESS = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vllm-sr-imag
 
 MIN_PIXELS = 65_536
 MAX_PIXELS = 1_638_400
-MAX_IMAGE_BYTES = 8_000_000
+MAX_IMAGE_BYTES = 16 << 20
 MAX_SOURCE_PIXELS = 16_000_000
 IMAGE_FORMATS = ("PNG", "JPEG", "WEBP")
 DATA_URL_FORMATS = ("png", "jpeg", "jpg", "webp")
@@ -209,7 +209,32 @@ def preprocess(image: Any, digest: str, settings: ProcessorSettings) -> Processe
     return _PREPROCESS.submit(_preprocess, image, digest, settings).result()
 
 
+def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
+    """``decode`` and the resize, as a media worker process runs them (``vllm_srun.media``): uint8 pixels and the digest.
+
+    The worker returns the resized uint8 pixels as a NumPy array, an eighth of
+    the FP32 patch rows they become, and ``loaded`` finishes them on the
+    preprocessing thread. The resize computes each output pixel alone, so the
+    worker's thread count leaves the pixels bit for bit as ``preprocess``
+    gives them.
+    """
+    picture, digest = decode(value)
+    return _resized(picture, settings).numpy(), digest
+
+
+def loaded(pixels: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
+    """A ``load`` result through the rest of the processor (on the preprocessing thread)."""
+    return _PREPROCESS.submit(
+        _patches, torch.from_numpy(pixels), digest, settings
+    ).result()
+
+
 def _preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
+    return _patches(_resized(image, settings), digest, settings)
+
+
+def _resized(image: Any, settings: ProcessorSettings) -> torch.Tensor:
+    """An RGB PIL image as uint8 ``[1, 3, height, width]`` at the processor's size."""
     import numpy as np
 
     pixels = torch.as_tensor(np.array(image, copy=True))
@@ -219,7 +244,14 @@ def _preprocess(image: Any, digest: str, settings: ProcessorSettings) -> Process
     height, width = smart_resize(
         old_height, old_width, settings.factor, settings.min_pixels, settings.max_pixels
     )
-    resized = _resize(stacked, height, width)
+    return _resize(stacked, height, width).contiguous()
+
+
+def _patches(
+    resized: torch.Tensor, digest: str, settings: ProcessorSettings
+) -> ProcessedImage:
+    """Resized uint8 pixels rescaled, normalized and laid out as the tower's FP32 patch rows."""
+    height, width = resized.shape[-2:]
     mean = torch.tensor(settings.image_mean) * (1.0 / settings.rescale_factor)
     std = torch.tensor(settings.image_std) * (1.0 / settings.rescale_factor)
     normalized = (
