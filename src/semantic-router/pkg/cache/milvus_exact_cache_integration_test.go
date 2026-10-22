@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// StorageIntegration: milvus
 func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T) {
-	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
-		t.Skip("Milvus integration tests disabled")
-	}
+	storagetest.Require(t, "milvus")
 	host := os.Getenv("MILVUS_HOST")
 	if host == "" {
 		host = "localhost"
@@ -36,11 +36,11 @@ func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 		EmbeddingProvider: cacheTestEmbeddingProvider(),
 		Enabled:           true,
 		TTLSeconds:        60,
-		EmbeddingModel:    "bert",
+		EmbeddingModel:    "qwen3",
 		Config:            milvusConfig,
 	})
 	if err != nil {
-		t.Skipf("Milvus unavailable: %v", err)
+		storagetest.Unavailable(t, "milvus", fmt.Sprintf("Milvus unavailable: %v", err))
 	}
 	t.Cleanup(func() {
 		_ = cache.client.DropCollection(context.Background(), cache.collectionName)
@@ -83,10 +83,9 @@ func milvusExactTestConfig(host string, port int) *config.MilvusConfig {
 	return milvusConfig
 }
 
+// StorageIntegration: milvus
 func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
-	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
-		t.Skip("Milvus integration tests disabled")
-	}
+	storagetest.Require(t, "milvus")
 	host := os.Getenv("MILVUS_HOST")
 	if host == "" {
 		host = "localhost"
@@ -102,12 +101,12 @@ func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
 		EmbeddingProvider:       cacheTestEmbeddingProvider(),
 		Enabled:                 true,
 		TTLSeconds:              60,
-		EmbeddingModel:          "bert",
+		EmbeddingModel:          "qwen3",
 		Milvus:                  milvusConfig,
 		DisableRebuildOnStartup: true,
 	})
 	if err != nil {
-		t.Skipf("Milvus unavailable: %v", err)
+		storagetest.Unavailable(t, "milvus", fmt.Sprintf("Milvus unavailable: %v", err))
 	}
 	t.Cleanup(func() {
 		_ = cache.milvusCache.client.DropCollection(

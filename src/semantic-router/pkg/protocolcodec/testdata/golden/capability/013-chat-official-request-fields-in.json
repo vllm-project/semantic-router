@@ -5,6 +5,10 @@
     "messages": [{"role": "user", "content": "hello"}]
   },
   "cases": [
+    {"name": "cache_salt", "patch": {"cache_salt": "phase-salt"}},
+    {"name": "min_p", "patch": {"min_p": 0}},
+    {"name": "repetition_penalty", "patch": {"repetition_penalty": 1.1}},
+    {"name": "top_k", "patch": {"top_k": -1}},
     {"name": "audio", "patch": {"audio": {"format": "wav", "voice": "alloy"}}},
     {"name": "chat_template_kwargs", "patch": {"chat_template_kwargs": {"enable_thinking": false}}},
     {"name": "frequency_penalty", "patch": {"frequency_penalty": 0.25}},

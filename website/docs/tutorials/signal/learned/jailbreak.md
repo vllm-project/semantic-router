@@ -78,11 +78,13 @@ contract; callers supplying flat text remain responsible for its scope.
 
 ### Token windows for a local classifier
 
-The implicit local `mmbert32k` default scans each text piece in 512-token
-windows with 255 content tokens of overlap. Its document budget comes from the
-registered default Guard model: 32,768 tokens including special tokens. This
-applies only when no recipe model binding or `window` is specified and
-`max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
+The default prompt guard, Vela 2.0 0.3B, reads each text whole, up to its
+8,192-token input, and takes no window
+([Choose a model](../../../model-runtime/choose-a-model.md#vela-20)). When the
+module runs Vela 1.0 Guard, it scans each text piece in 512-token windows with
+255 content tokens of overlap, within that model's document budget: 32,768
+tokens including special tokens. This applies only when no recipe model binding
+or `window` is specified and `max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
 a long piece requires multiple forwards. Preparation records the resolved window and document budget
 and checks the loaded model's actual capacity. An incompatible custom artifact
 fails preparation, and a piece exceeding the document budget produces an
@@ -100,7 +102,6 @@ global:
   model_catalog:
     modules:
       prompt_guard:
-        variant: mmbert32k
         max_sequence_length: 32768
         window:
           size: 128
@@ -115,6 +116,15 @@ and resets positions in each window.
 The total input must fit `max_sequence_length`; overflow is an inference
 error, never an uninspected suffix.
 
+For an explicit local binding, the deployment's `input.max_tokens` supplies the
+complete-document budget. With window scanning, that budget can exceed the
+checkpoint's single-forward capacity: `input: {max_tokens: 65536, overflow: window}`
+and `window: {size: 32768, overlap: 256}` scan up to 64K tokens using forwards of
+at most 32K tokens. Preparation checks each window against the loaded checkpoint
+and graph; a 32K document budget alone does not establish 32K forward support.
+All counts use the Guard tokenizer, including its special tokens. Explicit
+non-window `reject` and `truncate` deployments keep their existing input policy.
+
 Request rules, the detection API, and response scans use the same maximum
 positive-label risk across windows. For multiple positive labels, the runtime
 sums their probabilities within each window before choosing the riskiest
@@ -125,15 +135,21 @@ Outside the implicit default, omitting `window` retains whole-input inference
 or the configured legacy scan. Window sizes and thresholds need separate
 checkpoint evaluation; scanning all tokens does not establish understanding of
 distant context. Quoted attacks and instructions whose meaning depends on
-another window require separate evaluation. Local Candle and ORT model bindings
-can also select token windows; their loaded adapter and graph must support the
-requested execution geometry.
+another window require separate evaluation. Model bindings to a
+[model runtime](../../../model-runtime/guides/safety.md) deployment can also
+select token windows; the model must support the requested window size.
 
 A provider result declaring truncated or incompletely processed input is an
-unresolved scan. Request rules, the text detection APIs, and response scans
-cannot use its probabilities to report a clean complete input. A detection on
-another completely scored piece still counts; errors remain subject to the
-configured `on_error` and response-rule policies.
+unscanned input, as is an input over the guard's input under `reject` or over
+its [scan budget](../../../model-runtime/reference.md#long-inputs). Request
+rules, the text detection APIs, and response scans cannot use its
+probabilities to report a clean complete input: a rule matches it with the
+type `unscanned`, whatever `on_error` says, so padding a prompt cannot carry an
+attack past the guard. So does a scan that misses the signals' deadline
+(`global.model_catalog.signal_timeout_ms`). Set `prompt_guard.on_unscanned:
+allow` to let such content follow `on_error` instead. A detection on another
+completely scored piece still counts as a detection; backend failures remain
+subject to the configured `on_error` and response-rule policies.
 
 ### Direction
 

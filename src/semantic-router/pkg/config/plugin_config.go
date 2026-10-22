@@ -186,7 +186,7 @@ type FastResponsePluginConfig struct {
 // This plugin validates and strips request body parameters per decision.
 type RequestParamsPluginConfig struct {
 	// DefaultMaxTokens supplies an output bound only when the caller omits it.
-	DefaultMaxTokens *int `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty" jsonschema:"minimum=1"`
+	DefaultMaxTokens *OutputTokenDefault `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty"`
 	// BlockedParams is a list of parameters that should be blocked/stripped.
 	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
 	// MaxTokensLimit sets the maximum allowed value for max_tokens.
@@ -245,7 +245,6 @@ type ResponseJailbreakPluginConfig struct {
 // HallucinationPluginConfig represents configuration for hallucination detection plugin.
 type HallucinationPluginConfig struct {
 	Enabled                     bool   `json:"enabled" yaml:"enabled"`
-	UseNLI                      bool   `json:"use_nli,omitempty" yaml:"use_nli,omitempty"`
 	HallucinationAction         string `json:"hallucination_action,omitempty" yaml:"hallucination_action,omitempty"`
 	UnverifiedFactualAction     string `json:"unverified_factual_action,omitempty" yaml:"unverified_factual_action,omitempty"`
 	IncludeHallucinationDetails bool   `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
@@ -253,11 +252,13 @@ type HallucinationPluginConfig struct {
 
 // RouterReplayPluginConfig represents configuration for router_replay plugin.
 type RouterReplayPluginConfig struct {
-	Enabled             bool `json:"enabled" yaml:"enabled"`
-	MaxRecords          int  `json:"max_records,omitempty" yaml:"max_records,omitempty"`
-	CaptureRequestBody  bool `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
-	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
-	MaxBodyBytes        int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+	// nil permits personal data, matching the built-in capture default.
+	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
+	Enabled             bool  `json:"enabled" yaml:"enabled"`
+	MaxRecords          int   `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+	CaptureRequestBody  bool  `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	MaxBodyBytes        int   `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	// MaxToolTraceBytes caps each structured tool-trace field (Prompt,
 	// ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that

@@ -1,4 +1,4 @@
-import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
+import type { Message } from './ChatComponentTypes'
 import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
@@ -29,6 +29,7 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
   'Content-Type': 'application/json',
   'x-session-id': conversationId,
+  'x-conversation-id': conversationId,
   'x-vsr-debug': 'true',
 })
 
@@ -37,8 +38,12 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-schema-version',
   'x-vsr-response-path',
   'x-vsr-selected-model',
+  'x-vsr-effective-input-tokens',
+  'x-vsr-effective-max-output-tokens',
   'x-vsr-selected-algorithm',
   'x-vsr-selected-decision',
+  'x-vsr-selected-recipe',
+  'x-vsr-selected-confidence',
   'x-vsr-selected-modality',
   'x-vsr-replay-id',
   'x-vsr-cache-hit',
@@ -71,6 +76,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-conversation',
   'x-vsr-matched-event',
   'x-vsr-matched-input-modality',
+  'x-vsr-matched-decision-model',
   'x-vsr-matched-projections',
   'x-vsr-looper-model',
   'x-vsr-looper-models-used',
@@ -80,6 +86,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-looper-prompt-tokens',
   'x-vsr-looper-completion-tokens',
   'x-vsr-looper-total-tokens',
+  'x-vsr-routing-latency-ms',
   'x-vsr-latency-ms',
   'x-vsr-ttft-ms',
   'x-vsr-tpot-ms',
@@ -92,7 +99,6 @@ const RESPONSE_HEADER_KEYS = [
 export const buildChatMessages = (
   messages: Message[],
   nextUserMessage: string,
-  enableClawMode: boolean,
   nextUserAttachments: PlaygroundAttachment[] = [],
 ): OutboundChatMessage[] => {
   const chatMessages: OutboundChatMessage[] = []
@@ -163,10 +169,6 @@ export const buildChatMessages = (
         chatMessages.push({ role: 'assistant', content: assistantContent })
       }
     }
-  }
-
-  if (enableClawMode) {
-    chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
   }
 
   chatMessages.push({

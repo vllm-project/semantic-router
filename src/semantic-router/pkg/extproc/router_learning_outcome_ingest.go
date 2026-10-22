@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 const learningOutcomeIdempotencyTTL = 10 * time.Minute
@@ -19,6 +20,19 @@ func (rt *routerLearningRuntime) UpdateOutcome(
 		return routerruntime.RouterOutcomeResult{
 			Code:    routerruntime.RouterOutcomeCodeInvalid,
 			Message: "replay_id is required",
+		}
+	}
+	record, ok := rt.replayRecord(outcome.ReplayID)
+	if !ok {
+		return routerruntime.RouterOutcomeResult{
+			Code:    routerruntime.RouterOutcomeCodeReplayNotFound,
+			Message: "replay_id does not reference an owned routing event",
+		}
+	}
+	if replayOutcomeAlreadyRecorded(record, outcome.IdempotencyKey) {
+		return routerruntime.RouterOutcomeResult{
+			Code:    routerruntime.RouterOutcomeCodeDuplicate,
+			Message: "idempotent learning outcome already applied",
 		}
 	}
 	claim, duplicate, claimErr := rt.claimIdempotencyKey(ctx, outcome.IdempotencyKey)
@@ -44,18 +58,23 @@ func (rt *routerLearningRuntime) UpdateOutcome(
 		}()
 	}
 
-	record, ok := rt.replayRecord(outcome.ReplayID)
-	if !ok {
-		return routerruntime.RouterOutcomeResult{
-			Code:    routerruntime.RouterOutcomeCodeReplayNotFound,
-			Message: "replay_id does not reference an owned routing event",
-		}
-	}
-
 	if outcome.Target == routerruntime.RouterOutcomeTargetModel {
 		return rt.updateOwnedModelOutcome(outcome, record)
 	}
 	return rt.recordOwnedNonModelOutcome(outcome)
+}
+
+func replayOutcomeAlreadyRecorded(record routerreplay.RoutingRecord, idempotencyKey string) bool {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return false
+	}
+	for _, outcome := range record.Outcomes {
+		if strings.TrimSpace(outcome.IdempotencyKey) == idempotencyKey {
+			return true
+		}
+	}
+	return false
 }
 
 func (rt *routerLearningRuntime) updateOwnedModelOutcome(
@@ -84,8 +103,18 @@ func (rt *routerLearningRuntime) updateOwnedModelOutcome(
 			Message: "failed to append outcome to owned routing event",
 		}
 	}
+	if outcome.RecordOnly {
+		return routerruntime.RouterOutcomeResult{Recorded: true}
+	}
 	decisionName, decisionTier := rt.resolveOutcomeDecisionContext(outcome)
 	rt.recordModelExperience(decisionName, decisionTier, model, verdict, outcome.Score)
+	if rt.config != nil && rt.config.RouterLearning.Enabled && rt.config.RouterLearning.Protection.EffectiveEnabled() {
+		gate := rt.config.RouterLearning.Protection.Tuning.ProgressGate.EffectiveConfig()
+		if gate.Enabled {
+			sessiontelemetry.ConfigureTurnOutcomeWindow(ingestedEvidenceKey(record), gate.WindowSize, time.Duration(gate.WindowTTLSeconds)*time.Second, time.Now())
+			recordIngestedTurnOutcome(record, model, verdict, outcome.Score, outcome.ScoreProvided)
+		}
+	}
 	return routerruntime.RouterOutcomeResult{Updated: 1, Recorded: true}
 }
 

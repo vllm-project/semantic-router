@@ -231,6 +231,7 @@ export function discoverConfigurationCatalog(repoRoot) {
     signals: signalEntries(repoRoot),
     selectionAlgorithms: algorithmEntries(repoRoot, 'selection'),
     looperAlgorithms: algorithmEntries(repoRoot, 'looper'),
+    nativeAlgorithms: algorithmEntries(repoRoot, 'native'),
     plugins: pluginEntries(repoRoot),
   }
 }
@@ -270,6 +271,10 @@ export function renderConfigurationCatalog(catalog) {
     '### Looper algorithms',
     '',
     catalogTable(catalog.looperAlgorithms),
+    '',
+    '### Native System One algorithms',
+    '',
+    catalogTable(catalog.nativeAlgorithms),
     '',
     '### Plugins and bundles',
     '',

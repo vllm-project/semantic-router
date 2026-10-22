@@ -25,47 +25,17 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateDecisionSignalContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateDecisionEmitContracts(cfg); err != nil {
 		return err
 	}
+	reportAmbiguousConfidencePools(cfg)
 	return validateDecisionPluginContracts(cfg)
-}
-
-func validateDecisionModelContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
-			return err
-		}
-		warnUnguardedClassifierConditions(decision)
-		if err := validateDecisionAnnotations(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionModelRefs(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionAction(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
-			return err
-		}
-		if err := validateDecisionPromptModel(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionWorkflowModelRefs(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionCandidateIterations(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionOutputContractSpec(decision); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode, root bool) error {
@@ -80,7 +50,7 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
 		}
 		if ruleTreeSetsOnError(node) {
-			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
+			return fmt.Errorf("decision '%s': %s", decisionName, OnUnknownOnErrorConflictMessage)
 		}
 	}
 	if node.IsLeaf() {
@@ -93,6 +63,8 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 	}
 	return nil
 }
+
+const OnUnknownOnErrorConflictMessage = "condition on_error has no effect when rules.on_unknown is set; remove one of them"
 
 func ruleTreeSetsOnError(node *RuleNode) bool {
 	if node == nil {
@@ -114,11 +86,17 @@ func validateDecisionLeafNode(
 	decisionName string,
 	node *RuleNode,
 ) error {
-	if node.Label != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
-		return fmt.Errorf("decision '%s': label is only supported on classifier conditions", decisionName)
+	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeDecision)
+	if node.Label != "" && !labelled {
+		return fmt.Errorf("decision '%s': label is only supported on classifier and decision conditions", decisionName)
 	}
 	if strings.EqualFold(node.Type, SignalTypeClassifier) {
 		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
+			return err
+		}
+	}
+	if strings.EqualFold(node.Type, SignalTypeDecision) {
+		if err := validateDecisionModelLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
@@ -138,9 +116,9 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
-	if node.OnError != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
+	if node.OnError != "" && !labelled {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier conditions",
+			"decision '%s': condition %s(%q) on_error is only supported for classifier and decision conditions",
 			decisionName,
 			node.Type,
 			node.Name,
@@ -267,6 +245,9 @@ func validateDecisionAnnotations(decision Decision) error {
 }
 
 func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
+	if decision.Algorithm.IsNative() {
+		return validateNativeDecisionSurfaces(decision)
+	}
 	for i, modelRef := range decision.ModelRefs {
 		if modelRef.Model == "" {
 			return fmt.Errorf("decision '%s', modelRefs[%d]: model name cannot be empty", decision.Name, i)
@@ -489,12 +470,6 @@ func validateDecisionContextCompressionRecovery(
 		!compression.Recovery.Enabled {
 		return nil
 	}
-	if !cfg.Looper.IsEnabled() {
-		return fmt.Errorf(
-			"decision %q: context_compression recovery requires global.integrations.looper.endpoint",
-			decision.Name,
-		)
-	}
 	store := strings.TrimSpace(compression.Recovery.Store)
 	if store == "response_cache" {
 		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
@@ -537,6 +512,9 @@ func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
 func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {
 	if algorithm == nil {
 		return nil
+	}
+	if err := validateNativeAlgorithmConfig(decisionName, modelRefs, algorithm); err != nil {
+		return err
 	}
 
 	normalizedType, displayType, err := normalizeDecisionAlgorithmType(
@@ -716,8 +694,13 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmDecision:
+		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
 	case "multi_factor":
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
+	}
+	if _, registered, err := DecodeDecisionAlgorithm(decisionName, algorithm); registered {
+		return err
 	}
 	return nil
 }
@@ -727,6 +710,9 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 		return fmt.Errorf("decision '%s': algorithm.type=multi_factor requires algorithm.multi_factor configuration", decisionName)
 	}
 	path := fmt.Sprintf("decision '%s', algorithm.multi_factor", decisionName)
+	if cfg.ExpectedOutputTokens != nil && *cfg.ExpectedOutputTokens <= 0 {
+		return fmt.Errorf("%s.expected_output_tokens must be positive", path)
+	}
 	if err := validateMultiFactorObjective(cfg, path); err != nil {
 		return err
 	}

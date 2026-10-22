@@ -1,7 +1,6 @@
 package latency
 
 import (
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,8 +22,11 @@ const MaxTPOTHistorySize = 1000
 const MinObservationsForPercentile = 3
 
 // TPOTCache stores recent TPOT values per model for latency_aware percentile-based model selection.
+// Every request updates it, under a plain mutex: the critical sections are a
+// few hundred nanoseconds, and an RWMutex writer waiting on readers would
+// stall every request behind it.
 type TPOTCache struct {
-	mu    sync.RWMutex
+	mu    sync.Mutex
 	cache map[string]*ModelTPOTStats
 }
 
@@ -32,9 +34,9 @@ type TPOTCache struct {
 type ModelTPOTStats struct {
 	LastTPOT         float64   // Most recent TPOT value
 	AverageTPOT      float64   // Average TPOT over recent observations
-	RecentTPOTs      []float64 // Recent TPOT values for percentile calculation (sliding window)
 	LastUpdated      time.Time // Last time TPOT was updated
 	ObservationCount int       // Number of observations
+	recent           window    // Last MaxTPOTHistorySize values, for percentiles
 }
 
 // Global TPOT cache instance
@@ -72,9 +74,9 @@ func UpdateTPOT(model string, tpot float64) {
 		stats = &ModelTPOTStats{
 			LastTPOT:         tpot,
 			AverageTPOT:      tpot,
-			RecentTPOTs:      []float64{tpot},
 			LastUpdated:      time.Now(),
 			ObservationCount: 1,
+			recent:           newWindow(tpot),
 		}
 		globalTPOTCache.cache[model] = stats
 	} else {
@@ -84,15 +86,7 @@ func UpdateTPOT(model string, tpot float64) {
 		stats.LastTPOT = tpot
 		stats.LastUpdated = time.Now()
 		stats.ObservationCount++
-
-		// Add to recent TPOT history for percentile calculation
-		stats.RecentTPOTs = append(stats.RecentTPOTs, tpot)
-
-		// Maintain sliding window: keep only last MaxTPOTHistorySize values
-		if len(stats.RecentTPOTs) > MaxTPOTHistorySize {
-			// Remove oldest values, keeping the most recent ones
-			stats.RecentTPOTs = stats.RecentTPOTs[len(stats.RecentTPOTs)-MaxTPOTHistorySize:]
-		}
+		stats.recent.add(tpot, MaxTPOTHistorySize)
 	}
 }
 
@@ -104,8 +98,8 @@ func GetTPOT(model string) (float64, bool) {
 		return 0, false
 	}
 
-	globalTPOTCache.mu.RLock()
-	defer globalTPOTCache.mu.RUnlock()
+	globalTPOTCache.mu.Lock()
+	defer globalTPOTCache.mu.Unlock()
 
 	stats, exists := globalTPOTCache.cache[model]
 	if !exists {
@@ -130,68 +124,26 @@ func GetTPOTPercentile(model string, percentile int) (float64, bool) {
 		return 0, false
 	}
 
-	globalTPOTCache.mu.RLock()
+	globalTPOTCache.mu.Lock()
+	defer globalTPOTCache.mu.Unlock()
+
 	stats, exists := globalTPOTCache.cache[model]
-	if !exists || len(stats.RecentTPOTs) == 0 {
-		globalTPOTCache.mu.RUnlock()
+	if !exists || stats.recent.len() == 0 {
 		return 0, false
 	}
 
-	// Copy the slice while holding the lock to avoid race conditions with concurrent updates
-	// This ensures we work with a consistent snapshot of the data
-	recentTPOTs := make([]float64, len(stats.RecentTPOTs))
-	copy(recentTPOTs, stats.RecentTPOTs)
-	avg := stats.AverageTPOT
-	last := stats.LastTPOT
-	globalTPOTCache.mu.RUnlock()
-
 	// For 1-2 observations, use average as threshold
-	if len(recentTPOTs) < MinObservationsForPercentile {
+	if stats.recent.len() < MinObservationsForPercentile {
 		// Use average TPOT as threshold for small sample sizes
-		if avg > 0 {
-			return avg, true
+		if stats.AverageTPOT > 0 {
+			return stats.AverageTPOT, true
 		}
 		// Fallback to last TPOT if average not available
-		return last, true
+		return stats.LastTPOT, true
 	}
 
-	// For 3+ observations, use proper percentile calculation
-	// Note: Sorting is O(n log n), but necessary for accurate percentile calculation
-	// With MaxTPOTHistorySize=1000, this is acceptable performance (~10k comparisons)
-	percentileValue := computePercentile(recentTPOTs, float64(percentile)/100.0)
-	return percentileValue, true
-}
-
-// computePercentile computes the given percentile from a slice of values
-// percentile should be between 0.0 and 1.0 (e.g., 0.1 for 10th percentile, 0.5 for median)
-// Note: This function assumes the input slice is already a copy (not shared with other goroutines)
-// The caller is responsible for copying the slice while holding appropriate locks
-// Performance: O(n log n) where n is len(values)
-// With MaxTPOTHistorySize/MaxTTFTHistorySize=1000, this is ~10,000 comparisons
-// This is acceptable for routing decisions, but if performance becomes an issue,
-// consider: (1) maintaining sorted arrays, (2) approximate percentiles, or (3) caching results
-func computePercentile(values []float64, percentile float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-
-	// Sort the values
-	sorted := make([]float64, len(values))
-	copy(sorted, values)
-	sort.Float64s(sorted)
-
-	// Calculate the index
-	index := percentile * float64(len(sorted)-1)
-	lower := int(index)
-	upper := lower + 1
-
-	if upper >= len(sorted) {
-		return sorted[len(sorted)-1]
-	}
-
-	// Linear interpolation
-	weight := index - float64(lower)
-	return sorted[lower]*(1-weight) + sorted[upper]*weight
+	// For 3+ observations, read the percentile from the window's sorted values
+	return percentileFromSorted(stats.recent.sorted, float64(percentile)/100.0)
 }
 
 // ResetTPOT clears the TPOT cache (useful for testing)
@@ -210,8 +162,9 @@ const TTFTAlpha = 0.3
 const MaxTTFTHistorySize = 1000
 
 // TTFTCache stores recent TTFT values per model for latency_aware percentile-based model selection.
+// Every request updates and reads it, under a plain mutex, as TPOTCache.
 type TTFTCache struct {
-	mu    sync.RWMutex
+	mu    sync.Mutex
 	cache map[string]*ModelTTFTStats
 }
 
@@ -219,9 +172,9 @@ type TTFTCache struct {
 type ModelTTFTStats struct {
 	LastTTFT         float64   // Most recent TTFT value
 	AverageTTFT      float64   // Average TTFT over recent observations
-	RecentTTFTs      []float64 // Recent TTFT values for percentile calculation (sliding window)
 	LastUpdated      time.Time // Last time TTFT was updated
 	ObservationCount int       // Number of observations
+	recent           window    // Last MaxTTFTHistorySize values, for percentiles
 }
 
 // Global TTFT cache instance
@@ -259,9 +212,9 @@ func UpdateTTFT(model string, ttft float64) {
 		stats = &ModelTTFTStats{
 			LastTTFT:         ttft,
 			AverageTTFT:      ttft,
-			RecentTTFTs:      []float64{ttft},
 			LastUpdated:      time.Now(),
 			ObservationCount: 1,
+			recent:           newWindow(ttft),
 		}
 		globalTTFTCache.cache[model] = stats
 	} else {
@@ -271,15 +224,7 @@ func UpdateTTFT(model string, ttft float64) {
 		stats.LastTTFT = ttft
 		stats.LastUpdated = time.Now()
 		stats.ObservationCount++
-
-		// Add to recent TTFT history for percentile calculation
-		stats.RecentTTFTs = append(stats.RecentTTFTs, ttft)
-
-		// Maintain sliding window: keep only last MaxTTFTHistorySize values
-		if len(stats.RecentTTFTs) > MaxTTFTHistorySize {
-			// Remove oldest values, keeping the most recent ones
-			stats.RecentTTFTs = stats.RecentTTFTs[len(stats.RecentTTFTs)-MaxTTFTHistorySize:]
-		}
+		stats.recent.add(ttft, MaxTTFTHistorySize)
 	}
 }
 
@@ -291,8 +236,8 @@ func GetTTFT(model string) (float64, bool) {
 		return 0, false
 	}
 
-	globalTTFTCache.mu.RLock()
-	defer globalTTFTCache.mu.RUnlock()
+	globalTTFTCache.mu.Lock()
+	defer globalTTFTCache.mu.Unlock()
 
 	stats, exists := globalTTFTCache.cache[model]
 	if !exists {
@@ -317,36 +262,26 @@ func GetTTFTPercentile(model string, percentile int) (float64, bool) {
 		return 0, false
 	}
 
-	globalTTFTCache.mu.RLock()
+	globalTTFTCache.mu.Lock()
+	defer globalTTFTCache.mu.Unlock()
+
 	stats, exists := globalTTFTCache.cache[model]
-	if !exists || len(stats.RecentTTFTs) == 0 {
-		globalTTFTCache.mu.RUnlock()
+	if !exists || stats.recent.len() == 0 {
 		return 0, false
 	}
 
-	// Copy the slice while holding the lock to avoid race conditions with concurrent updates
-	// This ensures we work with a consistent snapshot of the data
-	recentTTFTs := make([]float64, len(stats.RecentTTFTs))
-	copy(recentTTFTs, stats.RecentTTFTs)
-	avg := stats.AverageTTFT
-	last := stats.LastTTFT
-	globalTTFTCache.mu.RUnlock()
-
 	// For 1-2 observations, use average as threshold
-	if len(recentTTFTs) < MinObservationsForPercentile {
+	if stats.recent.len() < MinObservationsForPercentile {
 		// Use average TTFT as threshold for small sample sizes
-		if avg > 0 {
-			return avg, true
+		if stats.AverageTTFT > 0 {
+			return stats.AverageTTFT, true
 		}
 		// Fallback to last TTFT if average not available
-		return last, true
+		return stats.LastTTFT, true
 	}
 
-	// For 3+ observations, use proper percentile calculation
-	// Note: Sorting is O(n log n), but necessary for accurate percentile calculation
-	// With MaxTTFTHistorySize=1000, this is acceptable performance (~10k comparisons)
-	percentileValue := computePercentile(recentTTFTs, float64(percentile)/100.0)
-	return percentileValue, true
+	// For 3+ observations, read the percentile from the window's sorted values
+	return percentileFromSorted(stats.recent.sorted, float64(percentile)/100.0)
 }
 
 // ResetTTFT clears the TTFT cache (useful for testing)

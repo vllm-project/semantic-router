@@ -13,19 +13,20 @@ import (
 // carriers. A shadow copy never carries them, and forward_headers may not
 // list them. Names are lower-case.
 var shadowCredentialHeaders = map[string]struct{}{
-	"authorization":            {},
-	"proxy-authorization":      {},
-	"cookie":                   {},
-	"x-api-key":                {},
-	"api-key":                  {},
-	"x-goog-api-key":           {},
-	headers.UserOpenAIKey:      {},
-	headers.UserAnthropicKey:   {},
-	headers.UserAzureOpenAIKey: {},
-	headers.UserBedrockKey:     {},
-	headers.UserGeminiKey:      {},
-	headers.UserVertexAIKey:    {},
-	headers.UserMiniMaxKey:     {},
+	"authorization":                    {},
+	"proxy-authorization":              {},
+	"cookie":                           {},
+	"x-api-key":                        {},
+	"api-key":                          {},
+	"x-goog-api-key":                   {},
+	headers.UserOpenAIKey:              {},
+	headers.UserAnthropicKey:           {},
+	headers.UserAzureOpenAIKey:         {},
+	headers.UserBedrockKey:             {},
+	headers.UserGeminiKey:              {},
+	headers.UserVertexAIKey:            {},
+	headers.UserMiniMaxKey:             {},
+	headers.UserCloudflareWorkersAIKey: {},
 }
 
 // IsShadowCredentialHeader reports whether a header name is a known

@@ -96,8 +96,10 @@ vllm-sr config plan --config candidate.yaml \
 ```
 
 Apply a hot-reloadable change with `vllm-sr config apply`. If the plan reports
-`RESTART_REQUIRED`, use the deployment workflow. For an authorized local-stack
-replacement, run `vllm-sr serve --config candidate.yaml --replace-active-config`.
+`RESTART_REQUIRED`, use the deployment workflow; on a local stack,
+`vllm-sr config apply` saves the change and the next `vllm-sr serve` applies
+it. For an authorized local-stack replacement, run
+`vllm-sr serve --config candidate.yaml --replace-active-config`.
 Confirm readiness and the active revision before testing.
 
 Set `ENTRYPOINT` to the published entrypoint you are evaluating, then preview a
@@ -150,7 +152,10 @@ an empty answer, or a truncated response is not successful delivery. Use a
 completion budget that fits the actual input and leaves room for the final
 answer. When the request omits a limit, a configured
 `request_params.default_max_tokens` supplies the decision default; otherwise
-the backend default applies.
+the backend default applies. For supported vLLM deployments,
+[`default_max_tokens: auto`](../installation/configuration#recipe-candidate-requirements)
+uses each model's remaining native capacity. Keep the selector's output cost
+forecast separate from this capacity and report the effective deployment limits.
 
 Assign at least two eligible, reachable models when comparing selection policies.
 With one candidate, the test verifies delivery but cannot measure a choice between
@@ -204,11 +209,14 @@ language, input length, use case, and session stage. Keep the candidate when it
 improves the chosen outcome without violating the quality floor or hard
 constraints; otherwise restore the baseline and preserve the evidence.
 
-Use `vllm-sr benchmark catalog` for broader routing workloads. For a full model
-or virtual-model comparison, discover the fixed suite with
-`vllm-sr benchmark intelligence list` and `plan --help`. A virtual model must be
-measured through its actual endpoint; its score cannot be assembled from member
-scores. Partial runs help guide tuning but do not establish a full suite score.
+Use [sr-bench 1.0](sr-bench) for frozen development/holdout datasets and reusable
+single-model/MoM comparisons. `benchmark preview` records live routing choices;
+`benchmark replay` estimates eligible direct routing changes from saved answers.
+`benchmark run` measures actual model execution, and `benchmark compare` reports
+paired quality uncertainty and cost saving against the best observed single.
+Replay is diagnostic; a measured MoM score requires its real routed endpoint.
+Keep partial runs and unknown costs visible instead of presenting them as a
+complete score or zero-cost success.
 
 The [agent tuning reference](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md)
 provides a reusable checklist. Keep raw evaluation outputs outside Git and

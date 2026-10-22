@@ -14,8 +14,8 @@ type byteCounter struct{}
 func (byteCounter) CountText(_ string, text string) (int, string) { return len(text), "bytes" }
 func (byteCounter) CountRequest(_ string, request *RequestIR) (int, string) {
 	count := 0
-	for _, message := range request.Semantic.Messages {
-		for _, block := range message.Content {
+	for _, message := range request.Messages {
+		for _, block := range message.Blocks {
 			count += len(block.Text)
 		}
 	}
@@ -42,9 +42,41 @@ func TestCurrentUserTruncationRequiresOptInAndPreservesBoundaries(t *testing.T) 
 	}
 }
 
+func TestCurrentUserTruncationAcceptsPlainTextBracketHeadings(t *testing.T) {
+	for _, heading := range []string{"[Request heading]", "{Request heading}"} {
+		for _, representation := range []string{"semantic", "raw"} {
+			t.Run(heading+"/"+representation, func(t *testing.T) {
+				original := heading + "\nHEAD instruction\n" + strings.Repeat("archive text ", 30000) + "\nTAIL instruction"
+				var ir *RequestIR
+				if representation == "semantic" {
+					request := &llmprotocol.Request{Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: original}}}}}
+					ir = ParseSemanticRequest(request, Provenance{})
+				} else {
+					request := map[string]interface{}{"messages": []interface{}{map[string]interface{}{"role": "user", "content": original}}}
+					ir = ParseRequestIR(request, Provenance{})
+				}
+				if !ir.Messages[0].Blocks[0].JSON {
+					t.Fatal("fixture must exercise the broad JSON-prefix heuristic")
+				}
+				result := NewService().Apply(context.Background(), Request{Request: ir, TokenCounter: byteCounter{}, Capabilities: ModelContextCapabilities{ContextWindow: 32000}, Policy: Policy{Mode: ModeAlways, Budget: Budget{TargetTokens: 32000}, Targets: Targets{CurrentUser: TargetPolicy{Mode: TargetTruncate}, History: TargetPolicy{Mode: TargetPreserve}}}})
+				got := ir.Messages[0].Blocks[0].Text
+				if result.Failure != nil || !result.Applied || len(got) > 32000 || !strings.HasPrefix(got, heading+"\nHEAD instruction\n") || !strings.HasSuffix(got, "\nTAIL instruction") || !strings.Contains(got, omissionMarker) {
+					t.Fatalf("plain heading blocked truncation: result=%+v bytes=%d", result, len(got))
+				}
+				if ir.Semantic != nil && ir.Semantic.Messages[0].Content[0].Text != got {
+					t.Fatal("semantic request did not receive the committed edit")
+				}
+				if ir.Semantic == nil && ir.Raw["messages"].([]interface{})[0].(map[string]interface{})["content"] != got {
+					t.Fatal("raw request did not receive the committed edit")
+				}
+			})
+		}
+	}
+}
+
 func TestCurrentUserTruncationProtectsStructuredAndTrustedContent(t *testing.T) {
 	long := strings.Repeat("data ", 10000)
-	for _, name := range []string{"system", "developer", "json", "tool", "image", "citation", "authorization", "safety"} {
+	for _, name := range []string{"system", "developer", "json", "json_array", "json_string", "json_number", "json_boolean", "json_null", "tool", "image", "citation", "authorization", "safety"} {
 		t.Run(name, func(t *testing.T) {
 			request := &llmprotocol.Request{Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: long}}}}}
 			provenance := Provenance{}
@@ -55,6 +87,16 @@ func TestCurrentUserTruncationProtectsStructuredAndTrustedContent(t *testing.T) 
 				request.Messages[0].Role = llmprotocol.RoleDeveloper
 			case "json":
 				request.Messages[0].Content[0].Text = `{"data":"` + long + `"}`
+			case "json_array":
+				request.Messages[0].Content[0].Text = `["` + long + `"]`
+			case "json_string":
+				request.Messages[0].Content[0].Text = `"` + long + `"`
+			case "json_number":
+				request.Messages[0].Content[0].Text = strings.Repeat("7", 10000)
+			case "json_boolean":
+				request.Messages[0].Content[0].Text = `true`
+			case "json_null":
+				request.Messages[0].Content[0].Text = `null`
 			case "tool":
 				request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1"}})
 			case "image":
@@ -66,8 +108,12 @@ func TestCurrentUserTruncationProtectsStructuredAndTrustedContent(t *testing.T) 
 			case "safety":
 				provenance.ProtectedMessages = map[int]Protection{0: ProtectSafety}
 			}
+			ir := ParseSemanticRequest(request, provenance)
+			if strings.HasPrefix(name, "json") && ir.currentUserTextBlock(ir.Messages[0], ir.Messages[0].Blocks[0]) {
+				t.Fatal("complete JSON document is eligible for current-user truncation")
+			}
 			before := encoded(t, request)
-			result := NewService().Apply(context.Background(), Request{Request: ParseSemanticRequest(request, provenance), TokenCounter: byteCounter{}, Capabilities: ModelContextCapabilities{ContextWindow: 1000}, Policy: Policy{Mode: ModeAlways, Targets: Targets{CurrentUser: TargetPolicy{Mode: TargetTruncate}, History: TargetPolicy{Mode: TargetPreserve}, ToolOutputs: TargetPolicy{Mode: TargetPreserve}}}})
+			result := NewService().Apply(context.Background(), Request{Request: ir, TokenCounter: byteCounter{}, Capabilities: ModelContextCapabilities{ContextWindow: 1000}, Policy: Policy{Mode: ModeAlways, Targets: Targets{CurrentUser: TargetPolicy{Mode: TargetTruncate}, History: TargetPolicy{Mode: TargetPreserve}, ToolOutputs: TargetPolicy{Mode: TargetPreserve}}}})
 			if result.Applied || encoded(t, request) != before {
 				t.Fatalf("changed protected %s: %+v", name, result)
 			}

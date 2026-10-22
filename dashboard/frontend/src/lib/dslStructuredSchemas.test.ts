@@ -90,6 +90,11 @@ describe('DSL structured field schemas', () => {
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
+    expect(requireField(getSignalFieldSchema('pii'), 'source')).toMatchObject({
+      type: 'select',
+      options: ['tool_result'],
+    })
+
     const domainScores = requireField(getSignalFieldSchema('domain'), 'model_scores')
     expect(domainScores.type).toBe('object[]')
     expect(domainScores.fields?.map((field) => field.key)).toEqual([
@@ -114,6 +119,7 @@ describe('DSL structured field schemas', () => {
       'sequence_classifier',
     ])
     expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
+    expect(requireField(getSignalFieldSchema('classifier'), 'disable_rationale').type).toBe('boolean')
 
     const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
     const conversationSource = requireField(conversationFeature.fields || [], 'source')

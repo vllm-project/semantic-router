@@ -29,6 +29,7 @@
     },
     "prompt_tokens": 5,
     "prompt_tokens_details": {
+      "cache_write_tokens": 0,
       "cached_tokens": 0
     },
     "total_tokens": 8

@@ -24,8 +24,11 @@ describe('recorded signal evidence', () => {
       projection_scores: { action_margin: -0.125 },
     }
     const expected = [
-      'Active Tool Loop', 'Service Degraded', 'Customer Tier',
-      'Sensitive Content', 'Has Image',
+      'Active Tool Loop',
+      'Service Degraded',
+      'Customer Tier',
+      'Sensitive Content',
+      'Has Image',
     ]
     expect(collectSignals(record.signals)).toEqual(expect.arrayContaining(expected))
     const html = renderToStaticMarkup(
@@ -35,13 +38,13 @@ describe('recorded signal evidence', () => {
         ))}
       </>,
     )
-    expected.forEach(value => expect(html).toContain(value))
+    expected.forEach((value) => expect(html).toContain(value))
     const metadata = buildInsightsRecordSections(record, { isReadonly: true }).find(
-      section => section.title === 'Routing Metadata',
+      (section) => section.title === 'Routing Metadata',
     )
-    const values = renderToStaticMarkup(<>{metadata?.fields.map(field => field.value)}</>)
-    expect(values).toContain('action_margin: -0.125')
-    expect(values).toContain('classifier:sensitive_content: 0')
+    const values = renderToStaticMarkup(<>{metadata?.fields.map((field) => field.value)}</>)
+    expect(values).toContain('<dt>action_margin</dt><dd>-0.1250</dd>')
+    expect(values).toContain('<th scope="row">classifier:sensitive_content</th><td>0.0000</td>')
     expect(html).not.toContain('undefined')
   })
 

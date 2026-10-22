@@ -5,9 +5,13 @@ describe('Dashboard capability settings fail closed', () => {
   it('restores settings for HttpOnly-cookie sessions authenticated by user state', () => {
     const source = readFileSync(new URL('./ReadonlyContext.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain('const { isAuthenticated } = useAuth()')
+    expect(source).toContain('const { isAuthenticated, user } = useAuth()')
     expect(source).toContain('if (!isAuthenticated)')
-    expect(source).toContain('}, [isAuthenticated])')
+    expect(source).toContain('const userID = user?.id')
+    expect(source).toContain(
+      'const accessSnapshot = JSON.stringify([user?.role, user?.permissions])',
+    )
+    expect(source).toContain('}, [isAuthenticated, userID, accessSnapshot, settingsRevision])')
     expect(source).not.toContain('const { token } = useAuth()')
   })
 
@@ -37,5 +41,13 @@ describe('Dashboard capability settings fail closed', () => {
     expect(source).not.toContain('!effectiveReadonly')
     expect(source).toContain('if (controller.signal.aborted) return')
     expect(source).toContain('return () => controller.abort()')
+  })
+
+  it('leaves feature availability to the capabilities context', () => {
+    const source = readFileSync(new URL('./ReadonlyContext.tsx', import.meta.url), 'utf8')
+
+    for (const removed of ['srBenchAvailable', 'mlPipelineAvailable', '/api/ml-pipeline/availability']) {
+      expect(source).not.toContain(removed)
+    }
   })
 })

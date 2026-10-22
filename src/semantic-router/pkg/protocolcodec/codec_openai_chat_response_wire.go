@@ -9,10 +9,13 @@ import (
 )
 
 type chatResponseWire struct {
-	ID                  string                    `json:"id"`
-	Object              string                    `json:"object,omitempty"`
-	Created             int64                     `json:"created"`
-	Model               string                    `json:"model"`
+	ID      string `json:"id"`
+	Object  string `json:"object,omitempty"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	// OpenRouter names the upstream that served the request. It is metadata,
+	// not part of the model's answer.
+	Provider            *string                   `json:"provider,omitempty"`
 	Choices             []chatChoiceWire          `json:"choices"`
 	Usage               *chatUsageWire            `json:"usage,omitempty"`
 	Metadata            map[string]string         `json:"metadata,omitempty"`
@@ -54,13 +57,18 @@ func (wire chatResponseWire) hasLegacyKVTransferMetadata() bool {
 }
 
 type chatChoiceWire struct {
-	Index         int                 `json:"index"`
-	Message       chatMessageWire     `json:"message"`
-	FinishReason  *string             `json:"finish_reason"`
-	Logprobs      *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs      []int64             `json:"token_ids,omitempty"`
-	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int               `json:"index"`
+	Message            chatMessageWire   `json:"message"`
+	FinishReason       *string           `json:"finish_reason"`
+	NativeFinishReason *string           `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire `json:"logprobs,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on each choice. The content is opaque provider
+	// metadata and is not replayed to the client.
+	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
+	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs               []int64             `json:"token_ids,omitempty"`
+	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string
@@ -104,7 +112,7 @@ type chatStopReasonWire struct {
 func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		if len(text) == 0 || len(text) > 128 {
+		if len(text) == 0 {
 			return fmt.Errorf("chat stop reason string is invalid")
 		}
 		reason.Text = &text
@@ -140,7 +148,26 @@ type chatTopTokenLogprobWire struct {
 	Bytes   []int64 `json:"bytes,omitempty"`
 }
 
+// Mistral puts the served tier inside usage, separately from OpenAI's
+// top-level service_tier. Keep this provider extension typed and closed.
+type chatUsageServiceTierWire string
+
+func (tier *chatUsageServiceTierWire) UnmarshalJSON(raw []byte) error {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	switch value {
+	case "standard", "priority":
+		*tier = chatUsageServiceTierWire(value)
+		return nil
+	default:
+		return fmt.Errorf("unsupported chat usage service tier")
+	}
+}
+
 type chatUsageWire struct {
+	ServiceTier             *chatUsageServiceTierWire        `json:"service_tier,omitempty"`
 	PromptTokens            int64                            `json:"prompt_tokens"`
 	CompletionTokens        int64                            `json:"completion_tokens"`
 	TotalTokens             int64                            `json:"total_tokens"`
@@ -155,29 +182,51 @@ type chatUsageWire struct {
 	PromptTime     *float64 `json:"prompt_time,omitempty"`
 	CompletionTime *float64 `json:"completion_time,omitempty"`
 	TotalTime      *float64 `json:"total_time,omitempty"`
+	// OpenRouter reports its own pricing and server-tool accounting beside
+	// canonical token usage. Keep these fields typed at the provider boundary.
+	Cost          *float64                         `json:"cost,omitempty"`
+	IsBYOK        *bool                            `json:"is_byok,omitempty"`
+	CostDetails   *chatOpenRouterCostDetailsWire   `json:"cost_details,omitempty"`
+	ServerToolUse *chatOpenRouterServerToolUseWire `json:"server_tool_use,omitempty"`
+}
+
+type chatOpenRouterCostDetailsWire struct {
+	UpstreamInferenceCost            *float64 `json:"upstream_inference_cost,omitempty"`
+	UpstreamInferencePromptCost      *float64 `json:"upstream_inference_prompt_cost,omitempty"`
+	UpstreamInferenceCompletionsCost *float64 `json:"upstream_inference_completions_cost,omitempty"`
+	ServerToolCost                   *float64 `json:"server_tool_cost,omitempty"`
+}
+
+type chatOpenRouterServerToolUseWire struct {
+	WebSearchRequests *int64 `json:"web_search_requests,omitempty"`
 }
 
 type chatPromptTokensDetailsWire struct {
-	CachedTokens     int64 `json:"cached_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
-	AudioTokens      int64 `json:"audio_tokens,omitempty"`
-	TextTokens       int64 `json:"text_tokens,omitempty"`
-	ImageTokens      int64 `json:"image_tokens,omitempty"`
+	CachedTokens        *int64           `json:"cached_tokens,omitempty"`
+	CacheWriteTokens    *int64           `json:"cache_write_tokens,omitempty"`
+	CreatedCacheTokens  *int64           `json:"created_cache_tokens,omitempty"`
+	CacheCreationTokens *int64           `json:"cache_creation_tokens,omitempty"`
+	MultimodalTokens    map[string]int64 `json:"multimodal_tokens,omitempty"`
+	AudioTokens         int64            `json:"audio_tokens,omitempty"`
+	TextTokens          int64            `json:"text_tokens,omitempty"`
+	ImageTokens         int64            `json:"image_tokens,omitempty"`
+	VideoTokens         *int64           `json:"video_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {
-	AcceptedPredictionTokens int64 `json:"accepted_prediction_tokens,omitempty"`
-	AudioTokens              int64 `json:"audio_tokens,omitempty"`
-	ReasoningTokens          int64 `json:"reasoning_tokens"`
-	TextTokens               int64 `json:"text_tokens,omitempty"`
-	RejectedPredictionTokens int64 `json:"rejected_prediction_tokens,omitempty"`
+	AcceptedPredictionTokens int64  `json:"accepted_prediction_tokens,omitempty"`
+	AudioTokens              int64  `json:"audio_tokens,omitempty"`
+	ReasoningTokens          int64  `json:"reasoning_tokens"`
+	TextTokens               int64  `json:"text_tokens,omitempty"`
+	ImageTokens              *int64 `json:"image_tokens,omitempty"`
+	RejectedPredictionTokens int64  `json:"rejected_prediction_tokens,omitempty"`
 }
 
 type chatErrorWire struct {
-	Message string `json:"message"`
-	Type    string `json:"type,omitempty"`
-	Param   string `json:"param,omitempty"`
-	Code    string `json:"code,omitempty"`
+	Message string          `json:"message"`
+	Type    string          `json:"type,omitempty"`
+	Param   string          `json:"param,omitempty"`
+	Code    openAIErrorCode `json:"code,omitempty"`
 }
 
 func validateChatExecutionMetadata(systemFingerprint *string) error {

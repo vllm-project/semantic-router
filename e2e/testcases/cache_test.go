@@ -66,10 +66,10 @@ func TestParseCacheSimilarityRejectsOutOfRangeHitScore(t *testing.T) {
 }
 
 func TestParseCacheSimilarityRejectsOutOfRangeMissScore(t *testing.T) {
-	// 1.0 is a full match: reporting it on a miss means the hit path was skipped.
-	for _, header := range []string{"-0.5", "1", "1.5"} {
+	// Verifier failures can reject any candidate, including a full match.
+	for _, header := range []string{"-0.5", "1.5"} {
 		if _, msg := parseCacheSimilarity(header, false); msg == "" {
-			t.Errorf("header %q: expected out-of-[0,1) miss similarity to fail", header)
+			t.Errorf("header %q: expected out-of-[0,1] miss similarity to fail", header)
 		}
 	}
 }
@@ -82,6 +82,8 @@ func TestParseCacheSimilarityAcceptsRejectedCandidateMissScore(t *testing.T) {
 		{header: "", want: 0},
 		{header: "0", want: 0},
 		{header: "0.42", want: 0.42},
+		{header: "0.97", want: 0.97},
+		{header: "1", want: 1},
 	} {
 		sim, msg := parseCacheSimilarity(tt.header, false)
 		if msg != "" {

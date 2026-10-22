@@ -9,7 +9,50 @@ func validateClassifierSignalContracts(cfg *RouterConfig) error {
 	if err := validateExternalModelNames(cfg.ExternalModels); err != nil {
 		return err
 	}
+	if err := validateExternalModelReasoningContracts(cfg); err != nil {
+		return err
+	}
 	return validateClassifierSignalRules(cfg)
+}
+
+func validateExternalModelReasoningContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	for i := range cfg.ExternalModels {
+		external := &cfg.ExternalModels[i]
+		path := fmt.Sprintf("global.model_catalog.external[%d]", i)
+		if external.Name != "" {
+			path = fmt.Sprintf("global.model_catalog.external[%q]", external.Name)
+		}
+		if err := validateExternalModelReasoningSyntax(external, path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateExternalModelReasoningSyntax(
+	external *ExternalModelConfig,
+	path string,
+) error {
+	if external == nil || external.Reasoning == nil {
+		return nil
+	}
+	reasoning := external.Reasoning
+	if strings.TrimSpace(reasoning.Family) == "" {
+		return fmt.Errorf("%s.reasoning.family is required", path)
+	}
+	if strings.TrimSpace(reasoning.Family) != reasoning.Family {
+		return fmt.Errorf("%s.reasoning.family must not contain surrounding whitespace", path)
+	}
+	if reasoning.UseReasoning == nil {
+		return fmt.Errorf("%s.reasoning.use_reasoning is required", path)
+	}
+	if strings.TrimSpace(reasoning.ReasoningEffort) != reasoning.ReasoningEffort {
+		return fmt.Errorf("%s.reasoning.reasoning_effort must not contain surrounding whitespace", path)
+	}
+	return nil
 }
 
 // validateGlobalClassifierRuntimeContracts validates each recipe independently.
@@ -61,6 +104,12 @@ func validateClassifierSignalRules(cfg *RouterConfig) error {
 		}
 		switch rule.Type {
 		case ClassifierSignalTypeLocal:
+			if strings.TrimSpace(rule.ModelPath) == "" && cfg.DecisionModel != "" {
+				if rule.Model != "" || rule.DisableRationale || len(rule.Labels) < 2 {
+					return fmt.Errorf("classifier %q: a default judgment needs two labels and accepts no external model or rationale setting", rule.Name)
+				}
+				continue
+			}
 			if err := validateLocalClassifierSignal(rule); err != nil {
 				return err
 			}
@@ -119,9 +168,9 @@ func validateLocalClassifierSignal(rule ClassifierSignalRule) error {
 	if strings.TrimSpace(rule.ModelPath) == "" {
 		return fmt.Errorf("routing.signals.classifiers[%q]: local classifiers require model_path", rule.Name)
 	}
-	if rule.Model != "" || rule.Instructions != "" {
+	if rule.Model != "" || rule.Instructions != "" || rule.DisableRationale {
 		return fmt.Errorf(
-			"routing.signals.classifiers[%q]: local classifiers do not accept model or instructions",
+			"routing.signals.classifiers[%q]: local classifiers do not accept model, instructions or disable_rationale",
 			rule.Name,
 		)
 	}
@@ -195,7 +244,7 @@ func validateLLMClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRule) e
 			ModelRoleClassification,
 		)
 	}
-	return validateLLMClassifierExternalDependency(rule, external)
+	return validateLLMClassifierExternalDependency(cfg, rule, external)
 }
 
 // validateSequenceClassifierSignal checks a rule against the http_classify
@@ -208,9 +257,9 @@ func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRu
 			rule.Name,
 		)
 	}
-	if rule.ModelPath != "" || rule.UseCPU || rule.Instructions != "" {
+	if rule.ModelPath != "" || rule.UseCPU || rule.Instructions != "" || rule.DisableRationale {
 		return fmt.Errorf(
-			"routing.signals.classifiers[%q]: sequence_classifier classifiers do not accept model_path, use_cpu or instructions",
+			"routing.signals.classifiers[%q]: sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale",
 			rule.Name,
 		)
 	}
@@ -242,6 +291,7 @@ func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRu
 }
 
 func validateLLMClassifierExternalDependency(
+	cfg *RouterConfig,
 	rule ClassifierSignalRule,
 	external *ExternalModelConfig,
 ) error {
@@ -260,7 +310,69 @@ func validateLLMClassifierExternalDependency(
 			rule.Model,
 		)
 	}
+	if err := validateLLMClassifierReasoningControl(cfg, rule, external); err != nil {
+		return err
+	}
 	return validateClassifierExternalEndpoint(rule, external)
+}
+
+func validateLLMClassifierReasoningControl(
+	cfg *RouterConfig,
+	rule ClassifierSignalRule,
+	external *ExternalModelConfig,
+) error {
+	if external.Reasoning == nil {
+		return nil
+	}
+	path := fmt.Sprintf(
+		"routing.signals.classifiers[%q]: external model %q reasoning",
+		rule.Name,
+		rule.Model,
+	)
+	if strings.ToLower(strings.TrimSpace(external.Provider)) != "vllm" {
+		return fmt.Errorf("%s requires llm_provider %q", path, "vllm")
+	}
+	reasoning := external.Reasoning
+	family, exists := cfg.ReasoningFamilies[reasoning.Family]
+	if !exists {
+		return fmt.Errorf("%s family %q is not configured", path, reasoning.Family)
+	}
+	if reasoning.UseReasoning == nil {
+		return fmt.Errorf("%s use_reasoning is required", path)
+	}
+	effort := reasoning.ReasoningEffort
+	if !*reasoning.UseReasoning {
+		if !externalReasoningFamilyCanDisable(&family) {
+			return fmt.Errorf("%s cannot disable always-on family %q", path, reasoning.Family)
+		}
+		if effort != "" {
+			return fmt.Errorf("%s reasoning_effort cannot be set while reasoning is disabled", path)
+		}
+		return nil
+	}
+	if effort == "" {
+		return nil
+	}
+	if family.Type == ReasoningFamilyTypeReasoningMode || family.Type == ReasoningFamilyTypeChatTemplateKwargs {
+		return fmt.Errorf("%s reasoning_effort cannot be used with mode-only family %q", path, reasoning.Family)
+	}
+	if !reasoningFamilyAllowsLevel(&family, effort) {
+		return fmt.Errorf("%s reasoning_effort %q is not supported by family %q", path, effort, reasoning.Family)
+	}
+	return nil
+}
+
+func externalReasoningFamilyCanDisable(family *ReasoningFamilyConfig) bool {
+	if family == nil {
+		return false
+	}
+	if len(family.Modes) > 0 && !reasoningFamilyModeAllowed(family, ReasoningModeDisabled) {
+		return false
+	}
+	if family.Type == ReasoningFamilyTypeTopLevelReasoningEffort {
+		return family.Disabled != ""
+	}
+	return reasoningFamilyCanDisableConfig(family)
 }
 
 func validateClassifierExternalEndpoint(

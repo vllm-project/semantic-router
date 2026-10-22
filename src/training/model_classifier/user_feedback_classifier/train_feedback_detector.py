@@ -3,7 +3,7 @@
 Feedback Detector Training Script
 
 Trains a 4-class user satisfaction classifier compatible with:
-https://huggingface.co/llm-semantic-router/feedback-detector
+https://huggingface.co/vllm-sr/feedback-detector
 
 Labels:
   - SAT: User is satisfied
@@ -42,6 +42,7 @@ from transformers import (
 )
 
 if __package__:
+    from ..training_args_compat import create_training_arguments
     from .data_contract import (
         ID2LABEL,
         LABEL2ID,
@@ -52,6 +53,9 @@ if __package__:
         write_label_mapping,
     )
 else:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from data_contract import (
         ID2LABEL,
         LABEL2ID,
@@ -61,6 +65,7 @@ else:
         validate_splits,
         write_label_mapping,
     )
+    from training_args_compat import create_training_arguments
 
 # Optional LoRA imports
 try:
@@ -165,7 +170,7 @@ def main():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="llm-semantic-router/mmbert-32k-yarn",
+        default="vllm-sr/mmbert-32k-yarn",
         help="Base model (default: mmBERT-32K YaRN with 32K context)",
     )
     parser.add_argument(
@@ -176,7 +181,7 @@ def main():
     parser.add_argument(
         "--data_source",
         type=str,
-        default="llm-semantic-router/feedback-detector-dataset",
+        default="vllm-sr/feedback-detector-dataset",
         help="HuggingFace dataset ID or local data directory",
     )
     parser.add_argument(
@@ -355,7 +360,8 @@ def main():
             # NVIDIA GPUs: use fp16 with AMP
             use_fp16 = True
 
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,

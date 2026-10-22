@@ -28,6 +28,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	}
 
 	requiredAlgorithmFragments := map[string]string{
+		"cascade":       filepath.Join("native", "cascade.yaml"),
 		"automix":       filepath.Join("selection", "automix.yaml"),
 		"confidence":    filepath.Join("looper", "confidence.yaml"),
 		"fusion":        filepath.Join("looper", "fusion.yaml"),
@@ -37,6 +38,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"latency_aware": filepath.Join("selection", "latency-aware.yaml"),
 		"mlp":           filepath.Join("selection", "mlp.yaml"),
 		"multi_factor":  filepath.Join("selection", "multi-factor.yaml"),
+		"random":        filepath.Join("selection", "random.yaml"),
 		"ratings":       filepath.Join("looper", "ratings.yaml"),
 		"remom":         filepath.Join("looper", "remom.yaml"),
 		"router_dc":     filepath.Join("selection", "router-dc.yaml"),
@@ -44,6 +46,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"svm":           filepath.Join("selection", "svm.yaml"),
 		"workflows":     filepath.Join("looper", "workflows.yaml"),
 		"prompt":        filepath.Join("selection", "prompt.yaml"),
+		"decision":      filepath.Join("selection", "decision.yaml"),
 	}
 	for _, algorithmType := range SupportedDecisionAlgorithmTypes() {
 		relPath, ok := requiredAlgorithmFragments[algorithmType]

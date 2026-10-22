@@ -9,7 +9,8 @@ import (
 
 func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire chatResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateChatResponseResource(wire); err != nil {
@@ -20,20 +21,83 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	}
 	response := decodeChatResponseEnvelope(wire)
 	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
-		"kv_transfer":     wire.hasLegacyKVTransferMetadata(),
-		"metadata":        len(wire.Metadata) > 0,
-		"moderation":      len(wire.Moderation) > 0,
-		"x_groq":          len(wire.XGroq) > 0,
-		"usage_breakdown": wire.hasUsageBreakdown(),
+		"choices.message.tool_calls.index":                       chatChoicesHaveToolCallIndex(wire.Choices),
+		"choices.message.provider_specific_fields":               chatChoicesHaveMessageProviderSpecificFields(wire.Choices),
+		"choices.provider_specific_fields":                       chatChoicesHaveProviderSpecificFields(wire.Choices),
+		"provider":                                               wire.Provider != nil,
+		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
+		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
+		"metadata":                                               len(wire.Metadata) > 0,
+		"moderation":                                             len(wire.Moderation) > 0,
+		"x_groq":                                                 len(wire.XGroq) > 0,
+		"usage_breakdown":                                        wire.hasUsageBreakdown(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
-	decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy)
-	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, body, response.Generation, response.SourceStopReason, policy)
+	if err := decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy); err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
+	}
+	// A same-format encode may replay the response byte-for-byte. OpenRouter's
+	// provider, native finish reason and accounting decorations were dropped
+	// from the neutral response, so render it again instead of leaking them.
+	// LiteLLM's provider_specific_fields are similarly non-canonical and must
+	// not be replayed.
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations()
+	if needsReencode {
+		canonicalBody = nil
+	}
+	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
+	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
+}
+
+func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if choice.NativeFinishReason != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (wire chatResponseWire) hasOpenRouterDecorations() bool {
+	if wire.Provider != nil || chatChoicesHaveNativeFinishReason(wire.Choices) {
+		return true
+	}
+	if wire.Usage == nil {
+		return false
+	}
+	usage := wire.Usage
+	return usage.Cost != nil || usage.IsBYOK != nil || usage.CostDetails != nil || usage.ServerToolUse != nil ||
+		usage.PromptTokensDetails != nil && usage.PromptTokensDetails.VideoTokens != nil ||
+		usage.CompletionTokensDetails != nil && usage.CompletionTokensDetails.ImageTokens != nil
+}
+
+func chatChoicesHaveProviderSpecificFields(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if len(choice.ProviderSpecificFields) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func chatChoicesHaveMessageProviderSpecificFields(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if len(choice.Message.ProviderSpecificFields) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (wire chatResponseWire) hasLiteLLMDecorations() bool {
+	return chatChoicesHaveProviderSpecificFields(wire.Choices) ||
+		chatChoicesHaveMessageProviderSpecificFields(wire.Choices)
 }
 
 func chatChoicesHaveTokenizedArguments(choices []chatChoiceWire) bool {
@@ -47,20 +111,36 @@ func chatChoicesHaveTokenizedArguments(choices []chatChoiceWire) bool {
 	return false
 }
 
+func chatChoicesHaveToolCallIndex(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		for _, call := range choice.Message.ToolCalls {
+			if call.Index != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func decodeChatResponseUsage(
 	wire *chatUsageWire,
 	response *llmprotocol.Response,
 	diagnostics *llmprotocol.Diagnostics,
 	policy llmprotocol.Policy,
-) {
+) error {
 	if wire == nil {
-		return
+		return nil
 	}
-	response.Usage = decodeChatUsage(*wire)
+	usage, err := decodeChatUsage(*wire)
+	if err != nil {
+		return err
+	}
+	response.Usage = usage
 	appendProviderFieldOmissions(
 		diagnostics, policy, llmprotocol.OpenAIChatV1,
 		chatUsageFieldOmissions(*wire, "usage."), chatUsageOmissionReason,
 	)
+	return nil
 }
 
 const chatUsageOmissionReason = "provider accounting detail has no separate protocol-neutral bucket"
@@ -70,12 +150,16 @@ const chatUsageOmissionReason = "provider accounting detail has no separate prot
 // inventory and report the same omissions under their own field prefix.
 func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool {
 	return map[string]bool{
+		prefix + "service_tier":                                         wire.ServiceTier != nil,
 		prefix + "compute_units":                                        len(wire.ComputeUnits) > 0,
 		prefix + "prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
 		prefix + "prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
+		prefix + "prompt_tokens_details.video_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.VideoTokens != nil,
 		prefix + "prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
+		prefix + "prompt_tokens_details.multimodal_tokens":              wire.PromptTokensDetails != nil && len(wire.PromptTokensDetails.MultimodalTokens) > 0,
 		prefix + "completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
 		prefix + "completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
+		prefix + "completion_tokens_details.image_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.ImageTokens != nil,
 		prefix + "completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
 		prefix + "completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
 		prefix + "cost_in_usd_ticks":                                    wire.CostInUSDTicks != nil,
@@ -84,6 +168,10 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "prompt_time":                                          wire.PromptTime != nil,
 		prefix + "completion_time":                                      wire.CompletionTime != nil,
 		prefix + "total_time":                                           wire.TotalTime != nil,
+		prefix + "cost":                                                 wire.Cost != nil,
+		prefix + "is_byok":                                              wire.IsBYOK != nil,
+		prefix + "cost_details":                                         wire.CostDetails != nil,
+		prefix + "server_tool_use":                                      wire.ServerToolUse != nil,
 	}
 }
 
@@ -97,8 +185,8 @@ func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
 	}
 	if wire.Error != nil {
 		response.Error = &llmprotocol.ProtocolError{
-			Category: decodeProviderErrorCategory(wire.Error.Type, wire.Error.Code),
-			Code:     wire.Error.Code, Message: wire.Error.Message, Parameter: wire.Error.Param,
+			Category: decodeProviderErrorCategory(wire.Error.Type, string(wire.Error.Code)),
+			Code:     string(wire.Error.Code), Message: wire.Error.Message, Parameter: wire.Error.Param,
 		}
 		response.StopReason = llmprotocol.StopError
 	}
@@ -120,7 +208,7 @@ func decodeChatChoices(wire chatResponseWire, response *llmprotocol.Response, po
 			response.Evidence.TokenLogprobs = decodeChatTokenLogprobs(choice.Logprobs)
 			if choice.FinishReason != nil {
 				response.SourceStopReason = *choice.FinishReason
-				response.StopReason = decodeChatStop(*choice.FinishReason)
+				response.StopReason, response.MatchedStopSequence = decodeChatStopWithMatch(*choice.FinishReason, choice.StopReason, policy)
 			}
 			continue
 		}
@@ -137,7 +225,7 @@ func decodeChatChoiceItem(choice chatChoiceWire, responseID string, policy llmpr
 	if err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
-	item := llmprotocol.OutputItem(message)
+	item := llmprotocol.OutputItem{ID: message.ID, Role: message.Role, Content: message.Content}
 	if item.ID == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 		item.ID = llmprotocol.StableID("chat-response", responseID, fmt.Sprint(choice.Index))
 	}
@@ -161,7 +249,7 @@ func decodeChatTokenLogprobs(wire *chatLogprobsWire) []llmprotocol.TokenLogprob 
 	return tokens
 }
 
-func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
+func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 	usage := llmprotocol.Usage{
 		State:           llmprotocol.UsageAvailable,
 		InputUncached:   unknownCount(),
@@ -174,15 +262,9 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 		Total:           authoritative(wire.TotalTokens),
 	}
 	if wire.PromptTokensDetails != nil {
-		cached, cacheWrite := wire.PromptTokensDetails.CachedTokens, wire.PromptTokensDetails.CacheWriteTokens
-		uncached := int64(-1)
-		if cached >= 0 && cacheWrite >= 0 && wire.PromptTokens >= cached && cacheWrite <= wire.PromptTokens-cached {
-			uncached = wire.PromptTokens - cached - cacheWrite
-		}
-		usage.InputCacheRead = authoritative(cached)
-		usage.InputCacheWrite = authoritative(cacheWrite)
-		usage.InputUncached = llmprotocol.TokenCount{
-			Value: llmprotocol.Int64(uncached), Provenance: llmprotocol.UsageDerived,
+		details := wire.PromptTokensDetails
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
+			return llmprotocol.Usage{}, err
 		}
 	}
 	if wire.CompletionTokensDetails != nil {
@@ -196,7 +278,7 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 			Value: llmprotocol.Int64(other), Provenance: llmprotocol.UsageDerived,
 		}
 	}
-	return usage
+	return usage, nil
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
@@ -214,6 +296,7 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 	if err := appendChatStopReasonDiagnostic(&diagnostics, response.StopReason, envelope.Format, policy); err != nil {
 		return nil, diagnostics, err
 	}
+	appendChatCacheCreationOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	wire := chatResponseWire{ID: response.ID, Object: "chat.completion", Model: response.Model}
 	if !response.CreatedAt.IsZero() {
 		wire.Created = response.CreatedAt.Unix()
@@ -290,13 +373,24 @@ func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 	wire := &chatUsageWire{PromptTokens: prompt, CompletionTokens: completion, TotalTokens: total}
 	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil {
 		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{
-			CachedTokens: tokenValue(usage.InputCacheRead), CacheWriteTokens: tokenValue(usage.InputCacheWrite),
+			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
 		}
 	}
 	if usage.OutputReasoning.Value != nil {
 		wire.CompletionTokensDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: tokenValue(usage.OutputReasoning)}
 	}
 	return wire
+}
+
+// decodeChatStopWithMatch reads vLLM's non-standard choices[].stop_reason when
+// the target can carry it. With finish_reason "stop", a string there is the stop
+// sequence that ended the generation; an integer is a stop token id and null is
+// end of sequence.
+func decodeChatStopWithMatch(reason string, detail *chatStopReasonWire, policy llmprotocol.Policy) (llmprotocol.StopReason, string) {
+	if policy.ProviderStopSequences && reason == "stop" && detail != nil && detail.Text != nil {
+		return llmprotocol.StopSequence, *detail.Text
+	}
+	return decodeChatStop(reason), ""
 }
 
 func decodeChatStop(reason string) llmprotocol.StopReason {
@@ -331,7 +425,13 @@ func (OpenAIChatCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
-	return decodeOpenAITransportError(body, policy)
+	if policy.ResponseVendor == llmprotocol.ResponseVendorSnowflake {
+		return decodeSnowflakeTransportError(body, policy, llmprotocol.OpenAIChatV1)
+	}
+	if policy.ResponseVendor == llmprotocol.ResponseVendorCloudflare {
+		return decodeCloudflareTransportError(body, policy, llmprotocol.OpenAIChatV1)
+	}
+	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIChatV1)
 }
 
 func (OpenAIChatCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

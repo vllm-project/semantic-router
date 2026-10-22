@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
@@ -53,9 +52,6 @@ func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
 			writeReloadTestDocument(t, path, "B", candidate)
 			parseReloadConfig = func(string) (*config.RouterConfig, error) { return candidate, nil }
 			ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
-			prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-				return modelruntime.EmbeddingRuntimeState{}, nil
-			}
 			var candidateCloses atomic.Int32
 			closeFailure := errors.New("test resource close failed")
 			buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
@@ -73,7 +69,7 @@ func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
 			var once sync.Once
 			releaseWarmup := func() { once.Do(func() { close(finish) }) }
 			t.Cleanup(releaseWarmup)
-			warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
+			warmupReloadRouter = func(*OpenAIRouter) error {
 				close(started)
 				<-finish
 				return nil

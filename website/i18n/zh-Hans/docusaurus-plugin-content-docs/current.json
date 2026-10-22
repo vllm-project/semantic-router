@@ -1,6 +1,6 @@
 {
   "version.label": {
-    "message": "最新版",
+    "message": "最新版（未发布）",
     "description": "The label for version next"
   },
   "sidebar.tutorialSidebar.category.Overview": {
@@ -135,21 +135,13 @@
     "message": "运维",
     "description": "The label for category Operations in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Router Runtime": {
-    "message": "路由器运行时",
-    "description": "The label for category Router Runtime in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Model Runtime": {
+    "message": "模型运行时",
+    "description": "The label for category Model Runtime in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Run models": {
-    "message": "运行模型",
-    "description": "The label for category Run models in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Model guides": {
-    "message": "模型用法",
-    "description": "The label for category Model guides in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Fleet Simulator": {
-    "message": "机队模拟器",
-    "description": "The label for category Fleet Simulator in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Model Runtime Guides": {
+    "message": "任务指南",
+    "description": "The label for category Model Runtime Guides in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Proposals": {
     "message": "提案",
@@ -199,6 +191,10 @@
     "message": "评测",
     "description": "The label for category Benchmarking in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.sr-bench 1.0": {
+    "message": "sr-bench 1.0",
+    "description": "The label for category sr-bench 1.0 in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.API Reference": {
     "message": "接口参考",
     "description": "The label for category API Reference in sidebar tutorialSidebar"
@@ -234,10 +230,6 @@
   "sidebar.tutorialSidebar.category.Global": {
     "message": "全局配置",
     "description": "The label for category Global in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.link.Fleet Simulator PDF": {
-    "message": "机队模拟器 PDF",
-    "description": "The label for sidebar link Fleet Simulator PDF"
   },
   "sidebar.tutorialSidebar.category.Intelligent Route": {
     "message": "智能路由",

@@ -404,11 +404,11 @@ check_metrics() {
         log "WARN" "✗ Request error metrics not found"
     fi
 
-    if echo "$metrics" | grep -q "llm_pii_violations_total"; then
-        log "SUCCESS" "✓ PII violation metrics found"
-        echo "$metrics" | grep "llm_pii_violations_total" | head -3
+    if echo "$metrics" | grep -q 'llm_signal_match_total{.*signal_type="pii"'; then
+        log "SUCCESS" "✓ PII signal match metrics found"
+        echo "$metrics" | grep 'llm_signal_match_total{.*signal_type="pii"' | head -3
     else
-        log "INFO" "ℹ PII violation metrics not found (no violations yet)"
+        log "INFO" "ℹ No PII signal match observations; this does not establish a clean safety result"
     fi
 
     if echo "$metrics" | grep -q "llm_category_classifications_count"; then

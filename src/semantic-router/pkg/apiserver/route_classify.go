@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -24,6 +26,14 @@ import (
 // service outage (503); anything else is treated as an
 // internal error (500 CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, services.ErrConfigHashMismatch) {
+		s.writeErrorResponse(w, http.StatusPreconditionFailed, "CONFIG_HASH_MISMATCH", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrConfigHashUnavailable) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_HASH_UNAVAILABLE", err.Error())
+		return
+	}
 	if errors.Is(err, services.ErrEmptyText) ||
 		errors.Is(err, services.ErrInvalidRequestFacts) ||
 		errors.Is(err, binding.ErrInputLimit) {
@@ -75,10 +85,16 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 // should be evaluated regardless of whether they are used in decisions
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
+	expected := r.Header.Get(headers.SRBenchExpectedConfigHash)
+	if expected != "" && !headers.ValidConfigHash(expected) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONFIG_HASH", "expected config hash must be a lowercase SHA-256 digest")
+		return
+	}
 	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	req.ExpectedConfigHash = expected
 
 	if r.URL.Query().Get("trace") == "true" {
 		if req.Options == nil {
@@ -284,8 +300,54 @@ func (s *ClassificationAPIServer) extractRequestedResults(unifiedResults *servic
 		return piiBatchResults(unifiedResults)
 	case "security":
 		return securityBatchResults(unifiedResults)
+	case "all":
+		return allBatchResults(unifiedResults, options)
 	default:
 		return intentBatchResults(unifiedResults, options)
+	}
+}
+
+// allBatchResults keeps the intent projection and attaches the PII and security
+// outcome computed for the same text index. An object is omitted when the
+// unified response has no entry at that index.
+func allBatchResults(unifiedResults *services.UnifiedBatchResponse, options *ClassificationOptions) []BatchClassificationResult {
+	results := intentBatchResults(unifiedResults, options)
+	for i := range results {
+		if i < len(unifiedResults.PIIResults) {
+			results[i].PII = newBatchPIIResult(unifiedResults.PIIResults[i])
+		}
+		if i < len(unifiedResults.SecurityResults) {
+			results[i].Security = newBatchSecurityResult(unifiedResults.SecurityResults[i])
+		}
+	}
+	return results
+}
+
+// batchConfidence returns nil unless scores are explicitly available, matching
+// the null encoding in classification's unified_result_json.go.
+func batchConfidence(scoresAvailable *bool, confidence float32) *float32 {
+	if scoresAvailable == nil || !*scoresAvailable {
+		return nil
+	}
+	return &confidence
+}
+
+func newBatchPIIResult(r classification.PIIResult) *BatchPIIResult {
+	return &BatchPIIResult{
+		HasPII:          r.HasPII,
+		PIITypes:        r.PIITypes,
+		Confidence:      batchConfidence(r.ScoresAvailable, r.Confidence),
+		ScoresAvailable: r.ScoresAvailable,
+	}
+}
+
+func newBatchSecurityResult(r classification.SecurityResult) *BatchSecurityResult {
+	return &BatchSecurityResult{
+		IsJailbreak:     r.IsJailbreak,
+		ThreatType:      r.ThreatType,
+		Confidence:      batchConfidence(r.ScoresAvailable, r.Confidence),
+		ScoresAvailable: r.ScoresAvailable,
+		Decision:        r.Decision,
 	}
 }
 

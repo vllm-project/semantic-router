@@ -81,6 +81,18 @@ func contextOverflowConfig(ctx *RequestContext) *config.ContextCompressionPlugin
 // budget eligibility. It does not choose a backend: the widest compatible
 // assigned budget only bounds the request that normal selection will inspect.
 func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, originalModel string) error {
+	if ctx != nil && ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
+		return nil
+	}
+	if ctx != nil && decisionUsesAutomaticOutput(ctx.SemanticRequest, ctx.VSRSelectedDecision) {
+		refs := ctx.VSRSelectedDecision.ModelRefs
+		if action := ctx.VSRSelectedDecision.Action; action != nil && action.Type == config.DecisionActionRoute {
+			refs = append([]config.ModelRef{{Model: action.Destination}}, refs...)
+		} else if !r.requestModelActsAsAuto(originalModel) {
+			refs = []config.ModelRef{{Model: originalModel}}
+		}
+		return r.prepareAutomaticCandidates(ctx, refs)
+	}
 	cfg := contextOverflowConfig(ctx)
 	if cfg == nil || ctx.SemanticRequest == nil || ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
 		return nil
@@ -139,6 +151,9 @@ func (r *OpenAIRouter) contextOverflowInputBudget(model string, demand selection
 // Repeat the bound after enrichment and deterministic provider preparation.
 // This checks the actual dispatch body rather than trusting the earlier view.
 func (r *OpenAIRouter) prepareDispatchContextOverflow(ctx *RequestContext, request *llmprotocol.Request, model string) error {
+	if request != nil && request.Sampling.AutomaticOutput {
+		return nil
+	} // Exact render owns automatic admission and confirmed-overflow compression.
 	cfg := contextOverflowConfig(ctx)
 	if cfg == nil {
 		return nil

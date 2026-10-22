@@ -1,3 +1,5 @@
+import type { SelectionTrace } from '../types/selectionTrace'
+
 /** The recorded routing explanation. These scores are selector units, not probabilities. */
 export interface ReplayCandidateTrace {
   base_score?: number
@@ -49,6 +51,7 @@ export interface ReplayAdaptationScore {
 }
 
 export interface ReplayRouteDiagnostics {
+  selection_trace?: SelectionTrace
   selection_reasoning?: string
   previous_model?: string
   proposal_model?: string

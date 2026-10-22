@@ -26,7 +26,6 @@ func TestClassifyCategoryWithEntropySkipsNilEmbeddingClassifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer keywordClassifier.Free()
 
 	classifier := &Classifier{
 		Config:            &config.RouterConfig{},

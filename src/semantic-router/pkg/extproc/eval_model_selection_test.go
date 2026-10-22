@@ -140,7 +140,7 @@ func TestSelectModelForEvalReportsConfiguredLooperFinalModel(t *testing.T) {
 	}
 }
 
-func TestSelectModelForEvalDoesNotClaimBaseSelectorIsFinalWhenLearningCanChangeIt(t *testing.T) {
+func TestSelectModelForEvalReturnsLearningSnapshotProvenance(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
 		RouterLearning: config.RouterLearningConfig{Enabled: true},
 		BackendModels: config.BackendModels{
@@ -162,7 +162,7 @@ func TestSelectModelForEvalDoesNotClaimBaseSelectorIsFinalWhenLearningCanChangeI
 	}
 
 	result := router.SelectModelForEval(services.EvalModelSelectionInput{Decision: decision})
-	if result.Status != services.EvalSelectionExecutionRequired || result.SelectedModel != "" {
-		t.Fatalf("learning-aware Eval selection = %+v, want no fabricated final model", result)
+	if result.Status != services.EvalSelectionSelected || result.SelectedModel == "" || result.Provenance == nil || !result.Provenance.StateDependent || result.Provenance.Mode != "read_only_snapshot" || !result.Provenance.Sampled {
+		t.Fatalf("learning-aware Eval selection = %+v", result)
 	}
 }

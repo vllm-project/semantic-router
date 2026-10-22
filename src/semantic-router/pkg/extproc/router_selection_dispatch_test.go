@@ -3,14 +3,39 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
+
+func TestSelectionUsesPreparedProviderForEveryLocalBackend(t *testing.T) {
+	for _, backend := range []string{"candle", "ort", "openvino"} {
+		t.Run(backend, func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.EmbeddingConfig = config.HNSWConfig{Backend: backend, ModelType: "multimodal"}
+			calls := 0
+			provider, err := embedding.NewFuncProvider(backend, 768, func(context.Context, string) ([]float32, error) {
+				calls++
+				return make([]float32, 768), nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			set := embedding.NewSet(map[string]embedding.Provider{"multimodal": provider}, "multimodal")
+			embed, options := resolveSelectionEmbeddingFunc(cfg, set)
+			vector, err := embed(context.Background(), "query", options)
+			if err != nil || len(vector) != 768 || calls != 1 {
+				t.Fatalf("selection bypassed its prepared provider: dimension=%d calls=%d err=%v", len(vector), calls, err)
+			}
+		})
+	}
+}
 
 func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,19 +70,65 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	}
 	cfg.ModelSelection.Enabled = true
 	cfg.ModelSelection.ML.ModelsPath = "test-model-selection"
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	cfg.ModelSelection.ML.ModelType = config.EmbeddingModelTypeRemote
+	cfg.Decisions = []config.Decision{{Name: "nearest", Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
+	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer prepared.Close()
 	embed, defaultConfig := resolveSelectionEmbeddingFunc(cfg, prepared)
 
-	embedding, err := embed("hello", defaultConfig)
+	embedding, err := embed(context.Background(), "hello", defaultConfig)
 	if err != nil {
 		t.Fatalf("selection embedding function error = %v", err)
 	}
 	if len(embedding) != 2 || embedding[0] != float32(0.1) {
 		t.Fatalf("embedding = %#v, want two remote values", embedding)
+	}
+}
+
+func TestSelectionEmbeddingPropagatesCancellationContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+
+	provider, err := embedding.NewFuncProvider("test", 1, func(got context.Context, _ string) ([]float32, error) {
+		if got != ctx {
+			t.Errorf("embedding context = %p, want request context %p", got, ctx)
+		}
+		close(started)
+		<-got.Done()
+		return nil, got.Err()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := embedding.NewSet(map[string]embedding.Provider{"test": provider}, "test")
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "test"}
+	embed, options := resolveSelectionEmbeddingFunc(cfg, set)
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := embed(ctx, "cancel me", options)
+		errCh <- err
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("embedding provider was not called")
+	}
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("embedding error = %v, want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("embedding did not stop after request cancellation")
 	}
 }
 
@@ -151,9 +222,8 @@ func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
 
 // TestSelectionEmbeddingModelTypeNormalizesCase guards against a configured
 // modelType (e.g. "Qwen3") passing validation case-insensitively but then
-// reaching candle_binding.SupportsBatchedEmbedding and GetEmbeddingBatched
-// unnormalized -- the former is case/whitespace-tolerant, the latter is not,
-// so a mismatch there routes a "batchable" model into a call that fails.
+// reaching the embedding provider lookup unnormalized: the prepared providers
+// are keyed by the normalized name, so the lookup would miss.
 func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -170,7 +240,7 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 			models := config.EmbeddingModels{
 				EmbeddingConfig: config.HNSWConfig{ModelType: tc.modelType},
 			}
-			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendCandle); got != tc.want {
+			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendModelRuntime); got != tc.want {
 				t.Errorf("selectionEmbeddingModelType(%q) = %q, want %q", tc.modelType, got, tc.want)
 			}
 		})
@@ -180,9 +250,8 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 // TestBuildMLSelectionConfigNormalizesModelTypeCase guards the same
 // unnormalized-modelType bug as TestSelectionEmbeddingModelTypeNormalizesCase,
 // but on the sibling ml.model_type path: nothing validates or rewrites it, so
-// it reaches factory.go's mlEmbeddingConfig -- and the same
-// SupportsBatchedEmbedding/FFI dispatch -- independently of the default
-// embedding model type.
+// it reaches factory.go's mlEmbeddingConfig -- and the same provider lookup --
+// independently of the default embedding model type.
 func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{

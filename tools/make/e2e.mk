@@ -16,14 +16,31 @@ E2E_TESTS ?=
 E2E_SETUP_ONLY ?= false
 E2E_SKIP_SETUP ?= false
 E2E_USE_WORKSPACE_MODELS ?= false
+E2E_UNIT_REPORT_DIR ?= $(CURDIR)/.agent-harness/e2e-unit
+
+.PHONY: test-e2e-unit
+test-e2e-unit: $(HARNESS_VENV_DEPS) ## Test E2E framework helpers and profiles without starting a cluster
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/ci/run_e2e_unit.py --output "$(E2E_UNIT_REPORT_DIR)"
 
 # Build the E2E test binary
 build-e2e: ## Build the E2E test binary
 	@$(LOG_TARGET)
 	@echo "Building E2E test binary..."
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
+	@$(MAKE) e2e-coverage-check
+
+.PHONY: e2e-coverage-check
+e2e-coverage-check: ## Run the runtime-derived E2E coverage drift gates (no cluster required)
+	@$(LOG_TARGET)
+	@echo "Running E2E coverage drift gates..."
+	@cd e2e && go test -count=1 ./pkg/verification/
 
 # Run E2E tests
+test-e2e-profile-multimodal: ## Unit-test the multimodal-routing E2E profile package (CRD mirrors the pack, chart defaults kept)
+	@$(LOG_TARGET)
+	@cd e2e && go test ./profiles/multimodal-routing/ -count=1
+
 e2e-test: ## Run E2E tests (PROFILE=envoy-ai-gateway by default)
 e2e-test: build-e2e
 	@$(LOG_TARGET)
@@ -53,11 +70,6 @@ e2e-test-kubernetes: e2e-test
 e2e-test-ai-gateway:
 e2e-test-ai-gateway: E2E_PROFILE=envoy-ai-gateway
 e2e-test-ai-gateway: e2e-test
-
-# Run E2E tests with Dynamo profile (requires GPU)
-e2e-test-dynamo: ## Run E2E tests with Dynamo profile (requires 3+ GPUs)
-e2e-test-dynamo: E2E_PROFILE=dynamo
-e2e-test-dynamo: e2e-test
 
 # Run E2E tests with RAG hybrid search profile (multi-store, BM25 + n-gram + vector)
 e2e-test-rag-hybrid-search: ## Run E2E tests with RAG hybrid search profile
@@ -130,11 +142,6 @@ e2e-help: ## Show help for E2E testing
 	@echo ""
 	@echo "Available Profiles:"
 	@echo "  envoy-ai-gateway - Test the baseline contract through Envoy AI Gateway"
-	@echo "  agentgateway     - Test Semantic Router with the agentgateway controller"
-	@echo "  aibrix           - Test Semantic Router with AIBrix"
-	@echo "  dynamo           - Test Semantic Router with NVIDIA Dynamo (requires 3+ GPUs)"
-	@echo "  istio            - Test Semantic Router with Istio service mesh"
-	@echo "  llm-d            - Test Semantic Router with LLM-D"
 	@echo "  production-stack - Test Semantic Router in production-like stack (HA/LB/Obs)"
 	@echo "  rag-hybrid-search - Test RAG multi-store and hybrid search (BM25 + n-gram + vector)"
 	@echo "  response-api     - Test Response API endpoints (POST/GET/DELETE /v1/responses)"
@@ -157,7 +164,6 @@ e2e-help: ## Show help for E2E testing
 	@echo "  make e2e-test E2E_PROFILE=envoy-ai-gateway       # Run baseline Envoy AI Gateway tests"
 	@echo "  make e2e-test E2E_PROFILE=envoy-ai-gateway E2E_USE_WORKSPACE_MODELS=true"
 	@echo "  make e2e-test-response-api-suite                 # Run response-api + Redis + Redis Cluster suite"
-	@echo "  make e2e-test-dynamo                             # Run Dynamo tests (requires GPU)"
 	@echo "  make e2e-test-debug                              # Run tests and keep cluster + deployed profile"
 	@echo "  make e2e-test-specific E2E_TESTS=\"test1,test2\"   # Run specific tests"
 	@echo "  make e2e-cleanup                                 # Clean up test cluster"

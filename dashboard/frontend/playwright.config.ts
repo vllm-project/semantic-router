@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  // Real deployment acceptance is selected only by its dedicated opt-in configs.
+  testIgnore: [
+    '**/evaluation/sr-bench-live.spec.ts',
+    '**/evaluation/sr-bench-lifecycle.spec.ts',
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -23,4 +28,3 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
 });
-

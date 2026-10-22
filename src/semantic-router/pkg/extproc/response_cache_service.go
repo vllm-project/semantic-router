@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,6 +68,9 @@ func responseCacheEmbeddingIdentity(cfg *config.RouterConfig, backend cache.Cach
 		return "", nil
 	}
 	identity, err := initialize(settings)
+	if errors.Is(err, embedding.ErrIdentityUnsupported) {
+		return "", nil
+	}
 	if err != nil {
 		return "", fmt.Errorf("initialize semantic cache embedding identity: %w", err)
 	}

@@ -25,6 +25,7 @@ A router config uses these top-level sections:
 version: v0.3
 listeners: []
 providers: {}
+evaluation: {}
 routing: {}
 entrypoints: []
 recipes: []
@@ -37,6 +38,8 @@ global: {}
   deployment pricing metadata. A built-in model may add an optional `catalog`
   identity, while `backend_refs[].provider` selects the stable runtime Provider
   ID. Custom vLLM/SGLang models continue to omit `catalog`.
+- `evaluation` optionally defines benchmarks, indices, and model-linked
+  measurement records.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
@@ -138,6 +141,10 @@ runtime dependency; they do not define routing behavior by themselves.
   portable while making its candidate-pool cardinality executable as soon as
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
+- PII rules keep the legacy prompt/history scope when `source` is omitted or
+  empty. Set `source: tool_result` explicitly to scan textual tool-result
+  content decoded from the request protocol; this source does not implicitly
+  include the prompt or conversation history.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response

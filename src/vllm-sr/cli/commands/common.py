@@ -13,7 +13,11 @@ import click
 def exit_with_logged_error(
     log: Any, interrupt_message: str | None = None
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Wrap a CLI command and exit cleanly on logged failures."""
+    """Wrap a CLI command and exit cleanly on logged failures.
+
+    Ctrl-C exits 0 only for commands that pass ``interrupt_message``; for other
+    commands Click aborts with exit code 1.
+    """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
@@ -21,8 +25,9 @@ def exit_with_logged_error(
             try:
                 return func(*args, **kwargs)
             except KeyboardInterrupt:
-                if interrupt_message:
-                    log.info(interrupt_message)
+                if not interrupt_message:
+                    raise
+                log.info(interrupt_message)
                 sys.exit(0)
             except click.exceptions.Exit:
                 raise

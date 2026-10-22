@@ -42,9 +42,10 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	allRecords := r.collectRouterReplayRecords()
-	filteredRecords := filterRouterReplayRecords(allRecords, filters)
-	payload := buildRouterReplayAggregatePayload(allRecords, filteredRecords)
+	payload, err := r.queryRouterReplayAggregate(filters)
+	if err != nil {
+		return r.createErrorResponse(500, "router replay storage query failed")
+	}
 	return r.createRouterReplayJSONResponse(200, payload)
 }
 

@@ -16,26 +16,44 @@ This reference is generated from the registered CLI commands. Command descriptio
 
 | Command | Description |
 | --- | --- |
-| [`vllm-sr`](#vllm-sr) | vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints. |
-| [`vllm-sr benchmark`](#vllm-sr-benchmark) | Install, run, compare, and gate reproducible benchmark workloads. |
-| [`vllm-sr benchmark benchmark-install`](#vllm-sr-benchmark-benchmark-install) | Install a data-only Benchmark Pack for replay or supported live tracks. |
-| [`vllm-sr benchmark benchmarks`](#vllm-sr-benchmark-benchmarks) | Print all exact-pinned external benchmark adapter descriptors. |
-| [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Print the versioned evaluation suites, tracks, and targets. |
-| [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare two local immutable drafts without rerunning either workload. |
-| [`vllm-sr benchmark gate`](#vllm-sr-benchmark-gate) | Emit standalone gate evidence and fail CI on blocking draft verdicts. |
-| [`vllm-sr benchmark intelligence`](#vllm-sr-benchmark-intelligence) | Plan and run the six fixed Intelligence 1.0 benchmarks. |
-| [`vllm-sr benchmark intelligence list`](#vllm-sr-benchmark-intelligence-list) | Print the exact Intelligence 1.0 benchmark and source contracts. |
-| [`vllm-sr benchmark intelligence plan`](#vllm-sr-benchmark-intelligence-plan) | Emit secret-free commands and provenance without executing a benchmark. |
-| [`vllm-sr benchmark intelligence run`](#vllm-sr-benchmark-intelligence-run) | Execute fixed benchmark adapters and write private evidence receipts. |
-| [`vllm-sr benchmark normalizers`](#vllm-sr-benchmark-normalizers) | Print the closed native-export contracts and explicit blockers. |
-| [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Read the local worker report draft. |
-| [`vllm-sr benchmark run`](#vllm-sr-benchmark-run) | Execute a manifest and print its finalized worker report draft. |
-| [`vllm-sr benchmark suite-install`](#vllm-sr-benchmark-suite-install) | Install a normalized suite as exploratory E0 evidence. |
-| [`vllm-sr benchmark suite-list`](#vllm-sr-benchmark-suite-list) | List browser-safe suite metadata without private artifact references. |
-| [`vllm-sr benchmark suite-normalize`](#vllm-sr-benchmark-suite-normalize) | Parse one native export into exploratory E0 replay evidence. |
-| [`vllm-sr benchmark suite-show`](#vllm-sr-benchmark-suite-show) | Print the immutable operator manifest for one installed suite. |
-| [`vllm-sr benchmark validate`](#vllm-sr-benchmark-validate) | Validate a fixed evaluation manifest without executing it. |
-| [`vllm-sr benchmark verify-source`](#vllm-sr-benchmark-verify-source) | Verify an ignored external source checkout against its exact pin. |
+| [`vllm-sr`](#vllm-sr) | vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime. |
+| [`vllm-sr benchmark`](#vllm-sr-benchmark) | Prepare, run, inspect, and compare sr-bench 1.0 evaluations. |
+| [`vllm-sr benchmark cancel`](#vllm-sr-benchmark-cancel) | Cancel remaining work while retaining all existing evidence. |
+| [`vllm-sr benchmark candidate-plan`](#vllm-sr-benchmark-candidate-plan) | Reuse a terminal baseline's frozen protocol without repeating its requests. |
+| [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Show the nine benchmark adapters and evaluation profiles. |
+| [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare matched cases against the best observed single model. |
+| [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
+| [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
+| [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
+| [`vllm-sr benchmark dataset exclusions`](#vllm-sr-benchmark-dataset-exclusions) | Freeze finite named history without inspecting outcomes or running models. |
+| [`vllm-sr benchmark dataset options`](#vllm-sr-benchmark-dataset-options) | List downloadable sources, profiles, access notes, and dependencies. |
+| [`vllm-sr benchmark dataset preparations`](#vllm-sr-benchmark-dataset-preparations) | List shared download jobs or inspect one preparation by ID. |
+| [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download and freeze a dataset through the shared service by default. |
+| [`vllm-sr benchmark dataset show`](#vllm-sr-benchmark-dataset-show) | Inspect a frozen dataset or list datasets in the shared store. |
+| [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
+| [`vllm-sr benchmark experiment attach`](#vllm-sr-benchmark-experiment-attach) | Link existing evidence without changing or rerunning it. |
+| [`vllm-sr benchmark experiment create`](#vllm-sr-benchmark-experiment-create) | Create an experiment without submitting model work. |
+| [`vllm-sr benchmark experiment delete`](#vllm-sr-benchmark-experiment-delete) | Delete a finished experiment's grouping and links; keep every run and result. |
+| [`vllm-sr benchmark experiment list`](#vllm-sr-benchmark-experiment-list) | Read one page of experiments. |
+| [`vllm-sr benchmark experiment show`](#vllm-sr-benchmark-experiment-show) | Read the experiment and one page of its linked runs. |
+| [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
+| [`vllm-sr benchmark plan`](#vllm-sr-benchmark-plan) | Validate and freeze all cases, targets, profiles, and limits without inference. |
+| [`vllm-sr benchmark preview`](#vllm-sr-benchmark-preview) | Inspect routing decisions without producing quality scores. |
+| [`vllm-sr benchmark reconcile-usage`](#vllm-sr-benchmark-reconcile-usage) | Append an offline accounting correction from saved streams; no inference. |
+| [`vllm-sr benchmark recover`](#vllm-sr-benchmark-recover) | Create a separate attempt from a reviewed recovery plan; never auto-retry. |
+| [`vllm-sr benchmark recover-plan`](#vllm-sr-benchmark-recover-plan) | Inspect eligible continuation cells without making model requests. |
+| [`vllm-sr benchmark regrade`](#vllm-sr-benchmark-regrade) | Regrade saved MCQ/grid final outputs without mutating original evidence. |
+| [`vllm-sr benchmark replay`](#vllm-sr-benchmark-replay) | Estimate eligible static routes from saved answers without inference. |
+| [`vllm-sr benchmark replay-options`](#vllm-sr-benchmark-replay-options) | List eligible baselines, or compatible previews for BASELINE; no model calls. |
+| [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Show quality, four-bucket usage, cost, latency, time, and limitations. |
+| [`vllm-sr benchmark run`](#vllm-sr-benchmark-run) | Execute one frozen live evaluation through the shared service. |
+| [`vllm-sr benchmark runs`](#vllm-sr-benchmark-runs) |  |
+| [`vllm-sr benchmark serve`](#vllm-sr-benchmark-serve) | Own the durable journal and workers independently of a browser. |
+| [`vllm-sr benchmark setup`](#vllm-sr-benchmark-setup) | Inspect prerequisites or explicitly install optional benchmark harnesses. |
+| [`vllm-sr benchmark show`](#vllm-sr-benchmark-show) | Read a run, bounded evidence page, or one complete saved call. |
+| [`vllm-sr benchmark target`](#vllm-sr-benchmark-target) | Manage the operator-owned target registry used by the Dashboard. |
+| [`vllm-sr benchmark target list`](#vllm-sr-benchmark-target-list) |  |
+| [`vllm-sr benchmark target register`](#vllm-sr-benchmark-target-register) | Replace the local registry from a JSON list of credential references. |
 | [`vllm-sr completion`](#vllm-sr-completion) | Generate or install shell completion for vllm-sr. |
 | [`vllm-sr completion install`](#vllm-sr-completion-install) | Install shell completions into your shell configuration. |
 | [`vllm-sr completion show`](#vllm-sr-completion-show) | Print the completion script for a shell. |
@@ -43,16 +61,19 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config apply`](#vllm-sr-config-apply) | Plan, compare-and-swap, persist, and hot-reload a configuration. |
 | [`vllm-sr config envoy`](#vllm-sr-config-envoy) | Print the generated Envoy configuration. |
 | [`vllm-sr config get`](#vllm-sr-config-get) | Read the active canonical configuration from a Router. |
-| [`vllm-sr config import`](#vllm-sr-config-import) | Import a supported external config source into canonical v0.3 YAML. |
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
 | [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
-| [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a backup version. |
+| [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
+| [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
 | [`vllm-sr config router`](#vllm-sr-config-router) | Print the canonical router configuration. |
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
-| [`vllm-sr config versions`](#vllm-sr-config-versions) | List immutable configuration backup versions. |
+| [`vllm-sr config versions`](#vllm-sr-config-versions) | List the configuration history, newest first. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
+| [`vllm-sr instance`](#vllm-sr-instance) | Inspect the serving state of an existing local instance. |
+| [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
+| [`vllm-sr instance status`](#vllm-sr-instance-status) | Print desired/observed mode and durable operation state. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
 | [`vllm-sr optimize`](#vllm-sr-optimize) | Analyze routing evidence and produce candidate recipe changes. |
 | [`vllm-sr optimize recipe-learning`](#vllm-sr-optimize-recipe-learning) | Analyze replay and outcomes to produce recipe-learning artifacts. |
@@ -68,10 +89,10 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr recipe pack`](#vllm-sr-recipe-pack) | Create a deterministic ZIP from an exact five-file RECIPE_DIR. |
 | [`vllm-sr recipe plan`](#vllm-sr-recipe-plan) | Validate a recipe and bind the plan to the current config ETag. |
 | [`vllm-sr recipe validate`](#vllm-sr-recipe-validate) | Validate a recipe against the running Router without changing config. |
-| [`vllm-sr request`](#vllm-sr-request) | Send requests through an Envoy listener. |
+| [`vllm-sr request`](#vllm-sr-request) | Send requests through the stack's listener. |
 | [`vllm-sr request chat`](#vllm-sr-request-chat) | Send a one-shot chat completion through the Envoy-routed HTTP API. |
 | [`vllm-sr route`](#vllm-sr-route) | Preview routing decisions or probe the routed inference path. |
-| [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and the selected route without calling a model backend. |
+| [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and model selection without generating an answer. |
 | [`vllm-sr route probe`](#vllm-sr-route-probe) | Probe a real route and assert complete assistant delivery for expected 2xx. |
 | [`vllm-sr serve`](#vllm-sr-serve) | Start vLLM Semantic Router. |
 | [`vllm-sr status`](#vllm-sr-status) | Show status of vLLM Semantic Router services. |
@@ -86,7 +107,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 Usage: vllm-sr [OPTIONS] [COMMAND] [ARGS]...
 ```
 
-vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints.
+vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime.
 
 | Parameter | Description |
 | --- | --- |
@@ -99,36 +120,47 @@ vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints.
 Usage: vllm-sr benchmark [OPTIONS] COMMAND [ARGS]...
 ```
 
-Install, run, compare, and gate reproducible benchmark workloads.
+Prepare, run, inspect, and compare sr-bench 1.0 evaluations.
 
 | Parameter | Description |
 | --- | --- |
+| `--url TEXT` | Shared sr-bench service URL; discovers the current local stack by default. Environment: SR_BENCH_URL. |
+| `--store PATH` | Durable service store; discovers the current local stack by default. Environment: SR_BENCH_STORE. |
+| `--no-autostart` | Require an already running service. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark benchmark-install` {#vllm-sr-benchmark-benchmark-install}
+### `vllm-sr benchmark cancel` {#vllm-sr-benchmark-cancel}
 
 ```text
-Usage: vllm-sr benchmark benchmark-install [OPTIONS]
+Usage: vllm-sr benchmark cancel [OPTIONS] RUN_ID
 ```
 
-Install a data-only Benchmark Pack for replay or supported live tracks.
+Cancel remaining work while retaining all existing evidence.
 
 | Parameter | Description |
 | --- | --- |
-| `--pack DIRECTORY` | Clean exact-revision checkout containing benchmark.yaml and bundle/.  [required] |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
+| `RUN_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark benchmarks` {#vllm-sr-benchmark-benchmarks}
+### `vllm-sr benchmark candidate-plan` {#vllm-sr-benchmark-candidate-plan}
 
 ```text
-Usage: vllm-sr benchmark benchmarks [OPTIONS]
+Usage: vllm-sr benchmark candidate-plan [OPTIONS] BASELINE_RUN_ID
 ```
 
-Print all exact-pinned external benchmark adapter descriptors.
+Reuse a terminal baseline's frozen protocol without repeating its requests.
+
+Failed, cancelled and interrupted full-plan baselines may supply the same
+questions and settings. This does not qualify their measurements for Compare.
 
 | Parameter | Description |
 | --- | --- |
+| `BASELINE_RUN_ID` | Required argument. Type: text. |
+| `--target TEXT` | Registered MoM target; may be repeated.  [required] May be repeated. |
+| `--mode CHOICE` | [default: live] Choices: live, preview. |
+| `--name TEXT` | — |
+| `--experiment TEXT` | — |
+| `--hypothesis TEXT` | Default: . |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark catalog` {#vllm-sr-benchmark-catalog}
@@ -137,124 +169,355 @@ Print all exact-pinned external benchmark adapter descriptors.
 Usage: vllm-sr benchmark catalog [OPTIONS]
 ```
 
-Print the versioned evaluation suites, tracks, and targets.
+Show the nine benchmark adapters and evaluation profiles.
 
 | Parameter | Description |
 | --- | --- |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark compare` {#vllm-sr-benchmark-compare}
 
 ```text
-Usage: vllm-sr benchmark compare [OPTIONS]
+Usage: vllm-sr benchmark compare [OPTIONS] BASELINE_RUN_ID CANDIDATE_RUN_ID
 ```
 
-Compare two local immutable drafts without rerunning either workload.
+Compare matched cases against the best observed single model.
 
 | Parameter | Description |
 | --- | --- |
-| `--baseline TEXT` | [required] |
-| `--candidate TEXT` | [required] |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
+| `BASELINE_RUN_ID` | Required argument. Type: text. |
+| `CANDIDATE_RUN_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark gate` {#vllm-sr-benchmark-gate}
+### `vllm-sr benchmark comparison-options` {#vllm-sr-benchmark-comparison-options}
 
 ```text
-Usage: vllm-sr benchmark gate [OPTIONS] RUN_ID
+Usage: vllm-sr benchmark comparison-options [OPTIONS] [BASELINE]
 ```
 
-Emit standalone gate evidence and fail CI on blocking draft verdicts.
+List eligible baselines, or comparable live runs for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset` {#vllm-sr-benchmark-dataset}
+
+```text
+Usage: vllm-sr benchmark dataset [OPTIONS] COMMAND [ARGS]...
+```
+
+Prepare reproducible fixed benchmark case sets.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset combine` {#vllm-sr-benchmark-dataset-combine}
+
+```text
+Usage: vllm-sr benchmark dataset combine [OPTIONS] MANIFESTS...
+```
+
+Create a reusable multi-benchmark dataset from prepared manifests.
+
+| Parameter | Description |
+| --- | --- |
+| `MANIFESTS...` | Required argument. Type: path. Accepts multiple values. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset exclusions` {#vllm-sr-benchmark-dataset-exclusions}
+
+```text
+Usage: vllm-sr benchmark dataset exclusions [OPTIONS]
+```
+
+Freeze finite named history without inspecting outcomes or running models.
+
+| Parameter | Description |
+| --- | --- |
+| `--dataset TEXT` | Named prepared dataset whose entire membership is reserved. May be repeated. |
+| `--run TEXT` | Named frozen run whose entire planned membership is reserved. May be repeated. |
+| `--output PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset options` {#vllm-sr-benchmark-dataset-options}
+
+```text
+Usage: vllm-sr benchmark dataset options [OPTIONS]
+```
+
+List downloadable sources, profiles, access notes, and dependencies.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset preparations` {#vllm-sr-benchmark-dataset-preparations}
+
+```text
+Usage: vllm-sr benchmark dataset preparations [OPTIONS] [PREPARATION_ID]
+```
+
+List shared download jobs or inspect one preparation by ID.
+
+| Parameter | Description |
+| --- | --- |
+| `[PREPARATION_ID]` | Optional argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset prepare` {#vllm-sr-benchmark-dataset-prepare}
+
+```text
+Usage: vllm-sr benchmark dataset prepare [OPTIONS]
+```
+
+Download and freeze a dataset through the shared service by default.
+
+| Parameter | Description |
+| --- | --- |
+| `--benchmark TEXT` | Benchmark ID; repeat to prepare a shared collection.  [required] May be repeated. |
+| `--profile CHOICE` | Choices: smoke, quick, standard. Default: quick. |
+| `--source-path PATH` | — |
+| `--local` | Prepare on this host; required for source files and history options. Default: false. |
+| `--no-wait` | Return the shared service preparation job immediately. Default: false. |
+| `--revision TEXT` | — |
+| `--seed INTEGER` | Default: 20260918. |
+| `--source-partition TEXT` | Frozen upstream partition for native task identity; never an evaluation split. |
+| `--exclusion-snapshot PATH` | — |
+| `--evaluation-role CHOICE` | Explicit family role; retest is never selected automatically. Choices: holdout, retest. |
+| `--limit INTEGER` | Custom case cap; cannot be represented as an upstream full benchmark. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset show` {#vllm-sr-benchmark-dataset-show}
+
+```text
+Usage: vllm-sr benchmark dataset show [OPTIONS] [PATH]
+```
+
+Inspect a frozen dataset or list datasets in the shared store.
+
+| Parameter | Description |
+| --- | --- |
+| `[PATH]` | Optional argument. Type: path. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment` {#vllm-sr-benchmark-experiment}
+
+```text
+Usage: vllm-sr benchmark experiment [OPTIONS] COMMAND [ARGS]...
+```
+
+Group durable baseline, routing checks, candidates and validation runs.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment attach` {#vllm-sr-benchmark-experiment-attach}
+
+```text
+Usage: vllm-sr benchmark experiment attach [OPTIONS] EXPERIMENT_ID
+```
+
+Link existing evidence without changing or rerunning it.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--run TEXT` | [required] |
+| `--role CHOICE` | [required] Choices: baseline, candidate, estimate, initial, preview, recovery, smoke, validation. |
+| `--hypothesis TEXT` | Default: . |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment create` {#vllm-sr-benchmark-experiment-create}
+
+```text
+Usage: vllm-sr benchmark experiment create [OPTIONS] NAME
+```
+
+Create an experiment without submitting model work.
+
+| Parameter | Description |
+| --- | --- |
+| `NAME` | Required argument. Type: text. |
+| `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment delete` {#vllm-sr-benchmark-experiment-delete}
+
+```text
+Usage: vllm-sr benchmark experiment delete [OPTIONS] EXPERIMENT_ID
+```
+
+Delete a finished experiment's grouping and links; keep every run and result.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment list` {#vllm-sr-benchmark-experiment-list}
+
+```text
+Usage: vllm-sr benchmark experiment list [OPTIONS]
+```
+
+Read one page of experiments.
+
+| Parameter | Description |
+| --- | --- |
+| `--after INTEGER RANGE` | [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | [1&lt;=x&lt;=50] Default: 20. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment show` {#vllm-sr-benchmark-experiment-show}
+
+```text
+Usage: vllm-sr benchmark experiment show [OPTIONS] EXPERIMENT_ID
+```
+
+Read the experiment and one page of its linked runs.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--after INTEGER RANGE` | [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | [1&lt;=x&lt;=50] Default: 20. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark export` {#vllm-sr-benchmark-export}
+
+```text
+Usage: vllm-sr benchmark export [OPTIONS] RUN_ID
+```
+
+Export a dev response matrix for training; holdout export is rejected.
 
 | Parameter | Description |
 | --- | --- |
 | `RUN_ID` | Required argument. Type: text. |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
-| `--allow-unavailable` | Default: false. |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr benchmark intelligence` {#vllm-sr-benchmark-intelligence}
-
-```text
-Usage: vllm-sr benchmark intelligence [OPTIONS] COMMAND [ARGS]...
-```
-
-Plan and run the six fixed Intelligence 1.0 benchmarks.
-
-| Parameter | Description |
-| --- | --- |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr benchmark intelligence list` {#vllm-sr-benchmark-intelligence-list}
-
-```text
-Usage: vllm-sr benchmark intelligence list [OPTIONS]
-```
-
-Print the exact Intelligence 1.0 benchmark and source contracts.
-
-| Parameter | Description |
-| --- | --- |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr benchmark intelligence plan` {#vllm-sr-benchmark-intelligence-plan}
-
-```text
-Usage: vllm-sr benchmark intelligence plan [OPTIONS]
-```
-
-Emit secret-free commands and provenance without executing a benchmark.
-
-| Parameter | Description |
-| --- | --- |
-| `--benchmark TEXT` | Exact catalog benchmark ID; repeat it or use all.  [default: all] May be repeated. |
-| `--model TEXT` | [required] |
-| `--base-url TEXT` | [required] |
-| `--source-root DIRECTORY` | Directory containing exact-pinned aiperf, inspect-evals, and harbor checkouts.  [required] |
 | `--output PATH` | [required] |
-| `--tokenizer TEXT` | [default: builtin] |
-| `--api-key-env TEXT` | [default: OPENAI_API_KEY] |
-| `--concurrency INTEGER` | [default: 8] |
-| `--reasoning-effort TEXT` | — |
-| `--sample-limit INTEGER` | — |
-| `--terminal-attempts INTEGER` | [default: 5] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark intelligence run` {#vllm-sr-benchmark-intelligence-run}
+### `vllm-sr benchmark plan` {#vllm-sr-benchmark-plan}
 
 ```text
-Usage: vllm-sr benchmark intelligence run [OPTIONS]
+Usage: vllm-sr benchmark plan [OPTIONS]
 ```
 
-Execute fixed benchmark adapters and write private evidence receipts.
+Validate and freeze all cases, targets, profiles, and limits without inference.
 
 | Parameter | Description |
 | --- | --- |
-| `--benchmark TEXT` | Exact catalog benchmark ID; repeat it or use all.  [default: all] May be repeated. |
-| `--model TEXT` | [required] |
-| `--base-url TEXT` | [required] |
-| `--source-root DIRECTORY` | Directory containing exact-pinned aiperf, inspect-evals, and harbor checkouts.  [required] |
+| `--manifest PATH` | [required] |
+| `--output PATH` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark preview` {#vllm-sr-benchmark-preview}
+
+```text
+Usage: vllm-sr benchmark preview [OPTIONS]
+```
+
+Inspect routing decisions without producing quality scores.
+
+| Parameter | Description |
+| --- | --- |
+| `--idempotency-key TEXT` | Bind repeated submissions to the same frozen plan, without reissuing calls. |
+| `--detach` | Return immediately with a durable run ID. Default: false. |
+| `--manifest PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark reconcile-usage` {#vllm-sr-benchmark-reconcile-usage}
+
+```text
+Usage: vllm-sr benchmark reconcile-usage [OPTIONS] RUN_ID
+```
+
+Append an offline accounting correction from saved streams; no inference.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark recover` {#vllm-sr-benchmark-recover}
+
+```text
+Usage: vllm-sr benchmark recover [OPTIONS] RUN_ID
+```
+
+Create a separate attempt from a reviewed recovery plan; never auto-retry.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--plan PATH` | [required] |
+| `--idempotency-key TEXT` | [required] |
+| `--acknowledge-new-attempt` | Authorize new paid attempts for the exact reviewed failed cells. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark recover-plan` {#vllm-sr-benchmark-recover-plan}
+
+```text
+Usage: vllm-sr benchmark recover-plan [OPTIONS] RUN_ID
+```
+
+Inspect eligible continuation cells without making model requests.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--mode CHOICE` | Choices: undispatched, failed. Default: undispatched. |
+| `--output PATH` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark regrade` {#vllm-sr-benchmark-regrade}
+
+```text
+Usage: vllm-sr benchmark regrade [OPTIONS] RUN_ID
+```
+
+Regrade saved MCQ/grid final outputs without mutating original evidence.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
 | `--output PATH` | [required] |
-| `--tokenizer TEXT` | [default: builtin] |
-| `--api-key-env TEXT` | [default: OPENAI_API_KEY] |
-| `--concurrency INTEGER` | [default: 8] |
-| `--reasoning-effort TEXT` | — |
-| `--sample-limit INTEGER` | — |
-| `--terminal-attempts INTEGER` | [default: 5] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark normalizers` {#vllm-sr-benchmark-normalizers}
+### `vllm-sr benchmark replay` {#vllm-sr-benchmark-replay}
 
 ```text
-Usage: vllm-sr benchmark normalizers [OPTIONS]
+Usage: vllm-sr benchmark replay [OPTIONS]
 ```
 
-Print the closed native-export contracts and explicit blockers.
+Estimate eligible static routes from saved answers without inference.
 
 | Parameter | Description |
 | --- | --- |
-| `--runnable-only` | Default: false. |
+| `--baseline TEXT` | Completed single-model answer matrix run ID.  [required] |
+| `--preview TEXT` | Completed deterministic routing preview run ID.  [required] |
+| `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark replay-options` {#vllm-sr-benchmark-replay-options}
+
+```text
+Usage: vllm-sr benchmark replay-options [OPTIONS] [BASELINE]
+```
+
+List eligible baselines, or compatible previews for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark report` {#vllm-sr-benchmark-report}
@@ -263,12 +526,12 @@ Print the closed native-export contracts and explicit blockers.
 Usage: vllm-sr benchmark report [OPTIONS] RUN_ID
 ```
 
-Read the local worker report draft.
+Show quality, four-bucket usage, cost, latency, time, and limitations.
 
 | Parameter | Description |
 | --- | --- |
 | `RUN_ID` | Required argument. Type: text. |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
+| `--output PATH` | — |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark run` {#vllm-sr-benchmark-run}
@@ -277,103 +540,108 @@ Read the local worker report draft.
 Usage: vllm-sr benchmark run [OPTIONS]
 ```
 
-Execute a manifest and print its finalized worker report draft.
+Execute one frozen live evaluation through the shared service.
 
 | Parameter | Description |
 | --- | --- |
+| `--idempotency-key TEXT` | Bind repeated submissions to the same frozen plan, without reissuing calls. |
+| `--detach` | Return immediately with a durable run ID. Default: false. |
 | `--manifest PATH` | [required] |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-install` {#vllm-sr-benchmark-suite-install}
+### `vllm-sr benchmark runs` {#vllm-sr-benchmark-runs}
 
 ```text
-Usage: vllm-sr benchmark suite-install [OPTIONS]
+Usage: vllm-sr benchmark runs [OPTIONS]
 ```
-
-Install a normalized suite as exploratory E0 evidence.
 
 | Parameter | Description |
 | --- | --- |
-| `--request FILE` | [required] |
-| `--bundle DIRECTORY` | [required] |
-| `--source-root DIRECTORY` | Ignored directory containing the exact-pinned benchmark checkout(s).  [required] |
-| `--export-root DIRECTORY` | Frozen export re-parsed to verify deterministic normalization; this does not attest upstream benchmark execution. |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-list` {#vllm-sr-benchmark-suite-list}
+### `vllm-sr benchmark serve` {#vllm-sr-benchmark-serve}
 
 ```text
-Usage: vllm-sr benchmark suite-list [OPTIONS]
+Usage: vllm-sr benchmark serve [OPTIONS]
 ```
 
-List browser-safe suite metadata without private artifact references.
+Own the durable journal and workers independently of a browser.
 
 | Parameter | Description |
 | --- | --- |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
+| `--host TEXT` | Default: 127.0.0.1. |
+| `--port INTEGER` | Default: 8090. |
+| `--store-identity TEXT` | Canonical host store path SHA256 for an isolated runtime container. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-normalize` {#vllm-sr-benchmark-suite-normalize}
+### `vllm-sr benchmark setup` {#vllm-sr-benchmark-setup}
 
 ```text
-Usage: vllm-sr benchmark suite-normalize [OPTIONS]
+Usage: vllm-sr benchmark setup [OPTIONS]
 ```
 
-Parse one native export into exploratory E0 replay evidence.
+Inspect prerequisites or explicitly install optional benchmark harnesses.
 
 | Parameter | Description |
 | --- | --- |
-| `--adapter TEXT` | [required] |
-| `--suite-id TEXT` | [required] |
-| `--suite-name TEXT` | — |
-| `--source-root DIRECTORY` | Ignored directory containing the exact-pinned benchmark checkout(s).  [required] |
-| `--export-root DIRECTORY` | Directory containing the adapter's frozen native export shape. Its origin is not attested by this command.  [required] |
-| `--output DIRECTORY` | New immutable directory for request.json and the normalized bundle.  [required] |
+| `--benchmark TEXT` | Default: all. |
+| `--install` | Install pinned optional harnesses and task sources; makes no model requests. Default: false. |
+| `--build-sandbox` | Build a local offline grading image and record its content digest. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-show` {#vllm-sr-benchmark-suite-show}
+### `vllm-sr benchmark show` {#vllm-sr-benchmark-show}
 
 ```text
-Usage: vllm-sr benchmark suite-show [OPTIONS] SUITE_ID
+Usage: vllm-sr benchmark show [OPTIONS] RUN_ID
 ```
 
-Print the immutable operator manifest for one installed suite.
+Read a run, bounded evidence page, or one complete saved call.
 
 | Parameter | Description |
 | --- | --- |
-| `SUITE_ID` | Required argument. Type: text. |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
+| `RUN_ID` | Required argument. Type: text. |
+| `--results` | Default: false. |
+| `--calls` | Default: false. |
+| `--active` | Read only in-progress calls; requires --calls. Default: false. |
+| `--events` | Default: false. |
+| `--after INTEGER RANGE` | Evidence cursor from the previous page.  [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | Calls/results per page.  [1&lt;=x&lt;=500] Default: 100. |
+| `--call-id TEXT` | Read one full saved call including prompt and final response. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark validate` {#vllm-sr-benchmark-validate}
+### `vllm-sr benchmark target` {#vllm-sr-benchmark-target}
 
 ```text
-Usage: vllm-sr benchmark validate [OPTIONS]
+Usage: vllm-sr benchmark target [OPTIONS] COMMAND [ARGS]...
 ```
 
-Validate a fixed evaluation manifest without executing it.
+Manage the operator-owned target registry used by the Dashboard.
 
 | Parameter | Description |
 | --- | --- |
-| `--manifest PATH` | [required] |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark verify-source` {#vllm-sr-benchmark-verify-source}
+### `vllm-sr benchmark target list` {#vllm-sr-benchmark-target-list}
 
 ```text
-Usage: vllm-sr benchmark verify-source [OPTIONS]
+Usage: vllm-sr benchmark target list [OPTIONS]
 ```
-
-Verify an ignored external source checkout against its exact pin.
 
 | Parameter | Description |
 | --- | --- |
-| `--adapter TEXT` | [required] |
-| `--source-root DIRECTORY` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark target register` {#vllm-sr-benchmark-target-register}
+
+```text
+Usage: vllm-sr benchmark target register [OPTIONS]
+```
+
+Replace the local registry from a JSON list of credential references.
+
+| Parameter | Description |
+| --- | --- |
+| `--file PATH` | [required] |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr completion` {#vllm-sr-completion}
@@ -456,12 +724,12 @@ Print generated configuration or run config subcommands.
 Examples:
 
 ```bash
-vllm-sr config envoy
-vllm-sr config router
 vllm-sr config init --output config.yaml
-vllm-sr config envoy --config my-config.yaml
+vllm-sr config validate --config config.yaml
+vllm-sr config apply --config config.yaml
+vllm-sr config router
 vllm-sr config migrate --config old.yaml
-vllm-sr config import --from openclaw --source openclaw.json
+vllm-sr config envoy    # with --gateway extproc
 ```
 
 | Parameter | Description |
@@ -476,12 +744,15 @@ Usage: vllm-sr config apply [OPTIONS]
 
 Plan, compare-and-swap, persist, and hot-reload a configuration.
 
+A change the running Router can't take without a restart is saved for the
+next `vllm-sr serve` of a local stack, as the Dashboard saves one.
+
 | Parameter | Description |
 | --- | --- |
 | `--config FILE` | [default: config.yaml] |
 | `--mode CHOICE` | [default: replace] Choices: replace, merge. |
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
-| `--timeout FLOAT` | [default: 15] |
+| `--timeout FLOAT` | [default: 120] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -512,22 +783,6 @@ Read the active canonical configuration from a Router.
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr config import` {#vllm-sr-config-import}
-
-```text
-Usage: vllm-sr config import [OPTIONS]
-```
-
-Import a supported external config source into canonical v0.3 YAML.
-
-| Parameter | Description |
-| --- | --- |
-| `--from CHOICE` | Import source type.  [required] Choices: openclaw. |
-| `--source TEXT` | Path to the source config file. Defaults to OpenClaw discovery order. |
-| `--target TEXT` | Path to the target canonical config file.  [default: config.yaml] |
-| `--force` | Overwrite existing backup files for the source or target paths. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr config init` {#vllm-sr-config-init}
@@ -576,19 +831,46 @@ Validate and plan an exact remote mutation without changing the Router.
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr config propose` {#vllm-sr-config-propose}
+
+```text
+Usage: vllm-sr config propose [OPTIONS]
+```
+
+Print a reviewable config proposal. This command does not apply it.
+
+Examples:
+
+```bash
+vllm-sr config propose --config config.yaml \
+    --intent selection.latency-aware --decision default-route
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
+| `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
+| `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr config rollback` {#vllm-sr-config-rollback}
 
 ```text
 Usage: vllm-sr config rollback [OPTIONS] VERSION
 ```
 
-Compare-and-swap the active configuration to a backup version.
+Compare-and-swap the active configuration to a recorded version.
+
+VERSION is a configuration version number from `vllm-sr config versions`,
+or the timestamp of a backup. The restored document activates as a new
+version.
 
 | Parameter | Description |
 | --- | --- |
 | `VERSION` | Required argument. Type: text. |
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
-| `--timeout FLOAT` | [default: 15] |
+| `--timeout FLOAT` | [default: 120] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -632,17 +914,26 @@ Usage: vllm-sr config validate [OPTIONS]
 
 Validate configuration file.
 
+The CLI's own checks run first. The Router's validation then decides, as
+it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
+Router in its local image (never pulled), or the running Router --endpoint
+names.
+
 Examples:
 
 ```bash
 vllm-sr config validate
 vllm-sr config validate --config my-config.yaml
+vllm-sr config validate --endpoint http://localhost:8080
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to config file (default: config.yaml) Default: config.yaml. |
-| `--endpoint TEXT` | Also validate with this running Router's authoritative parser. |
+| `--endpoint TEXT` | Validate with this running Router instead of the local Router image. |
+| `--image TEXT` | Router image whose own validation to run (default: the stack's, if present). |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: standalone). Choices: standalone, extproc. |
+| `--offline` | Run only the CLI's own checks, without the Router's validation. Default: false. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
@@ -653,7 +944,7 @@ vllm-sr config validate --config my-config.yaml
 Usage: vllm-sr config versions [OPTIONS]
 ```
 
-List immutable configuration backup versions.
+List the configuration history, newest first.
 
 | Parameter | Description |
 | --- | --- |
@@ -674,17 +965,54 @@ Examples:
 
 ```bash
 vllm-sr dashboard                   # Docker dashboard
-vllm-sr dashboard --target k8s      # Show K8s address and port forward
+vllm-sr dashboard --target kubernetes  # Show K8s address and port forward
 vllm-sr dashboard --no-open
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--no-open` | Don't open browser, just show URL Default: false. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr instance` {#vllm-sr-instance}
+
+```text
+Usage: vllm-sr instance [OPTIONS] COMMAND [ARGS]...
+```
+
+Inspect the serving state of an existing local instance.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | Default: config.yaml. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance models` {#vllm-sr-instance-models}
+
+```text
+Usage: vllm-sr instance models [OPTIONS]
+```
+
+Print actual native model cards for readiness checks, without inference.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance status` {#vllm-sr-instance-status}
+
+```text
+Usage: vllm-sr instance status [OPTIONS]
+```
+
+Print desired/observed mode and durable operation state.
+
+| Parameter | Description |
+| --- | --- |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr logs` {#vllm-sr-logs}
@@ -703,18 +1031,18 @@ vllm-sr logs router
 vllm-sr logs dashboard
 vllm-sr logs envoy --follow
 vllm-sr logs router -f
-vllm-sr logs router --target k8s        # Kubernetes logs
-vllm-sr logs router --target k8s -f     # Follow K8s logs
+vllm-sr logs router --target kubernetes     # Kubernetes logs
+vllm-sr logs router --target kubernetes -f  # Follow K8s logs
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `SERVICE` | Required argument. Type: choice. Choices: envoy, router, dashboard. |
 | `-f, --follow` | Follow log output Default: false. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr optimize` {#vllm-sr-optimize}
@@ -740,7 +1068,7 @@ Analyze replay and outcomes to produce recipe-learning artifacts.
 | Parameter | Description |
 | --- | --- |
 | `--replay-file FILE` | Router replay JSON file. Accepts a router_replay.list payload or a record array. |
-| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080 when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
+| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080, with VLLM_SR_PORT_OFFSET added to the port, when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
 | `--cases-file FILE` | Optional eval cases JSON with replay_id/request_id plus expected_decision or expected_model. |
 | `--recipe-file FILE` | Optional current recipe YAML used to materialize complete candidate recipe variants. |
 | `--limit INTEGER` | Replay records to fetch from the endpoint.  [default: 100] |
@@ -940,7 +1268,7 @@ Validate a recipe against the running Router without changing config.
 Usage: vllm-sr request [OPTIONS] COMMAND [ARGS]...
 ```
 
-Send requests through an Envoy listener.
+Send requests through the stack's listener.
 
 | Parameter | Description |
 | --- | --- |
@@ -1003,13 +1331,17 @@ Preview routing decisions or probe the routed inference path.
 Usage: vllm-sr route preview [OPTIONS]
 ```
 
-Preview signals and the selected route without calling a model backend.
+Preview signals and model selection without generating an answer.
 
 | Parameter | Description |
 | --- | --- |
 | `--prompt TEXT` | Plain text prompt to evaluate. |
 | `--messages TEXT` | OpenAI-style messages JSON array string. |
 | `--model TEXT` | Routing model or entrypoint whose recipe should be evaluated. |
+| `--request-file FILE` | JSON Router Preview request; supported Chat messages and prompt fields only. |
+| `--session-id TEXT` | Read-only Learning session identity. |
+| `--conversation-id TEXT` | Read-only Learning conversation identity. |
+| `--sampling-seed INTEGER RANGE` | Preview-only exploration seed; does not fix a later live random draw.  [-9223372036854775808&lt;=x&lt;=9223372036854775807] |
 | `--endpoint TEXT` | Router management origin or /api/v1 root; defaults to the local management port. |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--trace / --no-trace` | Include per-decision routing trace trees. Default: false. |
@@ -1049,7 +1381,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 ## `vllm-sr serve` {#vllm-sr-serve}
 
 ```text
-Usage: vllm-sr serve [OPTIONS]
+Usage: vllm-sr serve [OPTIONS] [MODEL]
 ```
 
 Start vLLM Semantic Router.
@@ -1058,24 +1390,36 @@ Serve uses --config or config.yaml and preserves the Dashboard-first setup flow.
 Connect physical models and publish Mixture-of-Model entrypoints in the
 Dashboard, then keep the same stack running with this single command.
 
-Virtual models are routing policies. Semantic Router starts Router, Envoy, the
-Dashboard, and supporting services; it does not download or launch the physical
-LLM engines referenced by provider backends. Connect user-owned single or
-multiple model endpoints through one canonical config or the Dashboard.
+Virtual models are routing policies. Semantic Router starts the Router, which
+serves the OpenAI-compatible API itself, the Dashboard and supporting services;
+it does not download or launch the physical LLM engines referenced by provider
+backends. Connect user-owned single or multiple model endpoints through one
+canonical config or the Dashboard.
 
 Ports are configured in the selected config under the listeners section.
 
 Local startup waits up to 1800 seconds for Router readiness, or Dashboard
-readiness during first-run setup. Use --startup-timeout SECONDS for a different
+readiness during first-run setup. During setup the command keeps waiting, and
+once you activate a config in the Dashboard it starts the Router from it. Use --startup-timeout SECONDS for a different
 positive budget when model loading or GPU compilation needs more time.
 The wait begins after containers start. It does not change inference deadlines.
 Timeout exits the CLI with an error and leaves containers available for inspection.
 
+GATEWAY MODES:
+
+```text
+standalone - The Router serves the OpenAI-compatible API itself (default)
+extproc    - An Envoy-based gateway in front of the Router: the Envoy container
+             on docker, as before standalone became the default; your gateway
+             on kubernetes
+```
+
 DEPLOYMENT TARGETS:
 
 ```text
-docker  - Local Docker deployment (default)
-k8s     - Kubernetes deployment via Helm
+docker     - Local Docker deployment (default)
+kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
+             release only)
 ```
 
 MODEL SELECTION ALGORITHMS:
@@ -1092,6 +1436,7 @@ kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
+random     - Uniform pick among eligible candidates (no configuration)
 ```
 
 Cross-request learning lives under global.router.learning.adaptation and
@@ -1102,12 +1447,14 @@ Examples:
 ```text
 # Dashboard-first setup or an existing ./config.yaml
 vllm-sr serve
+# Envoy in front of the Router, as before standalone became the default
+vllm-sr serve --gateway extproc
 # User-owned single or multi-model topology
 vllm-sr serve --config my-models.yaml
 # Explicitly replace Dashboard-edited runtime state from reviewed source YAML
 vllm-sr serve --config my-models.yaml --replace-active-config
 # Deploy a user-owned config to Kubernetes
-vllm-sr serve --target k8s --config my-models.yaml --namespace my-ns
+vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
 # Runtime policy and image overrides
 vllm-sr serve --algorithm latency_aware
 vllm-sr serve --image-pull-policy always
@@ -1115,33 +1462,74 @@ vllm-sr serve --readonly
 vllm-sr serve --minimal
 vllm-sr serve --log-level debug
 # AMD ROCm image, device passthrough, and router internal GPU defaults
-vllm-sr serve --platform amd
-vllm-sr serve --platform amd --startup-timeout 7200
-VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
+vllm-sr serve --platform rocm
+vllm-sr serve --platform rocm --startup-timeout 7200
+VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform rocm
 ```
+
+```text
+INSTANCE MODES:
+```
+
+```text
+vllm-sr serve
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine
+vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm -dp 2 --device-ids 0
+```
+
+Without --engine the instance starts in Router mode, including on restart.
+--engine (-e) disables recipe routing and serves the model. On the docker
+target only the Router container (the frontend, the native System One APIs
+and the model runtime) starts; --dashboard, --observability or --no-minimal
+add the rest. Without --config, and with no ./config.yaml, Engine mode keeps
+each model's config and state in ~/.local/state/vllm-sr/engine/&lt;model&gt; and
+prints a short summary (--verbose prints every detail). Saved routing
+configuration is retained.
+
+MODEL overrides the configured default judgment deployment's artifact.
+Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
+0.3B). Only explicit model, placement and engine options override saved
+settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
+and --enable-shared-context set the deployment's engine arguments.
+Backend LLMs, named deployments, listeners and API grants belong in --config.
 
 | Parameter | Description |
 | --- | --- |
+| `[MODEL]` | Optional argument. Type: text. |
+| `-e, --engine` | Start without recipe routing; otherwise start Router mode. Default: false. |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
 | `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:latest) |
 | `--router-image TEXT` | Docker image for the router container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
-| `--envoy-image TEXT` | Docker image for the Envoy container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
+| `--envoy-image TEXT` | Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
+| `--restart-policy CHOICE` | Restart policy of the containers this start creates: no (default), on-failure, unless-stopped, always. unless-stopped and always restart a crashed container and bring the stack back after a host reboot; vllm-sr stop still stops it. Choices: no, on-failure, unless-stopped, always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
-| `--minimal` | Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana) Default: false. |
-| `--log-level CHOICE` | Router log level override (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
-| `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). MIGraphX mmBERT embeddings require an explicit model binding and deployment with an input token budget. Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. |
-| `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--minimal / --no-minimal` | Start without the Dashboard, sr-bench and the observability stack (Jaeger, Prometheus, Grafana). The default in engine mode; --no-minimal starts them all. |
+| `--dashboard` | Also start the Dashboard and sr-bench when minimal (engine mode's default). Default: false. |
+| `--observability` | Also start Jaeger, Prometheus and Grafana when minimal (engine mode's default). Default: false. |
+| `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
+| `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
+| `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--profile TEXT` | Deployment profile: dev, prod (kubernetes target only). Selects values-&lt;profile&gt;.yaml defaults. |
+| `--chart-dir TEXT` | Path to Helm chart directory (kubernetes target only; default: ./deploy/helm/semantic-router, else the published chart for this version) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
+| `--revision TEXT` | Optional model branch, tag or commit; resolved once to an immutable startup revision. |
+| `-dp, --data-parallel-size INTEGER RANGE` | Number of model replicas. Preserve configured placement; new GPU deployments use distinct available GPUs.  [1&lt;=x&lt;=64] |
+| `--device-ids IDS` | Docker host GPU indices, e.g. 0 or 0,1. One index shares a GPU across replicas; otherwise use one per replica. Existing visibility masks are respected, not changed. |
+| `--max-num-seqs INTEGER RANGE` | Most rows one model forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone. Unset, the runtime picks it by the device (256 on GPUs with 160 GB or more, fewer on smaller ones, 8192 on the CPU).  [x&gt;=1] |
+| `--max-num-batched-tokens INTEGER RANGE` | Tokens one model forward may hold: the sum of its rows for models that pack merged rows, else its rows times its longest row. Unset, the runtime picks it by the device and a short startup calibration (at most 32768 on GPUs with 160 GB or more, 65536 on the CPU).  [x&gt;=8] |
+| `--batch-window-ms FLOAT RANGE` | How long the model runtime waits after the first request to collect more (runtime default 2.0).  [0&lt;=x&lt;=1000] |
+| `--dtype CHOICE` | Precision the model computes in; auto (the runtime default) is the one it was published in. Choices: auto, float32, bfloat16, float16. |
+| `--enable-shared-context / --no-enable-shared-context` | Compute the shared state of a multi-question decision request once (runtime default: on where the model family's records show no accuracy loss, Decision 2.0). |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}
@@ -1159,16 +1547,16 @@ vllm-sr status              # Show all services (Docker)
 vllm-sr status all          # Show all services
 vllm-sr status router       # Show router status
 vllm-sr status dashboard    # Show dashboard status
-vllm-sr status --target k8s # Show Kubernetes status
+vllm-sr status --target kubernetes  # Show Kubernetes status
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `[SERVICE]` | Optional argument. Type: choice. Choices: envoy, router, dashboard, all. Default: all. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr stop` {#vllm-sr-stop}
@@ -1183,15 +1571,15 @@ Examples:
 
 ```bash
 vllm-sr stop                # Stop Docker stack
-vllm-sr stop --target k8s   # Uninstall Helm release
+vllm-sr stop --target kubernetes  # Uninstall Helm release
 ```
 
 | Parameter | Description |
 | --- | --- |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr storage` {#vllm-sr-storage}

@@ -99,7 +99,13 @@ func TestMaterializedHistoryIsNotRepeatedBySessionOrMemoryReaders(t *testing.T) 
 			t.Fatalf("session context repeated retained history: %v", history)
 		}
 		_, _, messages, err := extractMemoryInfo(ctx)
-		if (err == nil) != authenticated || len(messages) != len(request.Messages) {
+		if !authenticated {
+			if err == nil || len(messages) != 0 {
+				t.Fatalf("unauthenticated memory history was materialized: got=%d err=%v", len(messages), err)
+			}
+			continue
+		}
+		if err != nil || len(messages) != len(request.Messages) {
 			t.Fatalf("memory history duplicated or lost the conversation: got=%d want=%d err=%v", len(messages), len(request.Messages), err)
 		}
 	}

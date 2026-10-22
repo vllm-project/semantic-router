@@ -1,12 +1,12 @@
 # Large multimodal embedding training
 
 This package trains and packages
-[`llm-semantic-router/multi-modal-embed-large`](https://huggingface.co/llm-semantic-router/multi-modal-embed-large).
+[`vllm-sr/multi-modal-embed-large`](https://huggingface.co/vllm-sr/multi-modal-embed-large).
 `artifacts.json` maps the public artifact to its local config and entrypoints.
 
 The released artifact and `configs/production.yaml` use the same tri-encoder:
 
-- text: `llm-semantic-router/mmbert-embed-32k-2d-matryoshka`;
+- text: `vllm-sr/mmbert-embed-32k-2d-matryoshka`;
 - image: `google/siglip2-so400m-patch14-384`;
 - audio: `openai/whisper-medium`;
 - shared output: 768 dimensions, with text up to 32,768 tokens.

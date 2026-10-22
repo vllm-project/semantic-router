@@ -3,114 +3,86 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
-func TestRetrieveExternalRAGWindowsRanksByBestScore(t *testing.T) {
+func TestRetrieveFromExternalAPIEmbedsTheQueryOnce(t *testing.T) {
 	tests := []struct {
-		name      string
-		format    string
-		responses []map[string]interface{}
+		format   string
+		response map[string]interface{}
+		vector   string
 	}{
 		{
-			name:   "pinecone similarity",
 			format: "pinecone",
-			responses: []map[string]interface{}{
-				pineconeResponse(pineconeMatch("first", 0.1), pineconeMatch("shared", 0.2)),
-				pineconeResponse(pineconeMatch("best", 0.9), pineconeMatch("shared", 0.8)),
-				pineconeResponse(pineconeMatch("third", 0.7)),
-			},
+			response: map[string]interface{}{"matches": []interface{}{
+				map[string]interface{}{"metadata": map[string]interface{}{"content": "first"}},
+				map[string]interface{}{"metadata": map[string]interface{}{"text": "second"}},
+				map[string]interface{}{"metadata": map[string]interface{}{"content": "third"}},
+			}},
+			vector: `"vector":[1,0,0]`,
 		},
 		{
-			name:   "weaviate distance",
 			format: "weaviate",
-			responses: []map[string]interface{}{
-				weaviateResponse(weaviateDocument("first", 0.9), weaviateDocument("shared", 0.8)),
-				weaviateResponse(weaviateDocument("best", 0.1), weaviateDocument("shared", 0.2)),
-				weaviateResponse(weaviateDocument("third", 0.3)),
-			},
+			response: map[string]interface{}{"data": map[string]interface{}{"Get": map[string]interface{}{"Document": []interface{}{
+				map[string]interface{}{"content": "first"},
+				map[string]interface{}{"content": "second"},
+				map[string]interface{}{"content": "third"},
+			}}}},
+			vector: "vector: [1,0,0]",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var requestIndex atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				index := int(requestIndex.Add(1)) - 1
-				if index >= len(tt.responses) {
-					t.Errorf("received unexpected request %d", index+1)
-					http.Error(w, "unexpected request", http.StatusInternalServerError)
-					return
+		t.Run(tt.format, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				body, err := io.ReadAll(r.Body)
+				if err != nil || !strings.Contains(string(body), tt.vector) {
+					t.Errorf("request does not carry the query vector %s: %s", tt.vector, body)
 				}
-				response := tt.responses[index]
-				if err := json.NewEncoder(w).Encode(response); err != nil {
+				if err := json.NewEncoder(w).Encode(tt.response); err != nil {
 					t.Errorf("encode response: %v", err)
 				}
 			}))
 			defer server.Close()
 
-			requestBodies := make([][]byte, len(tt.responses))
-			for i := range requestBodies {
-				requestBodies[i] = []byte(`{}`)
+			embedder := &plainRAGEmbedder{}
+			router := &OpenAIRouter{Embeddings: embedding.NewSet(
+				map[string]embedding.Provider{config.RAGQueryEmbeddingModel: embedder},
+				config.RAGQueryEmbeddingModel,
+			)}
+			topK := 2
+			ragConfig := &config.RAGPluginConfig{
+				Enabled:       true,
+				Backend:       "external_api",
+				TopK:          &topK,
+				BackendConfig: config.MustStructuredPayload(&config.ExternalAPIRAGConfig{Endpoint: server.URL, RequestFormat: tt.format}),
 			}
-			documents, _, err := (&OpenAIRouter{}).retrieveExternalRAGWindows(
-				context.Background(),
-				&config.ExternalAPIRAGConfig{Endpoint: server.URL, RequestFormat: tt.format},
-				requestBodies,
-				3,
-			)
+			query := strings.Repeat("a long preamble before the question. ", 64) + "how long does a refund take"
+
+			retrieved, err := router.retrieveFromExternalAPI(context.Background(), &RequestContext{UserContent: query}, ragConfig)
 			if err != nil {
-				t.Fatalf("retrieveExternalRAGWindows() error = %v", err)
+				t.Fatalf("retrieveFromExternalAPI() error = %v", err)
 			}
-			if got := int(requestIndex.Load()); got != len(tt.responses) {
-				t.Fatalf("sent %d requests, want %d", got, len(tt.responses))
+			if got := requests.Load(); got != 1 {
+				t.Fatalf("sent %d requests, want 1", got)
 			}
-			want := []string{"best", "shared", "third"}
-			if !reflect.DeepEqual(documents, want) {
-				t.Fatalf("documents = %v, want %v", documents, want)
+			if len(embedder.seen) != 1 || embedder.seen[0] != query {
+				t.Fatalf("embedded %q, want the whole query once", embedder.seen)
+			}
+			if want := "first\n\n---\n\nsecond"; retrieved != want {
+				t.Fatalf("retrieved %q, want the first top_k documents %q", retrieved, want)
 			}
 		})
-	}
-}
-
-func pineconeResponse(matches ...map[string]interface{}) map[string]interface{} {
-	values := make([]interface{}, len(matches))
-	for i, match := range matches {
-		values[i] = match
-	}
-	return map[string]interface{}{"matches": values}
-}
-
-func pineconeMatch(content string, score float64) map[string]interface{} {
-	return map[string]interface{}{
-		"metadata": map[string]interface{}{"content": content},
-		"score":    score,
-	}
-}
-
-func weaviateResponse(documents ...map[string]interface{}) map[string]interface{} {
-	values := make([]interface{}, len(documents))
-	for i, document := range documents {
-		values[i] = document
-	}
-	return map[string]interface{}{
-		"data": map[string]interface{}{
-			"Get": map[string]interface{}{"Document": values},
-		},
-	}
-}
-
-func weaviateDocument(content string, distance float64) map[string]interface{} {
-	return map[string]interface{}{
-		"content":     content,
-		"_additional": map[string]interface{}{"distance": distance},
 	}
 }
 

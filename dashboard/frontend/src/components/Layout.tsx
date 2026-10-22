@@ -22,7 +22,8 @@ import {
   type LayoutNavLink,
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
-import { useReadonly } from '../contexts/ReadonlyContext'
+import { useCapability } from '../contexts/CapabilitiesContext'
+import { isCapabilityUsable } from '../contexts/dashboardCapabilities'
 import { canAccessDashboardPath, canAccessMLSetup, canViewUsers } from '../utils/accessControl'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 
@@ -56,12 +57,13 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
-  const { evaluationAvailable } = useReadonly()
+  const evaluationAvailable = isCapabilityUsable(useCapability('evaluation'))
+  const mlSetupAvailable = isCapabilityUsable(useCapability('mlPipeline'))
   const location = useLocation()
   const configSection = getConfigSectionFromPathname(location.pathname)
   const navigate = useNavigate()
   const canAccessUsers = canViewUsers(user)
-  const canUseMLSetup = canAccessMLSetup(user)
+  const canUseMLSetup = canAccessMLSetup(user) && mlSetupAvailable
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(
@@ -159,7 +161,7 @@ const Layout: React.FC<LayoutProps> = ({
         isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
       }
       onFocus={() => void preloadDashboardRoute(link.to)}
-      onPointerEnter={() => void preloadDashboardRoute(link.to)}
+      onPointerDown={() => void preloadDashboardRoute(link.to)}
       onClick={closeMenus}
     >
       <ProductIcon name={link.icon} className={styles.navIcon} />

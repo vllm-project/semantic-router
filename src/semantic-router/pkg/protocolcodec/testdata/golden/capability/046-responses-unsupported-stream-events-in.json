@@ -92,26 +92,6 @@
       }
     },
     {
-      "name": "response.custom_tool_call_input.delta",
-      "stream": {
-        "public_model": "public-model",
-        "provider_model": "provider-model",
-        "chunks": [
-          "event: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":0}\n\n"
-        ]
-      }
-    },
-    {
-      "name": "response.custom_tool_call_input.done",
-      "stream": {
-        "public_model": "public-model",
-        "provider_model": "provider-model",
-        "chunks": [
-          "event: response.custom_tool_call_input.done\ndata: {\"type\":\"response.custom_tool_call_input.done\",\"sequence_number\":0}\n\n"
-        ]
-      }
-    },
-    {
       "name": "response.file_search_call.completed",
       "stream": {
         "public_model": "public-model",

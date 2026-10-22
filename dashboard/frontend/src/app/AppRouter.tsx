@@ -12,16 +12,18 @@ import SetupStatusPage from './SetupStatusPage'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { useCapabilities } from '../contexts/CapabilitiesContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const { user } = useAuth()
+  const { user, refreshSession } = useAuth()
+  const { refreshSettings } = useReadonly()
   const {
-    isLoading: settingsLoading,
-    evaluationAvailable,
-    evaluationUnavailableReason,
-  } = useReadonly()
-  const canUseMLSetup = canAccessMLSetup(user)
+    capabilities,
+    isLoading: capabilitiesLoading,
+    error: capabilitiesError,
+    refreshCapabilities,
+  } = useCapabilities()
 
   if (isLoading) {
     return <ProductLoadingState label="Opening your workspace" />
@@ -62,12 +64,17 @@ const AppRouter: React.FC = () => {
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              canUseMLSetup,
+              canAccessMLSetup: canAccessMLSetup(user),
               user,
               setupMode,
-              settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
+              capabilities,
+              capabilitiesLoading,
+              capabilitiesError,
+              onRefreshAccess: () => {
+                refreshSettings()
+                refreshCapabilities()
+                void refreshSession()
+              },
             })}
           </Route>
         </Route>

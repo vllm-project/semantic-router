@@ -67,3 +67,123 @@ func TestValidateMemoryNilConfig(t *testing.T) {
 		t.Fatalf("nil config must be valid, got: %v", err)
 	}
 }
+
+func TestValidateMemoryBackend(t *testing.T) {
+	tests := []struct {
+		name    string
+		backend string
+		setup   func(*MemoryConfig)
+		wantErr string
+	}{
+		{name: "default backend", backend: ""},
+		{name: "milvus", backend: "milvus"},
+		{name: "qdrant", backend: "qdrant", setup: func(cfg *MemoryConfig) {
+			cfg.Qdrant = &MemoryQdrantConfig{Host: "localhost"}
+		}},
+		{name: "valkey", backend: "valkey", setup: func(cfg *MemoryConfig) {
+			cfg.Valkey = &MemoryValkeyConfig{Host: "localhost"}
+		}},
+		{name: "unknown backend", backend: "qdrnt", wantErr: "not supported"},
+		{name: "qdrant block missing", backend: "qdrant", wantErr: "qdrant must be configured"},
+		{name: "valkey block missing", backend: "valkey", wantErr: "valkey must be configured"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &MemoryConfig{Backend: tc.backend}
+			if tc.setup != nil {
+				tc.setup(cfg)
+			}
+			err := validateMemoryContracts(&RouterConfig{Memory: *cfg})
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("valid backend rejected: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateMemoryGlobalRetrievalLimit(t *testing.T) {
+	cases := []struct {
+		name    string
+		limit   int
+		wantErr bool
+	}{
+		{"unset_zero_ok", 0, false},
+		{"positive_ok", 5, false},
+		{"negative_rejected", -1, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &RouterConfig{}
+			cfg.Memory.DefaultRetrievalLimit = tc.limit
+			err := validateMemoryContracts(cfg)
+			if tc.wantErr != (err != nil) {
+				t.Fatalf("default_retrieval_limit=%d: wantErr=%v, got err=%v", tc.limit, tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateMemoryPerDecisionPluginContracts(t *testing.T) {
+	mkDecision := func(name string, configuration map[string]interface{}) Decision {
+		return Decision{
+			Name: name,
+			Plugins: []DecisionPlugin{{
+				Type:          "memory",
+				Configuration: MustStructuredPayload(configuration),
+			}},
+		}
+	}
+
+	okCfg := &RouterConfig{}
+	okCfg.Decisions = []Decision{mkDecision("route_ok", map[string]interface{}{
+		"enabled":         true,
+		"hybrid_mode":     "rrf",
+		"retrieval_limit": 3,
+		"reflection":      map[string]interface{}{"algorithm": "noop"},
+	})}
+	if err := validateMemoryContracts(okCfg); err != nil {
+		t.Fatalf("valid per-decision memory plugin rejected: %v", err)
+	}
+
+	cases := []struct {
+		name          string
+		configuration map[string]interface{}
+		wantInError   string
+	}{
+		{
+			name:          "negative retrieval limit",
+			configuration: map[string]interface{}{"enabled": true, "retrieval_limit": -3},
+			wantInError:   "retrieval_limit",
+		},
+		{
+			name:          "zero retrieval limit",
+			configuration: map[string]interface{}{"enabled": true, "retrieval_limit": 0},
+			wantInError:   "retrieval_limit",
+		},
+		{
+			name:          "out-of-range dedup threshold",
+			configuration: map[string]interface{}{"enabled": true, "reflection": map[string]interface{}{"dedup_threshold": 1.5}},
+			wantInError:   "dedup_threshold",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &RouterConfig{}
+			cfg.Decisions = []Decision{mkDecision("route_bad", tc.configuration)}
+			err := validateMemoryContracts(cfg)
+			if err == nil {
+				t.Fatalf("invalid per-decision memory config %v must be rejected", tc.configuration)
+			}
+			if !strings.Contains(err.Error(), "route_bad") || !strings.Contains(err.Error(), tc.wantInError) {
+				t.Fatalf("error should name the decision and field, got: %v", err)
+			}
+		})
+	}
+}

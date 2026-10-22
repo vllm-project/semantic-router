@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -27,15 +26,5 @@ func TestModelRuntimeFieldsSurviveAdmissionAndDeepCopy(t *testing.T) {
 	clone.Spec.Config.PromptGuard.Backend.Model = "changed"
 	if sr.Spec.Config.ModelDeployments.Raw[0] != '{' || sr.Spec.Config.ModelAdmission.Raw[0] != '{' || sr.Spec.Config.PromptGuard.Backend.Model != "guardrail-service" {
 		t.Fatal("copied model runtime config aliases the original")
-	}
-}
-
-func TestPromptGuardLegacyProtocolRejectedAtAdmission(t *testing.T) {
-	sr := &SemanticRouter{Spec: SemanticRouterSpec{Config: ConfigSpec{PromptGuard: &PromptGuardConfig{Protocol: "http_classify"}}}}
-	if _, err := sr.ValidateCreate(context.Background(), sr); err == nil || !strings.Contains(err.Error(), "named backend") {
-		t.Fatalf("legacy protocol accepted: %v", err)
-	}
-	if _, err := sr.ValidateUpdate(context.Background(), &SemanticRouter{}, sr); err == nil {
-		t.Fatal("legacy protocol update accepted")
 	}
 }

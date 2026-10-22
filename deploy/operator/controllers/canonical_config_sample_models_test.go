@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -14,7 +15,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestDefaultOperatorSamplesSelectVelaModels(t *testing.T) {
+func TestDefaultOperatorSamplesSelectTheVela2Defaults(t *testing.T) {
 	for _, name := range []string{
 		"vllm_v1alpha1_semanticrouter.yaml",
 		"vllm.ai_v1alpha1_semanticrouter_openshift.yaml",
@@ -29,29 +30,71 @@ func TestDefaultOperatorSamplesSelectVelaModels(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			const prefix = "models/Vela-1.0-Encoder-307M-"
-			if cfg.MmBertModelPath != prefix+"Embedding" {
+			if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" {
 				t.Fatalf("embedding artifact = %q", cfg.MmBertModelPath)
 			}
-			if cfg.PromptGuard.ModelID != prefix+"Guard" || cfg.PromptGuard.Variant != routerconfig.PromptGuardVariantMmBERT32K {
+			if cfg.PromptGuard.ModelID != routerconfig.Vela2SignalModel || cfg.PromptGuard.Threshold != .75 {
 				t.Fatalf("guard model = %+v", cfg.PromptGuard)
 			}
-			if cfg.CategoryModel.ModelID != prefix+"Domain" || cfg.Variant != routerconfig.CategoryVariantMmBERT32K {
+			if cfg.CategoryModel.ModelID != routerconfig.Vela2SignalModel {
 				t.Fatalf("domain model = %+v", cfg.CategoryModel)
 			}
-			if cfg.PIIModel.ModelID != prefix+"PII" || !cfg.PIIModel.UseMmBERT32K || cfg.PIIMappingPath != prefix+"PII/pii_mapping.json" {
+			if cfg.PIIModel.ModelID != routerconfig.Vela2SignalModel || cfg.PIIMappingPath != "" {
 				t.Fatalf("PII model = %+v", cfg.PIIModel)
 			}
 		})
 	}
 }
 
-func TestTypedOperatorSampleUsesPublishedPIIMapping(t *testing.T) {
+func TestTypedOperatorSampleServesThePinnedVelaPII(t *testing.T) {
 	canonical := sampleModelConfig(t, "vllm.ai_v1alpha1_semanticrouter_model_runtime.yaml")
 	binding := canonical.Routing.ModelBindings["pii_classifier"]
-	want := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier.PII.PIIMappingPath
-	if binding.MappingPath != want {
-		t.Fatalf("PII binding requests %q, published Vela mapping is %q", binding.MappingPath, want)
+	if binding.MappingPath != "" {
+		t.Fatalf("PII binding names a mapping file instead of the served labels: %q", binding.MappingPath)
+	}
+	release := routerconfig.GetModelByPath("models/Vela-1.0-Encoder-307M-PII")
+	deployment := canonical.Global.ModelCatalog.Deployments[binding.Deployment]
+	if !deployment.IsModelRuntime() || deployment.Artifact != release.RepoID || deployment.Revision != release.Revision {
+		t.Fatalf("PII deployment is not the pinned Vela release on the model runtime: %+v", deployment)
+	}
+}
+
+func TestOperatorCIUsesCanonicalVelaModels(t *testing.T) {
+	workflow, err := os.ReadFile("../../../.github/workflows/operator-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, resource, ok := strings.Cut(string(workflow), "          apiVersion: vllm.ai/v1alpha1\n")
+	if !ok {
+		t.Fatal("operator CI SemanticRouter resource is missing")
+	}
+	resource, _, ok = strings.Cut(resource, "\n          EOF")
+	if !ok {
+		t.Fatal("operator CI resource heredoc is not terminated")
+	}
+	lines := []string{"apiVersion: vllm.ai/v1alpha1"}
+	for _, line := range strings.Split(resource, "\n") {
+		lines = append(lines, strings.TrimPrefix(line, "          "))
+	}
+	canonical := operatorModelConfig(t, []byte(strings.Join(lines, "\n")))
+	data, err := yaml.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := routerconfig.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := routerconfig.DefaultGlobalConfig()
+	system := routerconfig.DefaultSystemModels()
+	if cfg.MmBertModelPath != defaults.MmBertModelPath || cfg.EmbeddingConfig.ModelType != "mmbert" || !cfg.UseCPU {
+		t.Fatalf("CI embedding must use the canonical CPU model: %+v", cfg.EmbeddingModels)
+	}
+	if cfg.CategoryModel.ModelID != system.DomainClassifier || !cfg.CategoryModel.UseCPU {
+		t.Fatalf("CI domain classifier must inherit canonical CPU defaults: %+v", cfg.CategoryModel)
+	}
+	if cfg.PIIModel.ModelID != system.PIIClassifier || !cfg.PIIModel.UseCPU {
+		t.Fatalf("CI PII classifier must inherit canonical CPU defaults: %+v", cfg.PIIModel)
 	}
 }
 
@@ -84,8 +127,13 @@ func sampleModelConfig(t *testing.T, name string) *routerconfig.CanonicalConfig 
 	if err != nil {
 		t.Fatal(err)
 	}
+	return operatorModelConfig(t, data)
+}
+
+func operatorModelConfig(t *testing.T, data []byte) *routerconfig.CanonicalConfig {
+	t.Helper()
 	var sample vllmv1alpha1.SemanticRouter
-	if err = kubeyaml.Unmarshal(data, &sample); err != nil {
+	if err := kubeyaml.Unmarshal(data, &sample); err != nil {
 		t.Fatal(err)
 	}
 	// Backend discovery is independent of model configuration and needs a

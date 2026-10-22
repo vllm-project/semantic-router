@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -24,8 +26,10 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"kmeans":        selection.MethodKMeans,
 	"svm":           selection.MethodSVM,
 	"multi_factor":  selection.MethodMultiFactor,
+	"random":        selection.MethodRandom,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
+	"decision":      selection.MethodDecision,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -36,29 +40,35 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	candidates []config.Decision,
 ) (*classification.SignalResults, error) {
 	signalStart := time.Now()
-	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
+	_, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
+	defer signalSpan.End()
+	defer observeRoutingStage(ctx, "signals", signalStart)
 
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil {
+		signalSpan.SetStatus(codes.Error, "recipe_classifier_unavailable")
 		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
 	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
-		Text:                   signalInput.compressedText,
-		ContextText:            signalInput.allMessagesText,
-		CurrentUserText:        signalInput.currentUserText,
-		PriorUserMessages:      signalInput.priorUserMessages,
-		NonUserMessages:        nonUserMessages,
-		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
-		ImageURL:               ctx.RequestImageURL,
-		UncompressedText:       signalInput.evaluationText,
-		SkipCompressionSignals: signalInput.skipCompressionSignals,
-		ConversationFacts:      signalInput.conversationFacts,
-		RequestFacts:           signalInput.requestFacts,
+		ToolResultTexts:          signalInput.toolResultTexts,
+		ToolResultScanIncomplete: signalInput.toolResultScanIncomplete,
+		Text:                     signalInput.compressedText,
+		ContextText:              signalInput.allMessagesText,
+		CurrentUserText:          signalInput.currentUserText,
+		PriorUserMessages:        signalInput.priorUserMessages,
+		NonUserMessages:          nonUserMessages,
+		HasPriorAssistantReply:   signalInput.hasAssistantReply,
+		Headers:                  ctx.Headers,
+		ImageURL:                 ctx.RequestImageURL,
+		Audio:                    ctx.RequestAudio,
+		UncompressedText:         signalInput.evaluationText,
+		SkipCompressionSignals:   signalInput.skipCompressionSignals,
+		ConversationFacts:        signalInput.conversationFacts,
+		RequestFacts:             signalInput.requestFacts,
 	})
 	if authzErr != nil {
-		signalSpan.End()
+		signalSpan.SetStatus(codes.Error, "signal_evaluation_failed")
 		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"stage":      "authz",
@@ -72,8 +82,9 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	ensureContextTokenCount(ctx, signalInput)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	logSignalPhaseTiming(ctx, signalLatency, signals)
-	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
-	ctx.TraceContext = signalCtx
+	observeSignalEvidence(ctx, signalSpan)
+	observeProjectionResults(ctx, signalSpan)
+	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 0, signalLatency, false)
 	return signals, nil
 }
 
@@ -149,6 +160,8 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"action":         signals.MatchedActionRules,
+		"decision":       signals.MatchedDecisionRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -194,6 +207,8 @@ func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *c
 			{"metadata", signals.Metrics.Metadata.ExecutionTimeMs},
 			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
 			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
+			{"action", signals.Metrics.Action.ExecutionTimeMs},
+			{"decision", signals.Metrics.Decision.ExecutionTimeMs},
 		}
 		for _, timing := range timings {
 			if timing.ms > 0 {
@@ -214,21 +229,23 @@ func (r *OpenAIRouter) runDecisionEngine(
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
 	decisionStart := time.Now()
+	defer observeRoutingStage(ctx, "decision", decisionStart)
 	defer func() {
 		logging.ComponentEvent("extproc", "decision_phase_timing", map[string]interface{}{
 			"request_id":  ctx.RequestID,
 			"decision_ms": time.Since(decisionStart).Milliseconds(),
 		})
 	}()
-	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
+	_, decisionSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanDecisionEvaluation)
+	defer decisionSpan.End()
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil {
 		logging.ComponentErrorEvent("extproc", "recipe_classifier_unavailable", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"recipe":     ctx.Routing.RecipeName(),
 		})
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, "")
-		ctx.TraceContext = decisionCtx
+		decisionSpan.SetStatus(codes.Error, "recipe_classifier_unavailable")
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, "", false)
 		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 	strategy := classifier.Config.Strategy
@@ -237,8 +254,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	var err error
 	if candidates != nil {
 		if len(candidates) == 0 {
-			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
-			ctx.TraceContext = decisionCtx
+			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy), false)
 			return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 		}
 		result, err = classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
@@ -247,23 +263,22 @@ func (r *OpenAIRouter) runDecisionEngine(
 	}
 	ctx.VSRDecisionDiagnostics = signals.Diagnostics
 	if err != nil {
+		decisionSpan.SetStatus(codes.Error, "decision_evaluation_failed")
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"strategy":   strategy,
 			"error":      err.Error(),
 		})
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
-		ctx.TraceContext = decisionCtx
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy), false)
 		return nil, "", err
 	}
 	if result == nil || result.Decision == nil {
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
-		ctx.TraceContext = decisionCtx
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy), false)
 		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 
+	observeDecisionIdentity(ctx, decisionSpan, result.Decision)
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy), result.ConfidenceScored)
-	ctx.TraceContext = decisionCtx
 	return result, "", nil
 }
 
@@ -282,6 +297,9 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 ) (string, float64, entropy.ReasoningDecision, string, error) {
 	reasoningDecision := entropy.ReasoningDecision{}
 	categoryName := r.applyDecisionResultToContext(result, ctx)
+	if err := r.benchmarkCallLimitCheck(ctx); err != nil {
+		return "", 0, reasoningDecision, "", err
+	}
 	decisionName := result.Decision.Name
 	evaluationConfidence := result.Confidence
 
@@ -333,9 +351,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := r.effectiveReplayConfigForRequest(ctx, result.Decision); pluginCfg != nil {
-		ctx.RouterReplayPluginConfig = pluginCfg
-	}
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, result.Decision)
 	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
 	// Snapshot the retention directive emitted by this decision (deep clone)
@@ -365,13 +381,20 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	categoryName string,
 	evaluationConfidence float64,
 	ctx *RequestContext,
-) (string, entropy.ReasoningDecision, error) {
+) (model string, reasoning entropy.ReasoningDecision, selectionErr error) {
+	started := time.Now()
+	_, span := tracing.StartSpan(ctx.TraceContext, tracing.SpanAlgorithmSelection)
+	defer func() {
+		observeAlgorithmSelection(ctx, span, model, selectionErr)
+		observeRoutingStage(ctx, "algorithm", started)
+		span.End()
+	}()
 	if result.Decision.GetFastResponseConfig() != nil {
 		ctx.VSRSelectedModel = ""
 		ctx.VSRSelectionMethod = "fast_response"
 		return "", entropy.ReasoningDecision{}, nil
 	}
-	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
+	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
 		return "", entropy.ReasoningDecision{}, fmt.Errorf(
 			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
 			errNoContextEligibleDecisionModel,
@@ -412,6 +435,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 			selCtx.ExpectedOutputTokens = int(*demand.MaxOutputTokens)
 		}
 	}
+	selCtx.CandidateDemands = ctx.AutomaticCandidateDemands
 	selectedModelRef, usedMethod, err := r.selectModelFromCandidates(
 		selCtx,
 		result.Decision.Algorithm,
@@ -446,24 +470,15 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	logging.ComponentDebugEvent("extproc", "decision_model_selected", selectionFields)
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = usedMethod
+	if orch := r.fallbackOrchestratorForContext(ctx); orch != nil && orch.Policy().Enabled {
+		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
+	}
 	return selectedModel, applyReasoningModeFromSelectedModel(
 		selectedModelRef,
 		decisionName,
 		evaluationConfidence,
 		ctx,
 	), nil
-}
-
-func firstDecisionModelName(modelRefs []config.ModelRef) string {
-	for _, modelRef := range modelRefs {
-		if model := strings.TrimSpace(modelRef.LoRAName); model != "" {
-			return model
-		}
-		if model := strings.TrimSpace(modelRef.Model); model != "" {
-			return model
-		}
-	}
-	return ""
 }
 
 func applyReasoningModeFromSelectedModel(

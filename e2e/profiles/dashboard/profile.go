@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -32,6 +31,7 @@ const (
 	// and configmap as the production deployment.
 	dashboardE2EDeploymentManifest = "e2e/profiles/dashboard/dashboard-deployment.yaml"
 	dashboardE2EPVCManifest        = "e2e/profiles/dashboard/dashboard-pvc.yaml"
+	srBenchE2EManifest             = "e2e/profiles/dashboard/sr-bench-deployment.yaml"
 
 	dashboardE2EManagedLabel = "vllm.ai/e2e-managed=true"
 
@@ -141,6 +141,13 @@ func (p *Profile) deployDashboard(ctx context.Context, opts *framework.SetupOpti
 		return fmt.Errorf("failed to apply dashboard PVC: %w", err)
 	}
 
+	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, srBenchE2EManifest); err != nil {
+		return fmt.Errorf("failed to apply independent sr-bench worker: %w", err)
+	}
+	if err := helm.NewDeployer(opts.KubeConfig, opts.Verbose).WaitForDeployment(ctx, namespaceRouter, "semantic-router-sr-bench", timeoutDashboardWait); err != nil {
+		return fmt.Errorf("independent sr-bench worker not ready: %w", err)
+	}
+
 	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, dashboardE2EDeploymentManifest); err != nil {
 		return fmt.Errorf("failed to apply dashboard deployment: %w", err)
 	}
@@ -186,6 +193,7 @@ func (p *Profile) deployDashboard(ctx context.Context, opts *framework.SetupOpti
 func (p *Profile) cleanupDashboard(ctx context.Context, opts *framework.TeardownOptions) error {
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardManifestDir+"/service.yaml", "-n", namespaceRouter, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardE2EDeploymentManifest, "-n", namespaceRouter, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", srBenchE2EManifest, "-n", namespaceRouter, "--ignore-not-found=true")
 	// Delete only PVCs created by this E2E profile (label vllm.ai/e2e-managed=true).
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "pvc", "-l", dashboardE2EManagedLabel, "-n", namespaceRouter, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardManifestDir+"/configmap.yaml", "-n", namespaceRouter, "--ignore-not-found=true")

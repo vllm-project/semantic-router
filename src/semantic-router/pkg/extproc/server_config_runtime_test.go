@@ -54,7 +54,7 @@ func TestConfiguredGRPCMaxMessageSizeWithEmptyRuntimeRegistryDoesNotUseGlobal(t 
 		runtime: routerruntime.NewRegistry(nil),
 	}
 
-	if got, want := server.configuredGRPCMaxMessageSize(), 4*1024*1024; got != want {
+	if got, want := server.configuredGRPCMaxMessageSize(), (&config.LooperConfig{}).GetGRPCMaxMsgSize(); got != want {
 		t.Fatalf("configuredGRPCMaxMessageSize() = %d, want default size %d", got, want)
 	}
 }

@@ -201,7 +201,9 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   return (
     <section className={styles.container}>
       <div className={styles.estimateContext}>
-        <p className={styles.summaryHint}>Estimates from recorded tokens and configured rates.</p>
+        <p className={styles.summaryHint}>
+          Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.
+        </p>
         <details className={styles.estimateDetails}>
           <summary>How estimates work</summary>
           <p>

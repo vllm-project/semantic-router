@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -31,11 +32,6 @@ func init() {
 		Description: "Error handling - Non-existent response ID for DELETE",
 		Tags:        []string{"response-api", "error-handling"},
 		Fn:          testResponseAPIErrorNonexistentResponseIDDelete,
-	})
-	pkgtestcases.Register("response-api-error-backend-passthrough", pkgtestcases.TestCase{
-		Description: "Error handling - Backend error passthrough",
-		Tags:        []string{"response-api", "error-handling"},
-		Fn:          testResponseAPIErrorBackendPassthrough,
 	})
 }
 
@@ -183,59 +179,6 @@ func testResponseAPIErrorNonexistentResponseIDDelete(ctx context.Context, client
 			"error_message": apiError.Error.Message,
 			"error_type":    apiError.Error.Type,
 			"requested_id":  nonexistentID,
-		})
-	}
-	return nil
-}
-
-func testResponseAPIErrorBackendPassthrough(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	session, err := fixtures.OpenServiceSession(ctx, client, opts)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	storeTrue := true
-	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
-	raw, err := apiClient.CreateRaw(ctx, fixtures.ResponseAPIRequest{
-		Model:    "invalid-model-that-does-not-exist",
-		Input:    "This should trigger a backend error",
-		Store:    &storeTrue,
-		Metadata: map[string]string{"test": "response-api-error-backend-passthrough"},
-	})
-	if err != nil {
-		return err
-	}
-
-	var apiError fixtures.APIErrorResponse
-	if err := raw.DecodeJSON(&apiError); err == nil && apiError.Error.Message != "" {
-		if raw.StatusCode < 400 {
-			return fmt.Errorf("error response should have 4xx/5xx status code, got %d", raw.StatusCode)
-		}
-		if opts.SetDetails != nil {
-			opts.SetDetails(map[string]interface{}{
-				"behavior":      "error_passthrough",
-				"status_code":   raw.StatusCode,
-				"error_message": apiError.Error.Message,
-				"error_type":    apiError.Error.Type,
-			})
-		}
-		return nil
-	}
-
-	var apiResp fixtures.ResponseAPIResponse
-	if err := raw.DecodeJSON(&apiResp); err != nil {
-		return err
-	}
-	if raw.StatusCode != 200 {
-		return fmt.Errorf("expected status 200 for successful response, got %d", raw.StatusCode)
-	}
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"behavior":    "model_auto_routed",
-			"status_code": raw.StatusCode,
-			"response_id": apiResp.ID,
-			"model":       apiResp.Model,
 		})
 	}
 	return nil

@@ -21,12 +21,19 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath s
 		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
-	cfg, errs := Compile(string(data))
+	input := string(data)
+	cfg, errs := Compile(input)
 	if len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "  %s\n", e)
 		}
 		return fmt.Errorf("%d compilation error(s)", len(errs))
+	}
+
+	// Refuse to write output on blocking validation diagnostics; parsing twice keeps Compile byte-identical.
+	if diags, _ := Validate(input); hasBlockingDiagnostics(diags) {
+		blocking := writeValidationDiagnostics(os.Stderr, diags)
+		return fmt.Errorf("%d blocking validation diagnostic(s); no output written", blocking)
 	}
 
 	output, err := emitFormat(cfg, format, crdName, crdNamespace, basePath)
@@ -114,14 +121,12 @@ func isRoutingOnlyFragment(data []byte) bool {
 // TestBlockRunnerFactory constructs a TEST block runner for a parsed program.
 type TestBlockRunnerFactory func(prog *Program) (TestBlockRunner, error)
 
-// CLIValidate reads a DSL file and reports diagnostics.
-// Returns the number of errors found.
+// CLIValidate reports diagnostics for a DSL file and returns the blocking count (errors and constraints, not warnings).
 func CLIValidate(inputPath string, w io.Writer) int {
 	return cliValidate(inputPath, w, nil)
 }
 
-// CLIValidateWithRunner reads a DSL file, reports diagnostics, and executes TEST blocks
-// using a runner factory when the parsed program contains them.
+// CLIValidateWithRunner is CLIValidate plus TEST-block runtime checks via the given runner factory.
 func CLIValidateWithRunner(inputPath string, w io.Writer, factory TestBlockRunnerFactory) int {
 	return cliValidate(inputPath, w, factory)
 }
@@ -191,6 +196,7 @@ func runtimeValidationPos(prog *Program) Position {
 	return Position{}
 }
 
+// writeValidationDiagnostics prints diagnostics with a summary and returns the blocking (error + constraint) count.
 func writeValidationDiagnostics(w io.Writer, diags []Diagnostic) int {
 	var errCount, warnCount, constraintCount int
 	for _, d := range diags {
@@ -208,7 +214,7 @@ func writeValidationDiagnostics(w io.Writer, diags []Diagnostic) int {
 	_, _ = fmt.Fprintf(w, "\nSummary: 🔴 %d error(s)  🟡 %d warning(s)  🟠 %d constraint(s)\n",
 		errCount, warnCount, constraintCount)
 
-	return errCount
+	return errCount + constraintCount
 }
 
 func hasBlockingDiagnostics(diags []Diagnostic) bool {

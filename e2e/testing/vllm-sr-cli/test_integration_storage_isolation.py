@@ -117,7 +117,7 @@ class TestStorageNetworkIsolation(ServeSessionMixin, CLITestBase):
         print("  ✓ Both stores answer from the data network")
 
     def _assert_the_stores_are_unreachable_from_the_application_network(self):
-        """The boundary. Envoy, Dashboard, and OpenClaw workloads live here."""
+        """The boundary. Envoy and the Dashboard live here."""
         redis_output = self._probe_redis(self.NETWORK_NAME)
         self.assertFalse(
             self._redis_answered(redis_output),

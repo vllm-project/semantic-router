@@ -14,13 +14,15 @@ import {
   type RouterModelsInfo,
 } from '../utils/routerRuntime'
 import {
-  getRouterModelArtifactPath,
-  getRouterModelContext,
+  formatRouterModelLabel,
+  formatRouterModelTokens,
+  getRouterModelInputLimits,
+  getRouterModelKind,
   getRouterModelDevice,
   getRouterModelDisplayName,
   getRouterModelPreviewName,
-  isLocalDerivedRouterModel,
 } from './routerModelPresentation'
+import { buildRouterModelDetailSections, type RouterModelDetailRow } from './routerModelDetails'
 import {
   clampInventoryPage,
   filterAndSortRouterModels,
@@ -35,78 +37,6 @@ interface RouterModelInventoryProps {
   showSummary?: boolean
   emptyMessage?: string
   onSelectModel?: (model: RouterModelInfo) => void
-}
-
-interface DetailRow {
-  label: string
-  value: string
-}
-
-interface DetailSection {
-  title: string
-  rows: DetailRow[]
-}
-
-const TITLE_WORD_OVERRIDES: Record<string, string> = {
-  amd: 'AMD',
-  lora: 'LoRA',
-  mmbert: 'mmBERT',
-  nli: 'NLI',
-  pii: 'PII',
-}
-
-const METADATA_PRIORITY: Record<string, number> = {
-  model_type: 0,
-  threshold: 1,
-  use_cpu: 2,
-  enabled: 3,
-  mapping_path: 4,
-  jailbreak_mapping_path: 5,
-  max_sequence_length: 6,
-  default_dimension: 7,
-  matryoshka_supported: 8,
-  min_span_length: 9,
-  min_span_confidence: 10,
-  context_window_size: 11,
-  nli_filtering_enabled: 12,
-  status: 13,
-}
-
-function formatLabel(value?: string): string {
-  if (!value) return 'Unknown'
-  return value.replace(/[_-]+/g, ' ')
-}
-
-function formatTitleLabel(value?: string): string {
-  return formatLabel(value)
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(
-      (word) =>
-        TITLE_WORD_OVERRIDES[word.toLowerCase()] ??
-        `${word.charAt(0).toUpperCase()}${word.slice(1)}`,
-    )
-    .join(' ')
-}
-
-function summarizeValues(values?: string[], noun = 'items'): string | undefined {
-  if (!values?.length) return undefined
-  if (values.length <= 3) return values.join(', ')
-  return `${values.length} ${noun}`
-}
-
-function getModelKind(model: RouterModelInfo): string {
-  if (model.registry?.purpose) {
-    return formatTitleLabel(model.registry.purpose)
-  }
-  return formatTitleLabel(model.type)
-}
-
-function getModelDescription(model: RouterModelInfo): string | undefined {
-  const description = model.registry?.description?.trim()
-  // Model-card HTML is not a plain description; the task subtitle remains visible.
-  if (description && /<!--|<\/?[a-z][^>]*>/i.test(description)) return undefined
-  return description || undefined
 }
 
 function getStateChipClass(model: RouterModelInfo): string {
@@ -136,185 +66,7 @@ function getCardToneClass(model: RouterModelInfo): string {
   }
 }
 
-function formatMetadataValue(key: string, value: string): string {
-  if (key === 'model_type') {
-    return formatTitleLabel(value)
-  }
-  if (value === 'true') {
-    return 'Yes'
-  }
-  if (value === 'false') {
-    return 'No'
-  }
-  return value
-}
-
-function buildMetadataRows(metadata?: Record<string, string>): DetailRow[] {
-  if (!metadata) return []
-
-  return Object.entries(metadata)
-    .sort(([left], [right]) => {
-      const leftRank = METADATA_PRIORITY[left] ?? 99
-      const rightRank = METADATA_PRIORITY[right] ?? 99
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank
-      }
-      return left.localeCompare(right)
-    })
-    .map(([key, value]) => ({
-      label: formatTitleLabel(key),
-      value: formatMetadataValue(key, value),
-    }))
-}
-
-function getModelChips(model: RouterModelInfo): string[] {
-  const chips = new Set<string>()
-
-  if (model.registry?.pipeline_tag) {
-    chips.add(formatLabel(model.registry.pipeline_tag))
-  }
-
-  for (const tag of model.registry?.tags ?? []) {
-    chips.add(formatLabel(tag))
-    if (chips.size >= 5) break
-  }
-
-  if (model.categories?.length) {
-    chips.add(
-      `${model.categories.length} ${model.categories.length === 1 ? 'category' : 'categories'}`,
-    )
-  }
-
-  return [...chips].slice(0, 6)
-}
-
-function buildDetailSections(
-  model: RouterModelInfo,
-  consumers: RouterModelInfo[],
-): DetailSection[] {
-  const shared = consumers.length > 1
-  const identityRows: DetailRow[] = [
-    ...(!shared ? [{ label: 'Router Key', value: model.name }] : []),
-    { label: 'Artifact Path', value: getRouterModelArtifactPath(model) || 'Not reported' },
-  ]
-
-  if (isLocalDerivedRouterModel(model)) {
-    identityRows.push({ label: 'Artifact Kind', value: 'Local derived artifact' })
-  }
-
-  if (model.recipe && !shared) {
-    identityRows.push({ label: 'Recipe', value: model.recipe })
-  }
-
-  if (model.registry?.repo_id) {
-    identityRows.push({ label: 'Repository', value: model.registry.repo_id })
-  }
-
-  if (model.registry?.revision) {
-    identityRows.push({ label: 'Registry Revision', value: model.registry.revision })
-  }
-
-  if (model.registry?.base_model) {
-    identityRows.push({ label: 'Base Model', value: model.registry.base_model })
-  }
-
-  const context = getRouterModelContext(model)
-  const capabilityRows: DetailRow[] = [
-    { label: 'Type', value: getModelKind(model) },
-    {
-      label: 'Context Window',
-      value: context.source === 'runtime' ? context.label : 'Not reported',
-    },
-  ]
-
-  if (model.registry?.parameter_size) {
-    capabilityRows.push({ label: 'Size', value: model.registry.parameter_size })
-  }
-
-  if (model.registry?.max_context_length) {
-    capabilityRows.push({
-      label: 'Registry Context',
-      value: `${model.registry.max_context_length.toLocaleString('en-US')} tokens`,
-    })
-  }
-
-  if (model.registry?.base_model_max_context) {
-    capabilityRows.push({
-      label: 'Base Context',
-      value: `${model.registry.base_model_max_context.toLocaleString()} tokens`,
-    })
-  }
-
-  if (model.registry?.embedding_dim) {
-    capabilityRows.push({
-      label: 'Embedding',
-      value: `${model.registry.embedding_dim}d`,
-    })
-  }
-
-  if (model.registry?.num_classes) {
-    capabilityRows.push({
-      label: 'Labels',
-      value: `${model.registry.num_classes}`,
-    })
-  }
-
-  if (model.registry?.license) {
-    capabilityRows.push({ label: 'License', value: model.registry.license })
-  }
-
-  const languages = summarizeValues(model.registry?.languages, 'languages')
-  if (languages) {
-    capabilityRows.push({ label: 'Languages', value: languages })
-  }
-
-  const datasets = summarizeValues(model.registry?.datasets, 'datasets')
-  if (datasets) {
-    capabilityRows.push({ label: 'Datasets', value: datasets })
-  }
-
-  const metadata = shared
-    ? Object.fromEntries(
-        Object.entries(model.metadata ?? {}).filter(([key, value]) =>
-          consumers.every((consumer) => consumer.metadata?.[key] === value),
-        ),
-      )
-    : model.metadata
-  const runtimeRows = buildMetadataRows(metadata)
-  if (model.load_time) {
-    runtimeRows.unshift({ label: 'Load Time', value: model.load_time })
-  }
-  if (model.memory_usage) {
-    runtimeRows.push({ label: 'Memory Usage', value: model.memory_usage })
-  }
-
-  return [
-    { title: 'Identity', rows: identityRows },
-    { title: 'Capabilities', rows: capabilityRows },
-    { title: 'Runtime & Config', rows: runtimeRows },
-    ...(shared
-      ? [
-          {
-            title: 'Consumers',
-            rows: consumers.map((consumer) => ({
-              label: `${consumer.recipe || 'default'} / ${consumer.metadata?.binding || consumer.name}`,
-              value: [
-                getModelKind(consumer),
-                getRouterModelStateLabel(consumer),
-                consumer.metadata?.default_layer && `Layer ${consumer.metadata.default_layer}`,
-                consumer.metadata?.default_dimension &&
-                  `${consumer.metadata.default_dimension} dimensions`,
-              ]
-                .filter(Boolean)
-                .join(' · '),
-            })),
-          },
-        ]
-      : []),
-  ].filter((section) => section.rows.length > 0)
-}
-
-function renderDetailRows(rows: DetailRow[]): JSX.Element {
+function renderDetailRows(rows: RouterModelDetailRow[]): JSX.Element {
   return (
     <dl className={styles.detailList}>
       {rows.map((row) => (
@@ -341,12 +93,16 @@ const PreviewCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModel
   model,
   consumers,
 }) => {
-  const context = getRouterModelContext(model)
+  const limits = getRouterModelInputLimits(model)
   const name = getRouterModelPreviewName(model)
+  const budgetVaries = consumers.some((consumer) => {
+    const other = getRouterModelInputLimits(consumer)
+    return (other.document ?? other.input) !== (limits.document ?? limits.input)
+  })
   return (
     <>
       <div className={styles.previewTopRow}>
-        <span className={styles.previewPurpose}>{getModelKind(model)}</span>
+        <span className={styles.previewPurpose}>{getRouterModelKind(model)}</span>
         <span className={`${styles.previewState} ${getStateChipClass(model)}`}>
           {getRouterModelStateLabel(model)}
         </span>
@@ -356,9 +112,22 @@ const PreviewCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModel
         {name.subtitle && <p className={styles.previewSubtitle}>{name.subtitle}</p>}
       </div>
       <div className={styles.previewFooter}>
-        <p className={styles.previewContext}>
-          {context.source === 'registry' ? 'Registry context' : 'Context window'}: {context.label}
-        </p>
+        {limits.window !== undefined && (
+          <p className={styles.previewContext}>Window: {formatRouterModelTokens(limits.window)}</p>
+        )}
+        {limits.input !== undefined ? (
+          <p className={styles.previewContext}>
+            {limits.overflow === 'window' ? 'Document budget' : 'Input budget'}:{' '}
+            {budgetVaries
+              ? 'Varies by consumer'
+              : formatRouterModelTokens(limits.document ?? limits.input)}
+          </p>
+        ) : (
+          <p className={styles.previewContext}>
+            {limits.publishedContext !== undefined ? 'Published model context' : 'Input budget'}:{' '}
+            {formatRouterModelTokens(limits.publishedContext)}
+          </p>
+        )}
         {consumers.length > 1 && (
           <p className={styles.previewContext}>Shared by {consumers.length} consumers</p>
         )}
@@ -371,9 +140,7 @@ const FullCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInf
   model,
   consumers,
 }) => {
-  const sections = buildDetailSections(model, consumers)
-  const chips = getModelChips(model)
-  const description = getModelDescription(model)
+  const sections = buildRouterModelDetailSections(model, consumers)
 
   return (
     <>
@@ -384,27 +151,29 @@ const FullCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInf
             {getRouterModelStateLabel(model)}
           </span>
         </div>
-        <p className={styles.modelSubtitle}>{getModelKind(model)}</p>
-        {description && <p className={styles.description}>{description}</p>}
+        <p className={styles.modelSubtitle}>{getRouterModelKind(model)}</p>
       </div>
 
-      {chips.length > 0 && (
-        <div className={styles.chips}>
-          {chips.map((chip) => (
-            <span key={chip} className={styles.chip}>
-              {chip}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className={styles.detailSections}>
-        {sections.map((section) => (
-          <section key={section.title} className={styles.detailSection}>
-            <span className={styles.detailSectionTitle}>{section.title}</span>
-            {renderDetailRows(section.rows)}
-          </section>
-        ))}
+        {sections.map((section) =>
+          section.collapsible ? (
+            <details
+              key={section.title}
+              className={`${styles.detailSection} ${styles.detailSectionWide} ${styles.technicalDetails}`}
+            >
+              <summary className={styles.detailSectionTitle}>{section.title}</summary>
+              {renderDetailRows(section.rows)}
+            </details>
+          ) : (
+            <section
+              key={section.title}
+              className={`${styles.detailSection} ${section.wide ? styles.detailSectionWide : ''}`}
+            >
+              <h4 className={styles.detailSectionTitle}>{section.title}</h4>
+              {renderDetailRows(section.rows)}
+            </section>
+          ),
+        )}
       </div>
 
       <div
@@ -483,7 +252,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
     if (modelIndex >= 0) setPage(Math.floor(modelIndex / pageSize) + 1)
   }, [filteredModels, mode])
 
-  if (models.length === 0) {
+  if (allModels.length === 0) {
     return <div className={styles.empty}>{emptyMessage}</div>
   }
 
@@ -494,7 +263,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
           {showSummary && (
             <div className={styles.summaryRow}>
               <div className={styles.summaryStat}>
-                <span className={styles.summaryLabel}>Loaded</span>
+                <span className={styles.summaryLabel}>Runtimes ready</span>
                 <span className={styles.summaryValue}>
                   {loadedCount}/{totalCount}
                 </span>
@@ -502,7 +271,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
               {phase && (
                 <div className={styles.summaryStat}>
                   <span className={styles.summaryLabel}>Phase</span>
-                  <span className={styles.summaryValue}>{formatTitleLabel(phase)}</span>
+                  <span className={styles.summaryValue}>{formatRouterModelLabel(phase)}</span>
                 </div>
               )}
               {summaryMessage && <p className={styles.summaryMessage}>{summaryMessage}</p>}
@@ -545,7 +314,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
               </select>
             </label>
             <span className={styles.resultCount} aria-live="polite">
-              {filteredModels.length} of {allModels.length} models
+              {filteredModels.length} of {allModels.length} runtimes
             </span>
           </div>
         </>

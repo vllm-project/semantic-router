@@ -1,0 +1,111 @@
+name: Netlify Preview
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+# Serialize requests for each PR so repeated comments cannot start duplicate
+# builds. Unrelated comments must not replace a queued preview request.
+concurrency:
+  group: netlify-preview-${{ github.event.issue.pull_request && github.event.comment.body == '/netlify' && github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize preview
+    if: >-
+      github.event.issue.pull_request != null
+      && github.event.comment.body == '/netlify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      statuses: write
+    outputs:
+      build: ${{ steps.request.outputs.build }}
+      sha: ${{ steps.request.outputs.sha }}
+      number: ${{ steps.request.outputs.number }}
+      repository: ${{ steps.request.outputs.repository }}
+    steps:
+      - name: Check out trusted command handler
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check write access and duplicate requests
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+        run: python3 tools/ci/netlify_preview.py authorize --event "$GITHUB_EVENT_PATH"
+
+  build:
+    name: Build requested commit
+    needs: authorize
+    if: needs.authorize.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      # PR code runs only in this disposable job, with no deployment secrets or
+      # write token. The publisher consumes static files on a separate runner.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.authorize.outputs.repository }}
+          ref: ${{ needs.authorize.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build documentation
+        run: make docs-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netlify-site-${{ github.run_id }}-${{ github.run_attempt }}
+          path: website/build/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish preview
+    needs: [authorize, build]
+    if: always() && needs.authorize.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - name: Check out trusted publisher
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download static website
+        id: artifact
+        if: needs.build.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: netlify-site-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/netlify-site
+      - name: Publish draft and report status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+          PR_NUMBER: ${{ needs.authorize.outputs.number }}
+          SHA: ${{ needs.authorize.outputs.sha }}
+          BUILD_RESULT: ${{ needs.build.result == 'success' && steps.artifact.outcome == 'success' && 'success' || 'failure' }}
+        run: python3 tools/ci/netlify_preview.py publish --directory "$RUNNER_TEMP/netlify-site"

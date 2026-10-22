@@ -1,6 +1,66 @@
 {
   "cases": [
     {
+      "name": "access_programs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": null,
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "access_programs",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "background",
       "outcome": {
         "status": "ok",
@@ -38,8 +98,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -51,6 +111,66 @@
         "diagnostics": [
           {
             "field": "background",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "billing",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": null,
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "billing",
             "action": "dropped"
           },
           {
@@ -98,8 +218,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -158,8 +278,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -218,8 +338,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -278,8 +398,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -305,6 +425,66 @@
           "code": "invalid_error_response"
         },
         "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "frequency_penalty",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": null,
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "frequency_penalty",
+            "action": "dropped"
+          },
           {
             "field": "output.status",
             "action": "dropped"
@@ -350,8 +530,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -408,8 +588,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -464,8 +644,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -524,8 +704,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -584,8 +764,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -644,8 +824,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -704,8 +884,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -760,8 +940,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -820,8 +1000,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -876,8 +1056,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -932,8 +1112,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -992,8 +1172,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1052,8 +1232,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1065,6 +1245,66 @@
         "diagnostics": [
           {
             "field": "previous_response_id",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "presence_penalty",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": null,
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "presence_penalty",
             "action": "dropped"
           },
           {
@@ -1112,8 +1352,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1172,8 +1412,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1232,8 +1472,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1292,8 +1532,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1352,8 +1592,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1412,8 +1652,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1472,8 +1712,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1532,8 +1772,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1588,8 +1828,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1648,8 +1888,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1708,8 +1948,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1768,8 +2008,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1781,6 +2021,66 @@
         "diagnostics": [
           {
             "field": "tool_choice",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_usage",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": null,
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "tool_usage",
             "action": "dropped"
           },
           {
@@ -1828,8 +2128,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1888,8 +2188,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1948,8 +2248,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2008,8 +2308,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2124,8 +2424,8 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
+              "cache_write_tokens": null,
+              "cached_tokens": null
             },
             "output_tokens": 1,
             "output_tokens_details": {

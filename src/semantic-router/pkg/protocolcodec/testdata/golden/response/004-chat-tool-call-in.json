@@ -12,6 +12,7 @@
         "tool_calls": [
           {
             "id": "call_weather_1",
+            "index": 0,
             "type": "function",
             "function": {
               "name": "lookup_weather",

@@ -41,7 +41,7 @@ def dataset_manifest(**overrides):
         "task": "jailbreak",
         "source": {
             "type": "huggingface",
-            "locator": "llm-semantic-router/jailbreak-detection-dataset",
+            "locator": "vllm-sr/jailbreak-detection-dataset",
             "revision": DATASET_REVISION,
         },
         "license": "unknown-upstream",
@@ -94,7 +94,7 @@ def artifact_manifest(**overrides):
         "id": "mmbert32k-jailbreak-detector-merged",
         "task": "jailbreak",
         "identity": {
-            "repo": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+            "repo": "vllm-sr/mmbert32k-jailbreak-detector-merged",
             "revision": ARTIFACT_REVISION,
             "digest": artifact_identity_digest(files),
         },
@@ -470,6 +470,14 @@ def test_latency_percentiles_use_nearest_rank():
     assert percentiles["p95"] == EXPECTED_P95_MS
 
 
+def test_macro_f1_leaves_labels_without_rows_out():
+    """A split with no rows for a declared label keeps the label, not a false zero."""
+    metrics = classification_metrics([0, 1, 1], [0, 1, 1], {"a": 0, "b": 1, "c": 2})
+    assert metrics["per_label"]["c"]["support"] == 0
+    assert metrics["macro_f1"] == 1.0
+    assert metrics["weighted_f1"] == 1.0
+
+
 def test_metrics_reject_misaligned_inputs():
     with pytest.raises(ValueError):
         classification_metrics([1, 0], [1], {"benign": 0, "jailbreak": 1})
@@ -566,8 +574,9 @@ def test_discrimination_shares_the_rank_of_a_tie():
     )
 
     assert separation["roc_auc"] == pytest.approx(0.5)
-    # No threshold flags the positive without also flagging the negative.
-    assert separation["recall_at_fpr_budget"] is None
+    # No threshold flags the positive without also flagging the negative, which
+    # is a recall of zero inside the budget rather than an undefined one.
+    assert separation["recall_at_fpr_budget"] == 0.0
 
 
 def test_recall_at_fpr_budget_stops_at_the_budget():
@@ -599,3 +608,16 @@ def test_discrimination_is_undefined_when_the_split_carries_one_side():
     assert (
         discrimination([1, 0], [[0.1, 0.9], [0.8, 0.2]], GATE_MAPPING, ["nope"]) is None
     )
+
+
+def test_discrimination_reports_zero_recall_when_the_budget_is_unreachable():
+    """One safe row outranks every unsafe one, so nothing is flagged in budget."""
+    separation = discrimination(
+        [1] * 10 + [0],
+        [[0.2, 0.8]] * 10 + [[0.01, 0.99]],
+        GATE_MAPPING,
+        ["jailbreak"],
+        fpr_budget=0.01,
+    )
+
+    assert separation["recall_at_fpr_budget"] == 0.0

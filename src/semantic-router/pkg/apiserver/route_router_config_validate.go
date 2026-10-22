@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -21,8 +21,9 @@ type RouterConfigValidateResponse struct {
 	ContractVersion string              `json:"contract_version"`
 	NormalizedYAML  string              `json:"normalized_yaml"`
 	Errors          []config.Diagnostic `json:"errors"`
-	Warnings        []config.Diagnostic `json:"warnings"`
-	Diff            *config.ConfigDiff  `json:"diff,omitempty"`
+	// Warnings are the findings the Router logs when it loads the document.
+	Warnings []config.Diagnostic `json:"warnings"`
+	Diff     *config.ConfigDiff  `json:"diff,omitempty"`
 }
 
 func (s *ClassificationAPIServer) handleConfigValidate(

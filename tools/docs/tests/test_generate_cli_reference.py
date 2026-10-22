@@ -43,7 +43,10 @@ class CLIReferenceTests(unittest.TestCase):
             self.assertEqual(content.count(f"`{path}` {{#{anchor}}}"), 1)
             self.assertEqual(content.count(f"[`{path}`](#{anchor})"), 1)
         self.assertIn("vllm-sr recipe builtin init", paths)
-        self.assertIn("vllm-sr benchmark intelligence plan", paths)
+        self.assertIn("vllm-sr benchmark plan", paths)
+        self.assertIn("vllm-sr benchmark dataset prepare", paths)
+        self.assertIn("vllm-sr benchmark replay", paths)
+        self.assertNotIn("vllm-sr benchmark intelligence", paths)
 
     def test_document_contains_real_cli_defaults_choices_arguments_and_help(self):
         content = reference.render(self.cli)

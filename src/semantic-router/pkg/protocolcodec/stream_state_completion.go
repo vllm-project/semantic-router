@@ -55,16 +55,17 @@ func (state *streamState) validateCompletedItemContent(event llmprotocol.Event) 
 }
 
 func (state *streamState) completeToolItem(event llmprotocol.Event) (llmprotocol.Event, error) {
-	arguments, err := state.finalToolArguments(event)
-	if err != nil {
-		return llmprotocol.Event{}, err
-	}
 	call := state.toolCalls[event.ItemIndex]
 	if event.ToolCall != nil {
-		call, err = state.mergeStreamToolIdentity(call, *event.ToolCall)
+		merged, err := state.mergeStreamToolIdentity(call, *event.ToolCall)
 		if err != nil {
 			return llmprotocol.Event{}, err
 		}
+		call = merged
+	}
+	arguments, err := state.finalToolArguments(event, call.Kind)
+	if err != nil {
+		return llmprotocol.Event{}, err
 	}
 	if err := state.validateStreamToolIdentity(call, true); err != nil {
 		return llmprotocol.Event{}, err
@@ -80,6 +81,20 @@ func (state *streamState) completeToolItem(event llmprotocol.Event) (llmprotocol
 func (state *streamState) mergeStreamToolIdentity(current, incoming llmprotocol.ToolCall) (llmprotocol.ToolCall, error) {
 	if err := state.validateStreamToolIdentity(incoming, false); err != nil {
 		return llmprotocol.ToolCall{}, err
+	}
+	incomingKindKnown := incoming.KindKnown || incoming.Kind != ""
+	currentKindKnown := current.KindKnown || current.Kind != ""
+	if incomingKindKnown {
+		if currentKindKnown && current.Kind != incoming.Kind {
+			return llmprotocol.ToolCall{}, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"stream_tool_identity_mismatch",
+				"upstream stream changed a tool call kind",
+				nil,
+			)
+		}
+		current.Kind = incoming.Kind
+		current.KindKnown = true
 	}
 	if incoming.ID != "" {
 		if current.ID != "" && current.ID != incoming.ID {
@@ -159,7 +174,7 @@ func (state *streamState) validateStreamToolArgumentAppend(current []byte, incom
 	return nil
 }
 
-func (state *streamState) finalToolArguments(event llmprotocol.Event) ([]byte, error) {
+func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmprotocol.ToolKind) ([]byte, error) {
 	arguments := state.toolArguments[event.ItemIndex]
 	if event.ToolCall != nil && event.ToolCall.Arguments != "" {
 		if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
@@ -170,7 +185,7 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event) ([]byte, e
 		}
 		arguments = []byte(event.ToolCall.Arguments)
 	}
-	if !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
+	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
 	}
 	return arguments, nil
@@ -335,6 +350,13 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		merged[index] = value
 	}
 	result := usageFromCounts(mergedUsageState(current.State, update.State), merged)
+	if result.InputCacheWrite.Value != nil &&
+		result.InputCacheWrite5m.Value != nil && result.InputCacheWrite1h.Value != nil {
+		if *result.InputCacheWrite5m.Value+*result.InputCacheWrite1h.Value != *result.InputCacheWrite.Value {
+			result.InputCacheWrite5m = llmprotocol.TokenCount{}
+			result.InputCacheWrite1h = llmprotocol.TokenCount{}
+		}
+	}
 	if err := deriveUsageTotal(&result); err != nil {
 		return llmprotocol.Usage{}, err
 	}
@@ -370,6 +392,7 @@ func mergedUsageState(current, update llmprotocol.UsageState) llmprotocol.UsageS
 func usageCounts(usage llmprotocol.Usage) []llmprotocol.TokenCount {
 	return []llmprotocol.TokenCount{
 		usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite,
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h,
 		usage.OutputReasoning, usage.OutputOther, usage.InputTotal, usage.OutputTotal, usage.Total,
 	}
 }
@@ -377,8 +400,9 @@ func usageCounts(usage llmprotocol.Usage) []llmprotocol.TokenCount {
 func usageFromCounts(state llmprotocol.UsageState, counts []llmprotocol.TokenCount) llmprotocol.Usage {
 	return llmprotocol.Usage{
 		State: state, InputUncached: counts[0], InputCacheRead: counts[1], InputCacheWrite: counts[2],
-		OutputReasoning: counts[3], OutputOther: counts[4], InputTotal: counts[5],
-		OutputTotal: counts[6], Total: counts[7],
+		InputCacheWrite5m: counts[3], InputCacheWrite1h: counts[4],
+		OutputReasoning: counts[5], OutputOther: counts[6], InputTotal: counts[7],
+		OutputTotal: counts[8], Total: counts[9],
 	}
 }
 

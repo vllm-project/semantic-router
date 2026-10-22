@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -50,6 +50,8 @@ type InitOptions struct {
 	RemoteExposure  *bool
 	AuthMode        string
 	RuntimeRegistry *routerruntime.Registry
+	// GatewayMode decides which config changes need a restart.
+	GatewayMode config.GatewayMode
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
@@ -95,7 +97,10 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 	}
 	cfg.ManagementAPI = managementCfg
 
-	classificationSvc, classificationOwner := classificationServiceForStartup(cfg, opts.RuntimeRegistry)
+	classificationSvc, classificationOwner, err := classificationServiceForStartup(cfg, opts.RuntimeRegistry)
+	if err != nil {
+		return nil, err
+	}
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -142,10 +147,13 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry), buildConfigUpdater(opts.RuntimeRegistry, liveClassificationSvc)),
 		runtimeRegistry:       opts.RuntimeRegistry,
 		configPath:            opts.ConfigPath,
+		gatewayMode:           opts.GatewayMode,
 		memoryStore:           memoryStore,
 		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 		startupStatusConfig:   &cfg.StartupStatus,
 	}
+
+	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
 
 	// Create HTTP server with routes
 	apiServer.initRoutingPreviewAdmission(cfg)
@@ -248,31 +256,19 @@ func ensureClassificationService(
 	cfg *config.RouterConfig,
 	runtimeRegistry *routerruntime.Registry,
 	svc *services.ClassificationService,
-) *services.ClassificationService {
+) (*services.ClassificationService, error) {
 	if svc != nil {
-		return svc
+		return svc, nil
 	}
-
 	if runtimeRegistry != nil {
-		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{
-			"using_placeholder": true,
-		})
-		return services.NewPlaceholderClassificationService()
+		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{"using_placeholder": true})
+		return services.NewPlaceholderClassificationService(), nil
 	}
-
-	// If no global service exists, try auto-discovery unified classifier.
-	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
-	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	service, err := services.NewClassificationServiceFromConfig(cfg)
 	if err != nil {
-		logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
-			"error":             err.Error(),
-			"using_placeholder": true,
-		})
-		return services.NewPlaceholderClassificationService()
+		return nil, fmt.Errorf("prepare canonical API classification runtime: %w", err)
 	}
-
-	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
-	return autoSvc
+	return service, nil
 }
 
 func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
@@ -348,14 +344,17 @@ func buildConfigUpdater(
 	return func(*config.RouterConfig) {}
 }
 
-func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer) {
+func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer, error) {
 	service := resolveClassificationService(cfg, registry)
 	created := service == nil && registry == nil
-	service = ensureClassificationService(cfg, registry, service)
-	if created {
-		return service, service
+	service, err := ensureClassificationService(cfg, registry, service)
+	if err != nil {
+		return nil, nil, err
 	}
-	return service, nil
+	if created {
+		return service, service, nil
+	}
+	return service, nil, nil
 }
 
 // initClassify attempts to get the global classification service with retry logic
@@ -431,7 +430,14 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 // handleHealth handles health check requests
 func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api"})
+	mode := "unknown"
+	if snapshot := s.activeConfigSnapshot(); snapshot != nil {
+		mode = "engine"
+		if snapshot.Config().RoutingEnabled() {
+			mode = "router"
+		}
+	}
+	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api", ServingMode: mode})
 }
 
 // handleReady reports whether router startup has completed enough for traffic.

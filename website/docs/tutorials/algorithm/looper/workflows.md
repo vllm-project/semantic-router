@@ -5,15 +5,16 @@
 `workflows` runs a bounded, multi-step Router Flow behind one
 OpenAI-compatible model name.
 
-The runtime also supports a direct Flow model slug through
-`global.integrations.looper.flow.model_names`. The built-in default is
-`vllm-sr/flow`. Direct Flow calls evaluate only decisions with
-`algorithm.type=workflows`; they do not silently fall back to normal single-model
-routes.
+Flow coordinates model workers within that configured workflow. The calling
+agent harness owns the outer agent loop, task state, and tool execution
+permissions. When Flow returns a tool call, the harness executes it and sends
+the result back so Flow can resume its pending workflow.
+
+Expose `flow` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=workflows` activates the algorithm. Use a dedicated recipe when this entrypoint should run only flow policies.
 
 ## Key Advantages
 
-- Exposes a multi-step agent workflow as one model name: `vllm-sr/flow`.
+- Exposes a bounded multi-model workflow as one model name: `vllm-sr/flow`.
 - Keeps worker boundaries explicit: dynamic planners may only use the decision's
   `modelRefs`.
 - Supports both static role plans and dynamic planner-generated workflows.
@@ -30,7 +31,7 @@ surface as small as `vllm-sr/flow`.
 
 ## When to Use
 
-- A route should expose a single model name but run a bounded micro-agent flow.
+- A route should expose a single model name but run a bounded multi-model workflow.
 - The worker pool should come from the decision's `modelRefs`.
 - You want static low-latency templates for predictable tasks.
 - You want dynamic planner-generated workflows for harder reasoning, coding, or
@@ -38,17 +39,17 @@ surface as small as `vllm-sr/flow`.
 
 ## Configuration
 
-Register the direct model slug:
+Map the public name to the recipe shown below. Move the `routing` block into a named recipe to isolate it from default routing.
 
 ```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: default
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
+      max_response_bytes_mb: 32
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -99,7 +100,8 @@ makes no model calls. An explicit planner override keeps that target and must
 pass the same stage checks; it is not replaced by another model on failure.
 If no eligible planner exists, the request fails closed. An explicit planner
 may be a separately configured helper outside the worker `modelRefs`, but must
-still have an operator-assigned backend. Worker calls remain constrained to
+still have an operator-assigned backend in `providers.models[].backend_refs`;
+without one, the configuration fails to load. Worker calls remain constrained to
 `modelRefs`; the executor rejects a plan that names a worker outside that list.
 Planner selection does not reduce a configured minimum of distinct successful
 workers.
@@ -154,7 +156,6 @@ routing:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |
@@ -206,6 +207,21 @@ setting it to `[]` isolates the step from prior outputs. Use a role id such as
 same agent id is emitted as `flow.steps[].responses[].agent_id` when
 `include_intermediate_responses` is enabled.
 
+Step IDs must be unique and must not collide with generated agent IDs. The
+router trims step IDs before validation; generated default IDs and normalized
+static role IDs follow the same uniqueness rule. Ambiguous plans are rejected
+before worker execution. In dynamic mode, `on_error: skip` uses the existing
+fallback plan instead of executing the invalid plan.
+
+This validation also applies when resuming a persisted workflow. A paused plan
+with conflicting IDs that an older version accepted is now rejected on resume,
+without dispatching further model calls. Resume validation failures do not start
+a fallback workflow, even with `on_error: skip`. Restart with an unambiguous
+plan rather than relying on the old continuation. Step IDs with surrounding
+whitespace are now trimmed consistently with access-list entries and agent IDs;
+older continuations whose stored step identity no longer matches may also be
+rejected.
+
 For local single-process development, `memory` is enough. For local restarts use
 `file`. For multi-replica deployments, use `redis` so a tool-result turn can be
 claimed by whichever router instance receives it.
@@ -230,3 +246,22 @@ workflow plan. Tool-call state can be persisted in memory, files, or Redis;
 choose a backend, TTL, authentication, and encryption appropriate for that
 content. See a complete example:
 [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml).
+
+## Optional trace transport
+
+Router-generated `flow` evidence is preserved in OpenAI Chat Completions JSON
+and SSE responses, including tool-call responses where the algorithm supports
+them. The trace is optional: if adding it would exceed the complete response
+limit or an individual SSE frame limit, the router omits the whole trace while
+serving the valid answer. It does not truncate trace JSON or answer text.
+
+OpenAI Responses and Anthropic Messages responses omit this Chat-specific
+extension. Both an unsupported target protocol and a size-based omission emit a
+`x-vsr-protocol-warnings` response header with action `dropped`, field `flow`,
+and reason `router_extension_unsupported_protocol` or
+`router_extension_size_limit`. The warning also accompanies immediate Looper
+responses. Required answer content remains subject to the normal protocol
+limits; an answer that cannot fit is rejected.
+
+Provider fields do not acquire router provenance by using the same name. The
+router validates provider content separately from its internal trace data.

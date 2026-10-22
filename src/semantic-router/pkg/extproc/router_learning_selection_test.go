@@ -264,7 +264,10 @@ func TestRouterLearningProtectionRescueSwitchEscapesUnderpoweredCurrentModel(t *
 		},
 	}
 
-	_, result, selected, _ := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[1], ctx)
+	_, result, selected, _, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[1], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 
 	if selected == nil || selected.Model != "frontier" || result.SelectedModel != "frontier" {
 		t.Fatalf("expected rescue switch to frontier, got result=%#v selected=%#v", result, selected)
@@ -401,7 +404,10 @@ func TestRouterLearningProtectionObserveDoesNotRollbackAdaptationProposal(t *tes
 		AllScores:     map[string]float64{"cheap": 1},
 	}
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 
 	if !applied || selected == nil || selected.Model != "frontier" || result.SelectedModel != "frontier" {
 		t.Fatalf("expected protection observe to preserve adaptation proposal, result=%#v selected=%#v applied=%v", result, selected, applied)
@@ -517,7 +523,10 @@ func TestRouterLearningDecisionObserveModeRecordsProposalWithoutChangingModel(t 
 		AllScores:     map[string]float64{"cheap": 1},
 	}
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 
 	if applied {
 		t.Fatal("expected observe mode to leave final model unchanged")

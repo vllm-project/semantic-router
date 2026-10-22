@@ -89,7 +89,7 @@ func (r *OpenAIRouter) retrieveRAGContext(
 ) (string, float64, error) {
 	start := time.Now()
 	retrievedContext, err := r.retrieveContext(ragCtx, ctx, ragConfig)
-	latency := time.Since(start).Seconds()
+	latency := hybridRetrievalLatency(hybridStrategy(ragConfig), time.Since(start).Seconds(), ctx.RAGRetrievalLatency)
 	ctx.RAGRetrievalLatency = latency
 
 	tracing.SetSpanAttributes(ragSpan,
@@ -100,6 +100,27 @@ func (r *OpenAIRouter) retrieveRAGContext(
 	return retrievedContext, latency, err
 }
 
+// hybridRetrievalLatency keeps the winning backend duration for parallel hybrid
+// only. Sequential hybrid must keep the wrapper elapsed time, including a
+// failed primary that ran before the fallback.
+func hybridRetrievalLatency(strategy string, wrapper, recorded float64) float64 {
+	if strategy == "parallel" && recorded > 0 {
+		return recorded
+	}
+	return wrapper
+}
+
+func hybridStrategy(ragConfig *config.RAGPluginConfig) string {
+	if ragConfig == nil || ragConfig.Backend != "hybrid" {
+		return ""
+	}
+	hybridConfig, err := ragConfig.HybridBackendConfig()
+	if err != nil || hybridConfig == nil {
+		return ""
+	}
+	return hybridConfig.Strategy
+}
+
 func handleRAGRetrievalError(
 	ctx *RequestContext,
 	ragSpan trace.Span,
@@ -108,8 +129,7 @@ func handleRAGRetrievalError(
 	err error,
 	latency float64,
 ) error {
-	tracing.RecordError(ragSpan, err)
-	ragSpan.SetStatus(codes.Error, err.Error())
+	tracing.RecordError(ragSpan, "retrieval_failed")
 	metrics.RecordRAGRetrieval(ragConfig.Backend, requestDecisionStateKey(ctx), "error", latency)
 
 	switch ragFailureMode(ragConfig) {
@@ -257,6 +277,9 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	if ragConfig.MaxContextLength != nil {
 		maxLength = *ragConfig.MaxContextLength
 	}
+	if maxLength < 0 {
+		return fmt.Errorf("max_context_length must not be negative, got %d", maxLength)
+	}
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)
 		retrievedContext = string(runes[:maxLength]) + "..."
@@ -368,6 +391,10 @@ func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName 
 
 	ragConfig := decision.GetRAGConfig()
 	if ragConfig == nil || !ragConfig.Enabled {
+		return nil, false
+	}
+
+	if applies, _ := r.pluginApplies(ctx, config.DecisionPluginRAG); !applies {
 		return nil, false
 	}
 

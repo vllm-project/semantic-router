@@ -49,11 +49,10 @@ clean-redis: stop-redis ## Clean up Redis data
 	@echo "Redis data directory cleaned"
 
 # Test semantic cache with Redis backend
-test-redis-cache: start-redis rust ## Test semantic cache with Redis backend
+test-redis-cache: start-redis ## Test semantic cache with Redis backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Redis backend..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/cache/ -run TestRedisCache
 	@echo "Consider running 'make stop-redis' when done testing"
 
@@ -61,18 +60,17 @@ test-redis-cache: start-redis rust ## Test semantic cache with Redis backend
 test-semantic-router-redis: build-router start-redis ## Test semantic-router with Redis cache backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Redis cache backend..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 	@echo "Consider running 'make stop-redis' when done testing"
 
 # Run Redis cache example
-run-redis-example: start-redis rust ## Run the Redis cache example
+run-redis-example: start-redis ## Run the Redis cache example
 	@$(LOG_TARGET)
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
-		export $(NATIVE_ENV) && \
-		go run ../../tools/redis/redis-cache.go
+		\
+		go run ../../tools/dev/examples/redis/redis-cache.go
 	@echo ""
 	@echo "Example complete! Check Redis using:"
 	@echo "  • redis-cli (command line)"
@@ -135,7 +133,7 @@ redis-cli: ## Open Redis CLI for interactive commands
 	@$(CONTAINER_RUNTIME) exec -it redis-semantic-cache redis-cli
 
 # Benchmark Redis cache performance
-benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
+benchmark-redis: start-redis ## Run Redis cache performance benchmark
 	@$(LOG_TARGET)
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo "  Redis Cache Performance Benchmark"
@@ -143,8 +141,7 @@ benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/redis
-	@export $(NATIVE_ENV) && \
-		export USE_CPU=$${USE_CPU:-false} && \
+	@export USE_CPU=$${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		cd src/semantic-router/pkg/cache && \
 		out=../../../../benchmark_results/redis/results.txt && \
@@ -158,7 +155,7 @@ benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
 	@echo "Benchmark complete! Results in: benchmark_results/redis/results.txt"
 
 # Compare In-Memory vs Redis vs Valkey
-benchmark-cache-comparison: rust start-redis start-valkey ## Compare all cache backends
+benchmark-cache-comparison: start-redis start-valkey ## Compare all cache backends
 	@$(LOG_TARGET)
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo "  Cache Backend Comparison Benchmark"
@@ -166,8 +163,7 @@ benchmark-cache-comparison: rust start-redis start-valkey ## Compare all cache b
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/comparison
-	@export $(NATIVE_ENV) && \
-		export USE_CPU=$${USE_CPU:-false} && \
+	@export USE_CPU=$${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \

@@ -18,7 +18,7 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     source_bytes = bootstrap.config_path.read_bytes()
     runtime = tmp_path / ".vllm-sr" / "runtime-config.setup-test.yaml"
     realize_runtime_config(
-        bootstrap.config_path, runtime, algorithm=None, platform="amd"
+        bootstrap.config_path, runtime, algorithm=None, platform="rocm"
     )
     runtime_bytes = runtime.read_bytes()
     layout = resolve_runtime_stack(stack_name="setup-test", port_offset=12000)
@@ -31,11 +31,8 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     )
     docker = tmp_path / "docker"
     docker.touch()
-    monkeypatch.setattr(
-        container_start, "resolve_container_cli_path", lambda **kwargs: str(docker)
-    )
 
-    def capture_specs(specs, *, storage_secret_values):
+    def capture_specs(specs, **_secrets):
         captured.extend(specs)
         return 0, "", ""
 
@@ -54,7 +51,7 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     envoy = yaml.safe_load((tmp_path / ".vllm-sr" / "envoy.yaml").read_text())
     assert envoy["static_resources"]["listeners"]
     services = {name: commands for name, _, commands in captured}
-    assert set(services) == {"router", "envoy", "dashboard"}
+    assert set(services) == {"router", "envoy", "sr-bench", "dashboard"}
     assert services["router"][0][1] == "create"
     assert services["envoy"][0][1] == "create"
     assert services["dashboard"][0][1] == "run"
@@ -111,3 +108,49 @@ def test_regular_renderer_accepts_only_validated_setup_envelope(tmp_path: Path, 
         str(path), str(output), resolve_runtime_stack()
     )
     assert yaml.safe_load(output.read_text())["static_resources"]["listeners"]
+
+
+def test_external_bench_service_uses_dashboard_gateway_without_worker_lifecycle(
+    tmp_path, monkeypatch
+):
+    bootstrap = ensure_bootstrap_workspace(tmp_path / "config.yaml")
+    captured = []
+    monkeypatch.setenv("SR_BENCH_URL", "http://host.docker.internal:18090")
+    monkeypatch.setenv("SR_BENCH_TOKEN_ENV", "EXTERNAL_BENCH_TOKEN")
+    monkeypatch.setenv("EXTERNAL_BENCH_TOKEN", "external-private-token")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **kwargs: dict.fromkeys(("router", "envoy", "dashboard"), "test-image"),
+    )
+    monkeypatch.setattr(
+        container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
+    )
+    docker = tmp_path / "docker"
+    docker.touch()
+
+    def capture_specs(specs, **kwargs):
+        captured.extend(specs)
+        assert kwargs["bench_secret_values"] == {
+            "EXTERNAL_BENCH_TOKEN": "external-private-token"
+        }
+        return 0, "", ""
+
+    monkeypatch.setattr(container_start, "run_container_specs", capture_specs)
+    assert (
+        container_start.container_start_vllm_sr(
+            str(bootstrap.config_path), {}, [{"port": 8899, "address": "127.0.0.1"}]
+        )[0]
+        == 0
+    )
+    assert [name for name, _, _ in captured] == ["router", "envoy", "dashboard"]
+    assert not (tmp_path / ".sr-bench").exists()
+    for name, _, commands in captured:
+        command = commands[0]
+        assert "external-private-token" not in " ".join(command)
+        if name == "dashboard":
+            assert "SR_BENCH_URL=http://host.docker.internal:18090" in command
+            assert "EXTERNAL_BENCH_TOKEN" in command
+        else:
+            assert not any("BENCH" in item for item in command)

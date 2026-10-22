@@ -32,11 +32,20 @@ func Evaluate(candidate []byte, opts EvaluateOptions) EvaluateResult {
 		return result
 	}
 
-	_, err = ParseYAMLBytesWithoutEnvExpansion(candidate)
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(candidate)
 	if err != nil {
 		result.Errors = append(result.Errors, classifyEvaluationError(err))
 		attachDiff(&result, raw, opts)
 		return result
+	}
+	for _, warning := range Warnings(cfg) {
+		result.Warnings = append(result.Warnings, Diagnostic{
+			Code:     warning.Code,
+			Severity: SeverityWarning,
+			Stage:    StageValidate,
+			Field:    warning.Field,
+			Message:  warning.Message,
+		})
 	}
 
 	normalized, err := marshalRedactedYAML(raw)

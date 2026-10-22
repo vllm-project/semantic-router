@@ -102,6 +102,10 @@ For a card without `reasoning_family`, labels such as `enabled`, `disabled`,
 `default`, and `unspecified` describe the published run condition only; they do
 not create a user-configurable selector.
 
+Runtime selectors consume the same exact-effort boundary. They never copy
+index evidence between efforts or multiply an index score by coverage; coverage
+may only break a tie between otherwise equal available scores.
+
 A physical Model Card represents one canonical upstream model identity. Date
 snapshots, cloud aliases, quantizations, and serving-engine packaging do not
 become duplicate cards: provider-specific names belong in that provider's
@@ -114,12 +118,13 @@ provider-owned mapping. A card may therefore appear under several providers
 without duplicating its intrinsic identity. Virtual recipes are materialized
 from packaged assets and keep their own evaluation directory.
 
-The built-in physical inventory is curated at the creator-company level. The
-current baseline contains 84 physical cards from 22 mainstream creators and
-five separately stored virtual cards. For each creator, prefer roughly the
+The built-in physical inventory is curated at the creator-company level, and
+virtual cards are stored separately. The generated
+`website/static/model-catalog/catalog.json` is the source for current card and
+provider counts. For each creator, prefer roughly the
 latest three generations or representative product lines over accumulating a
 shallow long tail of lesser-known creators. This policy is about Model Cards,
-not serving endpoints: the 60 `ProviderDefinition` resources remain broad so
+not serving endpoints: the `ProviderDefinition` resources remain broad so
 Add Model and handwritten custom models can use a known runtime contract even
 when that provider has no curated built-in model mapping. `ModelCard.publisher`
 is the creator; a `ProviderDefinition` is the runtime API contract for the

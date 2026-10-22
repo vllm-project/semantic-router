@@ -6,8 +6,8 @@ func TestGlobalModelServicesDoNotBorrowDefaultRecipeOverride(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.ModelDeployments = map[string]ModelDeployment{
-		"global": {Provider: "ort", Device: "rocm:0", Artifact: "models/encoder"},
-		"local":  {Provider: "ort", Device: "cpu", Artifact: "models/encoder"},
+		"global": {Provider: ModelRuntimeProvider, Device: "rocm:0", Artifact: "models/encoder"},
+		"local":  {Provider: ModelRuntimeProvider, Device: "cpu", Artifact: "models/encoder"},
 	}
 	cfg.GlobalModelBindings = map[string]ModelBinding{"embedding": {Deployment: "global", Adapter: "mmbert", Contract: "embedding.v1"}}
 	cfg.ModelBindings = map[string]ModelBinding{"embedding": {Deployment: "local", Adapter: "mmbert", Contract: "embedding.v1"}}
@@ -32,7 +32,7 @@ func TestGlobalModelServicesDoNotBorrowDefaultRecipeOverride(t *testing.T) {
 }
 
 func TestGlobalModelServicesUseOnlyReachableEnabledPlugins(t *testing.T) {
-	cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{}}}
+	cfg := &RouterConfig{}
 	cfg.Recipes = []RoutingRecipe{
 		{Name: "dormant", Profile: RoutingProfile{Decisions: []Decision{{Plugins: []DecisionPlugin{
 			{Type: "memory", Configuration: MustStructuredPayload(MemoryPluginConfig{Enabled: true})},
@@ -49,5 +49,18 @@ func TestGlobalModelServicesUseOnlyReachableEnabledPlugins(t *testing.T) {
 	}
 	if cfg.Tools.Enabled || cfg.Memory.Enabled {
 		t.Fatal("preparation demand changed global authoring")
+	}
+}
+
+func TestRecipeToolConsumerUsesGlobalModuleWithoutGlobalBinding(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = "bert"
+	cfg.Decisions = []Decision{{Plugins: []DecisionPlugin{{Type: "tool_selection", Configuration: MustStructuredPayload(ToolSelectionPluginConfig{Enabled: true})}}}}
+	if EmbeddingModelsNeeded(cfg, "bert", false)["bert"] {
+		t.Fatal("recipe prepared a second service-owned tools model")
+	}
+	service := cfg.ConfigForGlobalModelServices()
+	if !EmbeddingModelsNeeded(service, "bert", true)["bert"] {
+		t.Fatal("global scope lost tool consumer")
 	}
 }

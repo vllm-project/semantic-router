@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -66,12 +67,15 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 
 	queryEmbedding, err := embedder.Embed(r.Context(), params.request.Query)
 	if err != nil {
+		// The client message stays generic, so the cause is only on the server.
+		logging.Errorf("Vector store search could not embed the query for store %s: %v", params.storeID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_ERROR", "failed to generate query embedding")
 		return
 	}
 
 	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbedding)
 	if err != nil {
+		logging.Errorf("Vector store search failed for store %s: %v", params.storeID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SEARCH_ERROR", "search failed")
 		return
 	}
@@ -94,7 +98,9 @@ func (s *ClassificationAPIServer) parseVectorStoreSearchParams(r *http.Request) 
 	if err := s.parseJSONRequestWithLimit(r, &req, maxVectorStoreJSONBodySize); err != nil {
 		return vectorStoreSearchParams{}, err
 	}
-	if req.Query == "" {
+	// The embedder rejects text that is empty once trimmed, so a query of only
+	// whitespace is a client error here rather than an internal failure later.
+	if strings.TrimSpace(req.Query) == "" {
 		return vectorStoreSearchParams{}, fmt.Errorf("query is required")
 	}
 

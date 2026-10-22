@@ -36,7 +36,11 @@ func EffectiveCandidateRequest(request *llmprotocol.Request, decision *config.De
 					return nil, err
 				}
 			}
-			llmprotocol.DefaultOutputTokens(&view, params.DefaultMaxTokens)
+			if params.DefaultMaxTokens.IsAuto() {
+				llmprotocol.DefaultAutomaticOutput(&view)
+			} else {
+				llmprotocol.DefaultOutputTokens(&view, params.DefaultMaxTokens.Fixed())
+			}
 			llmprotocol.CapOutputTokens(&view, params.MaxTokensLimit)
 			llmprotocol.CapCandidateCount(&view, params.MaxN)
 		}

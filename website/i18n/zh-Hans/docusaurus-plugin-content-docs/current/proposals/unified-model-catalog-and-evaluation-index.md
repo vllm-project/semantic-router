@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 统一模型目录与评估指数
 description: 覆盖提供商、协议、模型卡片、运行时绑定、Day-0 支持和基准特定模型比较的单一目录契约。
 created: 2026-09-04
@@ -717,4 +718,4 @@ website/
 - [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1)
 - [统一配置契约 v0.3](./unified-config-contract-v0-3)
 - [多协议适配器架构](./multi-protocol-adaptor)
-- [评估平面](../benchmarking/evaluation-plane)
+- [sr-bench 1.0](../benchmarking/sr-bench)

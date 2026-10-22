@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "15a2f08f188b509dbe06132281a226d1cc6a665c"
   source_file: "docs/tutorials/decision/overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 决策
@@ -61,7 +62,7 @@ routing:
 `decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`。
 
 分类器失败会评估为 `Unknown`，而不是 `False`。`NOT Unknown` 仍是 `Unknown`；`False AND Unknown` 是 `False`，`True OR Unknown` 是 `True`。
-当最终结果仍未知时，`rules.on_unknown` 选择 `no_match`、`match` 或 `fail_request`。如果省略，会保留现有通用分类器 `on_error` 和提示防护 `on_error` 行为，并且路由器会在启动时警告既未设置这些项的分类器条件。已应用的策略出现在 `x-vsr-applied-unknown-policy` 响应头和 `llm_decision_unknown_total{decision, policy}` 指标中；`fail_request` 的 503 消息会点名修复方式。
+当最终结果仍未知时，`rules.on_unknown` 选择 `no_match`、`match` 或 `fail_request`。如果省略，会保留现有通用分类器 `on_error` 和提示防护 `on_error` 行为，并且路由器会在启动时警告既未设置这些项的分类器条件。已应用的策略出现在 `x-vsr-applied-unknown-policy` 响应头和 `llm_decision_unknown_total{decision, policy}` 指标中。`fail_request` 的 503 带有原因码 [`decision_unresolved`](../../api/router.md#routing-errors)，Router 为它记录的日志会点名修复方式。
 
 决策匹配与以下内容保持分离：
 

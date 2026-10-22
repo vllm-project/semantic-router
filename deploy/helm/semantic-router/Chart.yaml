@@ -3,11 +3,14 @@ name: semantic-router
 description: A Helm chart for deploying Semantic Router - an intelligent routing system for LLM applications
 type: application
 version: 0.2.0
-# appVersion is the default image tag used from a source checkout. Keep it on a
-# released image rather than the mutable main-channel tag. The publication
+# appVersion is the default tag of every image this chart deploys. During a
+# development cycle it is "latest", the image main publishes for these
+# templates. src/vllm-sr/scripts/release.sh pins the release tag on the release
+# commit and restores "latest" when it starts the next cycle;
+# tools/release/check_version_contract.py enforces both. The publication
 # pipeline overrides it with the main, nightly, or release image tag attached
 # to the packaged chart.
-appVersion: "v0.3.0"
+appVersion: "latest"
 keywords:
   - semantic-router
   - llm

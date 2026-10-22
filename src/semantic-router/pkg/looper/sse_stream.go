@@ -83,8 +83,6 @@ func buildReMoMStreamingSSE(
 	id string,
 	created int64,
 	final IntermediateResp,
-	allRoundResponses []RoundResponse,
-	includeIntermediate bool,
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -92,11 +90,7 @@ func buildReMoMStreamingSSE(
 		"delta":         map[string]interface{}{"role": "assistant"},
 		"finish_reason": nil,
 	}
-	var extra map[string]interface{}
-	if includeIntermediate {
-		extra = map[string]interface{}{"reasoning_mom_responses": allRoundResponses}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, final.Model, roleChoice, extra))
+	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, final.Model, roleChoice, nil))
 
 	contentChoice := map[string]interface{}{
 		"index":         0,

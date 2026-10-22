@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -9,7 +9,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configschema"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
@@ -37,6 +39,13 @@ func apiHealthRoutes() []apiRoute {
 			jsonResponse[startupstatus.State](http.StatusOK, "Successful response"),
 			jsonResponse[startupstatus.State](http.StatusServiceUnavailable, "Startup state or readiness is unavailable"),
 			emptyResponse(http.StatusInternalServerError, "Startup status could not be encoded"),
+		),
+		managedRoute(
+			EndpointMetadata{Path: apiStatusPath, Method: "GET", Description: "Versioned replica-local startup and configuration status; not a deployment probe"},
+			routePolicy{Permission: PermReadyRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleStatus,
+			jsonResponse[routerruntime.StatusReport](http.StatusOK, "Replica-local observations; unknown readiness is not ready"),
+			errorResponses(http.StatusServiceUnavailable),
 		),
 		managedRoute(
 			EndpointMetadata{
@@ -143,15 +152,7 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBodyFor[BatchClassificationRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleNLIClassification,
-			jsonResponse[services.NLIResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[services.NLIRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text and image embeddings"},
+			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
 			jsonResponse[EmbeddingResponse](http.StatusOK, "Successful response"),
@@ -183,15 +184,17 @@ func apiRoutingRoutes() []apiRoute {
 			EndpointMetadata{
 				Path:        apiRoutingPreviewPath,
 				Method:      "POST",
-				Description: "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+				Description: "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
 				Parameters: []OpenAPIParameter{
 					queryParameter("trace", "Include per-decision routing trace trees.", "boolean"),
+					headerParameter(headers.SRBenchExpectedConfigHash, "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.", false),
 				},
 			},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEvalClassification,
 			jsonResponse[services.EvalResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 504),
+			responseHeaders(http.StatusOK, map[string]OpenAPIHeader{headers.VSRConfigHash: {Description: "SHA-256 of the actual runtime generation used by this Preview.", Schema: OpenAPISchema{Type: "string"}}}),
+			errorResponses(400, 412, 413, 429, 500, 504),
 			jsonResponseOrError[services.EvalResponse](http.StatusServiceUnavailable, "Decision unresolved, inference canceled, or server shutting down"),
 			strictJSONBodyFor[services.IntentRequest](),
 		),
@@ -217,6 +220,12 @@ func apiInventoryRoutes() []apiRoute {
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleEmbeddingModelsInfo,
 			jsonResponse[embeddingModelsResponse](http.StatusOK, "Successful response"),
+		),
+		managedRoute(
+			EndpointMetadata{Path: apiInventoryModelRuntime, Method: "GET", Description: "Get the model_runtime deployments: process, readiness, restarts and served model cards"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
+			(*ClassificationAPIServer).handleModelRuntimeInventory,
+			jsonResponse[modelRuntimeInventoryResponse](http.StatusOK, "Successful response"),
 		),
 	}
 }
@@ -437,7 +446,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 			errorResponses(500),
 			mediaResponse(http.StatusOK, "Canonical configuration document; field schemas are available at /api/v1/config/schema?view=full", "application/json", OpenAPISchema{Type: "object", AdditionalProperties: true}),
-			etagResponseHeaders(http.StatusOK),
+			activeConfigResponseHeaders(http.StatusOK),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it"},
@@ -528,7 +537,7 @@ func apiKnowledgeBaseRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleCreateKnowledgeBase,
 			jsonResponse[knowledgeBaseDocument](http.StatusCreated, "Successful response"),
 			errorResponses(400, 500),
-			jsonResponse[knowledgeBaseDocument](http.StatusAccepted, "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash"),
+			jsonResponse[knowledgeBaseDocument](http.StatusAccepted, "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart"),
 			jsonResponse[knowledgeBaseDocument](http.StatusServiceUnavailable, "Candidate persisted but runtime activation failed; inspect activation and recover through /api/v1/config"),
 			errorResponse(http.StatusConflict, "Conflict, including CONFIG_ACTIVATION_PENDING or CONFIG_ACTIVATION_FAILED while the saved candidate is not active"),
 			jsonBodyFor[knowledgeBaseUpsertRequest](),
@@ -560,7 +569,7 @@ func apiKnowledgeBaseRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleUpdateKnowledgeBase,
 			jsonResponse[knowledgeBaseDocument](http.StatusOK, "Successful response"),
 			errorResponses(400, 404, 500),
-			jsonResponse[knowledgeBaseDocument](http.StatusAccepted, "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash"),
+			jsonResponse[knowledgeBaseDocument](http.StatusAccepted, "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart"),
 			jsonResponse[knowledgeBaseDocument](http.StatusServiceUnavailable, "Candidate persisted but runtime activation failed; inspect activation and recover through /api/v1/config"),
 			errorResponse(http.StatusConflict, "Conflict, including CONFIG_ACTIVATION_PENDING or CONFIG_ACTIVATION_FAILED while the saved candidate is not active"),
 			jsonBodyFor[knowledgeBaseUpsertRequest](),
@@ -571,7 +580,7 @@ func apiKnowledgeBaseRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleDeleteKnowledgeBase,
 			jsonResponse[knowledgeBaseDeleteResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 404, 500),
-			jsonResponse[knowledgeBaseDeleteResponse](http.StatusAccepted, "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash"),
+			jsonResponse[knowledgeBaseDeleteResponse](http.StatusAccepted, "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart"),
 			jsonResponse[knowledgeBaseDeleteResponse](http.StatusServiceUnavailable, "Candidate persisted but runtime activation failed; inspect activation and recover through /api/v1/config"),
 			errorResponse(http.StatusConflict, "Conflict, including CONFIG_ACTIVATION_PENDING or CONFIG_ACTIVATION_FAILED while the saved candidate is not active"),
 		),
@@ -589,6 +598,7 @@ func apiMemoryRoutes() []apiRoute {
 					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
 					queryParameter("type", "Comma-separated memory types: semantic, procedural, or episodic.", "string"),
 					queryParameter("limit", "Maximum results; defaults to 20 and is capped at 100.", "integer"),
+					queryParameter("offset", "Rows to skip after created_at descending, id descending. Best-effort under concurrent writes. Defaults to 0.", "integer"),
 				},
 			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},

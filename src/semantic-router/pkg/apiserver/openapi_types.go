@@ -1,6 +1,8 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
+
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/openapischema"
 
 // OpenAPISpec represents an OpenAPI 3.0 specification.
 type OpenAPISpec struct {
@@ -101,19 +103,7 @@ type OpenAPIMedia struct {
 }
 
 // OpenAPISchema describes a schema.
-type OpenAPISchema struct {
-	OneOf                []OpenAPISchema          `json:"oneOf,omitempty"`
-	Nullable             bool                     `json:"nullable,omitempty"`
-	Type                 string                   `json:"type,omitempty"`
-	Format               string                   `json:"format,omitempty"`
-	Description          string                   `json:"description,omitempty"`
-	Enum                 []string                 `json:"enum,omitempty"`
-	Properties           map[string]OpenAPISchema `json:"properties,omitempty"`
-	Required             []string                 `json:"required,omitempty"`
-	Items                *OpenAPISchema           `json:"items,omitempty"`
-	AdditionalProperties any                      `json:"additionalProperties,omitempty"`
-	Ref                  string                   `json:"$ref,omitempty"`
-}
+type OpenAPISchema = openapischema.Schema
 
 // OpenAPIComponents contains reusable components.
 type OpenAPIComponents struct {

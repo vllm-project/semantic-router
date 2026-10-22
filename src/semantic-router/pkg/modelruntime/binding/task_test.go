@@ -108,3 +108,35 @@ func TestTaskLimitsDoNotAdvertiseModelCapacityAsTaskSupport(t *testing.T) {
 		t.Fatal("model capacity bypassed task restriction")
 	}
 }
+
+func TestWindowLimitsKeepDocumentAndForwardCapacitySeparate(t *testing.T) {
+	limits := Limits{ModelTokens: 32768, TaskTokens: 32768, DocumentTokens: 262144, DeploymentTokens: 65536, Overflow: "window"}
+	if err := limits.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if limits.ForwardTokens() != 32768 || limits.EffectiveTokens() != 65536 {
+		t.Fatalf("mixed forward and document capacity: %+v", limits)
+	}
+	if err := limits.CheckInput(42000); err != nil {
+		t.Fatal(err)
+	}
+	if err := limits.CheckInput(65537); !errors.Is(err, ErrInputLimit) {
+		t.Fatalf("document overflow: %v", err)
+	}
+	for name, mutate := range map[string]func(*Limits){
+		"single forward":         func(l *Limits) { l.Overflow = "reject" },
+		"truncation":             func(l *Limits) { l.Overflow = "truncate" },
+		"no document capability": func(l *Limits) { l.DocumentTokens = 0 },
+		"insufficient scan":      func(l *Limits) { l.DocumentTokens = 32768 },
+		"unknown forward":        func(l *Limits) { l.ModelTokens = 0; l.TaskTokens = 0 },
+		"negative scan":          func(l *Limits) { l.DocumentTokens = -1 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := limits
+			mutate(&bad)
+			if err := bad.Validate(); !errors.Is(err, ErrCapability) {
+				t.Fatalf("unsupported capability accepted: %+v %v", bad, err)
+			}
+		})
+	}
+}

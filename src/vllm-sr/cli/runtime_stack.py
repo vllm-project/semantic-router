@@ -6,6 +6,8 @@ import os
 import re
 from dataclasses import dataclass, fields
 
+import click
+
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,
@@ -14,9 +16,12 @@ from cli.consts import (
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
 )
+from cli.gateway_mode import GATEWAY_STANDALONE
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
+MAX_PORT = 65535
 PORT_OFFSET_ENV = "VLLM_SR_PORT_OFFSET"
+BENCH_PORT_ENV = "VLLM_SR_BENCH_PORT"
 DEFAULT_ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
 
 DEFAULT_JAEGER_OTLP_PORT = 4318
@@ -35,8 +40,8 @@ class RuntimeStackLayout:
     """Every name and port one local stack owns.
 
     A stack runs on two bridge networks. *network_name* is the application
-    network: Envoy, Dashboard, the observability containers, and
-    any OpenClaw workload join it. *data_network_name* carries the storage
+    network: Envoy, Dashboard and the observability containers join
+    it. *data_network_name* carries the storage
     services alone, so nothing that merely shares the stack can reach Redis,
     Postgres, or Milvus over the network. Router is the one container on both.
     """
@@ -65,6 +70,7 @@ class RuntimeStackLayout:
     redis_port: int
     postgres_port: int
     milvus_port: int
+    sr_bench_port: int
 
     def __post_init__(self) -> None:
         for field in fields(self):
@@ -83,6 +89,12 @@ class RuntimeStackLayout:
                 f"{name} {port}; host ports must be between 1 and {_MAX_HOST_PORT}"
             )
         return port
+
+    @property
+    def sr_bench_container_name(self) -> str:
+        return self.dashboard_container_name.replace(
+            "dashboard-container", "sr-bench-container"
+        )
 
     @property
     def dashboard_url(self) -> str:
@@ -110,6 +122,12 @@ class RuntimeStackLayout:
 
     def envoy_listener_service_url(self, listener_port: int) -> str:
         return f"http://{self.envoy_container_name}:{listener_port}"
+
+    def gateway_listener_service_url(self, gateway: str, listener_port: int) -> str:
+        """The in-network URL of the container that serves the listeners."""
+        if gateway == GATEWAY_STANDALONE:
+            return f"http://{self.router_container_name}:{listener_port}"
+        return self.envoy_listener_service_url(listener_port)
 
     @property
     def jaeger_ui_url(self) -> str:
@@ -245,6 +263,9 @@ def resolve_runtime_stack(
         redis_port=DEFAULT_REDIS_PORT + resolved_port_offset,
         postgres_port=DEFAULT_POSTGRES_PORT + resolved_port_offset,
         milvus_port=DEFAULT_MILVUS_PORT + resolved_port_offset,
+        sr_bench_port=normalize_bench_port(
+            os.getenv(BENCH_PORT_ENV), resolved_port_offset
+        ),
     )
 
 
@@ -268,10 +289,49 @@ def normalize_stack_name(raw_value: str | None) -> str:
     return cleaned
 
 
+# The offset is added to every derived port, so the largest base binds the range.
+MAX_BASE_PORT = max(
+    DEFAULT_ROUTER_PORT,
+    DEFAULT_API_PORT,
+    DEFAULT_DASHBOARD_PORT,
+    DEFAULT_METRICS_PORT,
+    DEFAULT_MILVUS_PORT,
+    DEFAULT_JAEGER_OTLP_PORT,
+    DEFAULT_JAEGER_UI_PORT,
+    DEFAULT_PROMETHEUS_PORT,
+    DEFAULT_GRAFANA_PORT,
+    DEFAULT_REDIS_PORT,
+    DEFAULT_POSTGRES_PORT,
+)
+MAX_PORT_OFFSET = MAX_PORT - MAX_BASE_PORT
+
+
 def normalize_port_offset(raw_value: str | int | None) -> int:
     if raw_value in (None, ""):
         return 0
-    offset = int(raw_value)
-    if offset < 0:
-        raise ValueError(f"{PORT_OFFSET_ENV} must be >= 0, got {offset}")
+    try:
+        offset = int(raw_value)
+    except ValueError:
+        raise click.ClickException(
+            f"{PORT_OFFSET_ENV} must be an integer between 0 and {MAX_PORT_OFFSET}"
+        ) from None
+    if not 0 <= offset <= MAX_PORT_OFFSET:
+        raise click.ClickException(
+            f"{PORT_OFFSET_ENV} must be between 0 and {MAX_PORT_OFFSET} so derived"
+            f" ports stay within {MAX_PORT}, got {offset}"
+        )
     return offset
+
+
+def normalize_bench_port(raw_value: str | None, port_offset: int) -> int:
+    if raw_value in (None, ""):
+        return 8090 + port_offset
+    try:
+        port = int(raw_value)
+    except ValueError:
+        raise ValueError(
+            f"{BENCH_PORT_ENV} must be an integer between 1 and 65535"
+        ) from None
+    if not 1 <= port <= _MAX_HOST_PORT:
+        raise ValueError(f"{BENCH_PORT_ENV} must be between 1 and 65535, got {port}")
+    return port

@@ -137,7 +137,8 @@ spec:
 
     ### Architecture
 
-    The Semantic Router runs as an Envoy ExtProc filter, processing requests through:
+    The Semantic Router serves the OpenAI-compatible API itself (standalone mode), or runs as the
+    ExtProc filter of an existing Gateway, processing requests through:
 
     1. Prompt guard (jailbreak detection)
     2. PII detection and redaction

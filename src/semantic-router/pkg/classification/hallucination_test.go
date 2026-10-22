@@ -249,7 +249,7 @@ var _ = Describe("FactCheckClassifier", func() {
 		})
 	})
 
-	Describe("Initialize", func() {
+	Describe("Initialize", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			skipIfNoFactCheckModelGinkgo()
 			var err error
@@ -274,7 +274,7 @@ var _ = Describe("FactCheckClassifier", func() {
 		})
 	})
 
-	Describe("Classify", func() {
+	Describe("Classify", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			skipIfNoFactCheckModelGinkgo()
 			var err error
@@ -379,7 +379,7 @@ var _ = Describe("HallucinationDetector", func() {
 		})
 	})
 
-	Describe("Initialize", func() {
+	Describe("Initialize", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			skipIfNoHallucinationModel()
 			var err error
@@ -404,7 +404,7 @@ var _ = Describe("HallucinationDetector", func() {
 		})
 	})
 
-	Describe("Detect", func() {
+	Describe("Detect", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			skipIfNoHallucinationModel()
 			var err error

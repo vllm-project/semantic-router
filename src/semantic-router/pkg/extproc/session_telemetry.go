@@ -31,19 +31,22 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 		return sessiontelemetry.TurnPricing{}
 	}
 	return sessiontelemetry.TurnPricing{
-		Currency:         p.Currency,
-		PromptPer1M:      p.PromptPer1M,
-		CompletionPer1M:  p.CompletionPer1M,
-		CachedInputPer1M: p.CachedInputPer1M,
-		CacheWritePer1M:  p.CacheWritePer1M,
+		Currency:          p.Currency,
+		PromptPer1M:       p.PromptPer1M,
+		CompletionPer1M:   p.CompletionPer1M,
+		CachedInputPer1M:  p.CachedInputPer1M,
+		CacheWritePer1M:   p.CacheWritePer1M,
+		CacheWrite1hPer1M: p.CacheWrite1hPer1M,
 	}
 }
 
 func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
+	recordSessionTurnOutcome(ctx, usage, pricing)
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}
 	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
+	sessiontelemetry.RecordLastModel(promptCacheKeyStateKey(ctx), ctx.RequestModel)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 	// Routing ownership follows the dispatch identity; protocol telemetry keeps
 	// its own Chat fingerprint or Responses lineage without creating an owner.
@@ -60,6 +63,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		EstimatedCacheSavings:       accounting.estimatedSavings,
@@ -93,6 +97,29 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
 	}
 	sessiontelemetry.RecordTurn(p)
+}
+
+// promptCacheKeyStateKey scopes a client prompt_cache_key to the recipe, under
+// a fixed component so it cannot collide with a session key.
+func promptCacheKeyStateKey(ctx *RequestContext) string {
+	if ctx == nil || ctx.SemanticRequest == nil || requestBypassesRouting(ctx) {
+		return ""
+	}
+	return sessiontelemetry.RoutingSessionKey(ctx.Routing.RecipeName(), "prompt_cache_key", ctx.SemanticRequest.PromptCacheKey)
+}
+
+// promptCacheKeyModel returns the model that last served this request's
+// prompt_cache_key. A preview reads its snapshot and leaves the live store alone.
+func promptCacheKeyModel(ctx *RequestContext) string {
+	key := promptCacheKeyStateKey(ctx)
+	if key == "" {
+		return ""
+	}
+	if ctx.learningPreview != nil {
+		return ctx.learningPreview.lastModel(key).Model
+	}
+	model, _ := sessiontelemetry.GetLastModel(key)
+	return model
 }
 
 func recordRouterSessionUsageFromContext(
@@ -140,6 +167,8 @@ func recordRouterLearningUsageFromContext(
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite5mTokens:          usage.cacheWrite5mTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		Cost:                        sessionTurnCost(usage, pricing),

@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pytest
+import yaml
 from cli.algorithms import (
     AlgorithmConfig,
     FusionAlgorithmConfig,
@@ -6,6 +9,7 @@ from cli.algorithms import (
     WorkflowPlannerConfig,
     WorkflowsAlgorithmConfig,
 )
+from cli.main import main
 from cli.models import (
     Condition,
     DecisionAdaptationsConfig,
@@ -13,6 +17,7 @@ from cli.models import (
     Entrypoint,
     EvaluationRecord,
     KeywordSignal,
+    Listener,
     LoRAAdapter,
     ProjectionMapping,
     ProjectionMappingOutput,
@@ -23,6 +28,8 @@ from cli.models import (
     UserConfig,
 )
 from cli.validator import validate_user_config
+from cli.validator_recipe_contracts import effective_entrypoints
+from click.testing import CliRunner
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -95,6 +102,117 @@ def test_catalog_model_cannot_override_reasoning_binding():
         and "inherits reasoning" in error.message
         for error in errors
     )
+
+
+def _catalog_backed_qwen_config() -> UserConfig:
+    config = recipe_config()
+    config.providers.models[0].catalog = "qwen/qwen3.8-27b"
+    config.routing.model_cards[0].name = "qwen/qwen3.8-27b"
+    return config
+
+
+@pytest.mark.parametrize(
+    ("overlay", "field", "added"),
+    [
+        (
+            {
+                "capabilities": [
+                    "chat",
+                    "reasoning",
+                    "tools",
+                    "structured_output",
+                    "text",
+                ]
+            },
+            "capabilities",
+            "text",
+        ),
+        (
+            {"modalities": {"input": ["text", "audio"], "output": ["text"]}},
+            "modalities",
+            "audio",
+        ),
+    ],
+)
+def test_catalog_card_widening_is_rejected_before_serve(overlay, field, added):
+    config = _catalog_backed_qwen_config()
+    card = config.routing.model_cards[0]
+    for name, value in overlay.items():
+        setattr(card, name, value)
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == f"routing.modelCards[0].{field}"
+        and "widen a built-in claim" in error.message
+        and added in error.message
+        for error in errors
+    )
+
+
+def test_catalog_card_claims_may_be_narrowed():
+    config = _catalog_backed_qwen_config()
+    config.routing.model_cards[0].capabilities = ["chat", "reasoning"]
+    config.routing.model_cards[0].modalities = {"input": ["text"], "output": ["text"]}
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert not any(
+        error.field and error.field.startswith("routing.modelCards[0].")
+        for error in errors
+    )
+
+
+def test_custom_card_sharing_builtin_name_may_declare_its_own_claims():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {
+                "defaults": {"model": "qwen/qwen3.8-27b"},
+                "models": [
+                    {
+                        "name": "qwen/qwen3.8-27b",
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
+                    }
+                ],
+            },
+            "routing": {
+                "modelCards": [
+                    {"name": "qwen/qwen3.8-27b", "capabilities": ["chat", "text"]}
+                ]
+            },
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert not any("widen a built-in claim" in error.message for error in errors)
+
+
+def test_config_validate_reports_unverified_catalog_claim(tmp_path: Path):
+    config = _catalog_backed_qwen_config()
+    config.routing.model_cards[0].capabilities = [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "text",
+    ]
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            config.model_dump(mode="json", by_alias=True, exclude_none=True)
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(main, ["config", "validate", "--config", str(path)])
+
+    assert result.exit_code != 0
+    assert "capabilities widen a built-in claim" in result.output
+    assert "routing.modelCards[0].capabilities" in result.output
 
 
 def test_inline_reasoning_allows_an_implicit_mode_contract():
@@ -324,6 +442,11 @@ def test_entrypoints_must_reference_known_recipe():
     errors = validate_user_config(recipe_config(recipe_name="missing-recipe"))
 
     assert any("unknown recipe 'missing-recipe'" in error.message for error in errors)
+    assert any(
+        error.hint and "name of a recipe" in error.hint
+        for error in errors
+        if "unknown recipe 'missing-recipe'" in error.message
+    )
 
 
 def test_entrypoint_names_cannot_collide_with_provider_models():
@@ -332,7 +455,14 @@ def test_entrypoint_names_cannot_collide_with_provider_models():
 
     errors = validate_user_config(config)
 
-    assert any("conflicts with a configured model" in error.message for error in errors)
+    assert any(
+        "conflicts with a configured backend model" in error.message for error in errors
+    )
+    assert any(
+        error.hint and "distinct entrypoint model name" in error.hint
+        for error in errors
+        if "conflicts with a configured backend model" in error.message
+    )
 
 
 def test_recipes_only_default_profile_is_allowed():
@@ -359,6 +489,11 @@ def test_explicit_default_recipe_conflicts_with_top_level_strategy():
     errors = validate_user_config(config)
 
     assert any("Duplicate recipe name 'default'" in error.message for error in errors)
+    assert any(
+        error.hint and "unique name" in error.hint
+        for error in errors
+        if "Duplicate recipe name 'default'" in error.message
+    )
 
 
 def test_decision_adaptation_mode_boundaries_apply_inside_recipes():
@@ -552,13 +687,10 @@ def test_decision_names_can_repeat_across_recipes():
     assert not any("more than one routing profile" in error.message for error in errors)
 
 
-def test_default_looper_aliases_are_reserved_for_entrypoints():
+def test_orchestration_names_are_ordinary_explicit_entrypoints():
     config = recipe_config()
     config.entrypoints[0].model_names = ["vllm-sr/remom"]
-
-    errors = validate_user_config(config)
-
-    assert any("reserved alias" in error.message for error in errors)
+    assert not validate_user_config(config)
 
 
 def test_nullable_global_sections_do_not_crash_validation():
@@ -598,14 +730,14 @@ def test_malformed_alias_values_are_reported_without_crashing():
     )
 
 
-def test_reserved_aliases_are_trimmed_before_collision_checks():
+def test_removed_alias_fields_require_entrypoint_configuration():
     config = recipe_config()
     config.global_ = {"router": {"auto_model_names": [" amd/custom-auto "]}}
     config.entrypoints[0].model_names = ["amd/custom-auto"]
 
     errors = validate_user_config(config)
 
-    assert any("reserved alias" in error.message for error in errors)
+    assert any("was removed" in error.message for error in errors)
 
 
 def test_configured_model_names_keep_exact_collision_semantics():
@@ -723,3 +855,44 @@ def test_domain_names_can_have_different_definitions_across_recipes():
     errors = validate_user_config(config)
 
     assert not any("conflicting definitions" in error.message for error in errors)
+
+
+def test_default_entrypoint_override_and_reset():
+    config = recipe_config()
+    assert effective_entrypoints(config)[0].model_names == ["vllm-sr/auto"]
+    config.entrypoints.append(
+        Entrypoint(recipe="default", model_names=["our/router", "MoM"])
+    )
+    assert [
+        entry.model_names
+        for entry in effective_entrypoints(config)
+        if entry.recipe == "default"
+    ] == [["our/router", "MoM"]]
+    config.entrypoints = [
+        entry for entry in config.entrypoints if entry.recipe != "default"
+    ]
+    assert effective_entrypoints(config)[0].model_names == ["vllm-sr/auto"]
+
+
+def test_systemone_listener_scope_is_explicit_and_nonempty():
+    listener = Listener(
+        name="public", address="0.0.0.0", port=8000, models=["chat-only"]
+    )
+    assert listener.systemone is None
+    for models in ([], [""], [" padded "], ["one", "one"]):
+        with pytest.raises(PydanticValidationError):
+            Listener(
+                name="public",
+                address="0.0.0.0",
+                port=8000,
+                systemone={"models": models},
+            )
+    listener = Listener(
+        name="public",
+        address="0.0.0.0",
+        port=8000,
+        models=["chat-only"],
+        systemone={"models": ["decision-public"]},
+    )
+    assert listener.models == ["chat-only"]
+    assert listener.systemone.models == ["decision-public"]

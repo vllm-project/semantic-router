@@ -72,6 +72,64 @@ func TestMultiFactor_PicksHighestQualityWhenQualityDominant(t *testing.T) {
 	}
 }
 
+func TestMultiFactor_UsesCoverageOnlyForQualityTies(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1}
+	lowCoverage := addTestEvidence(config.ModelParams{}, 0.75, 0.6, "low")
+	highCoverage := addTestEvidence(config.ModelParams{}, 0.75, 1, "high")
+	s := buildMFSelector(cfg, map[string]config.ModelParams{"a": lowCoverage, "b": highCoverage},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+	refs := []config.ModelRef{
+		{Model: "a", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "b", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}
+	result, err := s.Select(context.Background(), &SelectionContext{CandidateModels: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedModel != "b" || !strings.Contains(result.Reasoning, "score=75.00 coverage=100%") {
+		t.Fatalf("coverage tie result = model %q reasoning %q", result.SelectedModel, result.Reasoning)
+	}
+
+	params := addTestEvidence(config.ModelParams{}, 0.6, 1, "low")
+	params = addTestEvidence(params, 0.9, 1, "high")
+	s = buildMFSelector(cfg, map[string]config.ModelParams{"model": params},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+	result, err = s.Select(context.Background(), &SelectionContext{CandidateModels: []config.ModelRef{
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedCandidate == nil || result.SelectedCandidate.ReasoningEffort != "high" ||
+		len(result.AllScores) != 2 || !strings.Contains(result.Reasoning, "effort=high score=90.00") {
+		t.Fatalf("duplicate-model selection = candidate %+v scores %v reasoning %q",
+			result.SelectedCandidate, result.AllScores, result.Reasoning)
+	}
+
+	cfg = DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Load: 1}
+	s = buildMFSelector(cfg, map[string]config.ModelParams{"a": lowCoverage, "b": highCoverage},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+	result, err = s.Select(context.Background(), &SelectionContext{CandidateModels: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedModel != "a" {
+		t.Fatalf("disabled quality used coverage, selected %q", result.SelectedModel)
+	}
+}
+
 func TestMultiFactor_UsesConfiguredCapabilityIndexAtExactEffort(t *testing.T) {
 	const codingIndex = "vllm-sr/coding@1.0.0"
 	const overallIndex = "vllm-sr/intelligence@1.0.0"

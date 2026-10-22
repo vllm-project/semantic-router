@@ -12,14 +12,14 @@ import (
 )
 
 func TestDefaultJailbreakWindowUsesRegistryBudgetWithoutChangingSource(t *testing.T) {
-	cfg := config.DefaultGlobalConfig()
+	cfg := vela1GuardConfig()
 	original := cfg.PromptGuard
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	resolved := models.cfg.PromptGuard
-	registered := config.GetModelByPath(config.DefaultSystemModels().PromptGuard)
+	registered := config.GetModelByPath(config.Vela1SystemModels().PromptGuard)
 	if resolved.MaxSequenceLength != registered.MaxContextLength || resolved.Window == nil || resolved.Window.Size != 512 || resolved.Window.Overlap != 255 {
 		t.Fatalf("incorrect bounded default: %+v", resolved)
 	}
@@ -50,19 +50,13 @@ func TestDefaultJailbreakWindowPreservesExplicitPolicies(t *testing.T) {
 			c.PromptGuard.MaxSequenceLength = 8192
 			c.PromptGuard.Window = &config.SequenceHeadWindowConfig{Size: 128, Overlap: 63}
 		},
-		"different adapter": func(c *config.RouterConfig) { c.PromptGuard.Variant = config.PromptGuardVariantCandle },
-		"disabled":          func(c *config.RouterConfig) { c.PromptGuard.Enabled = false },
-		"remote protocol": func(c *config.RouterConfig) {
-			c.PromptGuard.Variant = ""
-			c.PromptGuard.Protocol = config.PromptGuardProtocolHTTPChat
-		},
+		"disabled": func(c *config.RouterConfig) { c.PromptGuard.Enabled = false },
 		"remote backend": func(c *config.RouterConfig) {
-			c.PromptGuard.Variant = ""
 			c.PromptGuard.Backend = &config.RemoteClassifierBackend{Model: "remote", Protocol: config.RemoteClassifierProtocolHTTPClassify}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := config.DefaultGlobalConfig()
+			cfg := vela1GuardConfig()
 			change(&cfg)
 			original := cfg.PromptGuard
 			// Resolve the preparation policy without preparing a remote or native model.
@@ -78,7 +72,7 @@ func TestDefaultJailbreakWindowPreservesExplicitPolicies(t *testing.T) {
 }
 
 func TestDefaultJailbreakWindowRespectsArtifactSelection(t *testing.T) {
-	registered := config.GetModelByPath(config.DefaultSystemModels().PromptGuard)
+	registered := config.GetModelByPath(config.Vela1SystemModels().PromptGuard)
 	absolute, err := filepath.Abs(registered.LocalPath)
 	if err != nil {
 		t.Fatal(err)
@@ -95,10 +89,10 @@ func TestDefaultJailbreakWindowRespectsArtifactSelection(t *testing.T) {
 		{"absolute path", absolute, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cfg := config.DefaultGlobalConfig()
+			cfg := vela1GuardConfig()
 			cfg.PromptGuard.ModelID = test.artifact
 			original := cfg.PromptGuard
-			models, err := newClassifierModelRuntime(&cfg, nil)
+			models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -125,27 +119,27 @@ func TestDefaultJailbreakWindowRespectsArtifactSelection(t *testing.T) {
 	}
 }
 
-func TestDefaultJailbreakWindowPreservesAMDDeployment(t *testing.T) {
-	cfg := config.DefaultGlobalConfig()
+func TestDefaultJailbreakWindowPreservesROCmDeployment(t *testing.T) {
+	cfg := vela1GuardConfig()
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"guard-amd": {Artifact: config.DefaultSystemModels().PromptGuard, Provider: "ort", Device: "migraphx:0", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}},
+		"guard-amd": {Artifact: config.Vela1SystemModels().PromptGuard, Provider: config.ModelRuntimeProvider, Device: "rocm:0", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}},
 	}
 	cfg.ModelBindings = map[string]config.ModelBinding{
 		"prompt_guard": {Deployment: "guard-amd", Adapter: "modernbert", Contract: config.RemoteClassifierContractLabelDistribution},
 	}
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if models.cfg.PromptGuard.Window != nil || models.cfg.PromptGuard.MaxSequenceLength != 8192 {
-		t.Fatalf("explicit AMD execution changed: %+v", models.cfg.PromptGuard)
+		t.Fatalf("explicit ROCm execution changed: %+v", models.cfg.PromptGuard)
 	}
 	_, inference, err := buildJailbreakDependencies(models.cfg, newRiskTestClassifier(nil).JailbreakMapping, models)
 	if err != nil {
 		t.Fatal(err)
 	}
 	owned, ok := inference.(*ownedSequenceBackend)
-	if !ok || owned.spec.Deployment.Input.Overflow != "reject" || owned.spec.Deployment.Device != "migraphx:0" {
+	if !ok || owned.spec.Deployment.Input.Overflow != "reject" || owned.spec.Deployment.Device != "rocm:0" {
 		t.Fatalf("explicit owned backend was replaced: %T", inference)
 	}
 }
@@ -180,7 +174,7 @@ func TestDefaultJailbreakWindowPreservesContrastiveInputs(t *testing.T) {
 	text := strings.Repeat("sample ", 500)
 	for name, explicit := range map[string]int{"implicit default": 0, "explicit long budget": 8192, "explicit same window": 32768} {
 		t.Run(name, func(t *testing.T) {
-			cfg := config.DefaultGlobalConfig()
+			cfg := vela1GuardConfig()
 			cfg.PromptGuard.MaxSequenceLength = explicit
 			if explicit == 32768 {
 				cfg.PromptGuard.Window = &config.SequenceHeadWindowConfig{Size: 512, Overlap: 255}
@@ -189,7 +183,7 @@ func TestDefaultJailbreakWindowPreservesContrastiveInputs(t *testing.T) {
 			if explicit == 0 && len(original) < 2 {
 				t.Fatal("neutral fixture must exercise the original contrastive chunk boundary")
 			}
-			models, err := newClassifierModelRuntime(&cfg, nil)
+			models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -202,4 +196,12 @@ func TestDefaultJailbreakWindowPreservesContrastiveInputs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// vela1GuardConfig is the default configuration with the prompt guard pinned
+// to Vela 1.0 Guard, whose 32K document scan the Router resolves itself.
+func vela1GuardConfig() config.RouterConfig {
+	cfg := config.DefaultGlobalConfig()
+	cfg.PromptGuard.ModelID = config.Vela1SystemModels().PromptGuard
+	return cfg
 }

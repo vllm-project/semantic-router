@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 
 import pytest
+from cli.catalog_provider_projection import provider_projection_errors
 from cli.commands.validate import (
     _aggregate_projection_summary_lines,
     _aggregate_signal_summary_lines,
     _projection_summary_lines,
-    _provider_projection_errors,
     _signal_summary_lines,
 )
 from cli.config_contract import PROJECTION_FAMILY_SPECS, SIGNAL_FAMILY_SPECS
@@ -85,7 +85,7 @@ routing: {}
     user_config = parse_user_config(str(config_path), log_summary=False)
     authored_config = user_config.model_dump()
 
-    assert _provider_projection_errors(user_config) == []
+    assert provider_projection_errors(user_config) == []
     assert user_config.model_dump() == authored_config
 
 
@@ -132,6 +132,33 @@ routing:
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
+
+
+def test_validate_command_accepts_pii_rule_without_threshold(tmp_path):
+    config_path = _write_config(
+        tmp_path,
+        """
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+  signals:
+    pii:
+      - name: contact_details
+        pii_types_allowed: [EMAIL_ADDRESS]
+""",
+    )
+
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    rule = parse_user_config(str(config_path)).routing.signals.pii[0]
+    assert rule.threshold is None
 
 
 def test_validate_command_rejects_empty_external_gateway_provider_model(tmp_path):

@@ -8,8 +8,6 @@ import (
 )
 
 func TestBuildCanonicalConfigPromptGuardMappingPath(t *testing.T) {
-	const defaultMappingPath = "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json"
-
 	tests := []struct {
 		name        string
 		enabled     bool
@@ -17,9 +15,8 @@ func TestBuildCanonicalConfigPromptGuardMappingPath(t *testing.T) {
 		want        string
 	}{
 		{
-			name:    "enabled guard inherits router default",
+			name:    "enabled guard takes the served labels",
 			enabled: true,
-			want:    defaultMappingPath,
 		},
 		{
 			name:        "enabled guard preserves explicit override",
@@ -73,8 +70,8 @@ func TestBuildCanonicalConfigPromptGuardTokenWindow(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := canonical.Global.ModelCatalog.Modules.PromptGuard
-		if got.MaxSequenceLength != 32768 || got.Variant != "mmbert32k" {
-			t.Fatalf("lost explicit input budget or default variant: %+v", got)
+		if got.MaxSequenceLength != 32768 {
+			t.Fatalf("lost the explicit input budget: %+v", got)
 		}
 		if window == nil {
 			if got.Window != nil {

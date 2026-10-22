@@ -13,7 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -23,12 +22,12 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/route-action/gwapi-resources.yaml",
 }
 
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 }
 
 // Profile implements the decision route action test profile.

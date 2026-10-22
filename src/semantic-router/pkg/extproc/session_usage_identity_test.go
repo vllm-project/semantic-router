@@ -51,6 +51,10 @@ func TestRecordSessionTurnUsesDispatchOwner(t *testing.T) {
 					if err != nil || selected == nil || selected.Model != model {
 						t.Fatalf("selection did not establish %q: selected=%+v err=%v", model, selected, err)
 					}
+					// Usage arrives only after a successful dispatch establishes ownership.
+					if err := commitAgenticSessionDecision(ctx); err != nil {
+						t.Fatal(err)
+					}
 					ctx.RequestModel = selected.Model
 					owner := sessiontelemetry.RoutingSessionKey(recipe, sid)
 					if scope == config.RouterLearningScopeConversation {
@@ -61,7 +65,7 @@ func TestRecordSessionTurnUsesDispatchOwner(t *testing.T) {
 					}
 					before, ok := sessiontelemetry.GetRouterSessionSnapshot(owner, time.Now())
 					if !ok || before.CurrentModel != model || before.TurnCount != 1 || before.CumulativePromptTokens != 0 {
-						t.Fatalf("production selection did not create an empty owner: %+v, found=%t", before, ok)
+						t.Fatalf("committed dispatch did not create an empty owner: %+v, found=%t", before, ok)
 					}
 					owners = append(owners, owner)
 					recordSessionTurn(ctx, usage, pricing)

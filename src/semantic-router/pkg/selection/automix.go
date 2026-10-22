@@ -20,11 +20,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -133,7 +136,8 @@ type ModelCapability struct {
 // The algorithm routes to smaller models first and escalates based on
 // self-verification confidence, optimizing the cost-quality tradeoff.
 type AutoMixSelector struct {
-	config *AutoMixConfig
+	config      *AutoMixConfig
+	modelParams map[string]config.ModelParams
 
 	// Model capabilities indexed by model name
 	capabilities map[string]*ModelCapability
@@ -221,6 +225,7 @@ func (a *AutoMixSelector) Method() SelectionMethod {
 func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.ModelParams) {
 	a.capMu.Lock()
 	defer a.capMu.Unlock()
+	a.modelParams = modelConfig
 
 	for model, params := range modelConfig {
 		qualityScore, qualityKnown := params.EvidenceScore("")
@@ -262,28 +267,14 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 		return nil, err
 	}
 
-	// Sort candidates by cost (cheaper first for cascaded routing)
 	sortedCandidates := a.sortByCost(selCtx.CandidateModels)
-
-	// Calculate expected value for each model using POMDP
-	allScores := make(map[string]float64)
 	a.capMu.RLock()
-	a.valueMu.RLock()
 	defer a.capMu.RUnlock()
-	defer a.valueMu.RUnlock()
-
-	logging.Infof("[AutoMix] Evaluating %d candidates (tradeoff=%.2f):",
-		len(sortedCandidates), a.config.CostQualityTradeoff)
-	for _, model := range sortedCandidates {
-		modelName := model.Model
-		score := a.computeExpectedValue(modelName, selCtx)
-		allScores[modelName] = score
-		if cap, ok := a.capabilities[modelName]; ok {
-			logging.Infof("[AutoMix]   %s: cost=$%.2f, quality=%.2f, value=%.4f",
-				modelName, cap.Cost, cap.AvgQuality, score)
-		} else {
-			logging.Infof("[AutoMix]   %s: value=%.4f (no capability data)", modelName, score)
-		}
+	// Scoring and comparison observe one capability snapshot.
+	scores := a.scoreCandidatesLocked(sortedCandidates, selCtx)
+	candidateScores := make([]float64, len(scores))
+	for i, row := range scores {
+		candidateScores[i] = row.Score
 	}
 
 	// Find optimal starting model (not necessarily the best, but best value)
@@ -293,10 +284,10 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 
 	if a.config.CostAwareRouting {
 		// Cost-aware: select model with best value considering cost
-		selectedModel, selectedScore, reasoning = a.selectCostAware(sortedCandidates, allScores, selCtx)
+		selectedModel, selectedScore, reasoning = a.selectCostAware(sortedCandidates, candidateScores, selCtx)
 	} else {
 		// Quality-only: select model with highest expected quality
-		selectedModel, selectedScore, reasoning = a.selectQualityOnly(sortedCandidates, allScores)
+		selectedModel, selectedScore, reasoning = a.selectQualityOnly(sortedCandidates, candidateScores)
 	}
 
 	if selectedModel == nil {
@@ -318,14 +309,36 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 		selectedModel.Model, selectedScore, confidence, a.config.CostAwareRouting)
 
 	return &SelectionResult{
-		SelectedModel: selectedModel.Model,
-		LoRAName:      selectedModel.LoRAName,
-		Score:         selectedScore,
-		Confidence:    confidence,
-		Method:        MethodAutoMix,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     selectedModel.Model,
+		SelectedCandidate: selectedModel,
+		LoRAName:          selectedModel.LoRAName,
+		Score:             selectedScore,
+		Confidence:        confidence,
+		Method:            MethodAutoMix,
+		Reasoning:         reasoning,
+		AllScores:         scores.Diagnostics(),
+		CandidateScores:   scores,
 	}, nil
+}
+
+// ScoreCandidates exposes the raw expected values that Hybrid combines. The
+// cost-aware starting-model adjustment belongs to Select, not this score set.
+func (a *AutoMixSelector) ScoreCandidates(_ context.Context, ctx *SelectionContext) (CandidateScores, error) {
+	if err := ValidateSelectionContext(ctx); err != nil {
+		return nil, err
+	}
+	refs := a.sortByCost(ctx.CandidateModels)
+	a.capMu.RLock()
+	defer a.capMu.RUnlock()
+	return a.scoreCandidatesLocked(refs, ctx), nil
+}
+
+func (a *AutoMixSelector) scoreCandidatesLocked(refs []config.ModelRef, ctx *SelectionContext) CandidateScores {
+	scores := make(CandidateScores, len(refs))
+	for i, ref := range refs {
+		scores[i] = CandidateScore{Candidate: ref, Score: a.computeExpectedValue(ref, ctx), Evidence: a.rankingEvidence(ref)}
+	}
+	return scores
 }
 
 // UpdateFeedback updates POMDP model based on verification outcomes
@@ -400,8 +413,8 @@ func (a *AutoMixSelector) recordCapabilityMetric(model string) {
 
 // computeExpectedValue calculates the expected value of using a model
 // V(model) = R(model) + γ * E[V(s') | escalation possible]
-func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionContext) float64 {
-	cap := a.capabilities[model]
+func (a *AutoMixSelector) computeExpectedValue(candidate config.ModelRef, selCtx *SelectionContext) float64 {
+	cap := a.capabilities[candidate.Model]
 	if cap == nil {
 		return 0.5 // Default value for unknown models
 	}
@@ -409,7 +422,11 @@ func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionCo
 	// Missing quality evidence contributes nothing; it is not treated as a
 	// measured zero. Cost and learned verification remain independent signals.
 	quality := 0.0
-	if cap.QualityKnown {
+	if cap.QueryTotalCount > 0 && cap.QualityKnown {
+		quality = cap.AvgQuality
+	} else if evidence := evidenceForCandidate(a.modelParams, candidate); evidence != nil {
+		quality = math.Max(0, math.Min(1, *evidence.Score/100))
+	} else if candidate.ReasoningEffort == "" && cap.QualityKnown {
 		quality = cap.AvgQuality
 	}
 
@@ -437,13 +454,11 @@ func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionCo
 }
 
 // selectCostAware selects model optimizing cost-quality tradeoff
-func (a *AutoMixSelector) selectCostAware(candidates []config.ModelRef, scores map[string]float64, selCtx *SelectionContext) (*config.ModelRef, float64, string) {
-	var bestModel *config.ModelRef
-	bestValue := math.Inf(-1)
-
+func (a *AutoMixSelector) selectCostAware(candidates []config.ModelRef, scores []float64, selCtx *SelectionContext) (*config.ModelRef, float64, string) {
+	values := make(CandidateScores, 0, len(candidates))
 	for i := range candidates {
 		model := &candidates[i]
-		score := scores[model.Model]
+		score := scores[i]
 
 		cap := a.capabilities[model.Model]
 		if cap == nil {
@@ -464,42 +479,40 @@ func (a *AutoMixSelector) selectCostAware(candidates []config.ModelRef, scores m
 			value *= 1.1 // 10% bonus for likely-to-succeed models
 		}
 
-		if value > bestValue {
-			bestValue = value
-			bestModel = model
-		}
+		values = append(values, CandidateScore{Candidate: *model, Score: value, Evidence: a.rankingEvidence(*model)})
 	}
-
-	if bestModel == nil && len(candidates) > 0 {
-		bestModel = &candidates[0]
-		bestValue = scores[bestModel.Model]
+	if len(values) == 0 && len(candidates) > 0 {
+		values = append(values, CandidateScore{Candidate: candidates[0], Score: scores[0]})
 	}
-
-	reasoning := fmt.Sprintf("Cost-aware POMDP selection (tradeoff=%.2f, discount=%.2f)",
-		a.config.CostQualityTradeoff, a.config.DiscountFactor)
-
-	return bestModel, bestValue, reasoning
+	best := values.Best(HigherIsBetter, true)
+	if best < 0 {
+		return nil, 0, "no finite AutoMix values"
+	}
+	reasoning := fmt.Sprintf("Cost-aware POMDP selection (tradeoff=%.2f, discount=%.2f); %s",
+		a.config.CostQualityTradeoff, a.config.DiscountFactor, evidenceDiagnostic(values[best].Evidence))
+	return &values[best].Candidate, values[best].Score, reasoning
 }
 
 // selectQualityOnly selects the highest quality model regardless of cost
-func (a *AutoMixSelector) selectQualityOnly(candidates []config.ModelRef, scores map[string]float64) (*config.ModelRef, float64, string) {
-	var bestModel *config.ModelRef
-	var bestScore float64
-
-	for i := range candidates {
-		model := &candidates[i]
-		score := scores[model.Model]
-
-		if score > bestScore || bestModel == nil {
-			bestScore = score
-			bestModel = model
-		}
+func (a *AutoMixSelector) selectQualityOnly(candidates []config.ModelRef, scores []float64) (*config.ModelRef, float64, string) {
+	values := make(CandidateScores, len(candidates))
+	for i, candidate := range candidates {
+		values[i] = CandidateScore{Candidate: candidate, Score: scores[i], Evidence: a.rankingEvidence(candidate)}
 	}
+	best := values.Best(HigherIsBetter, true)
+	if best < 0 {
+		return nil, 0, "no finite AutoMix values"
+	}
+	reasoning := fmt.Sprintf("Quality-only POMDP selection (threshold=%.2f); %s",
+		a.config.VerificationThreshold, evidenceDiagnostic(values[best].Evidence))
+	return &values[best].Candidate, values[best].Score, reasoning
+}
 
-	reasoning := fmt.Sprintf("Quality-only POMDP selection (threshold=%.2f)",
-		a.config.VerificationThreshold)
-
-	return bestModel, bestScore, reasoning
+func (a *AutoMixSelector) rankingEvidence(candidate config.ModelRef) *modelcatalog.IndexResult {
+	if capability := a.capabilities[candidate.Model]; capability != nil && capability.QueryTotalCount > 0 {
+		return nil
+	}
+	return evidenceForCandidate(a.modelParams, candidate)
 }
 
 // sortByCost sorts models by cost (ascending)
@@ -510,7 +523,7 @@ func (a *AutoMixSelector) sortByCost(models []config.ModelRef) []config.ModelRef
 	a.capMu.RLock()
 	defer a.capMu.RUnlock()
 
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.SliceStable(sorted, func(i, j int) bool {
 		capI := a.capabilities[sorted[i].Model]
 		capJ := a.capabilities[sorted[j].Model]
 
@@ -575,32 +588,17 @@ func (a *AutoMixSelector) updateValueFunctionLocked() {
 	}
 }
 
+// paramSizePattern matches the parameter-count token in common model names
+// ("7b", "13b", "0.5b", "70B"). Digit boundaries keep "14b" from matching
+// inside "114b", and version fragments like the "3.1" in llama-3.1-8b do
+// not match because the size token must be directly followed by the unit.
+var paramSizePattern = regexp.MustCompile(`(?:^|[^0-9.])([0-9]+(?:\.[0-9]+)?)b(?:$|[^0-9])`)
+
 // estimateParamSize estimates model size from name
 func (a *AutoMixSelector) estimateParamSize(model string) float64 {
-	// Extract size from common naming patterns (7b, 13b, 70b, etc.)
-	sizes := []struct {
-		pattern string
-		size    float64
-	}{
-		{"405b", 405.0},
-		{"70b", 70.0},
-		{"72b", 72.0},
-		{"34b", 34.0},
-		{"32b", 32.0},
-		{"14b", 14.0},
-		{"13b", 13.0},
-		{"8b", 8.0},
-		{"7b", 7.0},
-		{"3b", 3.0},
-		{"1.8b", 1.8},
-		{"1.5b", 1.5},
-		{"0.5b", 0.5},
-	}
-
-	modelLower := strings.ToLower(model)
-	for _, s := range sizes {
-		if strings.Contains(modelLower, s.pattern) {
-			return s.size
+	if match := paramSizePattern.FindStringSubmatch(strings.ToLower(model)); match != nil {
+		if size, err := strconv.ParseFloat(match[1], 64); err == nil && size > 0 {
+			return size
 		}
 	}
 
@@ -709,7 +707,10 @@ func (a *AutoMixSelector) GetEscalationChain(candidates []config.ModelRef) []str
 	sorted := make([]config.ModelRef, len(candidates))
 	copy(sorted, candidates)
 
-	sort.Slice(sorted, func(i, j int) bool {
+	// SliceStable keeps candidates with equal estimates (unknown names all
+	// fall back to the default) in configuration order, so the chain is
+	// deterministic across runs.
+	sort.SliceStable(sorted, func(i, j int) bool {
 		sizeI := a.estimateParamSize(sorted[i].Model)
 		sizeJ := a.estimateParamSize(sorted[j].Model)
 		return sizeI < sizeJ

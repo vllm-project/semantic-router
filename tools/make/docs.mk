@@ -125,7 +125,7 @@ install-crd-ref-docs: ## Install crd-ref-docs tool
 docs-crd: install-crd-ref-docs ## Generate CRD API reference documentation
 	@$(LOG_TARGET)
 	@CRD_REF_DOCS_BIN="$(CRD_REF_DOCS_BIN)" \
-		tools/crd/generate-reference.sh website/docs/api/crd-reference.md
+		tools/codegen/crd/generate-reference.sh website/docs/api/crd-reference.md
 
 .PHONY: docs-crd-check
 docs-crd-check: install-crd-ref-docs ## Check that generated CRD documentation is current
@@ -134,7 +134,7 @@ docs-crd-check: install-crd-ref-docs ## Check that generated CRD documentation i
 	tmp_file=$$(mktemp); \
 	trap 'rm -f -- "$$tmp_file"' EXIT; \
 	CRD_REF_DOCS_BIN="$(CRD_REF_DOCS_BIN)" \
-		tools/crd/generate-reference.sh "$$tmp_file"; \
+		tools/codegen/crd/generate-reference.sh "$$tmp_file"; \
 	if ! cmp -s website/docs/api/crd-reference.md "$$tmp_file"; then \
 		echo "Generated CRD reference is out of date. Run make docs-crd."; \
 		diff -u website/docs/api/crd-reference.md "$$tmp_file" || true; \
@@ -157,28 +157,27 @@ docs-all: docs-crd docs-config docs-build ## Generate all documentation (CRD + c
 
 ##@ Apiserver API Reference (issue #2774)
 
-OPENAPI_GEN := tools/openapi-gen
+OPENAPI_GEN := tools/codegen/openapi
 APISERVER_OPENAPI_JSON := website/static/openapi/apiserver/apiserver.openapi.json
 APISERVER_REFERENCE_MD := website/docs/api/apiserver.md
 APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 .PHONY: generated-contract-check generated-contract-generate
-generated-contract-check: config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check ## Check all generated public references without rewriting
+generated-contract-check: training-contract-check config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check model-runtime-client-check decision-runtime-catalog-check ## Check all generated public references without rewriting
 
 # OpenAPI embeds the config schema: regenerate it before exporting API docs.
-generated-contract-generate: config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
+generated-contract-generate: training-contract-generate config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
 	@$(MAKE) api-docs-generate
 	@$(MAKE) agent-skill-sync
-	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd
+	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd model-runtime-client-generate decision-runtime-catalog-generate
 
 .PHONY: api-docs-openapi
-api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI JSON artifact from the route catalog
+api-docs-openapi: ## Export committed apiserver OpenAPI JSON artifact from the route catalog
 	@$(LOG_TARGET)
 	@mkdir -p $(dir $(APISERVER_OPENAPI_JSON))
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
@@ -187,29 +186,26 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
-	@python3 tools/agent/scripts/embed_generated_index.py \
+	@python3 tools/codegen/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
 		--index /tmp/apiserver-endpoint-index.md \
 		--begin "$(APISERVER_INDEX_BEGIN)" \
 		--end "$(APISERVER_INDEX_END)"
 
 .PHONY: api-docs-check
-api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts differ from generator output
+api-docs-check: ## Fail if committed api docs artifacts differ from generator output
 	@$(LOG_TARGET)
 	@TMPDIR_CHECK=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMPDIR_CHECK"' EXIT HUP INT TERM && \
 	cp "$(APISERVER_REFERENCE_MD)" "$$TMPDIR_CHECK/apiserver.md" && \
 	cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
-	python3 tools/agent/scripts/embed_generated_index.py \
+	python3 tools/codegen/embed_generated_index.py \
 		--markdown "$$TMPDIR_CHECK/apiserver.md" \
 		--index "$$TMPDIR_CHECK/apiserver-endpoint-index.md" \
 		--begin "$(APISERVER_INDEX_BEGIN)" \

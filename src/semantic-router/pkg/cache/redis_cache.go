@@ -21,10 +21,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+// redisCacheClient narrows the go-redis surface the cache uses (the FT*
+// search extensions sit outside redis.UniversalClient), so tests can inject
+// a fake without a live Redis.
+type redisCacheClient interface {
+	redis.UniversalClient
+	FTInfo(ctx context.Context, index string) *redis.FTInfoCmd
+	FTDropIndexWithArgs(ctx context.Context, index string, options *redis.FTDropIndexOptions) *redis.StatusCmd
+	FTCreate(ctx context.Context, index string, options *redis.FTCreateOptions, schema ...*redis.FieldSchema) *redis.StatusCmd
+	FTSearchWithArgs(ctx context.Context, index string, query string, options *redis.FTSearchOptions) *redis.FTSearchCmd
+}
+
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
 	embeddingProvider   embedding.Provider
-	client              *redis.Client
+	client              redisCacheClient
 	searchFn            func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error)
 	config              *config.RedisConfig
 	indexName           string
@@ -35,7 +46,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
@@ -80,9 +91,15 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	// would build a COSINE index while similarity scores were read back with
 	// the L2 formula.
 	redisConfig.Index.VectorField.MetricType = strings.ToUpper(redisConfig.Index.VectorField.MetricType)
+	copiedConfig := *redisConfig
+	redisConfig = &copiedConfig
+	redisConfig.Index.VectorField.Dimension, err = resolveCacheDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider)
+	if err != nil {
+		return nil, err
+	}
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=%d",
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name,
-		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingModel))
+		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider))
 
 	// Establish connection to Redis server
 	resolvedHost := normalizeLocalHostForContainerRuntimes(redisConfig.Connection.Host)
@@ -106,7 +123,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider), 0)),
 	}
 
 	releaseClient := func() { _ = redisClient.Close() }
@@ -239,11 +256,13 @@ func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, 
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
+func (c *RedisCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *RedisCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingProvider)
 }
 
 // createIndex builds the Redis index with the appropriate schema
@@ -561,7 +580,11 @@ func (c *RedisCache) addEntry(ctx context.Context, id string, requestID string, 
 
 	// Set TTL if configured (Redis native TTL)
 	if effectiveTTL > 0 {
-		c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second)
+		if expireErr := c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second).Err(); expireErr != nil {
+			// The entry is stored but without a native TTL; the read path still
+			// filters by ttl_seconds, yet the key lingers in Redis until deleted.
+			logging.Warnf("RedisCache.addEntry: failed to set TTL for %s: %v", docKey, expireErr)
+		}
 	}
 
 	logging.Debugf("RedisCache.addEntry: successfully added entry to Redis (key: %s, embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",

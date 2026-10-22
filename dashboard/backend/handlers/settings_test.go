@@ -26,22 +26,21 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 	t.Run("keeps config editing available when only the package store is read-only", testSettingsStoreReadonly)
 }
 
-func TestSettingsHandlerReportsFrozenEvaluationAvailability(t *testing.T) {
+func TestSettingsHandlerOmitsFeatureAvailability(t *testing.T) {
 	t.Parallel()
-	authContext := adminSettingsAuthContext("evaluation-admin")
-
-	available := requestSettings(t, &config.Config{
-		EvaluationAvailable: true,
-	}, authContext)
-	if !available.EvaluationAvailable || available.EvaluationUnavailableReason != "" {
-		t.Fatalf("available Evaluation response = %#v", available)
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	req = req.WithContext(auth.WithAuthContext(req.Context(), adminSettingsAuthContext("settings-admin")))
+	recorder := httptest.NewRecorder()
+	SettingsHandler(&config.Config{}, activatedResolver(t))(recorder, req)
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
 	}
-
-	unavailable := requestSettings(t, &config.Config{
-		EvaluationUnavailableReason: "Evaluation could not be initialized.",
-	}, authContext)
-	if unavailable.EvaluationAvailable || unavailable.EvaluationUnavailableReason != "Evaluation could not be initialized." {
-		t.Fatalf("unavailable Evaluation response = %#v", unavailable)
+	// Feature availability moved to /api/v1/capabilities.
+	for _, field := range []string{"srBenchAvailable", "srBenchUnavailableReason", "mlPipelineAvailable", "mlPipelineUnavailableReason"} {
+		if _, ok := body[field]; ok {
+			t.Errorf("settings still report %q", field)
+		}
 	}
 }
 

@@ -73,8 +73,11 @@ func TestStrictDispatchRechecksActualGrowthAndPermissionScope(t *testing.T) {
 	if err := r.validateDispatchRequirements(request, dispatch, ctx); !errors.Is(err, selection.ErrNoEligibleCandidates) {
 		t.Fatalf("growth err=%v", err)
 	}
-	if got := r.findQualifiedRerouteModel(d, dispatch, llmprotocol.RequiredCapabilities(*request), ctx); got != "" {
-		t.Fatalf("fallback resurrected %q", got)
+	if err := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("final capability gate ignored the strict budget: %v", err)
+	}
+	if dispatch.logicalModel != "vision" {
+		t.Fatalf("final validation changed the selected candidate: %+v", dispatch)
 	}
 }
 
@@ -122,7 +125,7 @@ func TestStrictOmittedOutputPolicyMatchesEncodedDispatch(t *testing.T) {
 	}
 }
 
-func TestStrictProviderGrowthReroutesOnlyWithinRetainedPolicy(t *testing.T) {
+func TestStrictProviderGrowthFailsClosedWithoutLateRerouting(t *testing.T) {
 	for _, allowLarge := range []bool{false, true} {
 		r, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 		r.Config.CandidateRequirements = &config.CandidateRequirements{Capabilities: config.CandidateCapabilitiesDeclared, Context: config.CandidateContextKnownLimits}
@@ -147,12 +150,8 @@ func TestStrictProviderGrowthReroutesOnlyWithinRetainedPolicy(t *testing.T) {
 		}
 		request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: string(make([]byte, 180))}}})
 		dispatch, err := r.prepareProviderDispatch(request, primary, d.Name, false, ctx)
-		if allowLarge {
-			if err != nil || dispatch == nil || dispatch.logicalModel != "large" {
-				t.Fatalf("permitted recovery dispatch=%+v err=%v", dispatch, err)
-			}
-		} else if !errors.Is(err, selection.ErrNoEligibleCandidates) || dispatch != nil {
-			t.Fatalf("excluded fallback resurrected dispatch=%+v err=%v", dispatch, err)
+		if !errors.Is(err, selection.ErrNoEligibleCandidates) || dispatch != nil {
+			t.Fatalf("late growth rerouted the request (large eligible=%t): dispatch=%+v err=%v", allowLarge, dispatch, err)
 		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -70,7 +71,7 @@ func recordResponseHeaderErrorMetrics(ctx *RequestContext, statusCode int) {
 	}
 }
 
-func finishUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutcome) {
+func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutcome) {
 	if ctx == nil || ctx.UpstreamSpan == nil {
 		return
 	}
@@ -79,9 +80,6 @@ func finishUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutco
 	if !outcome.isSuccessful && outcome.statusCode != 0 {
 		ctx.UpstreamSpan.SetStatus(codes.Error, "upstream request failed")
 	}
-
-	ctx.UpstreamSpan.End()
-	ctx.UpstreamSpan = nil
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
@@ -98,7 +96,7 @@ func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
@@ -113,6 +111,8 @@ func buildResponseHeadersContinueResponse(
 	headerMutation *ext_proc.HeaderMutation,
 	streaming bool,
 ) *ext_proc.ProcessingResponse {
+	headerMutation = mergeHeaderMutations(headerMutation,
+		&ext_proc.HeaderMutation{RemoveHeaders: []string{headers.VSRUpstreamHost}})
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HeadersResponse{

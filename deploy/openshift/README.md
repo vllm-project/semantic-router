@@ -13,10 +13,9 @@ in a shared environment.
 
 | Command option | Backend |
 | --- | --- |
-| `--simulator` | CPU mock backends for a quick routing check. |
 | `--kserve --simulator` | KServe simulator resources. |
 | `--kserve` | A real KServe model; requires its GPU and model-serving prerequisites. |
-| no backend flag | LLM Katan development backends. |
+| no backend flag | CPU provider-mocker backends from a qualified image digest. |
 
 `--classifier-gpu` moves the Router classifier to a GPU independently of the
 backend choice. `--no-observability` skips Dashboard, Grafana, Prometheus, and
@@ -31,12 +30,12 @@ oc whoami
 deploy/openshift/deploy-to-openshift.sh --help
 ```
 
-For a CPU-only disposable project:
+For a CPU-only disposable project, supply the published fixture digest:
 
 ```bash
+export PROVIDER_MOCKER_IMAGE="ghcr.io/vllm-project/semantic-router/provider-mocker@sha256:<qualified-digest>"
 deploy/openshift/deploy-to-openshift.sh \
-  --namespace vllm-semantic-router-system \
-  --simulator
+  --namespace vllm-semantic-router-system
 ```
 
 For the core path without the optional observability UIs:
@@ -44,9 +43,11 @@ For the core path without the optional observability UIs:
 ```bash
 deploy/openshift/deploy-to-openshift.sh \
   --namespace vllm-semantic-router-system \
-  --simulator \
   --no-observability
 ```
+
+The default fixture does not perform model inference. For a local real-model
+check, use the optional [Qwen3-0.6B runner](../../tools/test/services/tiny-model/README.md).
 
 The KServe modes call the helpers in [`../kserve/`](../kserve/). Install and
 validate KServe before using a real model. Do not install cluster operators
@@ -67,6 +68,45 @@ Depending on the selected mode, the script:
 The dynamic address flow is described in
 [`README-DYNAMIC-IPS.md`](README-DYNAMIC-IPS.md). The checked-in config contains
 placeholders and should not be edited with cluster IPs.
+
+## Grafana Live origins
+
+When an external proxy forwards an internal `Host`, Grafana Live can reject
+`/embedded/grafana/api/live/ws` even if panels load. Supply the trusted public
+**Dashboard origin**, not the internal Grafana service URL or Grafana Route:
+
+```bash
+export GF_LIVE_ALLOWED_ORIGINS="https://dashboard.example.com,https://dashboard.example.net:8443"
+deploy/openshift/deploy-to-openshift.sh --namespace vllm-semantic-router-system
+```
+
+The script passes this value to the Grafana container without changing
+`GF_SERVER_ROOT_URL`. Unset leaves the manifest's value intact; an explicit
+empty value clears an override and preserves Grafana's default origin checks.
+Values are comma-separated origins (scheme, hostname, optional port), with no
+path or trailing slash. Do not use `*` to bypass validation.
+
+The script does not infer allowed origins: the Dashboard Route is created
+after Grafana, and another proxy may expose a different public hostname. If
+using the generated Route directly, discover its host after deployment with
+`oc get route dashboard -n <namespace> -o jsonpath='{.spec.host}'`. Combine it
+with the Route's external scheme (`https` for the checked-in edge-TLS Route),
+then supply the resulting origin on the next deployment. For an existing
+installation, update only Grafana instead of rebuilding the whole stack:
+
+```bash
+oc set env deployment/grafana --containers=grafana \
+  --namespace vllm-semantic-router-system \
+  GF_LIVE_ALLOWED_ORIGINS="$GF_LIVE_ALLOWED_ORIGINS"
+```
+
+If applying static manifests without the script, patch the same environment
+variable in `observability/grafana/deployment.yaml`, alongside the existing
+root-URL and namespace substitutions. Shell environment variables alone do
+not modify static YAML. Keep the origin in your deployment source so a later
+apply does not reset it. After rollout, verify an allowed origin connects to
+Live and an unrelated origin is rejected; authentication and WebSocket proxy
+configuration are still required.
 
 ## Verify
 

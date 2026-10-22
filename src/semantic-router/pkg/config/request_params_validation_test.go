@@ -28,7 +28,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	params := cfg.Decisions[0].GetRequestParamsConfig()
-	if params.DefaultMaxTokens == nil || *params.DefaultMaxTokens != 4096 || *params.MaxTokensLimit != 8192 {
+	if params.DefaultMaxTokens == nil || params.DefaultMaxTokens.Value != 4096 || *params.MaxTokensLimit != 8192 {
 		t.Fatal("typed payload lost output default")
 	}
 	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
@@ -39,7 +39,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens != 4096 {
+	if again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens.Value != 4096 {
 		t.Fatal("canonical export lost output default")
 	}
 	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "strip_unknown: true")))
@@ -54,5 +54,36 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), "default_max_tokens: 4096") {
 		t.Fatal("canonical field missing")
+	}
+}
+
+// A configured limit caps the client's value, so a non-positive one would
+// rewrite every request to an invalid max_tokens or n.
+func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
+	template := `routing:
+  decisions:
+    - name: bounded
+      plugins:
+        - type: request_params
+          configuration:
+            %s
+`
+	for _, field := range []string{
+		"max_tokens_limit: 0", "max_tokens_limit: -1", "max_n: 0", "max_n: -1",
+		"{max_tokens_limit: 0, default_max_tokens: 10}",
+	} {
+		configuration := field
+		if strings.HasPrefix(field, "{") {
+			configuration = strings.Trim(field, "{}")
+			configuration = strings.ReplaceAll(configuration, ", ", "\n            ")
+		}
+		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, configuration))); err == nil {
+			t.Errorf("accepted a non-positive limit: %s", field)
+		}
+	}
+	for _, field := range []string{"max_tokens_limit: 8192", "max_n: 4"} {
+		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err != nil {
+			t.Errorf("rejected a positive limit %s: %v", field, err)
+		}
 	}
 }

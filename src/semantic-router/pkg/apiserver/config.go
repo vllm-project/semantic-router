@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -26,6 +27,7 @@ type ClassificationAPIServer struct {
 	runtimeConfig         *liveRuntimeConfig
 	runtimeRegistry       *routerruntime.Registry
 	configPath            string // path to the router config file (for read/update/rollback)
+	gatewayMode           config.GatewayMode
 	memoryStore           memory.Store
 	knowledgeBaseMapCache *knowledgeBaseMapCache
 	startupStateLoader    func() *startupstatus.State
@@ -93,7 +95,7 @@ type (
 type BatchClassificationRequest struct {
 	Recipe   string                 `json:"recipe,omitempty"`
 	Texts    []string               `json:"texts"`
-	TaskType string                 `json:"task_type,omitempty"` // "intent", "pii", "security", or "all"
+	TaskType string                 `json:"task_type,omitempty"` // "intent" (default), "pii", "security", or "all" (intent fields plus pii and security objects)
 	Options  *ClassificationOptions `json:"options,omitempty"`
 }
 
@@ -103,6 +105,32 @@ type BatchClassificationResult struct {
 	Confidence       float64            `json:"confidence"`
 	ProcessingTimeMs int64              `json:"processing_time_ms"`
 	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
+	// PII and Security are only set for task_type "all".
+	PII      *BatchPIIResult      `json:"pii,omitempty"`
+	Security *BatchSecurityResult `json:"security,omitempty"`
+}
+
+// BatchPIIResult is the PII detection outcome for one text in an "all" batch.
+// Confidence is null when the model did not report scores, mirroring the
+// encoding of classification.PIIResult.
+type BatchPIIResult struct {
+	HasPII          bool     `json:"has_pii"`
+	PIITypes        []string `json:"pii_types,omitempty"`
+	Confidence      *float32 `json:"confidence"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
+}
+
+// BatchSecurityResult is the jailbreak detection outcome for one text in an
+// "all" batch. Confidence is null when the model did not report scores,
+// mirroring the encoding of classification.SecurityResult.
+type BatchSecurityResult struct {
+	IsJailbreak     bool     `json:"is_jailbreak"`
+	ThreatType      string   `json:"threat_type"`
+	Confidence      *float32 `json:"confidence"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
+	// Decision carries the categorical guard detail (source label, categories,
+	// optional score) when the backend produced one.
+	Decision *tasks.LabelDecision `json:"decision,omitempty"`
 }
 
 // BatchClassificationResponse represents the response from batch classification
@@ -132,9 +160,10 @@ type ClassificationOptions struct {
 type EmbeddingRequest struct {
 	Recipe          string   `json:"recipe,omitempty"`
 	Texts           []string `json:"texts,omitempty"`
+	Audios          []string `json:"audios,omitempty"`           // Inline base64 WAV, up to 30 seconds; original rate and channels preserved
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
@@ -165,8 +194,8 @@ type SimilarityRequest struct {
 	Recipe          string  `json:"recipe,omitempty"`
 	Text1           string  `json:"text1"`
 	Text2           string  `json:"text2"`
-	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	Model           string  `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
+	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
 	TargetLayer     int     `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
 	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
@@ -186,8 +215,8 @@ type BatchSimilarityRequest struct {
 	Query           string   `json:"query"`                      // Query text
 	Candidates      []string `json:"candidates"`                 // Array of candidate texts
 	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model

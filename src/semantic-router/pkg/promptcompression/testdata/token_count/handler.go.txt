@@ -1,0 +1,56 @@
+package upload
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+type Handler struct {
+	Store   ObjectStore
+	MaxSize int64
+	Timeout time.Duration
+}
+
+type ObjectStore interface {
+	Put(name string, r io.Reader, size int64) error
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "missing name", http.StatusBadRequest)
+		return
+	}
+	body := http.MaxBytesReader(w, r.Body, h.MaxSize)
+	defer body.Close()
+
+	hasher := sha256.New()
+	if err := h.Store.Put(name, io.TeeReader(body, hasher), r.ContentLength); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "object too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, fmt.Sprintf("store: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"name": name, "sha256": hex.EncodeToString(hasher.Sum(nil))})
+}
+
+func retry(attempts int, delay time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = fn(); err == nil {
+			return nil
+		}
+		time.Sleep(delay * time.Duration(i+1))
+	}
+	return fmt.Errorf("after %d attempts: %w", attempts, err)
+}

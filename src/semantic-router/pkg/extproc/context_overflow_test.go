@@ -36,7 +36,7 @@ func overflowFixture(t *testing.T, text string) (*OpenAIRouter, *RequestContext)
 		t.Fatal(err)
 	}
 	d := &config.Decision{Name: "bounded", ModelRefs: []config.ModelRef{{Model: model}}, Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic}, Plugins: []config.DecisionPlugin{{Type: "context_compression", Configuration: payload}}}
-	request := testNeutralRequest("auto", text)
+	request := testNeutralRequest("vllm-sr/auto", text)
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(8192)
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = d
@@ -45,11 +45,18 @@ func overflowFixture(t *testing.T, text string) (*OpenAIRouter, *RequestContext)
 }
 
 func TestContextOverflowSelectionAndEncodedDispatchUseReducedRequest(t *testing.T) {
-	for _, filler := range []string{strings.Repeat(" a", 40000), strings.Repeat(" padding", 40000), strings.Repeat("中文🙂", 20000), strings.Repeat("x", 160000)} {
-		original := "HEAD instruction\n" + filler + "\nTAIL instruction"
+	for _, item := range []struct{ heading, filler string }{
+		{"HEAD instruction", strings.Repeat(" a", 40000)},
+		{"HEAD instruction", strings.Repeat(" padding", 40000)},
+		{"HEAD instruction", strings.Repeat("中文🙂", 20000)},
+		{"HEAD instruction", strings.Repeat("x", 160000)},
+		{"[Request heading]", strings.Repeat("archive text ", 30000)},
+		{"{Request heading}", strings.Repeat("archive text ", 30000)},
+	} {
+		original := item.heading + "\n" + item.filler + "\nTAIL instruction"
 		r, ctx := overflowFixture(t, original)
 		d := ctx.VSRSelectedDecision
-		name, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", original, ctx)
+		name, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", original, ctx)
 		if err != nil || model == "" || name != d.Name {
 			t.Fatalf("selection: model=%q err=%v", model, err)
 		}
@@ -69,7 +76,7 @@ func TestContextOverflowSelectionAndEncodedDispatchUseReducedRequest(t *testing.
 			t.Fatal(err)
 		}
 		got := outbound.Messages[0].Content[0].Text
-		if !utf8.ValidString(got) || !strings.HasPrefix(got, "HEAD instruction\n") || !strings.HasSuffix(got, "\nTAIL instruction") || !strings.Contains(got, "context omitted by route compression") || got == original {
+		if !utf8.ValidString(got) || !strings.HasPrefix(got, item.heading+"\n") || !strings.HasSuffix(got, "\nTAIL instruction") || !strings.Contains(got, "context omitted by route compression") || got == original {
 			t.Fatalf("invalid outbound truncation: bytes=%d", len(got))
 		}
 		bound, _ := (overflowTokenCounter{}).CountRequest(model, &contextcompression.RequestIR{Semantic: &outbound})
@@ -101,7 +108,7 @@ func TestContextOverflowPreservesSystemToolsAndLatestInstruction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(request.Instructions, original.Instructions) || !reflect.DeepEqual(request.Tools, original.Tools) || !reflect.DeepEqual(request.Messages[1:], original.Messages[1:]) {
@@ -110,6 +117,79 @@ func TestContextOverflowPreservesSystemToolsAndLatestInstruction(t *testing.T) {
 	if request.Messages[0].Content[0].Text == original.Messages[0].Content[0].Text {
 		t.Fatal("old history unchanged")
 	}
+}
+
+func TestContextOverflowRecompressesBracketHistoryForToolFollowups(t *testing.T) {
+	for _, heading := range []string{"[Request heading]", "{Request heading}"} {
+		t.Run(heading, func(t *testing.T) {
+			original := heading + "\nHeader MAPLE731\n" + strings.Repeat("Unrelated archival paragraph. ", 15000) + "\nReturn MAPLE731:42."
+			firstRouter, firstContext := overflowFixture(t, original)
+			first := encodedOverflowDispatch(t, firstRouter, firstContext, original)
+			if first.Messages[0].Content[0].Text == original {
+				t.Fatal("first turn did not reduce current-user text")
+			}
+			// Playground retains the original user text, not the first dispatch's
+			// lossy view, when it constructs the next turn and tool continuation.
+			for _, continuation := range []bool{false, true} {
+				latest := "Use calculator to compute 997*991."
+				r, ctx := overflowFixture(t, latest)
+				request := ctx.SemanticRequest
+				request.Instructions = []llmprotocol.InstructionBlock{{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Use tools accurately."}}}}
+				request.Tools = []llmprotocol.Tool{{Name: "calculator", InputSchema: json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}}}`)}}
+				request.Messages = append([]llmprotocol.Message{
+					{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: original}}},
+					{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "MAPLE731:42"}}},
+				}, request.Messages...)
+				if continuation {
+					request.Messages = append(request.Messages,
+						llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_calculator", Name: "calculator", Arguments: `{"expression":"997*991"}`}}}},
+						llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_calculator", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "988027"}}}}}})
+				}
+				before, err := selection.EffectiveCandidateRequest(request, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				outbound := encodedOverflowDispatch(t, r, ctx, latest)
+				if got := outbound.Messages[0].Content[0].Text; got == original || !strings.Contains(got, "context omitted by route compression") {
+					t.Fatal("old bracket-heading history was not compressed")
+				}
+				if !reflect.DeepEqual(request.Instructions, before.Instructions) || !reflect.DeepEqual(request.Tools, before.Tools) || !reflect.DeepEqual(request.Messages[1:], before.Messages[1:]) {
+					t.Fatal("history compression changed instructions, schema, latest user or tool exchange")
+				}
+				if !ctx.ContextCompressionApplied || ctx.ContextCompressionAfter >= ctx.ContextCompressionBefore {
+					t.Fatal("missing history compression receipt")
+				}
+			}
+		})
+	}
+}
+
+func encodedOverflowDispatch(t *testing.T, router *OpenAIRouter, ctx *RequestContext, input string) llmprotocol.Request {
+	t.Helper()
+	d := ctx.VSRSelectedDecision
+	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", input, ctx)
+	if err != nil || model == "" {
+		t.Fatalf("selection: model=%q err=%v", model, err)
+	}
+	if _, response, prepareErr := router.prepareRequestForModelRouting(ctx.SemanticRequest, input, ctx); prepareErr != nil || response != nil {
+		t.Fatalf("plugin preparation: %v response=%v", prepareErr, response != nil)
+	}
+	if dispatch, dispatchErr := router.prepareProviderDispatch(ctx.SemanticRequest, model, d.Name, false, ctx); dispatchErr != nil || dispatch == nil {
+		t.Fatalf("dispatch: %v", dispatchErr)
+	}
+	body, _, err := (protocolcodec.OpenAIChatCodec{}).EncodeRequest(*ctx.SemanticRequest, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outbound, _, _, err := (protocolcodec.OpenAIChatCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _ := (overflowTokenCounter{}).CountRequest(model, &contextcompression.RequestIR{Semantic: &outbound})
+	if bound+int(*outbound.Sampling.MaxOutputTokens) > 32768 {
+		t.Fatalf("dispatch exceeds context: input bound=%d", bound)
+	}
+	return outbound
 }
 
 func TestContextOverflowRejectsUntrimmableBudgetWithoutMutation(t *testing.T) {
@@ -138,7 +218,7 @@ func TestContextOverflowRejectsUntrimmableBudgetWithoutMutation(t *testing.T) {
 				ctx.ProtectedContextMessages = map[int]contextcompression.Protection{0: contextcompression.ProtectAuthorization}
 			}
 			before, _ := json.Marshal(req)
-			err := r.prepareDecisionContextOverflow(ctx, "auto")
+			err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto")
 			var budgetErr *selection.RequestBudgetError
 			if !errors.As(err, &budgetErr) {
 				t.Fatalf("not client budget error: %v", err)
@@ -170,7 +250,7 @@ func TestContextOverflowDefaultsAndBypassKeepRequest(t *testing.T) {
 			payload, _ := config.NewStructuredPayload(cfg)
 			ctx.VSRSelectedDecision.Plugins[0].Configuration = payload
 			before, _ := json.Marshal(ctx.SemanticRequest)
-			if err := r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+			if err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 				t.Fatal(err)
 			}
 			after, _ := json.Marshal(ctx.SemanticRequest)
@@ -183,7 +263,7 @@ func TestContextOverflowDefaultsAndBypassKeepRequest(t *testing.T) {
 
 func TestContextOverflowRechecksActualDispatchGrowth(t *testing.T) {
 	r, ctx := overflowFixture(t, "hello")
-	if err := r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	model := ctx.VSRSelectedDecision.ModelRefs[0].Model
@@ -211,7 +291,7 @@ func TestContextOverflowEffectivePolicyAndRecipeOptInStayIsolated(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	if len(ctx.SemanticRequest.Instructions) != 0 || ctx.SemanticRequest.Sampling.MaxOutputTokens != nil {
@@ -227,7 +307,7 @@ func TestContextOverflowEffectivePolicyAndRecipeOptInStayIsolated(t *testing.T) 
 	}
 	other := &RequestContext{SemanticRequest: untouched, VSRSelectedDecision: &config.Decision{Name: "other", ModelRefs: ctx.VSRSelectedDecision.ModelRefs}}
 	before, _ := json.Marshal(untouched)
-	if err = r.prepareDecisionContextOverflow(other, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(other, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := json.Marshal(untouched)
@@ -251,7 +331,7 @@ func TestContextOverflowRejectsFramingHeavyRequest(t *testing.T) {
 				}
 			}
 			var budget *selection.RequestBudgetError
-			if err := r.prepareDecisionContextOverflow(ctx, "auto"); !errors.As(err, &budget) {
+			if err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); !errors.As(err, &budget) {
 				t.Fatalf("many %s escaped framing budget: %v", kind, err)
 			}
 		})
@@ -263,7 +343,7 @@ func TestContextOverflowPreparedStreamCompletesAndReplays(t *testing.T) {
 	ctx.SemanticRequest.Stream = true
 	ctx.ExpectStreamingResponse = true
 	d := ctx.VSRSelectedDecision
-	_, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", "original routing input", ctx)
+	_, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", "original routing input", ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +362,7 @@ func TestContextOverflowPreparedStreamCompletesAndReplays(t *testing.T) {
 	ctx.RequestID = "overflow-stream"
 	ctx.UpstreamStatusCode = 200
 	ctx.IsStreamingResponse = true
-	r.startRouterReplay(ctx, "auto", model, d.Name)
+	r.startRouterReplay(ctx, "vllm-sr/auto", model, d.Name)
 	if _, err = r.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}, {Key: "content-type", Value: "text/event-stream"}}}}}, ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +396,7 @@ func TestContextOverflowCompressesMultipleOldUserAndAssistantTurns(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	userChanged, assistantChanged := false, false

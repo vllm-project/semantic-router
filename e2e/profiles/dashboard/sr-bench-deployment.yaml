@@ -1,0 +1,146 @@
+# Synthetic CI transport only: these fixed outputs are not model capability evidence.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-sr-bench-fixture
+data:
+  targets.json: |
+    [
+      {"id":"fixture","kind":"single","model":"fixture","base_url":"http://127.0.0.1:8091/v1","prices":{"fixture":{"input":1,"cached_input":0.1,"cache_write":2,"output":3}}},
+      {"id":"fixture-slow","kind":"single","model":"fixture-slow","base_url":"http://127.0.0.1:8091/v1","prices":{"fixture-slow":{"input":1,"cached_input":0.1,"cache_write":2,"output":3}}}
+    ]
+  model.py: |
+    import json
+    import time
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            if self.path != "/v1/chat/completions":
+                self.send_error(404)
+                return
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            model = body["model"]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            try:
+                if model == "fixture-slow":
+                    for _ in range(300):
+                        self.wfile.write(b": waiting\n\n")
+                        self.wfile.flush()
+                        time.sleep(0.1)
+                events = [
+                    {"model": model, "choices": [{"index": 0, "delta": {"reasoning_content": "B"}}]},
+                    {"model": model, "choices": [{"index": 0, "delta": {"content": "A"}, "finish_reason": "stop"}]},
+                    {"model": model, "choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 3, "prompt_tokens_details": {"cached_tokens": 2, "cache_creation_tokens": 1}}},
+                ]
+                for event in events:
+                    self.wfile.write(("data: " + json.dumps(event) + "\n\n").encode())
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    ThreadingHTTPServer(("127.0.0.1", 8091), Handler).serve_forever()
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-sr-bench-e2e-data
+  labels:
+    vllm.ai/e2e-managed: "true"
+spec:
+  storageClassName: standard
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router-sr-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: semantic-router-sr-bench
+  template:
+    metadata:
+      labels:
+        app: semantic-router-sr-bench
+    spec:
+      initContainers:
+        - name: prepare-benchmark-store
+          image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
+          imagePullPolicy: Never
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              install -d -o 65532 -g 65532 -m 0700 /data/store
+              cp /fixture/targets.json /data/store/targets.json
+              chown 65532:65532 /data/store/targets.json
+              chmod 0600 /data/store/targets.json
+          volumeMounts:
+            - {name: benchmark-data, mountPath: /data}
+            - {name: fixture, mountPath: /fixture, readOnly: true}
+      containers:
+        # Use the exact Dashboard image's packaged Python service, independently
+        # of the Dashboard process/pod; no separately built test implementation.
+        - name: worker
+          image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
+          imagePullPolicy: Never
+          command: [python3, -m, cli.main]
+          args: [benchmark, --store, /data/store, serve, --host, 0.0.0.0, --port, "8090"]
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+          env:
+            - {name: SR_BENCH_TOKEN, value: dashboard-e2e-sr-bench-token}
+          ports:
+            - {name: http, containerPort: 8090}
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8090/health',headers={'Authorization':'Bearer '+os.environ['SR_BENCH_TOKEN']}); urllib.request.urlopen(r,timeout=2).read()"
+            periodSeconds: 2
+          volumeMounts:
+            - {name: benchmark-data, mountPath: /data}
+        - name: synthetic-model
+          image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
+          imagePullPolicy: Never
+          command: [python3, /fixture/model.py]
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+          readinessProbe:
+            exec:
+              command: [python3, -c, "import socket; socket.create_connection(('127.0.0.1',8091),timeout=2).close()"]
+            periodSeconds: 2
+          volumeMounts:
+            - {name: fixture, mountPath: /fixture, readOnly: true}
+      volumes:
+        - name: benchmark-data
+          persistentVolumeClaim:
+            claimName: semantic-router-sr-bench-e2e-data
+        - name: fixture
+          configMap:
+            name: semantic-router-sr-bench-fixture
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router-sr-bench
+spec:
+  selector:
+    app: semantic-router-sr-bench
+  ports:
+    - {name: http, port: 8090, targetPort: http}
