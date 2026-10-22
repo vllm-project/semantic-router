@@ -324,3 +324,84 @@ func TestChatStreamPFieldStaysStrict(t *testing.T) {
 		})
 	}
 }
+
+// Fireworks Chat reply shape captured in issue #5401: each choice repeats
+// the raw decoded text in raw_output beside the parsed message. The rest of
+// the reply (reasoning_content, top-level service_tier, prediction-token
+// usage details) already fits the wire; raw_output did not, so every
+// Fireworks response failed strict decoding.
+const fireworksChatResponseFixture = `{
+  "id":"fw-1","object":"chat.completion","created":7,
+  "model":"accounts/fireworks/models/glm-5p3",
+  "choices":[{"index":0,"finish_reason":"stop","raw_output":"OK",
+    "message":{"role":"assistant","content":"OK","reasoning_content":"because"}}],
+  "service_tier":"default",
+  "usage":{"prompt_tokens":9,"completion_tokens":1,"total_tokens":10,
+    "completion_tokens_details":{"reasoning_tokens":0,
+      "accepted_prediction_tokens":2,"rejected_prediction_tokens":1}}
+}`
+
+func TestOpenAIChatResponseAcceptsFireworksRawOutput(t *testing.T) {
+	response, envelope, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(fireworksChatResponseFixture))
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if response.Usage.Total.Value == nil || *response.Usage.Total.Value != 10 {
+		t.Fatalf("usage = %+v", response.Usage)
+	}
+	if len(response.Output) != 1 {
+		t.Fatalf("output = %+v", response.Output)
+	}
+	assertDiagnosticFields(t, diagnostics,
+		"choices.raw_output",
+		"usage.completion_tokens_details.accepted_prediction_tokens",
+		"usage.completion_tokens_details.rejected_prediction_tokens",
+	)
+	if !envelope.ResponseReencodeRequired {
+		t.Fatal("Fireworks raw_output must force a re-encode so it is not replayed")
+	}
+}
+
+func TestOpenAIChatResponseTranslatesFireworksReply(t *testing.T) {
+	translated, err := NewBuiltinEngine().TranslateResponse(
+		llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(fireworksChatResponseFixture), nil,
+	)
+	if err != nil {
+		t.Fatalf("TranslateResponse() error = %v", err)
+	}
+	if len(translated.Response.Output) != 1 || translated.Response.Usage.Total.Value == nil {
+		t.Fatalf("translated response = %+v", translated.Response)
+	}
+	if strings.Contains(string(translated.Body), "raw_output") {
+		t.Fatal("raw_output must not appear in the re-encoded response")
+	}
+}
+
+func TestOpenAIChatResponseRejectsNonStringFireworksRawOutput(t *testing.T) {
+	body := strings.Replace(fireworksChatResponseFixture, `"raw_output":"OK"`, `"raw_output":42`, 1)
+	_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+}
+
+func TestChatStreamAcceptsFireworksChunkExtensions(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"fw-s\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"raw_output\":\"hi\",\"message\":{\"tools\":[{\"name\":\"lookup\"}]},\"finish_reason\":null}]}\n\n" +
+			"data: {\"id\":\"fw-s\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	events, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("Fireworks Chat stream chunk was rejected: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("Fireworks Chat stream produced no events")
+	}
+	assertDiagnosticFields(t, diagnostics,
+		"stream.choices.message.tools",
+		"stream.choices.raw_output",
+	)
+}
