@@ -1,12 +1,13 @@
 package verification
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
-	"strings"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
@@ -192,65 +193,92 @@ func sortFindings(findings []SuiteFinding) {
 	})
 }
 
-// CISuiteDispatch is the baseline-suite contract the integration workflow
-// declares: the workflow_call input default and the job environment
-// variable that carries the input into the e2e binary.
+// ciSuiteDispatchProbe drives the production CI path that dispatches a
+// baseline suite: tools/ci/ci_plan.py plans every e2e record twice (the
+// standard plan and the full plan), and tools/ci/run_e2e_batch.py builds the
+// environment and command it would hand bin/e2e for each record. A record
+// without baseline_suite exercises the runner's own fallback. The env and
+// flag names come from argv so Go stays their single source.
+const ciSuiteDispatchProbe = `
+import json, sys, tempfile
+from pathlib import Path
+
+root, env_name, flag = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+sys.path.insert(0, str(root / "tools" / "ci"))
+import ci_plan
+import run_e2e_batch as runner
+
+sha = "0" * 40
+
+
+def e2e(plan):
+    return [r for r in plan["verifications"] if r["executor"] == "e2e"]
+
+
+full = e2e(ci_plan.make_plan([], source_sha=sha, full=True))
+standard = e2e(ci_plan.make_plan([], source_sha=sha, requested=tuple(sorted(r["id"] for r in full))))
+fallback = [{k: v for k, v in r.items() if k != "baseline_suite"} for r in full]
+
+
+def observe(plan, record):
+    with tempfile.TemporaryDirectory() as tmp:
+        env = runner.profile_environment(record, Path(tmp) / "raw", Path(tmp) / "state", {})
+    command = runner.profile_command(record, "e2e-audit")
+    return {
+        "plan": plan,
+        "profile": record["profile"],
+        "planned_suite": record.get("baseline_suite", ""),
+        "env_suite": env.get(env_name, ""),
+        "flag_suites": [a[len(flag):] for a in command if a.startswith(flag)],
+    }
+
+
+rows = [observe(name, r) for name, records in (("standard", standard), ("full", full), ("runner-fallback", fallback)) for r in records]
+rows.sort(key=lambda row: (row["plan"], row["profile"]))
+json.dump(rows, sys.stdout)
+`
+
+// BaselineSuiteFlag is the cmd/e2e flag the batch runner passes the
+// planned suite through, alongside framework.BaselineSuiteEnv.
+const BaselineSuiteFlag = "-baseline-suite="
+
+// CISuiteDispatch is one baseline-suite dispatch on the CI path: the suite
+// tools/ci/ci_plan.py planned for an e2e record (empty for the runner
+// fallback rows, where the record carries none) and what
+// tools/ci/run_e2e_batch.py hands bin/e2e for it through
+// framework.BaselineSuiteEnv and BaselineSuiteFlag.
 type CISuiteDispatch struct {
-	InputDefault string `json:"input_default"`
-	EnvName      string `json:"env_name"`
-	EnvValue     string `json:"env_value"`
+	Plan         string   `json:"plan"`
+	Profile      string   `json:"profile"`
+	PlannedSuite string   `json:"planned_suite"`
+	EnvSuite     string   `json:"env_suite"`
+	FlagSuites   []string `json:"flag_suites"`
 }
 
-// LoadCISuiteDispatch parses the integration workflow at path and returns
-// its baseline-suite dispatch. A workflow without the input, or a job
-// without an environment variable bound to it, is a hard error: the suite
-// layer would then have no CI path at all.
-func LoadCISuiteDispatch(path string) (CISuiteDispatch, error) {
-	raw, err := os.ReadFile(path)
+// LoadCISuiteDispatch runs the planner and batch runner from the repository
+// at repoRoot and returns every dispatch they produce. It prefers the agent
+// harness interpreter (.venv-agent) and falls back to python3. Failing to
+// run the probe, or a probe that plans no e2e record, is a hard error: the
+// suite layer would then have no observed CI path at all.
+func LoadCISuiteDispatch(repoRoot string) ([]CISuiteDispatch, error) {
+	python := filepath.Join(repoRoot, ".venv-agent", "bin", "python")
+	if _, err := os.Stat(python); err != nil {
+		python = "python3"
+	}
+	cmd := exec.Command(python, "-c", ciSuiteDispatchProbe, repoRoot, framework.BaselineSuiteEnv, BaselineSuiteFlag)
+	cmd.Dir = repoRoot
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return CISuiteDispatch{}, fmt.Errorf("reading CI workflow %s: %w", path, err)
+		return nil, fmt.Errorf("probing CI planner and batch runner with %s: %w\n%s", python, err, stderr.String())
 	}
-	var doc struct {
-		On struct {
-			WorkflowCall struct {
-				Inputs map[string]struct {
-					Default string `yaml:"default"`
-				} `yaml:"inputs"`
-			} `yaml:"workflow_call"`
-		} `yaml:"on"`
-		Jobs map[string]struct {
-			Env map[string]string `yaml:"env"`
-		} `yaml:"jobs"`
+	var dispatches []CISuiteDispatch
+	if err := json.Unmarshal(out, &dispatches); err != nil {
+		return nil, fmt.Errorf("decoding CI suite dispatch probe output: %w", err)
 	}
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return CISuiteDispatch{}, fmt.Errorf("parsing CI workflow %s: %w", path, err)
+	if len(dispatches) == 0 {
+		return nil, fmt.Errorf("CI planner dispatches no e2e record; the baseline suite has no CI path")
 	}
-
-	input, ok := doc.On.WorkflowCall.Inputs["baseline-suite"]
-	if !ok {
-		return CISuiteDispatch{}, fmt.Errorf("CI workflow %s declares no baseline-suite workflow_call input", path)
-	}
-	dispatch := CISuiteDispatch{InputDefault: input.Default}
-
-	jobNames := make([]string, 0, len(doc.Jobs))
-	for name := range doc.Jobs {
-		jobNames = append(jobNames, name)
-	}
-	sort.Strings(jobNames)
-	for _, name := range jobNames {
-		for envName, envValue := range doc.Jobs[name].Env {
-			if !strings.Contains(envValue, "inputs.baseline-suite") {
-				continue
-			}
-			if dispatch.EnvName != "" && dispatch.EnvName != envName {
-				return CISuiteDispatch{}, fmt.Errorf("CI workflow %s binds inputs.baseline-suite to both %s and %s", path, dispatch.EnvName, envName)
-			}
-			dispatch.EnvName = envName
-			dispatch.EnvValue = envValue
-		}
-	}
-	if dispatch.EnvName == "" {
-		return CISuiteDispatch{}, fmt.Errorf("CI workflow %s binds inputs.baseline-suite to no job environment variable", path)
-	}
-	return dispatch, nil
+	return dispatches, nil
 }

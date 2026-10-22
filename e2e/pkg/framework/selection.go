@@ -8,8 +8,9 @@ import "github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 const BaselineSuiteProfile = "envoy-ai-gateway"
 
 // BaselineSuiteEnv is the environment variable CI uses to dispatch the
-// baseline suite into the e2e binary (integration-test-k8s.yml sets it from
-// the baseline-suite workflow input; cmd/e2e reads it as the flag default).
+// baseline suite into the e2e binary (tools/ci/run_e2e_batch.py sets it from
+// the suite tools/ci/ci_plan.py plans per record; cmd/e2e reads it as the
+// flag default).
 const BaselineSuiteEnv = "E2E_BASELINE_SUITE"
 
 // DefaultBaselineSuite is the suite the runner uses when neither the flag

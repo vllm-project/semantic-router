@@ -36,11 +36,11 @@ type ciOverrideReport struct {
 // effectiveSelectionReport is the audit view of the baseline-suite layer:
 // the derived selection per profile and suite, the drift Gate E enforces for
 // the baseline profile (all empty on a consistent contract), and the suite
-// dispatch the CI workflow declares.
+// dispatch observed on the CI planner-to-runner path.
 type effectiveSelectionReport struct {
 	verification.EffectiveSelection
-	BaselineDrift verification.SuiteDrift      `json:"baseline_drift"`
-	CIDispatch    verification.CISuiteDispatch `json:"ci_dispatch"`
+	BaselineDrift verification.SuiteDrift        `json:"baseline_drift"`
+	CIDispatch    []verification.CISuiteDispatch `json:"ci_dispatch"`
 }
 
 func main() {
@@ -92,7 +92,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "e2e-audit: %v\n", err)
 		os.Exit(1)
 	}
-	dispatch, err := verification.LoadCISuiteDispatch(workflowPath)
+	dispatch, err := verification.LoadCISuiteDispatch(repoRoot)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "e2e-audit: %v\n", err)
 		os.Exit(1)

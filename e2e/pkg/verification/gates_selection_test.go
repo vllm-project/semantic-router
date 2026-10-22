@@ -9,7 +9,6 @@ package verification
 // inputs, so each scenario stays pinned regardless of live registry state.
 
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -114,26 +113,49 @@ func TestGateESuiteLayerLeavesOtherProfilesUntouched(t *testing.T) {
 	}
 }
 
-// Gate E: the CI workflow dispatches a suite the runtime accepts, through
-// the environment variable the e2e binary reads. The workflow input default
-// is the suite every non-full CI plan runs, so it must be one
-// testmatrix.BaselineCases resolves rather than a value the runner rejects
-// after the profile is already deployed.
-func TestGateECIWorkflowDispatchesAcceptedSuite(t *testing.T) {
-	workflowPath := filepath.Join(repoRootForTest(t), ".github", "workflows", "integration-test-k8s.yml")
-	dispatch, err := LoadCISuiteDispatch(workflowPath)
+// Gate E: the CI planner-to-runner path dispatches suites the runtime
+// accepts. Every e2e record tools/ci/ci_plan.py plans must carry a suite
+// testmatrix.BaselineCases resolves, and tools/ci/run_e2e_batch.py must hand
+// that same suite to bin/e2e through both framework.BaselineSuiteEnv and the
+// -baseline-suite flag, so the runner cannot reject it after the profile is
+// deployed. The standard plan and the runner's fallback must use the local
+// default, and the plans together must dispatch every suite the audit
+// derives: a stress exclusion is only legitimate if the full suite that
+// executes the case is actually dispatched for the baseline profile.
+func TestGateECIDispatchesAcceptedSuite(t *testing.T) {
+	dispatches, err := LoadCISuiteDispatch(repoRootForTest(t))
 	if err != nil {
 		t.Fatalf("loading CI suite dispatch: %v", err)
 	}
 
-	if dispatch.EnvName != framework.BaselineSuiteEnv {
-		t.Errorf("CI workflow carries the baseline suite in %s but the e2e binary reads %s", dispatch.EnvName, framework.BaselineSuiteEnv)
+	baselineSuites := map[string]bool{}
+	for _, d := range dispatches {
+		want := d.PlannedSuite
+		if d.Plan == "runner-fallback" {
+			want = framework.DefaultBaselineSuite
+		} else {
+			if _, err := testmatrix.BaselineCases(d.PlannedSuite); err != nil || d.PlannedSuite == "" {
+				t.Errorf("%s plan dispatches suite %q for profile %q, which testmatrix.BaselineCases does not accept by name: %v", d.Plan, d.PlannedSuite, d.Profile, err)
+			}
+			if d.Profile == framework.BaselineSuiteProfile {
+				baselineSuites[d.PlannedSuite] = true
+			}
+		}
+		if d.Plan == "standard" && d.PlannedSuite != framework.DefaultBaselineSuite {
+			t.Errorf("standard plan dispatches suite %q for profile %q, but the runner default is %q; CI and local runs would execute different baseline scopes by default", d.PlannedSuite, d.Profile, framework.DefaultBaselineSuite)
+		}
+		if d.EnvSuite != want {
+			t.Errorf("%s plan, profile %q: batch runner sets %s=%q, want %q", d.Plan, d.Profile, framework.BaselineSuiteEnv, d.EnvSuite, want)
+		}
+		if !reflect.DeepEqual(d.FlagSuites, []string{want}) {
+			t.Errorf("%s plan, profile %q: batch runner passes %s%v, want exactly one %s%s", d.Plan, d.Profile, BaselineSuiteFlag, d.FlagSuites, BaselineSuiteFlag, want)
+		}
 	}
-	if _, err := testmatrix.BaselineCases(dispatch.InputDefault); err != nil {
-		t.Errorf("CI workflow input default %q is rejected by testmatrix.BaselineCases: %v", dispatch.InputDefault, err)
-	}
-	if dispatch.InputDefault != framework.DefaultBaselineSuite {
-		t.Errorf("CI workflow input default %q differs from the runner default %q; CI and local runs would execute different baseline scopes by default", dispatch.InputDefault, framework.DefaultBaselineSuite)
+
+	for _, suite := range testmatrix.BaselineSuites {
+		if !baselineSuites[suite] {
+			t.Errorf("no CI plan dispatches suite %q for profile %q; the cases only that suite executes never run in CI", suite, framework.BaselineSuiteProfile)
+		}
 	}
 }
 
