@@ -160,10 +160,9 @@ the same endpoint.
 `--artifact-mode` selects `pr` (default), `main`, `nightly` or `release`; for a
 release, `--tag` must match the release version.
 
-The generic buildx workflow and hosted AMD64 artifact loader reject this native
-build strategy. A native worker
-can build and qualify the artifact before it enters the project's publication
-process. Official registry publication remains to be coordinated with maintainers.
+Build and verify RISC-V64 artifacts with the native runner above. The existing
+hosted workflow continues to build its configured platforms. Official RISC-V64
+registry publication remains to be coordinated with maintainers.
 
 ## Dependency updates
 

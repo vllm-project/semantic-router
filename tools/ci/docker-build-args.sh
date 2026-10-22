@@ -4,10 +4,6 @@ set -euo pipefail
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 
 image_name="${MATRIX_IMAGE:?MATRIX_IMAGE is required}"
-if [[ "${BUILD_STRATEGY:-buildx}" != "buildx" ]]; then
-  echo '::error::Use tools/docker/riscv64/build.py --artifact-directory to build this artifact on native RISC-V64.' >&2
-  exit 1
-fi
 # The router images' runtime PyTorch build, from tools/ci/image_artifacts.py.
 accelerator="${ACCELERATOR:-}"
 dashboard_version_mode="${DASHBOARD_VERSION_MODE:-main}"

@@ -22,7 +22,6 @@ from execution_batches import (
     platform_batches,
 )
 from execution_targets import TARGET_FIELDS, target_errors
-from image_artifacts import DEFINITIONS
 from provider_mocker_image import validate_acquisition
 from release_guard_waiver import planned_waiver
 from verification_catalog import full_cpu_ids, load_catalog, verification_records
@@ -306,13 +305,10 @@ def load_builds(directory: Path, images: list[str] | None = None) -> list[dict]:
         if selected is not None and path.parent.name not in selected:
             continue
         record = json.loads(path.read_text())
-        definition = DEFINITIONS.get(record.get("id"))
-        primary_platform = definition[2][0] if definition else "linux/amd64"
         if not any(
-            image.get("platform") == primary_platform
-            for image in record.get("images", [])
+            image.get("platform") == "linux/amd64" for image in record.get("images", [])
         ):
-            raise ValueError(f"{path}: missing actual {primary_platform} image")
+            raise ValueError(f"{path}: missing actual Linux AMD64 image")
         builds.append(
             {
                 "id": f"image:{record['id']}",

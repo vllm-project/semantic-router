@@ -230,9 +230,6 @@ def main() -> None:
         names = json.loads(args.images)
         if not isinstance(names, list) or not names or len(set(names)) != len(names):
             raise ValueError("Image inventory must be a nonempty unique list")
-        for name in names:
-            if name in DEFINITIONS and "linux/amd64" not in DEFINITIONS[name][2]:
-                raise ValueError("Hosted image loading requires a Linux AMD64 artifact")
         receipts = []
         for name in names:
             if name not in DEFINITIONS:
@@ -300,12 +297,6 @@ def main() -> None:
             "accelerator": accelerator,
             "platforms": ",".join(platforms),
             "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
-            "build_strategy": "native" if args.image == "vllm-sr-riscv64" else "buildx",
-            "build_script": (
-                "tools/docker/riscv64/build.py"
-                if args.image == "vllm-sr-riscv64"
-                else ""
-            ),
         }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():
