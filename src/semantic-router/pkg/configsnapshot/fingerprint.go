@@ -62,6 +62,7 @@ var ownedFields = map[string]bool{
 	"IntelligentRouting.Strategy":              true,
 	"IntelligentRouting.Fallback":              true,
 	"RouterConfig.DocumentHash":                true, // identity and derived state
+	"RouterConfig.SourceDocument":              true, // exact parsed bytes, same identity
 	"RouterConfig.EffectiveModelRegistry":      true,
 	"RouterConfig.RoutingScope":                true,
 	"RouterConfig.SkipExternalAssetValidation": true,
