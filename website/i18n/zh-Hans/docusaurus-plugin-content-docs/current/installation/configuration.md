@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 配置
 description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配方、服务和密钥应放在哪里。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置

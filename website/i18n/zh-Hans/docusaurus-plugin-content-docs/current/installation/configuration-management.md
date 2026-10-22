@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置管理
 description: 运行中的 Router 如何激活一次配置变更、变更会重建什么、被拒绝的变更如何报告，以及如何列出和回滚版本。
 translation:

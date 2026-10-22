@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置工作流
 description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并应用同一份 canonical Router 配置。
 translation:
