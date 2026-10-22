@@ -143,3 +143,34 @@ Every escalation sends the request and accumulated answer context to another
 candidate model. Make sure every candidate is allowed by the route's data
 policy, and bound latency and cost for the worst-case chain. See a complete example:
 [`config/fragments/algorithm/looper/confidence.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/confidence.yaml).
+
+## External verifier token accounting
+
+The AutoMix `/verify` response may include an optional `usage` object:
+
+```json
+{"confidence": 0.9, "usage": {"prompt_tokens": 140, "completion_tokens": 10, "total_tokens": 150}}
+```
+
+These counts cover every internal verification sample. The demonstration server
+counts the tokenized prompt on each generation and generated tokens before text
+decoding, including special tokens. They describe verifier computation rather
+than the candidate model's generation or a provider's billing statement.
+
+Confidence adds reported verifier tokens to the cascade's aggregate usage and
+records them on the `external_verifier` attempt. The selected candidate remains
+the only answer returned; verifier samples are not copied to Replay or the
+client response. Verifier tokens are not priced using the candidate model's
+rates.
+
+Older servers may omit `usage`. A missing, null, or incomplete report preserves
+routing compatibility and marks the verifier attempt's `usage.unreported: true`
+in Replay. Its numeric counts, and aggregate response counts, are then reported
+subtotals rather than complete consumption. An explicit all-zero report is
+known zero. Negative, inconsistent, or non-integer counts are malformed verifier
+output and follow the configured `on_error` policy. Already reported consumption
+is retained when verification fails, including when a verdict is invalid.
+
+This accounting does not establish a pre-dispatch verifier budget. Aggregate
+reservation and settlement remain part of the shared Looper compute-policy
+contract.

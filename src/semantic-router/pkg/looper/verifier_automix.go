@@ -62,16 +62,26 @@ func (v *AutoMixVerifier) Verify(ctx context.Context, req *VerifierRequest) (*Ve
 		return nil, NewVerifierError(VerifierFailureNoCandidate, fmt.Errorf("automix verifier requires a candidate"))
 	}
 	start := time.Now()
+	result := &VerifierResult{Kind: v.Kind(), Version: v.version}
+	defer func() { result.LatencyMs = waitForLatency(start) }()
 	best := -1.0
 	bestIdx := -1
 	scores := make([]CandidateScore, 0, len(req.Candidates))
 	for i, c := range req.Candidates {
 		resp, err := v.client.Verify(ctx, req.Task, c.Content, req.TrustedContext, v.threshold)
 		if err != nil {
-			return nil, &VerifierError{Code: classifyVerifierOutputError(err), Err: err}
+			result.Usage.Unreported = true
+			return result, &VerifierError{Code: classifyVerifierOutputError(err), Err: err}
+		}
+		usage, usageErr := parseVerifierUsage(resp.Usage)
+		if err := accumulateVerifierUsage(&result.Usage, usage); err != nil {
+			return result, NewVerifierError(VerifierFailureMalformed, err)
+		}
+		if usageErr != nil {
+			return result, NewVerifierError(VerifierFailureMalformed, usageErr)
 		}
 		if !validVerifierConfidence(resp.Confidence) {
-			return nil, &VerifierError{
+			return result, &VerifierError{
 				Code: VerifierFailureMalformed,
 				Err:  fmt.Errorf("automix confidence %.3g out of [0,1]", resp.Confidence),
 			}
@@ -81,13 +91,9 @@ func (v *AutoMixVerifier) Verify(ctx context.Context, req *VerifierRequest) (*Ve
 			best, bestIdx = resp.Confidence, i
 		}
 	}
-	r := &VerifierResult{
-		Confidence: &best,
-		Kind:       v.Kind(),
-		Version:    v.version,
-		Scores:     scores,
-		LatencyMs:  waitForLatency(start),
-	}
+	r := result
+	r.Confidence = &best
+	r.Scores = scores
 	if bestIdx < 0 || best < v.threshold {
 		r.Disposition = DispositionRedo
 		r.ReasonCodes = []string{"below_threshold"}

@@ -27,7 +27,7 @@ type TokenUsage struct {
 	TotalTokens       int64 `json:"total_tokens"`
 	CachedInputTokens int64 `json:"cached_input_tokens,omitempty"`
 	CacheWriteTokens  int64 `json:"cache_write_tokens,omitempty"`
-	Unreported        bool  `json:"-"`
+	Unreported        bool  `json:"unreported,omitempty"`
 }
 
 // Add returns u with the usage of the given responses added to it. It is
@@ -90,6 +90,7 @@ func (u TokenUsage) Complete() bool {
 // UnmarshalJSON retains cache buckets that the SDK's base usage struct can lose.
 func (u *TokenUsage) UnmarshalJSON(data []byte) error {
 	var raw struct {
+		Unreported bool   `json:"unreported"`
 		Prompt     *int64 `json:"prompt_tokens"`
 		Completion *int64 `json:"completion_tokens"`
 		Total      *int64 `json:"total_tokens"`
@@ -111,7 +112,7 @@ func (u *TokenUsage) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	u.PromptTokens, u.CompletionTokens, u.TotalTokens = *raw.Prompt, *raw.Completion, *raw.Total
-	u.Unreported = false
+	u.Unreported = raw.Unreported
 	var cachedSeen, writeSeen bool
 	for _, value := range []*int64{raw.Cached, raw.Details.Cached} {
 		if value != nil {
