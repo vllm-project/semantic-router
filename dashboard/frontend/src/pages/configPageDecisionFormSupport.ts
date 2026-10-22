@@ -1,36 +1,17 @@
+import { canonicalToRuleDocument, type RuleIssue } from '../lib/decisionRuleAst'
+import {
+  RAW_EXPRESSION_INCOMPLETE,
+  blockingRuleIssues,
+  formatRuleIssuePath,
+  validateRuleDocument,
+  type RuleSignalScope,
+} from '../lib/decisionRuleValidation'
 import type {
   DecisionConfig,
-  DecisionCondition,
   DecisionFormState,
   DecisionPluginConfiguration,
   DecisionRuleSet,
 } from './configPageSupport'
-
-function validateCondition(condition: DecisionCondition, path: string): void {
-  const hasChildren = Boolean(condition.operator || condition.conditions?.length)
-  if (hasChildren) {
-    if (!condition.operator || !['AND', 'OR', 'NOT'].includes(condition.operator)) {
-      throw new Error(`${path} needs an AND, OR, or NOT operator.`)
-    }
-    const children = condition.conditions || []
-    if (condition.operator === 'NOT' && children.length !== 1) {
-      throw new Error(`${path} NOT group needs exactly one condition.`)
-    }
-    if (children.length === 0) throw new Error(`${path} needs at least one condition.`)
-    children.forEach((child, index) => validateCondition(child, `${path}.${index + 1}`))
-    return
-  }
-
-  if (!condition.type?.trim() || !condition.name?.trim()) {
-    throw new Error(`${path} needs both type and name.`)
-  }
-}
-
-function conditionUsesOnError(condition: DecisionCondition): boolean {
-  return Boolean(
-    condition.on_error || condition.conditions?.some((child) => conditionUsesOnError(child)),
-  )
-}
 
 // The Router accepts one leaf condition as the whole rule tree: `rules: {type, name}`.
 export const isSingleConditionRules = (rules: DecisionRuleSet | undefined): boolean =>
@@ -41,35 +22,44 @@ export const isSingleConditionRules = (rules: DecisionRuleSet | undefined): bool
       (rules.type || rules.name || rules.label || rules.predicate || rules.on_error),
   )
 
+/**
+ * Validates the rule tree against the selected routing scope's signals with
+ * the same checks the Go config validator runs, and blocks the save on any
+ * error. `editorIssues` carries what only the editor knows, such as an
+ * incomplete raw expression that never reached the tree.
+ */
 export const decisionRulesForSave = (
   value: DecisionFormState['rules'],
+  scope: RuleSignalScope,
+  editorIssues: RuleIssue[] = [],
 ): DecisionConfig['rules'] => {
   const rules = JSON.parse(JSON.stringify(value || {})) as DecisionConfig['rules']
-  const conditions = rules.conditions || []
-  if (isSingleConditionRules(rules)) {
-    validateCondition(rules, 'The root condition')
-    if (rules.on_unknown && conditionUsesOnError(rules)) {
-      throw new Error('Rules on_unknown cannot be combined with condition on_error.')
-    }
-    return rules
-  }
-  if (!rules.operator && conditions.length === 0) return {}
-  if (!rules.operator || !['AND', 'OR', 'NOT'].includes(rules.operator)) {
-    throw new Error('Rules need an AND, OR, or NOT root operator.')
-  }
-  if (rules.operator === 'NOT' && conditions.length !== 1) {
-    throw new Error('The root NOT group needs exactly one condition.')
-  }
-  if (rules.operator !== 'AND' && conditions.length === 0) {
-    throw new Error(`The root ${rules.operator} group needs at least one condition.`)
-  }
-  if (rules.on_error) throw new Error('on_error only applies to leaf conditions.')
-  conditions.forEach((condition, index) => validateCondition(condition, `Condition #${index + 1}`))
-  if (rules.on_unknown && conditions.some((condition) => conditionUsesOnError(condition))) {
-    throw new Error('Rules on_unknown cannot be combined with condition on_error.')
+  const issues = [
+    ...editorIssues.filter((issue) => issue.message.startsWith(RAW_EXPRESSION_INCOMPLETE)),
+    ...validateRuleDocument(canonicalToRuleDocument(rules), scope),
+  ]
+  const messages = Array.from(
+    new Set(
+      blockingRuleIssues(issues).map((issue) =>
+        issue.path.length > 0 ? `${formatRuleIssuePath(issue.path)}: ${issue.message}` : issue.message,
+      ),
+    ),
+  )
+  if (messages.length > 0) {
+    throw new Error(`Fix the rule tree before saving: ${messages.join('; ')}`)
   }
   return rules
 }
+
+const MODELLED_MODEL_REF_KEYS = new Set([
+  'model',
+  'use_reasoning',
+  'reasoning_description',
+  'reasoning_mode',
+  'reasoning_effort',
+  'lora_name',
+  'weight',
+])
 
 export const decisionModelRefsForSave = (
   values: DecisionFormState['modelRefs'],
@@ -81,7 +71,13 @@ export const decisionModelRefsForSave = (
       if (!model) {
         throw new Error(`Model reference #${index + 1} is missing a model name.`)
       }
+      // Keys the form does not model survive; the modelled optional text
+      // fields are rebuilt so a cleared field is dropped, not saved empty.
+      const unmodelled = Object.fromEntries(
+        Object.entries(value).filter(([key]) => !MODELLED_MODEL_REF_KEYS.has(key)),
+      )
       return {
+        ...unmodelled,
         model,
         use_reasoning: !!value?.use_reasoning,
         ...optionalText('reasoning_description', value?.reasoning_description),

@@ -1,6 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
+import {
+  incompleteRawExpression,
+  type RuleIssue,
+} from "@/lib/decisionRuleValidation";
 import type { DSLFieldObject } from "@/types/dsl";
 import {
   ALGORITHM_DESCRIPTIONS,
@@ -51,9 +55,16 @@ const AddRouteForm: React.FC<{
   );
   const [plugins, setPlugins] = useState<RoutePluginInput[]>([]);
 
+  // An unparsable raw WHEN draft never reaches whenExpr, so creating now
+  // would silently drop the typed condition.
+  const [whenIncomplete, setWhenIncomplete] = useState<string | null>(null);
+  const handleWhenIssues = useCallback((issues: RuleIssue[]) => {
+    setWhenIncomplete(incompleteRawExpression(issues));
+  }, []);
+
   const handleSubmit = useCallback(() => {
     const n = name.trim().replace(/\s+/g, "_");
-    if (!n) return;
+    if (!n || whenIncomplete) return;
     onAdd(n, {
       description: description.trim() || undefined,
       priority,
@@ -64,6 +75,7 @@ const AddRouteForm: React.FC<{
     });
   }, [
     name,
+    whenIncomplete,
     description,
     priority,
     whenExpr,
@@ -151,7 +163,8 @@ const AddRouteForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSubmit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || Boolean(whenIncomplete)}
+            title={whenIncomplete ?? undefined}
           >
             Create
           </button>
@@ -235,6 +248,7 @@ const AddRouteForm: React.FC<{
             value={whenExpr}
             onChange={setWhenExpr}
             availableSignals={availableSignals}
+            onIssuesChange={handleWhenIssues}
           />
         </div>
       </div>

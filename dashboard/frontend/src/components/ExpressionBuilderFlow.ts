@@ -1,7 +1,7 @@
 import Dagre from '@dagrejs/dagre'
 import { MarkerType, type Edge, type Node } from 'reactflow'
 
-import { isLeaf, isOperator, type DragData, type NodePath, type RuleNode } from './ExpressionBuilderSupport'
+import { isLeaf, isOperator, leafMetaBadges, type DragData, type NodePath, type RuleIssue, type RuleNode } from './ExpressionBuilderSupport'
 
 export interface FlowNodeData {
   ruleNode: RuleNode
@@ -9,6 +9,8 @@ export interface FlowNodeData {
   label: string
   isOperator: boolean
   depth?: number
+  /** The most severe validation issue anchored to this node. */
+  issue?: RuleIssue['severity']
   onDoubleClick?: (path: NodePath) => void
   onDropOnNode?: (targetPath: NodePath, data: DragData) => void
   onAddChild?: (targetPath: NodePath) => void
@@ -26,6 +28,7 @@ export function treeToFlowElements(
   onDoubleClick?: (path: NodePath) => void,
   onDropOnNode?: (targetPath: NodePath, data: DragData) => void,
   onAddChild?: (targetPath: NodePath) => void,
+  issueSeverity?: ReadonlyMap<string, RuleIssue['severity']>,
 ): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
   idCounter = 0
   const nodes: Node<FlowNodeData>[] = []
@@ -49,6 +52,7 @@ export function treeToFlowElements(
         onDropOnNode,
         onAddChild,
         depth,
+        issue: node.id ? issueSeverity?.get(node.id) : undefined,
       },
     })
 
@@ -121,7 +125,7 @@ function nextId(): string {
 
 function estimateSignalWidth(node: RuleNode): number {
   if (!isLeaf(node)) return OPERATOR_W
-  const text = `${node.signalType}  ${node.signalName}`
+  const text = [node.signalType, node.signalName, ...leafMetaBadges(node)].join('   ')
   const estimated = Math.max(SIGNAL_W, text.length * 7 + 32)
-  return Math.min(estimated, 320)
+  return Math.min(estimated, 420)
 }

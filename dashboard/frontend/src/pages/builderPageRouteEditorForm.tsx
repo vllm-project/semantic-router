@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
+import {
+  incompleteRawExpression,
+  type RuleIssue,
+} from "@/lib/decisionRuleValidation";
 import { useDSLStore } from "@/stores/dslStore";
 import type { ASTRouteDecl, DSLFieldObject } from "@/types/dsl";
 import {
@@ -77,7 +81,15 @@ const RouteEditorForm: React.FC<{
     route.plugins,
   ]);
 
+  // An unparsable raw WHEN draft never reaches whenExpr, so saving now
+  // would silently keep the previous condition.
+  const [whenIncomplete, setWhenIncomplete] = useState<string | null>(null);
+  const handleWhenIssues = useCallback((issues: RuleIssue[]) => {
+    setWhenIncomplete(incompleteRawExpression(issues));
+  }, []);
+
   const handleSave = useCallback(() => {
+    if (whenIncomplete) return;
     onUpdate({
       description: description.trim() || undefined,
       priority,
@@ -86,7 +98,16 @@ const RouteEditorForm: React.FC<{
       algorithm: algorithm?.algoType ? algorithm : undefined,
       plugins,
     });
-  }, [description, priority, whenExpr, models, algorithm, plugins, onUpdate]);
+  }, [
+    whenIncomplete,
+    description,
+    priority,
+    whenExpr,
+    models,
+    algorithm,
+    plugins,
+    onUpdate,
+  ]);
 
   // Model helpers
   const addModel = useCallback(() => {
@@ -170,6 +191,8 @@ const RouteEditorForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSave}
+            disabled={Boolean(whenIncomplete)}
+            title={whenIncomplete ?? undefined}
             style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
           >
             Save
@@ -238,6 +261,7 @@ const RouteEditorForm: React.FC<{
               route.when
             }
             availableSignals={availableSignals}
+            onIssuesChange={handleWhenIssues}
           />
         </div>
       </div>

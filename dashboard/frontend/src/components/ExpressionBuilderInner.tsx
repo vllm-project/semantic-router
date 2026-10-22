@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import ReactFlow, {
   useReactFlow,
   useNodesState,
@@ -21,16 +22,17 @@ import {
   isLeaf,
   isOperator,
   makeDragNode,
-  parseExprText,
   removeAtPath,
+  newRuleNodeId,
   replaceAtPath,
-  serializeNode,
-  validateTree,
   type DragData,
   type NodePath,
+  type RuleIssue,
+  type RuleLeaf,
   type RuleNode,
   type SignalDescriptor,
 } from './ExpressionBuilderSupport'
+import { formatRuleIssuePath } from '@/lib/decisionRuleValidation'
 import { applyDagreLayout, treeToFlowElements, type FlowNodeData } from './ExpressionBuilderFlow'
 import ExpressionBuilderCanvasEmptyState from './ExpressionBuilderCanvasEmptyState'
 import ExpressionBuilderContextMenu from './ExpressionBuilderContextMenu'
@@ -40,15 +42,21 @@ import ExpressionBuilderToolbox from './ExpressionBuilderToolbox'
 
 export interface ExpressionBuilderInnerProps {
   tree: RuleNode | null
-  setTree: React.Dispatch<React.SetStateAction<RuleNode | null>>
+  /** Reports a tree change to the owning editor; the editor serializes it. */
+  setTree: (action: React.SetStateAction<RuleNode | null>) => void
+  /** DSL text of the current tree, for the Result line. */
+  resultText: string
+  /** The raw input's text: the draft while raw mode is on. */
   rawText: string
-  setRawText: React.Dispatch<React.SetStateAction<string>>
+  onRawChange: (text: string) => void
+  rawError: string | null
   isRawMode: boolean
-  setIsRawMode: React.Dispatch<React.SetStateAction<boolean>>
+  setIsRawMode: (on: boolean) => void
+  rawDisabledReason: string | null
   maximized: boolean
   setMaximized: React.Dispatch<React.SetStateAction<boolean>>
   availableSignals: SignalDescriptor[]
-  onChange: (expr: string) => void
+  issues: RuleIssue[]
   pushHistory: (prev: RuleNode | null) => void
   canUndo: boolean
   canRedo: boolean
@@ -56,17 +64,22 @@ export interface ExpressionBuilderInnerProps {
   handleRedo: () => void
   selectedPath: NodePath | null
   setSelectedPath: React.Dispatch<React.SetStateAction<NodePath | null>>
-  internalChangeRef: React.MutableRefObject<boolean>
+  idPrefix: string
+}
+
+function isTextEntry(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  const tag = element?.tagName?.toLowerCase()
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || Boolean(element?.isContentEditable)
 }
 
 /**
  * Canvas + toolbox + raw/validation UI. Must render under `ReactFlowProvider`.
  */
 const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
-  tree, setTree, rawText, setRawText, isRawMode, setIsRawMode,
-  maximized, setMaximized, availableSignals, onChange, pushHistory,
-  canUndo, canRedo, handleUndo, handleRedo, selectedPath, setSelectedPath,
-  internalChangeRef,
+  tree, setTree, resultText, rawText, onRawChange, rawError, isRawMode, setIsRawMode,
+  rawDisabledReason, maximized, setMaximized, availableSignals, issues, pushHistory,
+  canUndo, canRedo, handleUndo, handleRedo, selectedPath, setSelectedPath, idPrefix,
 }) => {
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([])
@@ -79,14 +92,13 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
     return keys
   })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: NodePath } | null>(null)
-  const [editingNode, setEditingNode] = useState<{ path: NodePath; signalType: string; signalName: string } | null>(null)
+  const [editingPath, setEditingPath] = useState<NodePath | null>(null)
   const [addingToPath, setAddingToPath] = useState<NodePath | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [insertSiblingTarget, setInsertSiblingTarget] = useState<{ parentPath: NodePath; index: number } | null>(null)
 
   const reactFlowRef = useRef<HTMLDivElement>(null)
-  const suppressSyncRef = useRef(false)
 
   const showToast = useCallback((msg: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -104,33 +116,11 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
   }, [insertSiblingTarget, tree, pushHistory, setTree, showToast])
 
   useEffect(() => {
-    if (suppressSyncRef.current) { suppressSyncRef.current = false; return }
-    const text = tree ? serializeNode(tree) : ''
-    setRawText(text)
-    internalChangeRef.current = true
-    onChange(text)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tree])
-
-  useEffect(() => {
     if (!contextMenu) return
     const handler = () => setContextMenu(null)
     window.addEventListener('click', handler)
     return () => window.removeEventListener('click', handler)
   }, [contextMenu])
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && maximized) setMaximized(false)
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
-      const inInput = tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target as HTMLElement)?.isContentEditable
-      if (inInput) return
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo() }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo() }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [maximized, setMaximized, handleUndo, handleRedo])
 
   const signalGroups = useMemo(() => {
     const groups: Record<string, SignalDescriptor[]> = {}
@@ -169,19 +159,27 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
   const handleNodeDoubleClick = useCallback((path: NodePath) => {
     if (!tree) return
     const node = getNodeAtPath(tree, path)
-    if (!node) return
-    if (isLeaf(node)) {
-      setEditingNode({ path, signalType: node.signalType, signalName: node.signalName })
-    }
+    if (node && isLeaf(node)) setEditingPath(path)
   }, [tree])
 
-  const handleEditSave = useCallback((signalType: string, signalName: string) => {
-    if (!editingNode || !tree) { setEditingNode(null); return }
+  const editingLeaf = useMemo(() => {
+    if (!tree || !editingPath) return null
+    const node = getNodeAtPath(tree, editingPath)
+    return node && isLeaf(node) ? node : null
+  }, [tree, editingPath])
+
+  const handleEditSave = useCallback((edit: Partial<RuleLeaf>) => {
+    if (!editingPath || !tree || !editingLeaf) { setEditingPath(null); return }
     pushHistory(tree)
-    setTree(replaceAtPath(tree, editingNode.path, { signalType, signalName }))
-    setEditingNode(null)
-    showToast(`Updated to ${signalType}("${signalName}")`)
-  }, [editingNode, tree, pushHistory, setTree, showToast])
+    // Merge into the existing leaf so its id and unknown fields survive; an
+    // edit field set to undefined clears that field.
+    const merged: Record<string, unknown> = { ...editingLeaf, ...edit }
+    for (const key of Object.keys(merged)) if (merged[key] === undefined) delete merged[key]
+    const next = merged as unknown as RuleLeaf
+    setTree(replaceAtPath(tree, editingPath, next))
+    setEditingPath(null)
+    showToast(`Updated to ${next.signalType}("${next.signalName}")`)
+  }, [editingPath, editingLeaf, tree, pushHistory, setTree, showToast])
 
   const handleDropOnNode = useCallback((targetPath: NodePath, dragData: DragData) => {
     if (!tree) return
@@ -208,19 +206,30 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
     setAddingToPath(null)
   }, [addingToPath, tree, pushHistory, setTree, showToast])
 
+  const issueSeverity = useMemo(() => {
+    const severity = new Map<string, RuleIssue['severity']>()
+    for (const issue of issues) {
+      if (!issue.nodeId || severity.get(issue.nodeId) === 'error') continue
+      severity.set(issue.nodeId, issue.severity)
+    }
+    return severity
+  }, [issues])
+
   useEffect(() => {
     if (!tree) {
       setNodes([])
       setEdges([])
       return
     }
-    const { nodes: rawNodes, edges: newEdges } = treeToFlowElements(tree, handleNodeDoubleClick, handleDropOnNode, handleAddChild)
+    const { nodes: rawNodes, edges: newEdges } = treeToFlowElements(tree, handleNodeDoubleClick, handleDropOnNode, handleAddChild, issueSeverity)
     const layoutNodes = applyDagreLayout(rawNodes, newEdges)
     setNodes(layoutNodes)
     setEdges(newEdges)
-    setTimeout(() => fitView({ padding: 0.15, duration: 200 }), 50)
+    // The fullscreen switch remounts this canvas; a fit on the unmounted one yields NaN coordinates.
+    const fitTimer = setTimeout(() => fitView({ padding: 0.15, duration: 200 }), 50)
+    return () => clearTimeout(fitTimer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tree, handleNodeDoubleClick, handleDropOnNode, handleAddChild])
+  }, [tree, handleNodeDoubleClick, handleDropOnNode, handleAddChild, issueSeverity])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -241,11 +250,9 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
 
     if (data.kind === 'operator') {
       pushHistory(tree)
-      if (data.operator === 'NOT') {
-        setTree({ operator: 'NOT', conditions: [tree] })
-      } else {
-        setTree({ operator: data.operator, conditions: [tree] })
-      }
+      setTree(data.operator === 'NOT'
+        ? { id: newRuleNodeId(), operator: 'NOT', conditions: [tree] }
+        : { id: newRuleNodeId(), operator: data.operator, conditions: [tree] })
       showToast(`Wrapped tree with ${data.operator}`)
       return
     }
@@ -294,18 +301,24 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
     setContextMenu(null)
   }, [setSelectedPath])
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target as HTMLElement)?.isContentEditable) return
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPath && selectedPath.length > 0) {
-        e.preventDefault()
-        handleDeleteNode(selectedPath)
-      }
+  // Keyboard shortcuts are scoped to this editor's element, so two mounted
+  // editors never act on each other's tree or history.
+  const handleContainerKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    // A dialog opened by this editor (it may be portaled) handles its own keys;
+    // a dialog that hosts the editor, such as ConfigPage's form, does not.
+    const dialog = (e.target as HTMLElement).closest?.('[role="dialog"]')
+    if (dialog && !dialog.contains(e.currentTarget)) return
+    // Enter in the editor's own inputs never submits a host form.
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName?.toLowerCase() === 'input') e.preventDefault()
+    if (isTextEntry(e.target)) return
+    const modifier = e.ctrlKey || e.metaKey
+    if (modifier && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return }
+    if (modifier && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo(); return }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPath && selectedPath.length > 0) {
+      e.preventDefault()
+      handleDeleteNode(selectedPath)
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [selectedPath, handleDeleteNode])
+  }, [handleUndo, handleRedo, selectedPath, handleDeleteNode])
 
   const handleWrap = useCallback((path: NodePath, op: 'AND' | 'OR' | 'NOT') => {
     if (!tree) return
@@ -313,8 +326,8 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
     if (!node) return
     pushHistory(tree)
     const wrapped: RuleNode = op === 'NOT'
-      ? { operator: 'NOT', conditions: [node] }
-      : { operator: op, conditions: [node] }
+      ? { id: newRuleNodeId(), operator: 'NOT', conditions: [node] }
+      : { id: newRuleNodeId(), operator: op, conditions: [node] }
     setTree(replaceAtPath(tree, path, wrapped))
     setContextMenu(null)
     showToast(`Wrapped with ${op}`)
@@ -340,14 +353,8 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
     showToast(`Changed to ${newOp}`)
   }, [tree, pushHistory, setTree, showToast])
 
-  const handleRawChange = useCallback((text: string) => {
-    setRawText(text)
-    suppressSyncRef.current = true
-    setTree(parseExprText(text))
-    onChange(text)
-  }, [onChange, setRawText, setTree])
-
-  const validationIssues = useMemo(() => validateTree(tree, availableSignals), [tree, availableSignals])
+  const rawToggleId = `${idPrefix}-raw-toggle`
+  const rawErrorId = `${idPrefix}-raw-error`
 
   const applyTemplate = useCallback((tpl: BuilderTemplate) => {
     pushHistory(tree)
@@ -356,6 +363,9 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
 
   return (
     <div className={`${styles.container} ${maximized ? styles.containerMaximized : ''}`}
+      tabIndex={-1}
+      data-rule-editor-container
+      onKeyDown={handleContainerKeyDown}
       onClick={() => { setSelectedPath(null); setContextMenu(null) }}>
       <div className={styles.mainLayout}>
         <div className={styles.canvasWrapper}>
@@ -411,6 +421,9 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
                 }}
                 nodesDraggable={false}
                 nodesConnectable={false}
+                // d3-zoom stops dblclick propagation, which would swallow the
+                // node's double-click-to-edit before React sees it.
+                zoomOnDoubleClick={false}
                 edgesFocusable={false}
                 proOptions={{ hideAttribution: true }}
               >
@@ -451,23 +464,42 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
 
       <div className={styles.result}>
         <span className={styles.resultLabel}>Result:</span>
-        {tree ? <code className={styles.resultExpr}>{rawText}</code>
-             : <span className={styles.resultPlaceholder}>No condition — route matches all requests</span>}
+        {resultText ? <code className={styles.resultExpr}>{resultText}</code>
+             : <span className={styles.resultPlaceholder}>No condition — matches all requests</span>}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <label className={styles.rawToggle} htmlFor="expr-raw-toggle">
-          <input id="expr-raw-toggle" type="checkbox" checked={isRawMode} onChange={e => setIsRawMode(e.target.checked)} style={{ accentColor: 'var(--color-primary)' }} />
+        <label className={styles.rawToggle} htmlFor={rawToggleId}>
+          <input id={rawToggleId} type="checkbox" checked={isRawMode && !rawDisabledReason} disabled={Boolean(rawDisabledReason)}
+            onChange={e => setIsRawMode(e.target.checked)} style={{ accentColor: 'var(--color-primary)' }} />
           Edit raw expression
         </label>
+        {rawDisabledReason ? <span className={styles.resultPlaceholder}>{rawDisabledReason}</span> : null}
       </div>
-      {isRawMode && (
-        <input className={styles.rawInput} value={rawText} onChange={e => handleRawChange(e.target.value)}
-          placeholder='e.g. domain("math") AND complexity("hard")' onClick={e => e.stopPropagation()} />
+      {isRawMode && !rawDisabledReason && (
+        <>
+          <input className={styles.rawInput} value={rawText} onChange={e => onRawChange(e.target.value)}
+            aria-label="Raw expression" aria-invalid={rawError ? true : undefined}
+            aria-describedby={rawError ? rawErrorId : undefined}
+            placeholder='e.g. domain("math") AND complexity("hard")' onClick={e => e.stopPropagation()} />
+          {rawError ? (
+            <div id={rawErrorId} role="alert" className={styles.validationError}>
+              ✕ {rawError}. Saving is blocked until the expression is complete; turning raw editing off restores the expression from before it.
+            </div>
+          ) : null}
+        </>
       )}
 
-      {validationIssues.length > 0 && <div>{validationIssues.map((w, i) => <div key={i} className={styles.validationWarn}>⚠ {w}</div>)}</div>}
-      {tree && validationIssues.length === 0 && <div className={styles.validationOk}>✓ All referenced signals exist</div>}
+      {issues.length > 0 && (
+        <ul className={styles.issueList} aria-label="Rule issues">
+          {issues.map((issue, i) => (
+            <li key={`${issue.nodeId ?? 'root'}-${i}`} className={issue.severity === 'error' ? styles.validationError : styles.validationWarn}>
+              {issue.severity === 'error' ? '✕' : '⚠'} {issue.path.length > 0 ? `${formatRuleIssuePath(issue.path)}: ` : ''}{issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
+      {tree && issues.length === 0 && <div className={styles.validationOk}>✓ All referenced signals exist</div>}
 
       {contextMenu && tree ? (
         <ExpressionBuilderContextMenu
@@ -482,8 +514,8 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
             handleDeleteNode(path)
             setContextMenu(null)
           }}
-          onEditSignal={(path, signalType, signalName) => {
-            setEditingNode({ path, signalType, signalName })
+          onEditSignal={(path) => {
+            setEditingPath(path)
             setContextMenu(null)
           }}
           onInsertSibling={(target) => {
@@ -496,14 +528,16 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
         />
       ) : null}
 
-      {editingNode && (
+      {/* Portaled so its form never nests inside a host form, such as
+          ConfigPage's decision editor. */}
+      {editingLeaf && createPortal(
         <EditSignalDialog
-          signalType={editingNode.signalType}
-          signalName={editingNode.signalName}
+          initial={editingLeaf}
           availableSignals={availableSignals}
           onSave={handleEditSave}
-          onCancel={() => setEditingNode(null)}
-        />
+          onCancel={() => setEditingPath(null)}
+        />,
+        document.body,
       )}
 
       {addingToPath && (

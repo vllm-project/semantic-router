@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
+import { ruleSignalScope } from '../lib/decisionRuleValidation'
 import ConfigPageDecisionRulesEditor from './ConfigPageDecisionRulesEditor'
 import { decisionColumns } from './configPageDecisionTable'
 import type { DecisionConfig, DecisionRuleSet } from './configPageSupport'
@@ -30,19 +31,57 @@ describe('decision rules editor', () => {
     expect(view).toContain('jailbreak: prompt_injection')
     expect(view).toContain('On unknown: no_match')
     expect(view).not.toContain('Unconditional match')
+  })
 
-    const editor = renderRules(singleCondition)
-    expect(editor).toContain('<option value="CONDITION" selected="">Single condition</option>')
-    expect(editor).toContain('<option value="jailbreak" selected="">')
-    expect(editor).toContain('value="prompt_injection"')
-    expect(editor).toContain('<option value="no_match" selected="">No match</option>')
+  it('renders predicates readably and keeps on_unknown on an unconditional view', () => {
+    const view = renderRules(
+      {
+        operator: 'AND',
+        conditions: [
+          { type: 'classifier', name: 'intent', label: 'billing', predicate: { gte: 0.7, lt: 0.95 }, on_error: 'match' },
+        ],
+      },
+      true,
+    )
+    expect(view).toContain('Label: billing')
+    expect(view).toContain('Predicate: gte 0.7, lt 0.95')
+    expect(view).toContain('On error: match')
+    expect(view).not.toContain('{&quot;gte&quot;')
+    expect(renderRules({ on_unknown: 'match' }, true)).toContain('On unknown: match')
   })
 
   it('keeps empty rules unconditional', () => {
     expect(renderRules({}, true)).toBe('<span>Unconditional match</span>')
+  })
+
+  it('edits through the shared decision rule editor with the on_unknown policy', () => {
+    const editor = renderRules(singleCondition)
+    // One canvas implementation: the shared editor's Result line and raw toggle.
+    expect(editor).toContain('jailbreak(&quot;prompt_injection&quot;)')
+    expect(editor).toContain('id="config-decision-rules-raw-toggle"')
+    expect(editor).toContain('id="config-decision-rules-on-unknown"')
+    expect(editor).toContain('<option value="no_match" selected="">No match</option>')
+    expect(editor).toContain('When a signal evaluator fails')
+    // The old per-condition form editor is gone.
+    expect(editor).not.toContain('Root behavior')
+    expect(editor).not.toContain('Add Condition')
+  })
+
+  it('shows an empty rule set as an unconditional canvas', () => {
     const editor = renderRules({})
-    expect(editor).toContain('<option value="" selected="">Unconditional match</option>')
-    expect(editor).not.toContain('Single condition')
+    expect(editor).toContain('No condition — matches all requests')
+    expect(editor).toContain('<option value="" selected="">Use condition policy</option>')
+  })
+
+  it('reports recipe-scope issues inline in the editor', () => {
+    const editor = renderToStaticMarkup(
+      createElement(ConfigPageDecisionRulesEditor, {
+        value: { type: 'keyword', name: 'root-only' },
+        onChange: vi.fn(),
+        signalScope: ruleSignalScope([{ signalType: 'keyword', name: 'recipe-only' }], true),
+      }),
+    )
+    expect(editor).toContain('signal keyword(&quot;root-only&quot;) is not declared in this recipe')
   })
 
   it('counts a single root condition in the decisions table', () => {
