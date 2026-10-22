@@ -187,6 +187,13 @@ that rule stay experimental in the
 PC/NPU and NVIDIA DGX Spark profiles — until they qualify against the same
 contract as the maintained stacks.
 
+The GB10 profile at `tools/qualification/gb10` is an operator-run overlay for
+one DGX Spark host. It serves `config/recipes/gb10` from a digest-pinned
+ARM64 CUDA image with Kai on `device: cuda:0`. The profile keeps the same
+configuration semantics as the maintained stacks. It stays experimental
+until a passing receipt exists. Other models, other GPUs, Kubernetes GPU
+serving, and a general ARM64+CUDA claim stay unqualified.
+
 ## Classification and review
 
 Every deployment asset carries exactly one classification — maintained

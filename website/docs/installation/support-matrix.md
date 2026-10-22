@@ -104,7 +104,7 @@ choices.
 | NVIDIA CUDA on Linux x86-64 | Supported integration | Follow [NVIDIA CUDA](nvidia-cuda) for supported Router-side models, or keep the Router on CPU and qualify a separate NVIDIA backend against vLLM's support matrix. |
 | AMD ROCm on Linux x86-64 | Supported integration | Follow [AMD ROCm](amd-rocm) for supported Router-side models and qualify the Router, vLLM, ROCm, and model revisions as one set. |
 | AMD AI PC/NPU | Experimental, not qualified | No maintained deployment contract yet; tracked by [issue #2373](https://github.com/vllm-project/semantic-router/issues/2373). |
-| NVIDIA DGX Spark Arm64 | Experimental, not qualified | Arm64 images do not qualify CUDA or end-to-end inference on this platform; tracked by [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374). |
+| NVIDIA DGX Spark Arm64 | Experimental, not qualified | `config/recipes/gb10` and `tools/qualification/gb10` describe one Kai 0.6B configuration on GB10. That configuration stays unqualified until the profile writes a passing receipt on that host. Other models, other GPUs, Kubernetes GPU serving, and a general ARM64+CUDA claim remain unqualified. Tracked by [issue #5302](https://github.com/vllm-project/semantic-router/issues/5302) and [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374). |
 | Other accelerators and operating systems | Not qualified | No maintained profile. Open a qualification issue with reproducible hardware, software, image, and test evidence. |
 
 ## Before production

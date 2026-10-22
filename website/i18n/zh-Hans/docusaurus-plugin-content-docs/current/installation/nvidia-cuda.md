@@ -3,7 +3,7 @@ is_mtpe: false
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "56dbe50035d3cfeebdfdfed9124fadf0da2158c2"
   source_file: "docs/installation/nvidia-cuda.md"
   outdated: false
 ---
@@ -17,7 +17,7 @@ translation:
 ## 前置条件
 
 - Linux，以及你计划运行的 vLLM 发行版所支持的 NVIDIA GPU；
-- 使用当前 Semantic Router CUDA 镜像时需要 x86-64 主机；
+- 使用当前已发布的 Semantic Router CUDA 镜像时需要 x86-64 主机。GB10 限定改为把 `VLLM_SR_IMAGE` 设为摘要固定的 ARM64 CUDA 镜像，并运行 `python3 tools/qualification/gb10/qualification.py`。该配置只覆盖一种 Kai 0.6B 配置。其他模型、其他 GPU、Kubernetes GPU 服务，以及笼统的 ARM64+CUDA 声明仍未限定。本地 `latest` 标签是开发镜像，不是限定产物；
 - Router 镜像需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），这是其 PyTorch 构建（CUDA 12.8）包含的最旧架构；
 - NVIDIA 驱动，以及为在 CUDA 上运行的 Router 侧模型传入 Router 容器的 GPU；
 - Docker 和 NVIDIA Container Toolkit；
@@ -124,6 +124,13 @@ VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
 如果覆盖了构建 tag 或仓库，请将 `VLLM_SR_IMAGE` 设为实际构建的镜像，并通过 `VLLM_SR_DASHBOARD_IMAGE` 指定自定义配套镜像。
 
 当部署需要不可变的镜像标识时，固定 digest。如果 Router 与 vLLM 共享 GPU，请在有代表性的并发下测量内存和延迟；将小型、batch-one 的信号模型移到 CUDA 并不总是能改善端到端延迟。
+
+Router 侧模型的 CUDA 执行仍不是对全部 NVIDIA 设备的已验证声明，本页不改变 `CUDAAccelerator.validated`。GB10 配置记录一台主机：架构 `linux/arm64`、GB10 设备、镜像摘要、Kai 的 golden 状态、本地与外部已路由请求，以及单独的资源测量。使用已发布的 ARM64 摘要运行：
+
+```bash
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda@sha256:<digest> \
+  python3 tools/qualification/gb10/qualification.py
+```
 
 ## 验证已路由路径
 

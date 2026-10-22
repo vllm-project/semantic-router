@@ -22,6 +22,7 @@ start those inference backends.
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
 | [Vela AMD](vela-amd/README.md) | Explicit AMD execution of all ten Vela task models, with semantic routing and document reranking. |
+| [GB10 Kai](gb10/README.md) | One CUDA placement of Decision 2.0 Kai 0.6B, with explicit local and external generation backends. |
 | [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
 The [built-in virtual model catalog](built-in/README.md) is a separate

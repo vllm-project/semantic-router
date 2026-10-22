@@ -1,0 +1,154 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  stores:
+    response_cache:
+      enabled: false
+      backend_type: memory
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        device: cuda:0
+    system:
+      decision_model:
+        deployment: decision-kai
+
+providers:
+  defaults:
+    model: local/generation
+    reasoning_effort: medium
+  models:
+    - name: local/generation
+      provider_model_id: local/generation
+      api_format: openai
+      backend_refs:
+        - name: local-generation
+          endpoint: local-generation:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: external/generation
+      provider_model_id: external/generation
+      api_format: openai
+      backend_refs:
+        - name: external-generation
+          endpoint: external-generation:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+
+routing:
+  modelCards:
+    - name: local/generation
+      context_window_size: 32768
+      description: Explicit local generation backend for this recipe.
+      capabilities:
+        - chat
+      modality: text
+    - name: external/generation
+      context_window_size: 32768
+      description: Explicit external generation backend for this recipe.
+      capabilities:
+        - chat
+      modality: text
+  signals:
+    decision:
+      - name: gb10_domain
+        description: The domain Kai assigns to the request.
+        question:
+          type: choice
+          instructions: Which domain does this request belong to?
+          choices:
+            - key: code
+              description: Programming
+            - key: math
+              description: Mathematics
+            - key: other
+              description: Anything else
+        timeout_ms: 30000
+      - name: gb10_reasoning
+        description: Kai's probability that the request needs multi-step reasoning.
+        question:
+          type: noul
+          instructions: Does answering this request need multi-step reasoning?
+        predicate:
+          gte: 0.5
+        timeout_ms: 30000
+      - name: gb10_difficulty
+        description: Kai's expected difficulty level, from Trivial (0) through Hard (2).
+        question:
+          type: score
+          instructions: How difficult is this request?
+          levels:
+            - Trivial
+            - Moderate
+            - Hard
+        predicate:
+          gte: 1.0
+        timeout_ms: 30000
+  decisions:
+    - name: external_code
+      description: >-
+        Code requests that need multi-step reasoning (gb10_reasoning at least
+        0.5) and are moderately difficult or harder (gb10_difficulty at least
+        1) use the external generation backend. An unanswered Kai call fails
+        the request.
+      priority: 200
+      rules:
+        operator: AND
+        on_unknown: fail_request
+        conditions:
+          - type: decision
+            name: gb10_domain
+            label: code
+          - type: decision
+            name: gb10_reasoning
+          - type: decision
+            name: gb10_difficulty
+      modelRefs:
+        - model: external/generation
+          use_reasoning: false
+      algorithm:
+        type: static
+    - name: local_generation
+      description: >-
+        Math, other, and code requests that are not both multi-step and at
+        least moderately difficult use the local generation backend. An
+        unanswered Kai call fails the request.
+      priority: 100
+      rules:
+        operator: OR
+        on_unknown: fail_request
+        conditions:
+          - type: decision
+            name: gb10_domain
+            label: math
+          - type: decision
+            name: gb10_domain
+            label: other
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: gb10_reasoning
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: gb10_difficulty
+      modelRefs:
+        - model: local/generation
+          use_reasoning: false
+      algorithm:
+        type: static
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default
