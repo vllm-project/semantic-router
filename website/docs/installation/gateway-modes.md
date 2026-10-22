@@ -49,6 +49,10 @@ See the [release note](../release-notes/standalone-mode).
 - **Listeners:** each entry of `listeners` is served with HTTP/1.1 and HTTP/2
   (h2c in cleartext), with its `timeout` as the idle timeout, a 500 MiB request
   body limit and at most 50,000 connections, the limits of the Envoy template.
+- **Root URL:** in Router mode, `GET /` and `HEAD /` return an OpenAI-style
+  `404 not_found` after the listener's API key check, without calling a model
+  backend. The listener has no homepage. Use `POST /v1/chat/completions` for
+  chat requests or `GET /v1/models` to list the published models.
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
   OpenAI-style 401. The key is removed before the request reaches a provider.
