@@ -18,6 +18,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -221,13 +222,16 @@ func VectorStoreFormatExtension(format string) string {
 	return ext
 }
 
+// VectorStoreTextFormats lists the supported_formats extensions that
+// vectorstore.ExtractText can read.
+var VectorStoreTextFormats = []string{".txt", ".md", ".json", ".csv", ".html", ".htm"}
+
 func validateVectorStoreSupportedFormats(formats []string) error {
 	for _, format := range formats {
-		switch VectorStoreFormatExtension(format) {
-		case ".txt", ".md", ".json", ".csv", ".html", ".htm":
-		default:
+		if !slices.Contains(VectorStoreTextFormats, VectorStoreFormatExtension(format)) {
 			return fmt.Errorf(
-				"vector_store.supported_formats must contain only '.txt', '.md', '.json', '.csv', '.html', or '.htm', got '%s'",
+				"vector_store.supported_formats must contain only '%s', got '%s'",
+				strings.Join(VectorStoreTextFormats, "', '"),
 				format,
 			)
 		}
