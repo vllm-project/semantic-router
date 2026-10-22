@@ -103223,7 +103223,7 @@
         "tools",
         "multimodal"
       ],
-      "description": "Balances measured quality, latency, and cost across reasoning, simple, and general requests.",
+      "description": "Spends reasoning only where a request needs it; one decision-model call per request selects the reasoning, medium, or simple pool.",
       "display_name": "MoM V1 Blend",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -103244,7 +103244,7 @@
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103264,7 +103264,8 @@
           "required": true,
           "traits": [
             "chat",
-            "reasoning"
+            "reasoning",
+            "tools"
           ]
         },
         {
@@ -103302,7 +103303,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103334,7 +103335,7 @@
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103392,7 +103393,7 @@
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103426,7 +103427,7 @@
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103485,7 +103486,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103520,7 +103521,7 @@
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103597,7 +103598,7 @@
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103629,7 +103630,7 @@
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103667,7 +103668,7 @@
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }

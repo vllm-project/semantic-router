@@ -2,23 +2,21 @@ package all
 
 import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
-	agentgateway "github.com/vllm-project/semantic-router/e2e/profiles/agentgateway"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
-	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
 	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
 	complexityremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/complexity-remote-backend"
+	complexityrouting "github.com/vllm-project/semantic-router/e2e/profiles/complexity-routing"
+	conversationrouting "github.com/vllm-project/semantic-router/e2e/profiles/conversation-routing"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
-	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	externalgatewayresponses "github.com/vllm-project/semantic-router/e2e/profiles/external-gateway-responses"
 	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
-	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
-	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	localclassifierbackend "github.com/vllm-project/semantic-router/e2e/profiles/local-classifier-backend"
 	longcontextrouting "github.com/vllm-project/semantic-router/e2e/profiles/long-context-routing"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
+	masking "github.com/vllm-project/semantic-router/e2e/profiles/masking"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	modelruntime "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime"
 	modelruntimereal "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-real"
@@ -87,13 +85,11 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 func init() {
 	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("vela-shield", func() framework.Profile { return velashield.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"envoy-ai-gateway",
 		func() framework.Profile { return aigateway.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"provider-protocols",
 		func() framework.Profile { return providerprotocols.NewProfile() },
@@ -107,6 +103,8 @@ func init() {
 	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("conversation-routing", func() framework.Profile { return conversationrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("complexity-routing", func() framework.Profile { return complexityrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("routing-errors", func() framework.Profile { return routingerrors.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
@@ -116,7 +114,6 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: dashboardLocalImages},
 	)
 	register("dynamic-config", func() framework.Profile { return dynamicconfig.NewProfile() }, framework.ProfileCapabilities{})
-	register("dynamo", func() framework.Profile { return dynamo.NewProfile() }, framework.ProfileCapabilities{RequiresGPU: true})
 	register(
 		"external-gateway-responses",
 		func() framework.Profile { return externalgatewayresponses.NewProfile() },
@@ -127,13 +124,12 @@ func init() {
 		func() framework.Profile { return hallucination.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("istio", func() framework.Profile { return istio.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"jailbreak-onerror",
 		func() framework.Profile { return jailbreakonerror.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
+	register("masking", func() framework.Profile { return masking.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"route-action",
 		func() framework.Profile { return routeaction.NewProfile() },

@@ -3,6 +3,8 @@
 // each route's policy, and this package only describes what was registered.
 package apicontract
 
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/openapischema"
+
 // Spec is the subset of OpenAPI 3.0 the Dashboard publishes.
 type Spec struct {
 	OpenAPI    string              `json:"openapi"`
@@ -77,43 +79,8 @@ type Media struct {
 	Schema *Schema `json:"schema,omitempty"`
 }
 
-type Schema struct {
-	Type                 string            `json:"type,omitempty"`
-	Format               string            `json:"format,omitempty"`
-	Description          string            `json:"description,omitempty"`
-	Nullable             bool              `json:"nullable,omitempty"`
-	Enum                 []string          `json:"enum,omitempty"`
-	OneOf                []Schema          `json:"oneOf,omitempty"`
-	Properties           map[string]Schema `json:"properties,omitempty"`
-	Required             []string          `json:"required,omitempty"`
-	Items                *Schema           `json:"items,omitempty"`
-	AdditionalProperties any               `json:"additionalProperties,omitempty"`
-}
-
-// Accepts reports whether an object with exactly these property names would
-// validate against the schema: every required property present, and, when
-// the schema closes additional properties, no name outside those declared.
-// It exists so a oneOf's branches can be tested for exclusivity against the
-// real field sets a handler encodes.
-func (s Schema) Accepts(keys []string) bool {
-	present := make(map[string]bool, len(keys))
-	for _, key := range keys {
-		present[key] = true
-	}
-	for _, required := range s.Required {
-		if !present[required] {
-			return false
-		}
-	}
-	if closed, ok := s.AdditionalProperties.(bool); ok && !closed {
-		for _, key := range keys {
-			if _, declared := s.Properties[key]; !declared {
-				return false
-			}
-		}
-	}
-	return true
-}
+// Schema is the OpenAPI schema object shared with the Router management API.
+type Schema = openapischema.Schema
 
 type Components struct {
 	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes"`
