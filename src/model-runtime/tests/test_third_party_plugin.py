@@ -14,6 +14,7 @@ import math
 import shutil
 import subprocess
 import sys
+import threading
 import zipfile
 from pathlib import Path
 
@@ -649,6 +650,88 @@ def test_a_model_that_fails_to_load_leaves_the_others_serving(
         cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
         assert cards["broken"]["status"] == "failed" and not cards["broken"]["ready"]
     finally:
+        runtime.stop()
+
+
+@pytest.mark.parametrize("disconnect", [False, True])
+def test_worker_failure_updates_health_and_isolates_the_model(
+    example_plugin, keyword_package, monkeypatch, disconnect
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=tuple(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name=name,
+                    device="cpu",
+                    engine="example_counts",
+                )
+                for name in ("broken", "healthy")
+            ),
+            exit_on_device_error=False,
+        )
+    )
+    runtime.start(background=False)
+    entered, release = threading.Event(), threading.Event()
+    served = runtime.lookup("broken")
+
+    def fail_budget():
+        entered.set()
+        assert release.wait(5)
+        raise RuntimeError("injected worker planning failure")
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=create_app(runtime))
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            assert (await client.get("/health")).status_code == 200
+            monkeypatch.setattr(served.model, "forward_token_budget", fail_budget)
+            request = asyncio.create_task(
+                client.post(
+                    "/v1/classify", json={"model": "broken", "input": ["refund"]}
+                )
+            )
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                if disconnect:
+                    request.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await request
+                release.set()
+                if not disconnect:
+                    response = await asyncio.wait_for(request, 2)
+                    assert response.status_code == 500
+                    check("ErrorResponse", response.json())
+                    assert response.json()["error"]["code"] == "internal_error"
+                await asyncio.to_thread(served.scheduler._thread.join, 2)
+                assert not served.scheduler._thread.is_alive()
+                health = await client.get("/health")
+                assert health.status_code == 503
+                check("Health", health.json())
+                assert health.json()["models"]["broken"]["status"] == "degraded"
+                assert "injected worker planning failure" in health.json()["reason"]
+                assert (await client.get("/health/live")).status_code == 200
+                refused = await client.post(
+                    "/v1/classify", json={"model": "broken", "input": ["refund"]}
+                )
+                assert refused.status_code == 503
+                assert refused.json()["error"]["code"] == "not_ready"
+                healthy = await client.post(
+                    "/v1/classify", json={"model": "healthy", "input": ["refund"]}
+                )
+                assert healthy.status_code == 200
+                check("ClassifyResponse", healthy.json())
+            finally:
+                release.set()
+                if not request.done():
+                    request.cancel()
+                    await asyncio.gather(request, return_exceptions=True)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        release.set()
         runtime.stop()
 
 
