@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -184,6 +185,151 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 		},
 	}
 	runCatalogReasoningWireCases(t, tests)
+}
+
+func TestSameNamedLoRAUsesTheSelectedBaseProvider(t *testing.T) {
+	type observation struct {
+		path      string
+		authority string
+		model     string
+		authorize string
+	}
+	baseARequests := make(chan observation, 1)
+	baseBRequests := make(chan observation, 1)
+	newBackend := func(requests chan<- observation) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			body, err := io.ReadAll(request.Body)
+			if err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			var payload struct {
+				Model string `json:"model"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			requests <- observation{
+				path: request.URL.RequestURI(), authority: request.Host,
+				model: payload.Model, authorize: request.Header.Get("Authorization"),
+			}
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write([]byte(`{"id":"fixture-response"}`))
+		}))
+	}
+	baseA := newBackend(baseARequests)
+	defer baseA.Close()
+	baseB := newBackend(baseBRequests)
+	defer baseB.Close()
+
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			ModelConfig: map[string]config.ModelParams{
+				"base-a": {
+					PreferredEndpoints: []string{"base-a-backend"},
+					APIFormat:          config.APIFormatAnthropic,
+					LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+					AccessKeys:         map[string]string{"anthropic": "base-a-secret"},
+				},
+				"base-b": {
+					PreferredEndpoints: []string{"base-b-backend"},
+					APIFormat:          config.APIFormatResponses,
+					LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+					ExternalModelIDs:   map[string]string{"openai": "provider-b-model"},
+					AccessKeys:         map[string]string{"openai": "base-b-secret"},
+				},
+				"shared": {
+					ExternalModelIDs: map[string]string{
+						"anthropic": "provider-a-adapter",
+						"openai":    "provider-b-model",
+					},
+				},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{Name: "base-a-backend", Type: "anthropic", ProviderProfileName: "base-a-profile"},
+				{Name: "base-b-backend", Type: "openai", ProviderProfileName: "base-b-profile"},
+			},
+			ProviderProfiles: map[string]config.ProviderProfile{
+				"base-a-profile": {Type: "anthropic", BaseURL: baseA.URL},
+				"base-b-profile": {Type: "openai", BaseURL: baseB.URL},
+			},
+		},
+	}
+	router := &OpenAIRouter{
+		Config: cfg,
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewStaticConfigProvider(cfg),
+		),
+	}
+	useReasoning := false
+	selected := config.ModelRef{Model: "base-b", LoRAName: "shared", ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &useReasoning}}
+	decision := &config.Decision{Name: "shared-adapter", ModelRefs: []config.ModelRef{selected}}
+	request := testNeutralRequest("vllm-sr/auto", "route to the selected adapter")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+	ctx.VSRSelectedCandidate = &selected
+	ctx.VSREligibleModelRefs = []config.ModelRef{selected}
+
+	dispatch, err := router.resolveProviderDispatchForCandidate("shared", decision.Name, false, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "base-b", dispatch.effectiveBackendModel())
+	require.Equal(t, "base-b-backend", dispatch.backendName)
+	require.Equal(t, "provider-b-model", dispatch.upstreamModel)
+	require.Equal(t, llmprotocol.OpenAIResponsesV1, dispatch.targetFormat)
+
+	response, err := router.handleEntrypointModelRouting(
+		request, "vllm-sr/auto", decision.Name, entropy.ReasoningDecision{}, "shared", ctx,
+	)
+	require.NoError(t, err)
+	require.Nil(t, response.GetImmediateResponse())
+	common := response.GetRequestBody().GetResponse()
+	require.NotNil(t, common)
+	emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+	require.Equal(t, "base-b", emitted[headers.SelectedModel], "Envoy must select the owning base route")
+	require.Equal(t, "/v1/responses", emitted[":path"], "wire protocol must come from the owning base")
+	require.Equal(t, "Bearer base-b-secret", emitted["Authorization"], "credential must come from the owning base")
+
+	// Model the local Envoy route table: x-selected-model selects the configured
+	// physical model key, while the body keeps the adapter identity for vLLM.
+	routeModel := emitted[headers.SelectedModel]
+	params, found := cfg.ModelConfig[routeModel]
+	require.True(t, found, "route header must name a configured provider model")
+	require.Len(t, params.PreferredEndpoints, 1)
+	endpoint, found := cfg.GetEndpointByName(params.PreferredEndpoints[0])
+	require.True(t, found)
+	address, err := endpoint.ResolveAddress(cfg.ProviderProfiles)
+	require.NoError(t, err)
+	profile, err := cfg.GetProviderProfileForEndpoint(endpoint.Name)
+	require.NoError(t, err)
+	baseURL := providerEndpointScheme(cfg, endpoint.Name, profile) + "://" + address
+	outbound, err := http.NewRequest(http.MethodPost, baseURL+emitted[":path"], bytes.NewReader(common.GetBodyMutation().GetBody()))
+	require.NoError(t, err)
+	for name, value := range emitted {
+		if !strings.HasPrefix(name, ":") {
+			outbound.Header.Set(name, value)
+		}
+	}
+	upstreamResponse, err := baseB.Client().Do(outbound)
+	require.NoError(t, err)
+	require.NoError(t, upstreamResponse.Body.Close())
+	require.Equal(t, http.StatusOK, upstreamResponse.StatusCode)
+
+	select {
+	case observed := <-baseBRequests:
+		assert.Equal(t, "/v1/responses", observed.path)
+		assert.Equal(t, strings.TrimPrefix(baseB.URL, "http://"), observed.authority)
+		assert.Equal(t, "provider-b-model", observed.model)
+		assert.Equal(t, "Bearer base-b-secret", observed.authorize)
+	default:
+		t.Fatal("selected base backend did not receive the request")
+	}
+	select {
+	case observed := <-baseARequests:
+		t.Fatalf("wrong base backend received the request: %+v", observed)
+	default:
+	}
+	assert.Equal(t, "shared", ctx.VSRSelectedModel, "the client-facing selection remains the adapter")
 }
 
 func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {

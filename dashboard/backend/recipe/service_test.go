@@ -104,7 +104,7 @@ func assertManagedRecipeDescriptor(t *testing.T, service *Service, directory str
 	if descriptor.Metadata == nil || descriptor.Metadata.ID != "test-recipe" {
 		t.Fatalf("metadata = %#v", descriptor.Metadata)
 	}
-	if descriptor.Counts.UnifiedModels != 1 || descriptor.Counts.Recipes != 1 || descriptor.Counts.Decisions != 1 || descriptor.Counts.Probes != 2 {
+	if descriptor.Counts.UnifiedModels != 2 || descriptor.Counts.Recipes != 1 || descriptor.Counts.Decisions != 1 || descriptor.Counts.Probes != 2 {
 		t.Fatalf("counts = %#v", descriptor.Counts)
 	}
 	if descriptor.Digests.Recipe == "" || strings.Contains(descriptor.README, directory) {
@@ -300,46 +300,23 @@ recipes:
 	}
 }
 
-func TestProjectConfigDistinguishesOmittedAndExplicitAutoModels(t *testing.T) {
-	testCases := []struct {
-		name       string
-		routerYAML string
-		want       []string
+func TestProjectConfigUsesEffectiveEntrypoints(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		want         []string
 	}{
-		{
-			name: "omitted stays model free",
-			want: nil,
-		},
-		{
-			name:       "omitted uses configured model name",
-			routerYAML: "    auto_model_name: legacy-mom\n",
-			want:       []string{"legacy-mom"},
-		},
-		{
-			name:       "explicit list ignores legacy",
-			routerYAML: "    auto_model_name: legacy-mom\n    auto_model_names: [first, second]\n",
-			want:       []string{"first", "second"},
-		},
-		{
-			name:       "explicit empty ignores legacy",
-			routerYAML: "    auto_model_name: legacy-mom\n    auto_model_names: []\n",
-			want:       []string{},
-		},
-		{
-			name:       "explicit null ignores legacy",
-			routerYAML: "    auto_model_name: legacy-mom\n    auto_model_names: null\n",
-			want:       []string{},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			projection, err := projectConfig([]byte("version: v0.3\nglobal:\n  router:\n" + testCase.routerYAML))
+		{"omitted", "", []string{"vllm-sr/auto"}},
+		{"empty", "entrypoints: []\n", []string{"vllm-sr/auto"}},
+		{"explicit", "entrypoints:\n  - model_names: [first, second]\n    recipe: default\n", []string{"first", "second"}},
+		{"named", "entrypoints:\n  - model_names: [support]\n    recipe: support\n", []string{"vllm-sr/auto"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projection, err := projectConfig([]byte("version: v0.3\n" + tc.source))
 			if err != nil {
-				t.Fatalf("projectConfig(): %v", err)
+				t.Fatal(err)
 			}
-			if !slices.Equal(projection.autoModels, testCase.want) {
-				t.Fatalf("auto models = %v, want %v", projection.autoModels, testCase.want)
+			if !slices.Equal(projection.defaultModels, tc.want) {
+				t.Fatalf("defaults=%v want %v", projection.defaultModels, tc.want)
 			}
 		})
 	}
@@ -348,10 +325,9 @@ func TestProjectConfigDistinguishesOmittedAndExplicitAutoModels(t *testing.T) {
 func TestServiceRoundRobinsOnlyModelLessDefaultProbes(t *testing.T) {
 	dir := writeManagedRecipe(t)
 	writeFile(t, dir, "config.yaml", `version: v0.3
-global:
-  router:
-    auto_model_names: [auto-one, auto-two]
 entrypoints:
+  - model_names: [auto-one, auto-two]
+    recipe: default
   - model_names: [named-model]
     recipe: balanced
 recipes:
@@ -679,9 +655,6 @@ links:
   source: https://example.com/source
 `)
 	writeFile(t, dir, "config.yaml", `version: v0.3
-global:
-  router:
-    auto_model_names: []
 entrypoints:
   - model_names: [vllm-sr/mom-test-v1]
     recipe: balanced

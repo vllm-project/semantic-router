@@ -71,11 +71,6 @@ e2e-test-ai-gateway:
 e2e-test-ai-gateway: E2E_PROFILE=envoy-ai-gateway
 e2e-test-ai-gateway: e2e-test
 
-# Run E2E tests with Dynamo profile (requires GPU)
-e2e-test-dynamo: ## Run E2E tests with Dynamo profile (requires 3+ GPUs)
-e2e-test-dynamo: E2E_PROFILE=dynamo
-e2e-test-dynamo: e2e-test
-
 # Run E2E tests with RAG hybrid search profile (multi-store, BM25 + n-gram + vector)
 e2e-test-rag-hybrid-search: ## Run E2E tests with RAG hybrid search profile
 e2e-test-rag-hybrid-search: E2E_PROFILE=rag-hybrid-search
@@ -147,11 +142,6 @@ e2e-help: ## Show help for E2E testing
 	@echo ""
 	@echo "Available Profiles:"
 	@echo "  envoy-ai-gateway - Test the baseline contract through Envoy AI Gateway"
-	@echo "  agentgateway     - Test Semantic Router with the agentgateway controller"
-	@echo "  aibrix           - Test Semantic Router with AIBrix"
-	@echo "  dynamo           - Test Semantic Router with NVIDIA Dynamo (requires 3+ GPUs)"
-	@echo "  istio            - Test Semantic Router with Istio service mesh"
-	@echo "  llm-d            - Test Semantic Router with LLM-D"
 	@echo "  production-stack - Test Semantic Router in production-like stack (HA/LB/Obs)"
 	@echo "  rag-hybrid-search - Test RAG multi-store and hybrid search (BM25 + n-gram + vector)"
 	@echo "  response-api     - Test Response API endpoints (POST/GET/DELETE /v1/responses)"
@@ -174,7 +164,6 @@ e2e-help: ## Show help for E2E testing
 	@echo "  make e2e-test E2E_PROFILE=envoy-ai-gateway       # Run baseline Envoy AI Gateway tests"
 	@echo "  make e2e-test E2E_PROFILE=envoy-ai-gateway E2E_USE_WORKSPACE_MODELS=true"
 	@echo "  make e2e-test-response-api-suite                 # Run response-api + Redis + Redis Cluster suite"
-	@echo "  make e2e-test-dynamo                             # Run Dynamo tests (requires GPU)"
 	@echo "  make e2e-test-debug                              # Run tests and keep cluster + deployed profile"
 	@echo "  make e2e-test-specific E2E_TESTS=\"test1,test2\"   # Run specific tests"
 	@echo "  make e2e-cleanup                                 # Clean up test cluster"

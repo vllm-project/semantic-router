@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ci_policy import partition
 from classify_pr_changes import (
     NIGHTLY_IMAGES,
     PRODUCTION_RELEASE_IMAGES,
@@ -26,7 +27,10 @@ from execution_batches import (
     e2e_batches,
     expected_dispatch_jobs,
     image_producers,
-    native_batches,
+    platform_batches,
+)
+from execution_batches import (
+    component_batches as build_component_batches,
 )
 from provider_mocker_image import (
     IMAGE as MOCKER_IMAGE,
@@ -37,6 +41,7 @@ from provider_mocker_image import (
     published_from_plan,
     resolve_published,
 )
+from release_guard_waiver import planned_waiver
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -54,9 +59,10 @@ EXECUTORS = (
     "storage",
     "dashboard",
     "operator",
+    "operator-source",
     "local",
     "recipes",
-    "native",
+    "platform",
     "performance",
     "package",
     "tools",
@@ -78,11 +84,11 @@ def resolve_image_sources(plan: dict) -> None:
     try:
         plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
     except PublicationMissingError:
-        if plan["profile"] not in {"pr", "main"}:
-            # Release and nightly runs require an already qualified main image.
+        if plan["profile"] not in {"pr", "main", "nightly"}:
+            # Explicit release qualification requires a published fixture.
             raise
-        # A failed main gate can leave a valid fixture build unpublished. PRs
-        # still qualify their own exact inputs, without registry write access.
+        # Main publication is explicit. PRs and weekly qualification can test
+        # exact fixture inputs before that publication, without promoting them.
         published["source"] = "candidate"
         plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
         if plan["profile"] == "main":
@@ -103,6 +109,9 @@ def make_plan(
     draft: bool = False,
     base_sha: str = "",
     requested: tuple[str, ...] = (),
+    require_approval: bool = False,
+    authorization: dict | None = None,
+    publish: bool = False,
 ) -> dict:
     if profile not in PROFILES:
         raise ValueError(f"unknown CI profile: {profile}")
@@ -114,7 +123,16 @@ def make_plan(
     errors = catalog_errors(registry)
     if errors:
         raise ValueError("; ".join(errors))
-    full = full or profile in {"nightly", "release"}
+    authorization = authorization or {}
+    if publish and profile != "main":
+        raise ValueError("development publication requires the main profile")
+    full = full or profile in {"nightly", "release"} or publish
+    if (
+        require_approval
+        and authorization.get("authorized")
+        and authorization.get("full")
+    ):
+        full = True
     selection = classify(paths, full=full)
     records = verification_records(registry)
     ids = [] if draft and profile == "pr" else list(selection.selected_jobs)
@@ -126,6 +144,15 @@ def make_plan(
         if len(requested) != len(set(requested)) or set(requested) - set(records):
             raise ValueError("explicit verification inventory is unknown or duplicated")
         ids = list(requested)
+    required_ids = list(ids)
+    deferred = []
+    if profile == "main" and not publish:
+        # Main continuously checks source. Reviewed PRs own affected product
+        # qualification; explicit publication and weekly/release own full runs.
+        ids = [name for name in ids if records[name]["execution"] == "automatic"]
+        required_ids = list(ids)
+    elif require_approval and profile == "pr" and not requested:
+        ids, deferred = partition(ids, records, authorization)
     verifications = []
     for name in ids:
         record = {"id": name, **records[name], "source_sha": source_sha}
@@ -143,52 +170,49 @@ def make_plan(
             if requested
             else reasons or ["always" if record.get("always") else "explicit-consumer"]
         )
-        if record["executor"] == "operator":
-            variants = (
-                (
-                    "memory",
-                    "redis",
-                    "milvus",
-                    "qdrant",
-                    "hybrid",
-                    "mmbert",
-                    "complexity",
-                )
-                if full
-                else ("memory",)
-            )
-            record["integration_matrix"] = [
-                {
-                    "cache-backend": backend,
-                    "deploy-redis": backend == "redis",
-                    "deploy-milvus": backend in {"milvus", "hybrid"},
-                    "deploy-qdrant": backend == "qdrant",
-                    "router-name": f"test-router-{backend}",
-                }
-                for backend in variants
-            ]
         if record["executor"] == "e2e":
             record["baseline_suite"] = "full" if full else "standard"
+        if waiver := planned_waiver(profile, name):
+            record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
+    publish_python = profile == "release" or (profile == "main" and publish)
     publish_images = []
-    if profile == "main":
-        publish_images = list(selection.publish_images)
+    if profile == "main" and publish:
+        # Publish a complete commit-addressed CLI/image set only on request.
+        publish_images = list(PRODUCTION_RELEASE_IMAGES)
     elif profile == "nightly":
         publish_images = list(NIGHTLY_IMAGES)
     elif profile == "release":
         publish_images = list(PRODUCTION_RELEASE_IMAGES)
+    path_images = list(selection.pr_images if required_ids else ())
+    if profile == "main" and not publish:
+        path_images = []
+    deferred_images = []
+    if require_approval and profile == "pr" and not requested:
+        image_approval = authorization.get("authorized") and (
+            authorization.get("full") or "affected" in authorization.get("scopes", [])
+        )
+        if not image_approval:
+            deferred_images, path_images = path_images, []
     images = sorted(
-        set(selection.pr_images if ids else ())
+        set(path_images)
         | set(publish_images)
         | {image for record in verifications for image in record["images"]}
     )
+    deferred_images = sorted(set(deferred_images) - set(images))
     image_sources = (
         {MOCKER_IMAGE: acquisition(paths if profile in {"pr", "main"} else [])}
         if MOCKER_IMAGE in images
         else {}
     )
+    if (
+        profile == "main"
+        and publish
+        and image_sources.get(MOCKER_IMAGE, {}).get("source") == "candidate"
+    ):
+        publish_images = sorted({*publish_images, MOCKER_IMAGE})
     reused = [
         name
         for name, record in image_sources.items()
@@ -208,26 +232,24 @@ def make_plan(
         "domains": list(selection.domains),
         "verifications": verifications,
         "expected_verification_ids": ids,
+        "required_verification_ids": required_ids,
+        "deferred_verifications": deferred,
+        "deferred_images": deferred_images,
+        "approval_required": require_approval,
+        "publication": publish,
         "images": images,
         "build_images": build_images,
         "image_sources": image_sources,
-        "native": any(record["native"] for record in verifications),
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
-        or (profile == "main" and selection.signals["helm"]),
-        "publish_python": profile == "release"
-        or (
-            profile == "main"
-            and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
-            )
-        ),
+        or (profile == "main" and publish),
+        "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
         "quality_context": dict(selection.signals),
     }
     plan["component_batches"] = component_batches(verifications)
-    plan["native_batches"] = native_batches(verifications)
+    plan["platform_batches"] = platform_batches(verifications)
     plan["e2e_batches"] = e2e_batches(verifications)
     plan["image_producers"] = image_producers(images)
     plan["expected_dispatch_jobs"] = expected_dispatch_jobs(plan)
@@ -236,28 +258,17 @@ def make_plan(
 
 
 def component_batches(verifications: list[dict]) -> list[dict]:
-    """Pack compatible lightweight contracts without changing their identities."""
-    return [
-        {"id": name, **worker, "verifications": selected}
-        for name, worker in load_catalog()["component_workers"].items()
-        if (
-            selected := [
-                row
-                for row in verifications
-                if row["executor"] == "tools" and row["worker"] == name
-            ]
-        )
-    ]
+    return build_component_batches(verifications, load_catalog()["component_workers"])
 
 
 def dispatch_records(plan: dict) -> dict[str, list[dict]]:
     """Map stable physical caller IDs to contracts or bounded workers."""
     result = {job: [] for job in EXECUTOR_JOBS}
     for record in plan["verifications"]:
-        if record["executor"] not in {"tools", "native", "e2e"}:
+        if record["executor"] not in {"tools", "platform", "e2e"}:
             result[record["dispatch_job"]].append(record)
     result["tools"] = plan["component_batches"]
-    for batch in [*plan["native_batches"], *plan["e2e_batches"]]:
+    for batch in [*plan["platform_batches"], *plan["e2e_batches"]]:
         result[batch["dispatch_job"]].append(batch)
     return result
 
@@ -296,7 +307,14 @@ def github_outputs(plan: dict) -> dict[str, str]:
         for job, selected in plan["image_producers"].items()
     }
     values = {
-        "plan": plan,
+        # The complete plan is uploaded as ci-plan for the gate. Passing it as a
+        # job output exceeds GitHub's 1 MiB UTF-16 limit for release profiles;
+        # callers only need these fields to select their workflow behavior.
+        "plan": {
+            "profile": plan["profile"],
+            "base_sha": plan["base_sha"],
+            "quality_context": plan["quality_context"],
+        },
         "dispatch": dispatch,
         "worker_labels": {job: list(rows) for job, rows in dispatch.items()},
         "image_producers": producers,
@@ -304,7 +322,6 @@ def github_outputs(plan: dict) -> dict[str, str]:
         "build_images": plan["build_images"],
         "published_images": [published] if published else [],
         "publish_images": plan["publish_images"],
-        "build_native": plan["native"],
         "multiarch": plan["multiarch"],
         "publish_helm": plan["publish_helm"],
         "publish_python": plan["publish_python"],
@@ -353,6 +370,17 @@ def render_plan_summary(plan: dict) -> str:
             f"| {paths[record['category']]} | {record['display_name']} | "
             f"{workers[record['id']]} | {record['runtime']} / {record['device']} / {record['platform']} |"
         )
+    deferred = plan.get("deferred_verifications", [])
+    deferred_images = plan.get("deferred_images", [])
+    if deferred or deferred_images:
+        lines.extend(
+            [
+                "",
+                "Awaiting committer authorization: `/ci run`.",
+                f"Required contracts: {', '.join(deferred) or 'none'}.",
+                f"Required image builds: {', '.join(deferred_images) or 'none'}.",
+            ]
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -375,21 +403,70 @@ def previous_release(version: str, tags: list[str]) -> str:
     return max(candidates)[1]
 
 
+# Reviewed paired-performance bases for development cycles whose previous
+# release can't run the current harness. Each is a main commit whose
+# Production Benchmarks job passed with the harness that cycle measures.
+PERFORMANCE_BASES = {
+    # v0.3.0 predates the Vela benchmark contract and pkg/embedding, so the
+    # current harness cannot compile there. #3852 introduced the paired Vela
+    # CPU benchmarks.
+    "0.4.0": "12597be5ffae2319d856f230d61ca26248eb9b3b",
+    # v0.4.0 predates the model runtime, so compare-model-baseline.sh could
+    # only record a reset. #4707 pinned the classify benchmarks to the Vela 1.0
+    # specialists, and its own Production Benchmarks job passed with them.
+    "0.5.0": "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+}
+# The first release that serves the model benchmarks through the model
+# runtime. An older previous release can't be measured, only reset.
+MODEL_RUNTIME_RELEASE = (0, 5, 0)
+
+
+def performance_base(version: str, tags: list[str]) -> str:
+    """Choose an implementation that can run the current paired model harness.
+
+    A cycle with a declared base uses it. Every other cycle compares with its
+    previous release, which must include the model runtime; one that doesn't
+    must declare a base instead of resetting the comparison.
+    """
+    if version in PERFORMANCE_BASES:
+        return PERFORMANCE_BASES[version]
+    base = previous_release(version, tags)
+    released = tuple(map(int, base.removeprefix("v").split(".")))
+    if released < MODEL_RUNTIME_RELEASE:
+        raise ValueError(
+            f"{base} predates the model runtime, so the paired model benchmarks "
+            f"could only record a reset; declare the {version} base in "
+            "PERFORMANCE_BASES: a main commit whose Production Benchmarks job "
+            "passed with the current harness"
+        )
+    return base
+
+
 def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "previous-release":
+    if len(sys.argv) > 1 and sys.argv[1] in {"previous-release", "performance-base"}:
+        command = sys.argv[1]
         parser = argparse.ArgumentParser(
             description="Resolve an ancestor stable release in the same major version"
         )
         parser.add_argument("--version", required=True)
-        parser.add_argument("--github-output", type=Path, required=True)
+        parser.add_argument(
+            "--github-output", type=Path, help="Append ref=... here; else print it"
+        )
         args = parser.parse_args(sys.argv[2:])
         tags = subprocess.check_output(
             ["git", "tag", "--merged", "HEAD"], text=True
         ).splitlines()
         try:
-            ref = previous_release(args.version, tags)
+            ref = (
+                performance_base(args.version, tags)
+                if command == "performance-base"
+                else previous_release(args.version, tags)
+            )
         except ValueError as exc:
             parser.exit(1, str(exc) + "\n")
+        if args.github_output is None:
+            print(ref)
+            return 0
         with args.github_output.open("a") as stream:
             stream.write(f"ref={ref}\n")
         return 0
@@ -399,23 +476,35 @@ def main() -> int:
     parser.add_argument("--head", required=True)
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--draft", action="store_true")
+    parser.add_argument("--require-approval", action="store_true")
+    parser.add_argument("--authorization", type=Path)
+    parser.add_argument("--publish", action="store_true")
     parser.add_argument("--verification", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--github-output", type=Path)
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
+    paths = args.paths
+    if not paths and not args.verification:
+        # An absent comparison base is an explicit full inventory, not a
+        # change to every optional deployment in the repository.
+        scheduled = args.profile in {"nightly", "release"} and not args.base
+        publication = args.publish and not args.base
+        if not scheduled and not publication:
+            paths = git_changed_files(args.base, args.head)
     plan = make_plan(
-        (
-            args.paths
-            if args.verification
-            else args.paths or git_changed_files(args.base, args.head)
-        ),
+        paths,
         source_sha=args.head,
         base_sha=args.base,
         profile=args.profile,
         full=args.full,
         draft=args.draft,
         requested=tuple(args.verification),
+        require_approval=args.require_approval,
+        authorization=(
+            json.loads(args.authorization.read_text()) if args.authorization else None
+        ),
+        publish=args.publish,
     )
     resolve_image_sources(plan)
     args.output.parent.mkdir(parents=True, exist_ok=True)

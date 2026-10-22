@@ -108,9 +108,9 @@ func (l *WorkflowsLooper) validateWorkflowControlModels(cfg workflowsExecutionCo
 	if cfg.PlannerModel == "" {
 		return nil
 	}
-	for _, flowName := range l.cfg.Flow.EffectiveModelNames() {
+	for _, flowName := range l.cfg.EntrypointModels {
 		if cfg.PlannerModel == flowName {
-			return fmt.Errorf("workflows planner.model cannot be direct Flow model %q", cfg.PlannerModel)
+			return fmt.Errorf("workflows planner.model cannot be virtual entrypoint %q", cfg.PlannerModel)
 		}
 	}
 	return nil

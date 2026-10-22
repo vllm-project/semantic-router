@@ -3,7 +3,7 @@
 Feedback Detector Training Script
 
 Trains a 4-class user satisfaction classifier compatible with:
-https://huggingface.co/llm-semantic-router/feedback-detector
+https://huggingface.co/vllm-sr/feedback-detector
 
 Labels:
   - SAT: User is satisfied
@@ -170,7 +170,7 @@ def main():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="llm-semantic-router/mmbert-32k-yarn",
+        default="vllm-sr/mmbert-32k-yarn",
         help="Base model (default: mmBERT-32K YaRN with 32K context)",
     )
     parser.add_argument(
@@ -181,7 +181,7 @@ def main():
     parser.add_argument(
         "--data_source",
         type=str,
-        default="llm-semantic-router/feedback-detector-dataset",
+        default="vllm-sr/feedback-detector-dataset",
         help="HuggingFace dataset ID or local data directory",
     )
     parser.add_argument(

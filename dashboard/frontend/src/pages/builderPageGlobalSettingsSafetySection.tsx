@@ -2,7 +2,7 @@ import React, { useId } from 'react'
 
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 import styles from './BuilderPage.module.css'
-import { getBool, getNum, getObj, getStr } from './builderPageGlobalSettingsSupport'
+import { getBool, getNum, getObj } from './builderPageGlobalSettingsSupport'
 
 interface GlobalSettingsSafetySectionProps {
   local: DSLFieldObject
@@ -22,7 +22,11 @@ interface SafetySectionHeaderProps {
 }
 
 /** Toggle for the Safety section. Extracted to keep the section body on its own seam. */
-const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({ expanded, bodyId, onToggle }) => (
+const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({
+  expanded,
+  bodyId,
+  onToggle,
+}) => (
   <button
     type="button"
     className={styles.gsSectionHeader}
@@ -80,7 +84,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                         ...current,
                         enabled: true,
                         threshold: getNum(current, 'threshold', 0.7),
-                        model_type: getStr(current, 'model_type', 'candle'),
                       })
                     } else {
                       onSetField('prompt_guard', { ...current, enabled: false })
@@ -111,27 +114,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                     }
                   />
                 </div>
-                <div className={styles.gsRow}>
-                  <label className={styles.gsLabel}>Model</label>
-                  <div className={styles.gsRadioGroup}>
-                    {[
-                      { label: 'Candle (local)', value: 'candle' },
-                      { label: 'vLLM (external)', value: 'vllm' },
-                    ].map((option) => (
-                      <label key={option.value} className={styles.gsRadio}>
-                        <input
-                          type="radio"
-                          name="gs-pg-model"
-                          checked={getStr(promptGuard, 'model_type', 'candle') === option.value}
-                          onChange={() =>
-                            onSetNestedField('prompt_guard', 'model_type', option.value)
-                          }
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
           </div>
@@ -158,7 +140,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                           ...hallucinationModel,
                           threshold: getNum(hallucinationModel, 'threshold', 0.5),
                         },
-                        use_nli: getBool(current, 'use_nli', false),
                       })
                     } else {
                       onSetField('hallucination_mitigation', {
@@ -212,23 +193,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                       )
                     }
                   />
-                </div>
-                <div className={styles.gsRow}>
-                  <label className={styles.gsLabel}>NLI Model</label>
-                  <label className={styles.gsCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={getBool(hallucination, 'use_nli', false)}
-                      onChange={(event) =>
-                        onSetNestedField(
-                          'hallucination_mitigation',
-                          'use_nli',
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    <span>Enhanced explanations</span>
-                  </label>
                 </div>
               </div>
             )}

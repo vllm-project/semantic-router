@@ -22,7 +22,7 @@ import (
 type routerLearningPreviewSnapshot struct {
 	CapturedAt      time.Time
 	Seed            int64
-	Experience      map[string]routerLearningModelExperience
+	Experience      map[routerLearningExperienceKey]routerLearningModelExperience
 	Sessions        map[string]previewSession
 	LastModels      map[string]previewLastModel
 	Warmth          map[string]previewWarmth
@@ -49,7 +49,7 @@ type (
 func (r *OpenAIRouter) newLearningPreview(seed int64) (*routerLearningPreviewSnapshot, error) {
 	snapshot := &routerLearningPreviewSnapshot{
 		CapturedAt: time.Now().UTC(), Seed: seed,
-		Experience: map[string]routerLearningModelExperience{}, Sessions: map[string]previewSession{},
+		Experience: map[routerLearningExperienceKey]routerLearningModelExperience{}, Sessions: map[string]previewSession{},
 		LastModels: map[string]previewLastModel{}, Warmth: map[string]previewWarmth{},
 		ProgressWindows: map[string][]sessiontelemetry.TurnOutcome{},
 	}
@@ -132,7 +132,7 @@ func (r *OpenAIRouter) learningExperience(ctx *RequestContext, decision string, 
 	if ctx == nil || ctx.learningPreview == nil {
 		return r.routerLearningRuntimeState().experienceSnapshot(decision, tier, model)
 	}
-	for _, key := range []string{modelExperienceKey(decision, tier, model), modelExperienceKey("", tier, model), modelExperienceKey("", 0, model)} {
+	for _, key := range []routerLearningExperienceKey{modelExperienceKey(decision, tier, model), modelExperienceKey("", tier, model), modelExperienceKey("", 0, model)} {
 		if experience, ok := ctx.learningPreview.Experience[key]; ok {
 			return experience
 		}

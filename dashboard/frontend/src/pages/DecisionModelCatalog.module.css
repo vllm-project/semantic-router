@@ -1,0 +1,269 @@
+.catalog {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.catalogHeader,
+.cardTop,
+.selectionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.catalogHeader h2 {
+  margin-bottom: 0.4rem;
+}
+.eyebrow {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--color-text-secondary);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.help {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  margin: 0.35rem 0 0;
+}
+.catalogCount {
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.67rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-primary);
+}
+.catalogCount {
+  font-variant-numeric: tabular-nums;
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.55fr) minmax(130px, 0.4fr);
+  gap: 0.65rem;
+}
+.familyTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.catalog .familyTabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.catalog .familyTabs button[aria-pressed='true'] {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+.familyTabs button span {
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg-primary);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+label.card {
+  cursor: pointer;
+}
+.card:hover {
+  border-color: var(--color-text-secondary);
+}
+.cards:disabled label.card {
+  cursor: default;
+}
+.card.selected {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+.cardTop {
+  margin-bottom: 0.1rem;
+}
+.logo,
+.logoFallback {
+  height: 36px;
+  width: 36px;
+  object-fit: contain;
+  padding: 6px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.logoFallback {
+  display: grid;
+  place-items: center;
+  color: #171717;
+  font-size: 0.75rem;
+}
+.card input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+.card .modelName {
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  margin: -0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+.description {
+  flex: 1;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+}
+.capabilities span {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.62rem;
+  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+.hardware {
+  color: var(--color-text-secondary);
+  font-size: 0.71rem;
+}
+.cardState {
+  font-size: 0.69rem;
+  color: var(--color-text-secondary);
+}
+.selected .cardState {
+  color: var(--color-primary);
+}
+.selectionBar {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  padding: 0.9rem 1rem;
+  font-size: 0.78rem;
+}
+.selectionBar small {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+@media (max-width: 1150px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .catalogHeader,
+  .selectionBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .catalogCount {
+    display: none;
+  }
+}
+.searchField {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.searchField > span {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+.searchField input {
+  height: 40px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+}
+.pagination,
+.pagination > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.selectedPreview {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--surface-panel);
+}
+.taskPreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.taskPreview span {
+  font-size: 0.7rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+.taskPreview span[data-supported='false'] {
+  color: var(--text-muted);
+}
+@media (max-width: 640px) {
+  .pagination {
+    flex-wrap: wrap;
+  }
+}

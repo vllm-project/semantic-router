@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -24,7 +25,8 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 
 		canRegister, err := svc.CanBootstrap(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to check bootstrap status: %v", err)
+			http.Error(w, "failed to check bootstrap status", http.StatusInternalServerError)
 			return
 		}
 
@@ -68,7 +70,8 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 		// correctness gate for concurrent requests.
 		canBootstrap, err := svc.CanBootstrap(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to check bootstrap status: %v", err)
+			http.Error(w, "failed to check bootstrap status", http.StatusInternalServerError)
 			return
 		}
 		if !canBootstrap {
@@ -90,19 +93,22 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			log.Printf("bootstrap registration failed: %v", err)
+			http.Error(w, "bootstrap registration failed", http.StatusInternalServerError)
 			return
 		}
 
 		token, err := svc.issueTokenForContext(r.Context(), user)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to issue session token: %v", err)
+			http.Error(w, "failed to create session", http.StatusInternalServerError)
 			return
 		}
 
 		perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to load permissions: %v", err)
+			http.Error(w, "failed to create session", http.StatusInternalServerError)
 			return
 		}
 
@@ -127,13 +133,19 @@ func loginHandler(svc *Service) http.HandlerFunc {
 
 		token, user, err := svc.Login(r.Context(), strings.TrimSpace(req.Email), req.Password)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			if errors.Is(err, ErrInvalidCredentials) || errors.Is(err, ErrUserNotActive) {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+				return
+			}
+			log.Printf("login store error: %v", err)
+			http.Error(w, "authentication failed", http.StatusUnauthorized)
 			return
 		}
 
 		perms, err := svc.store.GetEffectivePermissions(r.Context(), user.Role, user.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to load permissions: %v", err)
+			http.Error(w, "failed to create session", http.StatusInternalServerError)
 			return
 		}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -12,13 +13,13 @@ import (
 
 type partialGuardBackend struct {
 	usage              *tasks.InputUsage
-	calls              int
+	calls              atomic.Int32
 	completeAfterFirst bool
 }
 
 func (b *partialGuardBackend) Classify(context.Context, string) (SequenceClassificationResult, error) {
-	b.calls++
-	if b.completeAfterFirst && b.calls > 1 {
+	call := b.calls.Add(1)
+	if b.completeAfterFirst && call > 1 {
 		return SequenceClassificationResult{Probabilities: []float32{.8, .2}, Input: &tasks.InputUsage{OriginalTokens: 4, ProcessedTokens: 4}}, nil
 	}
 	return SequenceClassificationResult{Probabilities: []float32{.1, .9}, Input: b.usage}, nil
@@ -64,7 +65,9 @@ func TestJailbreakPartialInputCannotProduceCleanAPIResult(t *testing.T) {
 	}
 }
 
-func TestJailbreakPartialInputPreservesOnErrorPolicy(t *testing.T) {
+// The guard read only part of the input, so the rest is unscanned: the rule
+// matches whatever on_error says, as a policy match without a risk score.
+func TestJailbreakPartialInputMatchesWhateverOnErrorSays(t *testing.T) {
 	for _, policy := range []string{config.OnErrorAllow, config.OnErrorBlock} {
 		t.Run(policy, func(t *testing.T) {
 			c := newRiskTestClassifier(&partialGuardBackend{usage: &tasks.InputUsage{OriginalTokens: 5, ProcessedTokens: 4}})
@@ -72,15 +75,14 @@ func TestJailbreakPartialInputPreservesOnErrorPolicy(t *testing.T) {
 			c.Config.JailbreakRules = []config.JailbreakRule{{Name: "guard", Threshold: .5}}
 			results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalConfidences: map[string]float64{}}
 			c.evaluateJailbreakSignal(context.Background(), results, &sync.Mutex{}, "sample", nil)
-			if results.SignalErrors["jailbreak:guard"] != jailbreakEvaluationFailedCode {
+			if results.SignalErrors["jailbreak:guard"] != signalInputLimitCode {
 				t.Fatalf("missing partial-input diagnostic: %+v", results.SignalErrors)
 			}
 			if results.JailbreakScoreAvailable {
 				t.Fatal("partial input published a usable risk score")
 			}
-			wantBlock := policy == config.OnErrorBlock
-			if (len(results.MatchedJailbreakRules) > 0) != wantBlock || results.SignalErrorMatches["jailbreak:guard"] != wantBlock {
-				t.Fatalf("on_error contract changed: matches=%v error_matches=%v", results.MatchedJailbreakRules, results.SignalErrorMatches)
+			if len(results.MatchedJailbreakRules) != 1 || !results.SignalErrorMatches["jailbreak:guard"] || results.JailbreakType != JailbreakUnscannedType {
+				t.Fatalf("unscanned input passed the guard: matches=%v error_matches=%v type=%q", results.MatchedJailbreakRules, results.SignalErrorMatches, results.JailbreakType)
 			}
 		})
 	}
@@ -91,23 +93,23 @@ func TestJailbreakCompletePositiveSurvivesPartialInput(t *testing.T) {
 	c := newRiskTestClassifier(backend)
 	text := strings.Repeat("sample ", 500)
 	scan, err := c.ScanJailbreakRisk(context.Background(), text)
-	if err != nil || scan.PartialErr == nil || scan.RiskScore != .8 || backend.calls < 2 {
-		t.Fatalf("complete positive or partial diagnostic lost: scan=%+v calls=%d err=%v", scan, backend.calls, err)
+	if err != nil || scan.PartialErr == nil || scan.RiskScore != .8 || backend.calls.Load() < 2 {
+		t.Fatalf("complete positive or partial diagnostic lost: scan=%+v calls=%d err=%v", scan, backend.calls.Load(), err)
 	}
 	signal := EvaluateResponseJailbreakSignal([]config.JailbreakRule{{Name: "matched", Threshold: .5}, {Name: "unresolved", Threshold: .95}}, &scan)
 	if len(signal.MatchedRules) != 1 || signal.MatchedRules[0] != "matched" || signal.Errors["jailbreak:unresolved"] != responseJailbreakSignalFailedCode {
 		t.Fatalf("response rules lost per-threshold partial semantics: %+v", signal)
 	}
-	backend.calls = 0
+	backend.calls.Store(0)
 	matched, _, _, _, err := c.CheckForJailbreakWithRisk(context.Background(), text)
 	if err != nil || !matched {
 		t.Fatalf("complete positive should still be actionable: matched=%v err=%v", matched, err)
 	}
-	backend.calls = 0
+	backend.calls.Store(0)
 	c.Config.JailbreakRules = []config.JailbreakRule{{Name: "guard", Threshold: .5}}
 	results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalConfidences: map[string]float64{}}
 	c.evaluateJailbreakSignal(context.Background(), results, &sync.Mutex{}, text, nil)
-	if len(results.MatchedJailbreakRules) != 1 || results.SignalErrors["jailbreak:guard"] != jailbreakEvaluationFailedCode || results.SignalErrorMatches["jailbreak:guard"] {
+	if len(results.MatchedJailbreakRules) != 1 || results.SignalErrors["jailbreak:guard"] != signalInputLimitCode || results.SignalErrorMatches["jailbreak:guard"] {
 		t.Fatalf("request signal must retain a real detection and the partial diagnostic: %+v", results)
 	}
 }

@@ -10,16 +10,22 @@ Envoy ExtProc. The routing policy stays the same; the gateway-specific resources
 determine when ExtProc runs, how the selected model reaches a backend, and which
 component owns authentication or traffic policy.
 
+Each integration runs the Helm chart with `gateway.mode: extproc`, which its
+values file under `deploy/kubernetes/` sets: the Router then serves ext_proc
+gRPC on port 50051 for the gateway. Set the same value when you write your own
+values. The chart's default, `standalone`, needs no gateway: the Router serves
+the OpenAI-compatible API on its own listeners.
+
 ## Choose an integration
 
 | Existing data plane | Start with | What it owns |
 | --- | --- | --- |
-| Envoy AI Gateway | [Envoy AI Gateway](ai-gateway) | Provider translation, provider credentials, rate limits, and Gateway API traffic policy. |
+| Agent Router (formerly Envoy AI Gateway) | [Agent Router](ai-gateway) | Provider translation, provider credentials, rate limits, and Gateway API traffic policy. |
 | agentgateway | [agentgateway](agentgateway) | Gateway API proxy, backend resources, and ExtProc phase policy. |
 | Istio | [Istio Gateway](istio) | Ingress, `HTTPRoute` processing, and the Envoy filter that calls Semantic Router. |
 | Gateway API Inference Extension | [GIE](gateway-api-inference-extension) | `InferencePool` endpoint selection after Semantic Router chooses a model pool. |
 
-Envoy AI Gateway and agentgateway are the
+Agent Router and agentgateway are the
 [AI Gateway](../../overview/semantic-router-overview#protocol-and-deployment-boundaries)
 examples in this table. LiteLLM is also an AI Gateway, but this project does not
 have a LiteLLM guide.

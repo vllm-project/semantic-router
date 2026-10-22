@@ -1,6 +1,6 @@
 schema_version: v1
 name: mom-v1
-description: Portable task-intent probes for five built-in recipes, policy version 3.0.0. Assignment-bound overflow
+description: Portable task-intent probes for five built-in recipes, policy version 4.0.0. Assignment-bound overflow
   rejections are verified separately.
 routing_assets:
   yaml: config/recipes/built-in/latest/mom-v1/config.yaml
@@ -60,65 +60,380 @@ coverage:
     tools: 100.0
     multi_turn: 100.0
 decisions:
-- id: balance_medium
+- id: balance_recovery
   expected_recipe: balance
-  expected_decision: medium
+  expected_decision: reasoning
+  expected_algorithm: multi_factor
   expected_plugins:
   - request_params
   plugin_match: exact
+  objective: 'Recovery: an earlier answer that the user says was wrong goes to reasoning; the correction question
+    and the user feedback judgment must agree.'
   variants:
-  - id: balance_over_240k_text_guard__boundary_orchestration_tools_collision
-    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
-      result.
+  - id: balance_recovery__wrong_calculation
+    messages:
+    - role: user
+      content: What is 17 * 24?
+    - role: assistant
+      content: 17 * 24 = 418.
+    - role: user
+      content: That's wrong. Please redo the calculation.
+    tags:
+    - language:en
+    - multi-turn
+    - shape:messages
+    - positive
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+  - id: balance_recovery__wrong_author
+    messages:
+    - role: user
+      content: Who wrote Pride and Prejudice?
+    - role: assistant
+      content: Pride and Prejudice was written by Charlotte Bronte.
+    - role: user
+      content: No, that's incorrect. Try again.
+    tags:
+    - language:en
+    - multi-turn
+    - shape:messages
+    - positive
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+  - id: balance_recovery__correction_zh
+    messages:
+    - role: user
+      content: 计算 23 的平方。
+    - role: assistant
+      content: 23 的平方是 539。
+    - role: user
+      content: 你算错了，请重新算一下。
+    tags:
+    - language:zh
+    - multi-turn
+    - shape:messages
+    - positive
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+  - id: balance_recovery__implicit_correction
+    tags:
+    - language:en
+    - contract:v2
+    - multi-turn
+    - feedback
+    messages:
+    - role: user
+      content: What is the capital of Australia?
+    - role: assistant
+      content: Wellington.
+    - role: user
+      content: That city is in New Zealand, so it cannot answer my question about Australia.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+  - id: balance_recovery__feedback_classifier
+    messages:
+    - role: user
+      content: What is the capital of Australia?
+    - role: assistant
+      content: Sydney.
+    - role: user
+      content: That answer was incorrect and did not solve my request. Please correct the answer.
+    tags:
+    - language:en
+    - multi_turn
+    - recovery
+    - positive
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+  - id: balance_recovery__correction_es
+    messages:
+    - role: user
+      content: ¿Cuál es la raíz cuadrada de 144?
+    - role: assistant
+      content: La raíz cuadrada de 144 es 14.
+    - role: user
+      content: La respuesta es incorrecta; corrige la respuesta e inténtalo de nuevo.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:es
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_fr
+    messages:
+    - role: user
+      content: Combien font 15 × 12 ?
+    - role: assistant
+      content: 15 × 12 = 170.
+    - role: user
+      content: La réponse est incorrecte, corrige la réponse et réessaie.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:fr
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_ja
+    messages:
+    - role: user
+      content: 日本の首都はどこですか？
+    - role: assistant
+      content: 日本の首都は大阪です。
+    - role: user
+      content: 回答が間違っています。修正してもう一度答えてください。
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:ja
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_de
+    messages:
+    - role: user
+      content: Wie viel ist 12 mal 12?
+    - role: assistant
+      content: 12 mal 12 ist 124.
+    - role: user
+      content: Die Antwort ist falsch; bitte korrigiere die Antwort und versuche es noch einmal.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:de
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_pt
+    messages:
+    - role: user
+      content: Quanto é 9 vezes 8?
+    - role: assistant
+      content: 9 vezes 8 é 81.
+    - role: user
+      content: A resposta está errada; corrija a resposta e tente novamente.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:pt
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_ko
+    messages:
+    - role: user
+      content: 물의 끓는점은 섭씨 몇 도인가요?
+    - role: assistant
+      content: 물의 끓는점은 섭씨 90도입니다.
+    - role: user
+      content: 답변이 틀렸습니다. 내용을 수정해서 다시 답하세요.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:ko
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_ar
+    messages:
+    - role: user
+      content: كم عدد أيام الأسبوع؟
+    - role: assistant
+      content: عدد أيام الأسبوع ستة.
+    - role: user
+      content: الإجابة خاطئة؛ صحح الإجابة وحاول مرة أخرى.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:ar
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_recovery__correction_ru
+    messages:
+    - role: user
+      content: Сколько будет 7 умножить на 6?
+    - role: assistant
+      content: 7 умножить на 6 будет 48.
+    - role: user
+      content: Ответ неверный; исправь ответ и попробуй снова.
+    expected_signals:
+      conversation:
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    tags:
+    - language:ru
+    - multi-turn
+    - shape:messages
+    - positive
+  - id: balance_long__recovery__recount_after_long_record
+    display_prompt: After a long inventory record, the user says the count of available items was wrong.
     playground:
       enabled: false
       reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
         in Playground.
-    query: 'Break this into independent workstreams: list the supplied inventory items by room, then use the
-      inventory lookup tool to fill in their listed owners. Combine the room lists into a short handover note.'
-    padding:
-      text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.                                                                                                                                   |'
-      repeat: 4500
-      placement: around
-    tools:
-    - type: function
-      function:
-        name: lookup_inventory
-        description: Look up one item in the supplied long-context inventory.
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'How many items in this inventory record are marked available? '
+    - role: assistant
+      content: There are 12 available items.
+    - role: user
+      content: That's wrong. Please recount the available items.
     tags:
     - language:en
+    - multi-turn
+    - shape:messages
     - stress:long-input
-    - context:over-240k
-    - shape:tools
-    - tools
-    - orchestration-words
-    - collision
-    - priority
-  - id: balance_tools__named_choice_without_text_intent
-    query: Return the current service state.
-    tools:
-    - type: function
-      function:
-        name: lookup_status
-        description: Look up a service status.
-    tool_choice:
-      type: function
-      function:
-        name: lookup_status
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
-    tags:
-    - language:en
-    - shape:tools
-    - tools
     - positive
-    - protocol-contract
     expected_signals:
       conversation:
-      - tool_required
-  - id: balance_tools__active_tool_loop_without_redeclared_tools
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+- id: balance_agentic
+  expected_recipe: balance
+  expected_decision: reasoning
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Agentic: an active tool loop, or declared tools that the request needs, goes to reasoning.'
+  variants:
+  - id: balance_agentic__tool_result_turn
+    messages:
+    - role: user
+      content: What's the weather in Paris?
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_1
+        type: function
+        function:
+          name: get_weather
+          arguments: '{"city": "Paris"}'
+    - role: tool
+      tool_call_id: call_1
+      content: '{"temp_c": 18, "sky": "cloudy"}'
+    tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Current weather for a city
+        parameters:
+          type: object
+          properties:
+            city:
+              type: string
+          required:
+          - city
+    tags:
+    - language:en
+    - multi-turn
+    - shape:messages
+    - shape:tools
+    - positive
+    expected_signals:
+      conversation:
+      - tool_loop
+  - id: balance_agentic__web_search
+    messages:
+    - role: user
+      content: Search the web for the latest vLLM release notes and summarize them.
+    tools:
+    - type: function
+      function:
+        name: web_search
+        description: Search the web
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+    tags:
+    - language:en
+    - shape:tools
+    - positive
+    expected_signals:
+      conversation:
+      - has_tools
+      decision:
+      - task:agentic
+  - id: balance_agentic__loop_without_tools
     messages:
     - role: user
       content: Check the current service status.
@@ -133,8 +448,6 @@ decisions:
     - role: tool
       tool_call_id: call-balance-status
       content: '{"status":"ready"}'
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
     tags:
     - language:en
     - multi_turn
@@ -144,44 +457,755 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
-  - id: balance_deliberate__dense_constraints
-    query: The answer must contain exactly three options, at least one risk, and no more than 120 words.
+  - id: balance_agentic__lookup_status
+    query: Use the status lookup function to check the api-gateway service and return only its current state.
     tools:
     - type: function
       function:
         name: lookup_status
-        description: Look up a service status when explicitly requested.
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
+        description: Look up a service status.
     tags:
     - language:en
-    - structured-output
     - shape:tools
     - tools
-    - negative
+    - positive
+    - demo
+    expected_signals:
+      conversation:
+      - has_tools
+      decision:
+      - task:agentic
+  - id: balance_agentic__lookup_status_zh
+    query: 请使用状态查询函数返回所选服务的状态。
+    tools:
+    - type: function
+      function:
+        name: lookup_status
+        description: 查询服务状态。
+    tags:
+    - language:zh
+    - shape:tools
+    - tools
+    - paraphrase
+    expected_signals:
+      conversation:
+      - has_tools
+      decision:
+      - task:agentic
+  - id: balance_agentic__required_tool_choice
+    query: Return the current service state.
+    tools:
+    - type: function
+      function:
+        name: lookup_status
+        description: Look up a service status.
+    tool_choice:
+      type: function
+      function:
+        name: lookup_status
+    tags:
+    - language:en
+    - shape:tools
+    - tools
+    - positive
+    - protocol-contract
+    expected_signals:
+      conversation:
+      - has_tools
+      decision:
+      - task:agentic
+  - id: balance_agentic__image_and_lookup
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Inspect the dashboard image and use the lookup function for the selected service.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tools:
+    - type: function
+      function:
+        name: lookup_service
+        description: Look up one service record.
+    tags:
+    - language:en
+    - shape:messages
+    - shape:tools
+    - tools
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      conversation:
+      - has_tools
+      decision:
+      - task:agentic
+  - id: balance_long__over_240k_text_guard__boundary_orchestration_tools_collision
+    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
+      result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    query: 'Break this into independent workstreams: list the supplied inventory items by room, then use the inventory
+      lookup tool to fill in their listed owners. Combine the room lists into a short handover note.'
+    padding:
+      text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.                                                                                                                                   |'
+      repeat: 4500
+      placement: after
+    tools:
+    - type: function
+      function:
+        name: lookup_inventory
+        description: Look up one item in the supplied long-context inventory.
+    tags:
+    - language:en
+    - stress:long-input
+    - context:over-240k
+    - shape:tools
+    - tools
+    - orchestration-words
     - collision
-  - id: balance_text_from_60k_to_120k__direct_summary_in_60k_120k_band
+    - priority
+  - id: balance_long__text_from_120k_to_240k__tools_in_120k_240k_band
+    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
+      result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Use the lookup tool to retrieve the status of inventory item R17. Copy the identifier and the status
+          returned by the function into one short sentence. The task is a direct lookup of the supplied record;
+          preserve the returned wording and include no other information. '
+    tags:
+    - language:en
+    - shape:messages
+    - stress:long-input
+    - capability
+    - tools
+    - shape:tools
+    - collision
+    - priority
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+  - id: balance_long__text_from_30k_to_60k__tools_in_30k_60k_band_collision
+    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
+      result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    query: Use the lookup tool to return the identifier explicitly printed in the final inventory row. Copy the
+      requested field exactly and give just that value.
+    padding:
+      text: 'Inventory record: item R17 is available in room A.                The facilities team owns the item.'
+      repeat: 1600
+      placement: after
+    tools:
+    - type: function
+      function:
+        name: lookup_identifier
+        description: Look up the final inventory identifier.
+    tags:
+    - language:en
+    - stress:long-input
+    - context:30k-60k
+    - tools
+    - shape:tools
+    - collision
+    - priority
+  - id: balance_long__image_tools__image_tools_in_30k_60k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
+      service, and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
+          status of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+  - id: balance_long__image_tools__image_tools_in_60k_120k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
+      service, and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 300000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
+          status of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+  - id: balance_long__image_tools__image_tools_in_120k_240k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
+      service, and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
+          status of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+  - id: balance_long__tool_loop__tool_result_after_long_record
+    display_prompt: Check every item in this long inventory record with the lookup tool, then report the unavailable
+      ones.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Use the lookup tool to check the status of every item in this inventory record and report the unavailable
+          ones. '
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_1
+        type: function
+        function:
+          name: lookup_context_item
+          arguments: '{"item": "R17"}'
+    - role: tool
+      tool_call_id: call_1
+      content: '{"item": "R17", "status": "available"}'
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    tags:
+    - language:en
+    - multi-turn
+    - shape:messages
+    - shape:tools
+    - stress:long-input
+    - positive
+    expected_signals:
+      conversation:
+      - tool_loop
+- id: balance_facts
+  expected_recipe: balance
+  expected_decision: medium
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Facts: answers that depend on facts most people would look up stay on medium, at low reasoning cost.'
+  variants:
+  - id: balance_facts__nobel_laureate
+    query: Who won the Nobel Prize in Literature in 1998?
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - precise_facts
+      - task:facts
+  - id: balance_facts__census_figure
+    query: What was the population of Tokyo in the 2020 census?
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - precise_facts
+      - task:facts
+  - id: balance_facts__nobel_zh
+    query: 2008年诺贝尔物理学奖得主是谁？他们因什么贡献获奖？
+    tags:
+    - language:zh
+    - positive
+    expected_signals:
+      decision:
+      - precise_facts
+      - task:facts
+  - id: balance_facts__release_years
+    query: List the release years of Python 3.0 through 3.12.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - precise_facts
+      - task:facts
+  - id: balance_facts__census_ja
+    query: 2020年の国勢調査での東京の人口はいくつですか？
+    tags:
+    - language:ja
+    - positive
+    expected_signals:
+      decision:
+      - precise_facts
+      - task:facts
+  - id: balance_facts__treaty_es
+    query: ¿En qué año se firmó el Tratado de Tordesillas y quiénes lo firmaron?
+    tags:
+    - language:es
+    - positive
+    expected_signals:
+      decision:
+      - precise_facts
+      - task:facts
+- id: balance_frontier
+  expected_recipe: balance
+  expected_decision: reasoning
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Frontier: research-level requests, at maximum effort, go to reasoning.'
+  variants:
+  - id: balance_frontier__ising_duality
+    query: In a 2D ferromagnetic Ising model on a square lattice, derive the exact critical temperature via the
+      Kramers-Wannier duality and explain why mean-field theory overestimates it.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+  - id: balance_frontier__nof_disjointness
+    query: Formulate and prove a sharp lower bound on the communication complexity of set disjointness for k-party
+      number-on-forehead protocols, and explain which known techniques fail beyond k = log n.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+  - id: balance_frontier__rg_two_loop
+    query: Derive the renormalization group flow of the O(N) model to two loops in 4 - epsilon dimensions and compute
+      the critical exponents eta and nu to order epsilon squared.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+    expected_signal_values:
+      decision:needs:
+        gte: 0.5
+        lte: 1
+  - id: balance_frontier__byzantine_optimal
+    query: Design a Byzantine consensus protocol with optimal resilience for partially synchronous networks, prove
+      safety and liveness, and show its message complexity matches the known lower bound.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+  - id: balance_frontier__onsager_zh
+    query: 推导二维伊辛模型在方格点阵上的精确配分函数（Onsager 解），并证明临界温度处比热的对数发散。
+    tags:
+    - language:zh
+    - positive
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+  - id: balance_frontier__navier_stokes
+    query: Prove global existence and smoothness of solutions to the three-dimensional incompressible Navier-Stokes
+      equations for smooth initial data, or construct a counterexample.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+- id: balance_code
+  expected_recipe: balance
+  expected_decision: medium
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Code: code that needs some reasoning stays on medium.'
+  variants:
+  - id: balance_code__lru_cache
+    query: Implement an LRU cache in Java with O(1) get and put, and explain the invariants.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+    expected_signal_values:
+      decision:task:
+        gte: 0.5
+        lte: 1
+  - id: balance_code__lru_ttl_go
+    query: Implement a thread-safe LRU cache in Go with a TTL per entry, and explain how you avoid lock contention.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+  - id: balance_code__manacher
+    query: Write a Python function that finds the longest palindromic substring in linear time using Manacher's
+      algorithm, and explain why it is linear.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+  - id: balance_code__dijkstra_ts
+    query: Implement Dijkstra's algorithm in TypeScript with a binary heap and explain its time complexity.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_high
+    notes: A code task at high effort still uses the coding lane.
+  - id: balance_code__rate_limiter_ja
+    query: Go でトークンバケット方式のレートリミッターを実装し、並行アクセス時の正しさを説明してください。
+    tags:
+    - language:ja
+    - positive
+    - collision
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_high
+- id: balance_hard
+  expected_recipe: balance
+  expected_decision: reasoning
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Hard: high effort, or a STEM problem that needs multi-step reasoning, goes to reasoning.'
+  variants:
+  - id: balance_hard__proof_zh
+    query: 证明：任意两个连续整数的乘积是偶数，并推广到三个连续整数的乘积能被 6 整除。
+    tags:
+    - language:zh
+    - positive
+    expected_signals:
+      projection:
+      - effort_high
+      decision:
+      - task:stem
+  - id: balance_hard__letter_only_chemistry
+    query: 'A chemist heats (E)-1,2-dideuterio-1-phenylpropene with a catalytic amount of a palladium(II) complex
+      in deuterated acetic acid and observes scrambling of the deuterium label. Which mechanism best accounts for
+      the observed isotope distribution?
+
+
+      A. Concerted [1,3]-sigmatropic hydrogen shift
+
+      B. Reversible hydropalladation and beta-hydride elimination
+
+      C. Radical chain isomerization
+
+      D. Acid-catalyzed carbocation formation without palladium
+
+
+      Answer with the letter only.'
+    tags:
+    - language:en
+    - collision
+    notes: A letter-only reply still needs the reasoning effort.
+    expected_signals:
+      decision:
+      - task:stem
+      - difficulty
+  - id: balance_hard__tradeoff_zh
+    query: 请分析取舍并逐步推理，给出可验证的建议。
+    tags:
+    - language:zh
+    - deliberate
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_hard__tradeoff_en
+    query: A production API is timing out after a database migration; analyze the tradeoffs and reason step by step
+      before recommending the safest fix.
+    tags:
+    - language:en
+    - deliberate
+    - positive
+    - demo
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_hard__verification
+    query: Verify the answer, cite reliable sources, and check the evidence before responding.
+    tags:
+    - language:en
+    - verification
+    - positive
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_hard__competing_root_causes
+    query: Analyze a production failure from several competing root causes and synthesize a defensible recommendation.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_hard__image_tradeoffs
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Analyze the tradeoffs from first principles in this architecture image.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - deliberate
+    - collision
+    - priority
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_hard__economic_policy
+    tags:
+    - language:en
+    - contract:v2
+    - positive
+    - stakes
+    query: Help choose an economic policy when an incorrect interest-rate decision could cause lasting unemployment
+      or severe inflation. Evaluate practical policy alternatives and recommend an action under uncertainty.
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_hard__primes_es
+    query: Demuestra que existen infinitos números primos de la forma 4k+3 y explica por qué el mismo argumento
+      no funciona para 4k+1.
+    tags:
+    - language:es
+    - positive
+    expected_signals:
+      projection:
+      - effort_high
+      decision:
+      - task:stem
+  - id: balance_hard__sqrt3_de
+    query: Beweise, dass die Wurzel aus 3 irrational ist, und verallgemeinere den Beweis auf die Wurzel jeder natürlichen
+      Zahl, die keine Quadratzahl ist.
+    tags:
+    - language:de
+    - positive
+    expected_signals:
+      projection:
+      - effort_high
+      decision:
+      - task:stem
+      - needs:deliberation
+  - id: balance_hard__bayes_fr
+    query: Un test médical a une sensibilité de 99 % et une spécificité de 95 % pour une maladie touchant 1 % de
+      la population. Calcule pas à pas la probabilité d'être malade après un test positif, puis après deux tests
+      positifs indépendants.
+    tags:
+    - language:fr
+    - positive
+    expected_signals:
+      projection:
+      - effort_high
+  - id: balance_long__text_from_30k_to_60k__root_cause_in_30k_60k_band_zh
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
       enabled: false
       reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
         in Playground.
-    query: Write a handover note explaining the relationships between the listed services, their owners and
-      maintenance dates. Organize the note around the stated dependencies and bring the repeated entries together
-      into a coherent account.
+    query: 请分析取舍并逐步推理，然后给出最稳妥的建议。
     padding:
-      text: Service api reads cache c. Team blue owns c; its two replicas have maintenance dates May 2 and
-        9.  |
+      text: Neutral architecture inventory data for context capacity validation; no routing intent is expressed.
+      repeat: 1600
+      placement: after
+    tags:
+    - language:zh
+    - stress:long-input
+    - context:30k-60k
+    - deliberate
+    - paraphrase
+- id: balance_standard
+  expected_recipe: balance
+  expected_decision: medium
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Standard: requests that need some reasoning stay on medium.'
+  variants:
+  - id: balance_standard__tcp
+    query: Explain how TCP congestion control works.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_medium
+  - id: balance_standard__tcp_zh
+    query: 解释一下 TCP 拥塞控制是如何工作的。
+    tags:
+    - language:zh
+    - positive
+  - id: balance_standard__terse_but_deliberate
+    query: Keep it concise and direct, but analyze the tradeoffs and root cause carefully.
+    tags:
+    - language:en
+    - collision
+    - priority
+    - positive
+    notes: Asking for a concise answer does not remove the reasoning a tradeoff needs.
+    expected_signals:
+      projection:
+      - effort_medium
+  - id: balance_standard__correction_without_answer
+    query: Your previous recommendation to expose the admin port publicly is wrong; correct it and propose a safer
+      configuration.
+    tags:
+    - class:negative
+    - collision
+    - demo
+    - language:en
+    - recovery
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_medium
+  - id: balance_long__text_from_60k_to_120k__direct_summary_in_60k_120k_band
+    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    query: Write a handover note explaining the relationships between the listed services, their owners and maintenance
+      dates. Organize the note around the stated dependencies and bring the repeated entries together into a coherent
+      account.
+    padding:
+      text: Service api reads cache c. Team blue owns c; its two replicas have maintenance dates May 2 and 9.  |
       repeat: 2800
       placement: after
     tags:
     - language:en
     - stress:long-input
     - context:60k-120k
-    - positive
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
-  - id: balance_text_from_60k_to_120k__direct_summary_in_60k_120k_band_zh
+  - id: balance_long__text_from_60k_to_120k__direct_summary_in_60k_120k_band_zh
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
       enabled: false
@@ -191,15 +1215,13 @@ decisions:
     padding:
       text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.      |'
       repeat: 2800
-      placement: before
+      placement: after
     tags:
     - language:zh
     - stress:long-input
     - context:60k-120k
     - paraphrase
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
-  - id: balance_text_from_30k_to_60k__direct_summary_in_30k_60k_band
+  - id: balance_long__text_from_30k_to_60k__direct_summary_in_30k_60k_band
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
       enabled: false
@@ -215,11 +1237,545 @@ decisions:
     - language:en
     - stress:long-input
     - context:30k-60k
+  - id: balance_long__deliberate__long_deliberate_context
+    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    query: Analyze the tradeoffs in this detailed architecture background.
+    repeat: 900
+    tags:
+    - language:en
+    - deliberate
+    - stress:long-input
+    - collision
+- id: balance_fast
+  expected_recipe: balance
+  expected_decision: simple
+  expected_algorithm: multi_factor
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Fast: requests that need no reasoning go to simple.'
+  variants:
+  - id: balance_fast__greeting
+    query: hi
+    tags:
+    - language:en
     - positive
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
-  - id: balance_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__joke
+    query: Tell me a joke about cats.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__greeting_zh
+    query: 你好，今天心情不错
+    tags:
+    - language:zh
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__declared_tool_not_needed
+    messages:
+    - role: user
+      content: Write a haiku about the ocean.
+    tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Current weather for a city
+        parameters:
+          type: object
+          properties:
+            city:
+              type: string
+          required:
+          - city
+    tags:
+    - language:en
+    - shape:tools
+    - class:negative
+    - collision
+    notes: A declared tool the request does not need leaves the request on effort routing.
+    expected_signals:
+      projection:
+      - effort_off
+      conversation:
+      - has_tools
+  - id: balance_fast__trivial_code_fix
+    query: 'Fix the bug in this function: def add(a, b): return a - b'
+    tags:
+    - language:en
+    - class:negative
+    - collision
+    notes: A one-line code fix needs no reasoning lane.
+    expected_signals:
+      projection:
+      - effort_off
+      decision:
+      - task:code
+  - id: balance_fast__brief_request
+    query: 'Quick answer: what''s the time complexity of binary search?'
+    tags:
+    - language:en
+    - collision
+    expected_signals:
+      projection:
+      - effort_off
+      keywords:
+      - brief_request
+  - id: balance_fast__thanks_after_answer
+    messages:
+    - role: user
+      content: Suggest a name for my cat.
+    - role: assistant
+      content: How about Mochi?
+    - role: user
+      content: Love it, thanks!
+    tags:
+    - language:en
+    - multi-turn
+    - shape:messages
+    - class:negative
+    expected_signals:
+      projection:
+      - effort_off
+      conversation:
+      - has_prior_answer
+    notes: A satisfied follow-up is not a correction.
+  - id: balance_fast__diagram_summary
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__diagram_summary_zh
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 请用一句话说明图中从左到右的方框名称以及箭头的连接顺序。
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:zh
+    - shape:messages
+    - multimodal
+    - image
+    - paraphrase
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__brief_definition
+    query: Answer briefly with a short definition of a readiness probe.
+    tags:
+    - language:en
+    - balanced
+    - negative
+    - benign-negative
+    - demo
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__brief_definition_zh
+    query: 请用一句话简短回答健康检查的用途。
+    tags:
+    - language:zh
+    - balanced
+    - negative
+    - benign-negative
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__copy_status
+    query: 'Read this service record and copy its stated status into one short sentence without adding information.
+      Record: the service is online. Return only the service status written in the record.'
+    repeat: 120
+    tags:
+    - language:en
+    - balanced
+    - negative
+    - benign-negative
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__negated_deliberation
+    query: 'Do not analyze the tradeoffs. Read this service record and copy the stated status: the server is online.
+      Give only the status in one short sentence, preserving the supplied wording.'
+    tags:
+    - language:en
+    - negative
+    - collision
+    - priority
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__easy_definition
+    query: Give a short definition of a common term.
+    tags:
+    - language:en
+    - negative
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__definition_health
+    tags:
+    - language:en
+    - contract:v2
+    - negative
+    - stakes:collision
+    query: 'Give the short definition from this glossary entry unchanged: "Drug interaction: one medicine changes
+      the effect of another medicine." Return only the supplied definition in one sentence.'
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__definition_law
+    tags:
+    - language:en
+    - contract:v2
+    - negative
+    - stakes:collision
+    query: 'Read this glossary entry and give only the supplied definition in one sentence. Term: non-disclosure
+      agreement. Definition: an agreement to keep specified information confidential. Preserve the meaning stated
+      in the entry and add no personal recommendation.'
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__definition_business
+    tags:
+    - language:en
+    - contract:v2
+    - negative
+    - stakes:collision
+    query: In one sentence, what is a company organizational chart?
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__definition_economics
+    tags:
+    - language:en
+    - contract:v2
+    - negative
+    - stakes:collision
+    query: 'Read this glossary entry and give only the supplied definition in one sentence. Term: capital loss.
+      Definition: an asset is sold for less than its purchase price. Preserve the meaning stated in the entry and
+      add no personal recommendation.'
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__satisfied_style_change
+    tags:
+    - language:en
+    - contract:v2
+    - negative
+    - multi-turn
+    - feedback
+    messages:
+    - role: user
+      content: Explain what a readiness check does.
+    - role: assistant
+      content: It tells the load balancer whether an instance is ready to receive requests.
+    - role: user
+      content: Thanks, that makes sense. Make it shorter.
+    expected_signals:
+      projection:
+      - effort_off
+      conversation:
+      - has_prior_answer
+  - id: balance_fast__ordinary_follow_up
+    messages:
+    - role: user
+      content: Summarize the purpose of a health check in two sentences.
+    - role: assistant
+      content: A health check reports whether a service can handle traffic.
+    - role: user
+      content: Add one concrete example.
+    tags:
+    - language:en
+    - multi_turn
+    - shape:messages
+    - balanced
+    expected_signals:
+      projection:
+      - effort_off
+      conversation:
+      - has_prior_answer
+  - id: balance_fast__clarification_follow_up
+    messages:
+    - role: user
+      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example:
+        process A has 2 events, B has 0, and C has 1.'
+    - role: assistant
+      content: The vector clock has one event counter for each process.
+    - role: user
+      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example:
+        process A has 2 events, B has 0, and C has 1.'
+    tags:
+    - language:en
+    - multi_turn
+    - recovery
+    - positive
+    notes: A request for clarification after an answer is not a correction.
+    expected_signals:
+      projection:
+      - effort_off
+      conversation:
+      - has_prior_answer
+  - id: balance_fast__tool_choice_none
+    query: Use the status lookup function and return the current state.
+    tools:
+    - type: function
+      function:
+        name: lookup_status
+        description: Look up a service status when enabled.
+    tool_choice: none
+    notes: tool_choice none keeps declared tools out of the agent lane.
+    tags:
+    - language:en
+    - shape:tools
+    - tools
+    - negative
+    - collision
+    - protocol-contract
+    expected_signals:
+      projection:
+      - effort_off
+      conversation:
+      - has_tools
+      - tool_disabled
+  - id: balance_fast__greeting_es
+    query: Hola, ¿qué tal?
+    tags:
+    - language:es
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__greeting_ar
+    query: مرحبا، كيف حالك؟
+    tags:
+    - language:ar
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__joke_de
+    query: Erzähl mir einen Witz über Katzen.
+    tags:
+    - language:de
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__thanks_ja
+    query: ありがとう、助かりました！
+    tags:
+    - language:ja
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__translate_es
+    query: 'Traduce al inglés: buenos días, ¿cómo estás?'
+    tags:
+    - language:es
+    - positive
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__correction_without_answer_es
+    query: La respuesta es incorrecta; corrige la respuesta e inténtalo de nuevo.
+    tags:
+    - language:es
+    - class:negative
+    - collision
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__correction_without_answer_fr
+    query: La réponse est incorrecte, corrige la réponse et réessaie.
+    tags:
+    - language:fr
+    - class:negative
+    - collision
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__correction_without_answer_ja
+    query: 回答が間違っています。修正してもう一度答えてください。
+    tags:
+    - language:ja
+    - class:negative
+    - collision
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__correction_without_answer_pt
+    query: A resposta está errada; corrija a resposta e tente novamente.
+    tags:
+    - language:pt
+    - class:negative
+    - collision
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__correction_without_answer_ar
+    query: الإجابة خاطئة؛ صحح الإجابة وحاول مرة أخرى.
+    tags:
+    - language:ar
+    - class:negative
+    - collision
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_fast__correction_without_answer_ru
+    query: Ответ неверный; исправь ответ и попробуй снова.
+    tags:
+    - language:ru
+    - class:negative
+    - collision
+    notes: Correction wording without an earlier answer in the conversation is not recovery.
+    expected_signals:
+      projection:
+      - effort_off
+  - id: balance_long__text_from_120k_to_240k__text_in_120k_240k_band
+    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Summarize the supplied record in one sentence using only its stated facts: identify the item, its
+          room and its availability. Preserve the meaning of the record and do not add information. '
+    tags:
+    - language:en
+    - shape:messages
+    - stress:long-input
+    - capability
+  - id: balance_long__image__image_in_30k_60k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+  - id: balance_long__image__image_in_60k_120k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 300000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+  - id: balance_long__image__image_in_120k_240k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+  - id: balance_long__over_240k_image_guard__image_at_first_over_240k_token
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -242,7 +1798,6 @@ decisions:
     - multimodal
     - image
     - stress:long-input
-    - positive
     - supported
     - context:240001
     - tools
@@ -253,947 +1808,6 @@ decisions:
       function:
         name: lookup_context_item
         description: Look up one item from the supplied context.
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
-  - id: balance_standard__ordinary_messages
-    messages:
-    - role: user
-      content: Summarize the purpose of a health check in two sentences.
-    - role: assistant
-      content: A health check reports whether a service can handle traffic.
-    - role: user
-      content: Add one concrete example.
-    tags:
-    - language:en
-    - multi_turn
-    - shape:messages
-    - balanced
-    expected_signals:
-      conversation:
-      - has_answer
-    notes: General task, constrained synthesis, or ongoing conversation; neither length nor available tools alone
-      licenses a complex or agent lane.
-  expected_algorithm: multi_factor
-- id: balance_simple
-  expected_recipe: balance
-  expected_decision: simple
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_text_from_120k_to_240k__tools_in_120k_240k_band
-    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
-      result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Use the lookup tool to retrieve the status of inventory item R17. Copy the identifier and the
-          status returned by the function into one short sentence. The task is a direct lookup of the supplied
-          record; preserve the returned wording and include no other information. '
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - stress:long-input
-    - capability
-    - positive
-    - tools
-    - shape:tools
-    - collision
-    - priority
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_text_from_30k_to_60k__tools_in_30k_60k_band_collision
-    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
-      result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: Use the lookup tool to return the identifier explicitly printed in the final inventory row. Copy
-      the requested field exactly and give just that value.
-    padding:
-      text: 'Inventory record: item R17 is available in room A.                The facilities team owns the
-        item.'
-      repeat: 1600
-      placement: around
-    tools:
-    - type: function
-      function:
-        name: lookup_identifier
-        description: Look up the final inventory identifier.
-    tags:
-    - language:en
-    - stress:long-input
-    - context:30k-60k
-    - tools
-    - shape:tools
-    - collision
-    - priority
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_tools__lookup_status
-    query: Use the status lookup function to check the api-gateway service and return only its current state.
-    tools:
-    - type: function
-      function:
-        name: lookup_status
-        description: Look up a service status.
-    tags:
-    - language:en
-    - shape:tools
-    - tools
-    - positive
-    - demo
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_tools__lookup_status_zh
-    query: 请使用状态查询函数返回所选服务的状态。
-    tools:
-    - type: function
-      function:
-        name: lookup_status
-        description: 查询服务状态。
-    tags:
-    - language:zh
-    - shape:tools
-    - tools
-    - paraphrase
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_over_240k_text_guard__text_at_first_over_240k_band
-    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: Return the item identifier printed in the supplied inventory record. Copy only that field exactly
-      as written; do not add other information.
-    padding:
-      text: 'Inventory record: item R17 is available in room A.                             The facilities
-        team owns the item.'
-      repeat: 9000
-      placement: after
-    notes: Neutral padding changes required capacity, not task difficulty or sensitivity; check admitted candidates
-      separately.
-    tags:
-    - language:en
-    - stress:long-input
-    - boundary
-    - positive
-    - context:over-240k
-  - id: balance_text_from_120k_to_240k__text_in_120k_240k_band
-    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Summarize the supplied record in one sentence using only its stated facts: identify the item,
-          its room and its availability. Preserve the meaning of the record and do not add information. '
-    notes: Neutral padding changes required capacity, not task difficulty or sensitivity; check admitted candidates
-      separately.
-    tags:
-    - language:en
-    - shape:messages
-    - stress:long-input
-    - capability
-    - positive
-  - id: balance_image_tools__inspect_and_lookup
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Inspect the dashboard image and use the lookup function for the selected service.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tools:
-    - type: function
-      function:
-        name: lookup_service
-        description: Look up one service record.
-    tags:
-    - language:en
-    - shape:messages
-    - shape:tools
-    - tools
-    - multimodal
-    - image
-    - positive
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_image_tools__inspect_and_lookup_zh
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 请查看图中的服务状态，并使用查询函数补充选中服务的信息。
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tools:
-    - type: function
-      function:
-        name: lookup_service
-        description: 查询一条服务记录。
-    tags:
-    - language:zh
-    - shape:messages
-    - shape:tools
-    - tools
-    - multimodal
-    - image
-    - paraphrase
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_image_tools__image_tools_in_30k_60k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 160000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the
-          recorded status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_image_tools__image_tools_in_60k_120k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 300000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the
-          recorded status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_image_tools__image_tools_in_120k_240k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the
-          recorded status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_image__diagram_summary
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Describe the picture in one sentence by naming the boxes from left to right and the arrows that
-          connect them.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - positive
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_image__diagram_summary_zh
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 请用一句话说明图中从左到右的方框名称以及箭头的连接顺序。
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:zh
-    - shape:messages
-    - multimodal
-    - image
-    - paraphrase
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_image__image_in_30k_60k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 160000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows
-          that connect them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_image__image_in_60k_120k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 300000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows
-          that connect them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_image__image_in_120k_240k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows
-          that connect them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_standard__tool_choice_none_overrides_text_intent
-    query: Use the status lookup function and return the current state.
-    tools:
-    - type: function
-      function:
-        name: lookup_status
-        description: Look up a service status when enabled.
-    tool_choice: none
-    notes: Explicit negative user/protocol instruction remains authoritative; positive substrings must not reverse
-      it. Availability of declared tools is distinct from active tool choice.
-    tags:
-    - language:en
-    - shape:tools
-    - tools
-    - negative
-    - collision
-    - protocol-contract
-  - id: balance_standard__brief_benign_negative
-    query: Answer briefly with a short definition of a readiness probe.
-    tags:
-    - language:en
-    - balanced
-    - negative
-    - benign-negative
-    - demo
-    expected_signals:
-      complexity:
-      - difficulty:easy
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_standard__brief_benign_negative_zh
-    query: 请用一句话简短回答健康检查的用途。
-    tags:
-    - language:zh
-    - balanced
-    - negative
-    - benign-negative
-    expected_signals:
-      complexity:
-      - difficulty:easy
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_standard__background_without_deliberate_pressure
-    query: 'Read this service record and copy its stated status into one short sentence without adding information.
-      Record: the service is online. Return only the service status written in the record.'
-    repeat: 120
-    tags:
-    - language:en
-    - balanced
-    - negative
-    - benign-negative
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_standard__negated_deliberation
-    query: 'Do not analyze the tradeoffs. Read this service record and copy the stated status: the server
-      is online. Give only the status in one short sentence, preserving the supplied wording.'
-    tags:
-    - language:en
-    - negative
-    - collision
-    - priority
-    expected_signals:
-      keywords:
-      - no_analysis
-    notes: Explicit negative user/protocol instruction remains authoritative; positive substrings must not reverse
-      it.
-  - id: balance_standard__easy_semantic_request
-    query: Give a short definition of a common term.
-    tags:
-    - language:en
-    - negative
-    - signal:complexity
-    expected_signals:
-      complexity:
-      - difficulty:easy
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  - id: balance_standard__image_and_tool_words_without_payloads
-    query: Explain why image payload and tool definition are API field names without sending either field.
-    tags:
-    - language:en
-    - balanced
-    - negative
-    - hard-negative
-    - negative:structural-words-only
-    notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
-      eligible models without creating another business decision.
-  expected_algorithm: multi_factor
-- id: balance_reasoning
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_text_from_60k_to_120k__deliberate_tools_in_60k_120k_band_collision
-    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
-      result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: Analyze the tradeoffs carefully before using the inventory lookup tool.
-    padding:
-      text: Neutral architecture inventory data for context capacity validation; no routing intent is expressed.
-      repeat: 2800
-      placement: around
-    tools:
-    - type: function
-      function:
-        name: lookup_inventory
-        description: Look up one item in the supplied inventory.
-    tags:
-    - language:en
-    - stress:long-input
-    - context:60k-120k
-    - tools
-    - shape:tools
-    - collision
-    - priority
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_tools__deliberate_tools_collision
-    query: Analyze the tradeoffs carefully, then use the status lookup function.
-    tools:
-    - type: function
-      function:
-        name: lookup_status
-        description: Look up a service status.
-    tags:
-    - language:en
-    - shape:tools
-    - tools
-    - deliberate
-    - collision
-    - priority
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_text_from_30k_to_60k__root_cause_in_30k_60k_band_zh
-    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: 请分析取舍并逐步推理，然后给出最稳妥的建议。
-    padding:
-      text: Neutral architecture inventory data for context capacity validation; no routing intent is expressed.
-      repeat: 1600
-      placement: before
-    tags:
-    - language:zh
-    - stress:long-input
-    - context:30k-60k
-    - deliberate
-    - paraphrase
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_deliberate__tradeoff_zh
-    query: 请分析取舍并逐步推理，给出可验证的建议。
-    tags:
-    - language:zh
-    - deliberate
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_deliberate__tradeoff_en
-    query: A production API is timing out after a database migration; analyze the tradeoffs and reason step by step
-      before recommending the safest fix.
-    tags:
-    - language:en
-    - deliberate
-    - positive
-    - demo
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_deliberate__long_deliberate_context
-    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: Analyze the tradeoffs in this detailed architecture background.
-    repeat: 900
-    tags:
-    - language:en
-    - deliberate
-    - stress:long-input
-    - collision
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_deliberate__verification_pressure
-    query: Verify the answer, cite reliable sources, and check the evidence before responding.
-    tags:
-    - language:en
-    - verification
-    - positive
-    expected_signals:
-      keywords:
-      - verify
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_deliberate__hard_semantic_request
-    query: Analyze a production failure from several competing root causes and synthesize a defensible recommendation.
-    tags:
-    - language:en
-    - signal:complexity
-    - positive
-    expected_signals:
-      complexity:
-      - difficulty:hard
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_deliberate__terse_but_deliberate
-    query: Keep it concise and direct, but analyze the tradeoffs and root cause carefully.
-    tags:
-    - language:en
-    - collision
-    - priority
-    - positive
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_answer_recovery__feedback_classifier
-    messages:
-    - role: user
-      content: What is the capital of Australia?
-    - role: assistant
-      content: Sydney.
-    - role: user
-      content: That answer was incorrect and did not solve my request. Please correct the answer.
-    tags:
-    - language:en
-    - multi_turn
-    - recovery
-    - positive
-    expected_signals:
-      user_feedback:
-      - wrong_answer
-      projection:
-      - retry
-      conversation:
-      - has_answer
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_image_tools__deliberate_image_tools_collision
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Analyze the tradeoffs from first principles in this diagram, then call the evidence lookup tool.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tools:
-    - type: function
-      function:
-        name: lookup_evidence
-        description: Look up supporting evidence.
-    tags:
-    - language:en
-    - shape:messages
-    - shape:tools
-    - tools
-    - multimodal
-    - image
-    - deliberate
-    - collision
-    - priority
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  - id: balance_image__deliberate_image_collision
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Analyze the tradeoffs from first principles in this architecture image.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - deliberate
-    - collision
-    - priority
-    expected_signals:
-      keywords:
-      - deliberate
-    notes: The user requests analysis, evidence verification, difficult diagnosis, or explicit answer correction;
-      images and tools remain candidate requirements.
-  expected_algorithm: multi_factor
-- id: balance_standalone_correction
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  forbidden_signals:
-    user_feedback:
-    - wrong_answer
-    projection:
-    - retry
-    conversation:
-    - has_answer
-  variants:
-  - id: balance_answer_recovery__explicit_correction
-    query: Your previous recommendation to expose the admin port publicly is wrong; correct it and propose a safer
-      configuration.
-    tags:
-    - language:en
-    - recovery
-    - positive
-    - demo
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_zh
-    query: 回答错了，请纠正答案并重新回答。
-    tags:
-    - language:zh
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_es
-    query: La respuesta es incorrecta; corrige la respuesta e inténtalo de nuevo.
-    tags:
-    - language:es
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_fr
-    query: La réponse est incorrecte, corrige la réponse et réessaie.
-    tags:
-    - language:fr
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_ja
-    query: 回答が間違っています。修正してもう一度答えてください。
-    tags:
-    - language:ja
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_de
-    query: Die Antwort ist falsch; bitte korrigiere die Antwort und versuche es erneut.
-    tags:
-    - language:de
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_pt
-    query: A resposta está errada; corrija a resposta e tente novamente.
-    tags:
-    - language:pt
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_ko
-    query: 답변이 틀렸습니다. 내용을 수정해서 다시 답하세요.
-    tags:
-    - language:ko
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_ar
-    query: الإجابة خاطئة؛ صحح الإجابة وحاول مرة أخرى.
-    tags:
-    - language:ar
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_hi
-    query: उत्तर गलत है; कृपया उत्तर सुधारें और फिर से प्रयास करें।
-    tags:
-    - language:hi
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-  - id: balance_answer_recovery__correction_ru
-    query: Ответ неверный; исправь ответ и попробуй снова.
-    tags:
-    - language:ru
-    - recovery
-    - positive
-    expected_signals:
-      keywords:
-      - answer_error
-      - answer_revision
-    notes: A self-contained error report and repair request qualify without assistant history.
-- id: balance_medium_negative_35
-  expected_recipe: balance
-  expected_decision: medium
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_answer_recovery__semantic_reask
-    messages:
-    - role: user
-      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the
-        example: process A has 2 events, B has 0, and C has 1.'
-    - role: assistant
-      content: The vector clock has one event counter for each process.
-    - role: user
-      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the
-        example: process A has 2 events, B has 0, and C has 1.'
-    tags:
-    - language:en
-    - multi_turn
-    - recovery
-    - positive
-    expected_signals:
-      reask:
-      - repeat
-      conversation:
-      - has_answer
-    notes: An unchanged repeated request without correctness rejection is ordinary follow-up, not answer recovery.
-  expected_algorithm: multi_factor
-  forbidden_signals:
-    projection:
-    - retry
 - id: speed_fast
   expected_recipe: speed
   expected_decision: fast
@@ -1222,7 +1836,7 @@ decisions:
     - positive
     - context:over-240k
   - id: speed_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -2224,7 +2838,7 @@ decisions:
     - positive
     - context:over-240k
   - id: cost_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -3076,7 +3690,7 @@ decisions:
       conversation:
       - tool_loop
   - id: accuracy_text_tool_result_synthesis__text_tool_result_beyond_240k
-    display_prompt: Synthesize the verified text-tool result after a context longer than 240K tokens, preserving
+    display_prompt: Synthesize the verified text-tool result from this large generated context, preserving
       its sentinel and factual conclusion.
     playground:
       enabled: false
@@ -3111,6 +3725,9 @@ decisions:
         description: Retrieve audit evidence.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3124,6 +3741,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_image_tool_result_synthesis__image_tool_result_collision
     messages:
     - role: user
@@ -3211,7 +3832,7 @@ decisions:
       conversation:
       - tool_loop
   - id: accuracy_image_tool_result_synthesis__image_tool_result_beyond_240k
-    display_prompt: Synthesize the verified image-tool result after a context longer than 240K tokens, preserving
+    display_prompt: Synthesize the verified image-tool result from this large generated context, preserving
       its sentinel and visual finding.
     playground:
       enabled: false
@@ -3250,6 +3871,9 @@ decisions:
         description: Inspect an extended architecture diagram.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3264,6 +3888,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_confidence_escalation__confidence_over_multi_round_collision
     query: Fact-check and escalate if uncertain while exploring multiple reasoning paths recursively.
     tags:
@@ -3582,7 +4210,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
   - id: accuracy_over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
       finding.
     playground:
       enabled: false
@@ -3619,7 +4247,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
   - id: accuracy_image_from_120k_to_240k__image_context_boundary_en
-    display_prompt: Inspect the attached image within this 120K-to-240K context and summarize its primary architecture
+    display_prompt: Inspect the attached image within this large generated context and summarize its primary architecture
       flow.
     playground:
       enabled: false
@@ -3647,7 +4275,7 @@ decisions:
     - collision
     - priority
   - id: accuracy_image_from_120k_to_240k__image_context_tools_collision_zh
-    display_prompt: 请在这段 120K 到 240K 的长上下文中检查所附架构图，必要时调用查询工具，并总结关键数据流。
+    display_prompt: 请在这段生成的长上下文中检查所附架构图，必要时调用查询工具，并总结关键数据流。
     playground:
       enabled: false
       reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
@@ -4347,7 +4975,7 @@ decisions:
       enabled: false
       reason: This synthetic long-input fixture is materialized only for Eval and is intentionally disabled
         in Playground.
-    query: Summarize this text using the supported terminal lane.
+    query: Summarize this text.
     padding:
       text: 'Neutral capacity record without image or routing intent. Neutral capacity record without image or routing
         intent. '
@@ -4452,7 +5080,7 @@ decisions:
     - capability
     - positive
   - id: vault_tools_blocked__benign_client_tool
-    query: Use the calculator to add the public numbers 17 and 25, and return only the sum.
+    query: What is the sum of the public numbers 17 and 25? Use the calculator.
     tools:
     - type: function
       function:
@@ -4964,191 +5592,6 @@ decisions:
     - prompt_attack
     safety:
     - unsafe
-- id: balance_v2_stakes_health
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_stakes_health
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-    query: Help choose a medical treatment when a mistaken choice could cause permanent injury. Compare the
-      practical options and their risks, and recommend what I should do under uncertainty.
-    notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
-      counterpart asserts FactCheck for the same domain.
-    expected_signals:
-      domains:
-      - health
-      embeddings:
-      - consequential
-  expected_algorithm: multi_factor
-- id: balance_v2_definition_health
-  expected_recipe: balance
-  expected_decision: simple
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_definition_health
-    tags:
-    - language:en
-    - contract:v2
-    - negative
-    - stakes:collision
-    query: 'Give the short definition from this glossary entry unchanged: "Drug interaction: one medicine
-      changes the effect of another medicine." Return only the supplied definition in one sentence.'
-    notes: A short definition in the same domain is not personalized high-stakes advice.
-    expected_signals:
-      complexity:
-      - difficulty:easy
-  expected_algorithm: multi_factor
-  forbidden_signals:
-    embeddings:
-    - consequential
-- id: balance_v2_stakes_law
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_stakes_law
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-    query: Help choose a legal course of action before I sign a contract that could cause an irreversible
-      loss. Compare my available legal options and recommend the safest course under uncertainty.
-    notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
-      counterpart asserts FactCheck for the same domain.
-    expected_signals:
-      domains:
-      - law
-      embeddings:
-      - consequential
-  expected_algorithm: multi_factor
-- id: balance_v2_definition_law
-  expected_recipe: balance
-  expected_decision: simple
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_definition_law
-    tags:
-    - language:en
-    - contract:v2
-    - negative
-    - stakes:collision
-    query: 'Read this glossary entry and give only the supplied definition in one sentence. Term: non-disclosure
-      agreement. Definition: an agreement to keep specified information confidential. Preserve the meaning
-      stated in the entry and add no personal recommendation.'
-    notes: A short definition in the same domain is not personalized high-stakes advice.
-    expected_signals:
-      complexity:
-      - difficulty:easy
-  expected_algorithm: multi_factor
-  forbidden_signals:
-    embeddings:
-    - consequential
-- id: balance_v2_stakes_business
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_stakes_business
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-    query: Help choose a business strategy when a mistaken investment could make our company insolvent. Compare
-      the commercial alternatives and recommend a course of action under uncertainty.
-    notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
-      counterpart asserts FactCheck for the same domain.
-    expected_signals:
-      domains:
-      - business
-      embeddings:
-      - consequential
-  expected_algorithm: multi_factor
-- id: balance_v2_definition_business
-  expected_recipe: balance
-  expected_decision: simple
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_definition_business
-    tags:
-    - language:en
-    - contract:v2
-    - negative
-    - stakes:collision
-    query: In one sentence, what is a company organizational chart?
-    notes: A short definition in the same domain is not personalized high-stakes advice.
-    expected_signals:
-      complexity:
-      - difficulty:easy
-  expected_algorithm: multi_factor
-  forbidden_signals:
-    embeddings:
-    - consequential
-- id: balance_v2_stakes_economics
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_stakes_economics
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-    query: Help choose an economic policy when an incorrect interest-rate decision could cause lasting unemployment
-      or severe inflation. Evaluate practical policy alternatives and recommend an action under uncertainty.
-    notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
-      counterpart asserts FactCheck for the same domain.
-    expected_signals:
-      domains:
-      - economics
-      embeddings:
-      - consequential
-  expected_algorithm: multi_factor
-- id: balance_v2_definition_economics
-  expected_recipe: balance
-  expected_decision: simple
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_definition_economics
-    tags:
-    - language:en
-    - contract:v2
-    - negative
-    - stakes:collision
-    query: 'Read this glossary entry and give only the supplied definition in one sentence. Term: capital
-      loss. Definition: an asset is sold for less than its purchase price. Preserve the meaning stated in
-      the entry and add no personal recommendation.'
-    notes: A short definition in the same domain is not personalized high-stakes advice.
-    expected_signals:
-      complexity:
-      - difficulty:easy
-  expected_algorithm: multi_factor
-  forbidden_signals:
-    embeddings:
-    - consequential
 - id: accuracy_v2_stakes_health
   expected_recipe: accuracy
   expected_decision: reasoning
@@ -5334,66 +5777,6 @@ decisions:
   forbidden_signals:
     embeddings:
     - consequential
-- id: balance_v2_implicit_correction
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_implicit_correction
-    tags:
-    - language:en
-    - contract:v2
-    - multi-turn
-    - feedback
-    messages:
-    - role: user
-      content: What is the capital of Australia?
-    - role: assistant
-      content: Wellington.
-    - role: user
-      content: That city is in New Zealand, so it cannot answer my question about Australia.
-    notes: Implicit correctness rejection should use learned Feedback despite no stock correction phrase.
-    expected_signals:
-      conversation:
-      - has_answer
-      user_feedback:
-      - wrong_answer
-      projection:
-      - retry
-  expected_algorithm: multi_factor
-- id: balance_v2_satisfied_style_change
-  expected_recipe: balance
-  expected_decision: medium
-  expected_plugins:
-  - request_params
-  plugin_match: exact
-  variants:
-  - id: balance_v2_satisfied_style_change
-    tags:
-    - language:en
-    - contract:v2
-    - negative
-    - multi-turn
-    - feedback
-    messages:
-    - role: user
-      content: Explain what a readiness check does.
-    - role: assistant
-      content: It tells the load balancer whether an instance is ready to receive requests.
-    - role: user
-      content: Thanks, that makes sense. Make it shorter.
-    notes: Satisfaction followed by a style request is ordinary continuation, not failed-answer recovery.
-    expected_signals:
-      conversation:
-      - has_answer
-  expected_algorithm: multi_factor
-  forbidden_signals:
-    user_feedback:
-    - wrong_answer
-    projection:
-    - retry
 - id: accuracy_v2_implicit_correction
   expected_recipe: accuracy
   expected_decision: reasoning
@@ -5414,7 +5797,7 @@ decisions:
       content: A stack removes the oldest item first; a queue removes the newest item first.
     - role: user
       content: Stacks remove the newest item first. Queues remove the oldest item first. Your explanation
-        reverses those two rules.
+        reverses those two rules, so it is not correct.
     notes: Correctness rejection is distinct from parallel expert authorization.
     expected_signals:
       conversation:
@@ -5916,8 +6299,8 @@ decisions:
   plugin_match: exact
   variants:
   - id: vault_v3_vh11
-    query: For a museum exhibit, describe at a high level why historical weapons required strict storage rules.
-      Do not explain how to construct or use one.
+    query: For a museum exhibit, explain at a high level why historical arms collections required strict storage
+      rules. Do not explain how to make or use any of them.
     tags:
     - language:en
     - contract:v3
@@ -6204,28 +6587,6 @@ decisions:
     - contract
     - negative
     - correction
-- id: contract-consequential-advice
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
-  expected_signals:
-    projection:
-    - actionable_care
-  expected_signal_values:
-    embedding:informational:
-      gte: -1
-      lte: 1
-  objective: Advice for an actual consequential decision needs reasoning; observing
-    the informational comparison score does not require that predicate to match.
-  variants:
-  - id: en
-    query: Before agreeing to a legally binding employment contract, help me choose between signing it now
-      or seeking legal advice. Evaluate the risk of an irreversible loss and recommend a course of action
-      under uncertainty.
-    tags:
-    - en
-    - contract
-    - consequential
 - id: contract-personal-support
   expected_recipe: vault
   expected_decision: sensitive
@@ -6270,25 +6631,6 @@ decisions:
     - language:en
     - contract
     - correction
-- id: contract-personal-action-care
-  expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
-  expected_plugins:
-  - request_params
-  expected_signals:
-    keywords:
-    - care_request
-    domains:
-    - health
-  objective: A direct personal medical action question combines explicit wording with a relevant domain.
-  variants:
-  - id: en
-    query: Should I stop taking the prescribed medicine before my next appointment?
-    tags:
-    - language:en
-    - contract
-    - care
 - id: contract-plural-workflow-start
   expected_recipe: accuracy
   expected_decision: agent
@@ -6436,7 +6778,7 @@ decisions:
       domains:
       - health
   - id: zh
-    query: 房东要求我明天前接受一条新的租约条款。请告诉我在作出承诺之前下一步该如何处理。
+    query: 房东要求我明天前接受一条新的租约条款。请告诉我在作出承诺之前，从法律角度下一步该如何处理。
     tags:
     - language:zh
     - contract
@@ -6553,13 +6895,13 @@ decisions:
     query: I want to change the editor font size from 12 to 14. Tell me what to do next in the settings menu.
     tags: [language:en, contract, negative, technical]
   - id: technical_zh
-    query: 我有一份已经写好的CSV文件，只想按日期排序。请告诉我下一步该如何在电子表格里操作，不需要改动任何数值。
+    query: 我有一份已经写好的CSV文件，只想按日期排序。请告诉我下一步该如何在表格软件里操作，不需要改动任何数值。
     tags: [language:zh, contract, negative, technical]
   - id: household_en
     query: I have two untidy shelves and empty storage boxes. Tell me what to do next to arrange my books alphabetically.
     tags: [language:en, contract, negative, everyday]
   - id: household_zh
-    query: 我想把旅行照片按月份放进文件夹。请告诉我下一步该如何整理，照片内容不用修改。
+    query: 我想把手机里的旅行照片按月份放进文件夹。请告诉我下一步该如何操作，照片内容不用修改。
     tags: [language:zh, contract, negative, everyday]
 - id: contract-vault-quoted-support-only
   expected_recipe: vault
@@ -6728,99 +7070,6 @@ decisions:
     - contract
     - positive
     - quoted-context
-- id: balance_v2_facts_health
-  expected_algorithm: multi_factor
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  expected_recipe: balance
-  expected_signals:
-    domains:
-    - health
-    fact_check:
-    - needs_fact_check
-  plugin_match: exact
-  signal_match: contains
-  variants:
-  - id: balance_v2_facts_health
-    notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
-      embedding signal.
-    query: 'Please fact-check: Can taking St John''s wort together with sertraline cause serotonin syndrome?'
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-- id: balance_v2_facts_law
-  expected_algorithm: multi_factor
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  expected_recipe: balance
-  expected_signals:
-    domains:
-    - law
-    fact_check:
-    - needs_fact_check
-  plugin_match: exact
-  signal_match: contains
-  variants:
-  - id: balance_v2_facts_law
-    notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
-      embedding signal.
-    query: 'Please fact-check: Can a landlord evict a tenant without the required legal notice and court process?'
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-- id: balance_v2_facts_business
-  expected_algorithm: multi_factor
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  expected_recipe: balance
-  expected_signals:
-    domains:
-    - business
-    fact_check:
-    - needs_fact_check
-  plugin_match: exact
-  signal_match: contains
-  variants:
-  - id: balance_v2_facts_business
-    notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
-      embedding signal.
-    query: Does granting a supplier exclusive distribution rights eliminate a company's commercial risk? Please
-      cite sources.
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
-- id: balance_v2_facts_economics
-  expected_algorithm: multi_factor
-  expected_decision: reasoning
-  expected_plugins:
-  - request_params
-  expected_recipe: balance
-  expected_signals:
-    domains:
-    - economics
-    fact_check:
-    - needs_fact_check
-  plugin_match: exact
-  signal_match: contains
-  variants:
-  - id: balance_v2_facts_economics
-    notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
-      embedding signal.
-    query: 'Please fact-check: Does a central bank lowering interest rates always reduce inflation?'
-    tags:
-    - language:en
-    - contract:v2
-    - positive
-    - stakes
 - id: accuracy_v2_facts_health
   expected_algorithm: multi_factor
   expected_decision: reasoning
@@ -6838,7 +7087,7 @@ decisions:
   - id: accuracy_v2_facts_health
     notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
       embedding signal.
-    query: 'Please fact-check: Can taking St John''s wort together with sertraline cause serotonin syndrome?'
+    query: 'Please fact-check: Can taking St John''s wort together with birth control pills make them less effective?'
     tags:
     - language:en
     - contract:v2

@@ -1,4 +1,4 @@
-"""Kubernetes shards retain independent profile evidence and teardown boundaries."""
+"""Shared Kubernetes workers retain profile evidence and teardown boundaries."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 import run_e2e_batch as runner  # noqa: E402
 from ci_plan import make_plan  # noqa: E402
 from execution_batches import e2e_batches, validate_execution_batch  # noqa: E402
+from execution_targets import observation_errors  # noqa: E402
 
 SHA = "a" * 40
 PROFILES = ("category-remote-backend", "complexity-remote-backend")
@@ -85,6 +86,25 @@ else:
 
 
 class E2EBatchTests(unittest.TestCase):
+    def test_actions_receipts_keep_runner_observation_and_exact_profile_inputs(self):
+        with patch.dict(
+            os.environ,
+            {"GITHUB_ACTIONS": "true", "CI_RUNNER_ENVIRONMENT": "github-hosted"},
+        ):
+            result = self.execute(condition="extra-artifact")
+        self.assertTrue(result["passed"])
+        records = {row["id"]: row for row in self.plan()["verifications"]}
+        for receipt in result["receipts"]:
+            record = records[receipt["id"]]
+            self.assertEqual(
+                observation_errors(record, receipt["execution"], require_actions=True),
+                [],
+            )
+            self.assertEqual(
+                {item["id"] for item in receipt["artifacts"]},
+                {"image:" + image for image in record["images"]},
+            )
+
     def test_real_profiles_reuse_prebuilt_inputs_and_keep_individual_receipts(self):
         result = self.execute()
         self.assertTrue(result["passed"])
@@ -105,23 +125,11 @@ class E2EBatchTests(unittest.TestCase):
             self.assertEqual(receipt["evidence"]["expected_cases"], ["required-case"])
             self.assertEqual(
                 {row["id"] for row in receipt["artifacts"]},
-                {"image:extproc", "image:provider-mocker"},
+                {"image:vllm-sr", "image:provider-mocker"},
             )
             self.assertIn(receipt["id"] + "/test-report.json", result["raw"])
-        # Every cluster was deleted and absence verified before the next profile.
-        first = next(
-            index
-            for index, row in enumerate(result["calls"])
-            if row.get("profile") == PROFILES[0]
-        )
-        second = next(
-            index
-            for index, row in enumerate(result["calls"])
-            if row.get("profile") == PROFILES[1]
-        )
-        between = [row["args"][:2] for row in result["calls"][first + 1 : second]]
-        self.assertIn(["delete", "cluster"], between)
-        self.assertIn(["get", "clusters"], between)
+        self.assertEqual(len(result["summaries"]), 1)
+        self.assertTrue(all(summary["failed"] == [] for summary in result["summaries"]))
 
     def test_failed_or_missing_profile_does_not_skip_independent_sibling(self):
         for outcome in (
@@ -158,25 +166,27 @@ class E2EBatchTests(unittest.TestCase):
                 )
                 self.assertEqual(len(result["summary"]["failed"]), len(PROFILES))
 
-    def test_teardown_failure_cannot_qualify_or_contaminate_later_profile(self):
+    def test_teardown_failure_stops_remaining_profiles_in_shared_worker(self):
         result = self.execute(condition="leaked-cluster")
         self.assertFalse(result["passed"])
         self.assertEqual(result["receipts"], [])
         self.assertEqual(
             len([row for row in result["calls"] if row["kind"] == "profile"]), 1
         )
-        self.assertEqual(len(result["summary"]["failed"]), len(PROFILES))
+        self.assertEqual(
+            result["summary"]["failed"], ["e2e." + profile for profile in PROFILES]
+        )
         self.assertIn(
-            "worker isolation unavailable",
+            "previous profile teardown failed",
             result["raw"]["e2e." + PROFILES[1] + "/failure.txt"],
         )
         self.assertEqual(result["after_retry_clusters"], [])
         self.assertEqual(result["after_retry_states"], [])
 
-    def test_ort_profile_keeps_its_declared_runtime_and_full_baseline(self):
+    def test_model_profile_keeps_its_declared_runtime_and_full_baseline(self):
         result = self.execute(profiles=("vela-omni",), full=True)
         self.assertTrue(result["passed"])
-        self.assertEqual(result["receipts"][0]["runtime"], "ort")
+        self.assertEqual(result["receipts"][0]["runtime"], "model-runtime")
         calls = [row for row in result["calls"] if row["kind"] == "profile"]
         self.assertEqual(calls[0]["baseline"], "full")
 
@@ -189,9 +199,9 @@ class E2EBatchTests(unittest.TestCase):
             elif condition == "profile":
                 changed["verifications"][0]["profile"] = "missing-profile"
             elif condition == "images":
-                changed["images"] = ["extproc"]
+                changed["images"] = ["vllm-sr"]
             else:
-                changed["verifications"][0]["executor"] = "native"
+                changed["verifications"][0]["executor"] = "platform"
             with self.subTest(condition=condition), self.assertRaises(ValueError):
                 validate_execution_batch(changed, "e2e")
 
@@ -276,95 +286,130 @@ class E2EBatchTests(unittest.TestCase):
 
     def execute(self, *, outcomes=None, condition="", profiles=PROFILES, full=False):
         plan = self.plan(profiles, full=full)
-        batch = plan["e2e_batches"][0]
-        self.assertEqual(len(batch["verifications"]), len(profiles))
+        batches = plan["e2e_batches"]
+        self.assertEqual(
+            sum(len(batch["verifications"]) for batch in batches), len(profiles)
+        )
+        for batch in batches:
+            self.assertLessEqual(len(batch["verifications"]), 3)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "bin").mkdir()
-            clusters = root / "clusters"
-            clusters.mkdir()
             for name, script in (("e2e", CHILD), ("kind", KIND)):
                 path = root / "bin" / name
                 path.write_text(f"#!{sys.executable}\n" + script)
                 path.chmod(0o755)
-            artifacts = [
-                {"id": "image:" + image, "sha256": "b" * 64}
-                for image in batch["images"]
-            ]
-            if condition == "missing-artifact":
-                artifacts = []
-            artifact_file = root / "artifacts.json"
-            artifact_file.write_text(json.dumps(artifacts))
-            env = {
-                "PATH": str(root / "bin") + os.pathsep + os.environ["PATH"],
-                "FAKE_CLUSTERS": str(clusters),
-                "FAKE_CALLS": str(root / "calls"),
-                "FAKE_OUTCOMES": json.dumps(outcomes or {}),
-                "FAKE_LEAK": "1" if condition == "leaked-cluster" else "",
-                "CI_IMAGE_RECEIPTS": str(artifact_file),
-                "CI_NATIVE_RECEIPTS": "",
-                "E2E_PREBUILT_EXT_PROC_IMAGE": "verified:extproc",
-                "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE": (
-                    "" if condition == "missing-image" else "verified:provider-mocker"
-                ),
-            }
-            if condition == "external-state":
-                env["E2E_BATCH_STATE_ROOT"] = str(root / "worker-volume")
             original_check_output = subprocess.check_output
+            original_run_command = runner.run_command
+
+            def bounded_command(command, env, log, timeout):
+                if (
+                    command[0].endswith("/bin/e2e")
+                    and "timeout" in (outcomes or {}).values()
+                ):
+                    timeout = 1
+                return original_run_command(command, env, log, timeout)
 
             def checked(command, **kwargs):
                 if command[:2] == ["git", "rev-parse"]:
                     return "c" * 40 if condition == "wrong-source" else SHA
                 return original_check_output(command, **kwargs)
 
-            with patch.object(runner, "ROOT", root), patch.object(
-                runner, "actual_platform", return_value="linux/amd64"
-            ), patch.object(
-                runner,
-                "PROFILE_TIMEOUT_MINUTES",
-                1 / 60 if "timeout" in (outcomes or {}).values() else 90,
-            ), patch.object(
-                runner.subprocess, "check_output", side_effect=checked
-            ), patch.dict(
-                os.environ, env
-            ), contextlib.redirect_stdout(
-                io.StringIO()
-            ):
-                output = root / "output"
-                passed = runner.run_batch(batch, output)
-                with self.assertRaises(FileExistsError):
-                    runner.run_batch(batch, output)
-                remaining_clusters = list(clusters.iterdir())
-                remaining_states = [
-                    path for path in (output / "state").glob("*") if path.exists()
+            passed, receipts, raw, calls, summaries = [], [], {}, [], []
+            remaining_clusters, remaining_states = [], []
+            after_retry_clusters, after_retry_states = [], []
+            for index, batch in enumerate(batches):
+                worker = root / batch["id"]
+                worker.mkdir()
+                clusters = worker / "clusters"
+                clusters.mkdir()
+                artifacts = [
+                    {"id": "image:" + image, "sha256": "b" * 64}
+                    for image in batch["images"]
                 ]
-                # The workflow's always-running cleanup can recover interrupted teardown.
-                with patch.dict(os.environ, {"FAKE_LEAK": ""}):
-                    runner.cleanup_batch(output)
-            return {
-                "passed": passed,
-                "receipts": [
+                if condition == "missing-artifact":
+                    artifacts = []
+                elif condition == "extra-artifact":
+                    artifacts.append({"id": "image:dashboard", "sha256": "d" * 64})
+                artifact_file = worker / "artifacts.json"
+                artifact_file.write_text(json.dumps(artifacts))
+                env = {
+                    "PATH": str(root / "bin") + os.pathsep + os.environ["PATH"],
+                    "FAKE_CLUSTERS": str(clusters),
+                    "FAKE_CALLS": str(worker / "calls"),
+                    "FAKE_OUTCOMES": json.dumps(outcomes or {}),
+                    "FAKE_LEAK": (
+                        "1" if condition == "leaked-cluster" and index == 0 else ""
+                    ),
+                    "CI_IMAGE_RECEIPTS": str(artifact_file),
+                    "CI_NATIVE_RECEIPTS": "",
+                    "E2E_PREBUILT_EXT_PROC_IMAGE": "verified:vllm-sr",
+                    "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE": (
+                        ""
+                        if condition == "missing-image"
+                        else "verified:provider-mocker"
+                    ),
+                }
+                if condition == "external-state":
+                    env["E2E_BATCH_STATE_ROOT"] = str(worker / "worker-volume")
+                with patch.object(runner, "ROOT", root), patch.object(
+                    runner, "actual_platform", return_value="linux/amd64"
+                ), patch.object(
+                    runner,
+                    "run_command",
+                    side_effect=bounded_command,
+                ), patch.object(
+                    runner.subprocess, "check_output", side_effect=checked
+                ), patch.dict(
+                    os.environ, env
+                ), contextlib.redirect_stdout(
+                    io.StringIO()
+                ):
+                    output = worker / "output"
+                    passed.append(runner.run_batch(batch, output))
+                    with self.assertRaises(FileExistsError):
+                        runner.run_batch(batch, output)
+                    remaining_clusters.extend(clusters.iterdir())
+                    remaining_states.extend(
+                        path for path in (output / "state").glob("*") if path.exists()
+                    )
+                    # The workflow's always-running cleanup can recover teardown.
+                    with patch.dict(os.environ, {"FAKE_LEAK": ""}):
+                        runner.cleanup_batch(output)
+                receipts.extend(
                     json.loads(path.read_text())
                     for path in sorted((output / "results").glob("*.json"))
-                ],
-                "raw": {
-                    str(path.relative_to(output / "raw")): path.read_text()
-                    for path in (output / "raw").rglob("*")
-                    if path.is_file()
-                },
-                "calls": (
-                    [
-                        json.loads(line)
-                        for line in (root / "calls").read_text().splitlines()
+                )
+                raw.update(
+                    {
+                        str(path.relative_to(output / "raw")): path.read_text()
+                        for path in (output / "raw").rglob("*")
+                        if path.is_file()
+                    }
+                )
+                calls_path = worker / "calls"
+                if calls_path.exists():
+                    calls.extend(
+                        json.loads(line) for line in calls_path.read_text().splitlines()
+                    )
+                summaries.append(json.loads((output / "summary.json").read_text()))
+                after_retry_clusters.extend(clusters.iterdir())
+                after_retry_states.extend((output / "state").glob("*"))
+            return {
+                "passed": all(passed),
+                "receipts": receipts,
+                "raw": raw,
+                "calls": calls,
+                "summaries": summaries,
+                "summary": {
+                    "failed": [
+                        item for summary in summaries for item in summary["failed"]
                     ]
-                    if (root / "calls").exists()
-                    else []
-                ),
-                "summary": json.loads((output / "summary.json").read_text()),
+                },
                 "remaining_clusters": remaining_clusters,
                 "remaining_states": remaining_states,
-                "after_retry_clusters": list(clusters.iterdir()),
-                "after_retry_states": list((output / "state").glob("*")),
+                "after_retry_clusters": after_retry_clusters,
+                "after_retry_states": after_retry_states,
             }
 
 

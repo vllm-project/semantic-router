@@ -70,7 +70,7 @@ func testLooperFusionAnalysisModes(ctx context.Context, client *kubernetes.Clien
 	}
 
 	for _, tc := range tests {
-		response, err := sendLocalChatCompletion(ctx, localPort, "MoM", tc.probe, 30*time.Second)
+		response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", tc.probe, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("fusion %s request failed: %w", tc.name, err)
 		}

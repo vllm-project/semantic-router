@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 /*
 Copyright 2025 vLLM Semantic Router.
@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -49,30 +48,22 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 		return "", err
 	}
 
-	// Embed the query once per window of itself, so a question that sits past
-	// the first window is still read, and keep each chunk's best score across
-	// those searches.
-	queryEmbeddings, err := embedding.QueryVectors(traceCtx, embedder, params.query, ragQueryWindowLimit)
+	queryEmbedding, err := embedder.Embed(traceCtx, params.query)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 
-	batches := make([][]vectorstore.SearchResult, 0, len(queryEmbeddings))
-	for _, queryEmbedding := range queryEmbeddings {
-		windowResults, searchErr := manager.Search(
-			traceCtx,
-			params.storeID,
-			queryEmbedding,
-			params.topK,
-			params.threshold,
-			params.filter,
-		)
-		if searchErr != nil {
-			return "", fmt.Errorf("vectorstore search failed: %w", searchErr)
-		}
-		batches = append(batches, windowResults)
+	results, err := manager.Search(
+		traceCtx,
+		params.storeID,
+		queryEmbedding,
+		params.topK,
+		params.threshold,
+		params.filter,
+	)
+	if err != nil {
+		return "", fmt.Errorf("vectorstore search failed: %w", err)
 	}
-	results := vectorstore.MergeSearchResults(params.topK, batches...)
 
 	results, err = r.rerankVectorStoreResults(traceCtx, ctx, ragConfig, params.query, results)
 	if err != nil {

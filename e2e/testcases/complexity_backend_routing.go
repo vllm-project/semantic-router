@@ -59,7 +59,7 @@ func testComplexityBackendRouting(ctx context.Context, client *kubernetes.Client
 	for _, tc := range cases {
 		prompt := fmt.Sprintf("__COMPLEXITY_SCORE__ %s route this request", tc.score)
 
-		resp, err := sendLocalChatCompletion(ctx, localPort, "auto", prompt, 30*time.Second)
+		resp, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", prompt, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("remote complexity request (score %s): %w", tc.score, err)
 		}

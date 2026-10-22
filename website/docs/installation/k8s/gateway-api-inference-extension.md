@@ -132,8 +132,8 @@ after the re-evaluated route, or verify their ordering explicitly.
   The [Istio guide](istio) shows the direct-Service version of this attachment.
 - **agentgateway:** attach an `AgentgatewayPolicy` in its pre-routing phase.
   See [agentgateway](agentgateway).
-- **Envoy AI Gateway / Envoy Gateway:** use the gateway's supported ExtProc
-  policy surface. See [Envoy AI Gateway](ai-gateway).
+- **Agent Router (formerly Envoy AI Gateway) / Envoy Gateway:** use the gateway's supported ExtProc
+  policy surface. See [Agent Router](ai-gateway).
 
 Do not apply attachment resources from one gateway implementation to another;
 their policy APIs and processing modes are not interchangeable.

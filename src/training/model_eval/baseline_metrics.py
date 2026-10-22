@@ -132,6 +132,11 @@ def summarise(
     latency = latency_percentiles(latencies)
     return {
         "metrics": metrics,
+        # Labels the split has no rows for: kept in per_label with support 0,
+        # left out of macro F1, and reported rather than scored.
+        "unsupported_labels": sorted(
+            name for name, entry in metrics["per_label"].items() if not entry["support"]
+        ),
         "discrimination": separation,
         "calibration": calibration_metrics(truth, predicted, scores, bin_count),
         "abstention": abstention,

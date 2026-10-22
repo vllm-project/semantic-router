@@ -142,6 +142,7 @@ class PerformanceWorkflowTests(unittest.TestCase):
                 self.assertNotIn("measurements completed", summary)
 
     def test_advisory_comparison_keeps_inventory_and_model_baseline(self) -> None:
+        self.assertEqual(self.by_id["looper"]["if"], "${{ always() && !cancelled() }}")
         comparison = self.by_id["comparison"]["run"]
         self.assertIn("--inventory=", comparison)
         self.assertIn("--model-baseline=", comparison)

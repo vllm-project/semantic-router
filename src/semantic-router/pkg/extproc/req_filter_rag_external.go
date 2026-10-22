@@ -89,112 +89,60 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("invalid external API RAG config: %w", err)
 	}
 
-	// Build one request per window of the query for the formats that search by
-	// vector, so a long query is not searched by its opening alone.
-	var requestBodies [][]byte
-	var buildErr error
-
+	var requestBody []byte
 	switch apiConfig.RequestFormat {
 	case "pinecone", "weaviate":
-		var queryEmbeddings [][]float32
-		queryEmbeddings, buildErr = r.ragQueryEmbeddings(traceCtx, ctx.UserContent, ctx)
-		for _, queryEmbedding := range queryEmbeddings {
-			var body []byte
-			if apiConfig.RequestFormat == "pinecone" {
-				body, buildErr = r.buildPineconeRequest(queryEmbedding, ragConfig)
-			} else {
-				body, buildErr = r.buildWeaviateRequest(queryEmbedding, ragConfig)
-			}
-			if buildErr != nil {
-				break
-			}
-			requestBodies = append(requestBodies, body)
-		}
+		requestBody, err = r.buildVectorSearchRequest(traceCtx, ctx, ragConfig, apiConfig.RequestFormat)
 	case "elasticsearch":
-		var body []byte
-		body, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
-		requestBodies = [][]byte{body}
+		requestBody, err = r.buildElasticsearchRequest(ctx, ragConfig)
 	case "custom":
-		var body []byte
-		body, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
-		requestBodies = [][]byte{body}
+		requestBody, err = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
 	default:
 		return "", fmt.Errorf("unsupported request format: %s", apiConfig.RequestFormat)
 	}
-
-	if buildErr != nil {
-		return "", fmt.Errorf("failed to build request: %w", buildErr)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request: %w", err)
 	}
 
+	apiResponse, latency, err := r.sendExternalRAGRequest(traceCtx, apiConfig, requestBody)
+	if err != nil {
+		return "", err
+	}
+	ctx.RAGRetrievalLatency = latency
+	documents, err := r.extractDocumentsFromResponse(apiResponse, apiConfig.RequestFormat)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract context: %w", err)
+	}
+	if len(documents) == 0 {
+		return "", fmt.Errorf("no content found in %s response", apiConfig.RequestFormat)
+	}
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
 	}
-
-	documents, totalLatency, err := r.retrieveExternalRAGWindows(traceCtx, apiConfig, requestBodies, topK)
-	if err != nil {
-		return "", err
-	}
-	ctx.RAGRetrievalLatency = totalLatency
-
-	if len(documents) == 0 {
-		return "", fmt.Errorf("no content found in %s response", apiConfig.RequestFormat)
-	}
-
-	logging.Infof("Retrieved %d documents from external API over %d query window(s) (latency: %.3fs, format: %s)",
-		len(documents), len(requestBodies), totalLatency, apiConfig.RequestFormat)
-	return strings.Join(documents, "\n\n---\n\n"), nil
-}
-
-// retrieveExternalRAGWindows sends the query-window requests and combines their
-// results. Vector-search formats are merged by score; single-request formats
-// retain their existing first-seen behavior.
-func (r *OpenAIRouter) retrieveExternalRAGWindows(
-	traceCtx context.Context,
-	apiConfig *config.ExternalAPIRAGConfig,
-	requestBodies [][]byte,
-	topK int,
-) ([]string, float64, error) {
-	rankByScore := apiConfig.RequestFormat == "pinecone" || apiConfig.RequestFormat == "weaviate"
-	var rankedDocuments ragHits
-	var documents []string
-	seen := make(map[string]struct{})
-	var totalLatency float64
-	for _, requestBody := range requestBodies {
-		apiResponse, latency, sendErr := r.sendExternalRAGRequest(traceCtx, apiConfig, requestBody)
-		totalLatency += latency
-		if sendErr != nil {
-			return nil, totalLatency, sendErr
-		}
-		windowDocuments, windowScores, extractErr := r.extractDocumentsFromResponse(apiResponse, apiConfig.RequestFormat)
-		if extractErr != nil {
-			return nil, totalLatency, fmt.Errorf("failed to extract context: %w", extractErr)
-		}
-		if rankByScore {
-			rankedDocuments.add(windowDocuments, windowScores)
-			continue
-		}
-		for _, document := range windowDocuments {
-			if _, duplicate := seen[document]; duplicate {
-				continue
-			}
-			seen[document] = struct{}{}
-			documents = append(documents, document)
-		}
-	}
-
-	if rankByScore {
-		documents, _ = rankedDocuments.top(topK)
-	}
 	if topK > 0 && len(documents) > topK {
 		documents = documents[:topK]
 	}
-	return documents, totalLatency, nil
+
+	logging.Infof("Retrieved %d documents from external API (latency: %.3fs, format: %s)",
+		len(documents), latency, apiConfig.RequestFormat)
+	return strings.Join(documents, "\n\n---\n\n"), nil
+}
+
+// buildVectorSearchRequest embeds the query for the formats that search by vector.
+func (r *OpenAIRouter) buildVectorSearchRequest(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig, format string) ([]byte, error) {
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, ctx.UserContent, ctx)
+	if err != nil {
+		return nil, err
+	}
+	if format == "pinecone" {
+		return r.buildPineconeRequest(queryEmbedding, ragConfig)
+	}
+	return r.buildWeaviateRequest(queryEmbedding, ragConfig)
 }
 
 // sendExternalRAGRequest posts one request body and decodes the response,
-// returning how long the call took so a caller that sends several can report
-// their total.
+// returning how long the call took.
 func (r *OpenAIRouter) sendExternalRAGRequest(traceCtx context.Context, apiConfig *config.ExternalAPIRAGConfig, requestBody []byte) (map[string]interface{}, float64, error) {
 	req, err := http.NewRequestWithContext(traceCtx, "POST", apiConfig.Endpoint, bytes.NewBuffer(requestBody))
 	if err != nil {
@@ -400,8 +348,8 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 	return []byte(replaced), nil
 }
 
-// extractDocumentsFromResponse extracts documents and ranking scores from an API response.
-func (r *OpenAIRouter) extractDocumentsFromResponse(response map[string]interface{}, format string) ([]string, []float32, error) {
+// extractDocumentsFromResponse extracts the retrieved documents from an API response.
+func (r *OpenAIRouter) extractDocumentsFromResponse(response map[string]interface{}, format string) ([]string, error) {
 	switch format {
 	case "pinecone":
 		return r.extractPineconeContext(response)
@@ -412,10 +360,10 @@ func (r *OpenAIRouter) extractDocumentsFromResponse(response map[string]interfac
 	case "custom":
 		// For custom format, assume response has a "content" or "text" field
 		if content, ok := response["content"].(string); ok {
-			return []string{content}, nil, nil
+			return []string{content}, nil
 		}
 		if text, ok := response["text"].(string); ok {
-			return []string{text}, nil, nil
+			return []string{text}, nil
 		}
 		// Try to extract from results array
 		if results, ok := response["results"].([]interface{}); ok {
@@ -429,97 +377,76 @@ func (r *OpenAIRouter) extractDocumentsFromResponse(response map[string]interfac
 					}
 				}
 			}
-			return parts, nil, nil
+			return parts, nil
 		}
-		return nil, nil, fmt.Errorf("unable to extract context from custom response format")
+		return nil, fmt.Errorf("unable to extract context from custom response format")
 	default:
-		return nil, nil, fmt.Errorf("unknown response format: %s", format)
+		return nil, fmt.Errorf("unknown response format: %s", format)
 	}
 }
 
 // extractPineconeContext extracts context from Pinecone response
-func (r *OpenAIRouter) extractPineconeContext(response map[string]interface{}) ([]string, []float32, error) {
+func (r *OpenAIRouter) extractPineconeContext(response map[string]interface{}) ([]string, error) {
 	matches, ok := response["matches"].([]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no matches in Pinecone response")
+		return nil, fmt.Errorf("no matches in Pinecone response")
 	}
 
 	var parts []string
-	var scores []float32
 	for _, match := range matches {
 		if matchMap, ok := match.(map[string]interface{}); ok {
 			if metadata, ok := matchMap["metadata"].(map[string]interface{}); ok {
-				var content string
-				if value, ok := metadata["content"].(string); ok {
-					content = value
+				if content, ok := metadata["content"].(string); ok {
+					parts = append(parts, content)
 				} else if text, ok := metadata["text"].(string); ok {
-					content = text
-				} else {
-					continue
+					parts = append(parts, text)
 				}
-				score, ok := matchMap["score"].(float64)
-				if !ok {
-					return nil, nil, fmt.Errorf("pinecone match for %q has no numeric score", content)
-				}
-				parts = append(parts, content)
-				scores = append(scores, float32(score))
 			}
 		}
 	}
 
-	return parts, scores, nil
+	return parts, nil
 }
 
 // extractWeaviateContext extracts context from Weaviate response
-func (r *OpenAIRouter) extractWeaviateContext(response map[string]interface{}) ([]string, []float32, error) {
+func (r *OpenAIRouter) extractWeaviateContext(response map[string]interface{}) ([]string, error) {
 	data, ok := response["data"].(map[string]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no data in Weaviate response")
+		return nil, fmt.Errorf("no data in Weaviate response")
 	}
 
 	get, ok := data["Get"].(map[string]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no Get in Weaviate response")
+		return nil, fmt.Errorf("no Get in Weaviate response")
 	}
 
 	document, ok := get["Document"].([]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no Document in Weaviate response")
+		return nil, fmt.Errorf("no Document in Weaviate response")
 	}
 
 	var parts []string
-	var scores []float32
 	for _, doc := range document {
 		if docMap, ok := doc.(map[string]interface{}); ok {
 			if content, ok := docMap["content"].(string); ok {
-				additional, ok := docMap["_additional"].(map[string]interface{})
-				if !ok {
-					return nil, nil, fmt.Errorf("weaviate document %q has no _additional data", content)
-				}
-				distance, ok := additional["distance"].(float64)
-				if !ok {
-					return nil, nil, fmt.Errorf("weaviate document %q has no numeric distance", content)
-				}
 				parts = append(parts, content)
-				// Weaviate distance is lower-is-better; ragHits expects higher scores.
-				scores = append(scores, -float32(distance))
 			}
 		}
 	}
 
-	return parts, scores, nil
+	return parts, nil
 }
 
 // extractElasticsearchContext extracts context from Elasticsearch response
-func (r *OpenAIRouter) extractElasticsearchContext(response map[string]interface{}) ([]string, []float32, error) {
+func (r *OpenAIRouter) extractElasticsearchContext(response map[string]interface{}) ([]string, error) {
 	hits, ok := response["hits"].(map[string]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no hits in Elasticsearch response")
+		return nil, fmt.Errorf("no hits in Elasticsearch response")
 	}
 
 	hitsArray, ok := hits["hits"].([]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no hits array in Elasticsearch response")
+		return nil, fmt.Errorf("no hits array in Elasticsearch response")
 	}
 
 	var parts []string
@@ -535,5 +462,5 @@ func (r *OpenAIRouter) extractElasticsearchContext(response map[string]interface
 		}
 	}
 
-	return parts, nil, nil
+	return parts, nil
 }
