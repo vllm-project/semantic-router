@@ -1,4 +1,4 @@
-"""oneDNN's pre-packed FP32 linear: the ``linear`` slot's ``float32-packed`` variant on x86 CPUs.
+"""oneDNN's pre-packed FP32 linear: the ``linear`` slot's ``float32-packed`` CPU variant.
 
 The weight is reordered once, at load. On EPYC its GEMMs are 2.5-4.4x faster
 than ``F.linear`` (MKL) at every batch size, a row's result is the same alone
@@ -18,7 +18,7 @@ PACKED = "float32-packed"
 
 def available() -> bool:
     """Whether this host and PyTorch build run the packed linear."""
-    if platform.machine().lower() not in ("x86_64", "amd64"):
+    if platform.machine().lower() not in ("x86_64", "amd64", "aarch64", "arm64"):
         return False
     if not torch.backends.mkldnn.is_available():
         return False
@@ -30,7 +30,7 @@ def available() -> bool:
 
 
 class PackedLinear(nn.Module):
-    """An FP32 ``nn.Linear`` whose weight oneDNN reordered once (x86 CPUs)."""
+    """An FP32 ``nn.Linear`` whose weight oneDNN reordered once."""
 
     packed: torch.Tensor
 

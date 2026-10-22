@@ -1,8 +1,11 @@
 """Reduced copies of an encoder's linear layers, which batches that merge requests run."""
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 from torch import nn
+from vllm_srun.accel import onednn
 from vllm_srun.accel.onednn import PackedLinear
 from vllm_srun.engines.native.reduced import (
     linear_bytes,
@@ -13,6 +16,18 @@ from vllm_srun.engines.native.reduced import (
 from .test_modernbert import CONFIGS, batch, native
 
 CPU = torch.device("cpu")
+
+
+@pytest.mark.parametrize("machine", ["aarch64", "arm64"])
+def test_packed_linear_is_available_on_arm64(monkeypatch, machine):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: machine)
+    monkeypatch.setattr(onednn.torch.backends.mkldnn, "is_available", lambda: True)
+    monkeypatch.setattr(
+        onednn.torch.ops,
+        "mkldnn",
+        SimpleNamespace(_linear_pointwise=object()),
+    )
+    assert onednn.available()
 
 
 def runnable(kind):
