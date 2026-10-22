@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 协议中立编解码矩阵
 description: 定义 Router 数据面使用的协议中立请求、响应、错误和流式边界。
 created: 2026-02-18

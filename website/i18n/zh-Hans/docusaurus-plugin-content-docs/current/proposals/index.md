@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 提案
 description: vLLM Semantic Router 的设计提案、概念验证探索、实现记录和架构决策。
 translation:

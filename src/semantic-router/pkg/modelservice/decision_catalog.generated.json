@@ -127,6 +127,15 @@
       ]
     },
     {
+      "id": "vllm-sr/d3-turbo",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
       "id": "vllm-sr/d3-flash",
       "family": "decision3",
       "question_types": [

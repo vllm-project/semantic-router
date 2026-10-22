@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 安全加固
 description: 保护推理监听器、控制面板、凭据、回放数据、存储和容器运行时访问。
 translation:
