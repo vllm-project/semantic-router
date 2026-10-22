@@ -66,6 +66,12 @@ class CIStatusWorkflowTests(unittest.TestCase):
         validate_status_publisher(self.workflows, errors)
         self.assertTrue(any("token permissions" in error for error in errors))
 
+    def test_issue_write_does_not_replace_pr_feedback_write_permission(self) -> None:
+        self.publisher.jobs["publish"]["permissions"]["pull-requests"] = "read"
+        errors: list[str] = []
+        validate_status_publisher(self.workflows, errors)
+        self.assertTrue(any("token permissions" in error for error in errors))
+
     def test_bootstrap_probe_cannot_use_the_checkout_tree(self) -> None:
         steps = self.workflows["ci-changes.yml"].jobs["plan"]["steps"]
         probe = next(step for step in steps if step.get("id") == "publisher")

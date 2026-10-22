@@ -326,7 +326,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | `artifact`、`revision` | 部署 | Hub 仓库和 commit，或本地绝对路径。 |
 | `device` | 部署 | 见[让 router 来跑模型](./deploy.md#describe-a-deployment)。 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 部署 | 部署的[引擎参数](./engine-args.md)；没设的保持 runtime 默认值。 |
-| `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。 |
+| `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。这也包括默认决策模型、直接发布给 System One 的部署，以及本地 System One 别名的部署，不论监听器是否发布该别名。路由的 System One 入口不是一个部署。不属于这些情况的任务绑定仍保留任务模型的输入上限。 |
 | `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：路由信号走 `on_error`，安全信号按未扫描处理。 |
 | `on_unscanned` | `modules.prompt_guard`、`modules.classifier.pii` | `block`（默认）：模型没整读的内容，规则匹配为 `unscanned`。`allow`：跟随 `on_error`。 |
 | `process` | 部署 | 同名的托管部署共用一个进程。 |
