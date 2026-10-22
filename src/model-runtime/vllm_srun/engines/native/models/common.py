@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
+from ..quantized import project
 from .branch import Branches, StaticBranches, branch_attention, is_branches
 from .packed import Packed, is_packed, packed_attention
 from .tree import Tree, is_tree, tree_attention
@@ -78,7 +79,8 @@ class GatedMLP(nn.Module):
         self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out: torch.Tensor = self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+        gate, up = project(x, self.gate_proj, self.up_proj)
+        out: torch.Tensor = self.down_proj(F.silu(gate) * up)
         return out
 
 

@@ -157,7 +157,8 @@ them. The options are `deadline_ms` (a number greater than 0),
 `invalid_request` and a message that names it. A request the Router sends to
 its model directly waits 30 seconds for the answer, or its `deadline_ms` when
 that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
-minutes, by default). `options.profile` was removed in
+minutes, by default); a `long_context` request without `deadline_ms` waits
+that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
 runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
 and `meta` reports `dtype` and `numerics` instead of `profile`.
@@ -336,6 +337,18 @@ The Router logs each of these failures at `WARN`, under the request's
 the recipe and decision it reached, and the error. Anthropic Messages clients
 get the same status and message in Anthropic's error envelope, which has no
 code field.
+
+When routing decision processing exceeds its deadline, the Router returns
+`504` with `request_timeout` and the message `request timed out`. A canceled
+decision returns `500` with `request_canceled` and the message `request canceled`
+if the connection still permits a response. Both use `server_error` in OpenAI
+Chat Completions and Responses. Anthropic Messages uses `timeout_error` for the
+deadline and `api_error` for cancellation. A disconnected client may receive no
+response.
+
+Router-generated immediate responses preserve HTTP status codes supported by
+Envoy. Unsupported or invalid status codes fall back to `500`; an error body
+is never intentionally sent with a success status.
 
 ## Request budget errors
 

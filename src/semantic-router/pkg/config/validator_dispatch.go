@@ -59,6 +59,7 @@ var (
 		validateLanguageContracts,
 		validateActionContracts,
 		validateContextContracts,
+		validateContextCapacity,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,

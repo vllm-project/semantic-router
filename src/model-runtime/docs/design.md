@@ -905,7 +905,19 @@ kernel per call (plain torch on a CPU) and multiplies in BF16, which keeps the
 memory but not the time; NVFP4 quantizes the activations with one Triton kernel
 that writes their scales in cuBLAS's layout and multiplies in
 `torch.nn.functional.scaled_mm` with 1x16 block scales, which needs FP4 tensor
-cores (a Blackwell GPU). A
+cores (a Blackwell GPU). At load, NVFP4 projections of one input (q / k / v,
+gate / up) whose input and weight global scales agree are merged into one
+layer (`merge_siblings`): one quantization and one product per group, each
+part keeping views of the merged weight so device memory stays the same, and
+its outputs reaching the fused kernels as column-slice views. Projections that
+share only the input global scale (`in_proj_qkv` / `in_proj_z`) share its
+quantization (`project`). Each column is the one its separate product gives, so
+answers do not change. With approximate kernels on compute capability 12.x,
+graph captures of up to 512 rows multiply in FlashInfer's CUTLASS FP4 GEMM
+instead, where FlashInfer is installed and can tune its tiles (it compiles a
+delay kernel for its tuner with a CUDA 12.9 or later toolkit), each weight
+shape checked against cuBLAS first (`accel/flashinfer_nvfp4.py`,
+`use_flashinfer`); the receipt's `nvfp4_product` says which runs and why. A
 quantized package is its own model: its manifest's parameter counts are the
 logical ones, placement counts its files, and its answers are compared with
 the BF16 package's in `docs/records/decision3-quantized.md`.
@@ -984,8 +996,12 @@ lane (a running average of that lane's recent forwards). Short work goes first, 
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
-waits for the forward in flight, not for the remaining windows of a long one;
-each job is answered as soon as its own batches have run. The order of
+waits for the forward in flight, not for the remaining windows of a long one.
+It plans them together with the jobs of planned batches that have not started,
+so requests that wait for the device share forwards up to the budget instead of
+keeping the batches their arrival formed; a started batch, a job split over
+forwards once one of them ran, and reference forwards keep their plan. Each job
+is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
@@ -1142,8 +1158,8 @@ answers their panels byte for byte. The official wheel still provides torch's
 Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
 ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
 machine code is the released build's. It carries
-code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
-`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for gfx90a, gfx942, gfx950 and gfx1151 (Instinct MI200, MI300 and
+MI350, and Ryzen AI Max; `CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
 code for rather than falling back. Triton's compiled kernels and
 MIOpen's databases live in the model volume, since the charts run the router
 on a read-only root without a home directory.
