@@ -471,6 +471,101 @@ def test_decision_window_input_is_a_supported_scan_budget():
     assert _errors(document) == []
 
 
+def _ask_the_default_decision_model(document):
+    for rule in document["routing"]["signals"]["decision"]:
+        del rule["deployment"]
+    del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+    document["global"]["model_catalog"]["system"] = {
+        "decision_model": {"deployment": "decision-kai"}
+    }
+
+
+def test_default_decision_model_rejects_a_task_input_budget():
+    def mutate(document):
+        _ask_the_default_decision_model(document)
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 32768,
+            "overflow": "reject",
+        }
+
+    assert any("never truncate" in error for error in _errors(_config(mutate)))
+
+
+def test_default_decision_model_accepts_a_scan_budget():
+    def mutate(document):
+        _ask_the_default_decision_model(document)
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 4096,
+            "overflow": "window",
+        }
+
+    assert _errors(_config(mutate)) == []
+
+
+@pytest.mark.parametrize(
+    "budget",
+    [
+        {"max_tokens": 32768, "overflow": "reject"},
+        {"max_tokens": 512, "overflow": "truncate"},
+    ],
+)
+def test_systemone_publication_rejects_a_task_input_budget(budget):
+    def publish(document):
+        document["listeners"][0]["systemone"] = {
+            "models": ["vllm-sr/Decision-2.0-Kai-0.6B"]
+        }
+        document["global"]["model_catalog"]["deployments"]["decision-kai"][
+            "input"
+        ] = budget
+
+    def alias(document):
+        publish(document)
+        document["providers"]["models"].append(
+            {
+                "name": "judge",
+                "api_format": "systemone",
+                "deployment": "decision-kai",
+            }
+        )
+        document["listeners"][0]["systemone"] = {"models": ["judge"]}
+
+    for mutate in (publish, alias):
+        assert any("never truncate" in error for error in _errors(_config(mutate)))
+
+
+def test_systemone_publication_accepts_a_scan_budget():
+    def mutate(document):
+        document["listeners"][0]["systemone"] = {
+            "models": ["vllm-sr/Decision-2.0-Kai-0.6B"]
+        }
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 4096,
+            "overflow": "window",
+        }
+
+    assert _errors(_config(mutate)) == []
+
+
+def test_systemone_publication_rejects_a_classifier_task_input():
+    def mutate(document):
+        document["global"]["model_catalog"]["deployments"]["vela-domain"] = {
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+            "device": "cpu",
+            "public_name": "encoder-public",
+            "input": {"max_tokens": 512, "overflow": "truncate"},
+        }
+        document["global"]["model_catalog"]["bindings"] = {
+            "domain_classifier": {
+                "deployment": "vela-domain",
+                "contract": "label_distribution.v1",
+            }
+        }
+        document["listeners"][0]["systemone"] = {"models": ["encoder-public"]}
+
+    assert any("never truncate" in error for error in _errors(_config(mutate)))
+
+
 @pytest.mark.parametrize(
     "replicas",
     [
