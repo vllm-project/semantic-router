@@ -282,6 +282,10 @@ func setCoreEnums(root *jsonschema.Schema) {
 		string(routerconfig.RuleOnUnknownMatch),
 		string(routerconfig.RuleOnUnknownFailRequest),
 	})
+	setDefinitionPropertyEnum(root, "RuleNode", "on_error", []string{
+		routerconfig.RuleOnErrorNoMatch,
+		routerconfig.RuleOnErrorMatch,
+	})
 	setDefinitionPropertyEnum(root, "ProjectionScoreInput", "type", routerconfig.SupportedProjectionInputTypes())
 	setDefinitionPropertyEnum(root, "InputModalityRule", "modality", routerconfig.SupportedInputModalities())
 	setDefinitionPropertyEnum(root, "ActionRule", "name", routerconfig.SupportedActions())

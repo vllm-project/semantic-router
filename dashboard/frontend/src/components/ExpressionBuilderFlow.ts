@@ -9,7 +9,7 @@ export interface FlowNodeData {
   label: string
   isOperator: boolean
   depth?: number
-  /** The most severe validation issue anchored to this node. */
+  /** The most severe editor issue anchored to this node. */
   issue?: RuleIssue['severity']
   onDoubleClick?: (path: NodePath) => void
   onDropOnNode?: (targetPath: NodePath, data: DragData) => void

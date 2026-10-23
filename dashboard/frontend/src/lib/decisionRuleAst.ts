@@ -10,6 +10,8 @@
  * one-child groups and wraps single-leaf roots.
  */
 
+import { ROUTER_CONFIG_SCHEMA } from '@/generated/routerConfigContract'
+
 import type {
   DecisionCondition,
   DecisionRuleSet,
@@ -21,6 +23,14 @@ export type { NumericPredicate }
 export type RuleOperator = 'AND' | 'OR' | 'NOT'
 export type RuleOnError = 'match' | 'no_match'
 export type RuleOnUnknown = 'no_match' | 'match' | 'fail_request'
+
+// Option lists come from the generated Router config schema, not a copy here.
+const RULE_NODE_PROPERTIES = ROUTER_CONFIG_SCHEMA.$defs.RuleNode.properties
+export const RULE_ON_ERROR_VALUES = RULE_NODE_PROPERTIES.on_error.enum as RuleOnError[]
+export const RULE_ON_UNKNOWN_VALUES = RULE_NODE_PROPERTIES.on_unknown.enum as RuleOnUnknown[]
+export const RULE_PREDICATE_KEYS = Object.keys(
+  ROUTER_CONFIG_SCHEMA.$defs.NumericPredicate.properties,
+) as Array<keyof NumericPredicate>
 
 export interface RuleLeaf {
   id?: string
@@ -64,16 +74,11 @@ export type RuleGroupNode = Exclude<RuleNode, RuleLeaf>
 export type SignalDescriptor = {
   signalType: string
   name: string
-  /** Classifier labels or decision-question option keys. */
+  /** Classifier labels or decision-question option keys, offered as suggestions. */
   labels?: string[]
-  labelRequired?: boolean
-  labelForbidden?: boolean
-  /** False when a label_scores.v1 operating point supplies the threshold. */
-  predicateRequired?: boolean
-  localClassifier?: boolean
 }
 
-/** One validation or serialization finding, anchored to a tree node. */
+/** A finding the editor reports to its host, anchored to a tree node. */
 export interface RuleIssue {
   nodeId?: string
   path: number[]
@@ -95,7 +100,6 @@ export interface DecisionRuleDocument {
 
 const LEAF_KEYS = new Set(['type', 'name', 'label', 'predicate', 'on_error'])
 const GROUP_KEYS = new Set(['operator', 'conditions'])
-const PREDICATE_KEYS = ['gt', 'gte', 'lt', 'lte'] as const
 
 let ruleNodeCounter = 0
 
@@ -143,8 +147,8 @@ export function describePredicate(predicate: NumericPredicate | undefined): stri
 }
 
 function sortIndex(key: string): number {
-  const index = (PREDICATE_KEYS as readonly string[]).indexOf(key)
-  return index === -1 ? PREDICATE_KEYS.length : index
+  const index = (RULE_PREDICATE_KEYS as readonly string[]).indexOf(key)
+  return index === -1 ? RULE_PREDICATE_KEYS.length : index
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -206,8 +210,8 @@ function withoutNullFields(raw: Record<string, unknown>): Record<string, unknown
 function canonicalToNode(input: unknown, root: boolean): RuleNode {
   const raw = isPlainObject(input) ? withoutNullFields(input) : input
   if (!isPlainObject(raw)) {
-    // A non-object child cannot be modelled; keep it verbatim so validation
-    // can reject it and a save never drops it.
+    // A non-object child cannot be modelled; keep it verbatim so the Router
+    // rejects it on save instead of the save dropping it.
     return { id: newRuleNodeId(), signalType: '', signalName: '', extra: { value: raw } }
   }
   if (isLeafShaped(raw)) return canonicalToLeaf(raw, root)
@@ -220,7 +224,7 @@ function canonicalToNode(input: unknown, root: boolean): RuleNode {
   if (rawConditions !== undefined && !Array.isArray(rawConditions)) extra.conditions = rawConditions
   if (raw.operator !== undefined && typeof raw.operator !== 'string') extra.operator = raw.operator
   // Go trims and upper-cases the operator and defaults an omitted one to AND.
-  // An unsupported operator is kept verbatim so validation can name it.
+  // An unsupported operator is kept verbatim so the Router can name it.
   const operator = (normalizeOperator(raw.operator) || 'AND') as RuleOperator
   for (const [key, value] of Object.entries(raw)) {
     if (GROUP_KEYS.has(key) || LEAF_KEYS.has(key) || value === undefined) continue
@@ -276,11 +280,11 @@ function withOptional(
 
 function predicateToCanonical(predicate: NumericPredicate): NumericPredicate {
   const out: Record<string, unknown> = {}
-  for (const key of PREDICATE_KEYS) {
+  for (const key of RULE_PREDICATE_KEYS) {
     if (typeof predicate[key] === 'number') out[key] = predicate[key]
   }
   // Non-numeric or unknown predicate keys are invalid, but are written back
-  // so validation can report them instead of the save dropping them.
+  // so the Router reports them instead of the save dropping them.
   for (const [key, value] of Object.entries(predicate)) {
     if (value === undefined || hasOwn(out, key)) continue
     out[key] = value
@@ -315,7 +319,7 @@ export function ruleDocumentToCanonical(doc: DecisionRuleDocument): CanonicalRul
   const out: Record<string, unknown> = doc.tree ? { ...nodeToCanonical(doc.tree) } : {}
   if (doc.onUnknown !== undefined) out.on_unknown = doc.onUnknown
   // Unknown keys read from an empty root stay on the root after the first
-  // condition is added, so validation keeps reporting them instead of a save
+  // condition is added, so the Router keeps reporting them instead of a save
   // dropping them.
   for (const [key, value] of Object.entries(doc.rootExtra ?? {})) {
     if (value !== undefined && !hasOwn(out, key)) out[key] = value

@@ -299,3 +299,20 @@ test('Tab stays inside the fullscreen rule editor', async ({ page }) => {
     expect(await focusInOverlay()).toBe(true)
   }
 })
+
+test('a rule the Router rejects keeps the dialog open with the Router error', async ({ page }) => {
+  const saved: SavedConfig[] = []
+  await mockStatefulConfig(page, saved)
+  // The update handler parses the config with the Router's validators and
+  // answers 400 with their error, as the dashboard backend does.
+  const routerError =
+    'Config validation failed: routing recipe "balanced": decision "balanced-route": rules.conditions[1]: NOT requires exactly one child condition, got 2'
+  await page.route('**/api/router/config/update', (route) =>
+    route.fulfill({ status: 400, contentType: 'text/plain', body: routerError }),
+  )
+  const editor = await openBalancedRouteEditor(page)
+
+  await editor.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(editor.getByText(routerError)).toBeVisible()
+  await expect(editor).toBeVisible()
+})

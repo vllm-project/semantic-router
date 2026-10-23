@@ -4,7 +4,7 @@ import ExpressionBuilder from "@/components/ExpressionBuilder";
 import {
   blockingRuleIssues,
   type RuleIssue,
-} from "@/lib/decisionRuleValidation";
+} from "@/lib/decisionRuleIssues";
 import type { DSLFieldObject } from "@/types/dsl";
 import {
   ALGORITHM_DESCRIPTIONS,

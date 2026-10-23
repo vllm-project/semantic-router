@@ -11,7 +11,7 @@ import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import { getAlgorithmFieldSchema, getPluginFieldSchema } from '../lib/dslSchemas'
 import type { RuleIssue } from '../lib/decisionRuleAst'
-import { decisionRuleSignalScope } from '../lib/decisionRuleSignals'
+import { decisionRuleSignalDescriptors } from '../lib/decisionRuleSignals'
 import type {
   ConfigData,
   DecisionConfig,
@@ -94,20 +94,15 @@ export default function ConfigPageDecisionsSection({
     setDecisionDeleteError(null)
   }, [selectedScopeId])
   const decisions = scopedConfig?.decisions || []
-  // Rules reference the selected scope's signals only: a named recipe never
-  // sees the root profile's declarations, and Go rejects an undeclared one.
-  const ruleSignalScope = useMemo(
+  // The picker offers the selected scope's signals only: a named recipe never
+  // sees the root profile's declarations.
+  const ruleSignals = useMemo(
     () =>
-      decisionRuleSignalScope(
-        {
-          signals: scopedConfig?.signals ?? scopedConfig?.routing?.signals,
-          projections: scopedConfig?.projections ?? scopedConfig?.routing?.projections,
-          model_bindings: scopedConfig?.routing?.model_bindings,
-          global_model_bindings: config?.global?.model_catalog?.bindings,
-        },
-        { strictNames: true },
-      ),
-    [scopedConfig, config?.global?.model_catalog?.bindings],
+      decisionRuleSignalDescriptors({
+        signals: scopedConfig?.signals ?? scopedConfig?.routing?.signals,
+        projections: scopedConfig?.projections ?? scopedConfig?.routing?.projections,
+      }),
+    [scopedConfig],
   )
   // The open editor's latest issues, including an incomplete raw expression.
   const rulesIssuesRef = useRef<RuleIssue[]>([])
@@ -438,7 +433,7 @@ export default function ConfigPageDecisionsSection({
           <ConfigPageDecisionRulesEditor
             value={(value as DecisionFormState['rules']) || {}}
             onChange={(nextValue) => onChange(nextValue)}
-            signalScope={ruleSignalScope}
+            availableSignals={ruleSignals}
             onIssuesChange={(issues) => {
               rulesIssuesRef.current = issues
             }}
@@ -594,7 +589,7 @@ export default function ConfigPageDecisionsSection({
 
       const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-      const rules = decisionRulesForSave(formData.rules, ruleSignalScope, rulesIssuesRef.current)
+      const rules = decisionRulesForSave(formData.rules, rulesIssuesRef.current)
       const modelRefs = decisionModelRefsForSave(formData.modelRefs)
       const plugins = decisionPluginsForSave(formData.plugins)
       const action = configuredObject(formData.action)

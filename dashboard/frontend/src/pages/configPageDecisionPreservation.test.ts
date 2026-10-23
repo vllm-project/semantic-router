@@ -1,22 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import type { RuleIssue } from '../lib/decisionRuleAst'
-import {
-  ON_UNKNOWN_ON_ERROR_CONFLICT_MESSAGE,
-  RAW_EXPRESSION_INCOMPLETE,
-  ruleSignalScope,
-} from '../lib/decisionRuleValidation'
+import { RAW_EXPRESSION_INCOMPLETE } from '../lib/decisionRuleIssues'
 import { decisionModelRefsForSave, decisionRulesForSave } from './configPageDecisionFormSupport'
 import { mergeDecisionForSave, replaceDecisionByName, type DecisionConfig } from './configPageSupport'
-
-const scope = ruleSignalScope(
-  [
-    { signalType: 'keyword', name: 'complex' },
-    { signalType: 'metadata', name: 'canary' },
-    { signalType: 'classifier', name: 'risk', labels: ['RISKY'], labelRequired: true },
-  ],
-  true,
-)
 
 describe('decision editor preservation', () => {
   it('preserves prompt algorithms and non-form fields during edits', () => {
@@ -81,51 +68,14 @@ describe('decision editor preservation', () => {
       ],
     }
 
-    const result = decisionRulesForSave(existing, scope)
+    const result = decisionRulesForSave(existing)
 
     expect(result).toEqual(existing)
     expect(result).not.toBe(existing)
   })
 
-  it('rejects a root unknown policy combined with a classifier on_error policy', () => {
-    expect(() =>
-      decisionRulesForSave(
-        {
-          operator: 'AND',
-          on_unknown: 'fail_request',
-          conditions: [
-            { type: 'classifier', name: 'risk', label: 'RISKY', predicate: { gte: 0.8 }, on_error: 'match' },
-          ],
-        },
-        scope,
-      ),
-    ).toThrow(ON_UNKNOWN_ON_ERROR_CONFLICT_MESSAGE)
-  })
-
-  it('rejects a single-leaf root combining on_error and on_unknown', () => {
-    expect(() =>
-      decisionRulesForSave(
-        { type: 'classifier', name: 'risk', label: 'RISKY', predicate: { gte: 0.8 }, on_error: 'match', on_unknown: 'fail_request' },
-        scope,
-      ),
-    ).toThrow(ON_UNKNOWN_ON_ERROR_CONFLICT_MESSAGE)
-  })
-
-  it('rejects on_error on a composite root', () => {
-    expect(() =>
-      decisionRulesForSave(
-        {
-          operator: 'AND',
-          on_error: 'match',
-          conditions: [{ type: 'keyword', name: 'complex' }],
-        },
-        scope,
-      ),
-    ).toThrow(/only apply to leaf conditions/)
-  })
-
   it('keeps a single root condition and unconditional rules', () => {
-    expect(decisionRulesForSave({ type: 'keyword', name: 'complex' }, scope)).toEqual({
+    expect(decisionRulesForSave({ type: 'keyword', name: 'complex' })).toEqual({
       type: 'keyword',
       name: 'complex',
     })
@@ -136,40 +86,23 @@ describe('decision editor preservation', () => {
       predicate: { gte: 0.8 },
       on_unknown: 'no_match',
     }
-    expect(decisionRulesForSave(classifier, scope)).toEqual(classifier)
-    expect(decisionRulesForSave({}, scope)).toEqual({})
-    expect(decisionRulesForSave({ operator: 'AND', conditions: [] }, scope)).toEqual({
+    expect(decisionRulesForSave(classifier)).toEqual(classifier)
+    expect(decisionRulesForSave({})).toEqual({})
+    expect(decisionRulesForSave({ operator: 'AND', conditions: [] })).toEqual({
       operator: 'AND',
       conditions: [],
     })
   })
 
-  it('blocks a save with path-qualified, Go-equivalent errors', () => {
-    expect(() => decisionRulesForSave({ type: 'keyword' }, scope)).toThrow(
-      'signal condition of type "keyword" requires a name',
-    )
-    expect(() =>
-      decisionRulesForSave(
-        {
-          operator: 'AND',
-          conditions: [
-            { type: 'keyword', name: 'complex' },
-            { operator: 'NOT', conditions: [] },
-          ],
-        },
-        scope,
-      ),
-    ).toThrow('rules.conditions[1]: NOT requires exactly one child condition, got 0')
-    // The recipe scope is strict: an undeclared reference is an error.
-    expect(() =>
-      decisionRulesForSave({ type: 'keyword', name: 'root-only' }, scope),
-    ).toThrow('signal keyword("root-only") is not declared in this recipe')
-    expect(() =>
-      decisionRulesForSave(
-        { type: 'classifier', name: 'risk', label: 'SAFE', predicate: { gte: 0.8 } },
-        scope,
-      ),
-    ).toThrow(/requires a declared label/)
+  it('leaves rule validity to the Router', () => {
+    // The Router rejects this on_error and on_unknown conflict when the
+    // config is written; the form passes the rules through unchanged.
+    const conflicting: DecisionConfig['rules'] = {
+      operator: 'AND',
+      on_unknown: 'fail_request',
+      conditions: [{ type: 'classifier', name: 'risk', label: 'RISKY', on_error: 'match' }],
+    }
+    expect(decisionRulesForSave(conflicting)).toEqual(conflicting)
   })
 
   it('blocks a save while the editor holds an incomplete raw expression', () => {
@@ -178,13 +111,13 @@ describe('decision editor preservation', () => {
       severity: 'error',
       message: `${RAW_EXPRESSION_INCOMPLETE}: expected ")" at column 18`,
     }
-    expect(() =>
-      decisionRulesForSave({ type: 'keyword', name: 'complex' }, scope, [rawIssue]),
-    ).toThrow(/Raw expression is incomplete: expected "\)" at column 18/)
-    // Warnings and other editor issues never block on their own.
+    expect(() => decisionRulesForSave({ type: 'keyword', name: 'complex' }, [rawIssue])).toThrow(
+      /Raw expression is incomplete: expected "\)" at column 18/,
+    )
+    // Other editor issues never block on their own.
     expect(
-      decisionRulesForSave({ type: 'keyword', name: 'complex' }, scope, [
-        { path: [], severity: 'warning', message: 'advice' },
+      decisionRulesForSave({ type: 'keyword', name: 'complex' }, [
+        { path: [], severity: 'error', message: 'NOT requires exactly one child condition, got 0' },
       ]),
     ).toEqual({ type: 'keyword', name: 'complex' })
   })

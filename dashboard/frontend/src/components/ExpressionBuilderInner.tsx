@@ -32,7 +32,7 @@ import {
   type RuleNode,
   type SignalDescriptor,
 } from './ExpressionBuilderSupport'
-import { formatRuleIssuePath } from '@/lib/decisionRuleValidation'
+import { formatRuleIssuePath } from '@/lib/decisionRuleIssues'
 import { applyDagreLayout, treeToFlowElements, type FlowNodeData } from './ExpressionBuilderFlow'
 import ExpressionBuilderCanvasEmptyState from './ExpressionBuilderCanvasEmptyState'
 import ExpressionBuilderContextMenu from './ExpressionBuilderContextMenu'
@@ -499,7 +499,6 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
           ))}
         </ul>
       )}
-      {tree && issues.length === 0 && !rawError && <div className={styles.validationOk}>✓ All referenced signals exist</div>}
 
       {contextMenu && tree ? (
         <ExpressionBuilderContextMenu

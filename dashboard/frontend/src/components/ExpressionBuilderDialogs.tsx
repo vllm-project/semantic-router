@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useId, useMemo, useState } from 'react'
 
 import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
+import { RULE_ON_ERROR_VALUES } from '@/lib/decisionRuleAst'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './ExpressionBuilder.module.css'
@@ -183,7 +184,7 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
                     value={label}
                     list={descriptor?.labels?.length ? labelListId : undefined}
                     onChange={event => setLabel(event.target.value)}
-                    placeholder={descriptor?.labelForbidden ? 'This question takes no label' : 'Declared label'}
+                    placeholder="Declared label"
                   />
                   {descriptor?.labels?.length ? (
                     <datalist id={labelListId}>
@@ -201,8 +202,9 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
                     onChange={event => setOnError(event.target.value)}
                   >
                     <option value="">Not set</option>
-                    <option value="no_match">no_match</option>
-                    <option value="match">match</option>
+                    {RULE_ON_ERROR_VALUES.map(value => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
                   </select>
                 </label>
               </>

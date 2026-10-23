@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import ExpressionBuilder from '../../src/components/ExpressionBuilder'
 import ExpressionBuilderContextMenu from '../../src/components/ExpressionBuilderContextMenu'
-import { incompleteRawExpression } from '../../src/lib/decisionRuleValidation'
+import { incompleteRawExpression } from '../../src/lib/decisionRuleIssues'
 
 export function ExpressionActionsHarness() {
   const [value, setValue] = useState('keyword("example")')

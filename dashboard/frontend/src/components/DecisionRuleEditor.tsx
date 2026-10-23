@@ -19,6 +19,7 @@ import {
   normalizeForDsl,
   ruleSubtreeEquals,
   assignRuleIds,
+  RULE_ON_UNKNOWN_VALUES,
   type DecisionRuleDocument,
   type RuleIssue,
   type RuleNode,
@@ -26,21 +27,18 @@ import {
 } from '@/lib/decisionRuleAst'
 import { parseRuleExpr, serializeRuleExpr } from '@/lib/decisionRuleDsl'
 import { trapDialogFocus } from '@/hooks/useAccessibleDialog'
-import {
-  RAW_EXPRESSION_INCOMPLETE,
-  validateRuleDocument,
-  type RuleSignalScope,
-} from '@/lib/decisionRuleValidation'
+import { RAW_EXPRESSION_INCOMPLETE } from '@/lib/decisionRuleIssues'
 
 import styles from './ExpressionBuilder.module.css'
 import ExpressionBuilderInner, { type ExpressionBuilderInnerProps } from './ExpressionBuilderInner'
-import type { NodePath } from './ExpressionBuilderSupport'
+import type { NodePath, SignalDescriptor } from './ExpressionBuilderSupport'
 
 export interface DecisionRuleEditorProps {
   value: DecisionRuleDocument
   onChange: (next: DecisionRuleDocument) => void
-  signalScope: RuleSignalScope
-  /** Validation issues plus any raw-expression parse error. */
+  /** Signals offered in the picker: the selected routing scope's own. */
+  availableSignals: SignalDescriptor[]
+  /** A raw-expression parse error, plus any part of the tree the DSL cannot express. */
   onIssuesChange?: (issues: RuleIssue[]) => void
   /** Prefix for DOM ids, so several editors can share a page. */
   idPrefix?: string
@@ -52,11 +50,8 @@ export interface DecisionRuleEditorProps {
 }
 
 const HISTORY_LIMIT = 50
-const ON_UNKNOWN_OPTIONS: Array<{ value: RuleOnUnknown; label: string }> = [
-  { value: 'no_match', label: 'No match' },
-  { value: 'match', label: 'Match' },
-  { value: 'fail_request', label: 'Fail request' },
-]
+const onUnknownLabel = (value: RuleOnUnknown) =>
+  value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ')
 
 function treeHasExtra(node: RuleNode | null): boolean {
   if (!node) return false
@@ -71,7 +66,7 @@ function issuesKey(issues: RuleIssue[]): string {
 const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
   value,
   onChange,
-  signalScope,
+  availableSignals,
   onIssuesChange,
   idPrefix,
   title = 'Expression Builder',
@@ -256,10 +251,9 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
     shellRef.current?.querySelector<HTMLElement>('[data-rule-editor-container]')?.focus({ preventScroll: true })
   }, [maximized])
 
-  const treeIssues = useMemo(
-    () => validateRuleDocument({ ...value, tree }, signalScope, { onUnknownManagedElsewhere: !showOnUnknown }),
-    [value, tree, signalScope, showOnUnknown],
-  )
+  // Only what the DSL cannot express is reported for the tree; whether the
+  // rule is valid is decided by the Router when the host saves or compiles.
+  const treeIssues = serialized.errors
   // The raw error is shown beside the raw input, so only the host sees it as an issue.
   const issues = useMemo(
     () =>
@@ -290,7 +284,7 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
     rawDisabledReason,
     maximized,
     setMaximized,
-    availableSignals: signalScope.descriptors,
+    availableSignals,
     issues: treeIssues,
     pushHistory,
     canUndo,
@@ -316,9 +310,9 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
             onChange={(event) => handleOnUnknownChange(event.target.value)}
           >
             <option value="">Use condition policy</option>
-            {ON_UNKNOWN_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {RULE_ON_UNKNOWN_VALUES.map((option) => (
+              <option key={option} value={option}>
+                {onUnknownLabel(option)}
               </option>
             ))}
           </select>

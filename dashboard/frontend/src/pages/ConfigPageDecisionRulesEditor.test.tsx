@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ruleSignalScope } from '../lib/decisionRuleValidation'
 import ConfigPageDecisionRulesEditor from './ConfigPageDecisionRulesEditor'
 import { decisionColumns } from './configPageDecisionTable'
 import type { DecisionConfig, DecisionRuleSet } from './configPageSupport'
@@ -73,15 +72,24 @@ describe('decision rules editor', () => {
     expect(editor).toContain('<option value="" selected="">Use condition policy</option>')
   })
 
-  it('reports recipe-scope issues inline in the editor', () => {
+  it('reports a tree the DSL cannot express inline and leaves validity to the Router', () => {
     const editor = renderToStaticMarkup(
+      createElement(ConfigPageDecisionRulesEditor, {
+        value: { operator: 'AND', conditions: [{ operator: 'NOT', conditions: [] }] },
+        onChange: vi.fn(),
+        availableSignals: [{ signalType: 'keyword', name: 'recipe-only' }],
+      }),
+    )
+    expect(editor).toContain('NOT requires exactly one child condition, got 0')
+    // An undeclared reference is the Router's to reject on save.
+    const undeclared = renderToStaticMarkup(
       createElement(ConfigPageDecisionRulesEditor, {
         value: { type: 'keyword', name: 'root-only' },
         onChange: vi.fn(),
-        signalScope: ruleSignalScope([{ signalType: 'keyword', name: 'recipe-only' }], true),
+        availableSignals: [{ signalType: 'keyword', name: 'recipe-only' }],
       }),
     )
-    expect(editor).toContain('signal keyword(&quot;root-only&quot;) is not declared in this recipe')
+    expect(undeclared).not.toContain('is not declared')
   })
 
   it('counts a single root condition in the decisions table', () => {

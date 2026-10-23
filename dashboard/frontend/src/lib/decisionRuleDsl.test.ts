@@ -83,7 +83,7 @@ describe('serializeRuleExpr', () => {
   it('explicitly rejects fields the DSL cannot express', () => {
     const result = serializeRuleExpr(leaf('keyword', 'a', { extra: { weight: 2 } }))
     expect(result.errors.map((e) => e.message)).toEqual([
-      'field weight is not supported by the router and cannot be expressed in DSL',
+      'field weight cannot be expressed in the DSL',
     ])
   })
 })

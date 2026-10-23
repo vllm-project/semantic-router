@@ -903,11 +903,6 @@
   padding: 0.25rem 0;
 }
 
-.validationOk {
-  composes: validation;
-  color: var(--color-primary);
-}
-
 .validationWarn {
   composes: validation;
   color: var(--color-warning, #f59e0b);

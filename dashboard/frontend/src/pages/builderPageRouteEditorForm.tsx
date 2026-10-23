@@ -4,7 +4,7 @@ import ExpressionBuilder from "@/components/ExpressionBuilder";
 import {
   blockingRuleIssues,
   type RuleIssue,
-} from "@/lib/decisionRuleValidation";
+} from "@/lib/decisionRuleIssues";
 import { useDSLStore } from "@/stores/dslStore";
 import type { ASTRouteDecl, DSLFieldObject } from "@/types/dsl";
 import {

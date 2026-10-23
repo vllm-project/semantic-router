@@ -3,13 +3,14 @@ import {
   isRuleGroup,
   isRuleLeaf,
   newRuleNodeId,
+  RULE_PREDICATE_KEYS,
   type NumericPredicate,
   type RuleLeaf,
   type RuleNode,
 } from '@/lib/decisionRuleAst'
 
 // The rule tree model lives in lib/decisionRuleAst.ts so the canonical bridge,
-// the DSL module and the validators share it without depending on components.
+// the DSL module and the issue helpers share it without depending on components.
 export type {
   NumericPredicate,
   RuleGroup,
@@ -154,11 +155,11 @@ export function makeDragNode(data: DragData): RuleNode | null {
 }
 
 // Leaf edit dialog: the gt/gte/lt/lte inputs as text drafts.
-export const PREDICATE_FIELDS = ['gt', 'gte', 'lt', 'lte'] as const
-export type PredicateDraft = Record<(typeof PREDICATE_FIELDS)[number], string>
+export const PREDICATE_FIELDS = RULE_PREDICATE_KEYS
+export type PredicateDraft = Record<keyof NumericPredicate, string>
 
 export function predicateDraft(predicate: NumericPredicate | undefined): PredicateDraft {
-  const draft = { gt: '', gte: '', lt: '', lte: '' }
+  const draft = Object.fromEntries(PREDICATE_FIELDS.map((key) => [key, ''])) as PredicateDraft
   for (const key of PREDICATE_FIELDS) {
     const value = predicate?.[key]
     if (value !== undefined) draft[key] = String(value)
@@ -166,8 +167,9 @@ export function predicateDraft(predicate: NumericPredicate | undefined): Predica
   return draft
 }
 
-// Keys outside gt/gte/lt/lte have no input here; they are carried over so
-// validation keeps reporting them instead of the dialog dropping them.
+// Keys outside the schema's predicate fields have no input here; they are
+// carried over so the Router rejects them on save instead of the dialog
+// silently dropping them.
 export function predicateFromDraft(
   draft: PredicateDraft,
   initial: NumericPredicate | undefined,

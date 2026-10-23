@@ -7,8 +7,8 @@ import {
   ruleDocumentToCanonical,
   type DecisionRuleDocument,
   type RuleIssue,
+  type SignalDescriptor,
 } from '../lib/decisionRuleAst'
-import { ruleSignalScope, type RuleSignalScope } from '../lib/decisionRuleValidation'
 import { isSingleConditionRules } from './configPageDecisionFormSupport'
 import type { DecisionCondition, DecisionRuleSet } from './configPageSupport'
 import styles from './ConfigPageDecisionsSection.module.css'
@@ -18,11 +18,11 @@ interface ConfigPageDecisionRulesEditorProps {
   onChange?: (value: DecisionRuleSet) => void
   readOnly?: boolean
   /** Signals of the selected routing scope (a named recipe sees only its own). */
-  signalScope?: RuleSignalScope
+  availableSignals?: SignalDescriptor[]
   onIssuesChange?: (issues: RuleIssue[]) => void
 }
 
-const EMPTY_SCOPE = ruleSignalScope([], true)
+const NO_SIGNALS: SignalDescriptor[] = []
 
 function RuleSummary({ node }: { node: DecisionCondition }) {
   if (node.operator || node.conditions?.length) {
@@ -101,7 +101,7 @@ export default function ConfigPageDecisionRulesEditor({
   value,
   onChange,
   readOnly = false,
-  signalScope = EMPTY_SCOPE,
+  availableSignals = NO_SIGNALS,
   onIssuesChange,
 }: ConfigPageDecisionRulesEditorProps) {
   // The canonical rules are the source of truth; the editor keeps its own
@@ -119,7 +119,7 @@ export default function ConfigPageDecisionRulesEditor({
       <DecisionRuleEditor
         value={document}
         onChange={handleChange}
-        signalScope={signalScope}
+        availableSignals={availableSignals}
         onIssuesChange={onIssuesChange}
         idPrefix="config-decision-rules"
         title="Decision rule tree"

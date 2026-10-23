@@ -12,6 +12,7 @@ import {
   isRuleGroup,
   isRuleLeaf,
   newRuleNodeId,
+  RULE_PREDICATE_KEYS,
   type NumericPredicate,
   type RuleIssue,
   type RuleLeaf,
@@ -25,8 +26,8 @@ export function quoteDSLString(value: string): string {
   return JSON.stringify(value)
 }
 
-const PREDICATE_KEYS = ['gt', 'gte', 'lt', 'lte'] as const
-type PredicateKey = (typeof PREDICATE_KEYS)[number]
+const PREDICATE_KEYS: readonly string[] = RULE_PREDICATE_KEYS
+type PredicateKey = keyof NumericPredicate
 
 const PRECEDENCE: Record<RuleOperator, number> = { OR: 1, AND: 2, NOT: 3 }
 
@@ -49,7 +50,7 @@ function formatNumber(value: number): string {
 
 function formatPredicate(predicate: NumericPredicate): string {
   const parts: string[] = []
-  for (const key of PREDICATE_KEYS) {
+  for (const key of RULE_PREDICATE_KEYS) {
     const value = predicate[key]
     if (value !== undefined) parts.push(`${key}: ${formatNumber(value)}`)
   }
@@ -81,7 +82,7 @@ function issue(ctx: SerializeCtx, node: RuleNode, path: number[], message: strin
 
 function reportExtra(ctx: SerializeCtx, node: RuleNode, path: number[]) {
   for (const key of Object.keys(node.extra ?? {})) {
-    issue(ctx, node, path, `field ${key} is not supported by the router and cannot be expressed in DSL`)
+    issue(ctx, node, path, `field ${key} cannot be expressed in the DSL`)
   }
 }
 
@@ -94,7 +95,7 @@ function serializeLeaf(leaf: RuleLeaf, path: number[], ctx: SerializeCtx): strin
   if (leaf.predicate !== undefined) {
     for (const [key, value] of Object.entries(leaf.predicate)) {
       if (value === undefined) continue
-      if (!(PREDICATE_KEYS as readonly string[]).includes(key)) {
+      if (!PREDICATE_KEYS.includes(key)) {
         issue(ctx, leaf, path, `predicate field ${key} is not supported`)
       } else if (typeof value !== 'number' || !Number.isFinite(value)) {
         issue(ctx, leaf, path, 'predicate values must be finite')
@@ -414,7 +415,7 @@ class RuleExprParser {
       if (value.kind !== 'object') throw new RuleParseError(offset, 'predicate must be an object such as { gte: 0.7 }')
       const predicate: NumericPredicate = {}
       for (const field of value.fields) {
-        if (!(PREDICATE_KEYS as readonly string[]).includes(field.key)) {
+        if (!PREDICATE_KEYS.includes(field.key)) {
           throw new RuleParseError(field.offset, `unknown predicate field ${field.key} (expected gt, gte, lt, lte)`)
         }
         if (field.value.kind !== 'number' || !Number.isFinite(field.value.value)) {

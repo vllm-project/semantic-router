@@ -7,11 +7,10 @@
  * DecisionRuleEditor that ConfigPage also uses.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { deriveRootShape, type DecisionRuleDocument, type RuleIssue } from '@/lib/decisionRuleAst'
 import { boolExprToRuleNode, parseRuleExpr, serializeRuleExpr } from '@/lib/decisionRuleDsl'
-import { ruleSignalScope } from '@/lib/decisionRuleValidation'
 
 import DecisionRuleEditor from './DecisionRuleEditor'
 import type { SignalDescriptor } from './ExpressionBuilderSupport'
@@ -34,10 +33,6 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
   value, onChange, initialAstExpr, availableSignals, onIssuesChange,
 }) => {
   const [doc, setDoc] = useState<DecisionRuleDocument>(() => documentFromBuilder(value, initialAstExpr))
-  // Builder signals come from the DSL AST and are not recipe scoped, so an
-  // undeclared reference stays a warning, as it was before.
-  const signalScope = useMemo(() => ruleSignalScope(availableSignals, false), [availableSignals])
-
   const lastEmittedRef = useRef(value)
   useEffect(() => {
     if (value === lastEmittedRef.current) return
@@ -56,7 +51,7 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
     <DecisionRuleEditor
       value={doc}
       onChange={handleChange}
-      signalScope={signalScope}
+      availableSignals={availableSignals}
       onIssuesChange={onIssuesChange}
     />
   )

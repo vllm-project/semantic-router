@@ -1,11 +1,5 @@
-import { canonicalToRuleDocument, type RuleIssue } from '../lib/decisionRuleAst'
-import {
-  RAW_EXPRESSION_INCOMPLETE,
-  blockingRuleIssues,
-  formatRuleIssuePath,
-  validateRuleDocument,
-  type RuleSignalScope,
-} from '../lib/decisionRuleValidation'
+import type { RuleIssue } from '../lib/decisionRuleAst'
+import { incompleteRawExpression } from '../lib/decisionRuleIssues'
 import type {
   DecisionConfig,
   DecisionFormState,
@@ -23,32 +17,17 @@ export const isSingleConditionRules = (rules: DecisionRuleSet | undefined): bool
   )
 
 /**
- * Validates the rule tree against the selected routing scope's signals with
- * the same checks the Go config validator runs, and blocks the save on any
- * error. `editorIssues` carries what only the editor knows, such as an
- * incomplete raw expression that never reached the tree.
+ * Copies the rule tree for the save. The Router validates it when the config
+ * is written and the dialog shows its error; only an incomplete raw
+ * expression, which never reached the tree, blocks the save here.
  */
 export const decisionRulesForSave = (
   value: DecisionFormState['rules'],
-  scope: RuleSignalScope,
   editorIssues: RuleIssue[] = [],
 ): DecisionConfig['rules'] => {
-  const rules = JSON.parse(JSON.stringify(value || {})) as DecisionConfig['rules']
-  const issues = [
-    ...editorIssues.filter((issue) => issue.message.startsWith(RAW_EXPRESSION_INCOMPLETE)),
-    ...validateRuleDocument(canonicalToRuleDocument(rules), scope),
-  ]
-  const messages = Array.from(
-    new Set(
-      blockingRuleIssues(issues).map((issue) =>
-        issue.path.length > 0 ? `${formatRuleIssuePath(issue.path)}: ${issue.message}` : issue.message,
-      ),
-    ),
-  )
-  if (messages.length > 0) {
-    throw new Error(`Fix the rule tree before saving: ${messages.join('; ')}`)
-  }
-  return rules
+  const incomplete = incompleteRawExpression(editorIssues)
+  if (incomplete) throw new Error(`Fix the rule tree before saving: ${incomplete}`)
+  return JSON.parse(JSON.stringify(value || {})) as DecisionConfig['rules']
 }
 
 const MODELLED_MODEL_REF_KEYS = new Set([

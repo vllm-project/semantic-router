@@ -6975,7 +6975,11 @@
           "$ref": "#/$defs/NumericPredicate"
         },
         "on_error": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "no_match",
+            "match"
+          ]
         },
         "on_unknown": {
           "type": "string",
