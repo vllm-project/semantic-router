@@ -362,7 +362,7 @@ the affected verification; do not remove a required case to make the Gate green.
 
 For Preview failures, inspect the per-probe signals, decisions, and latency in
 the conformance report. The built-in MoM inventory includes all five entrypoints
-and 346 probes. Performance CI reports numerical regressions as warnings;
+and 347 probes. Performance CI reports numerical regressions as warnings;
 benchmark execution, complete inventory, and matching model identities remain
 required. The explicit local `make perf-check` still fails on allocation
 regressions. Go allocation metrics do not measure native memory or GPU memory;
