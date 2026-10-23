@@ -49,3 +49,53 @@ ROUTE test {
 		}
 	}
 }
+
+func shadowBudgetDSL(budget string) string {
+	return `ROUTE test {
+  PRIORITY 1
+  WHEN domain("math")
+  MODEL "m:1b"
+  PLUGIN shadow_dispatch {
+    enabled: true
+    budget: ` + budget + `
+  }
+}`
+}
+
+func TestCompileShadowDispatchBudgetRejectsMalformed(t *testing.T) {
+	cases := []struct {
+		name    string
+		budget  string
+		wantErr string
+	}{
+		{name: "non-object", budget: `"bad"`, wantErr: "shadow_dispatch.budget must be an object"},
+		{name: "string bound", budget: `{ max_calls_per_request: "1" }`, wantErr: "shadow_dispatch.budget.max_calls_per_request must be an integer"},
+		{name: "string cost", budget: `{ max_cost_per_request: "1" }`, wantErr: "shadow_dispatch.budget.max_cost_per_request must be a number"},
+		{name: "unknown field", budget: `{ max_calls: 1 }`, wantErr: `shadow_dispatch.budget has unknown field "max_calls"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, errs := Compile(shadowBudgetDSL(tc.budget))
+			if len(errs) == 0 {
+				t.Fatalf("budget %s compiled without error, want %q", tc.budget, tc.wantErr)
+			}
+			if !strings.Contains(errs[0].Error(), tc.wantErr) {
+				t.Errorf("errors = %v, want %q", errs, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestCompileShadowDispatchBudgetKeepsExplicitZero(t *testing.T) {
+	cfg, errs := Compile(shadowBudgetDSL(`{ max_calls_per_request: 0 max_tokens_per_request: 0 }`))
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	sd, ok := decodePluginConfig[config.ShadowDispatchPluginConfig](&cfg.Decisions[0].Plugins[0])
+	if !ok {
+		t.Fatal("could not decode shadow_dispatch plugin config")
+	}
+	if sd.Budget != (config.ShadowDispatchBudgetConfig{}) {
+		t.Errorf("budget = %+v, want zero budget", sd.Budget)
+	}
+}

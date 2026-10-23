@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"sort"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -236,31 +238,74 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 		cfg.Arms = v
 	}
 	if raw, ok := fields["budget"]; ok {
-		if ov, ok := raw.(ObjectValue); ok {
-			if iv, ok := getIntField(ov.Fields, "max_calls_per_request"); ok {
-				cfg.Budget.MaxCallsPerRequest = int64(iv)
-			}
-			if iv, ok := getIntField(ov.Fields, "max_tokens_per_request"); ok {
-				cfg.Budget.MaxTokensPerRequest = int64(iv)
-			}
-			if fv, ok := getFloat64Field(ov.Fields, "max_cost_per_request"); ok {
-				cfg.Budget.MaxCostPerRequest = fv
-			}
-			if fv, ok := getFloat64Field(ov.Fields, "price_per_million_tokens"); ok {
-				cfg.Budget.PricePerMillionTokens = fv
-			}
-			if iv, ok := getIntField(ov.Fields, "reserve_tokens_per_arm"); ok {
-				cfg.Budget.ReserveTokensPerArm = int64(iv)
-			}
-			if iv, ok := getIntField(ov.Fields, "max_concurrency_per_request"); ok {
-				cfg.Budget.MaxConcurrencyPerRequest = int64(iv)
-			}
-			if iv, ok := getIntField(ov.Fields, "max_response_bytes_per_request"); ok {
-				cfg.Budget.MaxResponseBytesPerRequest = int64(iv)
-			}
-		}
+		cfg.Budget = c.compileShadowBudgetConfig(raw)
 	}
 	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
+	return cfg
+}
+
+// compileShadowBudgetConfig reads the per-request aggregate budget. A malformed
+// budget is rejected instead of compiling to a zero budget, because zero means
+// "unlimited" on every dimension.
+func (c *Compiler) compileShadowBudgetConfig(raw Value) config.ShadowDispatchBudgetConfig {
+	var cfg config.ShadowDispatchBudgetConfig
+	obj, ok := raw.(ObjectValue)
+	if !ok {
+		c.addError(Position{}, "shadow_dispatch.budget must be an object")
+		return cfg
+	}
+	intFields := []struct {
+		name string
+		dst  *int64
+	}{
+		{"max_calls_per_request", &cfg.MaxCallsPerRequest},
+		{"max_tokens_per_request", &cfg.MaxTokensPerRequest},
+		{"reserve_tokens_per_arm", &cfg.ReserveTokensPerArm},
+		{"max_concurrency_per_request", &cfg.MaxConcurrencyPerRequest},
+		{"max_response_bytes_per_request", &cfg.MaxResponseBytesPerRequest},
+	}
+	floatFields := []struct {
+		name string
+		dst  *float64
+	}{
+		{"max_cost_per_request", &cfg.MaxCostPerRequest},
+		{"price_per_million_tokens", &cfg.PricePerMillionTokens},
+	}
+	known := make(map[string]bool, len(intFields)+len(floatFields))
+	for _, f := range intFields {
+		known[f.name] = true
+		if _, exists := obj.Fields[f.name]; !exists {
+			continue
+		}
+		v, ok := getIntField(obj.Fields, f.name)
+		if !ok {
+			c.addError(Position{}, "shadow_dispatch.budget.%s must be an integer", f.name)
+			continue
+		}
+		*f.dst = int64(v)
+	}
+	for _, f := range floatFields {
+		known[f.name] = true
+		if _, exists := obj.Fields[f.name]; !exists {
+			continue
+		}
+		v, ok := getFloat64Field(obj.Fields, f.name)
+		if !ok {
+			c.addError(Position{}, "shadow_dispatch.budget.%s must be a number", f.name)
+			continue
+		}
+		*f.dst = v
+	}
+	unknown := make([]string, 0, len(obj.Fields))
+	for name := range obj.Fields {
+		if !known[name] {
+			unknown = append(unknown, name)
+		}
+	}
+	sort.Strings(unknown)
+	for _, name := range unknown {
+		c.addError(Position{}, "shadow_dispatch.budget has unknown field %q", name)
+	}
 	return cfg
 }
 
