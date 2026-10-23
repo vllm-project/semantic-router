@@ -729,10 +729,10 @@ fixtures:
         )
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
-        self.assertEqual(len(probes), 346)
-        added_probes = probes[306:316]
+        self.assertEqual(len(probes), 347)
+        added_probes = probes[307:317]
         self.assertEqual(
-            {probe.decision_id for probe in probes[316:320]},
+            {probe.decision_id for probe in probes[317:321]},
             {
                 "contract-direct-result-repair",
                 "contract-plural-workflow-start",
@@ -756,7 +756,7 @@ fixtures:
             },
         )
         self.assertEqual(
-            {probe.decision_id for probe in probes[342:]},
+            {probe.decision_id for probe in probes[343:]},
             {
                 f"accuracy_v2_facts_{domain}"
                 for domain in ("health", "law", "business", "economics")
@@ -788,11 +788,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "55086d5f036567da985af2f7742a3cef5eb6d2e08246be829aae24ea5ad43520",
+            "a5dce2874cdbbaabd1540c42e68ca2d7e59828929b4c60bad8d00be6e50f314f",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "efc134a87e0d27d696c494876ea0c8a5c2cdf2a5fced326cd3ff0909aba9afa0",
+            "16e04f02ae4a813c34859f2edb77a7aa65d7d1494b9b97e661baaaa0c3d4dd06",
         )
         by_id = {probe.probe_id: probe for probe in probes}
         self.assertEqual(len(by_id), len(probes))
