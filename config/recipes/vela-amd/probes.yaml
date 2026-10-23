@@ -30,6 +30,7 @@ coverage:
     multi_turn: 100.0
 decisions:
 - id: observe
+  model: vela-auto
   expected_decision: observe
   expected_algorithm: static
   expected_alias: vela-default
@@ -60,6 +61,7 @@ decisions:
     keywords:
     - knowledge-query
 - id: knowledge
+  model: vela-auto
   expected_decision: knowledge
   expected_algorithm: static
   expected_alias: vela-default

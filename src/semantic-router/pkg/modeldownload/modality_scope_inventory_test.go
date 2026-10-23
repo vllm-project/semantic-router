@@ -2,7 +2,6 @@ package modeldownload
 
 import (
 	"reflect"
-	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -20,12 +19,6 @@ func modalityInventoryConfig() *config.RouterConfig {
 		},
 	}
 	cfg.ModalityRules = []config.ModalityRule{{Name: "AR"}}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"native": {Provider: "candle", Artifact: modalityInventoryArtifact, Revision: "main"},
-	}
-	cfg.ModelBindings = map[string]config.ModelBinding{
-		"modality_detector": {Deployment: "native", Contract: "label_distribution.v1", Adapter: "mmbert32k"},
-	}
 	return cfg
 }
 
@@ -35,9 +28,8 @@ func TestModalityInventoryIgnoresUnrelatedRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(baseline) != 1 || baseline[0].CheckONNX ||
-		!slices.Contains(baseline[0].ExcludePatterns, "*.onnx") || len(baseline[0].RequiredFileGroups) != 1 {
-		t.Fatalf("expected native-only modality artifact: %#v", baseline)
+	if len(baseline) != 1 || baseline[0].LocalPath != modalityInventoryArtifact {
+		t.Fatalf("expected the modality module artifact: %#v", baseline)
 	}
 	cfg.Recipes = []config.RoutingRecipe{
 		{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Signals: cfg.Signals, ModelBindings: cfg.ModelBindings}},
@@ -82,27 +74,5 @@ func TestModalityInventoryRequiresModelConsumer(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestModalityInventoryKeepsActualORTRecipeRequirements(t *testing.T) {
-	cfg := modalityInventoryConfig()
-	cfg.ModelDeployments["onnx"] = config.ModelDeployment{Provider: "ort", Artifact: modalityInventoryArtifact, Revision: "main"}
-	cfg.Recipes = []config.RoutingRecipe{
-		{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Signals: cfg.Signals, ModelBindings: cfg.ModelBindings}},
-		{Name: "image-route", Profile: config.RoutingProfile{
-			Signals: config.Signals{ModalityRules: []config.ModalityRule{{Name: "DIFFUSION"}}},
-			ModelBindings: map[string]config.ModelBinding{
-				"modality_detector": {Deployment: "onnx", Contract: "label_distribution.v1", Adapter: "mmbert32k"},
-			},
-		}},
-	}
-	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"image-route"}, Recipe: "image-route"}}
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(specs) != 1 || !specs[0].CheckONNX || len(specs[0].ExcludePatterns) != 0 || len(specs[0].RequiredFileGroups) != 2 {
-		t.Fatalf("real ORT consumer must retain native and ONNX requirements: %#v", specs)
 	}
 }

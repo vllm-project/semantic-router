@@ -12,8 +12,9 @@ import (
 func (r *OpenAIRouter) handleModelsRequestHeaders(
 	method string,
 	path string,
+	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if method != "GET" || !strings.HasPrefix(path, "/v1/models") {
+	if method != "GET" || normalizeRequestPath(path) != "/v1/models" {
 		return nil, nil
 	}
 
@@ -21,7 +22,7 @@ func (r *OpenAIRouter) handleModelsRequestHeaders(
 		"method": method,
 		"path":   path,
 	})
-	response, err := r.handleModelsRequest(path)
+	response, err := r.handleModelsRequest(path, ctx.ListenerModels)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +34,7 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 	path string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if !strings.HasPrefix(path, "/v1/responses") {
+	if !strings.HasPrefix(path, "/v1/responses") && !isAzureResponsesCollection(path) {
 		return nil, nil
 	}
 
@@ -153,6 +154,8 @@ func detectSourceFormat(path string, ctx *RequestContext) {
 		ctx.SourceFormat = llmprotocol.AnthropicMessagesV1
 		logging.Debugf("Detected Anthropic client protocol from path: %s", path)
 	case strings.HasPrefix(path, "/v1/responses"):
+		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+	case isAzureResponsesCollection(path):
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 	default:
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1

@@ -2,11 +2,9 @@ package dynamicconfig
 
 import (
 	"context"
-	"errors"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
@@ -45,33 +43,5 @@ func TestBootstrapDoesNotWaitForUnpublishedCRs(t *testing.T) {
 		if !strings.Contains(string(data), "namespace: "+routerNamespace+"\n") {
 			t.Fatalf("%s is outside the Router namespace", manifest)
 		}
-	}
-}
-
-func TestWaitForActivatedCRsRequiresCurrentGenerationOfBothResources(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	calls := 0
-	err := waitForActivatedCRs(ctx, time.Millisecond, func(_ context.Context, resource string) ([]byte, error) {
-		calls++
-		if strings.HasPrefix(resource, "intelligentroute/") && calls < 4 {
-			return []byte(`{"metadata":{"generation":2},"status":{"conditions":[{"type":"Ready","status":"True","observedGeneration":1}]}}`), nil
-		}
-		return []byte(`{"metadata":{"generation":2},"status":{"conditions":[{"type":"Ready","status":"True","observedGeneration":2}]}}`), nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if calls < 4 {
-		t.Fatal("stale Ready condition was accepted")
-	}
-}
-
-func TestWaitForActivatedCRsCancels(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := waitForActivatedCRs(ctx, time.Hour, func(context.Context, string) ([]byte, error) { return nil, errors.New("not ready") })
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("wait = %v", err)
 	}
 }

@@ -71,7 +71,7 @@ func TestEmbeddingSignalErrorsPreserveModalityBoundaries(t *testing.T) {
 			c := &Classifier{keywordEmbeddingClassifier: ec}
 			results := newSignalResultsForTest()
 			var mu sync.Mutex
-			c.evaluateEmbeddingSignal(context.Background(), results, &mu, tc.text, tc.image, nil)
+			c.evaluateEmbeddingSignal(context.Background(), results, &mu, embeddingSignalInput{Text: tc.text, Image: tc.image}, nil)
 			if len(results.SignalErrors) != len(tc.wantErrors) {
 				t.Fatalf("errors=%v, want keys %v", results.SignalErrors, tc.wantErrors)
 			}
@@ -142,7 +142,7 @@ func TestReaskSignalFailureAndNonApplicability(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			rc, err := NewReaskClassifierWithProvider([]config.ReaskRule{{Name: "repeat", Threshold: .8, LookbackTurns: tc.lookback}, {Name: "longer", Threshold: .8, LookbackTurns: 3}}, "synthetic", provider)
+			rc, err := NewReaskClassifierWithProvider([]config.ReaskRule{{Name: "repeat", Threshold: .8, LookbackTurns: tc.lookback}, {Name: "longer", Threshold: .8, LookbackTurns: 3}}, "synthetic", fullInputTestEmbeddingProvider{provider})
 			if err != nil {
 				t.Fatal(err)
 			}

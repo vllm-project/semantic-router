@@ -25,7 +25,7 @@ const complexitySignalSourceLocal = "local"
 func publishComplexityValues(values map[string]float64, result ComplexityRuleResult) {
 	prefix := "complexity:" + result.RuleName
 	switch result.SignalSource {
-	case complexitySignalSourceScore:
+	case complexitySignalSourceScore, "decision_score":
 		values[prefix+":score"] = result.FusedMargin
 	case complexitySignalSourceLabels:
 		return
@@ -43,6 +43,9 @@ func publishComplexityValues(values map[string]float64, result ComplexityRuleRes
 // complexitySignalSource names the path that answers for this classifier,
 // mirroring the dispatch in classifyComplexity.
 func (c *Classifier) complexitySignalSource() string {
+	if c.complexityClassifier != nil && len(c.complexityClassifier.judgments) > 0 {
+		return "decision_score"
+	}
 	switch {
 	case c.complexityScoreBackend != nil:
 		return complexitySignalSourceScore

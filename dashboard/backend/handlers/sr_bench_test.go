@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -56,6 +58,38 @@ func TestSRBenchProxyPreservesRequestsWithTrustedIdentity(t *testing.T) {
 	}
 	if response.Header().Get("Set-Cookie") != "" || response.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("unexpected headers: %v", response.Header())
+	}
+}
+
+func TestSRBenchProxyRejectsRevokedMutationBeforeForwarding(t *testing.T) {
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer upstream.Close()
+	handler, err := NewSRBenchHandler(upstream.URL, "service-secret", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range []struct {
+		method, path, body string
+	}{
+		{http.MethodPost, SRBenchAPIPath + "/experiments", `{"name":"revoked"}`},
+		{http.MethodDelete, SRBenchAPIPath + "/experiments/exp-0123456789abcdef0123456789abcdef", ""},
+	} {
+		r := srBenchTestRequest(request.method, request.path, request.body)
+		r = r.WithContext(dashboardauth.WithPermissionRevalidator(r.Context(), func(context.Context) error {
+			return errors.New("evaluation.write revoked")
+		}))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, r)
+		if response.Code != http.StatusForbidden {
+			t.Errorf("%s %s status = %d, want 403", request.method, request.path, response.Code)
+		}
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("sr-bench received %d revoked mutations", got)
 	}
 }
 

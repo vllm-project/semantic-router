@@ -92,8 +92,8 @@ decisions:
         expected_signals:
           reask:
             - persistently_dissatisfied
-          keywords:
-            - verification_markers
+          decision:
+            - sources
         tags:
           - language:en
           - persistent
@@ -131,7 +131,7 @@ decisions:
           - role: user
             content: "That is still wrong. Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
         expected_signals:
-          reask: [likely_dissatisfied]
+          decision: [code, wrong]
         tags: [feedback, code, boundary, messages, one-reask]
       - id: code_without_verification
         query: "The previous code is wrong and still raises TypeError. Fix it directly; do not research or cite sources."
@@ -192,9 +192,9 @@ decisions:
         expected_signals:
           reask:
             - persistently_dissatisfied
-          keywords:
-            - code_error_markers
-            - verification_markers
+          decision:
+            - code
+            - sources
         tags:
           - language:en
           - persistent
@@ -220,6 +220,17 @@ decisions:
       - id: cn_economic_recovery
         query: "你刚才的解释不对，请重新讲一下通货膨胀和衰退的区别，结构清楚一点。"
         tags: [feedback, general, zh]
+      - id: es_wrong_after_answer
+        messages:
+          - role: user
+            content: ¿Cómo preparo un huevo pasado por agua?
+          - role: assistant
+            content: Hiérvelo durante veinte minutos y luego sírvelo.
+          - role: user
+            content: Eso no es correcto, un huevo pasado por agua no se cocina veinte minutos. Explica otra vez la receta.
+        expected_signals:
+          decision: [wrong]
+        tags: [language:es, multi-turn, feedback]
       - id: compound_interest_retry
         query: "That answer was wrong. Explain compound interest vs simple interest again in plain English."
         tags: [feedback, general, finance]
@@ -327,6 +338,17 @@ decisions:
       - id: walkthrough_example
         query: "Walk me through it more clearly with one simple example."
         tags: [feedback, clarification]
+      - id: ja_clarify_after_answer
+        messages:
+          - role: user
+            content: ハッシュマップとは何ですか？
+          - role: assistant
+            content: ハッシュマップはキーと値を対応付けるデータ構造です。
+          - role: user
+            content: もう少し分かりやすく、簡単な例を一つ挙げて説明してください。
+        expected_signals:
+          decision: [clarify]
+        tags: [language:ja, multi-turn, clarification]
       - id: rainbow_clarification
         query: Explain your previous description of rainbows more clearly, with one example.
         tags:

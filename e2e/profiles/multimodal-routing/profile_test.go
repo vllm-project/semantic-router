@@ -10,16 +10,20 @@ import (
 )
 
 type profileValues struct {
-	Env      []corev1.EnvVar `json:"env"`
-	ExtraEnv []corev1.EnvVar `json:"extraEnv"`
-	Config   struct {
+	Env       []corev1.EnvVar            `json:"env"`
+	ExtraEnv  []corev1.EnvVar            `json:"extraEnv"`
+	Resources map[string]json.RawMessage `json:"resources"`
+	Config    struct {
 		Global struct {
 			ModelCatalog struct {
 				Embeddings struct {
 					Semantic struct {
+						ModelPath       string `json:"multimodal_model_path"`
 						EmbeddingConfig struct {
-							TargetLayer *int `json:"target_layer"`
-							TopK        *int `json:"top_k"`
+							ModelType       string `json:"model_type"`
+							TargetDimension *int   `json:"target_dimension"`
+							TargetLayer     *int   `json:"target_layer"`
+							TopK            *int   `json:"top_k"`
 						} `json:"embedding_config"`
 					} `json:"semantic"`
 				} `json:"embeddings"`
@@ -32,7 +36,7 @@ type embeddingRule struct {
 	Name      string  `json:"name"`
 	Threshold float64 `json:"threshold"`
 	// A per-rule prototype-scoring override (CRD spelling and pack
-	// spelling) replaces the family blend the thresholds were calibrated
+	// spelling) replaces the media policy the thresholds were calibrated
 	// under; any presence, even an empty block, is a mismatch.
 	PrototypeScoringCRD  json.RawMessage `json:"prototypeScoring"`
 	PrototypeScoringPack json.RawMessage `json:"prototype_scoring"`
@@ -68,8 +72,8 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	if len(profile.Env) != 0 {
 		t.Fatal("multimodal profile must not replace the chart-owned env list; use extraEnv")
 	}
-	if len(profile.ExtraEnv) != 1 {
-		t.Fatalf("profile extraEnv has %d entries, want 1", len(profile.ExtraEnv))
+	if len(profile.ExtraEnv) != 0 {
+		t.Fatalf("profile must select its deployment through canonical config, found extraEnv: %+v", profile.ExtraEnv)
 	}
 
 	effective := append(append([]corev1.EnvVar{}, chartDefaults.Env...), profile.ExtraEnv...)
@@ -78,15 +82,28 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	requireLiteralEnvironment(t, environment, "HF_HOME", "/app/models/.cache/huggingface")
 	requireSecretEnvironment(t, environment, "HF_TOKEN")
 	requireSecretEnvironment(t, environment, "HUGGINGFACE_HUB_TOKEN")
-	requireLiteralEnvironment(t, environment, "EMBEDDING_MODEL_OVERRIDE", "multimodal")
+	if _, exists := environment["EMBEDDING_MODEL_OVERRIDE"]; exists {
+		t.Fatal("profile must exercise canonical model selection without an environment override")
+	}
+	for key := range profile.Resources {
+		if key != "limits" && key != "requests" {
+			t.Fatalf("container resources contains unsupported chart workaround %q", key)
+		}
+	}
 
 	// Helm deep-merges embedding_config maps. The profile must explicitly select
 	// the final multimodal text-encoder layer; omitting it leaves the chart's
-	// invalid mmBERT layer-22 default, while zero is lost on canonical marshal.
+	// invalid mmBERT layer-22 default, zero is preserved on the canonical YAML round trip.
 	embeddingConfig := profile.Config.Global.ModelCatalog.Embeddings.Semantic.EmbeddingConfig
+	if embeddingConfig.ModelType != "multimodal" || profile.Config.Global.ModelCatalog.Embeddings.Semantic.ModelPath != "models/vela-1.0-omni-nano" {
+		t.Fatal("profile must select the prepared Nano deployment through canonical config")
+	}
+	if embeddingConfig.TargetDimension == nil || *embeddingConfig.TargetDimension != 0 {
+		t.Fatal("profile must request the complete manifest embedding dimension")
+	}
 	targetLayer := embeddingConfig.TargetLayer
-	if targetLayer == nil || *targetLayer != 6 {
-		t.Fatalf("multimodal profile target_layer = %v, want explicit 6", targetLayer)
+	if targetLayer == nil || *targetLayer != 0 {
+		t.Fatalf("multimodal profile target_layer = %v, want explicit 0", targetLayer)
 	}
 
 	// The image cases assert non-matches from the matched-embeddings header.
@@ -146,7 +163,7 @@ func TestImageRulesMirrorTheShippedPack(t *testing.T) {
 		// the pack; the CRD the E2E router deploys must not carry one either,
 		// or the E2E scores under a blend the thresholds were not selected for.
 		if rule.overridesPrototypeScoring() || shipped[i].overridesPrototypeScoring() {
-			t.Fatalf("rule %q carries a prototype-scoring override; the calibrated thresholds assume the family blend", rule.Name)
+			t.Fatalf("rule %q carries a prototype-scoring override; calibrated thresholds assume the image default", rule.Name)
 		}
 	}
 }

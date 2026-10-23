@@ -69,9 +69,10 @@ func TestCompileShadowDispatchBudgetRejectsMalformed(t *testing.T) {
 		wantErr string
 	}{
 		{name: "non-object", budget: `"bad"`, wantErr: "shadow_dispatch.budget must be an object"},
-		{name: "string bound", budget: `{ max_calls_per_request: "1" }`, wantErr: "shadow_dispatch.budget.max_calls_per_request must be an integer"},
-		{name: "string cost", budget: `{ max_cost_per_request: "1" }`, wantErr: "shadow_dispatch.budget.max_cost_per_request must be a number"},
-		{name: "unknown field", budget: `{ max_calls: 1 }`, wantErr: `shadow_dispatch.budget has unknown field "max_calls"`},
+		{name: "string bound", budget: `{ max_calls_per_request: "1" }`, wantErr: "cannot unmarshal string into Go struct field ShadowDispatchBudgetConfig.max_calls_per_request"},
+		{name: "bool bound", budget: `{ max_response_bytes_per_request: true }`, wantErr: "cannot unmarshal bool into Go struct field ShadowDispatchBudgetConfig.max_response_bytes_per_request"},
+		{name: "string cost", budget: `{ max_cost_per_request: "1" }`, wantErr: "cannot unmarshal string into Go struct field ShadowDispatchBudgetConfig.max_cost_per_request"},
+		{name: "unknown field", budget: `{ max_calls: 1 }`, wantErr: `unknown field "max_calls"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

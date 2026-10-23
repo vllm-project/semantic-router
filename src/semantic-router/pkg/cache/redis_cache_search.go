@@ -191,6 +191,7 @@ func (c *RedisCache) selectPolarityCandidate(docs []redis.Document, queryTokens 
 		}
 		if !best.Found || similarity > best.Similarity {
 			best = lookupResultFromTimestamps(body, similarity, storedAt, expiresAt)
+			best.NegationGuard = negationGuardOutcomeFor(queryTokens, doc.Fields["query"])
 		}
 	}
 	if !best.Found {

@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 const (
 	configReloadDebounceWindow = 250 * time.Millisecond
 	configReloadSettleDelay    = 300 * time.Millisecond
+	configReloadPollInterval   = time.Second
 )
 
 type configFileReloadLoop struct {
@@ -42,6 +44,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 func (s *Server) watchFileConfigAndReload(ctx context.Context) {
 	watcher, cfgDir, ok := newConfigFileWatcher(s.configPath)
 	if !ok {
+		s.pollFileConfigAndReload(ctx)
 		return
 	}
 	defer func() {
@@ -55,6 +58,53 @@ func (s *Server) watchFileConfigAndReload(ctx context.Context) {
 		cfgDir:  cfgDir,
 	}
 	loop.run(ctx)
+}
+
+// pollFileConfigAndReload preserves file-backed reloads when the host has
+// exhausted its inotify instances or the watched directory cannot be added.
+func (s *Server) pollFileConfigAndReload(ctx context.Context) {
+	logging.ComponentEvent("extproc", "config_watcher_polling_fallback", map[string]interface{}{
+		"file":        s.configPath,
+		"interval_ms": int(configReloadPollInterval / time.Millisecond),
+	})
+	loop := configFileReloadLoop{server: s, cfgFile: s.configPath}
+	ticker := time.NewTicker(configReloadPollInterval)
+	defer ticker.Stop()
+	pollConfigFileChanges(ctx, s.configPath, ticker.C, func() {
+		loop.scheduleReload(ctx, fsnotify.Event{Name: s.configPath, Op: fsnotify.Write})
+	})
+}
+
+func pollConfigFileChanges(ctx context.Context, cfgFile string, ticks <-chan time.Time, onChange func()) {
+	previous, err := configFileHash(cfgFile)
+	haveBaseline := err == nil
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-ticks:
+			if !ok {
+				return
+			}
+			current, readErr := configFileHash(cfgFile)
+			if readErr != nil {
+				continue
+			}
+			if !haveBaseline || current != previous {
+				previous = current
+				haveBaseline = true
+				onChange()
+			}
+		}
+	}
+}
+
+func configFileHash(path string) ([sha256.Size]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(data), nil
 }
 
 func newConfigFileWatcher(cfgFile string) (*fsnotify.Watcher, string, bool) {

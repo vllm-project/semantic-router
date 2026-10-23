@@ -12,7 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func TestLLMLabelClassifierRationaleHTTP(t *testing.T) {
@@ -70,7 +70,7 @@ func TestLLMLabelClassifierRationaleHTTP(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 			cfg := rationaleHTTPConfig(t, server, tt.flag)
-			models, err := newClassifierModelRuntime(cfg, nil)
+			models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -111,7 +111,7 @@ func TestLLMLabelClassifierRationaleHTTP(t *testing.T) {
 			if err := json.Unmarshal(body, &request); err != nil {
 				t.Fatal(err)
 			}
-			if request.Model != "test-model" || request.MaxTokens != defaultLLMLabelClassifierMaxTokens || request.ResponseFormat.Type != "json_object" {
+			if request.Model != "test-model" || request.MaxTokens != defaultLLMLabelClassifierMaxTokens || request.ResponseFormat.Type != "json_schema" {
 				t.Fatalf("unexpected generation options: %s", body)
 			}
 			if len(request.Messages) != 2 || request.Messages[0].Role != "system" || request.Messages[1].Role != "user" {
@@ -179,7 +179,7 @@ func TestLLMLabelClassifierRationaleBindingIsolation(t *testing.T) {
 		other := rationaleHTTPConfig(t, server, "true").ClassifierRules[0]
 		other.Name = "other"
 		cfg.ClassifierRules = append(cfg.ClassifierRules, other)
-		models, err := newClassifierModelRuntime(cfg, native.New(pool))
+		models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{Runtime: serving.New(nil, pool)})
 		if err != nil {
 			t.Fatal(err)
 		}

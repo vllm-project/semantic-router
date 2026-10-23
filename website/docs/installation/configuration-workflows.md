@@ -39,21 +39,26 @@ active lifecycle operation finishes.
 
 An empty local workspace starts the Dashboard in setup mode. Use it to bind
 model endpoints, choose a baseline policy, preview the result, and activate a
-complete config.
+complete config; the waiting `vllm-sr serve` then starts the Router from it.
 
-After activation, the **Mixture-of-Models** workspace separates three tasks:
+After activation, open **Build → Routing → Models** to connect physical Chat
+backends. **Mixture-of-Models** has three tabs:
 
-- **Built-in Models** discovers installed virtual models and their Model Cards;
-- **Models & Routing** edits physical models, entrypoints, recipes, and routing;
+- **Models** publishes and manages public model entrypoints;
+- **Recipes** manages the policies those entrypoints select;
 - **Probes** inspects recipe scenarios and supports generation or routing-only
   validation.
+
+**Build → System One** separately provides **Decision Models**, **Decision
+Playground**, and **Decision Monitoring** for judgment deployments, typed
+questions, and their runtime observations.
 
 Verify provider generation separately from routing evaluation. A probe can
 select the expected route even when the selected backend cannot generate.
 
 The visual DSL editor owns routing semantics. It preserves listeners, providers,
 global settings, and setup state when replacing its routing surface. Multi-recipe
-lifecycle changes are managed from Models & Routing or the management API so a
+lifecycle changes are managed from Mixture-of-Models or the management API so a
 visual edit cannot silently discard another recipe.
 
 ## Helm
@@ -69,13 +74,9 @@ the canonical document as `config.yaml`, then place that document under
 configOverride:
   version: v0.3
   listeners:
-    - name: grpc-50051
+    - name: http-8899
       address: 0.0.0.0
-      port: 50051
-      timeout: 300s
-    - name: http-8080
-      address: 0.0.0.0
-      port: 8080
+      port: 8899
       timeout: 300s
   providers:
     defaults:
@@ -120,15 +121,25 @@ helm upgrade --install semantic-router \
   -f values.yaml
 ```
 
-`vllm-sr serve --target k8s --config config.yaml` passes the selected document
+Helm values seed the Router ConfigMap at install. If the Dashboard or Router
+API later saves a config edit, an ordinary Helm upgrade preserves that live
+document. To intentionally apply a revised `configOverride`, change
+`configMap.applyValuesRevision` in the values file for that upgrade. Reusing
+the same revision on later upgrades preserves subsequent live edits. A saved
+ConfigMap edit takes effect after the Router deployment rolls out.
+
+`vllm-sr serve --target kubernetes --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command
 rejects an empty or setup-only document and does not inject local-Docker service
 addresses or knowledge-base paths. Run `vllm-sr config validate` first so schema and
 reference errors fail before deployment.
 
-Choose Kubernetes GPU images, resources, and device plugins through Helm or the
-Operator. The local `--platform amd` and `--platform nvidia` shortcuts do not
-configure Kubernetes scheduling.
+On Kubernetes, `--platform rocm` and `--platform cuda` select the ROCm or CUDA
+Router image, unless an image is set explicitly, and request `amd.com/gpu`
+or `nvidia.com/gpu` resources from canonical device ordinals. Replicas sharing
+one device need one GPU; distinct ordinals require that allocation size. The
+pod schedules onto a node whose device plugin offers those GPUs. Node selectors, tolerations, other resources and the device
+plugin itself come from Helm values or the Operator.
 
 The chart runs the Dashboard as its own Deployment and Service, and that
 Deployment is disabled by default. The Router Service carries the gRPC and HTTP

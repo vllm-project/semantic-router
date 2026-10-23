@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -14,12 +14,12 @@ config:
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/workflow-planner
         backend_refs:
           - name: test-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:
@@ -113,10 +113,7 @@ config:
         embedding_model: mmbert
     integrations:
       looper:
-        endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1/chat/completions
         flow:
-          model_names:
-            - openai/gpt-oss-20b
           state:
             store_backend: redis
             ttl_seconds: 1800
@@ -138,19 +135,17 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
 resources:
   limits:
     cpu: '2'
-    memory: 2Gi
+    memory: 10Gi
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:

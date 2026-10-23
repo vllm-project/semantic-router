@@ -80,7 +80,7 @@ plugins:
 | `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
 | `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
-| `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. The primary path reaches backends through Envoy, which does not verify upstream certificates. |
+| `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
 
 A shadow is skipped, with a metric but no outcome, when the request is sampled out or when the primary dispatch already selected the shadow model. Decisions that execute through the looper (ratings, confidence, fusion, ReMoM, workflows) reject the plugin at config load, because the shadow hook runs only on single-model provider dispatch.
@@ -118,3 +118,45 @@ Completed and failed shadows append one outcome to the primary request's replay 
 
 Replay redaction applies to shadow outcomes the same way it applies to the rest of the record: viewers without content rights see the routing and timing fields but not `target_ref`, `reason`, or `metadata`. Keep `capture_response_body` off unless the replay store and its readers are cleared for prompt-level content. See the fragment:
 [`config/fragments/plugin/shadow-dispatch/sampled.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/shadow-dispatch/sampled.yaml).
+
+### Export a comparison dataset
+
+Captured outcomes become a comparison dataset through `GET /api/v1/observability/replays/dataset`. The endpoint reads the records the usual replay filters select and answers with a versioned manifest of the primary and shadow arms for each input.
+
+A manifest is identified by its own digest, so the export takes the split plan as part of the request: `seed` fixes split assignment and each repeated `split` is written as `name:weight`, for example `?seed=2026-q3&split=train:8&split=eval:2`. The same records under the same seed and splits rebuild the same manifest, including the split every example lands in, so adding later observations never moves an example that was already placed.
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset?recipe=vault&seed=2026-q3&split=train:8&split=eval:2"
+```
+
+The manifest carries identity, output digests, and lineage, never prompt or response text, so it can be published beside the numbers it supports. An observation enters whole or not at all: a request that failed, is unfinished, lost its input to truncation, or never recorded a digest is left out and counted under an exclusion reason, and `counts` reports what was kept and what was dropped. Because the manifest describes the whole selection it was built from, a selection larger than 5000 records is refused rather than exported as a page. Narrow the filters and export again.
+
+One recipe or one decision usually dominates live traffic, and a dataset built from it reads as a statement about the whole router when it is a statement about that decision. `balance_by` and `balance_max` cap how much one group may contribute, grouping by `recipe`, `decision` or `primary_model`. The rows a cap keeps follow the seed rather than the clock, so a balanced dataset is a sample of the traffic and not of when it arrived, and rows dropped for balance are counted under `balance_cap` like any other exclusion. Both parameters are given together; one alone is refused.
+
+The export needs `replay.read` and reads the same records the list API does. Body capture must be on for the decisions being compared, since an observation with no captured request is excluded as `request_body_missing`.
+
+### Hand the comparison to a judge
+
+`GET /api/v1/observability/replays/dataset/judge-tasks` takes the same selection and split plan as the export, plus a `blinding_key`, and answers with pairwise tasks: one primary answer against one shadow answer, with the request each was given. Every pair appears twice with the sides swapped, so a judge that prefers whichever answer comes first shows up as disagreement between the two orders. Each side carries an opaque arm label that names neither the model nor which side is the primary, and the labels differ in every pair. Only the key maps a label back to a model, so keep it away from the judge. It may not equal the manifest seed, which is published.
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset/judge-tasks?recipe=vault&seed=2026-q3&split=train:8&split=eval:2&blinding_key=$JUDGE_KEY"
+```
+
+A pair is built only when the request and both answers hash back to the digests in the manifest. A stored request names the model the router sent it to, so the input digest covers the request body without its top-level model field (`Model` in the recorded request, `model` in a client body), which is also the `input` a judge reads, and each task carries that `input_digest`. This changed input identity, deduplication and splits, so the manifest is `shadow-dataset.v2` and the tasks are `shadow-judge-tasks.v2`. A `shadow-dataset.v1` manifest is refused. The shadow text comes from the captured excerpt, so the shadow decision needs `capture_response_body` on and a `max_capture_bytes` large enough for whole answers. An excerpt that was cut, or a primary answer a response-stage plugin rewrote before it was stored, is left out and counted as `arm_text_digest_mismatch`, and a pair with no text at all as `arm_text_missing`. A request that does not match its digest is counted as `input_text_digest_mismatch`, and a missing one as `input_text_missing`. An answer that names its own model is marked `names_own_model`, since no label can blind a judge to that.
+
+The tasks carry prompt and answer text, so the route needs `replay.detail` and refuses a caller without it rather than redacting the tasks. The judge runs outside the router.
+
+### Publish the dataset and its judgments
+
+`tools/calibration/shadow-dataset` publishes a manifest, and optionally the judgments a judge returned for it, into a storage directory. Any object store mounted as a filesystem works as that directory. The tool validates every input before it writes anything: the manifest has to match its own digest, the tasks have to be the ones the manifest and the blinding key produce from the text they carry, and the judgments have to answer those tasks with no field the judgment record does not define. The key is read for that check and never published.
+
+```bash
+make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
+  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json \
+  --blinding-key $JUDGE_KEY"
+```
+
+The manifest lands at `manifests/<digest>/<digest of the file>.json`, because the manifest digest leaves out the counts and two exports of the same examples can differ in what they excluded, and the judgment set lands at `judgments/<manifest digest>/<digest of the set>.json` beside a `.report.json` that counts outcomes, slot picks and how many pairs followed the slot rather than the answer. Every name comes from content, so publishing the same files twice changes nothing and a published name is never replaced with different bytes. The judge tasks are read to check the judgments against but never published, because they carry the prompt and both answers. Keep datasets out of this repository.

@@ -149,6 +149,10 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			if result.FirstImageURL == "" {
 				result.FirstImageURL = neutralInlineImageDataURL(content)
 			}
+		case llmprotocol.ContentAudio:
+			if message.Role == llmprotocol.RoleUser && result.FirstAudio == "" {
+				result.FirstAudio = neutralInlineAudioDataURL(content)
+			}
 		case llmprotocol.ContentToolCall:
 			result.AssistantToolCallCount++
 			if message.Role == llmprotocol.RoleAssistant {
@@ -216,4 +220,16 @@ func saturatingNeutralAdd(left, right int) int {
 		return math.MaxInt
 	}
 	return left + right
+}
+
+// Inline audio remains protocol-neutral and is decoded only if an audio rule
+// consumes it. URLs and local filesystem references never cross this boundary.
+func neutralInlineAudioDataURL(content llmprotocol.Content) string {
+	if content.Data != "" && strings.HasPrefix(strings.ToLower(content.MediaType), "audio/") {
+		return "data:" + strings.ToLower(content.MediaType) + ";base64," + content.Data
+	}
+	if strings.HasPrefix(strings.ToLower(content.URL), "data:audio/") && strings.Contains(content.URL, ";base64,") {
+		return content.URL
+	}
+	return ""
 }

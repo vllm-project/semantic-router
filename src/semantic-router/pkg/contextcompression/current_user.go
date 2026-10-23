@@ -59,26 +59,29 @@ func compressCandidateText(model string, counter TokenCounter, candidate planned
 	if candidate.plan.Kind == TargetCurrentUser {
 		return truncateCurrentUser(model, counter, text, target)
 	}
-	// The extractive engine estimates tokens internally; adapt its item budget
-	// to the request counter, then verify the result using that same counter.
-	original, source := counter.CountText(model, text)
-	minimum := candidate.plan.OriginalTokens
-	if source == "utf8_byte_upper_bound" {
-		target = max(1, int(float64(target)*float64(EstimateTokens(text))/float64(max(1, original))))
-		minimum = EstimateTokens(text)
-	}
+	// Plan budgets are in the request counter's unit and the block already met
+	// its minimum there; the engine budgets with its own estimate of the text.
+	estimated := EstimateTokens(text)
+	minimum, target := estimated, engineTokens(target, estimated, candidate.plan.OriginalTokens)
 	if candidate.plan.Kind == TargetHistory && !json.Valid([]byte(text)) {
 		// History prose can start with a bracketed heading. Tool output keeps
 		// its conservative malformed-JSON guard; valid history JSON still uses
 		// the existing structure-preserving string-leaf compressor below.
-		estimated := EstimateTokens(text)
 		minimum, target = normalizeTokenBudget(minimum, target)
 		if estimated < minimum || target <= 0 || target >= estimated {
 			return unchangedResult(text, estimated)
 		}
 		return compressText(text, candidate.plan.Query, estimated, target)
 	}
-	return CompressToolOutput(text, candidate.plan.Query, minimum, target)
+	return compressToolOutput(text, candidate.plan.Query, estimated, minimum, target)
+}
+
+// engineTokens rescales a request-counter budget by the engine/request count ratio of one text.
+func engineTokens(tokens, engineTotal, requestTotal int) int {
+	if tokens <= 0 || requestTotal <= 0 || engineTotal == requestTotal {
+		return tokens
+	}
+	return max(1, int(float64(tokens)*float64(engineTotal)/float64(requestTotal)))
 }
 
 func truncateCurrentUser(model string, counter TokenCounter, text string, target int) Result {

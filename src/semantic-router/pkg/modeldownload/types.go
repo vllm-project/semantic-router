@@ -1,7 +1,5 @@
 package modeldownload
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-
 // ModelSpec represents a model to be downloaded
 type ModelSpec struct {
 	// Local path where the model should be stored (e.g., "models/mom-embedding-light")
@@ -16,9 +14,6 @@ type ModelSpec struct {
 	// Each group requires at least one matching file, allowing native sharded
 	// weights and provider-supported ONNX layouts.
 	RequiredFileGroups [][]string
-	// RerankerSelections resolve omitted coordinates and the primary graph from
-	// downloaded encoder metadata. Every active selection must be available.
-	RerankerSelections []config.PairScorerSelection
 	// FilesOnly is used for a separate registered mapping or graph artifact.
 	FilesOnly bool
 	// CheckONNX verifies declared external tensor files for downloaded graphs.

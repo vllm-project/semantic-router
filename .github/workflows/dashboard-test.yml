@@ -3,9 +3,6 @@ name: Dashboard Tests
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        type: string
-        default: ""
       verification:
         type: string
         default: ""
@@ -15,10 +12,15 @@ permissions:
 
 jobs:
   dashboard-test:
-    name: Dashboard Tests
-    runs-on: ubuntu-24.04
+    name: Application Contracts
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
 
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - name: Check out the repo
         uses: actions/checkout@v4
 
@@ -64,14 +66,9 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: binary
+          install-mode: goinstall
           args: --help
 
-      - name: Load shared native libraries
-        if: inputs.native-artifact != ''
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
 
       - name: Check, test, and build Dashboard with one dependency installation
         run: make dashboard-check dashboard-test-wasm dashboard-test-e2e-evaluation dashboard-build
@@ -94,15 +91,27 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
         with:
+          overwrite: true
           name: ci-result-dashboard
           path: .agent-harness/dashboard/result.json
           include-hidden-files: true
           if-no-files-found: error
 
+      - name: Upload Dashboard test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-framework-evidence
+          path: .agent-harness/dashboard/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload WASM test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: dashboard-wasm-evidence
           path: .agent-harness/dashboard/wasm/
           include-hidden-files: true
@@ -113,6 +122,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: evaluation-browser-diagnostics
           path: |
             dashboard/frontend/playwright-report

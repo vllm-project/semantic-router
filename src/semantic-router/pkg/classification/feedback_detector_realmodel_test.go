@@ -5,15 +5,13 @@ import (
 	"math"
 	"strconv"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func setupRealFeedbackDetector(t *testing.T) *FeedbackDetector {
 	t.Helper()
-	cfg := config.DefaultGlobalConfig().FeedbackDetector
+	cfg := vela1SpecialistsConfig().FeedbackDetector
 	cfg.ModelID = requireRealModel(t, "VLLM_SR_FEEDBACK_MODEL", cfg.ModelID)
-	detector, err := NewFeedbackDetector(&cfg)
+	detector, err := NewFeedbackDetector(&cfg, managedModelRuntime(t))
 	if err != nil {
 		t.Fatalf("build feedback detector: %v", err)
 	}

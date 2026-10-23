@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { SignalCapabilityNotice } from "./SignalCapabilityContext";
+import { useSignalCapabilities } from "./signalCapabilityState";
+import {
+  signalAvailability,
+  signalCapabilitySchema,
+  decisionQuestionTypes,
+} from "./signalCapabilities";
+import React, { useCallback, useEffect, useState } from "react";
 
 import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import {
@@ -75,17 +82,27 @@ const AddModelForm: React.FC<{
 };
 
 const AddSignalForm: React.FC<{
-  onAdd: (
-    signalType: string,
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
+  onAdd: (signalType: string, name: string, fields: DSLFieldObject) => void;
   onCancel: () => void;
 }> = ({ onAdd, onCancel }) => {
   const [signalType, setSignalType] = useState<SignalType>("domain");
   const [name, setName] = useState("");
-  const schema = useMemo(() => getSignalFieldSchema(signalType), [signalType]);
   const [fields, setFields] = useState<DSLFieldObject>({});
+  const { data, scope } = useSignalCapabilities();
+  const availability = signalAvailability(data, scope, signalType, name, fields);
+  const schema =
+    signalType === "decision"
+      ? signalCapabilitySchema(
+          getSignalFieldSchema(signalType),
+          decisionQuestionTypes(data, scope, fields),
+        )
+      : getSignalFieldSchema(signalType);
+  const disabledTypes = Object.fromEntries(
+    SIGNAL_TYPES.flatMap((type) => {
+      const result = signalAvailability(data, scope, type, name);
+      return result.supported ? [] : [[type, result.reason || "Unavailable"]];
+    }),
+  );
 
   useEffect(() => {
     setFields({});
@@ -97,9 +114,9 @@ const AddSignalForm: React.FC<{
 
   const handleSubmit = useCallback(() => {
     const trimmed = name.trim().replace(/\s+/g, "_");
-    if (!trimmed) return;
+    if (!trimmed || !availability.supported) return;
     onAdd(signalType, trimmed, fields);
-  }, [signalType, name, fields, onAdd]);
+  }, [signalType, name, fields, onAdd, availability.supported]);
 
   return (
     <div className={styles.editorPanel}>
@@ -115,7 +132,7 @@ const AddSignalForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSubmit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || !availability.supported}
           >
             Create
           </button>
@@ -129,6 +146,7 @@ const AddSignalForm: React.FC<{
         <CustomSelect
           value={signalType}
           options={[...SIGNAL_TYPES]}
+          disabledOptions={disabledTypes}
           onChange={(value) => setSignalType(value as SignalType)}
         />
       </div>
@@ -146,6 +164,7 @@ const AddSignalForm: React.FC<{
         />
       </div>
 
+      <SignalCapabilityNotice reason={availability.reason} />
       <div className={styles.dslPreview}>
         <div className={styles.dslPreviewHeader}>
           <span className={styles.dslPreviewTitle}>Fields</span>

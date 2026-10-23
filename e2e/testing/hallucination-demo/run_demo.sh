@@ -5,10 +5,15 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROVIDER_MOCKER_PYTHON="${PROVIDER_MOCKER_PYTHON:-$ROOT_DIR/.agent-harness/provider-mocker/bin/python}"
+if [[ ! -x "$PROVIDER_MOCKER_PYTHON" ]]; then
+    echo "Run make provider-mocker-install, or set PROVIDER_MOCKER_PYTHON to its Python environment." >&2
+    exit 1
+fi
 
 # Ports
-MOCK_VLLM_PORT=8002
+PROVIDER_MOCKER_PORT=8002
 MOCK_SEARCH_PORT=8003
 ROUTER_PORT=8801
 WEB_CLIENT_PORT=8888
@@ -35,13 +40,13 @@ echo ""
 
 cleanup() {
     echo -e "\n${YELLOW}Cleaning up...${NC}"
-    if [ -f /tmp/mock_vllm_demo.pid ]; then kill "$(cat /tmp/mock_vllm_demo.pid)" 2>/dev/null || true; fi
+    if [ -f /tmp/provider_mocker_demo.pid ]; then kill "$(cat /tmp/provider_mocker_demo.pid)" 2>/dev/null || true; fi
     if [ -f /tmp/mock_search_demo.pid ]; then kill "$(cat /tmp/mock_search_demo.pid)" 2>/dev/null || true; fi
     if [ -f /tmp/router_demo.pid ]; then kill "$(cat /tmp/router_demo.pid)" 2>/dev/null || true; fi
     if [ -f /tmp/envoy_demo.pid ]; then kill "$(cat /tmp/envoy_demo.pid)" 2>/dev/null || true; fi
-    rm -f /tmp/mock_vllm_demo.pid /tmp/mock_search_demo.pid /tmp/router_demo.pid /tmp/envoy_demo.pid
+    rm -f /tmp/provider_mocker_demo.pid /tmp/mock_search_demo.pid /tmp/router_demo.pid /tmp/envoy_demo.pid
     # Kill any remaining processes on our ports
-    lsof -ti:$MOCK_VLLM_PORT | xargs kill -9 2>/dev/null || true
+    lsof -ti:$PROVIDER_MOCKER_PORT | xargs kill -9 2>/dev/null || true
     lsof -ti:$MOCK_SEARCH_PORT | xargs kill -9 2>/dev/null || true
     lsof -ti:$ROUTER_PORT | xargs kill -9 2>/dev/null || true
     lsof -ti:50051 | xargs kill -9 2>/dev/null || true
@@ -53,7 +58,7 @@ trap cleanup EXIT
 
 # Pre-cleanup: kill any processes using our ports
 echo -e "${YELLOW}[0/4]${NC} Cleaning up any existing processes..."
-lsof -ti:$MOCK_VLLM_PORT | xargs kill -9 2>/dev/null || true
+lsof -ti:$PROVIDER_MOCKER_PORT | xargs kill -9 2>/dev/null || true
 lsof -ti:$MOCK_SEARCH_PORT | xargs kill -9 2>/dev/null || true
 lsof -ti:$ROUTER_PORT | xargs kill -9 2>/dev/null || true
 lsof -ti:50051 | xargs kill -9 2>/dev/null || true
@@ -61,16 +66,16 @@ lsof -ti:8080 | xargs kill -9 2>/dev/null || true
 sleep 1
 echo -e "   ${GREEN}✓ Cleanup complete${NC}"
 
-# Step 1: Start Mock vLLM with tool calling
-echo -e "${YELLOW}[1/4]${NC} Starting Mock vLLM server (port $MOCK_VLLM_PORT)..."
-python3 "$SCRIPT_DIR/mock_vllm_toolcall.py" --port $MOCK_VLLM_PORT > /tmp/mock_vllm_demo.log 2>&1 &
-echo $! > /tmp/mock_vllm_demo.pid
+# Step 1: Start Provider mocker with tool calling
+echo -e "${YELLOW}[1/4]${NC} Starting Provider mocker server (port $PROVIDER_MOCKER_PORT)..."
+PROVIDER_MOCKER_SCENARIO=toolcall PYTHONPATH="$ROOT_DIR/tools/test/services/provider-mocker${PYTHONPATH:+:$PYTHONPATH}" "$PROVIDER_MOCKER_PYTHON" -m provider_mocker --port "$PROVIDER_MOCKER_PORT" > /tmp/provider_mocker_demo.log 2>&1 &
+echo $! > /tmp/provider_mocker_demo.pid
 sleep 1
-if curl -sf http://127.0.0.1:$MOCK_VLLM_PORT/health > /dev/null; then
-    echo -e "   ${GREEN}✓ Mock vLLM is healthy${NC}"
+if curl -sf http://127.0.0.1:$PROVIDER_MOCKER_PORT/health > /dev/null; then
+    echo -e "   ${GREEN}✓ Provider mocker is healthy${NC}"
 else
-    echo -e "   ${RED}✗ Mock vLLM failed to start${NC}"
-    cat /tmp/mock_vllm_demo.log
+    echo -e "   ${RED}✗ Provider mocker failed to start${NC}"
+    cat /tmp/provider_mocker_demo.log
     exit 1
 fi
 
@@ -90,18 +95,22 @@ fi
 # Step 3: Start Semantic Router (gRPC ExtProc on port 50051)
 echo -e "${YELLOW}[3/5]${NC} Starting Semantic Router (ExtProc port 50051)..."
 cd "$ROOT_DIR"
-export LD_LIBRARY_PATH=${ROOT_DIR}/candle-binding/target/release
 nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_demo.log 2>&1 &
 echo $! > /tmp/router_demo.pid
 
-echo "   Waiting for router to initialize models (15s)..."
-sleep 15
-
-# Check if router initialized
-if grep -q "Fact-check classifier initialized" /tmp/router_demo.log 2>/dev/null; then
-    echo -e "   ${GREEN}✓ Router models initialized${NC}"
+echo "   Waiting for the router's models (up to 300s)..."
+ready=false
+for _ in $(seq 1 300); do
+    if curl -fsS -o /dev/null --max-time 1 http://127.0.0.1:8080/ready 2>/dev/null; then
+        ready=true
+        break
+    fi
+    sleep 1
+done
+if $ready; then
+    echo -e "   ${GREEN}✓ Router models ready${NC}"
 else
-    echo -e "   ${YELLOW}⚠ Router may still be initializing...${NC}"
+    echo -e "   ${YELLOW}⚠ Router is not ready yet${NC}"
     echo "   Check /tmp/router_demo.log for details"
 fi
 
@@ -127,7 +136,7 @@ echo "  All services started!"
 echo -e "==============================================${NC}"
 echo ""
 echo "Services running:"
-echo "  • Mock vLLM:      http://127.0.0.1:$MOCK_VLLM_PORT"
+echo "  • Provider mocker:      http://127.0.0.1:$PROVIDER_MOCKER_PORT"
 echo "  • Mock Search:    http://127.0.0.1:$MOCK_SEARCH_PORT"
 echo "  • Router gRPC:    localhost:50051"
 echo "  • Envoy HTTP:     http://127.0.0.1:$ROUTER_PORT"

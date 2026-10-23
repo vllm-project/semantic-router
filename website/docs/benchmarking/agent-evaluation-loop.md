@@ -96,8 +96,10 @@ vllm-sr config plan --config candidate.yaml \
 ```
 
 Apply a hot-reloadable change with `vllm-sr config apply`. If the plan reports
-`RESTART_REQUIRED`, use the deployment workflow. For an authorized local-stack
-replacement, run `vllm-sr serve --config candidate.yaml --replace-active-config`.
+`RESTART_REQUIRED`, use the deployment workflow; on a local stack,
+`vllm-sr config apply` saves the change and the next `vllm-sr serve` applies
+it. For an authorized local-stack replacement, run
+`vllm-sr serve --config candidate.yaml --replace-active-config`.
 Confirm readiness and the active revision before testing.
 
 Set `ENTRYPOINT` to the published entrypoint you are evaluating, then preview a
@@ -151,7 +153,7 @@ completion budget that fits the actual input and leaves room for the final
 answer. When the request omits a limit, a configured
 `request_params.default_max_tokens` supplies the decision default; otherwise
 the backend default applies. For supported vLLM deployments,
-[`default_max_tokens: auto`](../installation/configuration#recipe-wide-candidate-and-replay-policies)
+[`default_max_tokens: auto`](../installation/configuration#recipe-candidate-requirements)
 uses each model's remaining native capacity. Keep the selector's output cost
 forecast separate from this capacity and report the effective deployment limits.
 

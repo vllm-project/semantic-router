@@ -13,6 +13,7 @@ func runAnthropicClientToolLifecycle(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
 	model string,
+	expectDirectCaller bool,
 ) error {
 	tool := map[string]any{
 		"name": "lookup", "description": "Look up a value",
@@ -33,7 +34,7 @@ func runAnthropicClientToolLifecycle(
 	if err != nil {
 		return fmt.Errorf("streaming tool-call turn: %w", err)
 	}
-	streamCall, err := decodeAnthropicToolUseStream(streamedFirst)
+	streamCall, err := decodeAnthropicToolUseStream(streamedFirst, expectDirectCaller)
 	if err != nil {
 		return fmt.Errorf("streaming tool-call turn: %w", err)
 	}
@@ -42,7 +43,7 @@ func runAnthropicClientToolLifecycle(
 	if err != nil {
 		return fmt.Errorf("tool-call turn: %w", err)
 	}
-	call, err := decodeAnthropicToolUse(first)
+	call, err := decodeAnthropicToolUse(first, expectDirectCaller)
 	if err != nil {
 		return fmt.Errorf("tool-call turn: %w", err)
 	}
@@ -62,6 +63,7 @@ func runAnthropicClientToolLifecycle(
 				"role": "assistant",
 				"content": []any{map[string]any{
 					"type": "tool_use", "id": call.CallID, "name": call.Name, "input": input,
+					"caller": map[string]any{"type": "direct"},
 				}},
 			},
 			map[string]any{
@@ -92,14 +94,17 @@ func runAnthropicClientToolLifecycle(
 	return nil
 }
 
-func decodeAnthropicToolUse(body []byte) (responsesFunctionCall, error) {
+func decodeAnthropicToolUse(body []byte, expectDirectCaller bool) (responsesFunctionCall, error) {
 	var response struct {
 		StopReason string `json:"stop_reason"`
 		Content    []struct {
-			Type  string          `json:"type"`
-			ID    string          `json:"id"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
+			Type   string          `json:"type"`
+			ID     string          `json:"id"`
+			Name   string          `json:"name"`
+			Input  json.RawMessage `json:"input"`
+			Caller struct {
+				Type string `json:"type"`
+			} `json:"caller"`
 		} `json:"content"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
@@ -110,8 +115,9 @@ func decodeAnthropicToolUse(body []byte) (responsesFunctionCall, error) {
 	}
 	content := response.Content[0]
 	call := responsesFunctionCall{CallID: content.ID, Name: content.Name, Arguments: string(content.Input)}
-	if call.CallID != "call_mock_lookup" || call.Name != "lookup" || call.Arguments != `{"query":"weather"}` || !json.Valid(content.Input) {
-		return responsesFunctionCall{}, fmt.Errorf("Anthropic tool use changed identity or input: %s", truncateString(string(body), 1000))
+	if call.CallID != "call_mock_lookup" || call.Name != "lookup" || call.Arguments != `{"query":"weather"}` ||
+		(expectDirectCaller && content.Caller.Type != "direct") || !json.Valid(content.Input) {
+		return responsesFunctionCall{}, fmt.Errorf("anthropic tool use changed identity, input, or caller provenance: %s", truncateString(string(body), 1000))
 	}
 	return call, nil
 }
@@ -120,9 +126,12 @@ type anthropicToolStreamEvent struct {
 	Type         string `json:"type"`
 	Index        int    `json:"index"`
 	ContentBlock struct {
-		Type string `json:"type"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		Type   string `json:"type"`
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Caller struct {
+			Type string `json:"type"`
+		} `json:"caller"`
 	} `json:"content_block"`
 	Delta struct {
 		Type        string  `json:"type"`
@@ -136,14 +145,15 @@ type anthropicToolStreamState struct {
 	stopReason     string
 	blockStopped   bool
 	messageStopped bool
+	expectCaller   bool
 }
 
-func decodeAnthropicToolUseStream(body []byte) (responsesFunctionCall, error) {
+func decodeAnthropicToolUseStream(body []byte, expectDirectCaller bool) (responsesFunctionCall, error) {
 	stream := string(body)
 	if err := rejectStreamFragments(stream, "Anthropic", []string{"chat.completion.chunk", "data: [DONE]", "event: response."}); err != nil {
 		return responsesFunctionCall{}, err
 	}
-	state := anthropicToolStreamState{}
+	state := anthropicToolStreamState{expectCaller: expectDirectCaller}
 	for _, data := range protocolSSEDataFrames(body) {
 		var event anthropicToolStreamEvent
 		if err := json.Unmarshal([]byte(data), &event); err != nil {
@@ -159,8 +169,9 @@ func decodeAnthropicToolUseStream(body []byte) (responsesFunctionCall, error) {
 func (state *anthropicToolStreamState) consume(event anthropicToolStreamEvent, data string) error {
 	switch event.Type {
 	case "content_block_start":
-		if event.Index != 0 || event.ContentBlock.Type != "tool_use" {
-			return fmt.Errorf("invalid Anthropic tool block start: %s", data)
+		if event.Index != 0 || event.ContentBlock.Type != "tool_use" ||
+			(state.expectCaller && event.ContentBlock.Caller.Type != "direct") {
+			return fmt.Errorf("anthropic tool block start lost identity or direct caller provenance: %s", data)
 		}
 		state.call.CallID, state.call.Name = event.ContentBlock.ID, event.ContentBlock.Name
 	case "content_block_delta":

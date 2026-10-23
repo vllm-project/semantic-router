@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -12,9 +12,9 @@ config:
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
-          - name: mock-vllm
+          - name: provider-mocker
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:
@@ -35,7 +35,6 @@ config:
           - type: hallucination
             configuration:
               enabled: true
-              use_nli: false
               hallucination_action: header
               unverified_factual_action: header
               include_hallucination_details: true
@@ -89,6 +88,27 @@ config:
     integrations: {}
     model_catalog:
       kbs: []
+      # Pluggable endpoint backend under test: the detector is served by an
+      # OpenAI-compatible endpoint (mock stands in for a vLLM-hosted
+      # KRLabsOrg/lettucedect-v2-qwen-2b) instead of an in-process model.
+      external:
+        - name: hallucination-detector
+          model_role: classification
+          llm_endpoint:
+            address: mock-hallucination-detector.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_model_name: KRLabsOrg/lettucedect-v2-qwen-2b
+          llm_timeout_seconds: 10
+      deployments:
+        hallucination-detector-http:
+          provider: http
+          external_model: hallucination-detector
+      bindings:
+        hallucination_detector:
+          deployment: hallucination-detector-http
+          contract: token_spans.v1
+          adapter: http_chat
       modules:
         prompt_guard:
           enabled: false
@@ -100,33 +120,24 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
         hallucination_mitigation:
           enabled: true
           # Use the canonical Vela fact-check binding to gate detection.
           fact_check:
             model_ref: fact_check_classifier
-            threshold: 0.65
+            threshold: 0.86
             use_cpu: true
-            use_mmbert_32k: true
-          # Pluggable endpoint backend under test: the detector is served by an
-          # OpenAI-compatible endpoint (mock stands in for a vLLM-hosted
-          # KRLabsOrg/lettucedect-v2-qwen-2b) instead of an in-process model.
           detector:
-            backend: endpoint
-            endpoint: http://mock-hallucination-detector.default.svc.cluster.local:8000/v1
             include_explanation: false
-            model_id: KRLabsOrg/lettucedect-v2-qwen-2b
 # The detector is remote, but the router still loads two local models before it
 # serves: the startup embedding download, gated only on
 # !EmbeddingModels.UsesRemoteEmbeddingBackend() and the model_catalog.embeddings
-# *_model_path values (pkg/modeldownload/feature_gates.go), and the mmBERT-32K
-# fact-check classifier that gates when detection runs. 2Gi held while this
+# *_model_path values (pkg/modeldownload/feature_gates.go), and the fact-check
+# model (Vela 2.0 0.3B by default) that gates when detection runs. 2Gi held while this
 # profile was selection: manual and never ran in CI; on the PR lane the pod is
 # OOMKilled during fact-check initialization before the startup probe passes.
 # jailbreak-onerror needs 6Gi for the embedding load alone, so this profile,

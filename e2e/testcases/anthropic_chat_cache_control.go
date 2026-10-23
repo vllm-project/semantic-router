@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -34,9 +35,9 @@ func testAnthropicChatCacheControl(
 	defer session.Close()
 	backendOpts := opts
 	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
-		Namespace:   "anthropic-backend-system",
-		Name:        "anthropic-backend-qwen",
-		ServicePort: "8080",
+		Namespace:   "provider-protocols-system",
+		Name:        "provider-mocker",
+		ServicePort: "8000",
 	}
 	backendSession, err := fixtures.OpenServiceSession(ctx, client, backendOpts)
 	if err != nil {
@@ -46,7 +47,7 @@ func testAnthropicChatCacheControl(
 
 	sessionID := fmt.Sprintf("chat-cache-%d", time.Now().UnixNano())
 	request := map[string]any{
-		"model":      "MoM",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 16,
 		"messages": []any{
 			map[string]any{

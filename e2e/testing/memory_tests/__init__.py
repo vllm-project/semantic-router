@@ -5,12 +5,16 @@ Re-exports all test classes so the runner can import them from one place.
 
 from memory_tests.base import MemoryFeaturesTest, MilvusVerifier
 from memory_tests.test_chat_completions import ChatCompletionsMemoryTest
+from memory_tests.test_default_threshold import MemoryDefaultThresholdTest
 from memory_tests.test_isolation import UserIsolationTest
 from memory_tests.test_per_decision import (
     PerDecisionMemoryDisabledTest,
     PerDecisionThresholdOverrideTest,
 )
-from memory_tests.test_persistence_receipts import MemoryPersistenceReceiptTest
+from memory_tests.test_persistence_receipts import (
+    MemoryPersistenceReceiptTest,
+    MemoryPersistenceShutdownTest,
+)
 from memory_tests.test_pipeline import (
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
@@ -22,9 +26,11 @@ from memory_tests.test_storage import MemoryStorageTest, PluginCombinationTest
 __all__ = [
     "ChatCompletionsMemoryTest",
     "MemoryContentIntegrityTest",
+    "MemoryDefaultThresholdTest",
     "MemoryFeaturesTest",
     "MemoryInjectionPipelineTest",
     "MemoryPersistenceReceiptTest",
+    "MemoryPersistenceShutdownTest",
     "MemoryStorageTest",
     "MilvusVerifier",
     "PerDecisionMemoryDisabledTest",

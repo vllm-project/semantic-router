@@ -45,7 +45,7 @@ func TestSignalGroupSoftmaxExclusiveChoosesSingleDomainWinner(t *testing.T) {
 }
 
 func TestSignalGroupSoftmaxExclusiveChoosesSingleEmbeddingWinner(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"TensorFlow pipeline":  makeEmbedding(1.0, 0.0, 0.0),
 		"machine learning":     makeEmbedding(0.95, 0.0, 0.0),
 		"neural network":       makeEmbedding(0.90, 0.0, 0.0),
@@ -55,7 +55,7 @@ func TestSignalGroupSoftmaxExclusiveChoosesSingleEmbeddingWinner(t *testing.T) {
 		"ingredients":          makeEmbedding(0.18, 0.0, 0.0),
 	})
 
-	classifier := buildGroupedEmbeddingClassifier(t)
+	classifier := buildGroupedEmbeddingClassifier(t, provider)
 	signals := classifier.EvaluateAllSignals("TensorFlow pipeline")
 	if len(signals.MatchedEmbeddingRules) != 1 || signals.MatchedEmbeddingRules[0] != "ai" {
 		t.Fatalf("expected only ai after group normalization, got %v", signals.MatchedEmbeddingRules)
@@ -181,7 +181,7 @@ func TestSignalGroupDefaultFallbackMatchesEmbeddingRouteWhenNoGroupMemberFires(t
 }
 
 func TestAnalyzeSoftmaxSignalGroupCentroidsWarnsOnSimilarMembers(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"machine learning":     makeEmbedding(1.0, 0.0, 0.0),
 		"neural network":       makeEmbedding(0.95, 0.0, 0.0),
 		"python code":          makeEmbedding(0.98, 0.05, 0.0),
@@ -250,7 +250,7 @@ func TestAnalyzeSoftmaxSignalGroupCentroidsWarnsOnSimilarMembers(t *testing.T) {
 				SimilarityThreshold:       0.7,
 				AggregationMethodConfiged: config.AggregationMethodMax,
 			},
-		}, config.HNSWConfig{PreloadEmbeddings: true}),
+		}, config.HNSWConfig{PreloadEmbeddings: true}, provider),
 	}
 
 	warnings, err := classifier.AnalyzeSoftmaxSignalGroupCentroids(0.7)
@@ -312,14 +312,14 @@ func buildGroupedDomainClassifier(mock *MockCategoryInference) *Classifier {
 	return classifier
 }
 
-func buildGroupedEmbeddingClassifier(t *testing.T) *Classifier {
+func buildGroupedEmbeddingClassifier(t *testing.T, provider *testEmbeddingProvider) *Classifier {
 	t.Helper()
 
 	rules := topicRules()
 	embeddingClassifier := newTestEmbeddingClassifier(t, rules, config.HNSWConfig{
 		PreloadEmbeddings: true,
 		TopK:              intPtr(2),
-	})
+	}, provider)
 
 	return &Classifier{
 		Config: &config.RouterConfig{

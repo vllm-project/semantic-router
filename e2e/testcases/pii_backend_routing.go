@@ -22,8 +22,8 @@ func init() {
 // testPIIBackendRouting drives the PII signal through a remote token_spans.v1
 // service.
 //
-// The profile configures no local PII model, so candle token classification
-// cannot run and cannot produce a span. Every assertion below therefore
+// The profile configures no local PII model, so no local token classification
+// can run and produce a span. Every assertion below therefore
 // attributes the decision to the remote call rather than merely agreeing with
 // it.
 //
@@ -82,7 +82,7 @@ func testPIIBackendRouting(ctx context.Context, client *kubernetes.Clientset, op
 
 	observed := make(map[string]string, len(cases))
 	for _, tc := range cases {
-		resp, err := sendLocalChatCompletion(ctx, localPort, "auto", tc.prompt, 30*time.Second)
+		resp, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", tc.prompt, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("remote PII request (%s): %w", tc.name, err)
 		}

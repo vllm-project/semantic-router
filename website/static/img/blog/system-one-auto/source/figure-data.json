@@ -1,0 +1,296 @@
+{
+  "scope": "Actual Router frontend public endpoints, historical JevBench public suite; not official v1.6.1 score",
+  "quality_pass": 0,
+  "quality_items": 231,
+  "source_groups": 195,
+  "quality": {
+    "direct_kai": {
+      "items": 231,
+      "correct": 152,
+      "accuracy": 0.658008658008658,
+      "point_accuracy": 0.6493506493506493,
+      "unresolved": 0,
+      "kai_coverage": 1.0
+    },
+    "direct_vega": {
+      "items": 231,
+      "correct": 203,
+      "accuracy": 0.8787878787878788,
+      "point_accuracy": 0.8831168831168831,
+      "unresolved": 0,
+      "kai_coverage": 0.0
+    },
+    "auto": {
+      "items": 231,
+      "correct": 190,
+      "accuracy": 0.8225108225108225,
+      "point_accuracy": 0.8268398268398268,
+      "unresolved": 0,
+      "kai_coverage": 0.5411255411255411
+    }
+  },
+  "paired_quality": {
+    "direct_kai": {
+      "accuracy_gain": 0.1645021645021645,
+      "ci95": [
+        0.1134453781512605,
+        0.2171945701357466
+      ],
+      "rescued_items": 41,
+      "harmed_items": 3,
+      "source_groups": 195
+    },
+    "direct_vega": {
+      "accuracy_gain": -0.05627705627705628,
+      "ci95": [
+        -0.08888888888888889,
+        -0.02586206896551724
+      ],
+      "rescued_items": 1,
+      "harmed_items": 14,
+      "source_groups": 195
+    }
+  },
+  "passes": {
+    "0": {
+      "arms": {
+        "direct_kai": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 13.95966606194484,
+            "p50": 5.740388063713908,
+            "p95": 47.68524505198002,
+            "p99": 106.20992907788604
+          },
+          "physical_calls": {
+            "kai": 231.0,
+            "vega": 0.0
+          },
+          "served_by": {
+            "kai": 231
+          }
+        },
+        "direct_vega": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 210.9799679102642,
+            "p50": 54.42047608084977,
+            "p95": 991.41108058393,
+            "p99": 1378.6877365782855
+          },
+          "physical_calls": {
+            "kai": 0.0,
+            "vega": 231.0
+          },
+          "served_by": {
+            "vega": 231
+          }
+        },
+        "auto": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 126.61113945396367,
+            "p50": 24.279136210680008,
+            "p95": 493.97859908640385,
+            "p99": 1132.4457302456715
+          },
+          "physical_calls": {
+            "kai": 231.0,
+            "vega": 106.0
+          },
+          "served_by": {
+            "kai": 125,
+            "vega": 106
+          }
+        }
+      },
+      "auto_over_direct_vega_mean_elapsed_ratio": 0.6001097673302093,
+      "ratio_source_group_ci95": [
+        0.47477256257825046,
+        0.7479700896718847
+      ]
+    },
+    "1": {
+      "arms": {
+        "direct_kai": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 9.711536402447205,
+            "p50": 5.7658180594444275,
+            "p95": 30.77986161224544,
+            "p99": 39.09184483345598
+          },
+          "physical_calls": {
+            "kai": 231.0,
+            "vega": 0.0
+          },
+          "served_by": {
+            "kai": 231
+          }
+        },
+        "direct_vega": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 110.98202586161916,
+            "p50": 54.82919700443745,
+            "p95": 350.83265707362443,
+            "p99": 474.988279258832
+          },
+          "physical_calls": {
+            "kai": 0.0,
+            "vega": 231.0
+          },
+          "served_by": {
+            "vega": 231
+          }
+        },
+        "auto": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 88.15254845144429,
+            "p50": 7.557679899036884,
+            "p95": 380.45258808415383,
+            "p99": 513.244276656769
+          },
+          "physical_calls": {
+            "kai": 231.0,
+            "vega": 106.0
+          },
+          "served_by": {
+            "kai": 125,
+            "vega": 106
+          }
+        }
+      },
+      "auto_over_direct_vega_mean_elapsed_ratio": 0.7942957228169505,
+      "ratio_source_group_ci95": [
+        0.7227957423595572,
+        0.8558303654977525
+      ]
+    },
+    "2": {
+      "arms": {
+        "direct_kai": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 10.035751351191626,
+            "p50": 6.048512179404497,
+            "p95": 31.660903594456613,
+            "p99": 39.817710570059695
+          },
+          "physical_calls": {
+            "kai": 231.0,
+            "vega": 0.0
+          },
+          "served_by": {
+            "kai": 231
+          }
+        },
+        "direct_vega": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 111.03287900725452,
+            "p50": 54.84484601765871,
+            "p95": 351.3083865400404,
+            "p99": 475.54470163304325
+          },
+          "physical_calls": {
+            "kai": 0.0,
+            "vega": 231.0
+          },
+          "served_by": {
+            "vega": 231
+          }
+        },
+        "auto": {
+          "requests": 231,
+          "http_failures": 0,
+          "elapsed_ms": {
+            "mean": 88.59240106464206,
+            "p50": 8.339752908796072,
+            "p95": 381.92574796266854,
+            "p99": 515.0564936688166
+          },
+          "physical_calls": {
+            "kai": 231.0,
+            "vega": 106.0
+          },
+          "served_by": {
+            "kai": 125,
+            "vega": 106
+          }
+        }
+      },
+      "auto_over_direct_vega_mean_elapsed_ratio": 0.7978933974940318,
+      "ratio_source_group_ci95": [
+        0.7259179911233667,
+        0.8585999407141455
+      ]
+    }
+  },
+  "limits": [
+    "Serialized low-concurrency timing, not throughput or equal-resource SLO comparison",
+    "Keep all three passes separate: warmup did not eliminate first-pass shape/cache state",
+    "Runtime forward/readout elapsed is not kernel GPU active time, billing or provisioned cost",
+    "Two resident dedicated GPUs; fewer Vega calls do not establish fewer GPUs or dollars",
+    "Repeated passes do not increase independent quality sample size; 231 inputs/195 source groups"
+  ],
+  "determinism_vs_pass0": {
+    "direct_kai": {
+      "1": {
+        "changed_answer_payloads": 0,
+        "changed_selected_models": 0,
+        "changed_physical_calls": 0
+      },
+      "2": {
+        "changed_answer_payloads": 0,
+        "changed_selected_models": 0,
+        "changed_physical_calls": 0
+      }
+    },
+    "direct_vega": {
+      "1": {
+        "changed_answer_payloads": 0,
+        "changed_selected_models": 0,
+        "changed_physical_calls": 0
+      },
+      "2": {
+        "changed_answer_payloads": 0,
+        "changed_selected_models": 0,
+        "changed_physical_calls": 0
+      }
+    },
+    "auto": {
+      "1": {
+        "changed_answer_payloads": 0,
+        "changed_selected_models": 0,
+        "changed_physical_calls": 0
+      },
+      "2": {
+        "changed_answer_payloads": 0,
+        "changed_selected_models": 0,
+        "changed_physical_calls": 0
+      }
+    }
+  },
+  "uncertainty": {
+    "method": "paired source-group percentile bootstrap",
+    "replicates": 5000,
+    "seed": 20261010,
+    "interval_indices_zero_based": [
+      124,
+      4874
+    ],
+    "quantile_method": "linear interpolation at (N-1)*p",
+    "p95_intervals": null,
+    "p95_interval_note": "No p95 confidence interval was calculated; pass differences are repeated measurements, not CI."
+  }
+}

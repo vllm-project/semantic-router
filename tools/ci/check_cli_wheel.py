@@ -5,42 +5,109 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import venv
 from pathlib import Path
 
+DEFAULT_IMAGES = (
+    "VLLM_SR_CONTAINER_IMAGE_DEFAULT",
+    "VLLM_SR_CONTAINER_IMAGE_ROCM",
+    "VLLM_SR_CONTAINER_IMAGE_CUDA",
+    "VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT",
+)
 
-def check_wheel(wheel: Path) -> None:
+
+def check_wheel(wheel: Path, image_tag: str | None = None) -> None:
     wheel = wheel.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="vllm-sr-wheel-") as temporary:
         root = Path(temporary)
         environment = root / "venv"
-        venv.EnvBuilder(with_pip=True).create(environment)
         python = environment / (
             "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
         )
-        subprocess.run(
-            [
-                str(python),
-                "-I",
-                "-m",
-                "pip",
-                "install",
-                "--disable-pip-version-check",
-                str(wheel),
-            ],
-            cwd=root,
-            check=True,
-        )
+        child_env: dict[str, str] | None = None
+        launcher_version: str | None = None
+        if sys.platform not in {"darwin", "linux"}:
+            venv.EnvBuilder(with_pip=True).create(environment)
+            subprocess.run(
+                args=[
+                    str(python),
+                    "-I",
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    str(wheel),
+                ],
+                cwd=root,
+                check=True,
+            )
+        else:
+            child_env = {
+                "PATH": os.defpath,
+                "HOME": str(root),
+                "TMPDIR": str(root),
+                "SHELL": "/bin/bash",
+                "PIP_CONFIG_FILE": os.devnull,
+            }
+            shell_config = root / ".bashrc"
+            existing_shell_config = "export EXISTING_SETTING=preserved\n"
+            shell_config.write_text(data=existing_shell_config, encoding="utf-8")
+            subprocess.run(
+                args=[
+                    "bash",
+                    str(Path(__file__).resolve().parents[2] / "install.sh"),
+                    "--mode",
+                    "cli",
+                    "--runtime",
+                    "skip",
+                    "--no-launch",
+                    "--python",
+                    sys.executable,
+                    "--pip-spec",
+                    str(wheel),
+                    "--install-root",
+                    str(root),
+                    "--bin-dir",
+                    str(root / "bin"),
+                ],
+                cwd=root,
+                env=child_env,
+                check=True,
+                timeout=300,
+            )
+            completion = shell_config.read_text(encoding="utf-8")
+            if not completion.startswith(existing_shell_config) or (
+                "vllm-sr completion show bash" not in completion
+            ):
+                raise RuntimeError(
+                    "installer did not preserve and extend shell configuration"
+                )
+            if (root / "runtime.env").exists():
+                raise RuntimeError(
+                    "CLI-only installation configured a container runtime"
+                )
+            launcher_version = subprocess.check_output(
+                args=[str(root / "bin" / "vllm-sr"), "--version"],
+                cwd=root,
+                env=child_env,
+                text=True,
+                timeout=60,
+            ).strip()
+            print(
+                f"Installer launcher: {launcher_version}; completion stayed in isolated HOME."
+            )
 
         def cli(*arguments: str) -> str:
             # Neither the working directory nor PYTHONPATH can supply CLI code
             # or missing resources from the checkout under isolated Python.
             result = subprocess.run(
-                [str(python), "-I", "-m", "cli.main", *arguments],
+                args=[str(python), "-I", "-m", "cli.main", *arguments],
                 cwd=root,
+                env=child_env,
                 text=True,
                 capture_output=True,
                 check=False,
@@ -53,7 +120,34 @@ def check_wheel(wheel: Path) -> None:
                 )
             return result.stdout
 
-        print(cli("--version").strip())
+        version = cli("--version").strip()
+        if launcher_version is not None and launcher_version != version:
+            raise RuntimeError("installer launcher does not match the installed wheel")
+        print(version)
+        if image_tag is not None:
+            images = subprocess.run(
+                args=[
+                    str(python),
+                    "-I",
+                    "-c",
+                    "from cli import consts; print("
+                    + ", ".join(f"consts.{name}" for name in DEFAULT_IMAGES)
+                    + ")",
+                ],
+                cwd=root,
+                env=child_env,
+                text=True,
+                capture_output=True,
+                check=True,
+                timeout=60,
+            ).stdout.split()
+            if len(images) != len(DEFAULT_IMAGES) or any(
+                image.rsplit(":", 1)[-1] != image_tag for image in images
+            ):
+                raise RuntimeError(
+                    f"installed CLI does not default to its {image_tag} images: {images}"
+                )
+            print(f"Installed wheel runs its own images: {', '.join(images)}")
         schema = json.loads(cli("config", "schema"))
         if not schema.get("sections"):
             raise RuntimeError("installed CLI has no progressive schema index")
@@ -104,7 +198,11 @@ def check_wheel(wheel: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
-    check_wheel(parser.parse_args().wheel)
+    parser.add_argument(
+        "--image-tag", help="Tag every default first-party image must carry."
+    )
+    args = parser.parse_args()
+    check_wheel(args.wheel, args.image_tag)
 
 
 if __name__ == "__main__":

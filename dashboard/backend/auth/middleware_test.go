@@ -25,8 +25,6 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/me", expected: true},
 		{path: "/api/status", expected: false},
 		{path: "/embedded/grafana/", expected: true},
-		{path: "/embedded/wizmap/", expected: true},
-		{path: "/embedded/wizmap/assets/index.js", expected: false},
 	}
 
 	for _, tc := range testCases {
@@ -190,7 +188,6 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermTopologyRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
-		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
@@ -208,16 +205,10 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", expected: PermEvalRun},
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/context-recovery/invalidate", expected: PermConfigWrite},
-		{method: http.MethodGet, path: "/api/openclaw/teams", expected: PermOpenClawRead},
-		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
-		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
-		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermInferenceRun},
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", expected: PermFeedbackSubmit},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", expected: PermReplayRead},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/record-1", expected: PermReplayRead},
-		{method: http.MethodGet, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigWrite},
-		{method: http.MethodDelete, path: "/api/router/api/v1/storage/knowledge-bases/example", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/recipe", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/probes", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/packages", expected: PermConfigRead},
@@ -265,6 +256,16 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 		{
 			name: "dataset composition requires write", path: "/api/sr-bench/v1/datasets/compose",
 			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation requires write", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation needs no generation permission", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
 			wantRequired: []string{PermEvalWrite},
 		},
 		{
@@ -404,10 +405,11 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 		readerRecorder,
 		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
 	)
-	if readerRecorder.Code != http.StatusForbidden || nextCalled {
+	if readerRecorder.Code != http.StatusNoContent || !nextCalled {
 		t.Fatalf("read role status = %d, next called = %v", readerRecorder.Code, nextCalled)
 	}
 
+	nextCalled = false
 	writerRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		writerRecorder,

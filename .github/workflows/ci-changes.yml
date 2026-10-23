@@ -9,6 +9,9 @@ on:
       full:
         type: boolean
         default: false
+      publish:
+        type: boolean
+        default: false
       draft:
         type: boolean
         default: false
@@ -17,22 +20,32 @@ on:
         type: string
         default: ''
     outputs:
+      publisher_ready:
+        value: ${{ jobs.plan.outputs.publisher_ready }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
       dispatch:
         value: ${{ jobs.plan.outputs.dispatch }}
+      worker_labels:
+        value: ${{ jobs.plan.outputs.worker_labels }}
+      image_producers:
+        value: ${{ jobs.plan.outputs.image_producers }}
       images:
         value: ${{ jobs.plan.outputs.images }}
+      build_images:
+        value: ${{ jobs.plan.outputs.build_images }}
+      published_images:
+        value: ${{ jobs.plan.outputs.published_images }}
       publish_images:
         value: ${{ jobs.plan.outputs.publish_images }}
-      build_native:
-        value: ${{ jobs.plan.outputs.build_native }}
       multiarch:
         value: ${{ jobs.plan.outputs.multiarch }}
       publish_helm:
         value: ${{ jobs.plan.outputs.publish_helm }}
       publish_python:
         value: ${{ jobs.plan.outputs.publish_python }}
+      component_batches:
+        value: ${{ jobs.plan.outputs.component_batches }}
       quality:
         value: ${{ jobs.plan.outputs.quality }}
       generated:
@@ -45,67 +58,122 @@ on:
         value: ${{ jobs.plan.outputs.storage }}
       dashboard:
         value: ${{ jobs.plan.outputs.dashboard }}
+      operator-source:
+        value: ${{ jobs.plan.outputs.operator-source }}
       operator:
         value: ${{ jobs.plan.outputs.operator }}
       local:
         value: ${{ jobs.plan.outputs.local }}
       recipes:
         value: ${{ jobs.plan.outputs.recipes }}
-      native:
-        value: ${{ jobs.plan.outputs.native }}
+      platform:
+        value: ${{ jobs.plan.outputs.platform }}
       performance:
         value: ${{ jobs.plan.outputs.performance }}
       package:
         value: ${{ jobs.plan.outputs.package }}
-      component_batches:
-        value: ${{ jobs.plan.outputs.component_batches }}
-      e2e:
-        value: ${{ jobs.plan.outputs.e2e }}
+      tools:
+        value: ${{ jobs.plan.outputs.tools }}
+      e2e-router:
+        value: ${{ jobs.plan.outputs.e2e-router }}
+      e2e-fixtures:
+        value: ${{ jobs.plan.outputs.e2e-fixtures }}
+      e2e-dashboard:
+        value: ${{ jobs.plan.outputs.e2e-dashboard }}
 
 permissions:
   contents: read
+  actions: read
+  issues: read
+  pull-requests: read
 
 jobs:
   plan:
-    name: Verification Plan
+    name: Resolve Contracts
     runs-on: ubuntu-24.04
     outputs:
+      publisher_ready: ${{ steps.publisher.outputs.ready }}
       plan: ${{ steps.plan.outputs.plan }}
       dispatch: ${{ steps.plan.outputs.dispatch }}
+      worker_labels: ${{ steps.plan.outputs.worker_labels }}
+      image_producers: ${{ steps.plan.outputs.image_producers }}
       images: ${{ steps.plan.outputs.images }}
+      build_images: ${{ steps.plan.outputs.build_images }}
+      published_images: ${{ steps.plan.outputs.published_images }}
       publish_images: ${{ steps.plan.outputs.publish_images }}
-      build_native: ${{ steps.plan.outputs.build_native }}
       multiarch: ${{ steps.plan.outputs.multiarch }}
       publish_helm: ${{ steps.plan.outputs.publish_helm }}
       publish_python: ${{ steps.plan.outputs.publish_python }}
+      component_batches: ${{ steps.plan.outputs.component_batches }}
       quality: ${{ steps.plan.outputs.quality }}
       generated: ${{ steps.plan.outputs.generated }}
       security: ${{ steps.plan.outputs.security }}
       core: ${{ steps.plan.outputs.core }}
       storage: ${{ steps.plan.outputs.storage }}
       dashboard: ${{ steps.plan.outputs.dashboard }}
+      operator-source: ${{ steps.plan.outputs.operator-source }}
       operator: ${{ steps.plan.outputs.operator }}
       local: ${{ steps.plan.outputs.local }}
       recipes: ${{ steps.plan.outputs.recipes }}
-      native: ${{ steps.plan.outputs.native }}
+      platform: ${{ steps.plan.outputs.platform }}
       performance: ${{ steps.plan.outputs.performance }}
       package: ${{ steps.plan.outputs.package }}
-      component_batches: ${{ steps.plan.outputs.component_batches }}
-      e2e: ${{ steps.plan.outputs.e2e }}
+      tools: ${{ steps.plan.outputs.tools }}
+      e2e-router: ${{ steps.plan.outputs.e2e-router }}
+      e2e-fixtures: ${{ steps.plan.outputs.e2e-fixtures }}
+      e2e-dashboard: ${{ steps.plan.outputs.e2e-dashboard }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - run: python3 -m pip install PyYAML==6.0.3
+      - id: base
+        name: Resolve the base the merge ref applies to
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            sha="$(git rev-parse --verify "$GITHUB_SHA^1")"
+          else
+            sha="$EVENT_BEFORE"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - id: publisher
+        name: Check whether the trusted base can publish PR status
+        run: |
+          ready=false
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            base="$(git rev-parse --verify "$GITHUB_SHA^1")"
+            if git cat-file -e "$base:.github/workflows/ci-status.yml" 2>/dev/null \
+              && git cat-file -e "$base:tools/ci/pr_ci_status.py" 2>/dev/null; then
+              ready=true
+            fi
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+      - name: Resolve committer authorization for this exact PR source
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          mkdir -p .agent-harness/ci
+          python3 tools/ci/manual_ci.py resolve --event "$GITHUB_EVENT_PATH" \
+            --source "$GITHUB_SHA" --base "$BASE_SHA" \
+            --output .agent-harness/ci/authorization.json
       - id: plan
         env:
           PROFILE: ${{ inputs.profile }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
           FULL: ${{ inputs.full }}
+          PUBLISH: ${{ inputs.publish }}
           DRAFT: ${{ inputs.draft }}
           VERIFICATION: ${{ inputs.verification }}
         run: |
           flags=()
+          if [[ "$PUBLISH" == true ]]; then flags+=(--publish); fi
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            flags+=(--require-approval --authorization .agent-harness/ci/authorization.json)
+          fi
           if [[ "$FULL" == true ]]; then flags+=(--full); fi
           if [[ "$DRAFT" == true ]]; then flags+=(--draft); fi
           if [[ -n "$VERIFICATION" ]]; then flags+=(--verification "$VERIFICATION"); fi
@@ -114,6 +182,7 @@ jobs:
             --output .agent-harness/ci/plan.json --github-output "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-plan
           path: .agent-harness/ci/plan.json
           include-hidden-files: true

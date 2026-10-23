@@ -355,9 +355,8 @@ test('a Markdown final with no parsed answer is explained separately from an out
   await expect(page.getByText(/final text did not match the required answer format/)).toHaveCount(0)
   await page.getByRole('tab', { name: 'Calls', exact: true }).click()
   await page.getByRole('button', { name: 'format-call', exact: true }).click()
-  await page.getByText('Original call receipt', { exact: true }).click()
   await expect(
-    page.getByRole('tabpanel', { name: 'Calls', exact: true }).locator('pre'),
+    page.getByRole('region', { name: 'Visible response', exact: true }).locator('pre'),
   ).toContainText('**B**')
   expect(writes).toEqual([])
 })

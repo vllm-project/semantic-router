@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { benchApi } from './api'
 import BenchPagination from './BenchPagination'
+import CallDetail from './CallDetail'
 import { money, number, seconds } from './model'
 import type { CallRecord, Manifest, PageState } from './types'
 import { targetName } from './targetPresentation'
@@ -167,30 +168,7 @@ export default function CallEvidence({
               {error}
             </p>
           ) : detail ? (
-            <>
-              <div className={styles.metricGrid}>
-                <div>
-                  <span>Status</span>
-                  <strong>{detail.status}</strong>
-                </div>
-                <div>
-                  <span>Selected model</span>
-                  <strong>{detail.selected_model ?? detail.model ?? '—'}</strong>
-                </div>
-                <div>
-                  <span>Model cost</span>
-                  <strong>{money(detail.cost_usd)}</strong>
-                </div>
-                <div>
-                  <span>Latency</span>
-                  <strong>{seconds(detail.latency_s)}</strong>
-                </div>
-              </div>
-              <details className={styles.details}>
-                <summary>Original call receipt</summary>
-                <pre>{JSON.stringify(detail, null, 2)}</pre>
-              </details>
-            </>
+            <CallDetail key={detail.id} call={detail} />
           ) : (
             <ProductLoadingState compact label="Loading call evidence…" />
           )}

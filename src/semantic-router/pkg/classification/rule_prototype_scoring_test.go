@@ -25,8 +25,9 @@ func prototypeRuleVectors() ([]string, map[string][]float32) {
 
 func TestRecipeEmbeddingPrototypeOverrideControlsBankAndScore(t *testing.T) {
 	candidates, vectors := prototypeRuleVectors()
-	stubEmbeddingLookup(t, vectors)
-	stubMultiModalImageLookup(t, map[string][]float32{"query-image": vectors["query"]})
+	provider := stubEmbeddingLookup(t, vectors)
+	image := stubMultiModalImageLookup(t, map[string][]float32{testImageURI("query-image"): vectors["query"]})
+	provider.image = image
 	disabled := false
 	for _, modality := range []config.QueryModality{config.QueryModalityText, config.QueryModalityImage} {
 		for _, threshold := range []float32{0.8, 0.9} {
@@ -46,11 +47,11 @@ func TestRecipeEmbeddingPrototypeOverrideControlsBankAndScore(t *testing.T) {
 			}
 			for i := range cfg.Recipes {
 				scoped := cfg.ConfigForRecipe(&cfg.Recipes[i])
-				classifier := newTestEmbeddingClassifier(t, scoped.EmbeddingRules, scoped.EmbeddingConfig)
+				classifier := newTestEmbeddingClassifier(t, scoped.EmbeddingRules, scoped.EmbeddingConfig, provider)
 				var result *EmbeddingClassificationResult
 				var err error
 				if modality == config.QueryModalityImage {
-					result, err = classifier.ClassifyDetailedMultimodal(modality, "query-image")
+					result, err = classifier.ClassifyDetailedMultimodal(modality, testImageURI("query-image"))
 				} else {
 					result, err = classifier.ClassifyDetailed("query")
 				}
@@ -60,6 +61,8 @@ func TestRecipeEmbeddingPrototypeOverrideControlsBankAndScore(t *testing.T) {
 				wantCount, wantScore := 1, 0.0
 				if cfg.Recipes[i].Name == "retain" {
 					wantCount, wantScore = 10, 0.875
+				} else if modality == config.QueryModalityImage {
+					wantCount, wantScore = 10, 1 // Cross-modal default preserves every anchor.
 				}
 				if len(result.Scores) != 1 || result.Scores[0].PrototypeCount != wantCount || math.Abs(result.Scores[0].Score-wantScore) > 1e-6 {
 					t.Fatalf("%s/%s scores = %+v; want count %d score %g", cfg.Recipes[i].Name, modality, result.Scores, wantCount, wantScore)
@@ -82,17 +85,15 @@ func TestComplexityPrototypeOverrideAppliesToAllFourBanksAndScores(t *testing.T)
 		vector[i] = -1
 		vectors[easy[i]] = vector
 	}
-	stubEmbeddingLookup(t, vectors)
-	stubMultiModalImageLookup(t, vectors)
-	original := getMultiModalTextEmbedding
-	getMultiModalTextEmbedding = func(string, int) ([]float32, error) { return vectors["query"], nil }
-	t.Cleanup(func() { getMultiModalTextEmbedding = original })
+	provider := stubEmbeddingLookup(t, vectors)
+	image := stubMultiModalImageLookup(t, vectors)
+	provider.image = image
 	disabled := false
 	rules := []config.ComplexityRule{
-		{Name: "retain", Threshold: 0.8, Hard: config.ComplexityCandidates{Candidates: hard, ImageCandidates: hard}, Easy: config.ComplexityCandidates{Candidates: easy, ImageCandidates: easy}, PrototypeScoring: &config.PrototypeScoringConfig{Enabled: &disabled, BestWeight: 0.75, TopM: 2}},
-		{Name: "inherit", Threshold: 0.8, Hard: config.ComplexityCandidates{Candidates: hard, ImageCandidates: hard}, Easy: config.ComplexityCandidates{Candidates: easy, ImageCandidates: easy}},
+		{Name: "retain", Threshold: 0.8, Hard: config.ComplexityCandidates{Candidates: hard, ImageCandidates: testImageURIs(hard)}, Easy: config.ComplexityCandidates{Candidates: easy, ImageCandidates: testImageURIs(easy)}, PrototypeScoring: &config.PrototypeScoringConfig{Enabled: &disabled, BestWeight: 0.75, TopM: 2}},
+		{Name: "inherit", Threshold: 0.8, Hard: config.ComplexityCandidates{Candidates: hard, ImageCandidates: testImageURIs(hard)}, Easy: config.ComplexityCandidates{Candidates: easy, ImageCandidates: testImageURIs(easy)}},
 	}
-	classifier, err := NewComplexityClassifier(rules, "qwen3", config.PrototypeScoringConfig{MaxPrototypes: 1, BestWeight: 1, TopM: 1})
+	classifier, err := NewComplexityClassifier(rules, "qwen3", config.PrototypeScoringConfig{MaxPrototypes: 1, BestWeight: 1, TopM: 1}, provider, provider)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func TestComplexityPrototypeOverrideAppliesToAllFourBanksAndScores(t *testing.T)
 			}
 		}
 	}
-	for _, image := range []string{"", "query"} {
+	for _, image := range []string{"", testImageURI("query")} {
 		results, classifyErr := classifier.ClassifyDetailedWithImage("query", image)
 		if classifyErr != nil {
 			t.Fatal(classifyErr)

@@ -160,34 +160,25 @@ On **Step 1 — Connect model**, register your Ollama model:
 | Field | Value |
 | --- | --- |
 | **Model name** | Your Ollama tag, for example `llama3.2:3b` |
-| **Provider** | **Local vLLM** |
+| **Provider** | **Ollama** |
 | **Base URL or host** | `host.docker.internal:11434` |
 | **Endpoint label** | `primary` (or any short label) |
 | **Default** | Select this model if it is your only backend |
 
-![Configure an Ollama backend in the setup dashboard](/img/installation/ollama/setup-wizard-ollama-model.png)
+The **Ollama** choice writes an Ollama backend reference and defaults to
+`host.docker.internal:11434` for the local container stack. The Router uses
+that provider identity to send output limits in the `max_tokens` field Ollama
+reads. You can replace the default address if Ollama runs on another host.
 
-Why **Local vLLM** and not **OpenAI-compatible API**?
-
-- Ollama serves an OpenAI-compatible surface at `/v1/chat/completions`.
-- **Local vLLM** writes the host and protocol you enter as an `endpoint`
-  backend reference, so enter `host.docker.internal:11434` explicitly.
-
-Alternatively, choose **OpenAI-compatible API** and enter
-`http://host.docker.internal:11434/v1`; that provider type writes a `base_url`.
-Both paths use Ollama's OpenAI-compatible API.
-
-Click **Continue** when the model card validates.
+Click **Next** when the model card validates.
 
 ## 6. Choose routing and activate
 
-On **Step 2 — Choose routing**, keep the **Single-model baseline** if you only registered one Ollama model. You can import a preset or remote config later when you add more backends.
+On **Step 2 — Choose routing**, keep **From scratch** (one default catch-all route) if you only registered one Ollama model. You can import a preset or remote config later when you add more backends.
 
-On **Step 3 — Review & activate**, confirm the model summary, then click **Activate configuration**.
+On **Step 3 — Review & activate**, confirm the model summary, then click **Activate**.
 
-![Review the generated config and activate setup](/img/installation/ollama/setup-wizard-ollama-activate.png)
-
-Activation writes `config.yaml` to the current directory and exits setup mode. Envoy starts on port `8899` and routes requests through Semantic Router to your Ollama backend.
+Activation writes the configuration and exits setup mode. The `vllm-sr serve` that is still waiting in your terminal then starts the Router, which serves port `8899` and routes requests to your Ollama backend.
 
 ## 7. Test through Semantic Router
 

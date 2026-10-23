@@ -26,8 +26,10 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"kmeans":        selection.MethodKMeans,
 	"svm":           selection.MethodSVM,
 	"multi_factor":  selection.MethodMultiFactor,
+	"random":        selection.MethodRandom,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
+	"decision":      selection.MethodDecision,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -49,18 +51,21 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	}
 
 	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
-		Text:                   signalInput.compressedText,
-		ContextText:            signalInput.allMessagesText,
-		CurrentUserText:        signalInput.currentUserText,
-		PriorUserMessages:      signalInput.priorUserMessages,
-		NonUserMessages:        nonUserMessages,
-		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
-		ImageURL:               ctx.RequestImageURL,
-		UncompressedText:       signalInput.evaluationText,
-		SkipCompressionSignals: signalInput.skipCompressionSignals,
-		ConversationFacts:      signalInput.conversationFacts,
-		RequestFacts:           signalInput.requestFacts,
+		ToolResultTexts:          signalInput.toolResultTexts,
+		ToolResultScanIncomplete: signalInput.toolResultScanIncomplete,
+		Text:                     signalInput.compressedText,
+		ContextText:              signalInput.allMessagesText,
+		CurrentUserText:          signalInput.currentUserText,
+		PriorUserMessages:        signalInput.priorUserMessages,
+		NonUserMessages:          nonUserMessages,
+		HasPriorAssistantReply:   signalInput.hasAssistantReply,
+		Headers:                  ctx.Headers,
+		ImageURL:                 ctx.RequestImageURL,
+		Audio:                    ctx.RequestAudio,
+		UncompressedText:         signalInput.evaluationText,
+		SkipCompressionSignals:   signalInput.skipCompressionSignals,
+		ConversationFacts:        signalInput.conversationFacts,
+		RequestFacts:             signalInput.requestFacts,
 	})
 	if authzErr != nil {
 		signalSpan.SetStatus(codes.Error, "signal_evaluation_failed")
@@ -155,6 +160,8 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"action":         signals.MatchedActionRules,
+		"decision":       signals.MatchedDecisionRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -200,6 +207,8 @@ func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *c
 			{"metadata", signals.Metrics.Metadata.ExecutionTimeMs},
 			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
 			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
+			{"action", signals.Metrics.Action.ExecutionTimeMs},
+			{"decision", signals.Metrics.Decision.ExecutionTimeMs},
 		}
 		for _, timing := range timings {
 			if timing.ms > 0 {
@@ -342,9 +351,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := r.effectiveReplayConfigForRequest(ctx, result.Decision); pluginCfg != nil {
-		ctx.RouterReplayPluginConfig = pluginCfg
-	}
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, result.Decision)
 	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
 	// Snapshot the retention directive emitted by this decision (deep clone)
@@ -463,24 +470,15 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	logging.ComponentDebugEvent("extproc", "decision_model_selected", selectionFields)
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = usedMethod
+	if orch := r.fallbackOrchestratorForContext(ctx); orch != nil && orch.Policy().Enabled {
+		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
+	}
 	return selectedModel, applyReasoningModeFromSelectedModel(
 		selectedModelRef,
 		decisionName,
 		evaluationConfidence,
 		ctx,
 	), nil
-}
-
-func firstDecisionModelName(modelRefs []config.ModelRef) string {
-	for _, modelRef := range modelRefs {
-		if model := strings.TrimSpace(modelRef.LoRAName); model != "" {
-			return model
-		}
-		if model := strings.TrimSpace(modelRef.Model); model != "" {
-			return model
-		}
-	}
-	return ""
 }
 
 func applyReasoningModeFromSelectedModel(

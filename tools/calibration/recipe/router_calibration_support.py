@@ -255,7 +255,25 @@ def evaluate_probes(
             # reports remain deterministic even when requests finish out of order.
             results = list(executor.map(evaluate_one, probe_list))
 
-    wall_time_seconds = time.perf_counter() - started
+    return summarize_evaluation(
+        results,
+        manifest,
+        router_url,
+        scope=scope,
+        wall_time_seconds=time.perf_counter() - started,
+    )
+
+
+def summarize_evaluation(
+    results: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    router_url: str,
+    *,
+    scope: str,
+    wall_time_seconds: float,
+) -> dict[str, Any]:
+    """Summarize probe results; also merges the results of a manifest's probe shards."""
+    settings = resolve_evaluation_settings(manifest)
     decision_summaries = summarize_decision_results(results, manifest)
     tag_summaries = summarize_tag_results(results)
     matched = sum(1 for result in results if result["matched"])
@@ -450,6 +468,7 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "selection_reason": "",
         "selection_method": "",
         "signal_errors": {},
+        "expected_signal_errors": dict(probe.expected_signal_errors),
         "expected_recipe": probe.expected_recipe or "default",
         "actual_recipe": "",
         "expected_algorithm": probe.expected_algorithm,

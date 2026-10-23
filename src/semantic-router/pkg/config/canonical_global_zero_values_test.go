@@ -59,13 +59,3 @@ func TestReconcilePreservesTracingSamplingRateZero(t *testing.T) {
 		t.Fatalf("tracing.sampling.rate = %v, want 0", parsed.Observability.Tracing.Sampling.Rate)
 	}
 }
-
-func TestReconcilePreservesNLIFilteringDisabled(t *testing.T) {
-	cfg := &RouterConfig{}
-	cfg.HallucinationMitigation.HallucinationModel.EnableNLIFiltering = false
-
-	parsed := reconcileRoundTrip(t, cfg)
-	if parsed.HallucinationMitigation.HallucinationModel.EnableNLIFiltering {
-		t.Fatal("hallucination detector enable_nli_filtering = true, want false")
-	}
-}

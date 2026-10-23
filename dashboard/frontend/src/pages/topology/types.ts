@@ -41,8 +41,12 @@ export interface KeywordSignalConfig {
 
 export interface EmbeddingSignalConfig {
   threshold: number
-  candidates: string[]
-  aggregation_method: 'max' | 'avg' | 'min'
+  candidates?: string[]
+  image_candidates?: string[]
+  negative_candidates?: string[]
+  negative_image_candidates?: string[]
+  aggregation_method?: 'max' | 'mean' | 'any'
+  query_modality?: 'text' | 'image' | 'audio'
 }
 
 export interface DomainSignalConfig {
@@ -107,6 +111,7 @@ export interface AuthzSignalConfig {
 
 export interface PIISignalConfig {
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
 }
@@ -167,6 +172,8 @@ export interface RawRuleNode {
 }
 
 export interface RawRuleCombination {
+  type?: string
+  name?: string
   operator?: string
   conditions?: RawRuleNode[]
 }
@@ -264,6 +271,7 @@ export interface PricingConfig {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -385,7 +393,6 @@ export interface FilterState {
 // ============== Config Data (from API) ==============
 export interface ConfigData {
   embedding_models?: {
-    bert_model_path?: string
     mmbert_model_path?: string
     use_cpu?: boolean
     embedding_config?: {
@@ -397,21 +404,18 @@ export interface ConfigData {
     enabled: boolean
     model_id?: string
     model_ref?: string
-    use_modernbert?: boolean
     threshold?: number
     use_vllm?: boolean
   }
   classifier?: {
     category_model?: {
       model_id?: string
-      use_modernbert?: boolean
       threshold?: number
     }
     pii_model?: {
       enabled?: boolean
       model_id?: string
       model_ref?: string
-      use_modernbert?: boolean
       threshold?: number
     }
   }
@@ -424,12 +428,7 @@ export interface ConfigData {
     keywords: string[]
     case_sensitive?: boolean
   }>
-  embedding_rules?: Array<{
-    name: string
-    threshold: number
-    candidates: string[]
-    aggregation_method?: 'max' | 'avg' | 'min'
-  }>
+  embedding_rules?: Array<EmbeddingSignalConfig & { name: string }>
   fact_check_rules?: Array<{
     name: string
     description?: string
@@ -496,12 +495,12 @@ export interface ConfigData {
   }>
   hallucination?: Array<{
     name: string
-    use_nli?: boolean
     description?: string
   }>
   pii?: Array<{
     name: string
     threshold?: number
+    source?: 'tool_result'
     pii_types_allowed?: string[]
     include_history?: boolean
     description?: string
@@ -583,12 +582,7 @@ export interface ConfigData {
       keywords: string[]
       case_sensitive?: boolean
     }>
-    embeddings?: Array<{
-      name: string
-      threshold: number
-      candidates: string[]
-      aggregation_method?: 'max' | 'avg' | 'min'
-    }>
+    embeddings?: Array<EmbeddingSignalConfig & { name: string }>
     domains?: Array<{
       name: string
       description?: string
@@ -658,12 +652,12 @@ export interface ConfigData {
     }>
     hallucination?: Array<{
       name: string
-      use_nli?: boolean
       description?: string
     }>
     pii?: Array<{
       name: string
       threshold?: number
+      source?: 'tool_result'
       pii_types_allowed?: string[]
       include_history?: boolean
       description?: string
@@ -765,7 +759,6 @@ export interface ConfigData {
           model_id?: string
           model_ref?: string
           threshold?: number
-          use_modernbert?: boolean
           use_vllm?: boolean
         }
         classifier?: {

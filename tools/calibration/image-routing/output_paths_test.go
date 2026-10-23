@@ -63,13 +63,13 @@ func TestReportCarriesScoringProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"target_layer":0`, `"target_dimension":384`, `"artifact_files":{"model.safetensors":"sha256:abc"}`} {
+	for _, want := range []string{`"target_layer":0`, `"target_dimension":0`, `"artifact_files":{"model.safetensors":"sha256:abc"}`} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("JSON report lacks %s", want)
 		}
 	}
 	markdown := renderMarkdown(report)
-	for _, want := range []string{"Target layer (candidate text embeddings): `0 (final layer)`", "Model file `model.safetensors`: `sha256:abc`"} {
+	for _, want := range []string{"Target text layer: `0 (final layer)`", "Target dimension (all candidate modalities): `0`", "Model file `model.safetensors`: `sha256:abc`"} {
 		if !strings.Contains(markdown, want) {
 			t.Errorf("Markdown report lacks %q", want)
 		}

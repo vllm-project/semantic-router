@@ -41,7 +41,7 @@ def dataset_manifest(**overrides):
         "task": "jailbreak",
         "source": {
             "type": "huggingface",
-            "locator": "llm-semantic-router/jailbreak-detection-dataset",
+            "locator": "vllm-sr/jailbreak-detection-dataset",
             "revision": DATASET_REVISION,
         },
         "license": "unknown-upstream",
@@ -94,7 +94,7 @@ def artifact_manifest(**overrides):
         "id": "mmbert32k-jailbreak-detector-merged",
         "task": "jailbreak",
         "identity": {
-            "repo": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+            "repo": "vllm-sr/mmbert32k-jailbreak-detector-merged",
             "revision": ARTIFACT_REVISION,
             "digest": artifact_identity_digest(files),
         },
@@ -468,6 +468,14 @@ def test_latency_percentiles_use_nearest_rank():
     assert percentiles["mean"] == EXPECTED_MEAN_MS
     assert percentiles["p50"] == EXPECTED_P50_MS
     assert percentiles["p95"] == EXPECTED_P95_MS
+
+
+def test_macro_f1_leaves_labels_without_rows_out():
+    """A split with no rows for a declared label keeps the label, not a false zero."""
+    metrics = classification_metrics([0, 1, 1], [0, 1, 1], {"a": 0, "b": 1, "c": 2})
+    assert metrics["per_label"]["c"]["support"] == 0
+    assert metrics["macro_f1"] == 1.0
+    assert metrics["weighted_f1"] == 1.0
 
 
 def test_metrics_reject_misaligned_inputs():

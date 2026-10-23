@@ -1,106 +1,142 @@
 package handlers
 
 import (
+	"context"
+	"os"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
-func collectInContainerStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
-	return collectManagedDockerStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...)
+// StackState locates what tells a managed service that does not answer apart:
+// the runtime config, whose setup block says the stack waits for first-run
+// setup, and the files `vllm-sr serve` and the Dashboard keep beside it (the
+// CLI's heartbeat and the pending activation). The Dashboard reads them instead
+// of asking a container runtime.
+type StackState struct {
+	ConfigPath string
+	Setup      *setupmode.Resolver
 }
 
-func collectHostStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
-	if status, ok := collectSplitManagedHostStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...); ok {
-		return status
-	}
-
-	if status, ok := collectDirectStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...); ok {
-		return status
-	}
-	return collectDashboardOnlyHostStatus(routerAPIURL, envoyURL)
+// stoppedService is the state a managed service reports while it does not
+// answer its HTTP probe. Only the starting state may mention starting: the
+// status history counts a message that does as a start, not an outage.
+type stoppedService struct {
+	status  string
+	message string
 }
 
-func collectSplitManagedHostStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
-	if !managedRuntimeUsesSplitContainers() {
-		return SystemStatus{}, false
-	}
-
-	switch managedStatus := managedRuntimeContainerStatus(); managedStatus {
-	case "running", "exited":
-		return collectManagedDockerStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...), true
-	case "not found":
-		return SystemStatus{}, false
+func (s StackState) stoppedService() stoppedService {
+	switch {
+	case s.Setup != nil && s.Setup.Active():
+		return stoppedService{"standby", "Waiting for setup: activate a config in the Dashboard"}
+	case s.ConfigPath == "" || !servedByCLI():
+		return stoppedService{"not running", "Not running"}
+	case serveRunning(s.ConfigPath):
+		return stoppedService{"starting", "Starting: `vllm-sr serve` is starting it"}
+	case pendingActivationRecorded(s.ConfigPath):
+		return stoppedService{"not running", "Not running: run `vllm-sr serve` to apply the saved configuration"}
 	default:
-		return unknownContainerStatus(managedStatus), true
+		return stoppedService{"not running", "Not running: run `vllm-sr serve`"}
 	}
 }
 
-func collectManagedDockerStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+// servedByCLI reports whether `vllm-sr serve` created this stack. It names the
+// runtime config on every container it starts; a Kubernetes deployment does
+// not, keeps none of the CLI's files, and takes no `vllm-sr serve` hint.
+func servedByCLI() bool {
+	return strings.TrimSpace(os.Getenv("VLLM_SR_RUNTIME_CONFIG_PATH")) != ""
+}
+
+func collectInContainerStatus(ctx context.Context, runtimePath string, stack StackState, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+	return collectManagedStackStatus(ctx, runtimePath, stack, routerAPIURL, envoyURL, credentialProvider...)
+}
+
+func collectHostStatus(ctx context.Context, runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+	if status, ok := collectDirectStatus(ctx, runtimePath, routerAPIURL, envoyURL, credentialProvider...); ok {
+		return status
+	}
+	return collectDashboardOnlyHostStatus(ctx, routerAPIURL, envoyURL)
+}
+
+// collectManagedStackStatus reports the stack `vllm-sr serve` runs, from its
+// Dashboard container. A service that answers its HTTP probe runs; the state
+// of one that does not comes from the stack's files.
+func collectManagedStackStatus(ctx context.Context, runtimePath string, stack StackState, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+	routerAPIURL = strings.TrimRight(routerAPIURL, "/")
 	status := baseSystemStatus()
 	status.DeploymentType = "docker"
 	status.Overall = "healthy"
 	status.Endpoints = []string{"http://localhost:8899"}
 
-	routerLogContent := getContainerLogsTailForContainer(managedContainerNameForService("router"), 500)
-	routerHealthy, routerMsg := resolveManagedRouterStatus(routerAPIURL, routerLogContent)
-	envoyHealthy, envoyMsg := resolveManagedEnvoyStatus(envoyURL)
-	dashboardHealthy, dashboardMsg := resolveManagedDashboardStatus()
+	stopped := stack.stoppedService()
+	probe := probeServingHealth(ctx, routerAPIURL, credentialProvider...)
+	status.ServingMode = probe.mode
+	if probe.mode == servingModeEngine {
+		return collectModelEngineStatus(routerAPIURL, "docker", "container", probe)
+	}
+	router := resolveManagedRouterStatus(probe, stopped)
+	envoy := resolveManagedEnvoyStatus(ctx, envoyURL, stopped)
 
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
-	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy, credentialProvider...)
+	status.RouterRuntime = resolveRouterRuntimeStatus(ctx, runtimePath, routerAPIURL, router.Healthy, credentialProvider...)
+	routerReady := resolveRouterReadiness(ctx, routerAPIURL, router.Healthy, status.RouterRuntime, credentialProvider...)
+	status.routerReady = routerReady
+	router.Message = applyRuntimeMessage(router.Message, status.RouterRuntime)
+	status.Models = fetchModelsWhenReady(ctx, routerAPIURL, routerReady, credentialProvider...)
 	status.Services = append(status.Services,
-		buildServiceStatus("Routing access", boolToStatus(routerHealthy && envoyHealthy), routerHealthy && envoyHealthy, routingAccessMessage(routerHealthy, envoyHealthy), "gateway"),
-		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
-		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
-		buildServiceStatus("Dashboard", boolToStatus(dashboardHealthy), dashboardHealthy, dashboardMsg, "container"),
+		buildServiceStatus("Routing access", boolToStatus(routerReady && envoy.Healthy), routerReady && envoy.Healthy, routingAccessMessage(routerReady, envoy.Healthy), "gateway"),
+		router,
 	)
-	setManagedDockerOverall(&status, routerHealthy, envoyHealthy, dashboardHealthy)
+	// A standalone Router serves the listeners that the routing-access probe
+	// reaches; there is no Envoy container to report.
+	if managedStackRunsEnvoy() {
+		status.Services = append(status.Services, envoy)
+	}
+	status.Services = append(status.Services,
+		buildServiceStatus("Dashboard", "running", true, "Running", "container"),
+	)
+	setDegradedWhenUnhealthy(&status, router.Healthy, routerReady, envoy.Healthy)
 
 	return status
 }
 
-func unknownContainerStatus(containerStatus string) SystemStatus {
-	status := baseSystemStatus()
-	status.DeploymentType = "docker"
-	status.Overall = containerStatus
-	status.Services = append(status.Services, ServiceStatus{
-		Name:      "Runtime",
-		Status:    containerStatus,
-		Healthy:   false,
-		Component: "container",
-	})
-	return status
-}
-
-func collectDirectStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
+func collectDirectStatus(ctx context.Context, runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
+	routerAPIURL = strings.TrimRight(routerAPIURL, "/")
 	if routerAPIURL == "" {
 		return SystemStatus{}, false
 	}
 
-	routerHealthy, routerMsg := checkHTTPHealth(routerAPIURL + "/health")
-	if !routerHealthy {
+	probe := probeServingHealth(ctx, routerAPIURL, credentialProvider...)
+	if probe.mode == servingModeEngine {
+		return collectModelEngineStatus(routerAPIURL, "local (direct)", "process", probe), true
+	}
+	if !probe.healthy {
 		return SystemStatus{}, false
 	}
+	routerHealthy, routerMsg := probe.healthy, probe.message
 
 	status := baseSystemStatus()
 	status.DeploymentType = "local (direct)"
+	status.ServingMode = probe.mode
 	status.Overall = "healthy"
 	status.Endpoints = []string{routerAPIURL}
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
+	status.RouterRuntime = resolveRouterRuntimeStatus(ctx, runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
+	routerReady := resolveRouterReadiness(ctx, routerAPIURL, routerHealthy, status.RouterRuntime, credentialProvider...)
+	status.routerReady = routerReady
 	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, true, credentialProvider...)
+	status.Models = fetchModelsWhenReady(ctx, routerAPIURL, routerReady, credentialProvider...)
 	status.Services = append(status.Services, buildServiceStatus("Router", "running", true, routerMsg, "process"))
 
-	envoyHealthy := appendDirectEnvoyStatus(&status, envoyURL)
-	status.Services = append([]ServiceStatus{buildServiceStatus("Routing access", boolToStatus(envoyHealthy), envoyHealthy, routingAccessMessage(true, envoyHealthy), "gateway")}, status.Services...)
+	envoyHealthy := appendDirectEnvoyStatus(ctx, &status, envoyURL)
+	status.Services = append([]ServiceStatus{buildServiceStatus("Routing access", boolToStatus(routerReady && envoyHealthy), routerReady && envoyHealthy, routingAccessMessage(routerReady, envoyHealthy), "gateway")}, status.Services...)
 	status.Services = append(status.Services, buildServiceStatus("Dashboard", "running", true, "Running", "process"))
+	setDegradedWhenUnhealthy(&status, routerReady, envoyHealthy)
 
 	return status, true
 }
 
-func collectDashboardOnlyHostStatus(routerAPIURL, envoyURL string) SystemStatus {
+func collectDashboardOnlyHostStatus(ctx context.Context, routerAPIURL, envoyURL string) SystemStatus {
 	status := baseSystemStatus()
 	routerMsg := "Router API URL is not configured"
 	if routerAPIURL != "" {
@@ -112,7 +148,7 @@ func collectDashboardOnlyHostStatus(routerAPIURL, envoyURL string) SystemStatus 
 		buildServiceStatus("Routing access", "unavailable", false, "Router or gateway is unavailable", "gateway"),
 		buildServiceStatus("Router", "not running", false, routerMsg, "process"),
 	)
-	appendDirectEnvoyStatus(&status, envoyURL)
+	appendDirectEnvoyStatus(ctx, &status, envoyURL)
 	status.Services = append(status.Services,
 		buildServiceStatus("Dashboard", "running", true, "Running", "process"),
 	)
@@ -127,12 +163,12 @@ func routingAccessMessage(routerHealthy, envoyHealthy bool) string {
 	return "Router or gateway is unavailable"
 }
 
-func appendDirectEnvoyStatus(status *SystemStatus, envoyURL string) bool {
+func appendDirectEnvoyStatus(ctx context.Context, status *SystemStatus, envoyURL string) bool {
 	readyURL := "http://localhost:8801/ready"
 	if envoyURL != "" {
 		readyURL = strings.TrimRight(envoyURL, "/") + "/v1/models"
 	}
-	envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth(readyURL)
+	envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth(ctx, readyURL)
 	if !envoyRunning {
 		return false
 	}
@@ -163,66 +199,27 @@ func setDegradedWhenUnhealthy(status *SystemStatus, checks ...bool) {
 	}
 }
 
-func setManagedDockerOverall(status *SystemStatus, checks ...bool) {
-	for _, healthy := range checks {
-		if healthy {
-			setDegradedWhenUnhealthy(status, checks...)
-			return
-		}
+func resolveManagedRouterStatus(probe servingHealthProbe, stopped stoppedService) ServiceStatus {
+	if probe.healthy {
+		return buildServiceStatus("Router", "running", true, probe.message, "container")
 	}
-	status.Overall = "stopped"
+	return buildServiceStatus("Router", stopped.status, false, stopped.message, "container")
 }
 
-func resolveManagedRouterStatus(routerAPIURL string, logContent string) (bool, string) {
-	containerStatus := getDockerContainerStatus(managedContainerNameForService("router"))
-	if routerAPIURL != "" {
-		if healthy, msg := checkHTTPHealth(routerAPIURL + "/health"); healthy {
-			return healthy, msg
-		}
-		if containerStatus == "running" {
-			return false, "Starting"
-		}
-	}
-	return resolveManagedServiceStatus("router", containerStatus, logContent)
-}
-
-func resolveManagedEnvoyStatus(envoyURL string) (bool, string) {
+func resolveManagedEnvoyStatus(ctx context.Context, envoyURL string, stopped stoppedService) ServiceStatus {
+	readyURLs := []string{}
 	if envoyURL != "" {
-		if running, healthy, msg := checkEnvoyHealth(strings.TrimRight(envoyURL, "/") + "/v1/models"); running {
-			return healthy, msg
-		}
+		readyURLs = append(readyURLs, strings.TrimRight(envoyURL, "/")+"/v1/models")
 	}
 	if readyURL := managedEnvoyReadyURL(); readyURL != "" {
-		if running, healthy, msg := checkEnvoyHealth(readyURL); running {
-			return healthy, msg
+		readyURLs = append(readyURLs, readyURL)
+	}
+	for _, readyURL := range readyURLs {
+		if running, healthy, msg := checkEnvoyHealth(ctx, readyURL); running {
+			return buildServiceStatus("Envoy", boolToStatus(healthy), healthy, msg, "container")
 		}
 	}
-	return resolveManagedServiceStatus("envoy", getDockerContainerStatus(managedContainerNameForService("envoy")), "")
-}
-
-func resolveManagedDashboardStatus() (bool, string) {
-	if isRunningInContainer() {
-		return true, "Running"
-	}
-	return resolveManagedServiceStatus("dashboard", getDockerContainerStatus(managedContainerNameForService("dashboard")), "")
-}
-
-func resolveManagedServiceStatus(service string, containerStatus string, logContent string) (bool, string) {
-	switch containerStatus {
-	case "running":
-		if logContent != "" && serviceLogLooksHealthy(service, logContent) {
-			return true, "Running"
-		}
-		return true, "Running"
-	case "created":
-		return false, "Standby (setup mode)"
-	case "exited":
-		return false, "Exited"
-	case "not found":
-		return false, "Not found"
-	default:
-		return false, containerStatus
-	}
+	return buildServiceStatus("Envoy", stopped.status, false, stopped.message, "container")
 }
 
 func applyRuntimeMessage(message string, runtime *RouterRuntimeStatus) string {
@@ -232,10 +229,21 @@ func applyRuntimeMessage(message string, runtime *RouterRuntimeStatus) string {
 	return message
 }
 
-func fetchModelsWhenReady(routerAPIURL string, routerHealthy bool, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
+// Keep process liveness separate from whether the Router can serve requests.
+func resolveRouterReadiness(ctx context.Context, routerAPIURL string, routerHealthy bool, runtime *RouterRuntimeStatus, credentialProvider ...routerauth.CredentialProvider) bool {
 	if !routerHealthy {
+		return false
+	}
+	if runtime != nil {
+		return runtime.Ready
+	}
+	return checkRouterManagementHealth(ctx, routerAPIURL+"/ready", credentialProvider...)
+}
+
+func fetchModelsWhenReady(ctx context.Context, routerAPIURL string, routerReady bool, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
+	if !routerReady {
 		return nil
 	}
 
-	return fetchRouterModelsInfo(routerAPIURL, credentialProvider...)
+	return fetchRouterModelsInfo(ctx, routerAPIURL, credentialProvider...)
 }

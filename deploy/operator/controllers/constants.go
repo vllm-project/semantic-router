@@ -22,13 +22,12 @@ const (
 
 	typeAvailableSemanticRouter   = "Available"
 	typeProgressingSemanticRouter = "Progressing"
-	typeDegradedSemanticRouter    = "Degraded"
 )
 
 // Default values for SemanticRouter resources
 const (
 	// DefaultImage is the default container image for semantic router
-	DefaultImage = "ghcr.io/vllm-project/semantic-router/extproc:latest"
+	DefaultImage = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 
 	// DefaultReplicas is the default number of replicas
 	DefaultReplicas = int32(1)
@@ -40,6 +39,12 @@ const (
 	DefaultGRPCPort    = int32(50051)
 	DefaultAPIPort     = int32(8080)
 	DefaultMetricsPort = int32(9190)
+
+	// The listener a standalone Router serves inference on. Port 8801 is the
+	// one the Operator's Envoy sidecar served before standalone mode, so
+	// clients and HTTPRoutes keep their target.
+	DefaultListenerName = "http-8801"
+	DefaultListenerPort = int32(8801)
 
 	// Probe defaults
 	DefaultStartupProbePeriod           = int32(10)

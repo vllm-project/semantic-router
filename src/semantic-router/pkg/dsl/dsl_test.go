@@ -303,7 +303,7 @@ func TestParseMultiModel(t *testing.T) {
 func TestParsePluginTemplate(t *testing.T) {
 	input := `PLUGIN my_hallu hallucination {
   enabled: true
-  use_nli: true
+  hallucination_action: "warn"
 }
 
 ROUTE test {
@@ -434,7 +434,7 @@ ROUTE math_route {
 func TestCompilePluginTemplate(t *testing.T) {
 	input := `PLUGIN my_hallu hallucination {
   enabled: true
-  use_nli: true
+  hallucination_action: "warn"
 }
 
 ROUTE test {
@@ -1699,7 +1699,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "hallucination",
 			pluginType: "hallucination",
-			body:       `enabled: true use_nli: true hallucination_action: "warn"`,
+			body:       `enabled: true hallucination_action: "warn"`,
 			verifyType: "hallucination",
 		},
 		{
@@ -2202,6 +2202,7 @@ SIGNAL keyword advanced_kw {
   bm25_threshold: 0.7
   ngram_threshold: 0.8
   ngram_arity: 4
+  include_history: true
 }`
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -2234,6 +2235,9 @@ SIGNAL keyword advanced_kw {
 	}
 	if kw.NgramArity != 4 {
 		t.Errorf("ngram_arity = %d", kw.NgramArity)
+	}
+	if !kw.IncludeHistory {
+		t.Error("expected include_history = true")
 	}
 }
 

@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot/historylock"
 )
 
 // config.yaml can carry plaintext provider credentials, so every copy the
@@ -68,6 +70,46 @@ func writeConfigSnapshot(path string, data []byte) error {
 	// The rename is not durable until the directory entry is synced, so a crash
 	// here would drop the restore point the caller is about to rely on.
 	return syncSnapshotDirectory(filepath.Dir(path))
+}
+
+// Backup versions must never replace one another, including when two writes
+// fall in the same timestamp tick. Linking a synced temporary file publishes
+// the complete 0600 snapshot atomically and fails if the version exists.
+func writeConfigSnapshotExclusive(path string, data []byte) error {
+	temp, err := createConfigSnapshotTemp(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(temp.Name()) }()
+	if err := writeAndCloseSnapshotTemp(temp, data); err != nil {
+		return err
+	}
+	if err := os.Link(temp.Name(), path); err != nil {
+		return err
+	}
+	if err := os.Remove(temp.Name()); err != nil {
+		return err
+	}
+	return syncSnapshotDirectory(filepath.Dir(path))
+}
+
+const configBackupVersionLayout = "20060102-150405.000000000"
+
+func writeVersionedConfigBackup(backupDir string, data []byte, now time.Time) (string, error) {
+	base := now.Format(configBackupVersionLayout)
+	for attempt := 0; attempt < 1000; attempt++ {
+		version := base
+		if attempt > 0 {
+			version = fmt.Sprintf("%s-%03d", base, attempt)
+		}
+		path := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
+		err := writeConfigSnapshotExclusive(path, data)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		return version, err
+	}
+	return "", fmt.Errorf("no available config backup version for %s", base)
 }
 
 func syncSnapshotDirectory(dir string) error {
@@ -183,18 +225,23 @@ func createConfigBackup(configDir string, existingData []byte) (string, error) {
 	if err := ensureConfigSnapshotDir(backupDir); err != nil {
 		return "", fmt.Errorf("prepare config backup directory: %w", err)
 	}
+	unlock, err := historylock.Lock(backupDir)
+	if err != nil {
+		return "", fmt.Errorf("lock config backup directory: %w", err)
+	}
+	defer unlock()
 	repairConfigSnapshotPermissions(configDir)
 
-	version := time.Now().Format("20060102-150405")
+	now := time.Now()
 	if len(existingData) == 0 {
-		return version, nil
+		return now.Format(configBackupVersionLayout), nil
 	}
 
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := writeConfigSnapshot(backupFile, existingData); err != nil {
+	version, err := writeVersionedConfigBackup(backupDir, existingData, now)
+	if err != nil {
 		return "", fmt.Errorf("write config backup: %w", err)
 	}
-	log.Printf("[Deploy] Config backup created: %s", backupFile)
+	log.Printf("[Deploy] Config backup created: %s", filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version)))
 
 	return version, nil
 }
@@ -229,7 +276,7 @@ func archiveDeployDSL(configDir string, dsl string) {
 // into empty data would let a deploy or rollback overwrite an unreadable live
 // config with no snapshot, and the nil result also disables the runtime restore.
 func readLiveConfig(configPath string) ([]byte, error) {
-	data, err := os.ReadFile(configPath)
+	data, err := readPersistedDashboardConfig(configPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -255,14 +302,17 @@ func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) ([
 	}
 
 	backupDir := configBackupDir(configDir)
-	if err := ensureConfigSnapshotDir(backupDir); err != nil {
+	if err = ensureConfigSnapshotDir(backupDir); err != nil {
 		return nil, fmt.Errorf("prepare config backup directory: %w", err)
 	}
+	unlock, err := historylock.Lock(backupDir)
+	if err != nil {
+		return nil, fmt.Errorf("lock config backup directory: %w", err)
+	}
+	defer unlock()
 	repairConfigSnapshotPermissions(configDir)
 
-	currentVersion := time.Now().Format("20060102-150405")
-	preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-	if err := writeConfigSnapshot(preRollbackFile, existingData); err != nil {
+	if _, err = writeVersionedConfigBackup(backupDir, existingData, time.Now()); err != nil {
 		return nil, fmt.Errorf("snapshot current config before rollback: %w", err)
 	}
 
@@ -280,7 +330,11 @@ func versionsLocalList(w http.ResponseWriter, configPath string) {
 }
 
 func listConfigVersions(configPath string) ([]ConfigVersion, error) {
-	backupDir := configBackupDir(filepath.Dir(configPath))
+	configDir := strings.TrimSpace(os.Getenv("DASHBOARD_CONFIG_DIR"))
+	if configDir == "" {
+		configDir = filepath.Dir(configPath)
+	}
+	backupDir := configBackupDir(configDir)
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		return nil, err
@@ -298,6 +352,10 @@ func listConfigVersions(configPath string) ([]ConfigVersion, error) {
 		timestamp := versionStr
 		if t, parseErr := time.Parse("20060102-150405", versionStr); parseErr == nil {
 			timestamp = t.Format("2006-01-02 15:04:05")
+		} else if len(versionStr) >= len(configBackupVersionLayout) {
+			if t, preciseErr := time.Parse(configBackupVersionLayout, versionStr[:len(configBackupVersionLayout)]); preciseErr == nil {
+				timestamp = t.Format("2006-01-02 15:04:05.000000000")
+			}
 		}
 
 		versions = append(versions, ConfigVersion{
@@ -315,8 +373,19 @@ func listConfigVersions(configPath string) ([]ConfigVersion, error) {
 	return versions, nil
 }
 
-// cleanupBackups removes old backups beyond maxBackups
+// cleanupBackups removes old backups beyond maxBackups, with the files the
+// Router keeps beside a version it recorded. It holds the directory's lock,
+// as the Router does when it writes there.
 func cleanupBackups(backupDir string) {
+	if _, err := os.Lstat(backupDir); err != nil {
+		return
+	}
+	unlock, err := historylock.Lock(backupDir)
+	if err != nil {
+		log.Printf("Warning: skipped config backup cleanup: %v", err)
+		return
+	}
+	defer unlock()
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		return
@@ -342,8 +411,14 @@ func cleanupBackups(backupDir string) {
 		path := filepath.Join(backupDir, backups[i].Name())
 		if err := os.Remove(path); err != nil {
 			log.Printf("Warning: failed to remove old backup %s: %v", path, err)
-		} else {
-			log.Printf("Removed old backup: %s", backups[i].Name())
+			continue
+		}
+		log.Printf("Removed old backup: %s", backups[i].Name())
+		base := strings.TrimSuffix(path, ".yaml")
+		for _, sidecar := range []string{base + ".source", base + ".snapshot.json"} {
+			if err := os.Remove(sidecar); err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.Printf("Warning: failed to remove %s: %v", sidecar, err)
+			}
 		}
 	}
 }

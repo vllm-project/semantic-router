@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 调优与验证 Recipe
 description: 用真实请求改善路由质量、时延、成本和 Agent 连续性。
 translation:
   source_commit: "68519cf498b94c947cf4c7cd9a2800a41276dea6"
   source_file: "docs/benchmarking/agent-evaluation-loop.md"
-  outdated: false
+  outdated: true
 ---
 
 # 调优与验证 Recipe {#tune-and-verify-a-recipe}
@@ -59,7 +60,7 @@ vllm-sr config plan --config candidate.yaml \
   --endpoint "$ROUTER_ORIGIN"
 ```
 
-可热更新的变更使用 `vllm-sr config apply`。如果计划返回 `RESTART_REQUIRED`，则通过部署流程激活。对于已授权替换的本地实例，运行 `vllm-sr serve --config candidate.yaml --replace-active-config`。测试前确认就绪状态和生效版本。
+可热更新的变更使用 `vllm-sr config apply`。如果计划返回 `RESTART_REQUIRED`，则通过部署流程激活；在本地实例上，`vllm-sr config apply` 会保存该变更，由下一次 `vllm-sr serve` 应用。对于已授权替换的本地实例，运行 `vllm-sr serve --config candidate.yaml --replace-active-config`。测试前确认就绪状态和生效版本。
 
 将 `ENTRYPOINT` 设为正在评测的公开入口，然后预览数据集中的一个用例：
 

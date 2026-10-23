@@ -36,7 +36,7 @@ func overflowFixture(t *testing.T, text string) (*OpenAIRouter, *RequestContext)
 		t.Fatal(err)
 	}
 	d := &config.Decision{Name: "bounded", ModelRefs: []config.ModelRef{{Model: model}}, Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic}, Plugins: []config.DecisionPlugin{{Type: "context_compression", Configuration: payload}}}
-	request := testNeutralRequest("auto", text)
+	request := testNeutralRequest("vllm-sr/auto", text)
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(8192)
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = d
@@ -56,7 +56,7 @@ func TestContextOverflowSelectionAndEncodedDispatchUseReducedRequest(t *testing.
 		original := item.heading + "\n" + item.filler + "\nTAIL instruction"
 		r, ctx := overflowFixture(t, original)
 		d := ctx.VSRSelectedDecision
-		name, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", original, ctx)
+		name, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", original, ctx)
 		if err != nil || model == "" || name != d.Name {
 			t.Fatalf("selection: model=%q err=%v", model, err)
 		}
@@ -108,7 +108,7 @@ func TestContextOverflowPreservesSystemToolsAndLatestInstruction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(request.Instructions, original.Instructions) || !reflect.DeepEqual(request.Tools, original.Tools) || !reflect.DeepEqual(request.Messages[1:], original.Messages[1:]) {
@@ -167,7 +167,7 @@ func TestContextOverflowRecompressesBracketHistoryForToolFollowups(t *testing.T)
 func encodedOverflowDispatch(t *testing.T, router *OpenAIRouter, ctx *RequestContext, input string) llmprotocol.Request {
 	t.Helper()
 	d := ctx.VSRSelectedDecision
-	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", input, ctx)
+	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", input, ctx)
 	if err != nil || model == "" {
 		t.Fatalf("selection: model=%q err=%v", model, err)
 	}
@@ -218,7 +218,7 @@ func TestContextOverflowRejectsUntrimmableBudgetWithoutMutation(t *testing.T) {
 				ctx.ProtectedContextMessages = map[int]contextcompression.Protection{0: contextcompression.ProtectAuthorization}
 			}
 			before, _ := json.Marshal(req)
-			err := r.prepareDecisionContextOverflow(ctx, "auto")
+			err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto")
 			var budgetErr *selection.RequestBudgetError
 			if !errors.As(err, &budgetErr) {
 				t.Fatalf("not client budget error: %v", err)
@@ -250,7 +250,7 @@ func TestContextOverflowDefaultsAndBypassKeepRequest(t *testing.T) {
 			payload, _ := config.NewStructuredPayload(cfg)
 			ctx.VSRSelectedDecision.Plugins[0].Configuration = payload
 			before, _ := json.Marshal(ctx.SemanticRequest)
-			if err := r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+			if err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 				t.Fatal(err)
 			}
 			after, _ := json.Marshal(ctx.SemanticRequest)
@@ -263,7 +263,7 @@ func TestContextOverflowDefaultsAndBypassKeepRequest(t *testing.T) {
 
 func TestContextOverflowRechecksActualDispatchGrowth(t *testing.T) {
 	r, ctx := overflowFixture(t, "hello")
-	if err := r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	model := ctx.VSRSelectedDecision.ModelRefs[0].Model
@@ -291,7 +291,7 @@ func TestContextOverflowEffectivePolicyAndRecipeOptInStayIsolated(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	if len(ctx.SemanticRequest.Instructions) != 0 || ctx.SemanticRequest.Sampling.MaxOutputTokens != nil {
@@ -307,7 +307,7 @@ func TestContextOverflowEffectivePolicyAndRecipeOptInStayIsolated(t *testing.T) 
 	}
 	other := &RequestContext{SemanticRequest: untouched, VSRSelectedDecision: &config.Decision{Name: "other", ModelRefs: ctx.VSRSelectedDecision.ModelRefs}}
 	before, _ := json.Marshal(untouched)
-	if err = r.prepareDecisionContextOverflow(other, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(other, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := json.Marshal(untouched)
@@ -331,7 +331,7 @@ func TestContextOverflowRejectsFramingHeavyRequest(t *testing.T) {
 				}
 			}
 			var budget *selection.RequestBudgetError
-			if err := r.prepareDecisionContextOverflow(ctx, "auto"); !errors.As(err, &budget) {
+			if err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); !errors.As(err, &budget) {
 				t.Fatalf("many %s escaped framing budget: %v", kind, err)
 			}
 		})
@@ -343,7 +343,7 @@ func TestContextOverflowPreparedStreamCompletesAndReplays(t *testing.T) {
 	ctx.SemanticRequest.Stream = true
 	ctx.ExpectStreamingResponse = true
 	d := ctx.VSRSelectedDecision
-	_, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", "original routing input", ctx)
+	_, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", "original routing input", ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +362,7 @@ func TestContextOverflowPreparedStreamCompletesAndReplays(t *testing.T) {
 	ctx.RequestID = "overflow-stream"
 	ctx.UpstreamStatusCode = 200
 	ctx.IsStreamingResponse = true
-	r.startRouterReplay(ctx, "auto", model, d.Name)
+	r.startRouterReplay(ctx, "vllm-sr/auto", model, d.Name)
 	if _, err = r.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}, {Key: "content-type", Value: "text/event-stream"}}}}}, ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestContextOverflowCompressesMultipleOldUserAndAssistantTurns(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+	if err = r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"); err != nil {
 		t.Fatal(err)
 	}
 	userChanged, assistantChanged := false, false
