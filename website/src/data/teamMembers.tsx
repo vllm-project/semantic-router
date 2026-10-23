@@ -244,15 +244,15 @@ export const topNewContributorMembers: TeamMember[] = [
   },
   {
     name: 'Anup Sharma',
-    role: <Translate id="team.members.TwilightTechie.role">Member of Technical Staff</Translate>,
-    company: 'Nutanix',
+    role: <Translate id="team.members.TwilightTechie.role">Engineering</Translate>,
+    company: 'Sarvam AI',
     avatar: 'https://github.com/TwilightTechie.png',
     github: 'https://github.com/TwilightTechie',
     linkedin: 'https://www.linkedin.com/in/anup-sharma1/',
     externalLinks: [
       { label: 'Website', href: 'https://twilighttechie.github.io/' },
     ],
-    bio: <Translate id="team.members.TwilightTechie.bio">Software engineer working on distributed storage at Nutanix, with interests in LLM inference, model serving, and intelligent request routing.</Translate>,
+    bio: <Translate id="team.members.TwilightTechie.bio">Software engineer at Sarvam AI, with interests in LLM inference, model serving, and intelligent request routing.</Translate>,
     memberType: 'committer',
   },
   {
