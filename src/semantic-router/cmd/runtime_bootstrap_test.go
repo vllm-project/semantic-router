@@ -11,12 +11,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 func TestBoolFlagOverrideOnlyWhenExplicitlySet(t *testing.T) {
@@ -151,6 +155,48 @@ func freePort(t *testing.T) int {
 		t.Fatalf("failed to release the reserved port: %v", err)
 	}
 	return port
+}
+
+func TestInitializeRuntimeDependenciesReportsInitializedOnlyAfterSuccess(t *testing.T) {
+	previous := modelservice.DefaultManager()
+	t.Cleanup(func() { modelservice.SetDefault(previous) })
+	const initialized = "Runtime dependencies initialized. Starting router services..."
+
+	for _, tc := range []struct {
+		name        string
+		vectorStore *config.VectorStoreConfig
+		wantErr     bool
+	}{
+		{name: "success"},
+		{name: "vector store failure", vectorStore: &config.VectorStoreConfig{Enabled: true}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.RouterConfig{VectorStore: tc.vectorStore}
+			hooks := make([]func(context.Context) error, 0)
+			t.Cleanup(func() {
+				if err := runShutdownHooks(context.Background(), &hooks); err != nil {
+					t.Errorf("shutdown runtime dependencies: %v", err)
+				}
+			})
+			log := &stateLog{}
+
+			err := initializeRuntimeDependencies(cfg, log, &hooks, routerruntime.NewRegistry(cfg))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("initializeRuntimeDependencies() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			states := log.snapshot()
+			if len(states) == 0 {
+				t.Fatal("no startup state written")
+			}
+			reported := slices.ContainsFunc(states, func(state startupstatus.State) bool { return state.Message == initialized })
+			if reported == tc.wantErr {
+				t.Fatalf("initialized status reported = %v with error %v: %+v", reported, err, states)
+			}
+			if !tc.wantErr && states[len(states)-1].Message != initialized {
+				t.Fatalf("last state = %+v, want the initialized status", states[len(states)-1])
+			}
+		})
+	}
 }
 
 func TestRunShutdownHooksCompletesInRegistrationOrder(t *testing.T) {

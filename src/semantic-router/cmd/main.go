@@ -126,7 +126,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	metricsServer = startMetricsServerIfEnabled(cfg, opts.metricsPort)
 	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
-	_, err = initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	err = initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
 	if err != nil {
 		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
 	}
