@@ -38,6 +38,69 @@ choose a Provider in **Build → Routing → Models → Add Model**. The Dashboa
 catalog choices as **Built-in** and saves both the local alias and canonical
 identity.
 
+## MiniMax M3.1 Flash
+
+`minimax/minimax-m3.1-flash` identifies the
+[official open weights](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)
+under the MiniMax Community License. The MiniMax API and an experimental vLLM
+mapping share that card. Both mappings currently declare Chat Completions.
+
+```yaml
+version: v0.3
+providers:
+  models:
+    - name: flash
+      catalog: minimax/minimax-m3.1-flash
+      backend_refs:
+        - name: primary
+          provider: minimax
+          api_key_env: MINIMAX_API_KEY
+routing:
+  decisions:
+    - name: flash_default
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: flash
+          use_reasoning: true
+          reasoning_effort: high
+```
+
+The model uses adaptive thinking and supports `low`, `medium`, `high`, `xhigh`,
+and `max`, with `max` as the catalog default. Disabling reasoning, selecting
+`reasoning_mode: enabled`, or requesting `reasoning_effort: none` is rejected.
+The Router sends the selected effort as a top-level field to MiniMax.
+The [API](https://platform.minimax.io/docs/api-reference/text-openai-api)
+supports a 1,000,000-token context and up to 524,288 output tokens, including
+thinking. It ignores sampling changes to `temperature` and `top_p`, using 1
+and 0.95; `service_tier` is unsupported. Preserve `reasoning_content` and
+tool-call IDs when returning assistant history in a tool conversation.
+
+For an existing self-hosted server, replace the backend above with:
+
+```yaml
+        - name: primary
+          provider: vllm
+          base_url: http://127.0.0.1:8000/v1
+```
+
+The mapping resolves `MiniMaxAI/MiniMax-M3.1-Flash` and sends effort inside
+`chat_template_kwargs`. Follow the
+[vLLM recipe](https://recipes.vllm.ai/MiniMaxAI/MiniMax-M3.1-Flash): its reviewed
+version requires vLLM 0.33.0 nightly with the dedicated `minimax-m31-flash`
+image, `--block-size 128`, and `minimax_m3` reasoning/tool parsers. A stable pip
+installation is not sufficient. The Hopper example limits context to 262,144
+and disables video; match your served window and capabilities with canonical
+card overrides as described below. The mapping is experimental and does not
+certify a particular deployment.
+
+Five published benchmark records are attributed to the pinned official model
+card. Their reasoning effort is `unspecified`; they are vendor claims, not
+vLLM-SR reproductions. Terminal-Bench 4.0 remains separate from 2.1, and the
+selectable effort levels have no complete Intelligence 1.0 evidence.
+
 ## Supply a deployment name when required
 
 Some Providers map a catalog model to a fixed upstream ID. Others, such as a
