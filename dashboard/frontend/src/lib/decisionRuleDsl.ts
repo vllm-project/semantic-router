@@ -33,10 +33,18 @@ const PRECEDENCE: Record<RuleOperator, number> = { OR: 1, AND: 2, NOT: 3 }
 // ---------- Serializer ----------
 
 /** Go formats predicate numbers with strconv 'f' -1: never in exponent form. */
+// String() already gives the shortest round-trip digits; an exponent form is
+// expanded by shifting the decimal point, which never rounds.
 function formatNumber(value: number): string {
   const text = String(value)
-  if (!/e/i.test(text)) return text
-  return value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 })
+  const match = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/i.exec(text)
+  if (!match) return text
+  const [, sign, lead, fraction = '', exponent] = match
+  const digits = lead + fraction
+  const point = 1 + Number(exponent)
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`
+  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`
 }
 
 function formatPredicate(predicate: NumericPredicate): string {

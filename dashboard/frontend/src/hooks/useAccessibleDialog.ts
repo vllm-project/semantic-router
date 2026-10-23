@@ -75,7 +75,7 @@ function focusInitialDialogControl<T extends HTMLElement>(
   target.focus({ preventScroll: true })
 }
 
-function trapDialogFocus<T extends HTMLElement>(
+export function trapDialogFocus<T extends HTMLElement>(
   dialogRef: RefObject<T | null>,
   event: KeyboardEvent,
 ) {

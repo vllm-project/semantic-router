@@ -182,4 +182,21 @@ describe('decisionRuleSignalScope', () => {
     } as Parameters<typeof decisionRuleSignalDescriptors>[0])
     expect(localOverride[0].predicateRequired).toBeUndefined()
   })
+
+  it('resolves any domain when the scope declares none, like Go auto-generated categories', () => {
+    const domain = canonicalToRuleDocument({ type: 'domain', name: 'math' })
+    const implicit = decisionRuleSignalScope(
+      { signals: { keywords: [{ name: 'k', operator: 'OR', keywords: ['k'] }] } },
+      { strictNames: true },
+    )
+    expect(validateRuleDocument(domain, implicit)).toEqual([])
+
+    const declared = decisionRuleSignalScope(
+      { signals: { domains: [{ name: 'law', description: 'Law' }] } },
+      { strictNames: true },
+    )
+    expect(validateRuleDocument(domain, declared)).toEqual([
+      expect.objectContaining({ severity: 'error', message: 'signal domain("math") is not declared in this recipe' }),
+    ])
+  })
 })

@@ -276,3 +276,26 @@ test('Escape leaves the fullscreen rule editor without closing the decision dial
     '(classifier("intent", label: "a", predicate: { gte: 0.6 }) OR keyword("urgent")) AND NOT keyword("spam")',
   )
 })
+
+test('Tab stays inside the fullscreen rule editor', async ({ page }) => {
+  const saved: SavedConfig[] = []
+  await mockStatefulConfig(page, saved)
+  const editor = await openBalancedRouteEditor(page)
+  await editor.getByTitle('Fullscreen').click()
+  // The overlay header's close button; the canvas toolbar repeats the title.
+  const exit = page.getByTitle('Exit fullscreen (Esc)').first()
+  await expect(exit).toBeVisible()
+
+  // The decision dialog's own focus trap must not pull focus behind the overlay.
+  const focusInOverlay = () =>
+    exit.evaluate((button) => {
+      const overlay = button.parentElement?.parentElement
+      const active = document.activeElement
+      return Boolean(overlay && active && active !== document.body && overlay.contains(active))
+    })
+  await exit.focus()
+  for (const key of ['Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
+    await page.keyboard.press(key)
+    expect(await focusInOverlay()).toBe(true)
+  }
+})

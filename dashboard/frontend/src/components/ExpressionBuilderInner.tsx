@@ -499,7 +499,7 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
           ))}
         </ul>
       )}
-      {tree && issues.length === 0 && <div className={styles.validationOk}>✓ All referenced signals exist</div>}
+      {tree && issues.length === 0 && !rawError && <div className={styles.validationOk}>✓ All referenced signals exist</div>}
 
       {contextMenu && tree ? (
         <ExpressionBuilderContextMenu

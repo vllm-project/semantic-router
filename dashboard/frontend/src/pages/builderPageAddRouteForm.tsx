@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
 import {
-  incompleteRawExpression,
+  blockingRuleIssues,
   type RuleIssue,
 } from "@/lib/decisionRuleValidation";
 import type { DSLFieldObject } from "@/types/dsl";
@@ -55,16 +55,16 @@ const AddRouteForm: React.FC<{
   );
   const [plugins, setPlugins] = useState<RoutePluginInput[]>([]);
 
-  // An unparsable raw WHEN draft never reaches whenExpr, so creating now
-  // would silently drop the typed condition.
-  const [whenIncomplete, setWhenIncomplete] = useState<string | null>(null);
+  // An unparsable raw draft never reaches whenExpr, and an invalid tree
+  // serializes to WHEN text the compiler rejects, so either blocks creation.
+  const [whenBlocked, setWhenBlocked] = useState<string | null>(null);
   const handleWhenIssues = useCallback((issues: RuleIssue[]) => {
-    setWhenIncomplete(incompleteRawExpression(issues));
+    setWhenBlocked(blockingRuleIssues(issues)[0]?.message ?? null);
   }, []);
 
   const handleSubmit = useCallback(() => {
     const n = name.trim().replace(/\s+/g, "_");
-    if (!n || whenIncomplete) return;
+    if (!n || whenBlocked) return;
     onAdd(n, {
       description: description.trim() || undefined,
       priority,
@@ -75,7 +75,7 @@ const AddRouteForm: React.FC<{
     });
   }, [
     name,
-    whenIncomplete,
+    whenBlocked,
     description,
     priority,
     whenExpr,
@@ -163,8 +163,8 @@ const AddRouteForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSubmit}
-            disabled={!name.trim() || Boolean(whenIncomplete)}
-            title={whenIncomplete ?? undefined}
+            disabled={!name.trim() || Boolean(whenBlocked)}
+            title={whenBlocked ?? undefined}
           >
             Create
           </button>

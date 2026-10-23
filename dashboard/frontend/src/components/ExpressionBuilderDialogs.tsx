@@ -105,6 +105,7 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
           ref={dialogRef}
           className={styles.editDialog}
           role="dialog"
+          data-rule-editor-dialog
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
@@ -305,6 +306,7 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
           ref={dialogRef}
           className={styles.addPickerDialog}
           role="dialog"
+          data-rule-editor-dialog
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}

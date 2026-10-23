@@ -59,6 +59,20 @@ describe('validateRuleDocument', () => {
     expect(validateRuleDocument(canonicalToRuleDocument({ operator: 'AND', conditions: [] }), strict)).toEqual([])
   })
 
+  it('blocks a non-string operator instead of reading it as AND', () => {
+    expect(errors({ operator: 5, conditions: [{ type: 'keyword', name: 'urgent' }] } as never)).toEqual([
+      'field operator has an invalid value',
+    ])
+    expect(errors({ operator: 5 } as never)).toEqual(['field operator has an invalid value'])
+  })
+
+  it('accepts null rule fields, which Go reads as unset', () => {
+    expect(errors({ type: 'keyword', name: 'urgent', predicate: null, label: null, on_error: null } as never)).toEqual([])
+    expect(
+      errors({ operator: 'AND', conditions: [{ type: 'keyword', name: 'urgent' }], label: null } as never),
+    ).toEqual([])
+  })
+
   it('accepts a valid nested tree', () => {
     expect(
       errors({

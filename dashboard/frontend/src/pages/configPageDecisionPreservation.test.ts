@@ -102,6 +102,15 @@ describe('decision editor preservation', () => {
     ).toThrow(ON_UNKNOWN_ON_ERROR_CONFLICT_MESSAGE)
   })
 
+  it('rejects a single-leaf root combining on_error and on_unknown', () => {
+    expect(() =>
+      decisionRulesForSave(
+        { type: 'classifier', name: 'risk', label: 'RISKY', predicate: { gte: 0.8 }, on_error: 'match', on_unknown: 'fail_request' },
+        scope,
+      ),
+    ).toThrow(ON_UNKNOWN_ON_ERROR_CONFLICT_MESSAGE)
+  })
+
   it('rejects on_error on a composite root', () => {
     expect(() =>
       decisionRulesForSave(

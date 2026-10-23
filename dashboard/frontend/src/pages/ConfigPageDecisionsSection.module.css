@@ -237,5 +237,5 @@
 .ruleEditorFrame {
   display: flex;
   flex-direction: column;
-  min-height: 520px;
+  min-height: 600px;
 }

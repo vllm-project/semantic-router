@@ -196,7 +196,15 @@ function canonicalToLeaf(raw: Record<string, unknown>, root: boolean): RuleLeaf 
   return leaf
 }
 
-function canonicalToNode(raw: unknown, root: boolean): RuleNode {
+// Go decodes a YAML null on a rule field to its zero value, which means unset.
+const NULLABLE_KEYS = new Set([...LEAF_KEYS, ...GROUP_KEYS, 'on_unknown'])
+function withoutNullFields(raw: Record<string, unknown>): Record<string, unknown> {
+  if (!Object.entries(raw).some(([key, value]) => value === null && NULLABLE_KEYS.has(key))) return raw
+  return Object.fromEntries(Object.entries(raw).filter(([key, value]) => !(value === null && NULLABLE_KEYS.has(key))))
+}
+
+function canonicalToNode(input: unknown, root: boolean): RuleNode {
+  const raw = isPlainObject(input) ? withoutNullFields(input) : input
   if (!isPlainObject(raw)) {
     // A non-object child cannot be modelled; keep it verbatim so validation
     // can reject it and a save never drops it.
@@ -210,6 +218,7 @@ function canonicalToNode(raw: unknown, root: boolean): RuleNode {
     ? rawConditions.map((child) => canonicalToNode(child, false))
     : []
   if (rawConditions !== undefined && !Array.isArray(rawConditions)) extra.conditions = rawConditions
+  if (raw.operator !== undefined && typeof raw.operator !== 'string') extra.operator = raw.operator
   // Go trims and upper-cases the operator and defaults an omitted one to AND.
   // An unsupported operator is kept verbatim so validation can name it.
   const operator = (normalizeOperator(raw.operator) || 'AND') as RuleOperator
@@ -235,7 +244,7 @@ function isEmptyRoot(raw: Record<string, unknown>): boolean {
 }
 
 export function canonicalToRuleDocument(rules: CanonicalRule | undefined | null): DecisionRuleDocument {
-  const raw: Record<string, unknown> = isPlainObject(rules) ? rules : {}
+  const raw: Record<string, unknown> = isPlainObject(rules) ? withoutNullFields(rules) : {}
   const onUnknown = typeof raw.on_unknown === 'string' ? (raw.on_unknown as RuleOnUnknown) : undefined
   const unknownExtra = raw.on_unknown !== undefined && typeof raw.on_unknown !== 'string'
     ? { on_unknown: raw.on_unknown }
@@ -244,7 +253,7 @@ export function canonicalToRuleDocument(rules: CanonicalRule | undefined | null)
   if (isEmptyRoot(raw)) {
     const rootExtra: Record<string, unknown> = { ...unknownExtra }
     for (const [key, value] of Object.entries(raw)) {
-      if (key === 'on_unknown' || key === 'operator' || value === undefined) continue
+      if (key === 'on_unknown' || (key === 'operator' && typeof value === 'string') || value === undefined) continue
       rootExtra[key] = value
     }
     return withOptional({ tree: null, rootShape: 'empty' }, onUnknown, nonEmptyRecord(rootExtra))

@@ -29,18 +29,24 @@ export interface RuleSignalScope {
    * "not declared in this recipe". Without it such a reference is a warning.
    */
   strictNames: boolean
+  /** Types whose referenced names the Router declares itself, so any name resolves. */
+  implicitTypes: Set<string>
 }
 
 export function signalDescriptorKey(signalType: string, name: string): string {
   return `${signalType.trim().toLowerCase()}\u0000${name}`
 }
 
-export function ruleSignalScope(descriptors: SignalDescriptor[], strictNames: boolean): RuleSignalScope {
+export function ruleSignalScope(
+  descriptors: SignalDescriptor[],
+  strictNames: boolean,
+  implicitTypes: Iterable<string> = [],
+): RuleSignalScope {
   const byKey = new Map<string, SignalDescriptor>()
   for (const descriptor of descriptors) {
     byKey.set(signalDescriptorKey(descriptor.signalType, descriptor.name), descriptor)
   }
-  return { descriptors, byKey, strictNames }
+  return { descriptors, byKey, strictNames, implicitTypes: new Set(implicitTypes) }
 }
 
 /** Prefix of the blocking issue an editor reports for an unparsable raw expression. */
@@ -50,6 +56,7 @@ export const RAW_EXPRESSION_INCOMPLETE = 'Raw expression is incomplete'
 export function incompleteRawExpression(issues: RuleIssue[]): string | null {
   return issues.find((issue) => issue.message.startsWith(RAW_EXPRESSION_INCOMPLETE))?.message ?? null
 }
+
 
 export const ON_UNKNOWN_ON_ERROR_CONFLICT_MESSAGE =
   'condition on_error has no effect when rules.on_unknown is set; remove one of them'
@@ -128,7 +135,7 @@ function validateExtra(ctx: ValidationCtx, node: RuleNode, path: number[], root:
     if (isRuleLeaf(node) && (key === 'operator' || key === 'conditions')) continue
     if (key === 'on_unknown' && !root) {
       push(ctx, node, path, 'error', 'on_unknown is only supported on the root rules node')
-    } else if (['type', 'name', 'label', 'predicate', 'on_error', 'conditions', 'on_unknown'].includes(key)) {
+    } else if (['type', 'name', 'label', 'predicate', 'on_error', 'operator', 'conditions', 'on_unknown'].includes(key)) {
       push(ctx, node, path, 'error', `field ${key} has an invalid value`)
     } else {
       push(ctx, node, path, 'error', `unsupported field ${key}`)
@@ -259,7 +266,7 @@ function validateLeaf(ctx: ValidationCtx, leaf: RuleLeaf, path: number[]) {
     // Go even outside recipe scope, so those stay blocking.
     if (ALWAYS_DECLARED_TYPES.has(type)) {
       push(ctx, leaf, path, 'error', `${type} condition references unknown signal ${JSON.stringify(leaf.signalName)}`)
-    } else {
+    } else if (!ctx.scope.implicitTypes.has(type)) {
       referenceIssue(ctx, leaf, path, message)
     }
   } else if (type === 'classifier') {
@@ -303,7 +310,8 @@ export function validateRuleDocument(
     }
   }
   for (const key of Object.keys(doc.rootExtra ?? {})) {
-    ctx.issues.push({ path: [], severity: 'error', message: `unsupported field ${key}` })
+    const message = key === 'operator' ? 'field operator has an invalid value' : `unsupported field ${key}`
+    ctx.issues.push({ path: [], severity: 'error', message })
   }
   if (doc.tree) validateNode(ctx, doc.tree, [], true)
   return ctx.issues

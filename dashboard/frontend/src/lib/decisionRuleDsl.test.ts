@@ -51,6 +51,15 @@ describe('serializeRuleExpr', () => {
     expect(serializeRuleExpr(and).text).toBe('(keyword("a") OR keyword("b")) AND keyword("c")')
   })
 
+  it('writes exponent-form predicates as exact decimals', () => {
+    const text = (gte: number) => serializeRuleExpr(leaf('embedding', 'e', { predicate: { gte } })).text
+    expect(text(1e-21)).toBe('embedding("e", predicate: { gte: 0.000000000000000000001 })')
+    expect(text(1.2345678901234e-15)).toBe('embedding("e", predicate: { gte: 0.0000000000000012345678901234 })')
+    expect(text(-2.5e-7)).toBe('embedding("e", predicate: { gte: -0.00000025 })')
+    expect(text(1.5e21)).toBe('embedding("e", predicate: { gte: 1500000000000000000000 })')
+    expect(parseRuleExpr(text(1.2345678901234e-15)).tree).toMatchObject({ predicate: { gte: 1.2345678901234e-15 } })
+  })
+
   it('escapes quotes and backslashes in names', () => {
     expect(serializeRuleExpr(leaf('keyword', 'say "hi" \\ bye')).text).toBe('keyword("say \\"hi\\" \\\\ bye")')
   })

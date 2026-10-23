@@ -8,7 +8,7 @@
 import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
 
 import type { ConfigProjections, ConfigSignals } from '../pages/configPageSupport'
-import { SIGNAL_CATALOG } from '../pages/configPageSignalCatalog'
+import { SIGNAL_CATALOG, signalCatalogByType } from '../pages/configPageSignalCatalog'
 import type { SignalDescriptor } from './decisionRuleAst'
 import { ruleSignalScope, type RuleSignalScope } from './decisionRuleValidation'
 
@@ -148,5 +148,10 @@ export function decisionRuleSignalScope(
   scoped: DecisionRuleSignalSource,
   opts?: { strictNames?: boolean },
 ): RuleSignalScope {
-  return ruleSignalScope(decisionRuleSignalDescriptors(scoped), opts?.strictNames ?? false)
+  // Like Go's normalizeSignals, a scope without declared domains turns every
+  // domain its decisions reference into a category, so any domain name resolves.
+  const signals = (scoped.signals ?? {}) as Record<string, unknown>
+  const domains = signals[signalCatalogByType('domain').collection]
+  const implicitTypes = namedItems(domains).length === 0 ? ['domain'] : []
+  return ruleSignalScope(decisionRuleSignalDescriptors(scoped), opts?.strictNames ?? false, implicitTypes)
 }

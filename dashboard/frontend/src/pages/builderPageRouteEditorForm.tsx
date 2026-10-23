@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
 import {
-  incompleteRawExpression,
+  blockingRuleIssues,
   type RuleIssue,
 } from "@/lib/decisionRuleValidation";
 import { useDSLStore } from "@/stores/dslStore";
@@ -81,15 +81,15 @@ const RouteEditorForm: React.FC<{
     route.plugins,
   ]);
 
-  // An unparsable raw WHEN draft never reaches whenExpr, so saving now
-  // would silently keep the previous condition.
-  const [whenIncomplete, setWhenIncomplete] = useState<string | null>(null);
+  // An unparsable raw draft never reaches whenExpr, and an invalid tree
+  // serializes to WHEN text the compiler rejects, so either blocks the save.
+  const [whenBlocked, setWhenBlocked] = useState<string | null>(null);
   const handleWhenIssues = useCallback((issues: RuleIssue[]) => {
-    setWhenIncomplete(incompleteRawExpression(issues));
+    setWhenBlocked(blockingRuleIssues(issues)[0]?.message ?? null);
   }, []);
 
   const handleSave = useCallback(() => {
-    if (whenIncomplete) return;
+    if (whenBlocked) return;
     onUpdate({
       description: description.trim() || undefined,
       priority,
@@ -99,7 +99,7 @@ const RouteEditorForm: React.FC<{
       plugins,
     });
   }, [
-    whenIncomplete,
+    whenBlocked,
     description,
     priority,
     whenExpr,
@@ -191,8 +191,8 @@ const RouteEditorForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSave}
-            disabled={Boolean(whenIncomplete)}
-            title={whenIncomplete ?? undefined}
+            disabled={Boolean(whenBlocked)}
+            title={whenBlocked ?? undefined}
             style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
           >
             Save

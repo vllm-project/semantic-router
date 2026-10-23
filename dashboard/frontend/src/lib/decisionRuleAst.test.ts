@@ -171,6 +171,21 @@ describe('decision rule AST bridge', () => {
     })
   })
 
+  it('keeps a non-string operator verbatim instead of reading it as AND', () => {
+    const rules = { operator: 5, conditions: [{ type: 'keyword', name: 'a' }] } as never
+    expect(roundTrip(rules)).toEqual(rules)
+    expect(roundTrip({ operator: 5 } as never)).toEqual({ operator: 5 })
+  })
+
+  it('reads a null rule field as unset, like Go', () => {
+    expect(roundTrip({ type: 'keyword', name: 'k', predicate: null, on_error: null } as never)).toEqual({
+      type: 'keyword',
+      name: 'k',
+    })
+    expect(roundTrip({ operator: 'AND', conditions: [{ type: 'keyword', name: 'k' }], label: null } as never))
+      .toEqual({ operator: 'AND', conditions: [{ type: 'keyword', name: 'k' }] })
+  })
+
   it('only emits defined predicate numbers and never emits undefined keys', () => {
     const doc = canonicalToRuleDocument({ type: 'classifier', name: 'x', label: 'a', predicate: { gte: 0.5 } })
     const leaf = doc.tree as RuleLeaf

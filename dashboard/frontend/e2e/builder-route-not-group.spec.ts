@@ -172,3 +172,55 @@ test('an incomplete raw WHEN expression blocks the Builder route save', async ({
     'WHEN keyword("legal_terms") AND keyword("risk_markers")',
   )
 })
+
+test('a NOT left without a child blocks the Builder route save', async ({ page }) => {
+  await openBuilder(page, config)
+
+  await page.getByRole('button', { name: /^Legal Review\b/ }).click()
+  await expect(page.locator('code').filter({ hasText: 'legal_terms' })).toHaveText(condition)
+  const save = page.getByRole('button', { name: 'Save', exact: true })
+  await expect(save).toBeEnabled()
+
+  // A NOT gate starts without a child; the serializer would otherwise write
+  // placeholder WHEN text the compiler rejects.
+  await page.getByRole('button', { name: 'Clear', exact: true }).click()
+  await page.getByText('NOT Gate', { exact: true }).click()
+  await expect(save).toBeDisabled()
+  await expect(save).toHaveAttribute('title', /NOT requires exactly one child condition/)
+})
+
+const twoRouteConfig = config.replace(
+  '  decisions:\n',
+  `  decisions:
+    - name: urgent_review_route
+      description: Route risky requests.
+      priority: 50
+      rules:
+        type: keyword
+        name: risk_markers
+      modelRefs:
+        - model: model-a
+`,
+)
+
+test('switching Builder routes leaves raw mode and never restores the previous route', async ({ page }) => {
+  await openBuilder(page, twoRouteConfig)
+
+  await page.getByRole('button', { name: /^Legal Review\b/ }).click()
+  await expect(page.locator('code').filter({ hasText: 'legal_terms' })).toHaveText(condition)
+  await page.getByLabel('Edit raw expression').check()
+
+  await page.getByRole('button', { name: /^Urgent Review\b/ }).click()
+  const result = page.locator('code').filter({ hasText: 'risk_markers' })
+  await expect(result).toHaveText('keyword("risk_markers")')
+  await expect(page.getByLabel('Edit raw expression')).not.toBeChecked()
+
+  // An abandoned incomplete draft falls back to this route's own condition.
+  await page.getByLabel('Edit raw expression').check()
+  await page.getByLabel('Raw expression', { exact: true }).fill('keyword("risk_markers") AND')
+  await page.getByLabel('Edit raw expression').uncheck()
+  await expect(result).toHaveText('keyword("risk_markers")')
+  await expect(page.locator('pre').filter({ hasText: 'ROUTE urgent_review_route' })).toContainText(
+    'WHEN keyword("risk_markers")',
+  )
+})

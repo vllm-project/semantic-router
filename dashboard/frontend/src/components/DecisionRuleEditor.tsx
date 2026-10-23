@@ -25,6 +25,7 @@ import {
   type RuleOnUnknown,
 } from '@/lib/decisionRuleAst'
 import { parseRuleExpr, serializeRuleExpr } from '@/lib/decisionRuleDsl'
+import { trapDialogFocus } from '@/hooks/useAccessibleDialog'
 import {
   RAW_EXPRESSION_INCOMPLETE,
   validateRuleDocument,
@@ -121,14 +122,20 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
   )
 
   // Resync only when the parent's tree differs structurally; ids and explicit
-  // nesting of the internal tree survive the parent's re-derivation.
+  // nesting of the internal tree survive the parent's re-derivation. A
+  // different tree is a new rule (the Builder reuses this editor across
+  // routes), so raw mode and history from the old rule are dropped with it.
   useEffect(() => {
     if (ruleSubtreeEquals(value.tree, treeRef.current)) return
     const next = assignRuleIds(value.tree)
     treeRef.current = next
     setTreeState(next)
+    setIsRawModeState(false)
+    rawBaseRef.current = null
     setRawDraft(serializeRuleExpr(next).text)
     setRawError(null)
+    setPast([])
+    setFuture([])
     setSelectedPath(null)
   }, [value.tree])
 
@@ -224,6 +231,24 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
     return () => document.removeEventListener('keydown', handleEscape, true)
   }, [maximized])
 
+  // A host dialog's focus trap still sees itself as topmost and would pull Tab
+  // focus behind the overlay, so the overlay traps Tab first (window capture
+  // runs before the host's document capture). Dialogs opened from the editor
+  // keep their own trap.
+  const overlayRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!maximized) return
+    const handleTab = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || event.defaultPrevented) return
+      const active = document.activeElement
+      if (active?.closest('[data-rule-editor-dialog]')) return
+      event.stopPropagation()
+      trapDialogFocus(overlayRef, event)
+    }
+    window.addEventListener('keydown', handleTab, true)
+    return () => window.removeEventListener('keydown', handleTab, true)
+  }, [maximized])
+
   const lastMaximizedRef = useRef(maximized)
   useEffect(() => {
     if (lastMaximizedRef.current === maximized) return
@@ -231,15 +256,18 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
     shellRef.current?.querySelector<HTMLElement>('[data-rule-editor-container]')?.focus({ preventScroll: true })
   }, [maximized])
 
-  const issues = useMemo(() => {
-    const found = validateRuleDocument({ ...value, tree }, signalScope, {
-      onUnknownManagedElsewhere: !showOnUnknown,
-    })
-    if (rawError) {
-      found.unshift({ path: [], severity: 'error', message: `${RAW_EXPRESSION_INCOMPLETE}: ${rawError}` })
-    }
-    return found
-  }, [value, tree, signalScope, showOnUnknown, rawError])
+  const treeIssues = useMemo(
+    () => validateRuleDocument({ ...value, tree }, signalScope, { onUnknownManagedElsewhere: !showOnUnknown }),
+    [value, tree, signalScope, showOnUnknown],
+  )
+  // The raw error is shown beside the raw input, so only the host sees it as an issue.
+  const issues = useMemo(
+    () =>
+      rawError
+        ? [{ path: [], severity: 'error' as const, message: `${RAW_EXPRESSION_INCOMPLETE}: ${rawError}` }, ...treeIssues]
+        : treeIssues,
+    [treeIssues, rawError],
+  )
 
   const lastIssuesKeyRef = useRef<string | null>(null)
   useEffect(() => {
@@ -263,7 +291,7 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
     maximized,
     setMaximized,
     availableSignals: signalScope.descriptors,
-    issues,
+    issues: treeIssues,
     pushHistory,
     canUndo,
     canRedo,
@@ -306,7 +334,7 @@ const DecisionRuleEditor: React.FC<DecisionRuleEditorProps> = ({
   if (maximized) {
     return createPortal(
       <div className={styles.fullscreenOverlay}>
-        <div className={styles.fullscreenContainer}>
+        <div ref={overlayRef} className={styles.fullscreenContainer}>
           <div className={styles.fullscreenHeader}>
             <span className={styles.fullscreenTitle}>{title}</span>
             <button type="button" className={styles.fullscreenCloseBtn} onClick={() => setMaximized(false)} title="Exit fullscreen (Esc)">✕</button>

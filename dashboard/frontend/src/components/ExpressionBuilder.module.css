@@ -1426,6 +1426,12 @@
   min-height: 0;
 }
 
+/* Grow from the shell's flex size; a percentage height would collapse under a min-height host. */
+.ruleEditorShell > .container {
+  flex: 1;
+  height: auto;
+}
+
 .ruleEditorPolicy {
   display: flex;
   flex-wrap: wrap;
