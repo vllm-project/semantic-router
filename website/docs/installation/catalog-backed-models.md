@@ -45,6 +45,10 @@ identity.
 under the MiniMax Community License. The MiniMax API and an experimental vLLM
 mapping share that card. Both mappings currently declare Chat Completions.
 
+The card records the checkpoint's 1,048,576-token context window from its
+[pinned configuration](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/76faee1b4ac0f412e547781172e94548a6526a88/config.json).
+The MiniMax API mapping separately records its 1,000,000-token service limit.
+
 ```yaml
 version: v0.3
 providers:

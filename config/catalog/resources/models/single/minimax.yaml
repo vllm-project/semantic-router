@@ -17,7 +17,7 @@
   revision: 76faee1b4ac0f412e547781172e94548a6526a88
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning

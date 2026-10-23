@@ -100885,7 +100885,7 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1000000
+        "context_window_size": 1048576
       },
       "modalities": {
         "input": [
