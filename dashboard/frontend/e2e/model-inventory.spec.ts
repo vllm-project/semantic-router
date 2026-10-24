@@ -10,7 +10,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-intent-classifier-merged',
     registry: {
       local_path: 'models/mmbert32k-intent-classifier-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-intent-classifier-merged',
+      repo_id: 'vllm-sr/mmbert32k-intent-classifier-merged',
       purpose: 'domain-classification',
       description: 'Merged intent classifier for multilingual routing decisions.',
       parameter_size: '307M',
@@ -19,7 +19,7 @@ const routerModels = [
       num_classes: 14,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-intent-classifier-merged',
       tags: ['text-classification', 'intent-classification'],
     },
     metadata: {
@@ -35,7 +35,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-factcheck-classifier-merged',
     registry: {
       local_path: 'models/mmbert32k-factcheck-classifier-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+      repo_id: 'vllm-sr/mmbert32k-factcheck-classifier-merged',
       purpose: 'hallucination-sentinel',
       description: 'Fact-check classifier used during hallucination mitigation.',
       parameter_size: '307M',
@@ -44,7 +44,7 @@ const routerModels = [
       num_classes: 2,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-factcheck-classifier-merged',
       tags: ['text-classification', 'fact-check'],
     },
     metadata: {
@@ -61,7 +61,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-feedback-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-feedback-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-feedback-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-feedback-detector-merged',
       purpose: 'feedback-detection',
       description: 'User feedback classifier for satisfaction and correction signals.',
       parameter_size: '307M',
@@ -70,7 +70,7 @@ const routerModels = [
       num_classes: 4,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-feedback-detector-merged',
       tags: ['text-classification', 'feedback-detection'],
     },
     metadata: {
@@ -87,7 +87,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-jailbreak-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-jailbreak-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-jailbreak-detector-merged',
       purpose: 'jailbreak-detection',
       description: 'Prompt injection and jailbreak detector aligned with the router registry.',
       parameter_size: '307M',
@@ -96,7 +96,7 @@ const routerModels = [
       num_classes: 2,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-jailbreak-detector-merged',
       tags: ['text-classification', 'security'],
     },
     metadata: {
@@ -113,20 +113,20 @@ const routerModels = [
     model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     registry: {
       local_path: 'models/mmbert-embed-32k-2d-matryoshka',
-      repo_id: 'llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
+      repo_id: 'vllm-sr/mmbert-embed-32k-2d-matryoshka',
       purpose: 'embedding',
       description: 'Multilingual 2D Matryoshka embedding model with long-context support.',
       parameter_size: '307M',
       embedding_dim: 768,
       max_context_length: 32768,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka',
       tags: ['embedding', 'matryoshka', 'multilingual'],
     },
     metadata: {
       model_type: 'mmbert',
-      provider: 'ort',
-      device: 'migraphx:0',
+      provider: 'model_runtime',
+      device: 'rocm:0',
       effective_input_tokens: '32768',
       max_sequence_length: '32768',
       default_dimension: '768',
@@ -141,7 +141,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-pii-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-pii-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-pii-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-pii-detector-merged',
       purpose: 'pii-detection',
       description: 'PII detector for multilingual redaction and routing.',
       parameter_size: '307M',
@@ -149,7 +149,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 35,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-pii-detector-merged',
       tags: ['token-classification', 'pii'],
     },
     metadata: {
@@ -194,7 +194,22 @@ const hourlyHistory = (name: string) => ({
   })),
 })
 
-async function mockRouterInventoryShell(page: Page, status: unknown = statusPayload) {
+const decisionModelCatalog = {
+  system: { decision_model: { deployment: 'routing-judge' } },
+  deployments: {
+    'routing-judge': {
+      provider: 'model_runtime',
+      artifact: 'vllm-sr/Vela-2.0-4B',
+      device: 'rocm:0',
+    },
+  },
+}
+
+async function mockRouterInventoryShell(
+  page: Page,
+  status: unknown = statusPayload,
+  config: unknown = { signals: {}, decisions: [], providers: { models: [] }, plugins: {} },
+) {
   await mockAuthenticatedAppShell(page, {
     settings: {
       platform: 'amd',
@@ -205,12 +220,7 @@ async function mockRouterInventoryShell(page: Page, status: unknown = statusPayl
     await route.fulfill({
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        signals: {},
-        decisions: [],
-        providers: { models: [] },
-        plugins: {},
-      }),
+      body: JSON.stringify(config),
     })
   })
 
@@ -224,6 +234,93 @@ async function mockRouterInventoryShell(page: Page, status: unknown = statusPayl
 }
 
 test.describe('Router model inventory surfaces', () => {
+  test('shows the configured decision model, routing questions and observed shared runtime', async ({
+    page,
+  }) => {
+    const questions = [
+      { name: 'task', question: { type: 'choice' } },
+      { name: 'difficulty', question: { type: 'score' } },
+      { name: 'precise_facts', question: { type: 'noul' } },
+      { name: 'needs', question: { type: 'set' } },
+      { name: 'correction', question: { type: 'noul' } },
+    ]
+    const config = {
+      global: { model_catalog: decisionModelCatalog },
+      providers: { models: [] },
+      entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/balanced'] }],
+      recipes: [
+        {
+          name: 'balanced',
+          routing: {
+            signals: {
+              decision: questions,
+              pii: [{ name: 'personal_data' }],
+              jailbreak: [{ name: 'prompt_attack' }],
+              safety: [{ name: 'unsafe_request' }],
+            },
+            projections: { scores: [{ name: 'effort_score' }], mappings: [{ name: 'effort' }] },
+          },
+        },
+      ],
+    }
+    const models = ['pii_classifier', 'jailbreak_classifier', 'safety.unsafe_request'].map(
+      (name) => ({
+        name,
+        recipe: 'balanced',
+        type: 'classification',
+        loaded: true,
+        state: 'ready',
+        model_path: 'a'.repeat(64),
+        metadata: {
+          deployment: 'routing-judge',
+          resource_id: 'shared-vela',
+          provider: 'model_runtime',
+          device: 'rocm:0',
+        },
+      }),
+    )
+    await mockRouterInventoryShell(page, { ...statusPayload, models: { models } }, config)
+    await page.goto('/dashboard')
+
+    const intelligence = page.getByRole('region', { name: 'Router Intelligence' })
+    const overview = intelligence.getByTestId('decision-model-overview')
+    await expect(overview).toContainText('Vela-2.0-4B')
+    await expect(overview).toContainText('Shared runtime ready')
+    await expect(overview).toContainText('1 runtime · 3 reported bindings')
+    await expect(
+      intelligence.getByText('5 questions · 3 other signals · 2 projections'),
+    ).toBeVisible()
+    await intelligence.locator('summary').filter({ hasText: 'balanced' }).click()
+    for (const question of questions) {
+      await expect(intelligence.getByText(question.name, { exact: true })).toBeVisible()
+    }
+    await expect(intelligence.getByText('effort_score', { exact: true })).toBeVisible()
+    await expect(intelligence.getByText('effort', { exact: true })).toBeVisible()
+    await expect(intelligence.getByText('personal_data', { exact: true })).toBeVisible()
+    await expect(
+      intelligence.getByTestId('router-model-grid-preview').locator('button'),
+    ).toHaveCount(1)
+    await intelligence.getByTestId('router-model-preview-pii_classifier').click()
+    await expect(page.getByRole('dialog', { name: 'Runtime model details' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await intelligence.getByRole('button', { name: 'Manage decision model' }).click()
+    await expect(page).toHaveURL('/decision-model')
+  })
+
+  test('does not claim a configured decision model is ready without runtime evidence', async ({
+    page,
+  }) => {
+    await mockRouterInventoryShell(page, statusPayload, {
+      global: { model_catalog: decisionModelCatalog },
+    })
+    await page.goto('/dashboard')
+    const overview = page.getByTestId('decision-model-overview')
+    await expect(overview).toContainText('Vela-2.0-4B')
+    await expect(overview).toContainText('Runtime not reported')
+    await expect(overview).not.toContainText('Shared runtime ready')
+  })
+
   test('keeps service availability useful when router model metadata is absent', async ({ page }) => {
     await mockRouterInventoryShell(page, {
       ...statusPayload,
@@ -258,25 +355,26 @@ test.describe('Router model inventory surfaces', () => {
     await expect(previewGrid.locator('[data-testid^="router-model-preview-"]')).toHaveCount(6)
 
     const embeddingPreview = page.getByTestId('router-model-preview-mmbert_embedding_model')
-    await expect(embeddingPreview).toContainText('models/mmbert-embed-32k-2d-matryoshka')
+    await expect(embeddingPreview.getByRole('heading')).toHaveText('mmbert-embed-32k-2d-matryoshka')
+    await expect(embeddingPreview.getByText('vllm-sr', { exact: true })).toBeVisible()
     await expect(embeddingPreview).toContainText('Embedding')
+    await expect(embeddingPreview).toContainText('Input budget: 32,768 tokens')
     await expect(embeddingPreview).not.toContainText('MmBertEmbeddingModel(')
-    await expect(previewGrid.getByAltText('AMD platform')).toHaveCount(6)
-    await expect(page.getByAltText('AMD', { exact: true })).toBeVisible()
-    await expect(page.getByText('AMD GPU', { exact: true })).toHaveCount(0)
 
     await embeddingPreview.click()
     const details = page.getByRole('dialog', { name: 'Runtime model details' })
     await expect(details).toBeVisible()
     await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(details).toContainText('models/mmbert-embed-32k-2d-matryoshka')
-    await expect(details.getByText(routerModels[4].registry.description, { exact: true })).toBeVisible()
-    await expect(details).toContainText('Recipe')
-    await expect(details).toContainText('default')
+    await expect(details.getByRole('heading', { level: 3 })).toHaveText(routerModels[4].registry.repo_id)
+    await expect(details.getByText('default / mmbert_embedding_model', { exact: true })).toBeVisible()
     await expect(details).toContainText('Provider')
-    await expect(details.getByText('ort', { exact: true })).toBeVisible()
-    await expect(details).toContainText('migraphx:0')
-    await expect(details).toContainText('32768')
+    await expect(details.getByText('Model Runtime', { exact: true })).toBeVisible()
+    await expect(details.getByAltText('AMD GPU')).toBeVisible()
+    await expect(details).toContainText('ROCm 0')
+    await expect(details).toContainText('32,768 tokens')
+    const technicalDetails = details.locator('summary', { hasText: 'Technical details' })
+    await technicalDetails.click()
+    await expect(details.getByText(routerModels[4].model_path, { exact: true })).toBeVisible()
     await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
       'href',
       routerModels[4].registry.model_card_url,
@@ -294,6 +392,8 @@ test.describe('Router model inventory surfaces', () => {
     await expect(closeButtons.last()).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(closeButtons.first()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(technicalDetails).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(details.getByRole('link', { name: /model card/i })).toBeFocused()
   })
@@ -357,11 +457,14 @@ test.describe('Router model inventory surfaces', () => {
     await page.goto('/dashboard')
     const previews = page.getByTestId('router-model-preview-mmbert_embedding_model')
     await expect(previews).toHaveCount(2)
-    await previews.filter({ hasText: 'models/vault-embedding' }).click()
+    // Both consumers use the same upstream repository. The second fixture is
+    // the vault runtime; selecting it must preserve its recipe and artifact.
+    await previews.nth(1).click()
 
     const details = page.getByRole('dialog', { name: 'Runtime model details' })
-    await expect(details).toContainText('vault')
-    await expect(details).toContainText('models/vault-embedding')
+    await expect(details.getByText('vault / mmbert_embedding_model', { exact: true })).toBeVisible()
+    await details.locator('summary', { hasText: 'Technical details' }).click()
+    await expect(details.getByText('models/vault-embedding', { exact: true })).toBeVisible()
     await expect(details).not.toContainText('models/balance-embedding')
     await expect(page).toHaveURL(/\/dashboard$/)
   })

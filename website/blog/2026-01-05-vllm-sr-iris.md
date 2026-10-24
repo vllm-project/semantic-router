@@ -282,7 +282,7 @@ Every contribution matters—from fixing a typo to architecting a new feature. J
 
 - **Documentation**: [vllm-sr.ai](https://vllm-sr.ai)
 - **GitHub**: [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
-- **Models**: [Hugging Face](https://huggingface.co/llm-semantic-router)
+- **Models**: [Hugging Face](https://huggingface.co/vllm-sr)
 - **Community**: Join us on Slack in [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN)
 
 *The rainbow bridge is now open. Welcome to Iris.* 🌈

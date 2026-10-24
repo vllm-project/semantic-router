@@ -15,7 +15,6 @@ import (
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
 	CandidateRequirements *config.CandidateRequirements  `json:"candidateRequirements,omitempty"`
-	DataPolicy            *config.RoutingDataPolicy      `json:"dataPolicy,omitempty"`
 	ModelBindings         map[string]config.ModelBinding `json:"modelBindings,omitempty"`
 	Strategy              string                         `json:"strategy,omitempty"`
 	Entrypoints           []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
@@ -67,6 +66,8 @@ type ProjectionScoreDeclJSON struct {
 type ProjectionScoreInputJSON struct {
 	SignalType  string  `json:"signalType"`
 	SignalName  string  `json:"signalName"`
+	KB          string  `json:"kb,omitempty"`
+	Metric      string  `json:"metric,omitempty"`
 	Weight      float64 `json:"weight"`
 	ValueSource string  `json:"valueSource,omitempty"`
 	Match       float64 `json:"match,omitempty"`
@@ -247,7 +248,6 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	result := &ProgramJSON{
 		ModelBindings:         cloneModelBindings(prog.ModelBindings),
 		CandidateRequirements: prog.CandidateRequirements.Clone(),
-		DataPolicy:            prog.DataPolicy.Clone(),
 		Strategy:              prog.Strategy,
 		Signals:               make([]*SignalDeclJSON, 0, len(prog.Signals)),
 		Routes:                make([]*RouteDeclJSON, 0, len(prog.Routes)),
@@ -321,6 +321,8 @@ func appendProjectionScoreDecls(result *ProgramJSON, scores []*ProjectionScoreDe
 			scoreJSON.Inputs = append(scoreJSON.Inputs, &ProjectionScoreInputJSON{
 				SignalType:  input.SignalType,
 				SignalName:  input.SignalName,
+				KB:          input.KB,
+				Metric:      input.Metric,
 				Weight:      input.Weight,
 				ValueSource: input.ValueSource,
 				Match:       input.Match,

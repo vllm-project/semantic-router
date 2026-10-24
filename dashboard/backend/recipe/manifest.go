@@ -184,6 +184,7 @@ type routingAssets struct {
 type evaluationSettings struct {
 	RequestTimeoutSeconds *float64 `yaml:"request_timeout_seconds"`
 	Concurrency           *int     `yaml:"concurrency"`
+	Shards                *int     `yaml:"shards"`
 }
 
 type acceptancePolicy struct {
@@ -206,6 +207,8 @@ type robustnessPolicy struct {
 }
 
 type probeDecision struct {
+	ExpectedSignalErrors    yaml.Node `yaml:"expected_signal_errors"`
+	signalErrors            map[string]string
 	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
 	signalValueBounds       map[string]SignalValueBounds
 	ExpectedSelectionStatus *string             `yaml:"expected_selection_status"`
@@ -228,6 +231,8 @@ type probeDecision struct {
 }
 
 type probeVariant struct {
+	ExpectedSignalErrors    yaml.Node `yaml:"expected_signal_errors"`
+	signalErrors            map[string]string
 	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
 	signalValueBounds       map[string]SignalValueBounds
 	ExpectedSelectionStatus *string                `yaml:"expected_selection_status"`
@@ -320,6 +325,9 @@ func validateProbeEvaluationSettings(evaluation evaluationSettings, issues *[]st
 	if concurrency := evaluation.Concurrency; concurrency != nil && (*concurrency < 1 || *concurrency > 64) {
 		*issues = append(*issues, "evaluation.concurrency must be between 1 and 64")
 	}
+	if shards := evaluation.Shards; shards != nil && (*shards < 1 || *shards > 16) {
+		*issues = append(*issues, "evaluation.shards must be between 1 and 16")
+	}
 }
 
 func validateProbeDecision(
@@ -342,6 +350,7 @@ func validateProbeDecision(
 		*issues = append(*issues, label+".expected_decision is required")
 	}
 	validateExpectedSelectionStatus(decision.ExpectedSelectionStatus, label, issues)
+	decision.signalErrors = validatedSignalErrors(decision.ExpectedSignalErrors, label, issues)
 	var valueErr error
 	decision.signalValueBounds, valueErr = parseSignalValueExpectations(decision.ExpectedSignalValues)
 	if valueErr != nil {
@@ -379,6 +388,7 @@ func validateProbeVariant(
 	label := fmt.Sprintf("%s.variants[%d]", decisionLabel, variantIndex)
 	validateProbeVariantIdentity(decisionID, variant.ID, label, probeIDs, issues)
 	validateExpectedSelectionStatus(variant.ExpectedSelectionStatus, label, issues)
+	variant.signalErrors = validatedSignalErrors(variant.ExpectedSignalErrors, label, issues)
 	var valueErr error
 	variant.signalValueBounds, valueErr = parseSignalValueExpectations(variant.ExpectedSignalValues)
 	if valueErr != nil {
@@ -602,6 +612,7 @@ func expectedAssertionsForDecision(decision probeDecision) ExpectedAssertions {
 		PluginMatch:      decision.PluginMatch,
 		Signals:          nonNilSignalMap(decision.ExpectedSignals),
 		SignalValues:     cloneSignalValueBounds(decision.signalValueBounds),
+		SignalErrors:     cloneSignalErrors(decision.signalErrors),
 		ForbiddenSignals: nonNilSignalMap(decision.ForbiddenSignals),
 		SignalMatch:      decision.SignalMatch,
 	}
@@ -621,6 +632,9 @@ func flattenProbe(
 	}
 	if variant.signalValueBounds != nil {
 		expected.SignalValues = cloneSignalValueBounds(variant.signalValueBounds)
+	}
+	if variant.signalErrors != nil {
+		expected.SignalErrors = cloneSignalErrors(variant.signalErrors)
 	}
 	shapes, preview := probePresentation(variant)
 	return ProbeDetail{

@@ -82,7 +82,7 @@ func DecodeBase64(url string) ([]byte, bool) {
 
 // CanonicalDataURL rebuilds the data URI with a lowercased scheme, MIME type, and
 // ";base64," marker while preserving the exact-case payload, for consumers that
-// scan for the marker case-sensitively (e.g. the candle FFI).
+// scan for the marker case-sensitively.
 func CanonicalDataURL(url string) (string, bool) {
 	mime, payload, ok := parse(url)
 	if !ok {

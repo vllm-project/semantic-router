@@ -25,6 +25,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
 		"choices.message.tool_calls.index":                       chatChoicesHaveToolCallIndex(wire.Choices),
+		"choices.message.provider_specific_fields":               chatChoicesHaveMessageProviderSpecificFields(wire.Choices),
+		"choices.provider_specific_fields":                       chatChoicesHaveProviderSpecificFields(wire.Choices),
 		"provider":                                               wire.Provider != nil,
 		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
 		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
@@ -42,7 +44,9 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// A same-format encode may replay the response byte-for-byte. OpenRouter's
 	// provider, native finish reason and accounting decorations were dropped
 	// from the neutral response, so render it again instead of leaking them.
-	needsReencode := wire.hasOpenRouterDecorations()
+	// LiteLLM's provider_specific_fields are similarly non-canonical and must
+	// not be replayed.
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations()
 	if needsReencode {
 		canonicalBody = nil
 	}
@@ -71,6 +75,29 @@ func (wire chatResponseWire) hasOpenRouterDecorations() bool {
 	return usage.Cost != nil || usage.IsBYOK != nil || usage.CostDetails != nil || usage.ServerToolUse != nil ||
 		usage.PromptTokensDetails != nil && usage.PromptTokensDetails.VideoTokens != nil ||
 		usage.CompletionTokensDetails != nil && usage.CompletionTokensDetails.ImageTokens != nil
+}
+
+func chatChoicesHaveProviderSpecificFields(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if len(choice.ProviderSpecificFields) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func chatChoicesHaveMessageProviderSpecificFields(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if len(choice.Message.ProviderSpecificFields) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (wire chatResponseWire) hasLiteLLMDecorations() bool {
+	return chatChoicesHaveProviderSpecificFields(wire.Choices) ||
+		chatChoicesHaveMessageProviderSpecificFields(wire.Choices)
 }
 
 func chatChoicesHaveTokenizedArguments(choices []chatChoiceWire) bool {
@@ -158,8 +185,8 @@ func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
 	}
 	if wire.Error != nil {
 		response.Error = &llmprotocol.ProtocolError{
-			Category: decodeProviderErrorCategory(wire.Error.Type, wire.Error.Code),
-			Code:     wire.Error.Code, Message: wire.Error.Message, Parameter: wire.Error.Param,
+			Category: decodeProviderErrorCategory(wire.Error.Type, string(wire.Error.Code)),
+			Code:     string(wire.Error.Code), Message: wire.Error.Message, Parameter: wire.Error.Param,
 		}
 		response.StopReason = llmprotocol.StopError
 	}
@@ -181,7 +208,7 @@ func decodeChatChoices(wire chatResponseWire, response *llmprotocol.Response, po
 			response.Evidence.TokenLogprobs = decodeChatTokenLogprobs(choice.Logprobs)
 			if choice.FinishReason != nil {
 				response.SourceStopReason = *choice.FinishReason
-				response.StopReason = decodeChatStop(*choice.FinishReason)
+				response.StopReason, response.MatchedStopSequence = decodeChatStopWithMatch(*choice.FinishReason, choice.StopReason, policy)
 			}
 			continue
 		}
@@ -269,6 +296,7 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 	if err := appendChatStopReasonDiagnostic(&diagnostics, response.StopReason, envelope.Format, policy); err != nil {
 		return nil, diagnostics, err
 	}
+	appendChatCacheCreationOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	wire := chatResponseWire{ID: response.ID, Object: "chat.completion", Model: response.Model}
 	if !response.CreatedAt.IsZero() {
 		wire.Created = response.CreatedAt.Unix()
@@ -352,6 +380,17 @@ func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 		wire.CompletionTokensDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: tokenValue(usage.OutputReasoning)}
 	}
 	return wire
+}
+
+// decodeChatStopWithMatch reads vLLM's non-standard choices[].stop_reason when
+// the target can carry it. With finish_reason "stop", a string there is the stop
+// sequence that ended the generation; an integer is a stop token id and null is
+// end of sequence.
+func decodeChatStopWithMatch(reason string, detail *chatStopReasonWire, policy llmprotocol.Policy) (llmprotocol.StopReason, string) {
+	if policy.ProviderStopSequences && reason == "stop" && detail != nil && detail.Text != nil {
+		return llmprotocol.StopSequence, *detail.Text
+	}
+	return decodeChatStop(reason), ""
 }
 
 func decodeChatStop(reason string) llmprotocol.StopReason {

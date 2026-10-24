@@ -96,7 +96,7 @@ func init() {
 	pkgtestcases.Register("protocol-codec-anthropic-backend-agent-client-replay", pkgtestcases.TestCase{
 		Description: "Captured agent-client tool loops, errors and usage survive a native Anthropic Messages backend",
 		Tags:        []string{"protocol-codec", "anthropic", "agents", "tools", "streaming", "errors"},
-		Fn:          agentClientReplayTest("MoM", "anthropic.messages.v1"),
+		Fn:          agentClientReplayTest("vllm-sr/auto", "anthropic.messages.v1"),
 	})
 }
 

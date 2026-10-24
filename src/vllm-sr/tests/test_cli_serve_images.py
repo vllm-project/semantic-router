@@ -9,6 +9,10 @@ from click.testing import CliRunner
 
 
 def _capture_serve_deployment(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("cli.runtime_lifecycle.get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        "cli.runtime_lifecycle.container_status_strict", lambda _name: "not found"
+    )
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -17,7 +21,7 @@ def _capture_serve_deployment(monkeypatch, tmp_path: Path):
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 1}]},
             },
             sort_keys=False,
         )
@@ -87,6 +91,8 @@ def test_serve_passes_role_specific_images_to_backend(monkeypatch, tmp_path: Pat
             "serve",
             "--config",
             str(config_path),
+            "--gateway",
+            "extproc",
             "--router-image",
             "test/router:latest",
             "--envoy-image",
@@ -139,5 +145,5 @@ def test_serve_rejects_startup_timeout_for_kubernetes_before_mutation(monkeypatc
     result = CliRunner().invoke(
         main, ["serve", "--target", "k8s", "--startup-timeout", "7200"]
     )
-    assert result.exit_code == 1
-    assert "supported only for local Docker" in result.output
+    assert result.exit_code == 2
+    assert "--startup-timeout applies to the docker target" in result.output

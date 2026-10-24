@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from community_lifecycle_policy import (
     ACCEPTED,
@@ -214,28 +214,168 @@ def sync_issue_kind_event(client: GitHubClient, event: dict[str, Any]) -> None:
     add_labels(client, repo, number, plan.add_labels)
 
 
-def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
-    """Apply an explicit acceptance transition requested by ``/accept``."""
+def acceptance_candidates(client: GitHubClient, repo: str) -> dict[int, set[str]]:
+    """List issue numbers and actors for every current exact ``/accept`` comment."""
 
-    command = ((event.get("comment") or {}).get("body") or "").strip()
+    candidates: dict[int, set[str]] = {}
+    page = 1
+    while True:
+        comments = (
+            client.request(
+                f"repos/{repo}/issues/comments?sort=created&direction=asc"
+                f"&per_page={API_PAGE_SIZE}&page={page}"
+            )
+            or []
+        )
+        for comment in comments:
+            if comment.get("body") != "/accept":
+                continue
+            path = urlparse(comment.get("issue_url") or "").path.rstrip("/")
+            try:
+                number = int(path.rsplit("/", 1)[-1])
+            except (ValueError, IndexError):
+                print(
+                    "::warning::Ignored an exact `/accept` comment without an issue URL."
+                )
+                continue
+            actors = candidates.setdefault(number, set())
+            actor = (comment.get("user") or {}).get("login")
+            if actor:
+                actors.add(actor)
+        if len(comments) < API_PAGE_SIZE:
+            break
+        page += 1
+    return candidates
+
+
+def acceptance_actor_can_manage(
+    client: GitHubClient,
+    repo: str,
+    actors: set[str],
+    permission_cache: dict[str, bool],
+) -> bool:
+    """Return whether any command actor is authorized, failing closed on API errors."""
+
+    permission_failed = False
+    for actor in sorted(actors):
+        try:
+            if actor not in permission_cache:
+                permission_cache[actor] = actor_can_manage(client, repo, actor)
+            if permission_cache[actor]:
+                return True
+        except (Exception, SystemExit):
+            permission_failed = True
+    if permission_failed:
+        raise RuntimeError(
+            "Could not verify every `/accept` actor's repository permission."
+        )
+    return False
+
+
+def reconcile_acceptance_candidate(
+    client: GitHubClient,
+    repo: str,
+    number: int,
+    actors: set[str],
+    permission_cache: dict[str, bool],
+) -> str:
+    """Fetch, validate, and reconcile one deduplicated acceptance candidate."""
+
+    issue = client.request(f"repos/{repo}/issues/{number}", ignore_not_found=True)
+    if not issue:
+        print(
+            f"::warning title=Issue #{number} skipped::"
+            "The issue is no longer available."
+        )
+        return "skipped"
+    if issue.get("pull_request"):
+        print(
+            f"::notice title=Issue #{number} skipped::"
+            "Exact `/accept` comments on pull requests do not accept issues."
+        )
+        return "skipped"
+
+    labels = label_names(issue)
+    if ACCEPTED in labels and NEEDS_ACCEPTANCE not in labels:
+        print(
+            f"::notice title=Issue #{number} already synchronized::"
+            f"{ACCEPTED} is present and {NEEDS_ACCEPTANCE} is absent."
+        )
+        return "synchronized"
+
+    evaluation = evaluate_issue_acceptance(
+        issue,
+        actor_can_manage=acceptance_actor_can_manage(
+            client,
+            repo,
+            actors,
+            permission_cache,
+        ),
+    )
+    if not evaluation.valid:
+        print(f"::warning title=Issue #{number} not accepted::{evaluation.error}")
+        return "skipped"
+
+    add_labels(client, repo, number, {ACCEPTED})
+    remove_labels(client, repo, number, {NEEDS_ACCEPTANCE})
+    print(
+        f"::notice title=Issue #{number} accepted::"
+        f"Added {ACCEPTED} and removed {NEEDS_ACCEPTANCE}."
+    )
+    return "accepted"
+
+
+def reconciliation_failure_message(error: BaseException) -> str:
+    if isinstance(error, SystemExit):
+        return "A GitHub API request failed; see the preceding `gh api` error."
+    return str(error) or "A GitHub API request failed."
+
+
+def reconcile_issue_acceptance(client: GitHubClient, repo: str) -> None:
+    """Reconcile all issues with a current exact ``/accept`` comment."""
+
+    candidates = acceptance_candidates(client, repo)
+    permission_cache: dict[str, bool] = {}
+    results = {"accepted": 0, "synchronized": 0, "skipped": 0}
+    failures = 0
+
+    print(f"::notice::Discovered {len(candidates)} issue acceptance candidate(s).")
+    for number, actors in sorted(candidates.items()):
+        try:
+            result = reconcile_acceptance_candidate(
+                client,
+                repo,
+                number,
+                actors,
+                permission_cache,
+            )
+            results[result] += 1
+        except (Exception, SystemExit) as error:
+            failures += 1
+            print(
+                f"::error title=Issue #{number} reconciliation failed::"
+                f"{reconciliation_failure_message(error)}"
+            )
+
+    print(
+        "::notice::Acceptance reconciliation complete: "
+        f"{results['accepted']} accepted, "
+        f"{results['synchronized']} already synchronized, "
+        f"{results['skipped']} skipped, {failures} failed."
+    )
+    if failures:
+        raise SystemExit(1)
+
+
+def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
+    """Reconcile repository acceptance after an exact ``/accept`` event."""
+
+    command = (event.get("comment") or {}).get("body") or ""
     if command != "/accept":
         print("::error::The acceptance command must be exactly `/accept`.")
         raise SystemExit(1)
 
-    repo = repository_name(event)
-    number = int(event["issue"]["number"])
-    actor = (event.get("sender") or {}).get("login")
-    issue = client.request(f"repos/{repo}/issues/{number}")
-    evaluation = evaluate_issue_acceptance(
-        issue,
-        actor_can_manage=actor_can_manage(client, repo, actor),
-    )
-    if not evaluation.valid:
-        print(f"::error::{evaluation.error}")
-        raise SystemExit(1)
-
-    add_labels(client, repo, number, {ACCEPTED})
-    remove_labels(client, repo, number, {NEEDS_ACCEPTANCE})
+    reconcile_issue_acceptance(client, repository_name(event))
 
 
 def linked_issues_for_pull_request(

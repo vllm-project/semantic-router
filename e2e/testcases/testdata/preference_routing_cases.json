@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Terse: wants a short, direct reply",
+    "description": "A request for a short, no-elaboration reply resembles the terse_answers examples, not the detailed_answers ones",
+    "query": "Please keep your reply short and to the point, no need to explain further.",
+    "expected_decision": "terse_preference_routing",
+    "expected_matched_signal": "terse_answers",
+    "should_match": true
+  },
+  {
+    "name": "Detailed: wants full step-by-step reasoning",
+    "description": "A request for full reasoning and no skipped steps resembles the detailed_answers examples, not the terse_answers ones",
+    "query": "Please explain your full reasoning and go through this step by step, don't leave anything out.",
+    "expected_decision": "detailed_preference_routing",
+    "expected_matched_signal": "detailed_answers",
+    "should_match": true
+  },
+  {
+    "name": "No preference rule matches",
+    "description": "A plain factual question carries no stylistic preference cue, so it should clear neither rule's threshold",
+    "query": "What's the capital of France?",
+    "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  }
+]

@@ -45,6 +45,12 @@ const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 // observed, so this vendor changes only how failures are decoded.
 const ResponseVendorSnowflake ResponseVendor = "snowflake"
 
+// ResponseVendorOpenAICompatGateway permits the usage-metering fields that
+// OpenAI-compatible aggregating gateways (one-api/new-api style relays) append
+// to otherwise canonical chat completion responses. True vLLM endpoints emit
+// canonical bodies, so declaring this vendor for them is a no-op.
+const ResponseVendorOpenAICompatGateway ResponseVendor = "openai-compat-gateway"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
@@ -54,6 +60,11 @@ type Policy struct {
 	// ResponseVendor permits provider-specific fields at the response boundary.
 	// Empty keeps strict canonical decoding.
 	ResponseVendor ResponseVendor
+	// ProviderStopSequences lets a decoder report a provider's non-standard
+	// matched stop sequence (vLLM's choices[].stop_reason) as a stop_sequence
+	// terminal. TranslateResponse and NewStreamWithMutation set it only when
+	// the target wire format can carry a matched stop sequence.
+	ProviderStopSequences bool
 }
 
 type Limits struct {

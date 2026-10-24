@@ -9,7 +9,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -82,10 +81,8 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
 	return []string{
-		"keyword-routing",
-		"entropy-routing",
-		"routing-fallback",
 		"decision-scoped-multi-factor",
+		"decision-scoped-random",
 		"metadata-routing",
 		"input-modality-routing",
 	}

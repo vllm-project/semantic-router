@@ -42,4 +42,12 @@ describe('Dashboard capability settings fail closed', () => {
     expect(source).toContain('if (controller.signal.aborted) return')
     expect(source).toContain('return () => controller.abort()')
   })
+
+  it('leaves feature availability to the capabilities context', () => {
+    const source = readFileSync(new URL('./ReadonlyContext.tsx', import.meta.url), 'utf8')
+
+    for (const removed of ['srBenchAvailable', 'mlPipelineAvailable', '/api/ml-pipeline/availability']) {
+      expect(source).not.toContain(removed)
+    }
+  })
 })

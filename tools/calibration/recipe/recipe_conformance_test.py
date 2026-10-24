@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 recipe_conformance = importlib.import_module("recipe_conformance")
 recipe_coverage = importlib.import_module("recipe_conformance_coverage")
+recipe_sources = importlib.import_module("recipe_conformance_sources")
 recipe_metadata_schema = importlib.import_module("recipe_metadata_schema")
 FULL_COVERAGE_PERCENT = 100.0
 
@@ -63,11 +64,10 @@ class RecipeConformanceTest(unittest.TestCase):
             },
         )
         self.assertEqual(len(mom.decisions), 16)
-        self.assertEqual(mom.variants, 315)
-        self.assertEqual(
-            mom.coverage["signals"]["by_family"]["classifier"]["asserted"],
-            ["classifier:content-risk"],
-        )
+        self.assertEqual(mom.variants, 347)
+        self.assertNotIn("classifier", mom.coverage["signals"]["by_family"])
+        self.assertEqual(len(mom.probe_shard_sizes), 16)
+        self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
         self.assertEqual(set(mom.algorithms), {"multi_factor", "fusion", "workflows"})
         self.assertTrue(mom.coverage["passed"])
 
@@ -169,8 +169,8 @@ class RecipeConformanceTest(unittest.TestCase):
             ("vllm-sr/auto",),
         )
         self.assertEqual(len(by_name["accuracy"].entrypoints), 1)
-        self.assertEqual(by_name["multi-objective"].auto_entrypoints, ())
-        self.assertEqual(len(by_name["multi-objective"].entrypoints), 5)
+        self.assertEqual(by_name["multi-objective"].auto_entrypoints, ("vllm-sr/auto",))
+        self.assertEqual(len(by_name["multi-objective"].entrypoints), 6)
         self.assertEqual(
             {recipe.identity.id for recipe in inventory},
             set(by_name),
@@ -318,7 +318,8 @@ class RecipeConformanceTest(unittest.TestCase):
             recipe_conformance.DEFAULT_RECIPE_ROOT
         )
         by_name = {recipe.name: recipe for recipe in inventory}
-        self.assertEqual(by_name["vela-amd"].required_devices, ("migraphx:0", "rocm:0"))
+        self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
+        self.assertEqual(by_name["decision-balance"].required_devices, ("rocm",))
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -332,27 +333,54 @@ class RecipeConformanceTest(unittest.TestCase):
                 for shard in matrix["include"]
                 for name in shard["recipes"].split(",")
             }
-            self.assertEqual(planned, set(by_name) - {"vela-amd"})
+            self.assertEqual(planned, set(by_name) - {"decision-balance", "vela-amd"})
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
-                [{"recipe": "vela-amd", "required_devices": ["migraphx:0", "rocm:0"]}],
+                [
+                    {"recipe": "decision-balance", "required_devices": ["rocm"]},
+                    {"recipe": "vela-amd", "required_devices": ["rocm:0"]},
+                ],
             )
 
     def test_accelerator_requirements_follow_devices_not_recipe_names(self) -> None:
         deployments = {
-            "local": {"provider": "candle", "device": "cpu"},
+            "local": {"provider": "model_runtime", "device": "cpu"},
             "remote": {"provider": "http"},
-            "gpu": {"provider": "candle", "device": "cuda:0"},
-            "other": {"provider": "ort", "device": "migraphx:2"},
+            "gpu": {"provider": "model_runtime", "device": "cuda:0"},
+            "other": {"provider": "model_runtime", "device": "rocm:2"},
         }
         config = {"global": {"model_catalog": {"deployments": deployments}}}
         self.assertEqual(
-            recipe_conformance.configured_accelerators(config), ("cuda:0", "migraphx:2")
+            recipe_conformance.configured_accelerators(config), ("cuda:0", "rocm:2")
         )
         del deployments["gpu"]
         del deployments["other"]
         self.assertEqual(recipe_conformance.configured_accelerators(config), ())
+
+    def test_decision_model_hardware_comes_from_the_declared_resource(self) -> None:
+        for device, expected in [
+            ("rocm", ("rocm",)),
+            ("cuda:0", ("cuda:0",)),
+            ("cpu", ()),
+        ]:
+            config = {
+                "global": {
+                    "model_catalog": {
+                        "system": {"decision_model": {"deployment": "primary"}},
+                        "deployments": {
+                            "primary": {
+                                "provider": "model_runtime",
+                                "artifact": "provider/model",
+                                "device": device,
+                            }
+                        },
+                    }
+                }
+            }
+            self.assertEqual(
+                recipe_conformance.configured_accelerators(config), expected
+            )
 
     def test_cpu_runner_rejects_hardware_before_any_stack_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -503,11 +531,9 @@ class RecipeConformanceTest(unittest.TestCase):
 
     def test_default_entrypoints_are_bound_round_robin(self) -> None:
         config = {
-            "global": {
-                "router": {
-                    "auto_model_name": "custom-auto",
-                }
-            }
+            "entrypoints": [
+                {"model_names": ["custom-auto", "second"], "recipe": "default"}
+            ]
         }
         probes = [
             recipe_conformance.Probe(
@@ -523,7 +549,7 @@ class RecipeConformanceTest(unittest.TestCase):
 
         self.assertEqual(
             [probe.model for probe in bound],
-            ["vllm-sr/auto", "auto", "custom-auto", "vllm-sr/auto"],
+            ["custom-auto", "second", "custom-auto", "second"],
         )
 
     def test_portable_recipe_defaults_do_not_create_runtime_entrypoints(self) -> None:
@@ -561,11 +587,8 @@ class RecipeConformanceTest(unittest.TestCase):
                 config = {**bundle, field: value}
                 entrypoints = recipe_conformance.config_entrypoints(config)
                 self.assertEqual(
-                    {
-                        name: entrypoints[name]
-                        for name in ("vllm-sr/auto", "auto", "MoM")
-                    },
-                    dict.fromkeys(("vllm-sr/auto", "auto", "MoM"), "default"),
+                    {name: entrypoints[name] for name in ("vllm-sr/auto",)},
+                    dict.fromkeys(("vllm-sr/auto",), "default"),
                 )
                 if field == "entrypoints":
                     self.assertEqual(entrypoints["route"], "balanced")
@@ -603,6 +626,128 @@ class RecipeConformanceTest(unittest.TestCase):
             self.assertEqual(report["summary"]["passed_recipes"], 1)
             self.assertEqual(report["summary"]["missing_recipes"], 1)
             self.assertFalse(report["summary"]["passed"])
+
+    def test_probe_shards_spread_long_reads_and_keep_manifest_order(self) -> None:
+        costs = [("a", 1), ("b", 17), ("c", 1), ("d", 17), ("e", 1), ("f", 1)]
+
+        shards = recipe_sources.partition_probes(costs, 2)
+
+        flat = [probe for shard in shards for probe in shard]
+        self.assertEqual(sorted(flat), ["a", "b", "c", "d", "e", "f"])
+        self.assertEqual([("b" in shard) + ("d" in shard) for shard in shards], [1, 1])
+        order = [probe_id for probe_id, _cost in costs]
+        for shard in shards:
+            self.assertEqual(shard, sorted(shard, key=order.index))
+        self.assertEqual(recipe_sources.probe_cost(10_000_000), 17)
+
+    def test_probe_shard_settings_are_validated(self) -> None:
+        self.assertEqual(recipe_sources.probe_shard_count({}), 1)
+        self.assertEqual(
+            recipe_sources.probe_shard_count({"evaluation": {"shards": 4}}), 4
+        )
+        for value in (0, 17, True, "4"):
+            with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
+                recipe_sources.probe_shard_count({"evaluation": {"shards": value}})
+        self.assertEqual(recipe_sources.parse_probe_shard("2/3"), (2, 3))
+        for value in ("3/3", "2", "-1/3", "a/b"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                recipe_sources.parse_probe_shard(value)
+
+    def test_probe_shard_reports_merge_only_when_every_shard_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            manifest = root / "probes.yaml"
+            manifest.write_text(
+                yaml.safe_dump(
+                    {
+                        "schema_version": "v1",
+                        "name": "bundle",
+                        "routing_assets": {"yaml": "config.yaml", "dsl": "recipe.dsl"},
+                        "evaluation": {"concurrency": 1, "shards": 2},
+                        "coverage": {
+                            "min_signal_assertion_percent": 0,
+                            "min_projection_assertion_percent": 0,
+                            "min_algorithm_assertion_percent": 0,
+                            "min_plugin_assertion_percent": 0,
+                            "required_request_shapes": [],
+                            "min_tag_counts": {},
+                            "min_tag_pass_rate": {"tools": 100.0},
+                        },
+                        "decisions": [
+                            {
+                                "id": "fast",
+                                "expected_decision": "fast",
+                                "variants": [
+                                    {"id": name, "query": name, "tags": ["tools"]}
+                                    for name in ("one", "two", "three")
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def shard_report(index: int, ids: list[str]) -> None:
+                results = [
+                    {
+                        "id": f"fast:{probe_id}",
+                        "variant_id": probe_id,
+                        "decision_id": "fast",
+                        "expected_decision": "fast",
+                        "actual_decision": "fast",
+                        "model": "vllm-sr/bundle",
+                        "matched": True,
+                        "deployment_matched": True,
+                        "policy_matched": True,
+                        "tags": ["tools"],
+                        "latency_ms": 10.0,
+                    }
+                    for probe_id in ids
+                ]
+                path = root / "report" / "bundle" / "shards" / str(index)
+                path.mkdir(parents=True)
+                (path / "eval-report.json").write_text(
+                    json.dumps(
+                        {
+                            "inventory": {
+                                "name": "bundle",
+                                "probes": str(manifest),
+                                "probe_shard_sizes": [2, 1],
+                            },
+                            "evaluation": {
+                                "router_url": "http://127.0.0.1:8080",
+                                "evaluation_scope": "deployment",
+                                "performance": {"wall_time_seconds": 1.5},
+                                "execution": {
+                                    "expected_entrypoints": ["vllm-sr/bundle"]
+                                },
+                                "results": results,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            shard_report(1, ["two"])
+            self.assertEqual(recipe_conformance.merge_probe_shards(root / "report"), [])
+            self.assertFalse((root / "report/bundle/eval-report.json").exists())
+
+            shard_report(0, ["three", "one"])
+            self.assertEqual(
+                recipe_conformance.merge_probe_shards(root / "report"), ["bundle"]
+            )
+            merged = json.loads(
+                (root / "report/bundle/eval-report.json").read_text(encoding="utf-8")
+            )["evaluation"]
+            self.assertEqual(
+                [result["id"] for result in merged["results"]],
+                ["fast:one", "fast:two", "fast:three"],
+            )
+            self.assertEqual((merged["total"], merged["probe_shards"]), (3, 2))
+            self.assertTrue(merged["execution"]["complete"])
+            self.assertTrue(merged["passed"])
+            self.assertEqual(merged["performance"]["wall_time_seconds"], 3.0)
 
 
 if __name__ == "__main__":

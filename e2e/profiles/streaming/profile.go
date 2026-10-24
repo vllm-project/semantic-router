@@ -6,14 +6,13 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
 const valuesFile = "e2e/profiles/streaming/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
+	"e2e/profiles/streaming/backend.yaml",
 	"deploy/kubernetes/streaming/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/streaming/full-duplex.yaml",
 }

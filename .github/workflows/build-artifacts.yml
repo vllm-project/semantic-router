@@ -59,7 +59,7 @@ jobs:
         id: build-args
         env:
           MATRIX_IMAGE: ${{ matrix.image }}
-          CARGO_BUILD_JOBS: '8'
+          ACCELERATOR: ${{ steps.definition.outputs.accelerator }}
           DASHBOARD_VERSION_MODE: ${{ inputs.mode == 'pr' && 'pr' || inputs.mode == 'release' && 'release' || 'publish' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '0' }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -71,6 +71,7 @@ jobs:
         with:
           context: ${{ steps.definition.outputs.context }}
           file: ${{ steps.definition.outputs.dockerfile }}
+          target: ${{ steps.definition.outputs.target }}
           platforms: ${{ steps.definition.outputs.platforms }}
           outputs: type=oci,dest=.agent-harness/image-output/image.tar
           tags: semantic-router-ci/${{ matrix.image }}:${{ github.sha }}
@@ -94,6 +95,7 @@ jobs:
             --directory .agent-harness/image-output --mode "$MODE" --tag "$TAG" "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-image-${{ matrix.image }}
           path: .agent-harness/image-output/
           include-hidden-files: true
@@ -102,6 +104,7 @@ jobs:
           retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-build-image-${{ matrix.image }}
           path: .agent-harness/image-output/manifest.json
           include-hidden-files: true
@@ -124,6 +127,7 @@ jobs:
         run: python3 tools/ci/image_artifacts.py acquire --directory .agent-harness/image-output
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-image-${{ fromJSON(inputs.published-images)[0].id }}
           path: .agent-harness/image-output/
           include-hidden-files: true
@@ -132,6 +136,7 @@ jobs:
           retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-build-image-${{ fromJSON(inputs.published-images)[0].id }}
           path: .agent-harness/image-output/manifest.json
           include-hidden-files: true

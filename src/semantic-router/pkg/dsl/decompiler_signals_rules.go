@@ -48,6 +48,9 @@ func (d *decompiler) decompileKeywordSignals() {
 		if kw.NgramArity != 0 {
 			d.write("  ngram_arity: %d\n", kw.NgramArity)
 		}
+		if kw.IncludeHistory {
+			d.write("  include_history: true\n")
+		}
 		d.write("}\n\n")
 	}
 }
@@ -228,6 +231,133 @@ func (d *decompiler) decompileInputModalitySignals() {
 	}
 }
 
+// decompileTopicContinuitySignals writes only explicitly set fields, so an
+// omitted default stays omitted across a compile/decompile round trip.
+func (d *decompiler) decompileTopicContinuitySignals() {
+	for _, rule := range d.cfg.TopicContinuityRules {
+		d.write("SIGNAL topic_continuity %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.IncludeAssistant != nil {
+			d.write("  include_assistant: %t\n", *rule.IncludeAssistant)
+		}
+		if thresholds := topicContinuityThresholdsValue(rule.Thresholds); thresholds != nil {
+			d.write("  thresholds: %s\n", formatPluginConfigValue(thresholds))
+		}
+		if limits := topicContinuityLimitsValue(rule.Limits); limits != nil {
+			d.write("  limits: %s\n", formatPluginConfigValue(limits))
+		}
+		d.write("}\n\n")
+	}
+}
+
+func topicContinuityThresholdsValue(thresholds *config.TopicContinuityThresholds) map[string]interface{} {
+	if thresholds == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	if thresholds.Continuation != nil {
+		value["continuation"] = *thresholds.Continuation
+	}
+	if thresholds.Change != nil {
+		value["change"] = *thresholds.Change
+	}
+	if len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
+func topicContinuityLimitsValue(limits *config.TopicContinuityEvidenceLimits) map[string]interface{} {
+	if limits == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	if limits.MaxPriorTurns != 0 {
+		value["max_prior_turns"] = limits.MaxPriorTurns
+	}
+	if limits.MaxTurnBytes != 0 {
+		value["max_turn_bytes"] = limits.MaxTurnBytes
+	}
+	if limits.MaxInputBytes != 0 {
+		value["max_input_bytes"] = limits.MaxInputBytes
+	}
+	if len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
+func (d *decompiler) decompileDecisionModelSignals() {
+	for _, rule := range d.cfg.DecisionRules {
+		d.write("SIGNAL decision %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.Deployment != "" {
+			d.write("  deployment: %q\n", rule.Deployment)
+		}
+		d.write("  question: %s\n", formatPluginConfigValue(decisionQuestionValue(rule.Question)))
+		if predicate := numericPredicateValue(rule.Predicate); predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(predicate))
+		}
+		if rule.TimeoutMs > 0 {
+			d.write("  timeout_ms: %d\n", rule.TimeoutMs)
+		}
+		d.write("}\n\n")
+	}
+}
+
+func decisionQuestionValue(question config.DecisionQuestion) map[string]interface{} {
+	value := map[string]interface{}{"type": question.Type, "instructions": question.Instructions}
+	if len(question.Choices) > 0 {
+		value["choices"] = decisionChoicesValue(question.Choices)
+	}
+	if len(question.Levels) > 0 {
+		levels := make([]interface{}, 0, len(question.Levels))
+		for _, level := range question.Levels {
+			levels = append(levels, level)
+		}
+		value["levels"] = levels
+	}
+	if len(question.Labels) > 0 {
+		value["labels"] = decisionChoicesValue(question.Labels)
+	}
+	if question.Threshold != nil {
+		value["threshold"] = *question.Threshold
+	}
+	if question.Head != "" {
+		value["head"] = question.Head
+	}
+	return value
+}
+
+func decisionChoicesValue(choices []config.DecisionChoice) []interface{} {
+	entries := make([]interface{}, 0, len(choices))
+	for _, choice := range choices {
+		entry := map[string]interface{}{"key": choice.Key}
+		if choice.Description != "" {
+			entry["description"] = choice.Description
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func numericPredicateValue(predicate *config.NumericPredicate) map[string]interface{} {
+	if predicate == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	for key, bound := range map[string]*float64{"gt": predicate.GT, "gte": predicate.GTE, "lt": predicate.LT, "lte": predicate.LTE} {
+		if bound != nil {
+			value[key] = *bound
+		}
+	}
+	return value
+}
+
 func (d *decompiler) decompileClassifierSignals() {
 	for _, rule := range d.cfg.ClassifierRules {
 		d.write("SIGNAL classifier %s {\n", quoteName(rule.Name))
@@ -261,7 +391,9 @@ func (d *decompiler) decompileComplexitySignals() {
 		if comp.PrototypeScoring != nil {
 			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
 		}
-		if comp.Threshold != 0 {
+		// A written zero is kept as written, so the round trip does not turn
+		// a stated threshold into an absent one.
+		if comp.Threshold != 0 || comp.ThresholdSet {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}
 		// The explicit boundary pair. Omitting these here would silently
@@ -359,9 +491,6 @@ func (d *decompiler) decompileJailbreakSignals() {
 func (d *decompiler) decompileHallucinationSignals() {
 	for _, rule := range d.cfg.HallucinationRules {
 		d.write("SIGNAL hallucination %s {\n", quoteName(rule.Name))
-		if rule.UseNLI {
-			d.write("  use_nli: true\n")
-		}
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
@@ -380,6 +509,9 @@ func (d *decompiler) decompilePIISignals() {
 		}
 		if pii.IncludeHistory {
 			d.write("  include_history: true\n")
+		}
+		if pii.Source != "" {
+			d.write("  source: %q\n", pii.Source)
 		}
 		if pii.Description != "" {
 			d.write("  description: %q\n", pii.Description)

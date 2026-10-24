@@ -93,6 +93,8 @@ type MatchedSignals struct {
 	Metadata      []string `json:"metadata,omitempty"`
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Action        []string `json:"action,omitempty"`
+	Decision      []string `json:"decision,omitempty"`
 	Projection    []string `json:"projection,omitempty"`
 }
 

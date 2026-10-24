@@ -44,3 +44,51 @@ func RecordRecipeSelection(recipe, decision, algorithm, model string) {
 func ObserveProjectionScore(recipe, name string, value float64) {
 	projectionScores.WithLabelValues(recipe, name).Observe(value)
 }
+
+// Streamed body arrival has its own buckets because a slow client upload can
+// take far longer than the 10s ceiling of the routing stage histogram.
+var streamedBodyArrival = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "llm_streamed_body_arrival_seconds",
+	Help:    "Time from the first request body chunk to end of stream in STREAMED or FULL_DUPLEX_STREAMED mode.",
+	Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120},
+}, []string{"recipe"})
+
+var streamedBodyBytes = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "llm_streamed_body_bytes",
+	Help:    "Accumulated request body bytes at end of stream in STREAMED or FULL_DUPLEX_STREAMED mode.",
+	Buckets: prometheus.ExponentialBuckets(1024, 2, 14), // 1 KiB to 8 MiB
+}, []string{"recipe"})
+
+var streamedBodyChunks = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "llm_streamed_body_chunks",
+	Help:    "Request body chunk count at end of stream in STREAMED or FULL_DUPLEX_STREAMED mode.",
+	Buckets: []float64{1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 64, 128},
+}, []string{"recipe"})
+
+var promptCompressionOutcomes = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "llm_prompt_compression_total",
+	Help: "Prompt compression outcomes for the routing evaluation text.",
+}, []string{"recipe", "outcome"})
+
+// Prompt compression outcomes. The set is closed so the outcome label stays bounded.
+const (
+	PromptCompressionCompressed       = "compressed"
+	PromptCompressionSkippedDisabled  = "skipped_disabled"
+	PromptCompressionSkippedMinLength = "skipped_min_length"
+	PromptCompressionSkippedMaxTokens = "skipped_max_tokens"
+)
+
+// RoutingStagePromptCompression is the llm_routing_stage_duration_seconds
+// stage for prompt compression of the routing evaluation text.
+const RoutingStagePromptCompression = "prompt_compression"
+
+func ObserveStreamedBodyArrival(recipe string, seconds float64, bytes, chunks int) {
+	recipe = labelOrUnknown(recipe)
+	streamedBodyArrival.WithLabelValues(recipe).Observe(seconds)
+	streamedBodyBytes.WithLabelValues(recipe).Observe(float64(bytes))
+	streamedBodyChunks.WithLabelValues(recipe).Observe(float64(chunks))
+}
+
+func RecordPromptCompressionOutcome(recipe, outcome string) {
+	promptCompressionOutcomes.WithLabelValues(labelOrUnknown(recipe), outcome).Inc()
+}

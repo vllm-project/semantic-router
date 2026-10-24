@@ -23,7 +23,7 @@ type windowedPIIBackend struct {
 
 func newWindowedPIIBackend(cfg config.PIIModel, mapping *PIIMapping, models ...*classifierModelRuntime) (*windowedPIIBackend, error) {
 	runtime := consumerModelRuntime(models)
-	spec := runtime.localSpec("pii_classifier", cfg.ModelID, "mmbert32k", config.RemoteClassifierContractTokenSpans, cfg.UseCPU, cfg.MaxSequenceLength)
+	spec, specErr := runtime.localSpec("pii_classifier", cfg.ModelID, "mmbert32k", config.RemoteClassifierContractTokenSpans, cfg.UseCPU, cfg.MaxSequenceLength)
 	if cfg.Window == nil {
 		return nil, fmt.Errorf("PII token windows require geometry")
 	}
@@ -46,6 +46,9 @@ func newWindowedPIIBackend(cfg config.PIIModel, mapping *PIIMapping, models ...*
 	}
 	window := tasks.TextWindowsRequest{Size: cfg.Window.Size, Overlap: cfg.Window.Overlap}
 	return &windowedPIIBackend{spec: spec, labels: labels, window: window, prepare: func(ctx context.Context) (*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedTokenClassification], error) {
+		if specErr != nil {
+			return nil, specErr
+		}
 		return runtime.runtime.TokenWindows(ctx, spec, window)
 	}}, nil
 }

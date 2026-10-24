@@ -88,10 +88,10 @@ func openShadowDispatchRun(
 		return nil, err
 	}
 	run.chat = fixtures.NewChatCompletionsClient(run.gateway, shadowDispatchPollTimeout)
-	if _, err = run.primary(ctx, "auto", shadowDispatchPollTimeout); err != nil {
+	if _, err = run.primary(ctx, "vllm-sr/auto", shadowDispatchPollTimeout); err != nil {
 		return nil, fmt.Errorf("cold primary warmup: %w", err)
 	}
-	if _, err = run.primary(ctx, "auto", shadowPrimaryCeiling); err != nil {
+	if _, err = run.primary(ctx, "vllm-sr/auto", shadowPrimaryCeiling); err != nil {
 		return nil, fmt.Errorf("warmed primary baseline: %w", err)
 	}
 	ready = true

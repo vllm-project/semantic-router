@@ -197,6 +197,7 @@ func cloneExpectedAssertions(source ExpectedAssertions) ExpectedAssertions {
 	cloned.Plugins = append([]string(nil), source.Plugins...)
 	cloned.ForbiddenPlugins = append([]string(nil), source.ForbiddenPlugins...)
 	cloned.SignalValues = cloneSignalValueBounds(source.SignalValues)
+	cloned.SignalErrors = cloneSignalErrors(source.SignalErrors)
 	cloned.Signals = cloneSignalMap(source.Signals)
 	cloned.ForbiddenSignals = cloneSignalMap(source.ForbiddenSignals)
 	return cloned
