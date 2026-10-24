@@ -1435,6 +1435,7 @@ knn        - KNN selector using shared ML model-selection settings
 kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
+hiershrink - HierShrink selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
 random     - Uniform pick among eligible candidates (no configuration)
 ```
@@ -1513,7 +1514,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, hiershrink, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, hiershrink, multi_factor, random. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |

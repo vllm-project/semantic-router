@@ -30,7 +30,7 @@ type ModelSelectionCase struct {
 	ExpectedModels []string `json:"expected_models"` // List of valid models for this query
 	Description    string   `json:"description"`
 	// Algorithm specifies which model selection algorithm is expected to be used
-	// Supported: "knn", "kmeans", "svm", "mlp"
+	// Supported: "knn", "kmeans", "svm", "mlp", "hiershrink"
 	Algorithm string `json:"algorithm,omitempty"`
 	// ExpectEfficient indicates if the test expects an efficiency-optimized selection (KMeans)
 	// When true, expects faster/cheaper model; when false, expects higher quality model
