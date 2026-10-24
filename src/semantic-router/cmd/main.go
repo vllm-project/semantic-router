@@ -75,7 +75,8 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
-	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	startupWriter, closeStartupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	defer func() { runErr = errors.Join(runErr, closeStartupWriter()) }()
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
 		failStartup(startupWriter, "Failed to resolve management API: %v", err)
