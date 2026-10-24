@@ -148,7 +148,14 @@ request error. A `context_management` edit of `clear_thinking_20251015` with
 change history are rejected. Anthropic `cache_control` boundaries are omitted
 when the selected backend uses Responses, which cannot represent them. The
 prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
-`dropped` diagnostic for `cache_control`.
+`dropped` diagnostic for `cache_control`. A `system` message inside `messages`,
+such as the environment section and the file change notices Claude Code
+inserts during a session, reaches these backends as user text in the same
+place, because many open-model chat templates reject or drop a system message
+after the first position. The text joins the user turn right before it, or
+becomes a user turn of its own after a tool result, and
+`x-vsr-protocol-warnings` reports an `approximated` diagnostic for
+`messages[].role`. Messages backends receive the message in place.
 
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.

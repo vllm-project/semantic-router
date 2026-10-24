@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -135,6 +136,83 @@ func TestAnthropicAdaptiveResponsesDropsCacheDirectiveWithWarning(t *testing.T) 
 	}
 	if !llmprotocol.RequiredCapabilities(request).Supports(llmprotocol.CapabilityCacheDirectives) {
 		t.Fatal("dispatch modified the public Anthropic request")
+	}
+}
+
+// Claude Code places its environment section in a system message after the
+// first user turn and later notices after the tool results they refer to.
+// Qwen3.5 and later templates raise on that position, and gpt-oss, MiniMax-M2
+// and Nemotron templates drop it, so Chat and Responses backends receive the
+// text as user text in the same place.
+func TestAnthropicMidConversationSystemMessagesStayInPlaceAsUserText(t *testing.T) {
+	for _, check := range []struct {
+		target llmprotocol.WireFormat
+		key    string
+		want   []string
+	}{
+		{llmprotocol.OpenAIChatV1, "messages", []string{"system", "user", "assistant", "tool", "user"}},
+		{llmprotocol.OpenAIResponsesV1, "input", []string{"system", "user", "function_call", "function_call_output", "user"}},
+	} {
+		t.Run(string(check.target), func(t *testing.T) {
+			router := routingTestRouter("chat")
+			if check.target == llmprotocol.OpenAIResponsesV1 {
+				model := router.Config.ModelConfig["chat"]
+				model.APIFormat = config.APIFormatResponses
+				router.Config.ModelConfig["chat"] = model
+			}
+			request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(`{
+				"model":"chat","max_tokens":64,"system":[{"type":"text","text":"You are a coding agent."}],
+				"tools":[{"name":"Read","input_schema":{"type":"object"}}],
+				"messages":[
+					{"role":"user","content":"Fix the build"},
+					{"role":"system","content":[{"type":"text","text":"# Environment\nWorking directory: /work"}]},
+					{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"Read","input":{"file_path":"/work/Makefile"}}]},
+					{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"all: build"}]},
+					{"role":"system","content":"Note: /work/Makefile changed on disk since you last read it."}
+				]
+			}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+			ctx.ProtocolEnvelope = envelope
+			if _, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx); err != nil {
+				t.Fatal(err)
+			}
+			body, err := router.encodeDispatchRequest(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire map[string]json.RawMessage
+			var items []map[string]json.RawMessage
+			if err = json.Unmarshal(body, &wire); err != nil {
+				t.Fatal(err)
+			}
+			if err = json.Unmarshal(wire[check.key], &items); err != nil {
+				t.Fatal(err)
+			}
+			var labels []string
+			for _, item := range items {
+				var label string
+				if err = json.Unmarshal(item["role"], &label); err != nil {
+					_ = json.Unmarshal(item["type"], &label)
+				}
+				labels = append(labels, label)
+			}
+			if !reflect.DeepEqual(labels, check.want) ||
+				!bytes.Contains(items[1]["content"], []byte("# Environment")) ||
+				!bytes.Contains(items[4]["content"], []byte("changed on disk")) ||
+				bytes.Contains(items[0]["content"], []byte("# Environment")) {
+				t.Fatalf("backend conversation = %v: %s", labels, body)
+			}
+			if len(ctx.ProtocolDiagnostics) != 1 || ctx.ProtocolDiagnostics[0].Field != "messages[].role" ||
+				ctx.ProtocolDiagnostics[0].Action != llmprotocol.DiagnosticApproximated {
+				t.Fatalf("system messages sent as user text were not reported once: %+v", ctx.ProtocolDiagnostics)
+			}
+			if request.Messages[1].Role != llmprotocol.RoleSystem {
+				t.Fatal("dispatch modified the public Anthropic request")
+			}
+		})
 	}
 }
 

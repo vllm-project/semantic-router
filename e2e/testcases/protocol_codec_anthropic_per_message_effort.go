@@ -89,9 +89,14 @@ func runProtocolCodecAnthropicPerMessageEffort(ctx context.Context, client *kube
 		if inspectErr := assertPerMessageEffortProjection(upstream, check.format); inspectErr != nil {
 			return fmt.Errorf("%s: %w", check.format, inspectErr)
 		}
-		warned := hasProtocolFieldDiagnostic(result.Headers.Get("x-vsr-protocol-warnings"), "dropped", "messages[].output_config.effort")
+		warnings := result.Headers.Get("x-vsr-protocol-warnings")
+		warned := hasProtocolFieldDiagnostic(warnings, "dropped", "messages[].output_config.effort")
 		if warned != (check.format != "anthropic.messages.v1") {
 			return fmt.Errorf("%s per-message effort warning = %t", check.format, warned)
+		}
+		moved := hasProtocolFieldDiagnostic(warnings, "approximated", "messages[].role")
+		if moved != (check.format != "anthropic.messages.v1") {
+			return fmt.Errorf("%s system turn as user text warning = %t", check.format, moved)
 		}
 	}
 	return nil
@@ -133,11 +138,13 @@ func assertPerMessageEffortProjection(raw []byte, format string) error {
 		}
 		return nil
 	}
-	if len(messages) != 3 {
+	if len(messages) != 2 {
 		return fmt.Errorf("%s forwarded the empty effort-only system turn: %s", format, truncateString(string(raw), 500))
 	}
-	if !bytes.Contains(messages[1]["content"], []byte("Current date is 2026-01-01.")) {
-		return fmt.Errorf("%s lost the nonempty system turn: %s", format, truncateString(string(raw), 500))
+	// Many open-model Chat templates accept a system message only first, so the
+	// nonempty system turn joins the user turn before it.
+	if string(messages[0]["role"]) != `"user"` || !bytes.Contains(messages[0]["content"], []byte("Current date is 2026-01-01.")) {
+		return fmt.Errorf("%s did not keep the nonempty system turn in the first user turn: %s", format, truncateString(string(raw), 500))
 	}
 	for _, message := range messages {
 		if _, leaked := message["output_config"]; leaked {
