@@ -1,7 +1,7 @@
 """CPU accelerator: FP32 everywhere, pure-torch reference kernels. Validated.
 
 For models that name them it registers the ``geglu`` slot's ``contiguous``
-variant and, on x86, the ``linear`` slot's ``float32-packed`` one
+variant and, on x86 and ARM64, the ``linear`` slot's ``float32-packed`` one
 (``onednn.py``): together they make an encoder's forward batch-invariant.
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's

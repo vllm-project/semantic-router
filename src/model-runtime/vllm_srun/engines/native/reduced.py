@@ -10,7 +10,7 @@ reference batches (the golden check's) never see the copy. Kinds (``DtypePolicy.
   heads stay FP32): GPUs, and CPUs with BF16 instructions;
 - ``int8``: dynamic int8 (per-channel weight scales, per-batch activation
   scales; x86 CPUs);
-- ``float32-packed``: FP32 weights reordered once for oneDNN (x86 CPUs,
+- ``float32-packed``: FP32 weights reordered once for oneDNN (x86 and ARM64 CPUs,
   ``accel/onednn.py``), for models whose exact path keeps ``F.linear``.
 """
 
@@ -94,7 +94,10 @@ def unavailable(
             "this CPU computes BF16 without native instructions (AVX-512 BF16 or AMX)"
         )
     if kind == "float32-packed" and not onednn.available():
-        return "oneDNN's packed linear needs an x86 CPU and a PyTorch build with oneDNN"
+        return (
+            "oneDNN's packed linear needs an x86 or ARM64 CPU and a PyTorch "
+            "build with oneDNN"
+        )
     if kind == "int8" and "fbgemm" not in torch.backends.quantized.supported_engines:
         return "this PyTorch build has no fbgemm"
     return None
