@@ -38,7 +38,7 @@ func (c *RedisCache) FindExact(ctx context.Context, partition string, fingerprin
 		return LookupResult{}, nil
 	}
 	storedAt, expiresAt := parseExactTimingFields(fields)
-	return lookupResultFromTimestamps([]byte(responseBodyStr), 1.0, storedAt, expiresAt), nil
+	return exactLookupResultFromTimestamps([]byte(responseBodyStr), storedAt, expiresAt), nil
 }
 
 // AddExact writes a Redis exact-response entry with the effective cache TTL.
