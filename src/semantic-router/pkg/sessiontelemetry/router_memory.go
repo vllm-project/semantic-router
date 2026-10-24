@@ -282,7 +282,17 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		s.mu.Unlock()
 		return RouterSessionSnapshot{}, false
 	}
-	snapshot := RouterSessionSnapshot{
+	snapshot := snapshotFromSessionState(st, now)
+	s.mu.Unlock()
+	return snapshot, true
+}
+
+func snapshotFromSessionState(st *routerSessionState, now time.Time) RouterSessionSnapshot {
+	idleFor := now.Sub(st.lastSeen)
+	if idleFor < 0 {
+		idleFor = 0
+	}
+	return RouterSessionSnapshot{
 		SessionID:                       st.sessionID,
 		UserID:                          st.userID,
 		CurrentModel:                    st.currentModel,
@@ -310,8 +320,62 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
 		RecentOutcomes:                  cloneTurnOutcomes(st.recentOutcomes),
 	}
-	s.mu.Unlock()
-	return snapshot, true
+}
+
+func applyRouterSessionSnapshot(st *routerSessionState, snapshot RouterSessionSnapshot) {
+	if st == nil {
+		return
+	}
+	modelTurns := cloneIntMap(snapshot.ModelTurns)
+	if modelTurns == nil {
+		modelTurns = make(map[string]int)
+	}
+	st.sessionID = snapshot.SessionID
+	st.userID = snapshot.UserID
+	st.currentModel = snapshot.CurrentModel
+	st.currentCandidate = cloneSessionCandidate(snapshot.CurrentCandidate)
+	st.lastSeen = snapshot.LastSeen
+	st.lastSwitchAt = snapshot.LastSwitchAt
+	st.switchTimestamps = cloneInt64Slice(snapshot.SwitchTimestamps)
+	st.outcomeWindowSize = snapshot.OutcomeWindowSize
+	st.outcomeWindowTTL = time.Duration(snapshot.OutcomeWindowTTLSeconds) * time.Second
+	st.turnCount = snapshot.TurnCount
+	st.switchCount = snapshot.SwitchCount
+	st.modelTurns = modelTurns
+	st.cumulativePrompt = snapshot.CumulativePromptTokens
+	st.cumulativeCached = snapshot.CumulativeCachedTokens
+	st.cumulativeCacheWrite = snapshot.CumulativeCacheWriteTokens
+	st.cumulativeEstimatedCached = snapshot.CumulativeEstimatedCachedTokens
+	st.cumulativeCompletion = snapshot.CumulativeCompletionTokens
+	st.cumulativeCost = snapshot.CumulativeCost
+	st.cumulativeEstimatedCacheSavings = snapshot.CumulativeEstimatedCacheSavings
+	st.activeToolLoop = snapshot.ActiveToolLoop
+	st.lastDecisionName = snapshot.LastDecisionName
+	st.lastDecisionReason = snapshot.LastDecisionReason
+	st.lastCacheAccountingSource = snapshot.LastCacheAccountingSource
+	st.lastPolicy = clonePolicyMap(snapshot.LastPolicy)
+	st.recentOutcomes = cloneTurnOutcomes(snapshot.RecentOutcomes)
+}
+
+func localRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSnapshot, bool) {
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.sessions[sessionID]
+	if st == nil {
+		return RouterSessionSnapshot{}, false
+	}
+	if now.IsZero() {
+		now = s.nowFn()
+	}
+	idleFor := now.Sub(st.lastSeen)
+	if idleFor < 0 {
+		idleFor = 0
+	}
+	if idleFor > routerMemoryTTL {
+		return RouterSessionSnapshot{}, false
+	}
+	return snapshotFromSessionState(st, now), true
 }
 
 func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessionState {
