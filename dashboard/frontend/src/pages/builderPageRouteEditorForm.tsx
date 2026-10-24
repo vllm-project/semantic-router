@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
+import {
+  blockingRuleIssues,
+  type RuleIssue,
+} from "@/lib/decisionRuleIssues";
 import { useDSLStore } from "@/stores/dslStore";
 import type { ASTRouteDecl, DSLFieldObject } from "@/types/dsl";
 import {
@@ -77,7 +81,15 @@ const RouteEditorForm: React.FC<{
     route.plugins,
   ]);
 
+  // An unparsable raw draft never reaches whenExpr, and an invalid tree
+  // serializes to WHEN text the compiler rejects, so either blocks the save.
+  const [whenBlocked, setWhenBlocked] = useState<string | null>(null);
+  const handleWhenIssues = useCallback((issues: RuleIssue[]) => {
+    setWhenBlocked(blockingRuleIssues(issues)[0]?.message ?? null);
+  }, []);
+
   const handleSave = useCallback(() => {
+    if (whenBlocked) return;
     onUpdate({
       description: description.trim() || undefined,
       priority,
@@ -86,7 +98,16 @@ const RouteEditorForm: React.FC<{
       algorithm: algorithm?.algoType ? algorithm : undefined,
       plugins,
     });
-  }, [description, priority, whenExpr, models, algorithm, plugins, onUpdate]);
+  }, [
+    whenBlocked,
+    description,
+    priority,
+    whenExpr,
+    models,
+    algorithm,
+    plugins,
+    onUpdate,
+  ]);
 
   // Model helpers
   const addModel = useCallback(() => {
@@ -170,6 +191,8 @@ const RouteEditorForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSave}
+            disabled={Boolean(whenBlocked)}
+            title={whenBlocked ?? undefined}
             style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
           >
             Save
@@ -238,6 +261,7 @@ const RouteEditorForm: React.FC<{
               route.when
             }
             availableSignals={availableSignals}
+            onIssuesChange={handleWhenIssues}
           />
         </div>
       </div>

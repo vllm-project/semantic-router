@@ -49,6 +49,7 @@ function ToolboxOperators({ onClear }: ToolboxOperatorsProps) {
         )
       })}
       <button
+        type="button"
         className={styles.clearBtn}
         onClick={event => {
           event.stopPropagation()
@@ -120,6 +121,7 @@ export default function ExpressionBuilderToolbox({
             />
             {signalSearch ? (
               <button
+                type="button"
                 className={styles.toolboxSearchClear}
                 onClick={() => onSignalSearchChange('')}
               >

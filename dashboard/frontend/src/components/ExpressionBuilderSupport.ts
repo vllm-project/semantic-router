@@ -1,9 +1,26 @@
-export type SignalDescriptor = { signalType: string; name: string }
+import {
+  describePredicate,
+  isRuleGroup,
+  isRuleLeaf,
+  newRuleNodeId,
+  RULE_PREDICATE_KEYS,
+  type NumericPredicate,
+  type RuleLeaf,
+  type RuleNode,
+} from '@/lib/decisionRuleAst'
 
-export type RuleNode =
-  | { operator: 'AND' | 'OR'; conditions: RuleNode[] }
-  | { operator: 'NOT'; conditions: [RuleNode] }
-  | { signalType: string; signalName: string }
+// The rule tree model lives in lib/decisionRuleAst.ts so the canonical bridge,
+// the DSL module and the issue helpers share it without depending on components.
+export type {
+  NumericPredicate,
+  RuleGroup,
+  RuleIssue,
+  RuleLeaf,
+  RuleNode,
+  SignalDescriptor,
+} from '@/lib/decisionRuleAst'
+export { assignRuleIds, describePredicate, newRuleNodeId } from '@/lib/decisionRuleAst'
+export { boolExprToRuleNode } from '@/lib/decisionRuleDsl'
 
 export type NodePath = number[]
 
@@ -25,160 +42,24 @@ export interface DragDataTreeNode {
 
 export type DragData = DragDataSignal | DragDataOperator | DragDataTreeNode
 
-interface ParseCtx {
-  pos: number
-}
-
 export const DRAG_MIME = 'application/x-expr-builder'
 
-export function isLeaf(n: RuleNode): n is { signalType: string; signalName: string } {
-  return 'signalType' in n
+export function isLeaf(n: RuleNode): n is RuleLeaf {
+  return isRuleLeaf(n)
 }
 
-export function isOperator(n: RuleNode): n is Exclude<RuleNode, { signalType: string }> {
-  return 'operator' in n
+export function isOperator(n: RuleNode): n is Exclude<RuleNode, RuleLeaf> {
+  return isRuleGroup(n)
 }
 
-export function serializeNode(n: RuleNode): string {
-  if (isLeaf(n)) return `${n.signalType}("${n.signalName}")`
-  if (n.operator === 'NOT') {
-    const child = n.conditions[0]
-    if (!child) return 'NOT (?)'
-    const serializedChild = serializeNode(child)
-    return isOperator(child) && child.operator !== 'NOT'
-      ? `NOT (${serializedChild})`
-      : `NOT ${serializedChild}`
-  }
-  if (n.conditions.length === 0) return `(? ${n.operator} ?)`
-  if (n.conditions.length === 1) return serializeNode(n.conditions[0])
-  const parts = n.conditions.map((child) => {
-    const serializedChild = serializeNode(child)
-    if (
-      isOperator(child) &&
-      (child.operator === 'AND' || child.operator === 'OR') &&
-      child.operator !== n.operator
-    ) {
-      return `(${serializedChild})`
-    }
-    return serializedChild
-  })
-  return parts.join(` ${n.operator} `)
-}
-
-export function parseExprText(text: string): RuleNode | null {
-  const trimmed = text.trim()
-  if (!trimmed) return null
-  try {
-    return parseOr(trimmed, { pos: 0 })
-  } catch {
-    return null
-  }
-}
-
-function skipWhitespace(src: string, ctx: ParseCtx) {
-  while (ctx.pos < src.length && src[ctx.pos] === ' ') ctx.pos++
-}
-
-function parseOr(src: string, ctx: ParseCtx): RuleNode {
-  let left = parseAnd(src, ctx)
-  while (true) {
-    skipWhitespace(src, ctx)
-    if (src.slice(ctx.pos, ctx.pos + 2).toUpperCase() === 'OR' && /\s/.test(src[ctx.pos + 2] ?? '')) {
-      ctx.pos += 2
-      skipWhitespace(src, ctx)
-      const right = parseAnd(src, ctx)
-      if (isOperator(left) && left.operator === 'OR') {
-        left = { operator: 'OR', conditions: [...left.conditions, right] }
-      } else {
-        left = { operator: 'OR', conditions: [left, right] }
-      }
-    } else {
-      break
-    }
-  }
-  return left
-}
-
-function parseAnd(src: string, ctx: ParseCtx): RuleNode {
-  let left = parseNot(src, ctx)
-  while (true) {
-    skipWhitespace(src, ctx)
-    if (src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'AND' && /[\s(]/.test(src[ctx.pos + 3] ?? '')) {
-      ctx.pos += 3
-      skipWhitespace(src, ctx)
-      const right = parseNot(src, ctx)
-      if (isOperator(left) && left.operator === 'AND') {
-        left = { operator: 'AND', conditions: [...left.conditions, right] }
-      } else {
-        left = { operator: 'AND', conditions: [left, right] }
-      }
-    } else {
-      break
-    }
-  }
-  return left
-}
-
-function parseNot(src: string, ctx: ParseCtx): RuleNode {
-  skipWhitespace(src, ctx)
-  if (src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'NOT' && /[\s(]/.test(src[ctx.pos + 3] ?? '')) {
-    ctx.pos += 3
-    skipWhitespace(src, ctx)
-    const child = parseNot(src, ctx)
-    return { operator: 'NOT', conditions: [child] }
-  }
-  return parseAtom(src, ctx)
-}
-
-function parseAtom(src: string, ctx: ParseCtx): RuleNode {
-  skipWhitespace(src, ctx)
-  if (src[ctx.pos] === '(') {
-    ctx.pos++
-    skipWhitespace(src, ctx)
-    const inner = parseOr(src, ctx)
-    skipWhitespace(src, ctx)
-    if (src[ctx.pos] === ')') ctx.pos++
-    return inner
-  }
-  const signalMatch = src.slice(ctx.pos).match(/^(\w+)\("([^"]*)"\)/)
-  if (signalMatch) {
-    ctx.pos += signalMatch[0].length
-    return { signalType: signalMatch[1], signalName: signalMatch[2] }
-  }
-  const wordMatch = src.slice(ctx.pos).match(/^\w+/)
-  if (wordMatch) {
-    ctx.pos += wordMatch[0].length
-    return { signalType: wordMatch[0], signalName: '' }
-  }
-  throw new Error('Unexpected token')
-}
-
-export function boolExprToRuleNode(expr: Record<string, unknown> | null): RuleNode | null {
-  if (!expr) return null
-  const type = expr.type as string
-  switch (type) {
-    case 'signal_ref':
-      return { signalType: expr.signalType as string, signalName: expr.signalName as string }
-    case 'and': {
-      const left = boolExprToRuleNode(expr.left as Record<string, unknown>)
-      const right = boolExprToRuleNode(expr.right as Record<string, unknown>)
-      if (!left || !right) return left || right
-      return { operator: 'AND', conditions: [left, right] }
-    }
-    case 'or': {
-      const left = boolExprToRuleNode(expr.left as Record<string, unknown>)
-      const right = boolExprToRuleNode(expr.right as Record<string, unknown>)
-      if (!left || !right) return left || right
-      return { operator: 'OR', conditions: [left, right] }
-    }
-    case 'not': {
-      const child = boolExprToRuleNode(expr.expr as Record<string, unknown>)
-      if (!child) return null
-      return { operator: 'NOT', conditions: [child] }
-    }
-    default:
-      return null
-  }
+/** Compact label / predicate / on_error badges for a leaf node. */
+export function leafMetaBadges(leaf: RuleLeaf): string[] {
+  const badges: string[] = []
+  if (leaf.label) badges.push(leaf.label)
+  const predicate = describePredicate(leaf.predicate)
+  if (predicate) badges.push(predicate)
+  if (leaf.onError) badges.push(`on_error ${leaf.onError}`)
+  return badges
 }
 
 export function pathEq(a: NodePath, b: NodePath): boolean {
@@ -207,24 +88,18 @@ export function replaceAtPath(root: RuleNode, path: NodePath, replacement: RuleN
   return { ...root, conditions: newConditions } as RuleNode
 }
 
+// Removing a child never collapses the parent: Go accepts a one-child AND/OR,
+// so the explicit Unwrap action is the only collapse. A group left with no
+// children is removed from its own parent.
 export function removeAtPath(root: RuleNode, path: NodePath): RuleNode | null {
   if (path.length === 0) return null
   if (!isOperator(root)) return root
   const [head, ...tail] = path
-  if (tail.length === 0) {
-    const newConditions = root.conditions.filter((_, index) => index !== head)
-    if (newConditions.length === 0) return null
-    if (root.operator !== 'NOT' && newConditions.length === 1) return newConditions[0]
-    return { ...root, conditions: newConditions } as RuleNode
-  }
-  const newChild = removeAtPath(root.conditions[head], tail)
-  if (!newChild) {
-    const newConditions = root.conditions.filter((_, index) => index !== head)
-    if (newConditions.length === 0) return null
-    if (root.operator !== 'NOT' && newConditions.length === 1) return newConditions[0]
-    return { ...root, conditions: newConditions } as RuleNode
-  }
-  const newConditions = root.conditions.map((child, index) => (index === head ? newChild : child))
+  const newChild = tail.length === 0 ? null : removeAtPath(root.conditions[head], tail)
+  const newConditions = newChild
+    ? root.conditions.map((child, index) => (index === head ? newChild : child))
+    : root.conditions.filter((_, index) => index !== head)
+  if (newConditions.length === 0) return null
   return { ...root, conditions: newConditions } as RuleNode
 }
 
@@ -235,7 +110,7 @@ export function insertAtPath(root: RuleNode, path: NodePath, insertIdx: number, 
       conditions.splice(insertIdx, 0, node)
       return { ...root, conditions } as RuleNode
     }
-    return { operator: 'AND', conditions: [root, node] }
+    return { id: newRuleNodeId(), operator: 'AND', conditions: [root, node] }
   }
   if (!isOperator(root)) return root
   const [head, ...tail] = path
@@ -251,7 +126,7 @@ export function addChildAtPath(root: RuleNode, path: NodePath, child: RuleNode):
     const newTarget = { ...target, conditions: [...target.conditions, child] } as RuleNode
     return replaceAtPath(root, path, newTarget)
   }
-  const wrapped: RuleNode = { operator: 'AND', conditions: [target, child] }
+  const wrapped: RuleNode = { id: newRuleNodeId(), operator: 'AND', conditions: [target, child] }
   return replaceAtPath(root, path, wrapped)
 }
 
@@ -268,30 +143,51 @@ export function decodeDrag(raw: string): DragData | null {
 }
 
 export function makeDragNode(data: DragData): RuleNode | null {
-  if (data.kind === 'signal') return { signalType: data.signalType, signalName: data.signalName }
+  if (data.kind === 'signal') {
+    return { id: newRuleNodeId(), signalType: data.signalType, signalName: data.signalName }
+  }
   if (data.kind === 'operator') {
     return data.operator === 'NOT'
-      ? { operator: 'NOT', conditions: [] as unknown as [RuleNode] }
-      : { operator: data.operator, conditions: [] }
+      ? { id: newRuleNodeId(), operator: 'NOT', conditions: [] as unknown as [RuleNode] }
+      : { id: newRuleNodeId(), operator: data.operator, conditions: [] }
   }
   return null
 }
 
-export function validateTree(node: RuleNode | null, signals: SignalDescriptor[]): string[] {
-  const warnings: string[] = []
-  if (!node) return warnings
-  if (isLeaf(node)) {
-    if (!signals.some((signal) => signal.signalType === node.signalType && signal.name === node.signalName)) {
-      warnings.push(`Signal ${node.signalType}("${node.signalName}") is not defined`)
-    }
-  } else {
-    if (node.operator === 'NOT' && node.conditions.length !== 1) {
-      warnings.push('NOT must have exactly one child')
-    }
-    if ((node.operator === 'AND' || node.operator === 'OR') && node.conditions.length < 2) {
-      warnings.push(`${node.operator} needs at least 2 children`)
-    }
-    for (const child of node.conditions) warnings.push(...validateTree(child, signals))
+// Leaf edit dialog: the gt/gte/lt/lte inputs as text drafts.
+export const PREDICATE_FIELDS = RULE_PREDICATE_KEYS
+export type PredicateDraft = Record<keyof NumericPredicate, string>
+
+export function predicateDraft(predicate: NumericPredicate | undefined): PredicateDraft {
+  const draft = Object.fromEntries(PREDICATE_FIELDS.map((key) => [key, ''])) as PredicateDraft
+  for (const key of PREDICATE_FIELDS) {
+    const value = predicate?.[key]
+    if (value !== undefined) draft[key] = String(value)
   }
-  return warnings
+  return draft
+}
+
+// Keys outside the schema's predicate fields have no input here; they are
+// carried over so the Router rejects them on save instead of the dialog
+// silently dropping them.
+export function predicateFromDraft(
+  draft: PredicateDraft,
+  initial: NumericPredicate | undefined,
+): { predicate?: NumericPredicate; invalid: string[] } {
+  const predicate: NumericPredicate = {}
+  const raw = (initial ?? {}) as Record<string, unknown>
+  for (const key of Object.keys(raw)) {
+    if (raw[key] !== undefined && !(PREDICATE_FIELDS as readonly string[]).includes(key)) {
+      ;(predicate as Record<string, unknown>)[key] = raw[key]
+    }
+  }
+  const invalid: string[] = []
+  for (const key of PREDICATE_FIELDS) {
+    const text = draft[key].trim()
+    if (text === '') continue
+    const value = Number(text)
+    if (!Number.isFinite(value)) invalid.push(key)
+    else predicate[key] = value
+  }
+  return { predicate: Object.keys(predicate).length > 0 ? predicate : undefined, invalid }
 }

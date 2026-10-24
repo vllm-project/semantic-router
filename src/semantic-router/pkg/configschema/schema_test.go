@@ -210,3 +210,26 @@ func TestSchemaPublishesMemoryPersistenceBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaPublishesRuleNodePolicyEnums(t *testing.T) {
+	var document struct {
+		Defs map[string]struct {
+			Properties map[string]struct {
+				Enum []string `json:"enum"`
+			} `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(Document(), &document); err != nil {
+		t.Fatal(err)
+	}
+	properties := document.Defs["RuleNode"].Properties
+	want := map[string][]string{
+		"on_error":   {routerconfig.RuleOnErrorNoMatch, routerconfig.RuleOnErrorMatch},
+		"on_unknown": {string(routerconfig.RuleOnUnknownNoMatch), string(routerconfig.RuleOnUnknownMatch), string(routerconfig.RuleOnUnknownFailRequest)},
+	}
+	for field, values := range want {
+		if got := properties[field].Enum; strings.Join(got, ",") != strings.Join(values, ",") {
+			t.Errorf("RuleNode.%s enum = %v, want %v", field, got, values)
+		}
+	}
+}
