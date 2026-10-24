@@ -18,7 +18,10 @@ from cli.commands.recipe_learning_artifacts import (
     build_recipe_patch_suggestions,
     empty_recipe_patch,
 )
-from cli.commands.recipe_learning_findings import build_recipe_learning_findings
+from cli.commands.recipe_learning_findings import (
+    build_recipe_learning_findings,
+    build_run_findings,
+)
 from cli.commands.recipe_learning_metrics import (
     DecisionMetrics,
     EvalCase,
@@ -29,6 +32,7 @@ from cli.commands.recipe_learning_metrics import (
     update_experience_counts,
     update_metrics,
 )
+from cli.commands.recipe_learning_runs import build_run_model_choice
 from cli.consts import DEFAULT_API_PORT
 from cli.router_management_client import (
     OBSERVABILITY_REPLAYS_PATH,
@@ -40,7 +44,9 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 _DEFAULT_REPLAY_LIMIT = 100
-_MAX_REPLAY_LIMIT = 500
+_MAX_REPLAY_LIMIT = 100_000
+# The management API returns at most this many records per list request.
+_REPLAY_PAGE_SIZE = 100
 
 
 def load_replay_records(
@@ -56,12 +62,30 @@ def load_replay_records(
 
 
 def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
+    """Fetch up to limit records, paging by offset past the API's page cap.
+
+    Run-level analysis needs every record of a run, so a single capped page
+    would cut runs short."""
     client = RouterManagementClient(endpoint or None, timeout=timeout)
-    return client.request(
-        "GET",
-        OBSERVABILITY_REPLAYS_PATH,
-        params={"limit": str(max(1, min(limit, _MAX_REPLAY_LIMIT)))},
-    ).payload
+    limit = max(1, min(limit, _MAX_REPLAY_LIMIT))
+    if limit <= _REPLAY_PAGE_SIZE:
+        return client.request(
+            "GET", OBSERVABILITY_REPLAYS_PATH, params={"limit": str(limit)}
+        ).payload
+    records: list[dict[str, Any]] = []
+    while len(records) < limit:
+        page_size = min(_REPLAY_PAGE_SIZE, limit - len(records))
+        page = normalize_replay_payload(
+            client.request(
+                "GET",
+                OBSERVABILITY_REPLAYS_PATH,
+                params={"limit": str(page_size), "offset": str(len(records))},
+            ).payload
+        )
+        records.extend(page)
+        if len(page) < page_size:
+            break
+    return {"object": "router_replay.list", "data": records}
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:
@@ -130,9 +154,13 @@ def build_recipe_learning_artifact(
     recipe: dict[str, Any] | None = None,
     *,
     generate_patches: bool = True,
+    values_per_success: list[float] | None = None,
 ) -> dict[str, Any]:
     metrics_payload, experience_counts = build_metrics_payload(records, cases or {})
-    findings = build_recipe_learning_findings(metrics_payload)
+    metrics_payload["runs"] = build_run_model_choice(records, values_per_success)
+    findings = build_recipe_learning_findings(metrics_payload) + build_run_findings(
+        metrics_payload["runs"], recipe
+    )
     recipe_patch = (
         build_recipe_patch_suggestions(findings)
         if generate_patches
@@ -246,7 +274,7 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
     "--limit",
     default=_DEFAULT_REPLAY_LIMIT,
     show_default=True,
-    help="Replay records to fetch from the endpoint.",
+    help="Replay records to fetch from the endpoint, in pages of 100.",
 )
 @click.option(
     "--output-dir",
@@ -265,6 +293,17 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
     help="Compute metrics and findings without generating recipe patches.",
 )
 @click.option(
+    "--value-per-success",
+    "values_per_success",
+    type=float,
+    multiple=True,
+    help=(
+        "Value of one successful run (an agent task whose outcome was reported), in the "
+        "replay cost currency. Repeat to compare several. Enables default-model "
+        "recommendations from run outcomes and realized run cost."
+    ),
+)
+@click.option(
     "--timeout", default=15, show_default=True, help="HTTP request timeout in seconds."
 )
 @exit_with_logged_error(log)
@@ -277,6 +316,7 @@ def recipe_learning(
     output_dir: Path | None,
     output_json: bool,
     report_only: bool,
+    values_per_success: tuple[float, ...],
     timeout: int,
 ) -> None:
     """Analyze replay and outcomes to produce recipe-learning artifacts."""
@@ -289,6 +329,7 @@ def recipe_learning(
         cases,
         recipe,
         generate_patches=not report_only,
+        values_per_success=list(values_per_success),
     )
     if output_dir is not None:
         write_recipe_learning_artifacts(artifact, output_dir)

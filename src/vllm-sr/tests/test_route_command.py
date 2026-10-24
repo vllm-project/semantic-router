@@ -247,6 +247,36 @@ def test_recipe_learning_fetch_uses_authenticated_management_endpoint(
     assert authorizations == ["Bearer management-token"]
 
 
+def test_recipe_learning_fetch_pages_past_the_api_cap(monkeypatch) -> None:
+    pages: list[dict[str, Any]] = []
+
+    class _Response:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self.status_code = 200
+            self.ok = True
+            self.headers: dict[str, str] = {}
+            self._payload = payload
+            self.text = json.dumps(payload)
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def _fake_request(method: str, url: str, **kwargs: Any) -> _Response:
+        params = kwargs["params"]
+        pages.append(params)
+        offset, limit = int(params["offset"]), int(params["limit"])
+        available = max(0, min(limit, 230 - offset))
+        data = [{"id": f"r{offset + i}"} for i in range(available)]
+        return _Response({"object": "router_replay.list", "data": data})
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    payload = fetch_replay_payload("http://router.example:8080", 1000, 1)
+
+    assert [p["offset"] for p in pages] == ["0", "100", "200"]
+    assert len(payload["data"]) == 230
+
+
 def test_recipe_learning_accepts_api_root_without_duplicating_it(
     monkeypatch,
 ) -> None:
