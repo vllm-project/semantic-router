@@ -1265,3 +1265,34 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
 
   return [...curatedCards, ...generatedCards]
 }
+
+function changedSettingsValue(shown: unknown, next: unknown): unknown {
+  const shownObject = asObject(shown)
+  const nextObject = asObject(next)
+  if (shownObject && nextObject) {
+    const changed: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(nextObject)) {
+      const changedValue = changedSettingsValue(shownObject[key], value)
+      if (changedValue !== undefined) changed[key] = changedValue
+    }
+    return Object.keys(changed).length > 0 ? changed : undefined
+  }
+  return JSON.stringify(shown) === JSON.stringify(next) ? undefined : next
+}
+
+// Cards show effective values (Router defaults plus overrides), so only fields
+// the user changed may become overrides. Undefined means nothing changed.
+export function editedRouterSectionPatch(
+  card: RouterSectionCard,
+  data: EditFormData,
+): Partial<ConfigData> | undefined {
+  const next = card.save(data)
+  let shown: Partial<ConfigData>
+  try {
+    shown = card.save(card.editData)
+  } catch {
+    // Shown values the form rejects cannot serve as a baseline.
+    return next
+  }
+  return changedSettingsValue(shown, next) as Partial<ConfigData> | undefined
+}

@@ -7,6 +7,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
+  editedRouterSectionPatch,
   routerLayerMeta,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
@@ -186,7 +187,13 @@ export default function ConfigPageRouterConfigSection({
       card.editData,
       card.editFields,
       async (data) => {
-        await saveRouterSettings(card.save(data))
+        const updates =
+          isConfigured && !showLegacyCategories
+            ? editedRouterSectionPatch(card, data)
+            : card.save(data)
+        if (updates) {
+          await saveRouterSettings(updates)
+        }
       },
       isConfigured ? 'edit' : 'add',
     )

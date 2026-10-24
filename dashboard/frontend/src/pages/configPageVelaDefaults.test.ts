@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_SECTIONS } from './configPageRouterDefaultsCatalog'
-import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
+import {
+  buildRouterSectionCards,
+  editedRouterSectionPatch,
+  type RouterSystemKey,
+} from './configPageRouterDefaultsSupport'
 import type { CanonicalSystemModels } from './configPageSupport'
 import {
   embeddingModelsCatalogValue,
@@ -120,4 +124,65 @@ describe('Vela defaults and explicit legacy models', () => {
       expect(saved).toMatchObject(original)
     },
   )
+})
+
+describe('Global Config section saves', () => {
+  const sectionCard = (key: RouterSystemKey, effective: unknown) =>
+    buildRouterSectionCards({
+      config: null,
+      routerConfig: { [key]: effective },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    }).find((card) => card.key === key)!
+  const promptGuard = sectionCard('prompt_guard', {
+    enabled: true,
+    model_ref: 'prompt_guard',
+    model_id: 'models/Vela-2.0-0.3B',
+    threshold: 0.75,
+    use_cpu: true,
+  })
+  const admission = sectionCard('admission', {
+    hazard: { max_concurrency: 8, max_queue: 8, on_overflow: 'wait' },
+    safety: { max_concurrency: 8, max_queue: 8, on_overflow: 'wait' },
+  })
+
+  it('writes nothing when the shown values are saved unchanged', () => {
+    expect(editedRouterSectionPatch(promptGuard, { ...promptGuard.editData })).toBeUndefined()
+    expect(editedRouterSectionPatch(admission, { ...admission.editData })).toBeUndefined()
+  })
+
+  it('writes only the fields the user changed', () => {
+    expect(
+      editedRouterSectionPatch(promptGuard, { ...promptGuard.editData, threshold: 0.8 }),
+    ).toEqual({ model_catalog: { modules: { prompt_guard: { threshold: 0.8 } } } })
+
+    const policies = admission.editData.value as Record<string, Record<string, unknown>>
+    expect(
+      editedRouterSectionPatch(admission, {
+        value: { ...policies, hazard: { ...policies.hazard, max_queue: 16 } },
+      }),
+    ).toEqual({ model_catalog: { admission: { hazard: { max_queue: 16 } } } })
+  })
+
+  it('sends the whole edited section when the shown values do not validate', () => {
+    const system = sectionCard('system_models', {
+      decision_model: {},
+      pii_classifier: 'models/custom-pii',
+    })
+    expect(
+      editedRouterSectionPatch(system, {
+        ...system.editData,
+        decision_model: { deployment: 'main-judge' },
+      }),
+    ).toEqual({
+      model_catalog: {
+        system: {
+          decision_model: { deployment: 'main-judge' },
+          pii_classifier: 'models/custom-pii',
+        },
+      },
+    })
+  })
 })
