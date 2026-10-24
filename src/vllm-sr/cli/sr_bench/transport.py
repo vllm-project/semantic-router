@@ -11,11 +11,13 @@ import time
 from collections.abc import Mapping
 from contextlib import suppress
 from http import HTTPStatus
+from typing import Any
 
 import requests
 
 from . import native_output
 from .activity import CHECKPOINT_SECONDS
+from .fault_contract import validate_fault_receipt
 
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
@@ -26,6 +28,8 @@ PROVIDER_STATE_PHASE = "provider_state"
 UNKNOWN_PHASE = "unknown"
 SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
 SESSION_ID_HEADER = "x-session-id"
+FAULT_RECEIPT_HEADER = "x-vsr-fault-receipt"
+FAULT_CALL_INDEX_HEADER = "x-vsr-fault-call-index"
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -33,6 +37,20 @@ class CallFailure(RuntimeError):  # noqa: N818
     def __init__(self, message, partial=None):
         super().__init__(message)
         self.partial = partial or {}
+
+
+def fault_receipt(headers: Mapping[str, str]) -> dict[str, Any] | None:
+    raw = headers.get(FAULT_RECEIPT_HEADER)
+    if headers.get("x-vsr-fault-injected") != "true":
+        if raw is not None:
+            raise CallFailure("Provider fault receipt has no injection acknowledgement")
+        return None
+    if raw is None or len(raw.encode("utf-8")) > MAX_USAGE_RECEIPT_BYTES:
+        raise CallFailure("Provider fault receipt is missing or oversized")
+    try:
+        return validate_fault_receipt(json.loads(raw))
+    except (TypeError, ValueError) as exc:
+        raise CallFailure("Provider fault receipt is invalid") from exc
 
 
 def final_content(content):
@@ -292,6 +310,9 @@ def chat(
     output_policy="bounded",
     activity=None,
     session_id: str | None = None,
+    fault_schedule_id=None,
+    fault_session_id=None,
+    fault_call_index: int | None = None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -316,11 +337,18 @@ def chat(
         headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
     if target.get("max_inference_calls"):
         headers["X-SR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
+    if fault_schedule_id:
+        headers["x-vsr-fault-schedule-id"] = fault_schedule_id
+    if fault_session_id:
+        headers["x-vsr-fault-session-id"] = fault_session_id
+    if fault_call_index is not None:
+        headers[FAULT_CALL_INDEX_HEADER] = str(fault_call_index)
     content = ""
     reasoning = ""
     usage = None
     model = target["model"]
     provider_model_observed = False
+    injected_fault: dict[str, Any] | None = None
     finish = None
     ttft = None
     tool_calls = {}
@@ -344,10 +372,29 @@ def chat(
         stream_file = open(stream_path, "xb", buffering=8192)  # noqa: SIM115
 
     def partial():
+        resp_model = (
+            (
+                response.headers.get("x-vsr-selected-model")
+                or (model if provider_model_observed else None)
+            )
+            if response is not None
+            else None
+        )
+        resp_decision = (
+            response.headers.get("x-vsr-selected-decision")
+            if response is not None
+            else None
+        )
+        resp_status = response.status_code if response is not None else None
         return {
             "final": final_content(content),
             "reasoning": reasoning,
             "model": model,
+            "selected_model": resp_model,
+            "decision": resp_decision,
+            "response_status": resp_status,
+            "fault_injected": injected_fault is not None,
+            "injected_fault": injected_fault,
             "usage": usage,
             "latency_s": time.monotonic() - started,
             "ttft_s": ttft,
@@ -395,6 +442,7 @@ def chat(
                 min(limits["idle_timeout_s"], limits["total_timeout_s"]),
             ),
         )
+        injected_fault = fault_receipt(response.headers)
         if response.status_code >= HTTPStatus.BAD_REQUEST:
             raise CallFailure(f"Target HTTP {response.status_code}")
         if "text/event-stream" not in response.headers.get("content-type", ""):
@@ -440,9 +488,11 @@ def chat(
             obj = json.loads(data)
             if obj.get("error"):
                 raise CallFailure("Target returned an error event")
-            if native_evidence is not None and obj.get("model") is not None:
-                native_output.validate_response(native_evidence, obj["model"], None)
-                provider_model_observed = True
+            if obj.get("model") is not None:
+                if native_evidence is not None:
+                    native_output.validate_response(native_evidence, obj["model"], None)
+                if isinstance(obj["model"], str) and obj["model"]:
+                    provider_model_observed = True
             model = obj.get("model") or model
             if obj.get("usage"):
                 raw_usage = obj["usage"]
@@ -579,6 +629,8 @@ def chat(
         ) or response.headers.get("x-vsr-config-hash")
         result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
         result["decision"] = response.headers.get("x-vsr-selected-decision")
+        result["response_status"] = response.status_code
+        result["fault_injected"] = injected_fault is not None
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:
             raise CallFailure(
                 "Runtime configuration identity acknowledgement missing or mismatched",

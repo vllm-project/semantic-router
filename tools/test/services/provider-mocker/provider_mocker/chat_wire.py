@@ -117,7 +117,9 @@ def mock_chat_tool_response(req: ChatRequest, created_ts: int) -> dict[str, Any]
     }
 
 
-def generate_chat_tool_stream(req: ChatRequest, created_ts: int) -> Iterator[str]:
+def generate_chat_tool_stream(
+    req: ChatRequest, created_ts: int, complete: bool = True
+) -> Iterator[str]:
     response_id = "cmpl-mock-tool-123"
     yield build_chat_stream_chunk(
         req,
@@ -136,6 +138,8 @@ def generate_chat_tool_stream(req: ChatRequest, created_ts: int) -> Iterator[str
         },
         None,
     )
+    if not complete:
+        return
     yield build_chat_stream_chunk(
         req,
         response_id,
@@ -255,7 +259,7 @@ def build_chat_custom_tool_response(
 
 
 def generate_chat_custom_tool_stream(
-    req: ChatRequest, created_ts: int
+    req: ChatRequest, created_ts: int, complete: bool = True
 ) -> Iterator[str]:
     response_id = "cmpl-mock-custom-tool-123"
     # Some Chat providers announce an id before the custom kind/name.
@@ -266,6 +270,8 @@ def generate_chat_custom_tool_stream(
         {"role": "assistant", "tool_calls": [{"index": 0, "id": "call_mock_patch"}]},
         None,
     )
+    if not complete:
+        return
     first, second = CUSTOM_TOOL_FIXTURE_INPUT[:15], CUSTOM_TOOL_FIXTURE_INPUT[15:]
     yield build_chat_stream_chunk(
         req,

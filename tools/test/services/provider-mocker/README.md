@@ -72,6 +72,56 @@ echo (`__mock_structured_output__`), HTTP 429 (`__mock_provider_error__`), incom
 SSE (`__mock_incomplete_stream__`) and partial-output errors
 (`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`.
 
+## Request-scoped fault schedules
+
+Set `PROVIDER_MOCKER_FAULT_SCHEDULE` to a JSON object or a JSON file path before
+starting the mocker. `POST /debug/fault-schedule` replaces that mapping at runtime.
+Keys identify tasks; call indices start at zero:
+
+```json
+{
+  "task-with-fault": [
+    {"call_index": 2, "status": 503},
+    {"call_index": 4, "delay": 0.2},
+    {"call_index": 6, "stream_cut_short": true}
+  ]
+}
+```
+
+The mocker reads `x-vsr-fault-schedule-id` to select a schedule and
+`x-vsr-fault-session-id` to count calls within one execution. The explicit
+fault-session header takes precedence over session-header fallbacks.
+sr-bench also sends `x-vsr-fault-call-index` for the logical subject request.
+Retries of that request do not inject the fault again or advance the next
+scheduled index. Without that header, indices count individual provider requests.
+`GET /debug/fault-schedule` exposes the counters; `POST /debug/fault-schedule/reset`
+clears them without changing the schedules.
+
+sr-bench's run manifest uses the same mapping under `fault_schedules`, or an
+individual case can supply its list under `fault_schedule`. Configure the mocker
+separately; the manifest does not install a schedule on an upstream server.
+sr-bench sends these headers only for scheduled subject tasks, with independent
+counters for each run, target and case. Unscheduled tasks and auxiliary calls do
+not receive fault identifiers.
+
+The response carries `x-vsr-fault-injected: true` and a JSON
+`x-vsr-fault-receipt` for an applied fault. The receipt identifies its call index,
+actual parameters and provider model. A successful retry repeats the receipt for
+that logical request, so Router fallback does not hide an earlier injected fault.
+Cuts preserve the response prefix but omit the terminal frame, including on
+provider-specific and scenario replies. Buffered responses are truncated too;
+their content length describes the partial body. A zero-delay entry does not
+claim an injection.
+
+sr-bench keeps planned faults separate from observed receipts and reports
+faulted and unfaulted tasks separately. An unrelated HTTP failure still stops
+dispatch, even if the call carries a receipt for a delay or another fault.
+Run-level schedules are part of comparison compatibility, so changed fault
+conditions cannot silently count as the same evaluation protocol.
+When an error response omits the Router's selected model, sr-bench reports it as
+unknown rather than substituting the requested entrypoint; the receipt still
+identifies the provider model that received the fault.
+
 ## Image inputs
 
 The Docker build context is this directory. The image copies only the pinned
