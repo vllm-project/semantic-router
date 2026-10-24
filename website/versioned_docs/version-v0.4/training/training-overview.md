@@ -18,6 +18,7 @@ This section covers creating and evaluating your own task models.
 | Your goal | Workflow | What you train |
 | --- | --- | --- |
 | Improve semantic search or request similarity | [Embedding](./mmbert-32k-models#embedding-model-bi-encoder) | Vectors for queries and documents |
+| Train domain or cache embeddings & publish to Hugging Face | [Router Embeddings & Hub](./router-embeddings-huggingface) | LoRA adapters and domain-adapted embedding models |
 | Improve the order of retrieved candidates | [Reranking](./mmbert-32k-models#reranking-model-cross-encoder) | A relevance score for each query-document pair |
 | Adapt domain, feedback, prompt-attack, fact-check or output-modality detection | [Classifiers](./classifier-models) | A request label |
 | Detect personal information | [PII](./classifier-models#pii-detector) | Entity spans |
