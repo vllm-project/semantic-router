@@ -4,9 +4,11 @@ import os
 import subprocess
 import sys
 
+import pytest
 from cli.sr_bench.adapters import get_adapter
 from cli.sr_bench.contracts import BENCHMARK_WEIGHTS, BENCHMARKS, catalog
 from cli.sr_bench.external import HARNESSES
+from cli.sr_bench.legacy_reasoning_export import export_manifest
 from cli.sr_bench.setup import PACKAGES, setup
 
 CONFIGURATIONS: tuple[str, ...] = (
@@ -72,3 +74,27 @@ def test_default_setup_does_not_include_legacy_environment(
 
 def test_harness_preflight_names_have_trusted_package_specs() -> None:
     assert HARNESSES.keys() <= PACKAGES.keys()
+
+
+def test_standard_profile_cannot_claim_a_native_holdout(tmp_path) -> None:
+    with pytest.raises(ValueError, match="do not establish a holdout"):
+        export_manifest(
+            manifest={"profile": "standard"},
+            dataset="arc",
+            source_bundle=tmp_path / "unavailable.json",
+        )
+    with pytest.raises(ValueError, match="do not establish a holdout"):
+        get_adapter("legacy-arc").preflight(
+            {"metadata": {"split": "holdout"}}, {"profile": "standard"}, {}
+        )
+
+
+@pytest.mark.parametrize("seed", [True, -1, 2**32])
+def test_invalid_native_selection_seed_fails_before_preparation(seed, tmp_path) -> None:
+    with pytest.raises(ValueError, match="unsigned 32-bit integer"):
+        export_manifest(
+            manifest={},
+            dataset="arc",
+            source_bundle=tmp_path / "unavailable.json",
+            seed=seed,
+        )
