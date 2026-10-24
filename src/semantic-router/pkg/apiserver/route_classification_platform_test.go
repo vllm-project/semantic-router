@@ -182,6 +182,18 @@ func TestHandleCombinedClassificationUsesOneGeneration(t *testing.T) {
 }
 
 func TestHandleBatchClassificationUsesConfigAndServiceFromOneGeneration(t *testing.T) {
+	for _, test := range []struct {
+		name, body string
+		status     int
+	}{
+		{"legacy", `{"texts":["one","two"]}`, http.StatusServiceUnavailable},
+		{"typed", `{"inputs":[null,null]}`, http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) { testBatchClassificationGeneration(t, test.body, test.status) })
+	}
+}
+
+func testBatchClassificationGeneration(t *testing.T, requestBody string, expectedStatus int) {
 	oldConfig := &config.RouterConfig{}
 	oldConfig.API.BatchClassification.MaxBatchSize = 2
 	newConfig := &config.RouterConfig{}
@@ -212,7 +224,7 @@ func TestHandleBatchClassificationUsesConfigAndServiceFromOneGeneration(t *testi
 	}
 
 	body := &blockingBodyReader{
-		reader:  bytes.NewReader([]byte(`{"texts":["one","two"]}`)),
+		reader:  bytes.NewReader([]byte(requestBody)),
 		started: make(chan struct{}),
 		release: make(chan struct{}),
 	}
@@ -253,11 +265,11 @@ func TestHandleBatchClassificationUsesConfigAndServiceFromOneGeneration(t *testi
 	case <-time.After(time.Second):
 		t.Fatal("batch handler did not finish after request body release")
 	}
-	if w.Code != http.StatusServiceUnavailable {
+	if w.Code != expectedStatus {
 		t.Fatalf(
 			"status = %d, want %d from old generation classifier: %s",
 			w.Code,
-			http.StatusServiceUnavailable,
+			expectedStatus,
 			w.Body.String(),
 		)
 	}
