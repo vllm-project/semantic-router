@@ -53,10 +53,17 @@ together.
 
 ## Prepare a training run
 
-From a repository checkout, create an isolated environment with the appropriate
-PyTorch build for your accelerator and install the
-[training dependencies](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/mmbert_32k/requirements.txt).
-ROCm uses PyTorch's `cuda` device name.
+From a repository checkout, create the locked uv environment for this trainer:
+
+```bash
+uv sync --locked --project src/training/model_embeddings/mmbert_32k
+```
+
+The default PyPI torch wheel is a CUDA build on Linux and the platform default
+on macOS. A release run still uses the digest-pinned image recorded beside the
+trainer. ROCm uses PyTorch's `cuda` device name.
+[requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/mmbert_32k/requirements.txt)
+stays for anyone who installs with pip.
 
 Choose one starting point:
 
@@ -80,7 +87,8 @@ Set `VELA_TRAIN_CONFIG_SHA256` to the SHA-256 of your configuration file:
 ```bash
 export PYTHONPATH="$PWD"
 
-python -m src.training.model_embeddings.mmbert_32k.newbase_training \
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m src.training.model_embeddings.mmbert_32k.newbase_training \
   --config /data/retrieval/task.json \
   --config-sha256 "${VELA_TRAIN_CONFIG_SHA256:?Set the configuration SHA-256}" \
   --output /data/retrieval/run --device cuda
@@ -96,7 +104,10 @@ Evaluate a saved checkpoint against the same development corpus used for your
 baseline:
 
 ```bash
-python -m src.training.model_embeddings.mmbert_32k.newbase_scoring \
+export PYTHONPATH="$PWD"
+
+uv run --locked --project src/training/model_embeddings/mmbert_32k \
+  python -m src.training.model_embeddings.mmbert_32k.newbase_scoring \
   --model /data/retrieval/run/step-100 --task embedding \
   --known-dev /data/retrieval/validation --split validation \
   --output /data/retrieval/evaluation --device cpu --token-budget 32768
