@@ -19,7 +19,7 @@ func (r *OpenAIRouter) classifyRequestHeaders(method string, path string) (*ext_
 	switch normalizedPath {
 	case "/v1/chat/completions", azureV1ChatPath:
 		return validateInferenceMethod(r, method)
-	case "/v1/messages":
+	case "/v1/messages", "/v1/audio/speech":
 		return validateInferenceMethod(r, method)
 	case "/v1/models":
 		return validateAllowedMethod(r, method, "GET"), false

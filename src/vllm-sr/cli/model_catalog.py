@@ -304,7 +304,11 @@ def _parse_catalog_model(
 
 
 def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
-    """Project v2 protocol definitions onto the CLI virtual-model contract."""
+    """Project v2 protocol definitions onto the CLI virtual-model contract.
+
+    Virtual models answer chat-family protocols only; a protocol without the
+    chat capability, such as the Speech API, needs a dedicated backend.
+    """
 
     if not isinstance(value, list) or not value:
         raise ModelCatalogError("built-in catalog has no protocols")

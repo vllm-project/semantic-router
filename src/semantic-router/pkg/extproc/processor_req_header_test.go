@@ -31,6 +31,8 @@ func TestDetectSourceFormat(t *testing.T) {
 		{path: "/v1/responses?stream=true", want: llmprotocol.OpenAIResponsesV1},
 		{path: "/v1/messages", want: llmprotocol.AnthropicMessagesV1},
 		{path: "/v1/messages/count_tokens", want: llmprotocol.AnthropicMessagesV1},
+		{path: "/v1/audio/speech", want: llmprotocol.OpenAISpeechV1},
+		{path: "/v1/audio/speech?trace=1", want: llmprotocol.OpenAISpeechV1},
 	}
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
@@ -78,6 +80,10 @@ func TestValidatePublicGenerationEndpoints(t *testing.T) {
 		{method: "POST", path: "/v1/messages"},
 		{method: "GET", path: "/v1/messages", status: typev3.StatusCode_MethodNotAllowed},
 		{method: "POST", path: "/v1/messages/count_tokens", status: typev3.StatusCode_NotFound},
+		{method: "POST", path: "/v1/audio/speech"},
+		{method: "POST", path: "/v1/audio/speech/"},
+		{method: "GET", path: "/v1/audio/speech", status: typev3.StatusCode_MethodNotAllowed},
+		{method: "POST", path: "/v1/audio/transcriptions", status: typev3.StatusCode_NotFound},
 	}
 	for _, test := range tests {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {

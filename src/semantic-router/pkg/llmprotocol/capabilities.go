@@ -58,6 +58,10 @@ const (
 	// a JSON Schema function tool cannot represent.
 	CapabilityCustomTools
 	CapabilityTextVerbosity
+	// CapabilitySpeechGeneration covers the Speech API text-to-speech operation.
+	// It is not interchangeable with CapabilityAudioOutput, which describes
+	// generated audio embedded in a Chat or Responses response.
+	CapabilitySpeechGeneration
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -87,7 +91,7 @@ func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 // (tools/streaming/reasoning/caching) is protocol concern rather than a task
 // modality, so model capability declarations are compared against this mask.
 var taskCapabilityMask = CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
-	CapabilityAudioInput | CapabilityAudioOutput |
+	CapabilityAudioInput | CapabilityAudioOutput | CapabilitySpeechGeneration |
 	CapabilityVideoInput | CapabilityVideoOutput |
 	CapabilityFileInput | CapabilityFileOutput
 
@@ -145,6 +149,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityImageGeneration, "image_generation"},
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
+		{CapabilitySpeechGeneration, "speech_generation"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -163,6 +168,9 @@ func RequiredCapabilities(request Request) CapabilitySet {
 	if request.ImageGeneration != nil && request.ToolChoice.Mode != ToolChoiceNone ||
 		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
+	}
+	if request.SpeechGeneration != nil {
+		required.bits |= CapabilitySpeechGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
@@ -479,6 +487,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"image_generation":      CapabilityImageGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
+		"speech_generation":     CapabilitySpeechGeneration,
 	}
 	var set CapabilitySet
 	for _, name := range names {
