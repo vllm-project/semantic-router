@@ -7,7 +7,7 @@ import pytest
 import yaml
 from cli import decision_model, execution_platform, runtime_lifecycle
 from cli.bootstrap import build_bootstrap_config
-from cli.commands import runtime
+from cli.commands import runtime, runtime_mode_config
 from cli.commands.runtime_mode_config import (
     ENGINE_ARGUMENTS,
     apply_instance_options,
@@ -180,6 +180,38 @@ def test_same_artifact_keeps_revision_and_engine_args_when_unspecified():
     apply_instance_options(document, model_options=options(MODEL))
     assert selected(document)["revision"] == "b" * 40
     assert selected(document)["batch_window_ms"] == 0.5
+
+
+def test_saved_revision_off_the_release_pin_names_the_pin(monkeypatch):
+    pin = builtin_releases()[MODEL]
+    warnings = []
+    monkeypatch.setattr(
+        runtime_mode_config.log,
+        "warning",
+        lambda message, *args: warnings.append(message % args),
+    )
+    saved = {
+        "provider": "model_runtime",
+        "artifact": MODEL,
+        "revision": "b" * 40,
+        "device": "cpu",
+    }
+    apply_instance_options(declaration(dict(saved)), model_options=options(MODEL))
+    assert warnings == [
+        f"{MODEL} is served at revision {'b' * 12}, saved in this configuration; "
+        f"this vllm-sr pins {pin[:12]}. Serve with --revision {pin[:12]} to switch."
+    ]
+    warnings.clear()
+    apply_instance_options(
+        declaration({**saved, "revision": pin}), model_options=options(MODEL)
+    )
+    apply_instance_options(
+        declaration(dict(saved)), model_options=options(MODEL, revision="b" * 40)
+    )
+    document = declaration(dict(saved))
+    apply_instance_options(document, model_options=options(MODEL, revision=pin[:12]))
+    assert selected(document)["revision"] == pin
+    assert warnings == []
 
 
 def test_new_multi_gpu_workers_use_available_devices():
