@@ -312,6 +312,11 @@ class NativeEngineModel(EngineModel):
     def replays_graphs(self) -> bool:
         return self.graphs is not None
 
+    def replays_shape(self, rows: int, width: int, padded: bool) -> bool:
+        return self.graphs is not None and self.graphs.admits(
+            (rows, width, padded), rows * width
+        )
+
     @property
     def approximate_kernels(self) -> bool:
         return any(
