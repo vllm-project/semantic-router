@@ -313,8 +313,9 @@ def cli(*args: str, url: str) -> dict[str, Any]:
         capture_output=True,
         text=True,
         timeout=40,
-        check=True,
+        check=False,
     )
+    assert result.returncode == 0, result.stderr or result.stdout
     return json.loads(result.stdout)
 
 
@@ -471,6 +472,109 @@ def test_real_cli_bridge_and_report(
                     "correct": metric["correct"],
                     "accuracy": metric["accuracy"],
                     "cost_usd": metric["cost_usd"],
+                },
+                sort_keys=True,
+            )
+        )
+
+
+@pytest.mark.parametrize("candidate_mode", ["live", "preview"])
+def test_native_candidate_plan_preserves_disclosures_without_dispatch(
+    source: tuple[Path, list[dict[str, str]]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_mode: str,
+) -> None:
+    for name in ("SR_BENCH_URL", "SR_BENCH_TOKEN", "SR_BENCH_TOKEN_ENV"):
+        monkeypatch.delenv(name, raising=False)
+    cases = prepare_cases(source_path=source[0], limit=1)
+    store = Store(tmp_path / "store")
+    target = _Target(mode="success", cases=cases)
+    service = Server(("127.0.0.1", 0), store)
+    with running(target), running(service):
+        url = f"http://127.0.0.1:{service.server_port}"
+        base = target_manifest()
+        base["targets"][0]["base_url"] = f"http://127.0.0.1:{target.server_port}/v1"
+        baseline_path = tmp_path / "baseline.json"
+        baseline_path.write_text(
+            json.dumps(
+                build_manifest(
+                    base=base,
+                    suite_path=DEFAULT_SUITE,
+                    source_path=source[0],
+                    revision="synthetic-fixture-v1",
+                    limit=1,
+                )
+            )
+        )
+        report = cli("run", "--manifest", str(baseline_path), url=url)
+        assert report["status"] == "completed"
+        baseline = store.get(report["run_id"])
+        service.engine.threads[baseline["id"]].join(timeout=10)
+        assert len(target.requests) == 1
+        target_path = tmp_path / "target.json"
+        target_path.write_text(
+            json.dumps(
+                [
+                    {
+                        **base["targets"][0],
+                        "id": "candidate",
+                        "kind": "mom",
+                        "config_hash": "a" * 64,
+                        "preview_url": f"http://127.0.0.1:{target.server_port}/api/v1/routing/preview",
+                    }
+                ]
+            )
+        )
+        cli(
+            "--store",
+            str(store.root),
+            "target",
+            "register",
+            "--file",
+            str(target_path),
+            url=url,
+        )
+        original = list(store.db.iterdump())
+        candidate = cli(
+            "candidate-plan",
+            baseline["id"],
+            "--target",
+            "candidate",
+            "--mode",
+            candidate_mode,
+            url=url,
+        )
+        assert candidate["model_requests"] == 0
+        assert candidate["manifest"]["mode"] == candidate_mode
+        for key in (
+            "limitations",
+            "case_sha256",
+            "adapter_versions",
+            "limits",
+            "sampling",
+            "output_policy",
+        ):
+            assert candidate["manifest"][key] == baseline["manifest"][key]
+        assert len(target.requests) == 1
+        assert len(store.calls(baseline["id"])) == 1
+        assert list(store.db.iterdump()) == original
+        if candidate_mode == "live":
+            without_disclosures = {
+                key: value
+                for key, value in candidate["manifest"].items()
+                if key != "limitations"
+            }
+            with pytest.raises(ValueError, match="frozen smoke protocol"):
+                plan(without_disclosures)
+        print(
+            json.dumps(
+                {
+                    "candidate_mode": candidate_mode,
+                    "baseline_status": baseline["status"],
+                    "disclosures_preserved": True,
+                    "candidate_model_requests": candidate["model_requests"],
+                    "total_fixture_requests": len(target.requests),
                 },
                 sort_keys=True,
             )
