@@ -31,10 +31,14 @@ from typing import (
     final,
 )
 
+from ..quantization import FLOAT8, FLOAT8_DEVICES
+from .registry import names
+
 if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
+    from ..quantization import QuantizedWeights
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -203,7 +207,8 @@ class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
-    batch selects one with ``EncoderBatch.branch``.
+    batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
+    layers the checkpoint holds as int4, FP8 or NVFP4 weights (``quantization.py``).
     """
 
     model_type: str
@@ -212,14 +217,25 @@ class BackboneSpec:
     weight_prefix: str = ""
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
+    quantized: QuantizedWeights | None = None
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
         """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
 
         Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+        FP8 weights need FP8 matrix units and NVFP4 weights FP4 matrix units,
+        which every accelerator must report.
         """
-        return {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        from ..quantization import NVFP4, NVFP4_CAPABILITY
+
+        requires = {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        scheme = self.quantized.scheme if self.quantized is not None else None
+        capability = {FLOAT8: "float8", NVFP4: NVFP4_CAPABILITY}.get(scheme or "")
+        if capability is not None:
+            for name in names("accelerators"):
+                requires[name] = (*requires.get(name, ()), capability)
+        return requires
 
 
 @dataclass(frozen=True)
@@ -352,7 +368,10 @@ class ForwardBatch:
     image inputs, for a backbone that reads them. ``packed`` asks an engine that
     ``supports_packed`` to run the rows back to back with no padding:
     ``input_ids`` is then ``[1, sum(lengths)]``, the rows in order, and ``gather``
-    and ``query`` index that one row.
+    and ``query`` index that one row. ``states`` holds, per row, how many of its
+    real tokens are its state block, for a backbone with a state-once layout
+    (``BranchBatch``): each row then runs alone under the backbone's state-once
+    mask, the computation a branched forward reproduces (never packed).
     """
 
     input_ids: torch.Tensor
@@ -363,6 +382,7 @@ class ForwardBatch:
     shared_prefix: int = 0
     images: ImageInputs | None = None
     packed: bool = False
+    states: list[int] | None = None
 
 
 @dataclass
@@ -441,6 +461,30 @@ class TreeOutput:
     hidden: torch.Tensor
 
 
+@dataclass
+class BranchBatch:
+    """States encoded once and the question blocks that branch from them, for a backbone with a state-once layout.
+
+    ``states`` holds each state block's token IDs, ``blocks`` each question
+    block's and ``owners`` the state each block continues; ``media`` holds each
+    state's image (and video) inputs, None for a text state. The backbone's
+    layout (its config's ``attention_mode``) never lets a state token attend to
+    a block, so every block of a state branches from one encoding of it, with
+    positions that continue after the state: a block's hidden states are those
+    of the row state + block under that layout, up to rounding. The batch may
+    hold the states of several requests; ``EngineModel.branch`` returns the
+    final hidden state of each block's last token, ``[blocks, hidden]``.
+    """
+
+    states: list[list[int]]
+    blocks: list[list[int]]
+    owners: list[int]
+    media: list[ImageInputs | None] | None = None
+    # Per block, the readout positions as offsets from its last token (None: the last token only); ``branch``
+    # then returns one hidden state per readout, blocks in batch order.
+    readouts: list[tuple[int, ...]] | None = None
+
+
 class EngineModel(ABC):
     """A backbone loaded on one device.
 
@@ -480,6 +524,10 @@ class EngineModel(ABC):
     def tree(self, batch: TreeBatch) -> TreeOutput:
         """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
         raise NotImplementedError(f"{type(self).__name__} has no tree forward")
+
+    def branch(self, batch: BranchBatch) -> torch.Tensor:
+        """Encode each state once and branch its question blocks from it (backbones with a state-once layout)."""
+        raise NotImplementedError(f"{type(self).__name__} has no branched forward")
 
     @property
     def supports_packed(self) -> bool:
@@ -612,8 +660,14 @@ class Accelerator(ABC):
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
 
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        """Optional hardware reference key; callers own device-class fallback."""
+        return f"{self.name}:{device.arch}" if device.arch else None
+
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        if capability == "float8":
+            return f"{device.label}: {FLOAT8_DEVICES}"
         return f"{device.label} lacks {capability}"
 
     def autocast(
@@ -713,6 +767,12 @@ class ModelInfo:
     rerank: RerankInfo | None = None
     presets: tuple[str, ...] = ()
     modalities: tuple[str, ...] = ("text",)
+    # Where a decisions model reads images: ``state`` and, where it reads a question's own images,
+    # ``instructions`` and ``criteria``; empty means ``state`` for a model with the image modality.
+    image_placements: tuple[str, ...] = ()
+    # How ``usage.input_tokens`` counts a request: ``state_once`` when the state counts once;
+    # None when each question counts its own copy of the state.
+    usage: str | None = None
 
 
 @dataclass(frozen=True)
@@ -783,7 +843,10 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     rows that read images, say).
     ``shared_context_default`` is whether the model runs shared-context trees
     when the engine arguments leave ``enable_shared_context`` unset: on only
-    where the family's records show no accuracy loss.
+    where the family's records show no accuracy loss. ``merges_shared_batches``
+    says each item names its own shared context (a state-once model's state),
+    so one shared-context batch may hold several requests: the batcher then
+    packs whole requests into shared forwards.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -797,6 +860,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     engine_model: EngineModel
     device_thread: ClassVar[bool] = True
     shared_context_default: ClassVar[bool] = False
+    merges_shared_batches: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
     packs_merged_rows: bool = False
@@ -991,7 +1055,9 @@ class Job:
 
     Jobs submitted together for one model (a bundle's tasks) share a
     ``group``. A ``reference`` job (the golden check) runs alone, in its
-    released forwards, whatever the model's engine arguments.
+    released forwards, whatever the model's engine arguments. An ``alone``
+    job comes from the only request the runtime is serving: no other request
+    is on its way to join it, so it does not hold the batching window.
     """
 
     items: list[WorkItem]
@@ -1000,13 +1066,15 @@ class Job:
     payload: Any = None
     group: int | None = None
     reference: bool = False
+    alone: bool = False
 
 
 @dataclass
 class Batch:
     """Items from one or more jobs that run as one forward, in order.
 
-    ``shared_prefix`` > 0 (shared context): the items' common prefix length, run once.
+    ``shared_prefix`` > 0 (shared context): the items' common prefix length, run once;
+    on a model that ``merges_shared_batches``, each item's own context runs once.
     ``exact`` False marks a batch that merges concurrent requests (``LoadedModel.run_approximate``).
     ``lane`` is the ``LoadedModel.lane`` of its items when it merges requests.
     ``sub`` holds the batches of a turn that merges several lanes (``parts`` is
