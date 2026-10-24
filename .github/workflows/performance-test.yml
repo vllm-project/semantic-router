@@ -17,13 +17,18 @@ permissions:
 jobs:
   component-benchmarks:
     name: Production Benchmarks
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
     timeout-minutes: 90
     env:
       HF_HUB_DISABLE_XET: "1"
       VLLM_SRUN_CACHE_DIR: ${{ github.workspace }}/.cache/model-runtime
 
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
@@ -118,6 +123,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
         with:
+          overwrite: true
           name: ci-result-performance
           path: reports/ci-result.json
           if-no-files-found: error
@@ -203,6 +209,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: performance-results-${{ github.run_number }}
           path: |
             reports/

@@ -209,7 +209,7 @@ recipe to its catalog entrypoint and supplies explicit Preview-only backend
 fixtures, including capabilities, context limits, pricing, and synthetic
 benchmark records for model selection. It preserves every authored decision,
 signal, projection, algorithm, plugin, and probe. The current MoM bundle runs
-all five entrypoints and all 315 authored probes; counts are checked against the
+all five entrypoints and all 347 authored probes; counts are checked against the
 discovered inventory rather than used to select a smaller sample. These fixtures
 do not measure backend LLM quality or call external providers.
 
@@ -220,6 +220,17 @@ startup, readiness, and evaluation requests. Shared downloaded models live in
 the ignored `models/` cache. Use `VLLM_SR_PORT_OFFSET` to separate host ports when
 running concurrent stacks. Missing reports, zero probes, and incomplete probe
 execution fail the selected CPU gate.
+
+A recipe whose probes take too long for one CPU job sets `evaluation.shards` in
+`probes.yaml`. The planner then emits one live job per probe shard, named
+`<source>-<recipe>-<index>`, and splits the probes by estimated read cost: a
+decision question reads at most the model's first 16,384 tokens, so longer
+inputs weigh the same. Run one shard with
+`RECIPE_CONFORMANCE_PROBE_SHARD=<index>/<count>`; it writes its report under
+`<recipe>/shards/<index>/`. The report step merges a recipe's shards into its
+`eval-report.json` only when every shard reported, then applies the tag policy
+and the execution check to the whole manifest. MoM V1 uses 16 shards because
+its decision model reads long inputs slowly on a CPU.
 
 ### Policy and deployment scope
 
