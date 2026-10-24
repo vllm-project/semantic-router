@@ -557,6 +557,15 @@ env:
         key: token
         optional: true # Alternative env var name used by huggingface-cli
 
+# Model download endpoint. The Router resolves model references through this
+# endpoint at startup; on a cluster without a direct route to the model hub,
+# point it at an approved mirror.
+modelDownload:
+  # -- Endpoint the Router's startup model download uses. It is rendered as the
+  # single HF_ENDPOINT container variable; an HF_ENDPOINT entry in `env` or
+  # `extraEnv` is rejected so the pod never carries a duplicate key.
+  hfEndpoint: "https://huggingface.co"
+
 # Additional container env entries merged after `env` (e.g. E2E-only toggles).
 extraEnv: []
 

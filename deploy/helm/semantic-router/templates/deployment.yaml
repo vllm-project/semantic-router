@@ -46,6 +46,11 @@
 {{- fail (printf "args must not set %s: set gateway.mode instead, from which the chart derives the Router's ports, probes and Service" (toString .)) -}}
 {{- end -}}
 {{- end }}
+{{- range concat (.Values.env | default list) (.Values.extraEnv | default list) }}
+{{- if and (kindIs "map" .) (eq (toString (get . "name")) "HF_ENDPOINT") }}
+{{- fail "env and extraEnv must not set HF_ENDPOINT: the chart renders it from modelDownload.hfEndpoint, and a second entry would leave the pod with a duplicate key" -}}
+{{- end -}}
+{{- end }}
 {{- $standalone := eq (include "semantic-router.gatewayMode" .) "standalone" -}}
 {{- $tlsSecret := dig "tls" "secretName" "" (.Values.gateway | default (dict)) -}}
 {{- $listeners := list -}}
@@ -158,6 +163,10 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          {{- with .Values.modelDownload.hfEndpoint }}
+          - name: HF_ENDPOINT
+            value: {{ . | quote }}
+          {{- end }}
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}

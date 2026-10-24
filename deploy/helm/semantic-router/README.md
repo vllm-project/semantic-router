@@ -244,6 +244,7 @@ the locked chart dependencies.
 | livenessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
 | livenessProbe.periodSeconds | int | `30` | Period seconds |
 | livenessProbe.timeoutSeconds | int | `10` | Timeout seconds |
+| modelDownload.hfEndpoint | string | `"https://huggingface.co"` | Endpoint the Router's startup model download uses. It is rendered as the single HF_ENDPOINT container variable; an HF_ENDPOINT entry in `env` or `extraEnv` is rejected so the pod never carries a duplicate key. |
 | nameOverride | string | `""` | Override the name of the chart |
 | nodeSelector | object | `{}` |  |
 | observability.alerts.enabled | bool | `false` | Render a PrometheusRule for Semantic Router alerts. Requires Prometheus Operator or another controller that watches PrometheusRule. |
