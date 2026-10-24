@@ -2,8 +2,9 @@ schema_version: v1
 name: accuracy
 description: >
   Backend-independent Eval API probes for accuracy-oriented orchestration.
-  The suite verifies that expensive fan-out is reserved for tasks with a clear
-  quality benefit, while long-context and ordinary traffic stay single-model.
+  The decision model judges the way of working each request asks for; the
+  suite verifies that expensive fan-out is reserved for multi-step workstreams
+  and reviews, while long-context and ordinary traffic stay single-model.
 routing_assets:
   yaml: config/recipes/accuracy/config.yaml
   dsl: config/recipes/accuracy/recipe.dsl
@@ -16,7 +17,7 @@ fixtures:
       data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
 router_eval_endpoint: /api/v1/routing/preview
 evaluation:
-  request_timeout_seconds: 300
+  request_timeout_seconds: 900
   concurrency: 4
 acceptance:
   min_probe_pass_rate: 100.0
@@ -65,7 +66,7 @@ decisions:
       - id: evidence_workstreams_en
         query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
         expected_signals:
-          keywords: [accuracy_workflow_request]
+          decision: [accuracy_mode:workstreams, accuracy_difficulty]
         tags: [language:en, orchestration, accuracy]
       - id: root_cause_zh
         query: 请做根因分析并验证修复，把任务分解为独立工作流。
@@ -86,7 +87,7 @@ decisions:
         query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
         repeat: 2600
         expected_signals:
-          keywords: [accuracy_workflow_request]
+          decision: [accuracy_mode:workstreams]
           context: [accuracy_long_context]
         tags: [collision, priority, stress:long-input, orchestration]
 
@@ -109,7 +110,7 @@ decisions:
         query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
         repeat: 2600
         expected_signals:
-          keywords: [accuracy_deliberation_request]
+          decision: [accuracy_mode:independent_review]
           context: [accuracy_long_context]
         tags: [collision, priority, stress:long-input, deliberation]
 
@@ -121,7 +122,9 @@ decisions:
       - id: competing_hypotheses
         query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
         expected_signals:
-          keywords: [accuracy_deliberation_request]
+          decision: [accuracy_mode:independent_review, accuracy_difficulty]
+        expected_signal_values:
+          decision:accuracy_mode: {gte: 0.6, lte: 1}
         tags: [language:en, deliberation, accuracy]
       - id: adversarial_review
         query: Perform an adversarial review and challenge the proposed solution from both sides.
@@ -132,8 +135,7 @@ decisions:
 
   - id: accuracy_direct
     expected_decision: accuracy_direct
-    expected_algorithm: static
-    expected_alias: gpt55-worker
+    expected_algorithm: decision
     variants:
       - id: direct_explanation
         query: Explain how a mutex differs from a semaphore.
@@ -143,4 +145,6 @@ decisions:
         tags: [language:es, negative, single-model]
       - id: negated_fanout
         query: Do not debate both sides or create workstreams; answer the question directly.
+        expected_signals:
+          decision: [accuracy_mode:direct]
         tags: [language:en, negation, single-model]

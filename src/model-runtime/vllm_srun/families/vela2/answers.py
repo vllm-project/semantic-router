@@ -2,8 +2,8 @@
 
 Choice and Score probabilities are a softmax over the real options at the
 type's temperature (the abstain option is reported apart); ``confidence`` is
-the top-two margin for Choice and one minus the normalised variance for
-Score; Noul is P(yes). A Set question answers ``sets.<id>`` and one Noul per
+System One's published statistic for Choice and for Score
+(``systemone.choice_confidence``, ``score_confidence``); Noul is P(yes). A Set question answers ``sets.<id>`` and one Noul per
 label (``<id>.<label>``); a Span question answers ``spans.<id>`` (code-point
 offsets into the field it reads, clipped to that field when it shares a
 part) and a Noul that is its highest word probability over that field.
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 
 from ...errors import INVALID_MODEL_OUTPUT
-from ...systemone import canonical
+from ...systemone import canonical, choice_confidence, score_confidence
 from .calibration import Calibration, sigmoid, softmax
 from .raw import RawRow
 from .request import Question, State
@@ -79,24 +79,19 @@ class Answerer:
             else {}
         )
         if question.kind == "choice":
-            ordered = sorted(probability.values(), reverse=True)
-            margin = 1.0 if count == 1 else min(1.0, max(0.0, ordered[0] - ordered[1]))
             return {
                 "type": "choice",
                 "choice": names[int(np.argmax(logits[:count]))],
-                "confidence": margin,
+                "confidence": choice_confidence(list(probability.values())),
                 "probabilities": probability,
                 **abstain,
             }
         levels = [float(p) for p in probabilities]
         mean = math.fsum(index * p for index, p in enumerate(levels))
-        variance = math.fsum(p * (index - mean) ** 2 for index, p in enumerate(levels))
         return {
             "type": "score",
             "score": mean,
-            "confidence": min(
-                1.0, max(0.0, 1.0 - variance / ((count * count - 1) / 12))
-            ),
+            "confidence": score_confidence(levels),
             "legend": {
                 str(index): level if isinstance(level, str) else canonical(level)
                 for index, level in enumerate(question.criteria)
