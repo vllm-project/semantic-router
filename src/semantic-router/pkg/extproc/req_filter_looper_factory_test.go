@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -32,7 +33,7 @@ func TestHandleLooperExecutionRejectsUnknownAlgorithmBeforeUpstream(t *testing.T
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "unregistered"},
 	}
-	request := testNeutralRequest("auto", "hello")
+	request := testNeutralRequest("vllm-sr/auto", "hello")
 
 	response, err := router.handleLooperExecution(
 		context.Background(),
@@ -44,6 +45,12 @@ func TestHandleLooperExecutionRejectsUnknownAlgorithmBeforeUpstream(t *testing.T
 	require.NoError(t, err)
 	require.NotNil(t, response.GetImmediateResponse())
 	assert.Equal(t, 500, int(response.GetImmediateResponse().GetStatus().GetCode()))
-	assert.Contains(t, string(response.GetImmediateResponse().GetBody()), "unsupported Looper algorithm")
+	var errorEnvelope struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(response.GetImmediateResponse().GetBody(), &errorEnvelope))
+	assert.Equal(t, "Looper construction failed.", errorEnvelope.Error.Message)
 	assert.Zero(t, upstreamCalls.Load(), "unknown algorithm must fail before any upstream request")
 }

@@ -429,6 +429,7 @@ def test_adoption_takes_over_the_anonymous_volume_of_an_existing_container(
     )
     assert commands[0] == [
         "docker",
+        "container",
         "inspect",
         "--format",
         "{{json .Mounts}}",
@@ -459,13 +460,52 @@ def test_an_absent_container_creates_a_fresh_named_volume(
     monkeypatch: pytest.MonkeyPatch,
 ):
     def fake_run(command, **_kwargs):
-        raise subprocess.CalledProcessError(1, command, stderr="No such object")
+        raise subprocess.CalledProcessError(
+            1, command, stderr=f"Error: No such container: {command[-1]}"
+        )
 
     monkeypatch.setattr(container_mounts.subprocess, "run", fake_run)
 
     assert storage_secrets.adopt_storage_volumes(_layout("audit")) == (
         storage_secrets.StorageVolumes(
             postgres="audit-vllm-sr-postgres-data", redis="audit-vllm-sr-redis-data"
+        )
+    )
+
+
+def test_serving_from_a_new_directory_on_podman_reuses_the_volumes_stop_kept(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """`vllm-sr stop` removes the stores and keeps their named data volumes.
+
+    Podman resolves a name that matches no container to a volume with that
+    name prefix, so a typeless lookup of the removed `vllm-sr-redis` reached
+    `vllm-sr-redis-data` and failed its `.Mounts` template; a new directory,
+    which has no storage state and therefore adopts, could not start.
+    """
+    kept = ("vllm-sr-postgres-data", "vllm-sr-redis-data")
+
+    def podman(command, **_kwargs):
+        name = command[-1]
+        if command[1:3] != ["container", "inspect"] and any(
+            volume.startswith(name) for volume in kept
+        ):
+            raise subprocess.CalledProcessError(
+                125,
+                command,
+                stderr='Error: template: inspect:1:18: executing "inspect" at '
+                "<.Mounts>: can't evaluate field Mounts in type interface {}",
+            )
+        raise subprocess.CalledProcessError(
+            125, command, stderr=f"Error: no such container {name}"
+        )
+
+    monkeypatch.setattr(container_mounts, "get_container_runtime", lambda: "podman")
+    monkeypatch.setattr(container_mounts.subprocess, "run", podman)
+
+    assert storage_secrets.adopt_storage_volumes(_layout()) == (
+        storage_secrets.StorageVolumes(
+            postgres="vllm-sr-postgres-data", redis="vllm-sr-redis-data"
         )
     )
 

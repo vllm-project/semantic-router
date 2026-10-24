@@ -67,14 +67,21 @@ func TestSignalInputLimitAggregationPreservesPolicies(t *testing.T) {
 					}
 					result := &SignalResults{SignalConfidences: map[string]float64{}}
 					c.evaluateBERTJailbreakRule(c.Config.JailbreakRules[0], []string{"sample"}, map[string][]cachedJailbreakResult{"sample": guard}, time.Now(), result, &sync.Mutex{})
-					c.evaluatePIIRule(c.Config.PIIRules[0], "sample", nil, map[string][]cachedPIIResult{"sample": pii}, time.Now(), result, &sync.Mutex{})
+					c.evaluatePIIRule(c.Config.PIIRules[0], "sample", nil, nil, false,
+						map[piiCacheKey]cachedPIIContent{{source: "legacy", content: "sample"}: {results: pii}},
+						time.Now(), result, &sync.Mutex{})
 					require.Equal(t, "input_limit", result.SignalErrors["jailbreak:guard"])
 					require.Equal(t, "input_limit", result.SignalErrors["pii:private"])
-					wantMatched := positive || policy == config.OnErrorBlock
-					require.Equal(t, wantMatched, len(result.MatchedJailbreakRules) > 0)
-					require.Equal(t, wantMatched, len(result.MatchedPIIRules) > 0)
-					require.Equal(t, !positive && policy == config.OnErrorBlock, result.SignalErrorMatches["jailbreak:guard"])
-					require.Equal(t, !positive && policy == config.OnErrorBlock, result.SignalErrorMatches["pii:private"])
+					// The models did not read the over-long piece, so the jailbreak
+					// and PII rules match it whatever on_error says.
+					require.Equal(t, []string{"guard"}, result.MatchedJailbreakRules)
+					require.Equal(t, !positive, result.SignalErrorMatches["jailbreak:guard"])
+					if !positive {
+						require.Equal(t, JailbreakUnscannedType, result.JailbreakType)
+						require.Contains(t, result.PIIEntities, PIIUnscannedType)
+					}
+					require.Equal(t, []string{"private"}, result.MatchedPIIRules)
+					require.Equal(t, !positive, result.SignalErrorMatches["pii:private"])
 					if positive {
 						require.InDelta(t, .9, result.SignalValues["jailbreak:guard"], .00001)
 					}

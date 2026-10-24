@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -56,52 +56,40 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				CategoryModel: config.CategoryModel{
 					ModelID:             "models/mmbert32k-intent-classifier-merged",
 					Threshold:           0.42,
-					UseMmBERT32K:        true,
 					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
 				},
 				PIIModel: config.PIIModel{
 					ModelID:        "models/mmbert32k-pii-detector-merged",
 					Threshold:      0.73,
-					UseMmBERT32K:   true,
 					PIIMappingPath: "models/mmbert32k-pii-detector-merged/label_mapping.json",
 				},
 			},
 			PromptGuard: config.PromptGuardConfig{
 				Enabled:              true,
 				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				Variant:              config.PromptGuardVariantMmBERT32K,
 				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 			},
 			HallucinationMitigation: config.HallucinationMitigationConfig{
 				Enabled: true,
 				FactCheckModel: config.FactCheckModelConfig{
-					ModelID:      "models/mmbert32k-factcheck-classifier-merged",
-					Threshold:    0.61,
-					UseCPU:       true,
-					UseMmBERT32K: true,
+					ModelID:   "models/mmbert32k-factcheck-classifier-merged",
+					Threshold: 0.61,
+					UseCPU:    true,
 				},
 				HallucinationModel: config.HallucinationModelConfig{
-					ModelID:                "models/mom-halugate-detector",
-					Threshold:              0.80,
-					UseCPU:                 true,
-					MinSpanLength:          2,
-					MinSpanConfidence:      0.60,
-					ContextWindowSize:      50,
-					EnableNLIFiltering:     true,
-					NLIEntailmentThreshold: 0.75,
-				},
-				NLIModel: config.NLIModelConfig{
-					ModelID:   "models/mom-halugate-explainer",
-					Threshold: 0.90,
-					UseCPU:    true,
+					ModelID:           "models/mom-halugate-detector",
+					Threshold:         0.80,
+					UseCPU:            true,
+					MinSpanLength:     2,
+					MinSpanConfidence: 0.60,
+					ContextWindowSize: 50,
 				},
 			},
 			FeedbackDetector: config.FeedbackDetectorConfig{
-				Enabled:      true,
-				ModelID:      "models/mmbert32k-feedback-detector-merged",
-				Threshold:    0.70,
-				UseCPU:       true,
-				UseMmBERT32K: true,
+				Enabled:   true,
+				ModelID:   "models/mmbert32k-feedback-detector-merged",
+				Threshold: 0.70,
+				UseCPU:    true,
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
@@ -133,21 +121,13 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 	}
 }
 
-func TestCategoryModelInfoReportsEffectiveVariant(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		model    config.CategoryModel
-		wantType string
-	}{
-		{name: "mmbert32k", model: config.CategoryModel{Variant: config.CategoryVariantMmBERT32K}, wantType: config.CategoryVariantMmBERT32K},
-		{name: "modernbert", model: config.CategoryModel{Variant: config.CategoryVariantModernBERT}, wantType: config.CategoryVariantModernBERT},
-		{name: "remote protocol", model: config.CategoryModel{Backend: &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify}}, wantType: config.RemoteClassifierProtocolHTTPClassify},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := categoryModelInfoType(test.model); got != test.wantType {
-				t.Fatalf("category model type = %q, want %q", got, test.wantType)
-			}
-		})
+func TestClassifierModelInfoReportsHowTheModuleRuns(t *testing.T) {
+	if got := localModelType(nil); got != config.ModelRuntimeProvider {
+		t.Fatalf("local module type = %q, want %q", got, config.ModelRuntimeProvider)
+	}
+	remote := &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify}
+	if got := localModelType(remote); got != config.RemoteClassifierProtocolHTTPClassify {
+		t.Fatalf("remote module type = %q, want its protocol", got)
 	}
 }
 
@@ -396,13 +376,12 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 
 	resp := apiServer.buildModelsInfoResponse()
 	expected := map[string]string{
-		"category_classifier":     "models/mmbert32k-intent-classifier-merged",
-		"pii_classifier":          "models/mmbert32k-pii-detector-merged",
-		"jailbreak_classifier":    "models/mmbert32k-jailbreak-detector-merged",
-		"fact_check_classifier":   "models/mmbert32k-factcheck-classifier-merged",
-		"hallucination_detector":  "models/mom-halugate-detector",
-		"hallucination_explainer": "models/mom-halugate-explainer",
-		"feedback_detector":       "models/mmbert32k-feedback-detector-merged",
+		"category_classifier":    "models/mmbert32k-intent-classifier-merged",
+		"pii_classifier":         "models/mmbert32k-pii-detector-merged",
+		"jailbreak_classifier":   "models/mmbert32k-jailbreak-detector-merged",
+		"fact_check_classifier":  "models/mmbert32k-factcheck-classifier-merged",
+		"hallucination_detector": "models/mom-halugate-detector",
+		"feedback_detector":      "models/mmbert32k-feedback-detector-merged",
 	}
 
 	modelsByName := map[string]ModelInfo{}
@@ -438,8 +417,15 @@ func TestBuildHallucinationModelsReportsTokenSpansAdapter(t *testing.T) {
 
 func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
 	cfg := buildAuxiliaryModelsConfig()
-	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
-	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
+	cfg.ExternalModels = append(cfg.ExternalModels, config.ExternalModelConfig{Name: "detector", ModelName: "lettucedect", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8077}})
+	if cfg.ModelDeployments == nil {
+		cfg.ModelDeployments = map[string]config.ModelDeployment{}
+	}
+	if cfg.ModelBindings == nil {
+		cfg.ModelBindings = map[string]config.ModelBinding{}
+	}
+	cfg.ModelDeployments["detector"] = config.ModelDeployment{Provider: "http", ExternalModel: "detector"}
+	cfg.ModelBindings["hallucination_detector"] = config.ModelBinding{Deployment: "detector", Adapter: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractTokenSpans}
 
 	models := buildHallucinationModels(cfg, classifierModelAvailability{})
 	detector := requireModelInfo(t, models, "hallucination_detector")

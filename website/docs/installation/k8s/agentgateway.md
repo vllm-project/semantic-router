@@ -5,6 +5,15 @@ description: Attach Semantic Router as an ExtProc service to an agentgateway Kub
 
 # Deploy with agentgateway
 
+:::note Experimental integration example
+
+This integration has no maintained platform-specific E2E qualification. The
+project continuously tests standalone and the Agent Router ExtProc path. Use
+this guide as an example and qualify the exact upstream release and deployment
+you choose. See [Deployment Support](../support-matrix).
+
+:::
+
 Use this topology when [agentgateway](https://agentgateway.dev/) owns the
 Kubernetes Gateway API data plane. Semantic Router runs as an Envoy ExtProc
 service: it evaluates the selected recipe and writes the chosen model into the

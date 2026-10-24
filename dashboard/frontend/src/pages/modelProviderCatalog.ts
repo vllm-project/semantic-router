@@ -1,4 +1,4 @@
-import catalog from '../modelCatalogDocument'
+import catalog from '../modelCatalogMetadata'
 import type { CatalogProvider } from '../types/modelCatalog'
 import { resolveModelCatalogIcon } from './modelProviderIcons'
 
@@ -8,7 +8,7 @@ export interface ModelProviderPreset {
   description: string
   category: 'Start here' | 'Model APIs' | 'Private runtimes'
   baseUrl: string
-  apiFormat: 'openai' | 'responses' | 'anthropic'
+  apiFormat: 'openai' | 'responses' | 'anthropic' | 'systemone'
   authStrategy: CatalogProvider['auth']['strategy']
   icon: string
   monogram: string
@@ -29,6 +29,7 @@ const apiFormat = (protocol: string): ModelProviderPreset['apiFormat'] => {
   if (protocol === 'openai/chat-completions@1') return 'openai'
   if (protocol === 'anthropic/messages@1') return 'anthropic'
   if (protocol === 'openai/responses@1') return 'responses'
+  if (protocol === 'vllm-sr/systemone@1') return 'systemone'
   throw new Error(`unsupported default provider protocol: ${protocol}`)
 }
 
@@ -100,7 +101,5 @@ export function findModelProviderPreset({
   providers = modelProviderCatalog,
 }: ProviderLookupInput): ModelProviderPreset | undefined {
   const normalized = normalizedProviderID(providerID)
-  return normalized
-    ? providers.find((provider) => provider.id === normalized)
-    : undefined
+  return normalized ? providers.find((provider) => provider.id === normalized) : undefined
 }

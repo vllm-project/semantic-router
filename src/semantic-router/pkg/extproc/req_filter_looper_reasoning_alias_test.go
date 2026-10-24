@@ -13,9 +13,7 @@ func TestLooperReasoningCapabilityUsesPhysicalModelNotRequestAlias(t *testing.T)
 	const physicalModel = "reasoning-model"
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Looper: config.LooperConfig{
-				ReMoM: config.ReMoMRuntimeConfig{ModelNames: []string{requestAlias}},
-			},
+			Entrypoints: []config.EntrypointMapping{{ModelNames: []string{requestAlias}, Recipe: config.DefaultRecipeName}},
 			BackendModels: config.BackendModels{
 				ModelConfig: map[string]config.ModelParams{
 					physicalModel: {ReasoningFamily: "generic"},
@@ -33,4 +31,21 @@ func TestLooperReasoningCapabilityUsesPhysicalModelNotRequestAlias(t *testing.T)
 	useReasoning, effort := router.getReasoningInfoFromDecision(decision, requestAlias)
 	assert.False(t, useReasoning)
 	assert.Empty(t, effort)
+}
+
+func TestLooperDispatchDoesNotInheritOuterLoRAOwner(t *testing.T) {
+	selected := config.ModelRef{Model: "base-b", LoRAName: "shared"}
+	ordinaryRequest := &RequestContext{VSRSelectedCandidate: &selected}
+	hop := config.ModelRef{Model: "base-a", LoRAName: "shared"}
+	hopDecision := &config.Decision{ModelRefs: []config.ModelRef{hop}}
+	looperRequest := &RequestContext{
+		LooperRequest:        true,
+		VSRSelectedCandidate: &selected,
+		VSREligibleModelRefs: []config.ModelRef{selected},
+		VSRSelectedDecision:  hopDecision,
+	}
+
+	assert.Equal(t, "base-b", ordinaryRequest.backendModelForCandidate("shared"))
+	assert.Equal(t, "shared", looperRequest.backendModelForCandidate("shared"))
+	assert.Same(t, hopDecision, looperRequest.decisionForBackend("shared"))
 }

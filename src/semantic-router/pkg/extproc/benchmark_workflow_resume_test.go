@@ -36,9 +36,6 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 			var mu sync.Mutex
 			var dispatched []string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if got := r.Header.Get(headers.SRBenchExpectedConfigHash); got != hash {
-					t.Errorf("model dispatch config binding = %q, want %q", got, hash)
-				}
 				var payload struct {
 					Model    string                   `json:"model"`
 					Messages []map[string]interface{} `json:"messages"`

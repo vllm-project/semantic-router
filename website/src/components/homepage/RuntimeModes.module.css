@@ -1,0 +1,136 @@
+.compactSection {
+  composes: bandSection from './homepageShared.module.css';
+  padding: clamp(2rem, 3.5vw, 3rem) 0;
+}
+
+.compactHeader {
+  gap: 0.55rem;
+  margin-bottom: clamp(1rem, 2vw, 1.35rem);
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.modes > div {
+  min-width: 0;
+}
+
+.mode {
+  --mode-accent: var(--site-accent-strong);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: clamp(1rem, 1.6vw, 1.35rem);
+  border: 1px solid var(--site-border);
+  border-radius: 1rem;
+  background: var(--site-surface);
+}
+
+.engineMode {
+  --mode-accent: #7651cb;
+}
+
+:global([data-theme='dark']) .engineMode {
+  --mode-accent: #bea1ff;
+}
+
+.modeHeader {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.modeIcon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--mode-accent) 24%, var(--site-border));
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--mode-accent) 6%, var(--site-surface));
+  color: var(--mode-accent);
+  font-size: 1.05rem;
+}
+
+.modeKicker {
+  color: var(--site-muted);
+  font-size: 0.72rem;
+}
+
+.modeHeader h3 {
+  margin: 0.15rem 0 0;
+  color: var(--site-text-strong);
+  font-size: 1.1rem;
+}
+
+.modeDescription {
+  margin: 0.75rem 0;
+  color: var(--site-muted-bright);
+  font-size: 0.87rem;
+  line-height: 1.65;
+}
+
+.command {
+  margin: auto 0 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.6rem;
+  background: var(--site-code-bg);
+  color: var(--site-text-strong);
+  font-size: 0.76rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.command code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.modeDetails {
+  margin: 0.6rem 0 0.9rem;
+  color: var(--site-muted);
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+
+.modeFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--site-border);
+}
+
+.modeFooter a {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.modeFooter a:first-child {
+  color: var(--mode-accent);
+}
+
+.startupNote {
+  margin: 0.75rem 0 0;
+  color: var(--site-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

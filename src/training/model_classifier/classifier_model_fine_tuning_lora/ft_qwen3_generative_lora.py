@@ -456,7 +456,7 @@ def main(
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
     # Load model for causal LM with memory optimization
-    # Use F32 for training (more stable), will convert to BF16 for Candle inference later
+    # Use F32 for training (more stable), will convert to BF16 for inference later
     logger.info("Using F32 dtype for training (more stable than BF16)")
 
     model = AutoModelForCausalLM.from_pretrained(

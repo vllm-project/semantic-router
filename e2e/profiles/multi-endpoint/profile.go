@@ -6,7 +6,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -20,6 +19,7 @@ var (
 	waitDeployments = []helpers.DeploymentRef{
 		{Namespace: "default", Name: "vllm-14b-dev"},
 		{Namespace: "default", Name: "vllm-14b-prod"},
+		{Namespace: "default", Name: "vllm-14b-slow"},
 	}
 )
 
@@ -69,6 +69,7 @@ func (p *Profile) GetTestCases() []string {
 		"pii-detection",
 		"jailbreak-detection",
 		"chat-completions-request",
+		"decision-reliability-timeout",
 	}
 }
 

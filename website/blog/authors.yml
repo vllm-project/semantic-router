@@ -48,9 +48,15 @@ andyluo:
 
 anupsharma:
   name: Anup Sharma
-  title: AI & Distributed System @ Nutanix
+  title: Engineering @ Sarvam AI
   url: https://www.linkedin.com/in/anup-sharma1
   image_url: /img/team/anup.jpeg
+
+1fanwang:
+  name: Stefan Wang
+  title: Senior Software Engineer at LinkedIn
+  url: https://github.com/1fanwang
+  image_url: /img/team/stefan.png
 
 aayushsaini101:
   name: Aayush Saini
@@ -79,3 +85,9 @@ abhinav:
   title: Software Engineer at Barclays
   url: https://www.linkedin.com/in/abhinav-mahajan-b805b022a/
   image_url: /img/team/abhinav.png
+
+Alex-Wengg:
+  name: Alex Weng
+  title: Fluid Inference
+  url: https://github.com/Alex-Wengg
+  image_url: https://github.com/Alex-Wengg.png

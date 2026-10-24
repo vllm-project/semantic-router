@@ -26,6 +26,34 @@ func TestBalanceTaskIntentPolicy(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "balance")
 	tests := []evaluateSignalsCase{
 		{
+			name: "health semantics retain verification when topic is uncertain",
+			signals: &SignalMatches{
+				DomainRules:     []string{"other"},
+				EmbeddingRules:  []string{"health_guidance"},
+				KeywordRules:    []string{"verification_markers", "reference_heavy_markers"},
+				ContextRules:    []string{"short_context"},
+				ProjectionRules: []string{"balance_simple", "verification_required"},
+			},
+			expectedDecision: "verified_health",
+		},
+		{
+			name: "health semantics alone do not request verification",
+			signals: &SignalMatches{
+				EmbeddingRules: []string{"health_guidance"},
+			},
+			expectedDecision: "casual_chat",
+		},
+		{
+			name: "health correction keeps recovery priority",
+			signals: &SignalMatches{
+				EmbeddingRules:    []string{"health_guidance"},
+				KeywordRules:      []string{"verification_markers"},
+				UserFeedbackRules: []string{"wrong_answer"},
+				ProjectionRules:   []string{"verification_required", "feedback_correction_verified"},
+			},
+			expectedDecision: "feedback_wrong_answer_verified",
+		},
+		{
 			name: "short health source request keeps verification",
 			signals: &SignalMatches{
 				DomainRules:     []string{"health"},
@@ -122,53 +150,54 @@ func TestBalanceTaskIntentPolicy(t *testing.T) {
 	}
 }
 
-func TestAgentTaskIntentKeepsPrivacyPriority(t *testing.T) {
-	engine := maintainedRecipeEngine(t, "agent")
+func TestPrivacyQuestionsKeepWorkLocal(t *testing.T) {
+	engine := maintainedRecipeEngine(t, "privacy")
+	unknown := map[string]string{
+		"decision:attack":        "decision_rejected",
+		"decision:confidential":  "decision_rejected",
+		"decision:personal_data": "decision_rejected",
+		"decision:depth":         "decision_rejected",
+	}
 	tests := []evaluateSignalsCase{
-		{
-			name: "editing code with uncertain embedding",
-			signals: &SignalMatches{
-				DomainRules:     []string{"computer science"},
-				KeywordRules:    []string{"code_edit_action", "code_artifact"},
-				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_simple"},
-			},
-			expectedDecision: "domain_code",
-		},
-		{
-			name: "software topic alone is not coding",
-			signals: &SignalMatches{
-				DomainRules:     []string{"computer science"},
-				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_simple"},
-			},
-			expectedDecision: "simple_general",
-		},
-		{
-			name: "business semantics retain commercial lane",
-			signals: &SignalMatches{
-				DomainRules:     []string{"computer science"},
-				EmbeddingRules:  []string{"business_analysis"},
-				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_simple"},
-			},
-			expectedDecision: "domain_business",
-		},
-		{
-			name: "privacy outranks editing",
-			signals: &SignalMatches{
-				DomainRules:     []string{"computer science"},
-				KeywordRules:    []string{"code_edit_action", "code_artifact"},
-				ProjectionRules: []string{"policy_privacy_local_only", "policy_security_standard", "balance_simple"},
-			},
-			expectedDecision: "local_privacy_policy",
-		},
-		{
-			name: "daily comparison is not a business request",
-			signals: &SignalMatches{
-				DomainRules:     []string{"business"},
-				KeywordRules:    []string{"comparison_request"},
-				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_simple"},
-			},
-			expectedDecision: "medium_general",
-		},
+		{name: "an attack outranks private material", signals: &SignalMatches{DecisionRules: []string{"attack", "confidential"}}, expectedDecision: "local_security_containment"},
+		{name: "private material stays local", signals: &SignalMatches{DecisionRules: []string{"confidential"}}, expectedDecision: "local_privacy_policy"},
+		{name: "personal data stays local", signals: &SignalMatches{DecisionRules: []string{"personal_data"}}, expectedDecision: "local_privacy_policy"},
+		{name: "deep reasoning on private material stays local", signals: &SignalMatches{DecisionRules: []string{"depth", "confidential"}}, expectedDecision: "local_privacy_policy"},
+		{name: "deep reasoning with personal data stays local", signals: &SignalMatches{DecisionRules: []string{"depth", "personal_data"}}, expectedDecision: "local_privacy_policy"},
+		{name: "only non-sensitive deep reasoning leaves", signals: &SignalMatches{DecisionRules: []string{"depth"}}, expectedDecision: "cloud_frontier_reasoning"},
+		{name: "ordinary work stays local", signals: &SignalMatches{}, expectedDecision: "local_standard"},
+		{name: "an unanswered request stays on the privacy lane", signals: &SignalMatches{SignalErrors: unknown}, expectedDecision: "local_privacy_policy"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
+			assertDecisionResult(t, result, err, tt.expectedDecision)
+		})
+	}
+}
+
+func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
+	engine := maintainedRecipeEngine(t, "agent")
+	answers := func(difficulty float64, rules ...string) *SignalMatches {
+		return &SignalMatches{
+			DecisionRules: rules,
+			SignalValues:  map[string]float64{"decision:difficulty": difficulty},
+		}
+	}
+	tests := []evaluateSignalsCase{
+		{name: "an attack outranks privacy", signals: answers(0.5, "attack", "confidential"), expectedDecision: "local_security_containment"},
+		{name: "private material outranks code work", signals: answers(1.7, "confidential", "domain:code", "difficulty"), expectedDecision: "local_privacy_policy"},
+		{name: "personal data outranks a specialist field", signals: answers(1.9, "personal_data", "domain:legal_health", "difficulty"), expectedDecision: "local_privacy_policy"},
+		{name: "simple math takes the fast path", signals: answers(0.3, "domain:math_science"), expectedDecision: "simple_math_fast_path"},
+		{name: "math that needs reasoning takes the STEM lane", signals: answers(3.4, "domain:math_science", "difficulty"), expectedDecision: "domain_stem_research"},
+		{name: "law and health keep their lane", signals: answers(1.9, "domain:legal_health", "difficulty"), expectedDecision: "domain_legal_health"},
+		{name: "hard software work takes the complex code lane", signals: answers(2.9, "domain:code", "difficulty"), expectedDecision: "domain_code_complex"},
+		{name: "medium software work takes the code lane", signals: answers(1.7, "domain:code", "difficulty"), expectedDecision: "domain_code"},
+		{name: "a simple software question stays local", signals: answers(0.6, "domain:code"), expectedDecision: "simple_general"},
+		{name: "business keeps its lane", signals: answers(1.9, "domain:business", "difficulty"), expectedDecision: "domain_business"},
+		{name: "deep general reasoning escalates", signals: answers(3.0, "domain:general", "difficulty"), expectedDecision: "complex_general"},
+		{name: "a general comparison takes the medium lane", signals: answers(1.8, "domain:general", "difficulty"), expectedDecision: "medium_general"},
+		{name: "no answer falls to the local lane", signals: &SignalMatches{}, expectedDecision: "simple_general"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

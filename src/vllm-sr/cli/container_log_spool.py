@@ -7,6 +7,8 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from cli.commands.runtime_paths import cli_user_share_gid
+
 LOG_SPOOL_COMPONENTS = ("router", "envoy", "dashboard")
 LOG_SPOOL_MAX_BYTES = 4 * 1024 * 1024
 LOG_SPOOL_MAX_LINE_BYTES = 64 * 1024
@@ -163,9 +165,7 @@ def prepare_runtime_log_spool(vllm_sr_dir: str, stack_name: str) -> RuntimeLogSp
 
     logs_root = Path(vllm_sr_dir) / "logs"
     root = logs_root / stack_name
-    # GID 0 is deliberately never propagated into a container. A root-run CLI
-    # can assign the dashboard's established nonroot group instead.
-    gid = 65532 if os.getgid() == 0 else os.getgid()
+    gid = cli_user_share_gid()
     _ensure_directory(logs_root, 0o750, gid)
     _ensure_directory(root, 0o750, gid)
 

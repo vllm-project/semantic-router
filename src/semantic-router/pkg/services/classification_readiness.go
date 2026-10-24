@@ -24,17 +24,6 @@ func (s *ClassificationService) HasHallucinationDetector() bool {
 	return classifier != nil && classifier.IsHallucinationDetectorReady()
 }
 
-// HasHallucinationExplainer returns true when the hallucination NLI explainer is initialized.
-func (s *ClassificationService) HasHallucinationExplainer() bool {
-	if s == nil {
-		return false
-	}
-	s.runtimeMutex.RLock()
-	defer s.runtimeMutex.RUnlock()
-	classifier := s.classifierSnapshot()
-	return classifier != nil && classifier.IsHallucinationExplainerReady()
-}
-
 // HasFeedbackDetector returns true when the feedback detector has been initialized.
 func (s *ClassificationService) HasFeedbackDetector() bool {
 	if s == nil {
@@ -78,22 +67,6 @@ func (s *ClassificationService) HasAnyHallucinationDetector() bool {
 	}
 	s.runtimeMutex.RUnlock()
 	return s.HasHallucinationDetector()
-}
-
-// HasAnyHallucinationExplainer reports aggregate reachable-recipe inventory
-// readiness while HasHallucinationExplainer remains scoped to the default API.
-func (s *ClassificationService) HasAnyHallucinationExplainer() bool {
-	if s == nil {
-		return false
-	}
-	s.runtimeMutex.RLock()
-	if s.recipeClassifiers != nil {
-		ready := s.recipeClassifiers.HasAnyHallucinationExplainer()
-		s.runtimeMutex.RUnlock()
-		return ready
-	}
-	s.runtimeMutex.RUnlock()
-	return s.HasHallucinationExplainer()
 }
 
 // HasAnyFeedbackDetector reports aggregate reachable-recipe inventory readiness

@@ -58,7 +58,7 @@ func newLLMLabelClassifier(
 	if client.initErr != nil {
 		return nil, client.initErr
 	}
-	timeout := time.Duration(external.TimeoutSeconds) * time.Second
+	timeout := config.DurationFromSeconds(external.TimeoutSeconds)
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
@@ -285,7 +285,10 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 		)
 		switch rule.Type {
 		case config.ClassifierSignalTypeLocal:
-			classifier, err = newLocalLabelClassifier(rule, b.models)
+			classifier, err = prepareDecisionLabelClassifier(b.models, rule)
+			if err == nil && classifier == nil {
+				classifier, err = newLocalLabelClassifier(rule, b.models)
+			}
 		case config.ClassifierSignalTypeLLM:
 			external := b.cfg.FindExternalModelByName(rule.Model)
 			reasoning, reasoningErr := resolveExternalModelReasoningControl(

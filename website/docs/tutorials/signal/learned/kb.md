@@ -5,8 +5,9 @@
 `kb` binds routing signals to the output of a named knowledge base instance.
 Define these bindings under `routing.signals.kb`.
 
-Use it for an embedding-backed knowledge base that is loaded at Router startup
-and reused across several routes.
+Use it for an embedding-backed knowledge base referenced by a reachable
+recipe. Only referenced KBs are prepared at startup; an unused catalog entry
+does not load its assets or start an embedding model.
 
 ## Key Advantages
 

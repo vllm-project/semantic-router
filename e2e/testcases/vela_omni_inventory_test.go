@@ -40,11 +40,11 @@ func TestOmniEmbeddingOwnerInventory(t *testing.T) {
 			models := []omniInventoryModel{
 				{Recipe: "nano", Type: "embedding", Loaded: true, Metadata: map[string]string{
 					"binding": "embedding", "deployment": "nano", "contract": "embedding.v1",
-					"model_type": "vela_omni", "provider": "ort", "default_dimension": "384", "modalities": "text,image,audio",
+					"model_type": "vela_omni", "provider": "model_runtime", "default_dimension": "384", "modalities": "text,image,audio",
 				}},
 				{Recipe: "mini", Type: "embedding", Loaded: true, Metadata: map[string]string{
 					"binding": "embedding", "deployment": "mini", "contract": "embedding.v1",
-					"model_type": "vela_omni", "provider": "ort", "default_dimension": "768", "modalities": "text,image,audio",
+					"model_type": "vela_omni", "provider": "model_runtime", "default_dimension": "768", "modalities": "text,image,audio",
 				}},
 			}
 			if tc.mutate != nil {
