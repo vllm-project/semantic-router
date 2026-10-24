@@ -162,13 +162,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
     config = load_config(args.config)
     inventory = served_artifacts(config)
-    served = inventory.get(args.task)
+    spec = TASK_SPECS[args.task]
+    served_task = spec.served_task or args.task
+    served = inventory.get(served_task)
     if served is None:
         raise BaselineError(
-            f"{args.config} does not configure any artifact for task {args.task!r}"
+            f"{args.config} does not configure any artifact for task {served_task!r}"
         )
 
-    spec = TASK_SPECS[args.task]
     measured = resolve_measured_artifact(args, served, spec.validate_artifact)
     # A split without a pin is read at the revision resolved here, which is also the
     # one the result and the manifests record.
@@ -191,7 +192,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     findings = (
         registry_drift(inventory, MODEL_REGISTRY)
         + uncovered_artifacts(config)
-        + check_registry_label_order(args.task, measured.repo, mapping)
+        + check_registry_label_order(served_task, measured.repo, mapping)
         + _provenance_findings(args, measured)
     )
     for finding in findings:
