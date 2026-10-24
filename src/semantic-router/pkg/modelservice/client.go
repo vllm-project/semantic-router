@@ -24,7 +24,8 @@ type Client struct {
 	httpClient api.HttpRequestDoer
 	api        *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
-	bundleTasks atomic.Int64
+	bundleTasks  atomic.Int64
+	requestBytes atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
 	maxInputs atomic.Pointer[map[string]int]
 	// scanning holds the served models whose card reports a scan budget, the
@@ -80,6 +81,7 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
+	c.requestBytes.Store(int64(response.JSON200.Limits.MaxRequestBytes))
 	inputs := make(map[string]int, len(response.JSON200.Data))
 	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
@@ -186,6 +188,12 @@ func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRe
 		State:     state,
 		Questions: make(map[string]api.Question, len(request.Questions)),
 		Options:   &api.RequestOptions{DeadlineMs: deadline},
+	}
+	if len(request.Images) > 0 {
+		body.Images = &request.Images
+	}
+	if len(request.Videos) > 0 {
+		body.Videos = &request.Videos
 	}
 	if request.MaxTokens > 0 {
 		body.Options.MaxTokens = &request.MaxTokens

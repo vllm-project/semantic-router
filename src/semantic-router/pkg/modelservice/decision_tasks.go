@@ -125,6 +125,7 @@ func CapabilityForTask(definition TaskDefinition, card ModelCard) TaskCapability
 // Separate calls still participate in the existing multi-state Bundle fusion.
 func ExecuteTaskPlans(ctx context.Context, decider Decider, deployment string, input Request, plans []TaskPlan) (Response, map[string]TaskResult, error) {
 	started := time.Now()
+	input = attachDecisionMedia(ctx, deployment, input)
 	input.Questions = nil
 	seen := make(map[string]bool)
 	for _, plan := range plans {

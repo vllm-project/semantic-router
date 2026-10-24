@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/decisionmedia"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -71,6 +72,7 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
+		DecisionMedia:  decisionmedia.FromRequest(request),
 		JailbreakInput: extractJailbreakInput(request),
 	}
 	switch request.ToolChoice.Mode {
@@ -122,6 +124,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
 		recordUserInputModalities(result, message.Content, text)
+
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
