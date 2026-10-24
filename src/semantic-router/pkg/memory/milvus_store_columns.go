@@ -10,12 +10,15 @@ import (
 
 func memoryMetadataJSON(memory *Memory) ([]byte, error) {
 	metadata := map[string]interface{}{
-		"user_id":       memory.UserID,
-		"project_id":    memory.ProjectID,
-		"source":        memory.Source,
-		"importance":    memory.Importance,
-		"access_count":  memory.AccessCount,
-		"last_accessed": memory.LastAccessed.Unix(),
+		"user_id":            memory.UserID,
+		"project_id":         memory.ProjectID,
+		"source":             memory.Source,
+		"importance":         memory.Importance,
+		"access_count":       memory.AccessCount,
+		"last_accessed":      memory.LastAccessed.Unix(),
+		"created_by_user_id": memory.CreatedByUserID,
+		"conversation_id":    memory.ConversationID,
+		"created_via":        memory.CreatedVia,
 	}
 	return json.Marshal(metadata)
 }
