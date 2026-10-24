@@ -202,12 +202,17 @@ class Context:
                     "Priced call returned incomplete usage or unknown model pricing",
                     result,
                 )
-            if (
-                selected.get("max_inference_calls") is not None
-                and result.get("inference_call_count") is not None
-                and result["inference_call_count"] > selected["max_inference_calls"]
-            ):
-                raise CallFailure("Inference call count exceeded frozen bound", result)
+            if selected.get("max_inference_calls") is not None:
+                if result.get("inference_call_count") is None:
+                    raise CallFailure(
+                        message="Inference call count is unknown; frozen bound cannot be verified",
+                        partial=result,
+                    )
+                if result["inference_call_count"] > selected["max_inference_calls"]:
+                    raise CallFailure(
+                        message="Inference call count exceeded frozen bound",
+                        partial=result,
+                    )
             if not result.get("output_complete", True) and role != "subject":
                 raise CallFailure(
                     "Auxiliary model output was truncated; grading is incomplete",

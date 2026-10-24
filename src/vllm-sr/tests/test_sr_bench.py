@@ -54,6 +54,11 @@ class Target(BaseHTTPRequestHandler):
             self.send_header("X-VSR-Session-Phase", phase)
         if self.server.ack:
             self.send_header("X-SR-Bench-Config-Hash", self.server.ack)
+        if self.server.inference_call_count is not None:
+            self.send_header(
+                "X-VSR-Inference-Call-Count", str(self.server.inference_call_count)
+            )
+            self.send_header("X-VSR-Selected-Model", "model")
         self.end_headers()
         usage_events = self.server.usage_events
         if usage_events is None:
@@ -114,6 +119,7 @@ def target():
     server.truncated = False
     server.delay = 0
     server.ack = None
+    server.inference_call_count = None
     server.session_phase = None
     server.usage_events = None
     server.cache_write_field = "cache_creation_tokens"
@@ -264,6 +270,7 @@ def test_session_aware_target_sends_case_stable_session_ids(
     tmp_path, target, monkeypatch
 ):
     target.ack = "fixed"
+    target.inference_call_count = 1
     document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"][0].update(
@@ -322,6 +329,7 @@ def test_run_compares_session_modes_without_leaking_to_auxiliary_calls(
     tmp_path, target, monkeypatch
 ):
     target.ack = "fixed"
+    target.inference_call_count = 1
     document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"] = [
@@ -421,6 +429,7 @@ def test_target_rejects_unsupported_session_mode(target, session_mode):
 
 def test_session_mode_defaults_to_stateless_requests(tmp_path, target, monkeypatch):
     target.ack = "fixed"
+    target.inference_call_count = 1
     document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"][0].update(
