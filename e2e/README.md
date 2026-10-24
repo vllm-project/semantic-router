@@ -122,6 +122,7 @@ until the selected cases are known to be isolated.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **routing-strategies**: keyword, entropy, and fallback routing.
+- **selector-algorithms**: deterministic selector algorithm contracts.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
