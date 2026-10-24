@@ -8,8 +8,9 @@
     monogram: S
     monochrome: false
   distribution:
-    type: proprietary_api
-    source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
+    type: open_weights
+    source: https://huggingface.co/stepfun-ai/Step-5-Preview
+    license: StepFun Model License 1.0
   family: step-5
   reasoning_family: step-3.7
   parameter_size: 600B (27B active)
@@ -33,10 +34,10 @@
   verification:
     authority: StepFun
     status: claimed
-    verified_at: 2026-09-24
-    source: https://www.stepfun.com/step-5-preview
+    verified_at: 2026-10-18
+    source: https://huggingface.co/stepfun-ai/Step-5-Preview
   tags:
-  - proprietary
+  - open_weights
   - reasoning
   - multimodal
   - agentic
