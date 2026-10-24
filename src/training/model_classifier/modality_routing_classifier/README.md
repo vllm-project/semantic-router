@@ -32,12 +32,12 @@ Optional groups: `audit` for the Claude API judge in `label_audit/`, and
 
 On Linux the default `torch` wheel is a CUDA build, so no extra index is needed
 for a GPU host. `requirements.txt` and `requirements-lock.txt` are kept for the
-existing docs. Note that `run_training.sh` below still runs its own unpinned
-`pip install` and does not use this lock yet.
+existing docs. `run_training.sh` runs its GPU diagnostic, training, and inference
+demo through `uv run --locked --project`.
 
 ## Train
 
-`run_training.sh` installs its Python packages, builds the dataset, trains an
+`run_training.sh` prepares its locked uv environment, builds the dataset, trains an
 mmBERT LoRA adapter, and runs the script's inference demo:
 
 ```bash

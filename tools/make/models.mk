@@ -232,6 +232,13 @@ LORA_DIR := $(TRAINING_DIR)/model_classifier
 # Output directories for 32K models
 MMBERT32K_MODELS_DIR := models/mmbert32k
 
+.PHONY: training-uv-check
+training-uv-check:
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "Error: uv is required. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2; \
+		exit 1; \
+	}
+
 train-mmbert32k-all: ## Train remaining legacy mmBERT-32K tasks (Guard retired)
 	@echo "🚀 Training all mmBERT-32K models..."
 	@echo "   Base model: vllm-sr/mmbert-32k-yarn"
@@ -266,12 +273,12 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "   LoRA: models/mmbert32k-feedback-detector-lora"
 	@echo "   Merged: models/mmbert32k-feedback-detector-merged"
 
-train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supplement data)
+train-mmbert32k-intent: training-uv-check ## Train Intent Classifier (MMLU-Pro categories + supplement data)
 	@echo "🎯 Training Intent Classifier with mmBERT-32K..."
 	@echo "   LoRA rank: $(LORA_RANK), alpha: $(LORA_ALPHA)"
 	@echo "   Includes supplement data for better 'other' category detection"
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
-	python $(LORA_DIR)/classifier_model_fine_tuning_lora/ft_linear_lora.py \
+	uv run --locked --project "$(LORA_DIR)/classifier_model_fine_tuning_lora" python "$(LORA_DIR)/classifier_model_fine_tuning_lora/ft_linear_lora.py" \
 		--mode train \
 		--model mmbert-32k \
 		--lora-rank $(LORA_RANK) \
@@ -288,12 +295,12 @@ train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supple
 		mv lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/intent-classifier-lora; \
 	fi
 
-train-mmbert32k-pii: ## Train PII Detector (AI4Privacy + Presidio combined dataset)
+train-mmbert32k-pii: training-uv-check ## Train PII Detector (AI4Privacy + Presidio combined dataset)
 	@echo "Training PII Detector with mmBERT-32K (AI4Privacy + Presidio combined)..."
 	@echo "   Dataset: AI4Privacy (70%) + Presidio (30%) for maximum coverage"
 	@echo "   Epochs: $(PII_EPOCHS), Samples: $(PII_MAX_SAMPLES), LoRA rank: $(PII_LORA_RANK)"
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
-	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
+	uv run --locked --project "$(LORA_DIR)/pii_model_fine_tuning_lora" python "$(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py" \
 		--mode train \
 		--model mmbert-32k \
 		--lora-rank $(PII_LORA_RANK) \
@@ -311,9 +318,9 @@ train-mmbert32k-pii: ## Train PII Detector (AI4Privacy + Presidio combined datas
 		mv lora_pii_classifier_mmbert-32k_r$(PII_LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
 	fi
 
-train-mmbert32k-pii-quick: ## Quick PII training (3 epochs, 3000 samples)
+train-mmbert32k-pii-quick: training-uv-check ## Quick PII training (3 epochs, 3000 samples)
 	@echo "Quick PII Detector training (AI4Privacy + Presidio)..."
-	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
+	uv run --locked --project "$(LORA_DIR)/pii_model_fine_tuning_lora" python "$(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py" \
 		--mode train \
 		--model mmbert-32k \
 		--lora-rank 32 \
@@ -325,9 +332,9 @@ train-mmbert32k-pii-quick: ## Quick PII training (3 epochs, 3000 samples)
 		--use-ai4privacy
 	@echo "Quick PII training complete"
 
-train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (legacy)
+train-mmbert32k-pii-presidio-only: training-uv-check ## Train PII Detector with Presidio only (legacy)
 	@echo "Training PII Detector with Presidio only (legacy mode)..."
-	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
+	uv run --locked --project "$(LORA_DIR)/pii_model_fine_tuning_lora" python "$(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py" \
 		--mode train \
 		--model mmbert-32k \
 		--lora-rank $(LORA_RANK) \
@@ -346,10 +353,10 @@ train-mmbert32k-jailbreak: ## Retired: use the explicit Vela Guard sequence trai
 	@echo "See src/training/model_classifier/prompt_guard_fine_tuning_lora/README.md."
 	@exit 2
 
-train-mmbert32k-factcheck: ## Train Fact Check Classifier
+train-mmbert32k-factcheck: training-uv-check ## Train Fact Check Classifier
 	@echo "Training Fact Check Classifier with mmBERT-32K..."
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
-	python $(LORA_DIR)/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py \
+	uv run --locked --project "$(LORA_DIR)/fact_check_fine_tuning_lora" python "$(LORA_DIR)/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py" \
 		--mode train \
 		--model mmbert-32k \
 		--lora-rank $(LORA_RANK) \
