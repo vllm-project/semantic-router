@@ -27,6 +27,34 @@ Start with the public [model training guide](../../website/docs/training/trainin
 to choose a model family. Use the README beside a trainer for its environment,
 data preparation, commands, evaluation, and artifact format.
 
+## Environment setup
+
+Install each area from its own directory. Where a lock exists, run
+`uv sync --locked` there. Areas without a `uv.lock` still use the requirements
+file named in that area's README. Optional dependency groups stay in the area
+README. [`tests/test_uv_setup_table.py`](tests/test_uv_setup_table.py) compares
+this table with every `uv.lock` under this tree.
+
+| Area | Locked | Setup |
+| --- | --- | --- |
+| [`kv_mapper`](kv_mapper/) | yes | `uv sync --locked` |
+| [`model_classifier/classifier_model_fine_tuning_lora`](model_classifier/classifier_model_fine_tuning_lora/) | yes | `uv sync --locked` |
+| [`model_classifier/domain_classifier`](model_classifier/domain_classifier/) | yes | `uv sync --locked` |
+| [`model_classifier/escalation_risk`](model_classifier/escalation_risk/) | yes | `uv sync --locked` |
+| [`model_classifier/fact_check_fine_tuning_lora`](model_classifier/fact_check_fine_tuning_lora/) | yes | `uv sync --locked` |
+| [`model_classifier/hallucination_detection_classifier`](model_classifier/hallucination_detection_classifier/) | yes | `uv sync --locked` |
+| [`model_classifier/modality_routing_classifier`](model_classifier/modality_routing_classifier/) | yes | `uv sync --locked` |
+| [`model_classifier/pii_model_fine_tuning_lora`](model_classifier/pii_model_fine_tuning_lora/) | yes | `uv sync --locked` |
+| [`model_classifier/safety_classifier`](model_classifier/safety_classifier/) | no | no `uv.lock` yet |
+| [`model_classifier/user_feedback_classifier`](model_classifier/user_feedback_classifier/) | yes | `uv sync --locked` |
+| [`model_embeddings/domain_adapted_embeddings`](model_embeddings/domain_adapted_embeddings/) | no | no `uv.lock` yet |
+| [`model_embeddings/mmbert_32k`](model_embeddings/mmbert_32k/) | no | no `uv.lock` yet |
+| [`model_embeddings/multimodal/large`](model_embeddings/multimodal/large/) | no | no `uv.lock` yet |
+| [`model_embeddings/multimodal/small`](model_embeddings/multimodal/small/) | no | no `uv.lock` yet |
+| [`model_eval`](model_eval/) | yes | `uv sync --locked` |
+| [`model_experiment/mmlu_pro_solver_lora`](model_experiment/mmlu_pro_solver_lora/) | yes | `uv sync --locked` |
+| [`model_selection/ml_model_selection`](model_selection/ml_model_selection/) | yes | `uv sync --locked` |
+| [`model_selection/rl_model_selection`](model_selection/rl_model_selection/) | no | no `uv.lock` yet |
 ## Torch build
 
 Areas that train on a GPU choose the `torch` build with an extra.
