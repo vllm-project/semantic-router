@@ -13,7 +13,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.metadata import entry_points
-from typing import Protocol
+from typing import Any, Protocol
 
 from .grading import MCQ_GRADER_VERSION, basic_grade
 
@@ -24,8 +24,15 @@ class AdapterContext(Protocol):
     limits: dict
 
     def call(
-        self, messages, role="subject", target=None, extra_body=None, fixture_phase=None
-    ) -> dict: ...
+        self,
+        messages: list[dict[str, Any]],
+        role: str = "subject",
+        target: dict[str, Any] | str | None = None,
+        extra_body: dict[str, Any] | None = None,
+        fixture_phase: str | None = None,
+        *,
+        require_complete_output: bool = True,
+    ) -> dict[str, Any]: ...
     def cancelled(self) -> bool: ...
 
 

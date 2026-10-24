@@ -8,6 +8,7 @@ import json
 import threading
 import time
 from collections.abc import Callable, Iterator
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -261,6 +262,12 @@ class _Endpoint(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         model = self.server.models[len(self.server.seen) % len(self.server.models)]
         self.server.seen.append((self.headers.get(SESSION_ID_HEADER), body))
+        if (
+            self.server.fail_after is not None
+            and len(self.server.seen) > self.server.fail_after
+        ):
+            self.send_error(HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
@@ -268,7 +275,11 @@ class _Endpoint(BaseHTTPRequestHandler):
             {
                 "model": model,
                 "choices": [
-                    {"index": 0, "delta": {"content": "ok"}, "finish_reason": "stop"}
+                    {
+                        "index": 0,
+                        "delta": {"content": "ok"},
+                        "finish_reason": self.server.finish_reason,
+                    }
                 ],
             },
             {
@@ -286,6 +297,8 @@ def endpoint() -> Iterator[ThreadingHTTPServer]:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Endpoint)
     server.seen = []
     server.models = ["small", "large", "small"]
+    server.finish_reason = "stop"
+    server.fail_after = None
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server
@@ -319,10 +332,12 @@ def test_plan_rejects_stateless_targets(endpoint: ThreadingHTTPServer) -> None:
         plan(document)
 
 
+@pytest.mark.parametrize("finish_reason", ["stop", "length"])
 def test_replay_sends_each_turn_in_one_session(
-    tmp_path: Path, endpoint: ThreadingHTTPServer
+    tmp_path: Path, endpoint: ThreadingHTTPServer, finish_reason: str
 ) -> None:
     """One replay is one session: cumulative prefixes, tools and one identity."""
+    endpoint.finish_reason = finish_reason
     engine = Engine(Store(tmp_path))
     run_id = engine.start(_manifest(endpoint))["id"]
     deadline = time.monotonic() + 5
@@ -345,13 +360,51 @@ def test_replay_sends_each_turn_in_one_session(
         "tool_loop",
         "follow_up",
     ]
+    assert [call["finish_reason"] for call in calls] == [finish_reason] * 3
+    assert all(call["output_complete"] == (finish_reason == "stop") for call in calls)
     result = engine.store.results(run_id)[0]
-    assert result["correct"] is True
+    assert result["correct"] is (finish_reason == "stop")
+    if finish_reason == "length":
+        assert result["details"]["quality_failure"] == "output_limit"
     assert [turn["selected_model"] for turn in result["details"]["turns"]] == [
         "small",
         "large",
         "small",
     ]
+
+
+@pytest.mark.parametrize(
+    ("max_calls", "fail_after", "expected_requests", "error"),
+    [
+        (1, None, 1, "Per-case call budget exhausted"),
+        (2, None, 2, "Per-case call budget exhausted"),
+        (4, 1, 2, "503"),
+    ],
+    ids=["one-call-budget", "two-call-budget", "later-transport-failure"],
+)
+def test_truncated_replay_preserves_limits_and_transport_failures(
+    tmp_path: Path,
+    endpoint: ThreadingHTTPServer,
+    max_calls: int,
+    fail_after: int | None,
+    expected_requests: int,
+    error: str,
+) -> None:
+    endpoint.finish_reason = "length"
+    endpoint.fail_after = fail_after
+    document = _manifest(endpoint)
+    document["limits"]["max_calls_per_case"] = max_calls
+    engine = Engine(Store(tmp_path))
+    run_id = engine.start(document)["id"]
+    deadline = time.monotonic() + 5
+    while (status := engine.store.get(run_id)["status"]) not in TERMINAL:
+        assert time.monotonic() < deadline, "run did not terminate"
+        time.sleep(0.01)
+
+    assert status == "failed"
+    assert len(endpoint.seen) == expected_requests
+    assert error in engine.store.results(run_id)[0]["error"]
+    assert engine.store.calls(run_id)[0]["output_complete"] is False
 
 
 def test_report_counts_switches_per_fixture_phase(

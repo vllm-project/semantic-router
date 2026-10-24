@@ -62,6 +62,13 @@ recorded label as `fixture_phase` on the subject call receipt; when present, it
 outranks the observed phase in `model_switches_by_phase`, so an
 `agent-session-replay` run buckets its switches under the fixture's `user_turn`,
 `tool_loop` and `follow_up` turns.
+
+The recorded replay continues after an output-limit response because later turns
+use recorded messages rather than the generated answer. Each call and turn keeps
+its completion status. A replay with any truncated output retains
+`quality_failure: output_limit` and an incorrect outcome. Call, cost and time
+budgets, cancellation, and transport failures still stop the replay.
+
 Provider cache fields retain their presence separately from their numeric values:
 `cache_read_reported` and `cache_write_reported` are true only when the provider
 sent the corresponding field, including an explicit zero. The target and

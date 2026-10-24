@@ -14,9 +14,12 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .contracts import SESSION_AWARE
+
+if TYPE_CHECKING:
+    from .adapters import AdapterContext
 
 BENCHMARK_ID = "agent-session-replay"
 ADAPTER_VERSION = "agent-session-replay-v1"
@@ -118,15 +121,16 @@ def case_turns(case: dict[str, Any]) -> list[dict[str, Any]]:
     return turns
 
 
-def execute(case: dict[str, Any], context: Any) -> dict[str, Any]:
+def execute(case: dict[str, Any], context: AdapterContext) -> dict[str, Any]:
     turns = case_turns(case)
     rows: list[dict[str, Any]] = []
     answer = None
     for turn in turns:
         result = context.call(
-            case["messages"][: turn["message_count"]],
+            messages=case["messages"][: turn["message_count"]],
             extra_body={"tools": case["tools"]},
             fixture_phase=turn["phase"],
+            require_complete_output=False,
         )
         answer = result.get("final") or answer
         rows.append(
@@ -135,9 +139,19 @@ def execute(case: dict[str, Any], context: Any) -> dict[str, Any]:
                 "phase": turn["phase"],
                 "selected_model": result.get("selected_model") or "",
                 "finish_reason": result.get("finish_reason") or "",
+                "output_complete": result.get("output_complete", True),
             }
         )
-    return {"answer": answer, "correct": True, "score": 1, "details": {"turns": rows}}
+    complete = all(row["output_complete"] for row in rows)
+    details: dict[str, Any] = {"turns": rows}
+    if not complete:
+        details.update(quality_failure="output_limit", output_complete=False)
+    return {
+        "answer": answer if complete else None,
+        "correct": complete,
+        "score": int(complete),
+        "details": details,
+    }
 
 
 def preflight(case: dict[str, Any], manifest: dict[str, Any], cache: Any) -> None:

@@ -10,6 +10,7 @@ import threading
 import time
 from contextlib import contextmanager, suppress
 from http import HTTPStatus
+from typing import Any
 
 import requests
 
@@ -68,8 +69,15 @@ class Context:
         return self._cancel.is_set() or time.monotonic() > self.deadline
 
     def call(
-        self, messages, role="subject", target=None, extra_body=None, fixture_phase=None
-    ):
+        self,
+        messages: list[dict[str, Any]],
+        role: str = "subject",
+        target: dict[str, Any] | str | None = None,
+        extra_body: dict[str, Any] | None = None,
+        fixture_phase: str | None = None,
+        *,
+        require_complete_output: bool = True,
+    ) -> dict[str, Any]:
         if self.cancelled():
             raise CallFailure("Run cancelled or wall-time budget exhausted")
         if self.quality_failure:
@@ -226,7 +234,7 @@ class Context:
                     self.run_id, 0
                 ) + (result.get("cost_usd") or 0)
                 self.engine.reserved[self.run_id] -= reservation
-            if not result.get("output_complete", True):
+            if require_complete_output and not result.get("output_complete", True):
                 self.quality_failure = "output_limit"
             return result
         except CallFailure as exc:
