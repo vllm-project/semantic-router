@@ -76,20 +76,6 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 	return r.createRouterReplayJSONResponse(200, payload)
 }
 
-// filterTrajectoryRecordsBySession returns records captured for one logical session.
-func filterTrajectoryRecordsBySession(
-	records []routerreplay.RoutingRecord,
-	sessionID string,
-) []routerreplay.RoutingRecord {
-	matched := make([]routerreplay.RoutingRecord, 0)
-	for _, record := range records {
-		if record.SessionID == sessionID {
-			matched = append(matched, record)
-		}
-	}
-	return matched
-}
-
 func reverseRoutingRecords(records []routerreplay.RoutingRecord) {
 	slices.Reverse(records)
 }

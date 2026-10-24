@@ -25,7 +25,7 @@ func (p *PostgresStore) QueryPage(ctx context.Context, filters QueryFilters, lim
 		return RecordPage{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	where, args := postgresReplayWhere(filters)
+	where, args := p.retentionWhere(postgresReplayWhere(filters))
 	page := RecordPage{Records: []Record{}}
 	//nolint:gosec // tableName is validated; filters are parameters
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+p.tableName+where, args...).Scan(&page.Total); err != nil {
@@ -88,6 +88,19 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
+// retentionWhere hides expired rows until cleanup deletes them.
+func (p *PostgresStore) retentionWhere(where string, args []interface{}) (string, []interface{}) {
+	if p.ttl <= 0 {
+		return where, args
+	}
+	args = append(args, retentionCutoff(p.ttl))
+	clause := fmt.Sprintf("timestamp >= $%d", len(args))
+	if where == "" {
+		return " WHERE " + clause, args
+	}
+	return where + " AND " + clause, args
+}
+
 func postgresSummarySelectColumns() string {
 	columns := strings.Split(postgresRecordSelectColumns, ",")
 	for i, raw := range columns {
@@ -118,13 +131,14 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 		return err
 	}
 	defer release()
+	where, args := p.retentionWhere("", nil)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`SELECT COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model
-		FROM %s ORDER BY timestamp DESC, id DESC`, p.tableName)
-	rows, err := p.db.QueryContext(ctx, query)
+		FROM %s%s ORDER BY timestamp DESC, id DESC`, p.tableName, where)
+	rows, err := p.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}

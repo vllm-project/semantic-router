@@ -1,6 +1,13 @@
 package store
 
-import "context"
+import (
+	"cmp"
+	"context"
+	"errors"
+	"slices"
+	"strings"
+	"time"
+)
 
 // QueryFilters is the metadata-only filter contract shared by replay lists and
 // storage queries. Search is a literal, case-insensitive request-ID/recipe match.
@@ -16,10 +23,171 @@ type RecordPage struct {
 	Offset  int
 }
 
-// QueryReader optionally provides database-side pagination and a streaming
-// metadata scan. Implementations must not cap the scan or read captured bodies.
-// Reader remains the compatibility contract for bounded in-memory stores.
+// QueryReader provides paginated reads and a streaming metadata scan without
+// loading the whole store. Implementations must not cap the scan.
 type QueryReader interface {
 	QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error)
 	ScanMetadata(ctx context.Context, visit func(Record) error) error
+}
+
+var errInvalidPageBounds = errors.New("replay query requires a positive limit and nonnegative offset")
+
+func (f QueryFilters) empty() bool {
+	return !f.RecipeSet && f.Recipe == "" && f.Decision == "" && f.Model == "" && f.SessionID == "" &&
+		f.Search == "" && f.CacheStatus != "cached" && f.CacheStatus != "streamed"
+}
+
+// matches mirrors postgresReplayWhere.
+func (f QueryFilters) matches(r Record) bool {
+	if (f.RecipeSet || f.Recipe != "") && r.Recipe != f.Recipe {
+		return false
+	}
+	if f.Decision != "" && r.Decision != f.Decision {
+		return false
+	}
+	if f.SessionID != "" && r.SessionID != f.SessionID {
+		return false
+	}
+	if f.Model != "" && r.SelectedModel != f.Model && r.OriginalModel != f.Model {
+		return false
+	}
+	if f.Search != "" {
+		search := strings.ToLower(f.Search)
+		if !strings.Contains(strings.ToLower(r.RequestID), search) && !strings.Contains(strings.ToLower(r.Recipe), search) {
+			return false
+		}
+	}
+	switch f.CacheStatus {
+	case "cached":
+		return r.FromCache
+	case "streamed":
+		return r.Streaming
+	}
+	return true
+}
+
+// recordScan visits records newest first from position from until visit
+// returns false.
+type recordScan func(from int, visit func(Record) bool) error
+
+// collectPage serves QueryPage from a scan. Unfiltered pages take the total
+// from count and skip straight to the offset.
+func collectPage(filters QueryFilters, limit, offset int, count func() (int, error), scan recordScan) (RecordPage, error) {
+	if limit <= 0 || offset < 0 {
+		return RecordPage{}, errInvalidPageBounds
+	}
+	page := RecordPage{Records: []Record{}}
+	if filters.empty() {
+		total, err := count()
+		if err != nil {
+			return RecordPage{}, err
+		}
+		page.Total, page.Offset = total, min(offset, total)
+		err = scan(page.Offset, func(record Record) bool {
+			page.Records = append(page.Records, record)
+			return len(page.Records) < limit
+		})
+		return page, err
+	}
+	matched := 0
+	err := scan(0, func(record Record) bool {
+		if !filters.matches(record) {
+			return true
+		}
+		if matched >= offset && len(page.Records) < limit {
+			page.Records = append(page.Records, record)
+		}
+		matched++
+		return true
+	})
+	page.Total, page.Offset = matched, min(offset, matched)
+	return page, err
+}
+
+func scanAll(scan recordScan, visit func(Record) error) error {
+	var visitErr error
+	err := scan(0, func(record Record) bool {
+		visitErr = visit(record)
+		return visitErr == nil
+	})
+	return errors.Join(err, visitErr)
+}
+
+func listAll(scan recordScan) ([]Record, error) {
+	records := []Record{}
+	err := scan(0, func(record Record) bool {
+		records = append(records, record)
+		return true
+	})
+	return records, err
+}
+
+// newestFirst is the order every store pages in.
+func newestFirst(a, b Record) int {
+	if c := b.Timestamp.Compare(a.Timestamp); c != 0 {
+		return c
+	}
+	return cmp.Compare(b.ID, a.ID)
+}
+
+// fetchRecords reads the records for ids, in any order, leaving out missing ones.
+type fetchRecords func(ids []string) ([]Record, error)
+
+// visitBucket visits the records with ids in page order from position from.
+// Stores that index whole seconds call it for each second. A second larger than
+// one batch is read twice, first for the full timestamps and then for the
+// records it visits, so its bodies are never held all at once.
+func visitBucket(ids []string, from, batch int, fetch fetchRecords, visit func(Record) bool) (bool, error) {
+	if len(ids) <= batch {
+		records, err := fetch(ids)
+		if err != nil {
+			return false, err
+		}
+		slices.SortFunc(records, newestFirst)
+		for _, record := range records[min(from, len(records)):] {
+			if !visit(record) {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	type key struct {
+		id        string
+		timestamp time.Time
+	}
+	keys := make([]key, 0, len(ids))
+	for start := 0; start < len(ids); start += batch {
+		records, err := fetch(ids[start:min(start+batch, len(ids))])
+		if err != nil {
+			return false, err
+		}
+		for _, record := range records {
+			keys = append(keys, key{record.ID, record.Timestamp})
+		}
+	}
+	slices.SortFunc(keys, func(a, b key) int {
+		return newestFirst(Record{ID: a.id, Timestamp: a.timestamp}, Record{ID: b.id, Timestamp: b.timestamp})
+	})
+	keys = keys[min(from, len(keys)):]
+	for start := 0; start < len(keys); start += batch {
+		page := keys[start:min(start+batch, len(keys))]
+		pageIDs := make([]string, len(page))
+		for i, k := range page {
+			pageIDs[i] = k.id
+		}
+		records, err := fetch(pageIDs)
+		if err != nil {
+			return false, err
+		}
+		byID := make(map[string]Record, len(records))
+		for _, record := range records {
+			byID[record.ID] = record
+		}
+		for _, k := range page {
+			if record, ok := byID[k.id]; ok && !visit(record) {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
