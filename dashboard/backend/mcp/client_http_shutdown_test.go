@@ -62,7 +62,7 @@ func TestClientSerializesConcurrentTransportCleanup(t *testing.T) {
 	go func() { firstDone <- instance.closeMCPClient(probe) }()
 	select {
 	case <-probe.started:
-	case <-time.After(time.Second):
+	case <-time.After(preconditionBudget):
 		t.Fatal("first cleanup did not start")
 	}
 	<-probe.count
@@ -121,7 +121,7 @@ func TestManagerHTTPInitializationShutdownDoesNotDoubleClose(t *testing.T) {
 	go func() { connectDone <- manager.Connect(context.Background(), config.ID) }()
 	select {
 	case <-initializing:
-	case <-time.After(3 * time.Second):
+	case <-time.After(preconditionBudget):
 		t.Fatal("HTTP initialization did not start")
 	}
 
