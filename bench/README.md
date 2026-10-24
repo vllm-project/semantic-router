@@ -69,6 +69,15 @@ endpoints, and `comprehensive` runs multiple registered datasets. Use
 `vllm-semantic-router-bench <command> --help` for their endpoint and output
 options.
 
+The opt-in `legacy-*` sr-bench diagnostics run the remaining registered plain
+reasoning configurations through the native formatters and graders in a pinned
+optional environment. Each configuration has its own report entry. Use the
+[local source export guide](../website/docs/benchmarking/sr-bench/tasks-and-targets.md#legacy-plain-reasoning-diagnostics)
+to preserve source bytes, selection and reference meaning. The fixture gate is
+`make test-sr-bench-legacy-reasoning`, also included in `make test-reasoning-bench`.
+Fixture results do not qualify a full corpus or model quality. Existing commands,
+explicit-CoT evaluation, reasoning-mode comparisons and plots remain supported.
+
 ### Compare a model's reasoning modes
 
 `reasoning-mode-eval` sends the same dataset samples with reasoning disabled

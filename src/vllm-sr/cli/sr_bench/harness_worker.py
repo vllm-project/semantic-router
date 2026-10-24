@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 from .contracts import digest
+from .legacy_reasoning import CONFIGURATIONS
 
 
 def call(messages, role="subject", extra_body=None):
@@ -521,6 +522,12 @@ def _main(request):
         result = _scicode(request)
     elif benchmark == "terminal-bench-2.1":
         result = asyncio.run(_terminal_job(request))
+    elif benchmark.removeprefix("legacy-") in CONFIGURATIONS:
+        from .legacy_reasoning_worker import (  # noqa: PLC0415 - optional harness
+            execute,
+        )
+
+        result = execute(request=request)
     else:
         raise ValueError("Unsupported harness")
     Path(sys.argv[2]).write_text(json.dumps(result, indent=2) + "\n")

@@ -637,9 +637,13 @@ domains:
     owner: evaluation-quality
     paths:
       - bench/reasoning/**
+      - src/vllm-sr/cli/sr_bench/legacy_reasoning*.py
+      - src/vllm-sr/cli/sr_bench/legacy-reasoning-requirements.*
+      - src/vllm-sr/tests/test_sr_bench_legacy_reasoning*.py
       - bench/requirements.txt
       - tools/make/tooling.mk
     checks: [make test-reasoning-bench]
+    verify: [make test-sr-bench-legacy-reasoning]
     verifications: [bench-tools]
 
   router-flow-bench:

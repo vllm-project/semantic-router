@@ -1,0 +1,13 @@
+datasets==3.6.0
+matplotlib==3.9.4
+numpy==1.26.4
+openai==1.109.1
+pandas==2.2.3
+pyarrow==20.0.0
+PyYAML==6.0.2
+requests==2.32.5
+seaborn==0.13.2
+setuptools==80.9.0
+setuptools-scm==9.2.0
+tqdm==4.67.1
+wheel==0.45.1
