@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -704,4 +705,60 @@ func marshalWire(value any) ([]byte, error) {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "encode_wire", "wire response could not be encoded", err)
 	}
 	return body, nil
+}
+
+func coerceMetadataValue(val any) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case float64:
+		if v == float64(int64(v)) {
+			return strconv.FormatInt(int64(v), 10)
+		}
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case float32:
+		if v == float32(int32(v)) {
+			return strconv.FormatInt(int64(v), 10)
+		}
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case nil:
+		return "null"
+	default:
+		data, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(data)
+	}
+}
+
+func coerceWireMetadata(raw map[string]any) map[string]string {
+	if len(raw) == 0 {
+		return nil
+	}
+	metadata := make(map[string]string, len(raw))
+	for k, v := range raw {
+		metadata[k] = coerceMetadataValue(v)
+	}
+	return metadata
+}
+
+func encodeWireMetadata(metadata map[string]string) map[string]any {
+	if len(metadata) == 0 {
+		return nil
+	}
+	wire := make(map[string]any, len(metadata))
+	for k, v := range metadata {
+		wire[k] = v
+	}
+	return wire
 }
