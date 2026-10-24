@@ -99,6 +99,7 @@ type RequestContext struct {
 
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
+	RAGRerankScoreType  string
 	RAGRerankerIdentity string
 	// ConfigVersion is the version of the configuration snapshot that serves
 	// the request; 0 when the router serves without the lifecycle.
