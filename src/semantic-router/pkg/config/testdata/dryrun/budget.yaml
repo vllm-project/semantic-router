@@ -1,0 +1,27 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    model: m1
+  models:
+    - name: m1
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+routing:
+  modelCards:
+    - name: m1
+  decisions:
+    - name: compress
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      modelRefs:
+        - model: m1
+          use_reasoning: false
+      plugins:
+        - type: context_compression
+          configuration:
+            enabled: true
+            budget:
+              trigger_tokens: 100
+              target_tokens: 200
