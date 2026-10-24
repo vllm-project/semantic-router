@@ -189,6 +189,56 @@
     },
     {
       "default_profile": "published-agent",
+      "display_name": "Terminal-Bench 4.0",
+      "domain": "agentic_systems",
+      "id": "harbor/terminal-bench@4.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "resolved",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the 2.1 default index component.",
+          "display_name": "Published agent",
+          "id": "published-agent"
+        }
+      ],
+      "source": "https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0"
+    },
+    {
+      "default_profile": "published-agent",
+      "display_name": "CyberGym",
+      "domain": "cybersecurity",
+      "id": "sunblaze-ucb/cybergym@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "success_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published CyberGym vulnerability-reproduction success rate with the agent and context budget retained on the evaluation record.",
+          "display_name": "Published agent",
+          "id": "published-agent"
+        }
+      ],
+      "source": "https://github.com/sunblaze-ucb/cybergym"
+    },
+    {
+      "default_profile": "published-agent",
       "display_name": "SWE-bench Pro",
       "domain": "software_engineering",
       "id": "swe-bench/pro@1.0.0",
@@ -17269,6 +17319,132 @@
         "source_kind": "official_technical_report",
         "table": "Table 2",
         "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.628
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "source_kind": "official_model_card",
+        "tasks": 600,
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-deep-swe@1.0.0",
+      "metrics": {
+        "resolved": 0.737
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "agent": "mini-SWE-agent",
+        "agent_version": "2.4.5",
+        "context_window": "512K",
+        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "source_kind": "official_model_card",
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "text-only",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.434
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "questions": 2158,
+        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "source_kind": "official_model_card",
+        "tools": false,
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-terminal-bench@4.0.0",
+      "metrics": {
+        "resolved": 0.381
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "agent": "Codex",
+        "agent_version": "0.149.1",
+        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "source_kind": "official_model_card",
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "sunblaze-ucb/cybergym@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-cybergym@1.0.0",
+      "metrics": {
+        "success_rate": 0.822
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "agent": "Claude Code",
+        "agent_version": "2.1.263",
+        "context_window": "1M",
+        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "source_kind": "official_model_card",
+        "variant": "MiniMax-M3.1-Flash"
       }
     },
     {
@@ -63007,6 +63183,942 @@
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.434,
+          "status": "available",
+          "value": 0.434,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [
+        "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [
+        "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "minimax/minimax-m3",
       "provenance": [],
       "reasoning_effort": "disabled",
@@ -99753,6 +100865,62 @@
         "chat",
         "reasoning",
         "tools",
+        "vision",
+        "video",
+        "long_context"
+      ],
+      "description": "Open-weight multimodal MiniMax model for coding and agentic workloads with tunable reasoning depth.",
+      "display_name": "MiniMax M3.1 Flash",
+      "distribution": {
+        "license": "MiniMax-Community-License",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash",
+        "type": "open_weights"
+      },
+      "family": "minimax-m3.1",
+      "id": "minimax/minimax-m3.1-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "428B (23B active)",
+      "presentation": {
+        "logo": "package:minimax",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "MiniMax",
+      "reasoning_family": "minimax-m3.1-flash",
+      "released_at": "2026-10-19",
+      "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "MiniMax",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "status": "claimed",
+        "verified_at": "2026-10-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "structured_output",
         "vision",
         "video",
@@ -105431,6 +106599,39 @@
       "id": "minimax",
       "models": [
         {
+          "catalog": "minimax/minimax-m3.1-flash",
+          "id": "MiniMax-M3.1-Flash",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.015,
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_modes": [
+            "adaptive"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "first_party",
+          "restrictions": {
+            "context_window_size": 1000000,
+            "max_output_tokens": 524288,
+            "unsupported_request_fields": {
+              "openai/chat-completions@1": [
+                "service_tier"
+              ]
+            }
+          },
+          "verification": {
+            "source": "https://platform.minimax.io/docs/api-reference/text-openai-api",
+            "status": "claimed",
+            "verified_at": "2026-10-23"
+          }
+        },
+        {
           "catalog": "minimax/minimax-m2.5",
           "id": "MiniMax-M2.5",
           "lifecycle": "active",
@@ -107921,6 +109122,28 @@
           }
         },
         {
+          "catalog": "minimax/minimax-m3.1-flash",
+          "id": "MiniMaxAI/MiniMax-M3.1-Flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_modes": [
+            "adaptive"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.33.0",
+            "nightly_required": true
+          },
+          "verification": {
+            "source": "https://github.com/vllm-project/vllm/blob/eff8a5689681ea9db3c6390e5e4415d6dca42431/recipes/models/MiniMaxAI/MiniMax-M3.1-Flash.yaml",
+            "status": "claimed",
+            "verified_at": "2026-10-23"
+          }
+        },
+        {
           "catalog": "minimax/minimax-m2.5",
           "id": "MiniMaxAI/MiniMax-M2.5",
           "lifecycle": "experimental",
@@ -109654,6 +110877,23 @@
       ],
       "modes": [
         "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "max",
+      "default_mode": "adaptive",
+      "id": "minimax-m3.1-flash",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "adaptive"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
