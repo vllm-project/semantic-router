@@ -3,6 +3,7 @@
 import React from 'react'
 import { TestQueryResult, SignalType } from '../../types'
 import { SIGNAL_COLORS, SIGNAL_ICONS } from '../../constants'
+import { DecisionTraceView } from './DecisionTraceView'
 import styles from './ResultCard.module.css'
 
 interface ResultCardProps {
@@ -40,7 +41,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
           {result.routingLatency !== undefined && (
             <span className={styles.latencyBadge}>{result.routingLatency}ms</span>
           )}
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="Close routing result">✕</button>
         </div>
 
         {/* Warning Banner */}
@@ -62,12 +63,23 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
               </span>
             </div>
             <div className={styles.compactItem}>
-              <span className={styles.label}>Model:</span>
+              <span className={styles.label}>{result.selectionStatus === 'planned_final' ? 'Planned final model:' : 'Selected model:'}</span>
               <span className={styles.value}>
-                {result.matchedModels[0]?.split('/').pop() || 'N/A'}
+                {result.selectedModel || 'Not selected'}
               </span>
             </div>
           </div>
+
+          {result.recommendedModels && result.recommendedModels.length > 0 && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Candidate pool:</span>
+              {result.recommendedModels.map(model => <div key={model} className={styles.signalReason}>{model}</div>)}
+            </div>
+          )}
+          {result.algorithm && <div className={styles.signalReason}>Algorithm: {result.algorithm}</div>}
+          {result.selectionMethod && <div className={styles.signalReason}>Selection method: {result.selectionMethod}</div>}
+          {result.selectionStatus && <div className={styles.signalReason}>Selection status: {result.selectionStatus}</div>}
+          <DecisionTraceView trace={result.evalTrace} selectedDecision={result.matchedDecision} />
 
           {result.selectionReason && (
             <div className={styles.fallbackReason}>
