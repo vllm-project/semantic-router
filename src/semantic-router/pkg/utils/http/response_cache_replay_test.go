@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -38,6 +39,46 @@ func TestBuildStreamingCacheBodyReplaysReasoningToolsAndUsage(t *testing.T) {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("streaming replay missing %q:\n%s", expected, body)
 		}
+	}
+}
+
+func TestBuildStreamingCacheBodyKeepsContentWhitespace(t *testing.T) {
+	content := "Steps:\n1. a\n2.  b\n\n```go\nx := 1\n```"
+	cached, err := json.Marshal(map[string]any{
+		"model": "model-a",
+		"choices": []map[string]any{{
+			"index":         0,
+			"message":       map[string]any{"role": "assistant", "content": content},
+			"finish_reason": "stop",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var replayed strings.Builder
+	for _, line := range strings.Split(string(buildStreamingCacheBody(cached)), "\n") {
+		payload, ok := strings.CutPrefix(line, "data: ")
+		if !ok || payload == "[DONE]" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			t.Fatalf("invalid chunk %q: %v", payload, err)
+		}
+		for _, choice := range chunk.Choices {
+			replayed.WriteString(choice.Delta.Content)
+		}
+	}
+
+	if replayed.String() != content {
+		t.Fatalf("streaming replay changed the content:\n got: %q\nwant: %q", replayed.String(), content)
 	}
 }
 

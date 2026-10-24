@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -243,29 +244,26 @@ func extractErrorMessage(responseBytes []byte) string {
 	return "Error response from cache"
 }
 
-// splitContentIntoChunks splits content into word-by-word chunks for streaming
+// splitContentIntoChunks splits content into word-by-word chunks for streaming.
+// Each chunk carries the whitespace that follows its word, and the first chunk
+// also carries any leading whitespace, so the chunks join back to content.
 func splitContentIntoChunks(content string) []string {
 	if content == "" {
 		return []string{}
 	}
 
-	// Split by words (preserving spaces)
-	words := strings.Fields(content)
-	if len(words) == 0 {
-		return []string{content}
-	}
-
-	chunks := make([]string, 0, len(words))
-	for i, word := range words {
-		if i < len(words)-1 {
-			// Add space after word (except last word)
-			chunks = append(chunks, word+" ")
-		} else {
-			// Last word without trailing space
-			chunks = append(chunks, word)
+	var chunks []string
+	start := 0
+	inSpace := true
+	for i, r := range content {
+		isSpace := unicode.IsSpace(r)
+		if !isSpace && inSpace && start < i && strings.TrimSpace(content[start:i]) != "" {
+			chunks = append(chunks, content[start:i])
+			start = i
 		}
+		inSpace = isSpace
 	}
-	return chunks
+	return append(chunks, content[start:])
 }
 
 // buildStreamingCacheErrorBody returns an SSE-formatted error body from a cached error response.

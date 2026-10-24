@@ -566,7 +566,12 @@ func TestSplitContentIntoChunks(t *testing.T) {
 		{
 			name:     "multiple spaces",
 			content:  "word1  word2",
-			expected: []string{"word1 ", "word2"}, // Extra spaces collapsed by strings.Fields
+			expected: []string{"word1  ", "word2"},
+		},
+		{
+			name:     "newlines and leading whitespace",
+			content:  "\n  Steps:\n1. a\n\n```go\nx := 1\n```\n",
+			expected: []string{"\n  Steps:\n", "1. ", "a\n\n", "```go\n", "x ", ":= ", "1\n", "```\n"},
 		},
 	}
 
