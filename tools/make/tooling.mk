@@ -41,7 +41,7 @@ start-provider-mocker: provider-mocker-install ## Run the deterministic test bac
 .PHONY: provider-mocker-install start-provider-mocker
 
 bench-test-deps: $(HARNESS_VENV_DEPS) ## Install the bench package dependencies its reasoning and agent crew tests import
-	@"$(AGENT_PYTHON)" -m pip install --quiet -r bench/requirements.txt
+	@"$(AGENT_PYTHON)" -m pip install --quiet -e bench
 
 test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) ## Test the grounded fusion DRACO loader, rubric judge and arm comparison offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/grounded_fusion
