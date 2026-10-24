@@ -7,11 +7,12 @@ from pathlib import Path
 
 import pytest
 import requests
-from cli.sr_bench import datasets
+from cli.sr_bench import adapters, datasets
 from cli.sr_bench.contracts import digest, plan
 from cli.sr_bench.datasets import DatasetReader
+from cli.sr_bench.preparations import validate_request
 from cli.sr_bench.service import PREFIX, Server
-from cli.sr_bench.sources import _write_dataset
+from cli.sr_bench.sources import COUNTS, _write_dataset
 from cli.sr_bench.store import Store
 
 
@@ -39,6 +40,46 @@ def _dataset(root, cases, profile="smoke", seed=7):
         for case in cases
     }
     return _write_dataset(root, cases, profile, seed, sources)
+
+
+def test_missing_extension_requires_local_preparation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapters.list_adapters()
+    monkeypatch.setattr(adapters, "_adapters", dict(adapters._adapters))
+    identity = "local-only-check"
+    adapters.register_adapter(
+        adapters.BenchmarkAdapter(
+            id=identity,
+            title="Local-only check",
+            kind="exact",
+            source_url="https://example.test/tasks",
+            version="fixture-v1",
+            execute=lambda case, context: {},
+        )
+    )
+    reader = DatasetReader(tmp_path)
+    selection = reader.selection("smoke")
+    entries = {entry["id"]: entry for entry in selection["benchmarks"]}
+    assert entries[identity]["eligible"] is False
+    assert entries[identity]["reason_code"] == "local_preparation_required"
+    assert {
+        entry["id"]
+        for entry in selection["benchmarks"]
+        if entry["reason_code"] == "not_prepared"
+    } == set(COUNTS)
+    with pytest.raises(ValueError, match="Select a supported benchmark"):
+        validate_request({"benchmark": identity})
+
+    prepared = _dataset(tmp_path, [_case("local-case", benchmark=identity)])
+    entry = next(
+        entry
+        for entry in reader.selection("smoke")["benchmarks"]
+        if entry["id"] == identity
+    )
+    assert entry["eligible"] is True
+    assert entry["reason_code"] is None
+    assert entry["source_ids"] == [prepared["id"]]
 
 
 def test_detail_groups_and_filtered_pages_only_search_public_input(tmp_path):
@@ -257,9 +298,9 @@ def test_copied_metadata_never_follows_an_external_data_path(tmp_path):
     manifest = _dataset(tmp_path / "store", [_case("case")])
     path = Path(manifest["path"]).parent / "manifest.json"
     manifest["path"] = "/private/do-not-read/secret.jsonl"
-    manifest["sources"]["mmlu-pro"][
-        "url"
-    ] = "https://:hidden-credential@huggingface.co/datasets/example/test"
+    manifest["sources"]["mmlu-pro"]["url"] = (
+        "https://:hidden-credential@huggingface.co/datasets/example/test"
+    )
     path.write_text(json.dumps(manifest))
     reader = DatasetReader(tmp_path / "store")
     assert reader.page(manifest["id"])["total"] == 1
