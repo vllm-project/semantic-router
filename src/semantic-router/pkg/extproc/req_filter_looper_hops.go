@@ -79,6 +79,7 @@ func (r *OpenAIRouter) executeLooperGraph(
 ) (*looper.Response, *ext_proc.ProcessingResponse) {
 	in := graph.Input{Values: map[string]any{}}
 	looper.RequestValue.Put(in.Values, req)
+	ctx = withGatewayCredential(ctx, reqCtx)
 	outcome, err := graph.Run(ctx, program, in, graph.Options{
 		Caller: hops,
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},

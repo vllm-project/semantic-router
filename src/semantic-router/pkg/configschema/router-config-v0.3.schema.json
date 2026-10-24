@@ -261,6 +261,9 @@
             "$ref": "#/$defs/AuthzProviderConfig"
           },
           "type": "array"
+        },
+        "gateway_credential": {
+          "$ref": "#/$defs/GatewayCredentialConfig"
         }
       },
       "additionalProperties": false,
@@ -574,6 +577,9 @@
           "type": "string"
         },
         "openai_compat_gateway": {
+          "type": "boolean"
+        },
+        "trusted_gateway": {
           "type": "boolean"
         }
       },
@@ -3170,6 +3176,18 @@
         },
         "max_completion_tokens": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GatewayCredentialConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
