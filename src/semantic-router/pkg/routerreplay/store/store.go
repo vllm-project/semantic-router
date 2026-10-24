@@ -265,11 +265,13 @@ type DecisionRanking struct {
 	Comparable bool   `json:"comparable"`
 	Fallback   string `json:"fallback_reason,omitempty"`
 	ScoreKind  string `json:"score_kind,omitempty"`
-	DecidedBy  string `json:"decided_by"`
-	Winner     string `json:"winner"`
-	Candidates int    `json:"candidates"`
-	RunnerUp   string `json:"runner_up,omitempty"`
-	Reason     string `json:"reason,omitempty"`
+	// ScoreArtifact names the calibration artifact behind a calibrated score.
+	ScoreArtifact string `json:"score_artifact,omitempty"`
+	DecidedBy     string `json:"decided_by"`
+	Winner        string `json:"winner"`
+	Candidates    int    `json:"candidates"`
+	RunnerUp      string `json:"runner_up,omitempty"`
+	Reason        string `json:"reason,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its details, mirroring

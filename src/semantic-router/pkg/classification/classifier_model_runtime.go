@@ -164,6 +164,22 @@ func (b *ownedSequenceBackend) Init(_ string, _ bool, classes ...int) error {
 	return nil
 }
 
+// ModelSHA256 is the identity the runtime reports for the model behind this
+// binding, which is what a calibration artifact is fitted on.
+func (b *ownedSequenceBackend) ModelSHA256() (string, error) {
+	services := b.runtime.Services()
+	if services == nil {
+		return "", serving.ErrNotConfigured
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), modelservice.ReadyTimeout())
+	defer cancel()
+	card, err := services.Card(ctx, b.spec.Binding.Deployment)
+	if err != nil {
+		return "", fmt.Errorf("model_runtime deployment %q: %w", b.spec.Binding.Deployment, err)
+	}
+	return card.ModelSHA256, nil
+}
+
 // readsWholeText reports whether the prepared binding asks a Vela 2.0 model
 // its signal's question, which reads a whole text however long it is.
 func (b *ownedSequenceBackend) readsWholeText() bool {
