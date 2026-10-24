@@ -19,7 +19,7 @@ conformance = importlib.import_module("recipe_conformance")
 runtime = importlib.import_module("recipe_conformance_runtime")
 sources = importlib.import_module("recipe_conformance_sources")
 http = importlib.import_module("router_calibration_http")
-EXPECTED_BUILTIN_PROBES = 315
+EXPECTED_BUILTIN_PROBES = 347
 
 
 class BuiltInRecipeConformanceTest(unittest.TestCase):
@@ -49,7 +49,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         conformance.validate_probe_references(
             self.recipe / "probes.yaml", self.config, self.manifest, bound
         )
-        self.assertEqual(len(bound), 315)
+        self.assertEqual(len(bound), 347)
         self.assertEqual(
             {probe.model for probe in bound},
             {
@@ -251,18 +251,21 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             self.assertEqual(len({row["shard"] for row in matrix}), len(matrix))
             built_in = [row for row in matrix if row["source"] == "built-in-latest"]
             self.assertEqual(
-                built_in,
+                [{**row, "variants": 0} for row in built_in],
                 [
                     {
                         "source": "built-in-latest",
-                        "shard": "built-in-latest-0",
+                        "shard": f"built-in-latest-mom-v1-{index}",
                         "recipes": "mom-v1",
-                        "variants": 315,
+                        "probe_shard": f"{index}/16",
+                        "variants": 0,
                         "recipes_root": "config/recipes/built-in/latest",
                         "report_dir": "built-in/latest",
                     }
+                    for index in range(16)
                 ],
             )
+            self.assertEqual(sum(row["variants"] for row in built_in), 347)
             hardware = {"decision-balance", "vela-amd"}
             self.assertTrue(
                 all(not hardware & set(row["recipes"].split(",")) for row in matrix)
@@ -305,23 +308,33 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 for recipe in item.recipes
             }
 
-            self.assertEqual(len(matrix), len(expected))
             self.assertEqual(
                 {(row["source"], row["recipes"]) for row in matrix},
                 set(expected),
             )
-            for row in matrix:
+            whole = [row for row in matrix if not row["probe_shard"]]
+            self.assertEqual(len(whole), len(expected) - 1)
+            for row in whole:
                 key = (row["source"], row["recipes"])
                 self.assertEqual(row["shard"], f"{row['source']}-{row['recipes']}")
                 self.assertEqual(
                     (row["recipes_root"], row["report_dir"], row["variants"]),
                     expected[key],
                 )
+            sharded = [row for row in matrix if row["probe_shard"]]
+            self.assertEqual(
+                [row["shard"] for row in sharded],
+                [f"built-in-latest-mom-v1-{index}" for index in range(16)],
+            )
+            self.assertEqual(
+                sum(row["variants"] for row in sharded),
+                expected[("built-in-latest", "mom-v1")][2],
+            )
             self.assertIn(("built-in-latest", "mom-v1"), expected)
             self.assertNotIn(("standalone", "vela-amd"), expected)
 
     def test_eval_rejects_zero_or_partial_probe_execution(self):
-        for count in (0, 314, 315):
+        for count in (0, 346, 347):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 probes = runtime.bind_runtime_entrypoints(self.config, self.probes)
                 evaluation = {
@@ -371,11 +384,11 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 )
 
     def test_consolidation_fails_missing_partial_or_empty_results(self):
-        for count in (None, 0, 314, 315):
+        for count in (None, 0, 346, 347):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "inventory.json").write_text(
-                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 315}]})
+                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 347}]})
                 )
                 if count is not None:
                     (root / "mom-v1").mkdir()

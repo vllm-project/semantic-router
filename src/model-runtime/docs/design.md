@@ -44,9 +44,13 @@ now supervises a separate worker for each replica of a logical deployment.
 5. **One call per request.** A runtime process can serve several models, and
    the router sends all of a request's model work for one runtime as one
    bundled call.
-6. **Universal hardware, honestly labelled.** CPU and ROCm are validated, CUDA
-   is implemented and unit-tested but marked unvalidated, and XPU and MPS are
-   plugins marked unvalidated.
+6. **Universal hardware, honestly labelled.** CPU, ROCm, and CUDA are
+   validated. CUDA measurements are under `docs/records/cuda-*.md` (H200,
+   A100, Tesla T4). Vela 2.0 0.3B at 32 tokens is a known p50 regression on
+   H200. Fused kernels without bit-exact evidence stay excluded from the
+   exact profile; that is a valid outcome of item 4.
+   `CUDAAccelerator.validated` is true. XPU and MPS are plugins marked
+   unvalidated.
 7. **One stack.** After Phase 4 the router has no native model bindings: the Go
    router is free of cgo model code, and every model runs in the runtime.
 
@@ -64,7 +68,7 @@ running packaged remote code (`trust_remote_code`).
 | Naming | Domain `src/model-runtime/`, distribution and command `vllm-srun`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. The distribution ships in the router images and is not published to PyPI. Router mode keeps working and the router manages the runtime's lifecycle. |
 | Numerics | A request's reference path is byte-identical to the released packages' runtime. Cross-request batching is the default (section 5.4); shared context and faster kernels each have a measured accuracy record and are on by default only where it shows no loss. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
-| Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
+| Hardware | ROCm (MI300 / MI325X), CPU, and CUDA validated. CUDA records are under `docs/records/cuda-*.md`. |
 
 ### 2.2 Phases 2–4
 
@@ -912,7 +916,12 @@ part keeping views of the merged weight so device memory stays the same, and
 its outputs reaching the fused kernels as column-slice views. Projections that
 share only the input global scale (`in_proj_qkv` / `in_proj_z`) share its
 quantization (`project`). Each column is the one its separate product gives, so
-answers do not change. A
+answers do not change. With approximate kernels on compute capability 12.x,
+graph captures of up to 512 rows multiply in FlashInfer's CUTLASS FP4 GEMM
+instead, where FlashInfer is installed and can tune its tiles (it compiles a
+delay kernel for its tuner with a CUDA 12.9 or later toolkit), each weight
+shape checked against cuBLAS first (`accel/flashinfer_nvfp4.py`,
+`use_flashinfer`); the receipt's `nvfp4_product` says which runs and why. A
 quantized package is its own model: its manifest's parameter counts are the
 logical ones, placement counts its files, and its answers are compared with
 the BF16 package's in `docs/records/decision3-quantized.md`.
@@ -991,8 +1000,12 @@ lane (a running average of that lane's recent forwards). Short work goes first, 
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
-waits for the forward in flight, not for the remaining windows of a long one;
-each job is answered as soon as its own batches have run. The order of
+waits for the forward in flight, not for the remaining windows of a long one.
+It plans them together with the jobs of planned batches that have not started,
+so requests that wait for the device share forwards up to the budget instead of
+keeping the batches their arrival formed; a started batch, a job split over
+forwards once one of them ran, and reference forwards keep their plan. Each job
+is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
@@ -1105,7 +1118,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs, at `--dtype auto` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -1556,8 +1569,8 @@ files carry `!windows && cgo` build tags only because of these imports.
 The legacy driver calls the legacy router's diagnostics API
 (`/api/v1/diagnostics/...`), built from `main` before this change, so the
 reference is exactly what the router served. Each record states the commit,
-image, device, inputs and every disagreement. CUDA stays implemented,
-unit-tested and unvalidated.
+image, device, inputs and every disagreement. CUDA records are
+`docs/records/cuda-*.md`; the accelerator `validated` flag is true.
 
 ## 18. Performance
 
@@ -1583,7 +1596,7 @@ Later: a serving option for the graph cap (1,024 is 1–5% faster under
 Index-like traffic); kernel choices for other device classes; more
 approximate kernels with their accuracy records; an opt-in deterministic mode
 (every row the same answer in any batch); a `vllm` engine (pooling runner plus the family readouts) and a
-`llamacpp` engine; CUDA validation on CUDA hardware.
+`llamacpp` engine.
 
 Router `decision` signals ask Choice, Noul and Score questions, which every
 decision family answers, Vela 2.0 included. Set and Span answers are served
