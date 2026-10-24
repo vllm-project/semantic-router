@@ -55,5 +55,5 @@ def load_config(config_file):
     Context band token counts keep their source spelling so a config that is
     re-serialized for Helm or a container carries what the Router would read.
     """
-    with open(config_file) as f:
+    with open(config_file, encoding="utf-8") as f:
         return safe_load_router_config(f)
