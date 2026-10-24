@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -60,12 +61,12 @@ type chatChunkWire struct {
 	Error             *chatErrorWire            `json:"error,omitempty"`
 	ServiceTier       *chatServiceTierWire      `json:"service_tier,omitempty"`
 	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
-	PromptLogprobs    *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
+	PromptLogprobs    json.RawMessage           `json:"prompt_logprobs,omitempty"`
 	PromptTokenIDs    []int64                   `json:"prompt_token_ids,omitempty"`
-	PromptText        *chatNullOnlyWire         `json:"prompt_text,omitempty"`
+	PromptText        json.RawMessage           `json:"prompt_text,omitempty"`
 	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
-	ECTransferParams  *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
-	Metrics           *chatNullOnlyWire         `json:"metrics,omitempty"`
+	ECTransferParams  json.RawMessage           `json:"ec_transfer_params,omitempty"`
+	Metrics           json.RawMessage           `json:"metrics,omitempty"`
 	DoRemoteDecode    *bool                     `json:"do_remote_decode,omitempty"`
 	DoRemotePrefill   *bool                     `json:"do_remote_prefill,omitempty"`
 	RemoteBlockIDs    []int64                   `json:"remote_block_ids,omitempty"`
@@ -107,7 +108,7 @@ type chatChunkChoiceWire struct {
 	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
 	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs           []int64             `json:"token_ids,omitempty"`
-	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	RoutedExperts      json.RawMessage     `json:"routed_experts,omitempty"`
 }
 
 type chatChunkDeltaWire struct {
@@ -166,6 +167,66 @@ func (decoder *chatStreamDecoder) push(chunk []byte) ([]llmprotocol.Event, llmpr
 	return events, diagnostics, nil
 }
 
+// opaquePassthroughEnabled reports whether this decoder may forward raw
+// provider chunks for fields the neutral stream contract cannot carry. It
+// mirrors the Responses decoder's unknown-event handling: preserve policy,
+// same source and target format.
+func (decoder *chatStreamDecoder) opaquePassthroughEnabled() bool {
+	return decoder.policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat &&
+		decoder.context.Source == decoder.context.Target
+}
+
+// observeOpaqueChunkState feeds the terminal and accounting state a forwarded
+// raw chunk carries (finish reason, usage) without decoding it into neutral
+// output events. The bytes reach the client verbatim, but the stream still
+// completes with an accurate stop reason and authoritative usage, and the
+// completion gates see that output was delivered through opaque frames.
+func (decoder *chatStreamDecoder) observeOpaqueChunkState(chunk chatChunkWire) {
+	decoder.started = true
+
+	decoder.sawOpaqueOutput = true
+	for _, choice := range chunk.Choices {
+		if choice.FinishReason != nil && decoder.stop == "" {
+			decoder.stop, decoder.stopSequence = decodeChatStopWithMatch(*choice.FinishReason, choice.StopReason, decoder.policy)
+		}
+	}
+	if chunk.Usage != nil {
+		if usage, err := decodeChatUsage(*chunk.Usage); err == nil {
+			decoder.usage = usage
+		}
+	}
+}
+
+// chatChunkCarriesUnmodelledFields reports whether a provider chunk holds
+// fields the neutral stream contract has no slot for: streamed token
+// logprobs, output audio, non-null execution fields, or any top-level field
+// outside the modelled chunk wire set.
+func chatChunkCarriesUnmodelledFields(chunk chatChunkWire, frame []byte) bool {
+	for _, choice := range chunk.Choices {
+		if choice.Logprobs != nil || choice.Delta.Audio != nil || !isNullJSON(choice.RoutedExperts) {
+			return true
+		}
+	}
+	if !isNullJSON(chunk.PromptLogprobs) || !isNullJSON(chunk.PromptText) ||
+		!isNullJSON(chunk.ECTransferParams) || !isNullJSON(chunk.Metrics) {
+		return true
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(frame, &fields); err != nil {
+		return false
+	}
+	for name := range fields {
+		if _, modelled := chatChunkWireFields[name]; !modelled {
+			return true
+		}
+	}
+	return false
+}
+
+// chatChunkWireFields names the top-level keys the chunk wire contract
+// models; anything else in a data frame is provider passthrough state.
+var chatChunkWireFields = exactJSONStructFields(reflect.TypeOf(chatChunkWire{}))
+
 func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	parsed, err := decoder.parseProviderSSEFrame(frame)
 	if err != nil || !parsed.HasData {
@@ -185,7 +246,20 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	}
 	var diagnostics llmprotocol.Diagnostics
 	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, vendorExtensions)
-	if err := validateChatStreamChunk(chunk); err != nil {
+	if chunk.Error == nil && decoder.opaquePassthroughEnabled() && chatChunkCarriesUnmodelledFields(chunk, parsed.Data) {
+		// Same-format preserve mode forwards the raw frame: the neutral
+		// stream contract has no slot for streamed logprobs, output audio,
+		// non-null execution fields, or unknown provider fields, and the
+		// encoder replays the frame verbatim. Error chunks keep the failure
+		// path so a failing provider still terminates the stream. Identity
+		// observation still runs so a stream that switches IDs fails closed.
+		if err = decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
+			return nil, diagnostics, err
+		}
+		decoder.observeOpaqueChunkState(chunk)
+		return []llmprotocol.Event{{Type: llmprotocol.EventProviderOpaque, Opaque: append([]byte(nil), frame...)}}, diagnostics, nil
+	}
+	if err = validateChatStreamChunk(chunk, decoder.policy); err != nil {
 		return nil, diagnostics, err
 	}
 	// Some gateways emit empty synthetic chunks while waiting for the first
@@ -443,9 +517,22 @@ func isExactGatewayKeepalive(chunk chatChunkWire) bool {
 		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
 }
 
-func validateChatStreamChunk(chunk chatChunkWire) error {
+func validateChatStreamChunk(chunk chatChunkWire, policy llmprotocol.Policy) error {
 	if err := validateChatStreamEnvelope(chunk); err != nil {
 		return err
+	}
+	for _, execution := range []struct {
+		name string
+		raw  json.RawMessage
+	}{
+		{"prompt_logprobs", chunk.PromptLogprobs},
+		{"prompt_text", chunk.PromptText},
+		{"ec_transfer_params", chunk.ECTransferParams},
+		{"metrics", chunk.Metrics},
+	} {
+		if err := validateChatExecutionField(execution.name, execution.raw, policy); err != nil {
+			return err
+		}
 	}
 	if len(chunk.Choices) > 1 {
 		return llmprotocol.NewError(
@@ -459,7 +546,7 @@ func validateChatStreamChunk(chunk chatChunkWire) error {
 		if choice.FinishReason != nil && !validChatFinishReason(*choice.FinishReason) {
 			return invalidProviderResponse("invalid_chat_finish_reason", "Chat finish reason is not recognized")
 		}
-		if err := validateChatChunkChoiceExtensions(choice); err != nil {
+		if err := validateChatChunkChoiceExtensions(choice, policy); err != nil {
 			return err
 		}
 		seenToolIndexes := make(map[int]struct{}, len(choice.Delta.ToolCalls))

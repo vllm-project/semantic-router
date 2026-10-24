@@ -1,5 +1,7 @@
 package llmprotocol
 
+import "encoding/json"
+
 type UnknownFieldPolicy string
 
 const (
@@ -166,6 +168,38 @@ type Envelope struct {
 	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
 	SourceStop               string
 	ResponseRender           ResponseRenderContext
+	// RequestPassthrough carries top-level request fields that the neutral
+	// contract does not model. It lets a same-format encoder forward fields
+	// such as logprobs or provider-specific extensions after a semantic
+	// mutation changed the request generation. It is request-only state.
+	// Per-message unknown fields are not held here: they ride the neutral
+	// messages themselves (Message.Unknown) so reordering mutations cannot
+	// detach them from their message.
+	RequestPassthrough map[string]json.RawMessage
+	// ResponsePassthrough carries top-level provider response fields that the
+	// neutral contract does not model, plus modelled execution fields it only
+	// observes as null. A same-format encode that must re-render the response
+	// (provider decorations, response-id rewrite) merges them back; an
+	// unchanged response replays its source bytes and never consults them.
+	ResponsePassthrough map[string]json.RawMessage
+}
+
+// RequestCarriesMessagePassthrough reports whether any request message or
+// instruction still holds captured unknown fields. Same-format encoding
+// merges them back; translating such a request across formats must fail
+// loudly instead of silently erasing them.
+func RequestCarriesMessagePassthrough(request Request) bool {
+	for _, instruction := range request.Instructions {
+		if len(instruction.Unknown) > 0 {
+			return true
+		}
+	}
+	for _, message := range request.Messages {
+		if len(message.Unknown) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {

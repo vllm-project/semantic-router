@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -11,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestUnknownPreservationIsOnlyExactUnchangedSameFormat(t *testing.T) {
+func TestUnknownPreservationIsSameFormatChatOnly(t *testing.T) {
 	policy := llmprotocol.DefaultPolicy()
 	policy.UnknownFields = llmprotocol.UnknownPreserveSameFormat
 	engine, err := NewEngine(NewBuiltinRegistry(), policy)
@@ -26,8 +27,22 @@ func TestUnknownPreservationIsOnlyExactUnchangedSameFormat(t *testing.T) {
 	if _, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, body, nil); err == nil {
 		t.Fatal("cross-format translation silently dropped an unknown field")
 	}
-	if _, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, body, func(*llmprotocol.Request) error { return nil }); err == nil {
-		t.Fatal("mutated same-format translation silently dropped an unknown field")
+	mutated, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, body, func(request *llmprotocol.Request) error {
+		request.Model = "selected-model"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("mutated same-format translation lost passthrough: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(mutated.Body, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["future_field"]; !ok {
+		t.Fatalf("mutated same-format translation dropped an unknown field: %s", mutated.Body)
+	}
+	if string(fields["model"]) != `"selected-model"` {
+		t.Fatalf("model mutation was not applied: %s", fields["model"])
 	}
 }
 

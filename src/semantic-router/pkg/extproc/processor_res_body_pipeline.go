@@ -420,18 +420,20 @@ func isResponseAPIRequest(ctx *RequestContext) bool {
 }
 
 // cacheableClientResponse returns the bytes that may be persisted as the public
-// response. The cache is read back under the strict canonical contract by
-// decodeCachedClientResponse, deliberately without a backend vendor allowance,
-// because a cache partition is keyed on the ingress protocol and may be served
-// to a request that never touches the same backend.
+// response. The cache is read back by decodeCachedClientResponse with the
+// router's configured policy (strict by default; preserve when
+// preserve_unknown_chat_fields is on), deliberately without a backend vendor
+// allowance, because a cache partition is keyed on the ingress protocol and may
+// be served to a request that never touches the same backend.
 //
 // A same-format response is forwarded to the client verbatim, so on a backend
 // with a vendor allowance those bytes still carry the provider's decorations.
-// Persisting them would store an entry the strict reader rejects: the first
+// Persisting them would store an entry a strict reader rejects: the first
 // Azure response would poison its own partition and every later hit would fail.
 // Re-encoding from the neutral response yields the canonical equivalent. When
 // that encode fails, nothing is cached - a miss is recoverable, a poisoned
-// entry is not.
+// entry is not. Toggling preserve off again leaves such partitions readable
+// only if the entries were canonicalized, which is what this guard keeps true.
 func (r *OpenAIRouter) cacheableClientResponse(
 	clientBody []byte,
 	rewritten bool,

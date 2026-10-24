@@ -64,7 +64,7 @@ func (engine *Engine) Registry() *Registry {
 }
 
 func (engine *Engine) DecodeRequest(format llmprotocol.WireFormat, body []byte) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
-	return engine.decodeRequest(format, body, engine.policy)
+	return engine.decodeRequest(format, body, engine.translationDecodePolicy(format, format))
 }
 
 // DecodeRequestForMutation rejects wire fields that cannot survive neutral
@@ -75,7 +75,7 @@ func (engine *Engine) DecodeRequestForMutation(
 	format llmprotocol.WireFormat,
 	body []byte,
 ) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
-	return engine.decodeRequest(format, body, engine.translationDecodePolicy(format, format, true))
+	return engine.decodeRequest(format, body, engine.translationDecodePolicy(format, format))
 }
 
 func (engine *Engine) decodeRequest(
@@ -117,6 +117,18 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	if encodeRequestErr != nil {
 		return RequestResult{Request: request, Envelope: envelope}, encodeRequestErr
 	}
+	// Preserved request fields are source-format JSON; re-encoding them into
+	// a different format cannot keep them faithful, so the translation fails
+	// loudly instead of dropping them silently.
+	if envelope.Format != "" && envelope.Format != format &&
+		(len(envelope.RequestPassthrough) > 0 || llmprotocol.RequestCarriesMessagePassthrough(request)) {
+		return RequestResult{Request: request, Envelope: envelope}, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"passthrough_requires_same_format",
+			"preserved unknown request fields cannot be translated to the target format; route the request to a same-format backend",
+			nil,
+		)
+	}
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope}, err
 	}
@@ -149,7 +161,7 @@ func (engine *Engine) EncodeResponse(format llmprotocol.WireFormat, response llm
 }
 
 func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, body []byte, mutate RequestMutation) (RequestResult, error) {
-	decodePolicy := engine.translationDecodePolicy(source, target, mutate != nil)
+	decodePolicy := engine.translationDecodePolicy(source, target)
 	sourcePair, translateRequestErr := engine.codec(source)
 	if translateRequestErr != nil {
 		return RequestResult{}, translateRequestErr
@@ -193,7 +205,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	if translateResponseErr != nil {
 		return ResponseResult{}, translateResponseErr
 	}
-	decodePolicy := engine.translationDecodePolicy(source, target, mutate != nil)
+	decodePolicy := engine.translationDecodePolicy(source, target)
 	decodePolicy.ProviderStopSequences = engine.carriesMatchedStopSequence(target)
 	response, envelope, diagnostics, translateResponseErr := sourcePair.buffered.DecodeResponse(body, decodePolicy)
 	if translateResponseErr != nil {
@@ -350,12 +362,15 @@ func (engine *Engine) DecodeTransportError(
 	return transportError, diagnostics, nil
 }
 
-// Preserve-same-format is legal only for byte-identical replay. Once a
-// translation crosses formats or a semantic mutation is possible, decoding is
-// strict so an unknown field can never disappear without an explicit error.
-func (engine *Engine) translationDecodePolicy(source, target llmprotocol.WireFormat, mutated bool) llmprotocol.Policy {
+// Preserve-same-format is safe only for OpenAI Chat, whose encoders carry
+// unmodeled fields through both a mutated request re-encode and a same-format
+// stream's forwarded provider frames. Cross-format translation and every
+// other wire format stay strict so an unknown field can never disappear
+// without an explicit error.
+func (engine *Engine) translationDecodePolicy(source, target llmprotocol.WireFormat) llmprotocol.Policy {
 	policy := engine.policy
-	if policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat && (source != target || mutated) {
+	if policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat &&
+		(source != target || source != llmprotocol.OpenAIChatV1) {
 		policy.UnknownFields = llmprotocol.UnknownReject
 		policy.SourcePreservation = llmprotocol.SourceDisabled
 	}
@@ -420,7 +435,7 @@ func (engine *Engine) NewStreamWithMutation(
 	}
 	context.Source = source
 	context.Target = target
-	streamPolicy := engine.strictStreamPolicy()
+	streamPolicy := engine.translationDecodePolicy(source, target)
 	streamPolicy.ProviderStopSequences = engine.carriesMatchedStopSequence(target)
 	return &StreamEngine{
 		decoder:            sourcePair.stream.NewDecoder(context, streamPolicy),
@@ -433,10 +448,12 @@ func (engine *Engine) NewStreamWithMutation(
 	}, nil
 }
 
-// Streams are always decoded into neutral events before re-encoding or
-// accumulation. Unlike buffered same-format envelopes, they have no complete
-// byte-for-byte replay path, so accepting unknown fields would silently drop
-// provider semantics.
+// strictStreamPolicy serves buffered stream aggregation and locally assembled
+// stream validation, which reduce every frame to neutral events with no
+// byte-for-byte replay path: accepting unknown fields there would silently
+// drop provider semantics. The forwarding path uses translationDecodePolicy,
+// which keeps the preserve option for same-format Chat streams that forward
+// raw provider frames.
 func (engine *Engine) strictStreamPolicy() llmprotocol.Policy {
 	policy := engine.policy
 	if policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat {

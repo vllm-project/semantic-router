@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -23,13 +25,13 @@ type chatResponseWire struct {
 	Error               *chatErrorWire            `json:"error,omitempty"`
 	ServiceTier         *chatServiceTierWire      `json:"service_tier,omitempty"`
 	SystemFingerprint   *string                   `json:"system_fingerprint,omitempty"`
-	PromptLogprobs      *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
+	PromptLogprobs      json.RawMessage           `json:"prompt_logprobs,omitempty"`
 	PromptTokenIDs      []int64                   `json:"prompt_token_ids,omitempty"`
-	PromptText          *chatNullOnlyWire         `json:"prompt_text,omitempty"`
-	PromptRoutedExperts *chatNullOnlyWire         `json:"prompt_routed_experts,omitempty"`
+	PromptText          json.RawMessage           `json:"prompt_text,omitempty"`
+	PromptRoutedExperts json.RawMessage           `json:"prompt_routed_experts,omitempty"`
 	KVTransferParams    *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
-	ECTransferParams    *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
-	Metrics             *chatNullOnlyWire         `json:"metrics,omitempty"`
+	ECTransferParams    json.RawMessage           `json:"ec_transfer_params,omitempty"`
+	Metrics             json.RawMessage           `json:"metrics,omitempty"`
 	DoRemoteDecode      *bool                     `json:"do_remote_decode,omitempty"`
 	DoRemotePrefill     *bool                     `json:"do_remote_prefill,omitempty"`
 	RemoteBlockIDs      []int64                   `json:"remote_block_ids,omitempty"`
@@ -68,7 +70,7 @@ type chatChoiceWire struct {
 	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
 	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs               []int64             `json:"token_ids,omitempty"`
-	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	RoutedExperts          json.RawMessage     `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string
@@ -88,16 +90,114 @@ func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
 	}
 }
 
-// chatNullOnlyWire closes provider fields which this protocol version only
-// observes as null. A future non-null representation must be modeled before it
-// can cross the strict provider boundary.
-type chatNullOnlyWire struct{}
+// chatExecutionFieldNames lists provider execution fields the strict contract
+// observes only as null (a non-null body carries data this protocol version
+// has not modeled). They decode as raw JSON so the preserve-same-format
+// policy can forward them; the strict policy still rejects non-null values
+// in validateChatExecutionFields.
+var chatExecutionFieldNames = map[string]struct{}{
+	"prompt_logprobs": {}, "prompt_text": {}, "prompt_routed_experts": {},
+	"ec_transfer_params": {}, "metrics": {}, "routed_experts": {},
+}
 
-func (*chatNullOnlyWire) UnmarshalJSON(raw []byte) error {
-	if !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return fmt.Errorf("chat execution field must be null")
+func isNullJSON(raw json.RawMessage) bool {
+	return len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+// validateChatExecutionFields enforces the closed provider contract: execution
+// fields this protocol only observes as null must stay null. Under the
+// preserve-same-format policy the raw values are forwarded instead, so the
+// check is skipped entirely.
+func validateChatExecutionFields(policy llmprotocol.Policy, fields map[string]json.RawMessage) error {
+	if policy.UnknownFields != llmprotocol.UnknownReject {
+		return nil
+	}
+	for name, raw := range fields {
+		if _, execution := chatExecutionFieldNames[name]; execution {
+			if err := validateChatExecutionField(name, raw, policy); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+func validateChatExecutionField(name string, raw json.RawMessage, policy llmprotocol.Policy) error {
+	if policy.UnknownFields != llmprotocol.UnknownReject || isNullJSON(raw) {
+		return nil
+	}
+	// Match the strict decode-time rejection this replaces (the former
+	// chatNullOnlyWire unmarshal error): same code, same message.
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"invalid_upstream_json",
+		"upstream response JSON is invalid",
+		fmt.Errorf("chat execution field %s must be null", name),
+	)
+}
+
+// chatResponseWireFields is the set of top-level names modelled by
+// chatResponseWire. Fields outside it are provider extensions; execution
+// fields are modelled only so the strict decoder can reject non-null values.
+var chatResponseWireFields = exactJSONStructFields(reflect.TypeOf(chatResponseWire{}))
+
+// captureChatResponsePassthrough returns the top-level fields a same-format
+// client must still receive after a re-render: fields outside the modelled
+// response wire set plus non-null execution fields. Under the strict policy
+// it instead rejects non-null execution fields, keeping the closed provider
+// contract unchanged. Preserved bytes are bounded by SourceEnvelopeBytes
+// like the request capture.
+func captureChatResponsePassthrough(body []byte, policy llmprotocol.Policy) (map[string]json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return nil, err
+	}
+	if policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat {
+		return nil, validateChatExecutionFields(policy, fields)
+	}
+	// A case variant of a modelled name would decode into the modelled
+	// field through encoding/json's case-insensitive fallback while also
+	// being captured here, splitting one field into two on a re-render.
+	// Reject it exactly like the strict walker does.
+	folded := make(map[string]string, len(chatResponseWireFields))
+	for name := range chatResponseWireFields {
+		folded[strings.ToLower(name)] = name
+	}
+	out := make(map[string]json.RawMessage)
+	total := 0
+	for name, raw := range fields {
+		_, modelled := chatResponseWireFields[name]
+		if !modelled {
+			if canonical, exists := folded[strings.ToLower(name)]; exists {
+				return nil, nonCanonicalUpstreamField(fmt.Errorf("field %q is not canonical; use %q", name, canonical))
+			}
+		}
+		if modelled && !chatResponseExecutionField(name) {
+			continue
+		}
+		if modelled && isNullJSON(raw) {
+			continue
+		}
+		total += len(raw)
+		if total > policy.Limits.SourceEnvelopeBytes {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"upstream_body_limit",
+				"preserved unknown response fields exceed the source envelope budget",
+				nil,
+			)
+		}
+		out[name] = append(json.RawMessage(nil), raw...)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
+func chatResponseExecutionField(name string) bool {
+	_, execution := chatExecutionFieldNames[name]
+	return execution
 }
 
 // An empty object is the complete supported kv-transfer marker. Provider
@@ -241,15 +341,20 @@ func validateChatExecutionMetadata(systemFingerprint *string) error {
 	return nil
 }
 
-func validateChatChoiceExtensions(choice chatChoiceWire) error {
-	return validateChatOutputExtensions(choice.Message.Audio, choice.Message.LegacyFunctionCall)
+func validateChatChoiceExtensions(choice chatChoiceWire, policy llmprotocol.Policy) error {
+	if err := validateChatOutputExtensions(choice.Message.Audio, choice.Message.LegacyFunctionCall, policy); err != nil {
+		return err
+	}
+	return validateChatExecutionField("routed_experts", choice.RoutedExperts, policy)
 }
 
-func validateChatChunkChoiceExtensions(choice chatChunkChoiceWire) error {
+func validateChatChunkChoiceExtensions(choice chatChunkChoiceWire, policy llmprotocol.Policy) error {
 	// Neutral stream events intentionally have no token-logprob evidence slot.
-	// Reject non-null evidence instead of silently dropping it during the
-	// provider-to-public stream rewrite.
-	if choice.Logprobs != nil {
+	// Under the strict policy reject non-null evidence instead of silently
+	// dropping it during the provider-to-public stream rewrite; the
+	// preserve-same-format policy forwards the raw chunk instead (see
+	// chatStreamDecoder.pushFrame).
+	if choice.Logprobs != nil && policy.UnknownFields == llmprotocol.UnknownReject {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
 			"unsupported_upstream_stream_logprobs",
@@ -257,14 +362,21 @@ func validateChatChunkChoiceExtensions(choice chatChunkChoiceWire) error {
 			nil,
 		)
 	}
-	return validateChatOutputExtensions(choice.Delta.Audio, choice.Delta.LegacyFunctionCall)
+	if err := validateChatOutputExtensions(choice.Delta.Audio, choice.Delta.LegacyFunctionCall, policy); err != nil {
+		return err
+	}
+	return validateChatExecutionField("routed_experts", choice.RoutedExperts, policy)
 }
 
 func validateChatOutputExtensions(
 	audio *chatAudioOutputWire,
 	legacyFunctionCall *chatLegacyCallWire,
+	policy llmprotocol.Policy,
 ) error {
-	if audio != nil {
+	// Output audio has no neutral slot. Strict decoding rejects it;
+	// preserve-same-format accepts it so an unchanged response replays its
+	// source bytes and a re-rendered one can still drop it with diagnostics.
+	if audio != nil && policy.UnknownFields == llmprotocol.UnknownReject {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
 			"unsupported_upstream_audio",

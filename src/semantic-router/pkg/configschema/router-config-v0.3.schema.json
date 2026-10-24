@@ -1062,6 +1062,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CanonicalProtocol": {
+      "properties": {
+        "preserve_unknown_chat_fields": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalProviderDefaults": {
       "properties": {
         "model": {
@@ -1252,6 +1261,9 @@
         },
         "streamed_body": {
           "$ref": "#/$defs/CanonicalStreamedBody"
+        },
+        "protocol": {
+          "$ref": "#/$defs/CanonicalProtocol"
         },
         "skip_processing": {
           "$ref": "#/$defs/SkipProcessingConfig"
