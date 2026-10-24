@@ -41,8 +41,11 @@ A new multi-GPU placement uses the first N available GPUs. If fewer are
 available, specify one `--device-ids` value to request colocated workers
 explicitly. Resizing an authored placement repeats its device order. An
 existing visibility mask is honored: for example, host GPU 7 maps to runtime
-ordinal 0 under `ROCR_VISIBLE_DEVICES=7`. Kubernetes uses pod allocation
-ordinals in canonical config and does not accept physical `--device-ids`.
+ordinal 0 under `ROCR_VISIBLE_DEVICES=7`. A mask that names GPUs by UUID
+(`GPU-...`) also selects the platform with `--platform auto`; `--device-ids`
+and new multi-GPU placements still need a mask of host indices. Kubernetes
+uses pod allocation ordinals in canonical config and does not accept physical
+`--device-ids`.
 
 Listener ports and API grants belong in `listeners`; the initial native API
 listener uses port `8899`. Selecting a model never broadens an existing
@@ -192,10 +195,11 @@ says `video longer than 300 s` where the runtime says why in its own words.
 The Router answers a deployment whose workers are all busy the same way, 429
 `overloaded`, and one with no ready worker 503 `not_ready`; both carry
 `Retry-After` (1 and 5 seconds). In Engine mode a call that runs past the
-Router's 30-second budget returns 504 `systemone_deadline_exceeded`; a request
-whose `options.deadline_ms` is longer, such as a long-context one, waits that
-long instead, up to the listener's `systemone.max_deadline_ms` (10 minutes by
-default).
+Router's 30-second budget returns 504 `systemone_deadline_exceeded`, with a
+message that names `options.deadline_ms`; a request whose `options.deadline_ms`
+is longer waits that long instead, and a long-context request without one
+waits the listener's whole `systemone.max_deadline_ms` (10 minutes by default),
+which bounds both.
 A failed item of a request (one input or one question) carries its own error
 code and never fails the others; a failed question also carries a fixed
 `reason`. `POST /v1/systemone` is the exception: there a failed question fails
@@ -633,7 +637,7 @@ In summary:
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
 | `device` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. |
-| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). |
+| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). That includes the default decision model, a deployment published for direct System One inference, and the deployment of a local System One alias, whether or not a listener publishes the alias. A routed System One entrypoint is not one deployment. A task binding that is none of these keeps a task-model limit. |
 | `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
 | `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |
 | `replicas` | deployment | Placements of independent workers for one logical model. Each has `device` or `endpoint`/`served_name`; omit for one worker. Do not combine with deployment-level placement. |
