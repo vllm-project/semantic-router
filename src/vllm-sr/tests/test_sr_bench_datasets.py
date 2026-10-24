@@ -298,9 +298,9 @@ def test_copied_metadata_never_follows_an_external_data_path(tmp_path):
     manifest = _dataset(tmp_path / "store", [_case("case")])
     path = Path(manifest["path"]).parent / "manifest.json"
     manifest["path"] = "/private/do-not-read/secret.jsonl"
-    manifest["sources"]["mmlu-pro"]["url"] = (
-        "https://:hidden-credential@huggingface.co/datasets/example/test"
-    )
+    manifest["sources"]["mmlu-pro"][
+        "url"
+    ] = "https://:hidden-credential@huggingface.co/datasets/example/test"
     path.write_text(json.dumps(manifest))
     reader = DatasetReader(tmp_path / "store")
     assert reader.page(manifest["id"])["total"] == 1
