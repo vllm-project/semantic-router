@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型执行回退
 description: 定义上游执行失败后有界跨模型回退的所有权与安全边界。
 created: 2026-08-10

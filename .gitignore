@@ -186,6 +186,9 @@ grafana/
 grafana-data/
 prometheus-data/
 
+# Local GPU run logs and raw JSON (not records; records live in src/model-runtime/docs/records/)
+cuda-h200-logs/
+
 # Local dev makefile (not committed)
 Makefile.local
 

@@ -429,7 +429,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		if immediate.Status == nil {
 			immediate.Status = &typev3.HttpStatus{}
 		}
-		immediate.Status.Code = statusCodeToEnum(500)
+		immediate.Status.Code = typev3.StatusCode_InternalServerError
 		setImmediateContentType(immediate, "application/json")
 		ctx.ImmediateResponseEncoded = true
 	}
@@ -439,7 +439,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 	category, code, message := llmprotocol.ErrorInternal, "request_failed", "request failed"
 	switch status {
-	case 400, 413, 422:
+	case 400, 413, 415, 422:
 		category, code, message = llmprotocol.ErrorInvalidRequest, "invalid_request", "invalid inference request"
 	case 401:
 		category, code, message = llmprotocol.ErrorAuthentication, "authentication_failed", "authentication failed"
@@ -451,9 +451,9 @@ func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 		category, code, message = llmprotocol.ErrorConflict, "request_conflict", "request cannot be completed"
 	case 429:
 		category, code, message = llmprotocol.ErrorRateLimited, "rate_limited", "rate limit exceeded"
-	case 499:
-		category, code, message = llmprotocol.ErrorInternal, "request_canceled", "request canceled"
-	case 502, 503, 504:
+	case 504:
+		category, code, message = llmprotocol.ErrorUpstreamTimeout, "request_timeout", "request timed out"
+	case 502, 503:
 		category, code, message = llmprotocol.ErrorUpstreamUnavailable, "upstream_unavailable", "model service unavailable"
 	}
 	return llmprotocol.NewError(category, code, message, nil)

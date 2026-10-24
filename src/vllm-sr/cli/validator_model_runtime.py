@@ -1,10 +1,12 @@
 """Model-runtime checks that do not load local or remote model resources."""
 
+from cli.model_revision import builtin_releases
 from cli.model_runtime_defaults import (
     effective_model_deployments,
     global_model_bindings,
     iter_effective_routing_profiles,
 )
+from cli.model_runtime_retired import ENGINE_ARGUMENTS
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_decision_model import (
@@ -259,12 +261,12 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
-    if any(
+    if any(deployment.get(field) is not None for field in ENGINE_ARGUMENTS) or any(
         deployment.get(field)
-        for field in ("profile", "endpoint", "process", "served_name", "replicas")
+        for field in ("endpoint", "process", "served_name", "replicas")
     ):
         return (
-            "profile, endpoint, replicas and served_name apply only to "
+            "engine arguments, endpoint, replicas and served_name apply only to "
             "model_runtime deployments"
         )
     if provider != "http":
@@ -284,3 +286,31 @@ def _deployment_error(name, deployment, external_names):
     if (budget.get("overflow") or "reject") not in {"reject", "truncate", "window"}:
         return "input.overflow must be reject, truncate or window"
     return None
+
+
+def unpinned_hub_deployment_warnings(config: UserConfig) -> list[ValidationError]:
+    """Managed deployments of a Hub repository the runtime cannot load without a revision."""
+    built_in = {name.lower() for name in builtin_releases()}
+    warnings = []
+    for name, deployment in effective_model_deployments(config).items():
+        artifact = (deployment.get("artifact") or "").strip()
+        replicas = deployment.get("replicas") or [deployment]
+        if (
+            deployment.get("provider") != "model_runtime"
+            or not artifact
+            or artifact.startswith("/")
+            or deployment.get("revision")
+            or artifact.lower() in built_in
+            or all(replica.get("endpoint") for replica in replicas)
+        ):
+            continue
+        warnings.append(
+            ValidationError(
+                f"{artifact} is not a built-in model and sets no revision; the "
+                "runtime refuses to load it",
+                field=f"global.model_catalog.deployments.{name}",
+                hint="Set revision to the 40-hex commit to load, or use an "
+                "absolute path for a local package.",
+            )
+        )
+    return warnings

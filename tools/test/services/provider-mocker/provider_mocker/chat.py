@@ -180,6 +180,9 @@ async def _chat_reply(
     vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
     if vllm_reasoning is not None:
         return vllm_reasoning
+    vllm_error = vllm_fixture.error_reply(req, created_ts)
+    if vllm_error is not None:
+        return vllm_error
     vllm_stop = vllm_fixture.matched_stop(req)
     if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
         if req.stream:

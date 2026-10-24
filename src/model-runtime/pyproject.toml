@@ -27,6 +27,7 @@ dependencies = [
   "httptools>=0.6",
   "prometheus_client>=0.20",
   "pyyaml>=6.0",
+  "backports.zstd>=1.0; python_version < '3.14'",
 ]
 
 [project.optional-dependencies]
@@ -74,12 +75,6 @@ npu = "vllm_srun.accel.npu:NPUAccelerator"
 rocm = "vllm_srun.accel.rocm:ROCmAccelerator"
 xpu = "vllm_srun.accel.xpu:XPUAccelerator"
 
-[project.entry-points."vllm_srun.profiles"]
-exact = "vllm_srun.profiles.exact:ExactProfile"
-shared_context = "vllm_srun.profiles.shared_context:SharedContextProfile"
-batching = "vllm_srun.profiles.batching:BatchingProfile"
-max_speed = "vllm_srun.profiles.max_speed:MaxSpeedProfile"
-
 [tool.setuptools.packages.find]
 include = ["vllm_srun*"]
 
@@ -99,7 +94,8 @@ python_version = "3.10"
 files = [
   "vllm_srun/plugins",
   "vllm_srun/scheduler",
-  "vllm_srun/profiles",
+  "vllm_srun/config.py",
+  "vllm_srun/dtypes.py",
   "vllm_srun/runtime.py",
   "vllm_srun/api",
   "vllm_srun/registry",

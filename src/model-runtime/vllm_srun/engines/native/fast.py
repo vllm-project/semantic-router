@@ -2,7 +2,7 @@
 
 Every piece reproduces the eager backbone under BF16 autocast bit for bit (the
 parity records compare the result with the released packages' runtime on the
-four scored panels), so it belongs to the exact profile:
+four scored panels), so it runs at the published precision by default:
 
 - **Fused layers.** The element-wise ops of each Qwen3.5 / Qwen3 decoder layer
   run as the accelerator's fused kernels (``FUSED_SLOTS``; ROCm gfx942 Triton),
@@ -18,13 +18,14 @@ four scored panels), so it belongs to the exact profile:
 - **Graphs.** The backbone forward of each exact padded shape (rows, padded
   length, whether any row is padded) is captured once as a HIP / CUDA graph on
   the shape's second use and replayed afterwards, with the masks built from the
-  host-known row lengths as the eager path builds them. Shapes above
+  host-known row lengths as the eager path builds them (a noncausal backbone's
+  as ``noncausal_masks`` builds them, ``NoncausalMasks``). Shapes above
   ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
   several forwards each. Graphs are captured until there are ``MAX_GRAPHS`` of
-  them or the device's used memory has grown since the first capture by
-  ``MAX_GRAPH_BYTES`` or by half of what was free then, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
+  them or the captures have taken ``MAX_GRAPH_BYTES`` of device memory or half
+  of what was free at the first, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
   batches of Index traffic, led to GPU memory access faults. On CUDA the same
   runner also replays Vela 2.0's forest forward (``models/forest.py``) per
@@ -44,10 +45,21 @@ from torch import nn
 
 from ...accel.kernels import KernelSet
 from .models import Backbone
+from .models.branch import (
+    Branches,
+    StaticBranches,
+    branch_rule,
+    delta_kernel,
+    is_branches,
+    is_static,
+)
 from .models.common import attention
 from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
+from .models.packed import Packed, is_packed, packed_rule
+from .models.qwen3_5 import noncausal_masks
 from .models.tree import Tree, is_tree, suffix_rule
+from .quantized import project
 
 if TYPE_CHECKING:
     from .models.qwen3 import Qwen3Backbone, Qwen3Layer
@@ -276,22 +288,28 @@ def _qwen3_5_forward(
     layer: Qwen3_5Layer,
     hidden_states: torch.Tensor,
     rotary: tuple[torch.Tensor, torch.Tensor],
-    full_mask: torch.Tensor | Tree | None,
-    linear_mask: torch.Tensor | Tree | None,
+    full_mask: torch.Tensor | Tree | Branches | StaticBranches | None,
+    linear_mask: torch.Tensor | Tree | Branches | StaticBranches | None,
     kernels: KernelSet,
 ) -> torch.Tensor:
     p = cast(FusedLayer, layer)._fused
     hidden_states = hidden_states.contiguous()
+    # A last layer whose output only these rows are read (``StaticBranches.reading``).
+    rows = getattr(full_mask, "readout", None)
     _, normed = kernels("add_rmsnorm")(hidden_states, None, p["w1_in"], p["eps"])
     if layer.kind == "linear_attention":
-        delta = _gated_delta(layer.linear_attn, p, normed, linear_mask, kernels)
+        delta = _gated_delta(layer.linear_attn, p, normed, linear_mask, kernels, rows)
     else:
-        delta = _gated_attention(layer.self_attn, p, normed, rotary, full_mask, kernels)
+        delta = _gated_attention(
+            layer.self_attn, p, normed, rotary, full_mask, kernels, rows
+        )
+    if rows is not None:
+        hidden_states = hidden_states[:, rows].contiguous()
     hidden, normed = kernels("add_rmsnorm")(
         hidden_states, delta.contiguous(), p["w1_post"], p["eps"]
     )
     mlp = layer.mlp
-    act = kernels("silu_mul")(mlp.gate_proj(normed), mlp.up_proj(normed))
+    act = kernels("silu_mul")(*project(normed, mlp.gate_proj, mlp.up_proj))
     return _residual(kernels, hidden, mlp.down_proj(act))
 
 
@@ -343,7 +361,7 @@ def _qwen3_5_forest(
             stream, delta.contiguous(), p["w1_post"], p["eps"]
         )
         mlp = layer.mlp
-        act = kernels("silu_mul")(mlp.gate_proj(normed_post), mlp.up_proj(normed_post))
+        act = kernels("silu_mul")(*project(normed_post, mlp.gate_proj, mlp.up_proj))
         out.append(_residual(kernels, hidden, mlp.down_proj(act)))
     return out[0], out[1]
 
@@ -358,9 +376,7 @@ def _forest_projection(
     """``forest.project_attention`` through ``attn_prep``; the gate stays a view of the q projection."""
     rows, length, _ = h.shape
     hd = m.head_dim
-    qp = m.q_proj(h).contiguous()
-    kp = m.k_proj(h).contiguous()
-    vp = m.v_proj(h)
+    qp, kp, vp = project(h, m.q_proj, m.k_proj, m.v_proj)
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // (2 * hd)
     kv_heads = kp.shape[-1] // hd
@@ -383,10 +399,9 @@ def _tree_gated_delta(
     whose first outputs are dropped)."""
     _, length, _ = normed.shape
     pre, n, window = tree.prefix, len(tree.lengths), m.conv_kernel_size
-    mixed = m.in_proj_qkv(normed)
-    z = m.in_proj_z(normed)
-    b = m.in_proj_b(normed)
-    a = m.in_proj_a(normed)
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
     args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
 
     def rows(x: torch.Tensor) -> torch.Tensor:
@@ -428,12 +443,109 @@ def _tree_gated_delta(
     return projected
 
 
+def _branch_gated_delta(
+    m: GatedDeltaNet,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    branches: Branches | StaticBranches,
+    kernels: KernelSet,
+    rows: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """``branch.branch_gated_delta`` with the fused kernels: the gated-delta preparation reads the gapped rows
+    (every block after its state's last inputs) and keeps the packed ones; with ``rows``, the gated norm and
+    output projection of those rows only."""
+    _, length, _ = normed.shape
+    window = m.conv_kernel_size
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
+    prep = kernels("gdn_prep")
+    args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
+    segments = getattr(prep, "segments", None)
+    if segments is not None and is_static(branches):
+        # The prep's segmented form reads each block's first taps in its state: no gap layout copies.
+        q, k, v, g, beta = segments(
+            mixed.contiguous(),
+            b.contiguous(),
+            a.contiguous(),
+            *args,
+            branches.regions(window),
+        )
+    else:
+        q, k, v, g, beta = (
+            branches.ungapped(x, window)
+            for x in prep(
+                branches.gapped(mixed, window).contiguous(),
+                branches.gapped(b, window).contiguous(),
+                branches.gapped(a, window).contiguous(),
+                *args,
+            )
+        )
+    repeat = m.num_v_heads // m.num_k_heads
+    if repeat > 1:
+        q = q.repeat_interleave(repeat, dim=2)
+        k = k.repeat_interleave(repeat, dim=2)
+    core = branch_rule(delta_kernel(kernels, branches), branches, q, k, v, g, beta)
+    if rows is not None:
+        core, z, length = core[:, rows], z[:, rows], len(rows)
+    out = kernels("gated_rmsnorm")(
+        core.reshape(-1, m.head_v_dim).contiguous(),
+        z.reshape(-1, m.head_v_dim).contiguous(),
+        m.norm.weight,
+        m.norm.variance_epsilon,
+    )
+    projected: torch.Tensor = m.out_proj(out.reshape(1, length, -1))
+    return projected
+
+
+def _packed_gated_delta(
+    m: GatedDeltaNet,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    packed: Packed,
+    kernels: KernelSet,
+) -> torch.Tensor:
+    """``packed.packed_gated_delta`` with the fused kernels: ``gdn_prep`` over the gapped rows.
+
+    The projections feeding the convolution have no bias, so the zero rows
+    ``gapped`` puts before every row stay zero through them; their outputs are
+    dropped before the delta rule.
+    """
+    _, length, _ = normed.shape
+    window = m.conv_kernel_size
+    gapped = packed.gapped(normed, window)
+    q, k, v, g, beta = (
+        packed.ungapped(x, window)
+        for x in kernels("gdn_prep")(
+            m.in_proj_qkv(gapped).contiguous(), m.in_proj_b(gapped).contiguous(),
+            m.in_proj_a(gapped).contiguous(), p["conv_w"], p["A_log"], p["dt_bias"],
+            m.num_k_heads, m.head_k_dim,
+        )
+    )  # fmt: skip
+    # in_proj_z reads the ungapped rows, so it cannot share in_proj_qkv's quantization here
+    z = m.in_proj_z(normed)
+    repeat = m.num_v_heads // m.num_k_heads
+    if repeat > 1:
+        q = q.repeat_interleave(repeat, dim=2)
+        k = k.repeat_interleave(repeat, dim=2)
+    core = packed_rule(kernels("chunk_gated_delta_rule"), packed, q, k, v, g, beta)
+    out = kernels("gated_rmsnorm")(
+        core.reshape(-1, m.head_v_dim).contiguous(),
+        z.reshape(-1, m.head_v_dim).contiguous(),
+        m.norm.weight,
+        m.norm.variance_epsilon,
+    )
+    projected: torch.Tensor = m.out_proj(out.reshape(1, length, -1))
+    return projected
+
+
 def _gated_delta(
     m: GatedDeltaNet,
     p: dict[str, Any],
     normed: torch.Tensor,
-    mask: torch.Tensor | Tree | None,
+    mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
     kernels: KernelSet,
+    rows: torch.Tensor | None = None,
 ) -> torch.Tensor:
     conv = kernels.select("causal_conv1d").variant
     if conv is not None and (
@@ -441,16 +553,19 @@ def _gated_delta(
     ):
         # The model's released convolution (a kernel variant) is not what gdn_prep fuses.
         eager: torch.Tensor = m(normed, mask, kernels)
-        return eager
+        return eager if rows is None else eager[:, rows]
     if is_tree(mask):
         return _tree_gated_delta(m, p, normed, mask, kernels)
+    if is_branches(mask):
+        return _branch_gated_delta(m, p, normed, mask, kernels, rows)
+    if is_packed(mask):
+        return _packed_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:
         normed = (normed * mask[:, :, None]).to(normed.dtype)
     batch, length, _ = normed.shape
-    mixed = m.in_proj_qkv(normed)
-    z = m.in_proj_z(normed)
-    b = m.in_proj_b(normed)
-    a = m.in_proj_a(normed)
+    mixed, z, b, a = project(
+        normed, m.in_proj_qkv, m.in_proj_z, m.in_proj_b, m.in_proj_a
+    )
     q, k, v, g, beta = kernels("gdn_prep")(
         mixed.contiguous(), b.contiguous(), a.contiguous(), p["conv_w"], p["A_log"], p["dt_bias"],
         m.num_k_heads, m.head_k_dim,
@@ -477,14 +592,13 @@ def _gated_attention(
     p: dict[str, Any],
     normed: torch.Tensor,
     rotary: tuple[torch.Tensor, torch.Tensor],
-    mask: torch.Tensor | Tree | None,
+    mask: torch.Tensor | Tree | Branches | StaticBranches | None,
     kernels: KernelSet,
+    rows: torch.Tensor | None = None,
 ) -> torch.Tensor:
     batch, length, _ = normed.shape
     hd = m.head_dim
-    qp = m.q_proj(normed).contiguous()
-    kp = m.k_proj(normed).contiguous()
-    vp = m.v_proj(normed)
+    qp, kp, vp = project(normed, m.q_proj, m.k_proj, m.v_proj)
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // (2 * hd)
     kv_heads = kp.shape[-1] // hd
@@ -494,6 +608,8 @@ def _gated_attention(
     v = vp.view(batch, length, kv_heads, hd).transpose(1, 2)
     out = attention(kernels, q, k, v, mask, groups=m.groups, scaling=m.scaling)
     gate = qp.view(batch, length, heads, 2 * hd)[..., hd:]
+    if rows is not None:
+        out, gate = out[:, rows], gate[:, rows]
     gated: torch.Tensor = m.o_proj(kernels("sigmoid_gate")(out, gate))
     return gated
 
@@ -511,9 +627,7 @@ def _qwen3_forward(
     m = layer.self_attn
     batch, length, _ = normed.shape
     hd = m.head_dim
-    qp = m.q_proj(normed).contiguous()
-    kp = m.k_proj(normed).contiguous()
-    vp = m.v_proj(normed)
+    qp, kp, vp = project(normed, m.q_proj, m.k_proj, m.v_proj)
     cos, sin = (t.contiguous() for t in rotary)
     heads = qp.shape[-1] // hd
     kv_heads = kp.shape[-1] // hd
@@ -528,7 +642,7 @@ def _qwen3_forward(
         hidden_states, delta.contiguous(), p["w_post"], p["eps"]
     )
     mlp = layer.mlp
-    act = kernels("silu_mul")(mlp.gate_proj(normed), mlp.up_proj(normed))
+    act = kernels("silu_mul")(*project(normed, mlp.gate_proj, mlp.up_proj))
     return _residual(kernels, hidden, mlp.down_proj(act))
 
 
@@ -638,6 +752,21 @@ class Masks:
         }
 
 
+class NoncausalMasks(Masks):
+    """The masks of a noncausal backbone (``noncausal_masks``) from host-known padding.
+
+    Both are read from the attention mask on the device without a read-back, so
+    a graph captures them: the full-attention key mask is always given, and the
+    gated-delta layers get the 2D mask only when the batch is padded.
+    """
+
+    def build(
+        self, attention_mask: torch.Tensor, padded: bool
+    ) -> dict[str, torch.Tensor | None]:
+        full, linear = noncausal_masks(attention_mask, padded)
+        return {"full": full, "linear": linear}
+
+
 class Graphs:
     """Graphs of the backbone forward per exact padded shape (see the module docstring)."""
 
@@ -650,8 +779,12 @@ class Graphs:
         max_graphs: int = MAX_GRAPHS,
         max_tokens: int = MAX_GRAPH_TOKENS,
         max_bytes: int = MAX_GRAPH_BYTES,
+        first_capture_tokens: int = 0,
     ):
+        """A shape of at most ``first_capture_tokens`` tokens is captured the first time it runs,
+        any other the ``capture_after``-th time."""
         self.backbone = backbone
+        self.first_capture_tokens = first_capture_tokens
         self.masks = masks
         self.capture_after = capture_after
         self.max_graphs = max_graphs
@@ -660,9 +793,10 @@ class Graphs:
         self.graphs: dict[Hashable, dict[str, Any]] = {}
         self.seen: dict[Hashable, int] = {}
         self.failed: set[Hashable] = set()
-        self.base: int | None = None
-        self.budget = max_bytes
+        self.budget: int | None = None
+        self.spent = 0
         self.pool: Any = None
+        self.stream: Any = None
         self.stats = {
             "captures": 0,
             "replays": 0,
@@ -703,7 +837,8 @@ class Graphs:
             if len(self.seen) > 1 << 16:
                 self.seen.clear()
             self.seen[key] = self.seen.get(key, 0) + 1
-            if self.seen[key] < self.capture_after:
+            needed = 1 if tokens <= self.first_capture_tokens else self.capture_after
+            if self.seen[key] < needed:
                 self.stats["eager"] += 1
                 return body(*inputs)
             entry = self._capture(key, inputs, body)
@@ -731,21 +866,33 @@ class Graphs:
         inputs: tuple[torch.Tensor, ...],
         body: Callable[..., torch.Tensor],
     ) -> dict[str, Any] | None:
-        # A graph costs far more than its output, and part of it is taken only
-        # after the capture, so the budget is the device's growth since the first.
-        free, total = torch.cuda.mem_get_info(inputs[0].device)
-        used = total - free
-        if self.base is None:
-            # Half of what is free leaves room for eager forwards on a shared card.
-            self.base, self.budget = used, min(self.max_bytes, free // 2)
-        if len(self.graphs) >= self.max_graphs or used - self.base >= self.budget:
+        budget = self.max_bytes if self.budget is None else self.budget
+        if len(self.graphs) >= self.max_graphs or self.spent >= budget:
             self.stats["full"] += 1
             return None
+        # A graph costs far more than its output. torch.cuda.graph empties the
+        # allocator's cache when a capture begins, so with the cache emptied before
+        # and after it, the device memory a capture takes is what the graph holds.
+        # Growth of the cache between captures belongs to eager forwards.
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        free, _ = torch.cuda.mem_get_info(inputs[0].device)
+        if self.budget is None:
+            # Half of what is free leaves room for eager forwards on a shared card.
+            self.budget = min(self.max_bytes, free // 2)
         static = tuple(value.clone() for value in inputs)
         try:
+            # One capture stream: BLAS keeps a workspace per stream, so a new stream per
+            # capture would leave a workspace behind for every graph. A shape captured
+            # after an eager use has already compiled and tuned its kernels, so only the
+            # stream's first capture (or a first-use capture) runs the forward beforehand.
+            first_use = self.capture_after <= 1 or self.seen.get(key, 0) <= 1
+            warmups = 1 if first_use else 0
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-            stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+                self.stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+                warmups = 1
+            stream = self.stream
             stream.wait_stream(torch.cuda.current_stream())
             # Capture under the caller's autocast, with the cast cache off as capture needs.
             with torch.autocast(
@@ -755,7 +902,7 @@ class Graphs:
                 cache_enabled=False,
             ):
                 with torch.cuda.stream(stream):
-                    for _ in range(2):
+                    for _ in range(warmups):
                         body(*static)
                 torch.cuda.current_stream().wait_stream(stream)
                 torch.cuda.synchronize()
@@ -763,7 +910,10 @@ class Graphs:
                 # Device work is serialized, but other threads may still query the device
                 # meanwhile (placement); global capture mode would fail them and the capture.
                 with torch.cuda.graph(
-                    graph, pool=self.pool, capture_error_mode="thread_local"
+                    graph,
+                    pool=self.pool,
+                    stream=stream,
+                    capture_error_mode="thread_local",
                 ):
                     output = body(*static)
             torch.cuda.synchronize()
@@ -772,6 +922,8 @@ class Graphs:
             self.failed.add(key)
             self.stats["failed"] += 1
             return None
+        torch.cuda.empty_cache()
+        self.spent += max(0, free - torch.cuda.mem_get_info(inputs[0].device)[0])
         entry = {"inputs": static, "graph": graph, "output": output}
         self.graphs[key] = entry
         self.stats["captures"] += 1

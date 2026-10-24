@@ -178,6 +178,7 @@ spec:
                             - fast_response
                             - hallucination
                             - header_mutation
+                            - masking
                             - memory
                             - prompt_cache
                             - rag

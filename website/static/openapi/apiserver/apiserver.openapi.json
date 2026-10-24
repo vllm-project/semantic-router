@@ -15672,6 +15672,30 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "box": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "bottom": {
+                                "type": "number"
+                              },
+                              "left": {
+                                "type": "number"
+                              },
+                              "right": {
+                                "type": "number"
+                              },
+                              "top": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "bottom",
+                              "left",
+                              "right",
+                              "top"
+                            ]
+                          },
                           "choice": {
                             "nullable": true,
                             "type": "string"
@@ -15710,9 +15734,65 @@
                               "type": "number"
                             }
                           },
+                          "reason": {
+                            "nullable": true,
+                            "type": "string"
+                          },
                           "score": {
                             "nullable": true,
                             "type": "number"
+                          },
+                          "time": {
+                            "nullable": true,
+                            "type": "number"
+                          },
+                          "track": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "box": {
+                                  "type": "object",
+                                  "properties": {
+                                    "bottom": {
+                                      "type": "number"
+                                    },
+                                    "left": {
+                                      "type": "number"
+                                    },
+                                    "right": {
+                                      "type": "number"
+                                    },
+                                    "top": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "bottom",
+                                    "left",
+                                    "right",
+                                    "top"
+                                  ]
+                                },
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "time": {
+                                  "type": "number"
+                                },
+                                "visible": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "box",
+                                "confidence",
+                                "time",
+                                "visible"
+                              ]
+                            }
                           },
                           "type": {
                             "nullable": true,
@@ -15740,6 +15820,10 @@
                           "nullable": true,
                           "type": "string"
                         },
+                        "dtype": {
+                          "nullable": true,
+                          "type": "string"
+                        },
                         "engine": {
                           "nullable": true,
                           "type": "string"
@@ -15757,10 +15841,6 @@
                           "type": "string"
                         },
                         "numerics": {
-                          "nullable": true,
-                          "type": "string"
-                        },
-                        "profile": {
                           "nullable": true,
                           "type": "string"
                         },
@@ -15897,6 +15977,30 @@
                                   "nullable": true,
                                   "type": "number"
                                 },
+                                "box": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "properties": {
+                                    "bottom": {
+                                      "type": "number"
+                                    },
+                                    "left": {
+                                      "type": "number"
+                                    },
+                                    "right": {
+                                      "type": "number"
+                                    },
+                                    "top": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "bottom",
+                                    "left",
+                                    "right",
+                                    "top"
+                                  ]
+                                },
                                 "choice": {
                                   "nullable": true,
                                   "type": "string"
@@ -15935,9 +16039,65 @@
                                     "type": "number"
                                   }
                                 },
+                                "reason": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
                                 "score": {
                                   "nullable": true,
                                   "type": "number"
+                                },
+                                "time": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "track": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "box": {
+                                        "type": "object",
+                                        "properties": {
+                                          "bottom": {
+                                            "type": "number"
+                                          },
+                                          "left": {
+                                            "type": "number"
+                                          },
+                                          "right": {
+                                            "type": "number"
+                                          },
+                                          "top": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "bottom",
+                                          "left",
+                                          "right",
+                                          "top"
+                                        ]
+                                      },
+                                      "confidence": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "time": {
+                                        "type": "number"
+                                      },
+                                      "visible": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "box",
+                                      "confidence",
+                                      "time",
+                                      "visible"
+                                    ]
+                                  }
                                 },
                                 "type": {
                                   "nullable": true,
@@ -15965,6 +16125,10 @@
                                 "nullable": true,
                                 "type": "string"
                               },
+                              "dtype": {
+                                "nullable": true,
+                                "type": "string"
+                              },
                               "engine": {
                                 "nullable": true,
                                 "type": "string"
@@ -15982,10 +16146,6 @@
                                 "type": "string"
                               },
                               "numerics": {
-                                "nullable": true,
-                                "type": "string"
-                              },
-                              "profile": {
                                 "nullable": true,
                                 "type": "string"
                               },
@@ -16722,6 +16882,32 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "assets": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "data_base64": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "format": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "part": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
                       "images": {
                         "nullable": true,
                         "type": "array",
@@ -16741,13 +16927,13 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "long_context": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
                           "max_tokens": {
                             "nullable": true,
                             "type": "integer"
-                          },
-                          "profile": {
-                            "nullable": true,
-                            "type": "string"
                           },
                           "return_meta": {
                             "nullable": true,
@@ -16762,6 +16948,10 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "at": {
+                              "nullable": true,
+                              "type": "number"
+                            },
                             "choices": {
                               "nullable": true,
                               "type": "array",
@@ -16828,6 +17018,10 @@
                               "nullable": true,
                               "type": "string"
                             },
+                            "rate": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
                             "require_full_input": {
                               "nullable": true,
                               "type": "boolean"
@@ -16864,6 +17058,10 @@
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
+                                  "at": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
                                   "choices": {
                                     "nullable": true,
                                     "type": "array",
@@ -16929,6 +17127,10 @@
                                   "preset": {
                                     "nullable": true,
                                     "type": "string"
+                                  },
+                                  "rate": {
+                                    "nullable": true,
+                                    "type": "integer"
                                   },
                                   "require_full_input": {
                                     "nullable": true,
@@ -19502,6 +19704,32 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "assets": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "data_base64": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "format": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "part": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
                       "images": {
                         "nullable": true,
                         "type": "array",
@@ -19521,13 +19749,13 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "long_context": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
                           "max_tokens": {
                             "nullable": true,
                             "type": "integer"
-                          },
-                          "profile": {
-                            "nullable": true,
-                            "type": "string"
                           },
                           "return_meta": {
                             "nullable": true,
@@ -19542,6 +19770,10 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "at": {
+                              "nullable": true,
+                              "type": "number"
+                            },
                             "choices": {
                               "nullable": true,
                               "type": "array",
@@ -19608,6 +19840,10 @@
                               "nullable": true,
                               "type": "string"
                             },
+                            "rate": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
                             "require_full_input": {
                               "nullable": true,
                               "type": "boolean"
@@ -19644,6 +19880,10 @@
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
+                                  "at": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
                                   "choices": {
                                     "nullable": true,
                                     "type": "array",
@@ -19709,6 +19949,10 @@
                                   "preset": {
                                     "nullable": true,
                                     "type": "string"
+                                  },
+                                  "rate": {
+                                    "nullable": true,
+                                    "type": "integer"
                                   },
                                   "require_full_input": {
                                     "nullable": true,
@@ -21395,6 +21639,34 @@
                           "engine": {
                             "type": "string"
                           },
+                          "engine_args": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "batch_window_ms": {
+                                "type": "number"
+                              },
+                              "dtype": {
+                                "type": "string"
+                              },
+                              "enable_shared_context": {
+                                "type": "boolean"
+                              },
+                              "max_num_batched_tokens": {
+                                "type": "integer"
+                              },
+                              "max_num_seqs": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "max_num_seqs",
+                              "max_num_batched_tokens",
+                              "batch_window_ms",
+                              "dtype",
+                              "enable_shared_context"
+                            ]
+                          },
                           "family": {
                             "type": "string"
                           },
@@ -21430,10 +21702,10 @@
                           "name": {
                             "type": "string"
                           },
-                          "process": {
+                          "numerics": {
                             "type": "string"
                           },
-                          "profile": {
+                          "process": {
                             "type": "string"
                           },
                           "ready": {

@@ -3,14 +3,10 @@ queue_rules:
   - name: default
     queue_conditions:
       - base = main
-      - or:
-          - check-success = PR Gate
-          - check-skipped = PR Gate
+      - check-success = PR Gate
     merge_conditions:
       - base = main
-      - or:
-          - check-success = PR Gate
-          - check-skipped = PR Gate
+      - check-success = PR Gate
     merge_method: squash
     update_method: merge
     batch_size: 1
