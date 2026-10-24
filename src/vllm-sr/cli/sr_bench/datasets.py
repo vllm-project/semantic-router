@@ -647,9 +647,7 @@ class DatasetReader:
                         else (
                             "source_conflict"
                             if conflict
-                            else None
-                            if eligible
-                            else "not_prepared"
+                            else None if eligible else "not_prepared"
                         )
                     ),
                     "reason": (
