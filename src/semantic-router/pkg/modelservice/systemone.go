@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -129,6 +130,28 @@ func (c *Client) systemOne(ctx context.Context, model string, body json.RawMessa
 	}
 	result := SystemOneResult{Status: response.StatusCode, Body: data, ServerTiming: response.Header.Get("Server-Timing")}
 	return result, timing, systemOneStatusError(response.StatusCode)
+}
+
+// Runtime-style answers for a refusal that happened before any worker answered.
+var (
+	poolOverloadedAnswer = []byte(`{"error":{"code":"overloaded","message":"every worker of the deployment is busy"}}`)
+	poolNotReadyAnswer   = []byte(`{"error":{"code":"not_ready","message":"the deployment has no ready worker"}}`)
+)
+
+// SystemOneAnswer gives a refusal of the replica pool (every worker full, or
+// none ready) the status and code a worker's own refusal has, 429 overloaded or
+// 503 not_ready, instead of an unspecified failure. Every
+// public System One surface that calls a local deployment answers through it.
+func SystemOneAnswer(result SystemOneResult, err error) (int, []byte, error) {
+	if result.Status == 0 {
+		switch {
+		case errors.Is(err, ErrOverloaded):
+			return http.StatusTooManyRequests, slices.Clone(poolOverloadedAnswer), err
+		case errors.Is(err, ErrUnavailable):
+			return http.StatusServiceUnavailable, slices.Clone(poolNotReadyAnswer), err
+		}
+	}
+	return result.Status, result.Body, err
 }
 
 func systemOneStatusError(status int) error {

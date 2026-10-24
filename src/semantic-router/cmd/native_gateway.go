@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/gateway"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -207,8 +208,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 	models, _ := lease.Snapshot.Part(configsnapshot.ComponentModelService).(*extproc.FrontendModels)
 	remote, _ := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
 	local := func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
-		result, err := models.SystemOne(ctx, deployment, body)
-		return result.Status, result.Body, err
+		return modelservice.SystemOneAnswer(models.SystemOne(ctx, deployment, body))
 	}
 	var nativeRouter systemone.Router
 	if lease.Router != nil {
