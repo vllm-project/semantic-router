@@ -2,10 +2,13 @@ package modelservice
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestRecoveryRequiresFreshModelCard(t *testing.T) {
@@ -69,5 +72,58 @@ func TestRecoveryRequiresFreshModelCard(t *testing.T) {
 	g.refresh(ctx)
 	if !served.ready.Load() || !served.card.Answers("span") {
 		t.Errorf("model failed to recover with fresh metadata: ready=%v, types=%v", served.ready.Load(), served.card.QuestionTypes)
+	}
+}
+
+func TestRefreshDiscardsProbeFromExitedProcess(t *testing.T) {
+	modelsEntered := make(chan struct{})
+	releaseModels := make(chan struct{})
+	var modelsOnce sync.Once
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			writeJSON(w, http.StatusOK, map[string]any{"api_version": RuntimeAPIVersion, "status": "ready"})
+		case "/v1/models":
+			modelsOnce.Do(func() { close(modelsEntered) })
+			<-releaseModels
+			writeJSON(w, http.StatusOK, map[string]any{
+				"api_version": RuntimeAPIVersion, "object": "list",
+				"data": []any{map[string]any{"id": "primary", "object": "model", "family": "fixture", "ready": true, "surfaces": []string{"decisions"}, "question_types": []string{"choice"}}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := &processPlan{logical: "primary", name: "exited-process", members: map[string]string{"primary": "primary"}}
+	g := newGroup(plan, client, false)
+
+	refreshDone := make(chan struct{})
+	go func() {
+		defer close(refreshDone)
+		g.refresh(context.Background())
+	}()
+	select {
+	case <-modelsEntered:
+	case <-refreshDone:
+		t.Fatal("refresh returned before discovery began")
+	}
+	g.processExited(errors.New("killed"), time.Minute)
+	close(releaseModels)
+	<-refreshDone
+
+	served := g.models["primary"]
+	if served.ready.Load() {
+		t.Error("probe from the exited process marked the model ready")
+	}
+	if served.state != "restarting" {
+		t.Errorf("probe from the exited process overwrote state = %q, want restarting", served.state)
+	}
+	if served.card != nil {
+		t.Errorf("probe from the exited process restored a card: %+v", served.card)
 	}
 }
