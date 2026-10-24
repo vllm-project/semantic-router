@@ -245,6 +245,27 @@ class PRStatusTests(unittest.TestCase):
         client.refresh_report()
         self.assertEqual(reconcile(client, REPO, 101)["state"], "awaiting-approval")
 
+    def test_owned_status_check_does_not_count_as_a_failed_job(self):
+        for conclusion in (None, "failure"):
+            with self.subTest(conclusion=conclusion):
+                client = Client()
+                client.checks = [
+                    {
+                        "id": 77,
+                        "name": "PR Gate",
+                        "app": {"id": APP_ID},
+                        "external_id": f"{PREFIX}3:101:1",
+                        "status": "in_progress" if conclusion is None else "completed",
+                        "conclusion": conclusion,
+                    }
+                ]
+                client.jobs.append(
+                    {"id": 77, "name": "PR Gate", "conclusion": conclusion}
+                )
+                result = reconcile(client, REPO, 101)
+                self.assertEqual(result["state"], "awaiting-approval")
+                self.assertIn("Automatic checks passed", result["comment"])
+
     def test_repeated_waiting_receipt_keeps_the_same_gate_pending(self):
         client = Client()
         for _ in range(2):

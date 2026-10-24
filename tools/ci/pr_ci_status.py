@@ -480,6 +480,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
                     client, repo, pull, run, "legacy", plan, checks, dry_run=dry_run
                 )
             return {"ignored": "legacy workflow owns PR Gate"}
+        # Ignore only this publisher's check. Another failed PR Gate still counts.
         publisher_ids = {check["id"] for check in checks}
         jobs = [job for job in jobs if job.get("id") not in publisher_ids]
         report = artifact(client, repo, run, "ci-gate", "gate.json", 256 * 1024)
