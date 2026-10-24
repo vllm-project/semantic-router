@@ -1,4 +1,4 @@
-"""The quantized layers on a GPU: int4 unpacking against the CPU, FP8 on its matrix units, and packages' answers."""
+"""The quantized layers on a GPU: int4 unpacking against the CPU, FP8 and NVFP4 on their matrix units, and packages' answers."""
 
 import asyncio
 
@@ -342,3 +342,542 @@ def test_a_triton_without_knobs_launches_through_the_jit(device, monkeypatch):
     later = triton_fp8.quantize_rows(x, dtype)
     assert torch.equal(later[0].view(torch.uint8), first[0].view(torch.uint8))
     assert torch.equal(later[1], first[1])
+
+
+@pytest.fixture
+def blackwell(device):
+    from vllm_srun.accel.gpu import nvfp4_unavailable
+
+    reason = nvfp4_unavailable(device.index)
+    if reason:
+        pytest.skip(reason)
+    return device
+
+
+def nvfp4_layer(rows, columns, device, seed=0):
+    """An NVFP4Linear holding a random weight quantized by the reference, its input global scale for N(0, 1) inputs."""
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    torch.manual_seed(seed)
+    weight = torch.randn(rows, columns) * 0.05
+    module = NVFP4Linear(nn.Linear(columns, rows, bias=False))
+    global_ = nvfp4.global_scale(weight)
+    packed, scale = nvfp4.quantize(weight, global_)
+    module.weight_packed.copy_(packed)
+    module.weight_scale.copy_(scale)
+    module.weight_global_scale.copy_(global_)
+    module.input_global_scale.fill_(448 * 6 / 5.0)  # N(0, 1) blocks rarely pass 5
+    module.to(device).prepare()
+    return module, nvfp4.dequantize(packed, scale, global_).to(device)
+
+
+@pytest.mark.parametrize("shape", [(1, 64), (37, 256), (300, 5120), (8, 17408)])
+def test_nvfp4_activations_quantize_as_the_reference_does(blackwell, shape):
+    from vllm_srun.accel import nvfp4, triton_nvfp4
+
+    torch.manual_seed(0)
+    x = (torch.randn(*shape, device=blackwell) * 3).to(torch.bfloat16)
+    global_ = (
+        nvfp4.global_scale(x) * 0.7
+    )  # below this input's range: some blocks saturate
+    codes, scales = triton_nvfp4.quantize(x, float(global_))
+    want_codes, want_scales = nvfp4.quantize(x, global_)
+    assert codes.equal(want_codes)
+    # the kernel writes cuBLAS's padded 32x4x4 layout, zero where it pads
+    assert scales.view(torch.uint8).equal(nvfp4.swizzle(want_scales).view(torch.uint8))
+
+
+def test_later_nvfp4_calls_launch_the_compiled_kernel_and_write_the_same_bytes(
+    blackwell,
+):
+    from vllm_srun.accel import nvfp4, triton_nvfp4
+
+    torch.manual_seed(0)
+    x = torch.randn(300, 2048, device=blackwell, dtype=torch.bfloat16)
+    first = triton_nvfp4.quantize(x, 100.0)
+    assert [v for k, v in triton_nvfp4._launches.items() if k[2] == 2048 and v]
+    again = triton_nvfp4.quantize(x, 100.0)  # the direct launch
+    assert again[0].equal(first[0])
+    assert again[1].view(torch.uint8).equal(first[1].view(torch.uint8))
+    for rows in (1, 37, 129):  # every row count takes the same compiled kernel
+        codes, scales = triton_nvfp4.quantize(x[:rows].contiguous(), 100.0)
+        want_codes, want_scales = nvfp4.quantize(
+            x[:rows], torch.tensor([100.0], device=blackwell)
+        )
+        assert codes.equal(want_codes)
+        assert scales.view(torch.uint8).equal(
+            nvfp4.swizzle(want_scales).view(torch.uint8)
+        )
+    assert len([k for k in triton_nvfp4._launches if k[2] == 2048]) == 1
+
+
+def test_a_triton_without_knobs_launches_nvfp4_through_the_jit(blackwell, monkeypatch):
+    import triton
+    from vllm_srun.accel import triton_nvfp4
+
+    x = torch.randn(37, 2048, device=blackwell, dtype=torch.bfloat16)
+    first = triton_nvfp4.quantize(x, 100.0)
+    monkeypatch.delattr(triton, "knobs")
+    monkeypatch.setattr(triton_nvfp4, "_launch", None)  # the direct launch is not taken
+    later = triton_nvfp4.quantize(x, 100.0)
+    assert later[0].equal(first[0])
+    assert later[1].view(torch.uint8).equal(first[1].view(torch.uint8))
+
+
+@pytest.mark.parametrize(
+    "shape", [(32, 64, 1), (256, 512, 37), (5120, 17408, 300), (1024, 2048, 9000)]
+)
+def test_the_nvfp4_layer_multiplies_the_fp4_values_it_holds(blackwell, shape):
+    from vllm_srun.accel import nvfp4
+
+    rows, columns, inputs = shape
+    module, weight = nvfp4_layer(rows, columns, blackwell)
+    x = torch.randn(inputs, columns, device=blackwell).to(torch.bfloat16)
+    got = module(x).float()
+    codes, scales = nvfp4.quantize(x.float(), module.input_global_scale)
+    want = nvfp4.dequantize(codes, scales, module.input_global_scale) @ weight.T
+    # the same FP4 products in FP32; the layer writes BF16 (9000 rows: in slices)
+    assert ((got - want).norm() / want.norm()) < 4e-3
+
+
+def test_the_nvfp4_layer_replays_in_a_graph(blackwell):
+    module, _ = nvfp4_layer(256, 512, blackwell)
+    x = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    want = module(x)
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        module(x)
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        got = module(x)
+    graph.replay()
+    torch.cuda.synchronize()
+    assert got.equal(want)
+
+
+def captured(module, x):
+    """``module(x)`` captured in a graph and replayed once."""
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        module(x)
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        got = module(x)
+    graph.replay()
+    torch.cuda.synchronize()
+    return got
+
+
+@pytest.fixture
+def mm_fp4(blackwell):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    product, reason = flashinfer_nvfp4.load(blackwell)
+    if product is None:
+        pytest.skip(reason)
+    return product
+
+
+@pytest.mark.parametrize(
+    "shape", [(384, 256, 1), (384, 256, 37), (5120, 17408, 300), (34816, 5120, 512)]
+)
+def test_flashinfer_multiplies_nvfp4_as_cublas_does(blackwell, mm_fp4, shape):
+    from vllm_srun.engines.native import quantized
+
+    rows, columns, inputs = shape
+    module, _ = nvfp4_layer(rows, columns, blackwell)
+    x = torch.randn(inputs, columns, device=blackwell).to(torch.bfloat16)
+    q, scale = module.quantize(x, module.input_global)
+    got = module._flashinfer_product(mm_fp4, q, scale).float()
+    want = module._product(q, scale).float()
+    # the same FP4 products, summed in another order
+    assert ((got - want).norm() / want.norm()) < quantized.FLASHINFER_TOLERANCE
+    generator = torch.Generator(device=blackwell).manual_seed(0)
+    assert module.flashinfer_disagrees(mm_fp4, generator) is None
+
+
+def test_an_autotune_cache_records_flashinfer_tiles_once_per_shape(
+    blackwell, mm_fp4, tmp_path, monkeypatch
+):
+    import importlib
+
+    from vllm_srun.accel import autotune, flashinfer_nvfp4
+
+    flashinfer = importlib.import_module("flashinfer")
+    monkeypatch.setitem(autotune._FROZEN, "directory", tmp_path)
+    timed = []
+    real = flashinfer.autotune
+
+    def recorded(tune_mode=True, cache=None, **kwargs):
+        timed.append(tune_mode)
+        return real(tune_mode, cache=cache, **kwargs)
+
+    monkeypatch.setattr(flashinfer, "autotune", recorded)
+    flashinfer_nvfp4.tune(mm_fp4, [(384, 256), (256, 512)], blackwell)
+    assert timed == [True, True] and len(list(tmp_path.glob("flashinfer-fp4-*"))) == 2
+    # a later process loads them untimed: its tiles are the first one's
+    flashinfer_nvfp4.tune(mm_fp4, [(384, 256), (256, 512)], blackwell)
+    assert timed == [True, True, False, False]
+
+
+def test_only_graph_captures_of_up_to_its_rows_take_flashinfer(blackwell):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    module, _ = nvfp4_layer(256, 512, blackwell)
+    calls = []
+
+    def product(q, weight_t, *_, **__):
+        calls.append(q.shape[0])
+        return torch.zeros(
+            q.shape[0], weight_t.shape[1], dtype=torch.bfloat16, device=q.device
+        )
+
+    module.flashinfer = product
+    small = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    big = torch.randn(flashinfer_nvfp4.GRAPH_ROWS + 1, 512, device=blackwell).to(
+        torch.bfloat16
+    )
+    assert module(small).abs().max() > 0 and not calls  # eager forwards keep cuBLAS
+    assert not captured(module, small).any() and calls == [37]
+    assert captured(module, big).equal(module(big)) and calls == [37]
+
+
+def test_shapes_flashinfer_multiplies_otherwise_keep_cublas(blackwell, monkeypatch):
+    from vllm_srun.accel import flashinfer_nvfp4
+    from vllm_srun.engines.native import quantized
+
+    wrong, _ = nvfp4_layer(256, 512, blackwell)
+    failing, _ = nvfp4_layer(128, 256, blackwell)
+    right, _ = nvfp4_layer(384, 256, blackwell)
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
+    assert quantized.use_flashinfer([right], blackwell) == {"skipped": "absent"}
+    assert right.flashinfer is None
+
+    def product(q, weight_t, scale, *_, **__):
+        columns = weight_t.shape[1]
+        if columns == 128:
+            raise RuntimeError("no tile for this shape")
+        if columns == 256:  # far from cuBLAS's product
+            return torch.zeros(q.shape[0], 256, dtype=torch.bfloat16, device=q.device)
+        return right._product(q, scale.flatten())
+
+    tuned = []
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (product, None))
+    monkeypatch.setattr(
+        flashinfer_nvfp4, "tune", lambda mm, shapes, device: tuned.extend(shapes)
+    )
+    receipt = quantized.use_flashinfer([wrong, failing, right], blackwell)
+    assert receipt["cublas_shapes"] == {
+        "256x512": "relative error 1.0e+00 at 1 rows",
+        "128x256": "RuntimeError: no tile for this shape",
+    }
+    assert wrong.flashinfer is None and failing.flashinfer is None
+    assert right.flashinfer is product
+    assert tuned == [(256, 512), (128, 256), (384, 256)]  # tuned before the check
+
+
+def test_projections_of_one_input_scale_share_its_quantization(blackwell):
+    from vllm_srun.accel import triton_nvfp4
+    from vllm_srun.engines.native.quantized import project
+
+    gate, _ = nvfp4_layer(256, 512, blackwell, seed=1)
+    up, _ = nvfp4_layer(128, 512, blackwell, seed=2)
+    other, _ = nvfp4_layer(64, 512, blackwell, seed=3)
+    other.input_global = gate.input_global / 2  # another input global scale
+    other.input_decode = 1.0 / other.input_global * torch.ones(1, device=blackwell)
+    plain = nn.Linear(512, 32, bias=False).to(blackwell, torch.bfloat16)
+    x = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    alone = [layer(x) for layer in (gate, up, other, plain)]
+    calls = []
+
+    def counted(rows, global_scale):
+        calls.append(global_scale)
+        return triton_nvfp4.quantize(rows, global_scale)
+
+    for layer in (gate, up, other):
+        layer.quantize = counted
+    shared = project(x, gate, up, other, plain)
+    assert calls == [gate.input_global, other.input_global]
+    assert all(got.equal(want) for got, want in zip(shared, alone, strict=True))
+
+
+def sibling_layers(shapes, device):
+    """NVFP4 layers of one input under one weight global scale, as a package's q / k / v or gate / up are."""
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    torch.manual_seed(0)
+    weights = [torch.randn(rows, columns) * 0.05 for rows, columns in shapes]
+    global_ = nvfp4.global_scale(torch.cat(weights))
+    layers = []
+    for weight in weights:
+        layer = NVFP4Linear(nn.Linear(weight.shape[1], weight.shape[0], bias=False))
+        packed, scale = nvfp4.quantize(weight, global_)
+        layer.weight_packed.copy_(packed)
+        layer.weight_scale.copy_(scale)
+        layer.weight_global_scale.copy_(global_)
+        layer.input_global_scale.fill_(448 * 6 / 5.0)
+        layers.append(layer.to(device))
+    return layers
+
+
+def test_sibling_nvfp4_layers_merge_into_one_product_with_the_same_outputs(
+    blackwell,
+):
+    from vllm_srun.engines.native import quantized
+
+    q, k, v = sibling_layers([(512, 256), (128, 256), (128, 256)], blackwell)
+    attention = nn.Module()
+    attention.q_proj, attention.k_proj, attention.v_proj = q, k, v
+    for layer in (q, k, v):
+        layer.prepare()
+    xs = [
+        torch.randn(rows, 256, device=blackwell).to(torch.bfloat16)
+        for rows in (1, 37, 300)
+    ]
+    before = [[layer(x) for layer in (q, k, v)] for x in xs]
+    stored = torch.cuda.memory_allocated(blackwell)
+
+    assert quantized.merge_siblings(attention) == 1
+    group = q.merged
+    assert group is not None and group.parts == (q, k, v)
+    # the parts hold views of the merged weight: no second copy (only its few global-scale scalars)
+    weights = sum(layer.stored_bytes() for layer in (q, k, v))
+    assert torch.cuda.memory_allocated(blackwell) - stored < weights / 10
+    base = group.layer.weight_packed.untyped_storage().data_ptr()
+    assert all(
+        layer.weight_packed.untyped_storage().data_ptr() == base for layer in (q, k, v)
+    )
+    for x, want in zip(xs, before, strict=True):
+        merged = quantized.project(x, q, k, v)
+        assert all(got.equal(w) for got, w in zip(merged, want, strict=True))
+        assert all(layer(x).equal(w) for layer, w in zip((q, k, v), want, strict=True))
+
+
+def test_siblings_of_other_global_scales_stay_apart(blackwell):
+    from vllm_srun.engines.native import quantized
+
+    gate, up = sibling_layers([(256, 256), (256, 256)], blackwell)
+    up.weight_global_scale.mul_(2)
+    mlp = nn.Module()
+    mlp.gate_proj, mlp.up_proj = gate, up
+    quantized.prepare(mlp)
+    assert gate.merged is None and up.merged is None
+
+
+def test_silu_mul_reads_column_slices_as_it_reads_contiguous_rows(device):
+    pytest.importorskip("triton")
+    from vllm_srun.accel import triton_gfx942
+
+    both = torch.randn(3, 37, 2 * 1040, device=device).to(torch.bfloat16)
+    gate, up = torch.split(both, 1040, dim=-1)
+    want = triton_gfx942.silu_mul(gate.contiguous(), up.contiguous())
+    assert triton_gfx942.silu_mul(gate, up).equal(want)
+
+
+# d3's widths: hidden 5120; q (with its gate) 24 x 2 x 256, k / v 4 x 256; gate / up 17408
+D3_QKV = [(12288, 5120), (1024, 5120), (1024, 5120)]
+D3_GATE_UP = [(17408, 5120), (17408, 5120)]
+
+
+@pytest.mark.parametrize("shapes", [D3_QKV, D3_GATE_UP], ids=["q/k/v", "gate/up"])
+def test_d3_siblings_merge_bit_for_bit_at_the_package_widths(blackwell, shapes):
+    from vllm_srun.engines.native import quantized
+
+    parts = sibling_layers(shapes, blackwell)
+    owner = nn.Module()
+    names = quantized.SIBLINGS[0] if len(parts) == 3 else quantized.SIBLINGS[1]
+    for name, layer in zip(names, parts, strict=True):
+        setattr(owner, name, layer)
+        layer.prepare()
+    # 9,000 rows go in two slices of NVFP4_ROWS
+    xs = [
+        torch.randn(rows, 5120, device=blackwell).to(torch.bfloat16)
+        for rows in (1, 300, 9000)
+    ]
+    before = [[layer(x) for layer in parts] for x in xs]
+    assert quantized.merge_siblings(owner) == 1
+    for x, want in zip(xs, before, strict=True):
+        assert all(
+            got.equal(w)
+            for got, w in zip(quantized.project(x, *parts), want, strict=True)
+        )
+        reversed_ = quantized.project(x, *parts[::-1])  # any order: one product
+        assert all(got.equal(w) for got, w in zip(reversed_, want[::-1], strict=True))
+    del before
+
+
+def test_merged_q_k_v_reach_attn_prep_as_views_with_no_higher_peak(blackwell):
+    pytest.importorskip("triton")
+    from vllm_srun.accel import triton_gfx942
+    from vllm_srun.engines.native import quantized
+
+    q, k, v = sibling_layers(D3_QKV, blackwell)
+    attention = nn.Module()
+    attention.q_proj, attention.k_proj, attention.v_proj = q, k, v
+    for layer in (q, k, v):
+        layer.prepare()
+    torch.manual_seed(1)
+    x = torch.randn(1, 2048, 5120, device=blackwell).to(torch.bfloat16)
+    norm = [torch.randn(256, device=blackwell) for _ in range(2)]
+    cos, sin = (
+        torch.randn(1, 2048, 64, device=blackwell).to(torch.bfloat16) for _ in range(2)
+    )
+
+    def prep():
+        qp, kp, vp = quantized.project(x, q, k, v)
+        return (*triton_gfx942.attn_prep(qp, kp, *norm, cos, sin, 24, 4, 256, 1e-6), vp)
+
+    def peak():
+        prep()  # the first call compiles and sizes the cuBLAS workspace
+        torch.cuda.synchronize(blackwell)
+        torch.cuda.reset_peak_memory_stats(blackwell)
+        start = torch.cuda.memory_allocated(blackwell)
+        out = prep()
+        torch.cuda.synchronize(blackwell)
+        return out, torch.cuda.max_memory_allocated(blackwell) - start
+
+    separate, separate_peak = peak()
+    assert quantized.merge_siblings(attention) == 1
+    merged, merged_peak = peak()
+    assert all(got.equal(want) for got, want in zip(merged, separate, strict=True))
+    # q and k are not copied out of the merged product
+    assert merged_peak <= separate_peak
+
+
+def test_a_merged_nvfp4_layer_refuses_a_move_after_the_merge(blackwell):
+    from vllm_srun.engines.native import quantized
+
+    gate, up = sibling_layers([(256, 256), (256, 256)], blackwell)
+    mlp = nn.Module()
+    mlp.gate_proj, mlp.up_proj = gate, up
+    quantized.prepare(mlp)
+    assert gate.merged is not None
+    mlp.to(blackwell)  # where it already is: still views
+    with pytest.raises(RuntimeError, match=r"before quantized\.prepare"):
+        mlp.to("cpu")
+
+
+def test_a_whole_model_cast_keeps_the_nvfp4_weights(device):
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    module = NVFP4Linear(nn.Linear(64, 32, bias=False))
+    module.float().to(torch.bfloat16).to(device)
+    assert {name: b.dtype for name, b in module.named_buffers()} == {
+        "weight_packed": torch.uint8,
+        "weight_scale": torch.float8_e4m3fn,
+        "weight_global_scale": torch.float32,
+        "input_global_scale": torch.float32,
+    }
+
+
+def test_cuda_offers_nvfp4_where_its_fp4_tensor_cores_run(device):
+    from vllm_srun.accel.cuda import CUDAAccelerator
+    from vllm_srun.accel.gpu import nvfp4_unavailable
+
+    if torch.version.hip:
+        pytest.skip("CUDA accelerator")
+    accelerator = CUDAAccelerator()
+    info = accelerator.devices()[0]
+    offered = accelerator.capabilities(info)["nvfp4"]
+    assert offered is (nvfp4_unavailable(info.index) is None)
+    if not offered:
+        assert "Blackwell" in accelerator.lacks(info, "nvfp4")
+
+
+def served(package, dtype):
+    """Each fixture state answered twice (graphs capture on a shape's first uses) and the engine's receipt."""
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
+    from tests.test_quantized import QUESTIONS, STATES
+
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), device="cuda:0", dtype=dtype),)
+        )
+    )
+    runtime.start(background=False)
+    try:
+        bodies = [
+            asyncio.run(runtime.call("decisions", {"state": s, "questions": QUESTIONS}))
+            for _ in range(2)
+            for s in STATES
+        ]
+        return bodies[len(STATES) :], runtime.lookup(None).model.engine_model.receipt()
+    finally:
+        runtime.stop()
+
+
+def test_graphs_of_an_nvfp4_package_take_flashinfer_with_close_answers(
+    mm_fp4, tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    product, captured_calls = flashinfer_nvfp4.product, []
+
+    def counted(*args, **kwargs):
+        if torch.cuda.is_current_stream_capturing():
+            captured_calls.append(args[1].shape[0])
+        return product(*args, **kwargs)
+
+    monkeypatch.setattr(flashinfer_nvfp4, "product", counted)
+    # the fixture's forwards run 612 to 8,192 rows
+    monkeypatch.setattr(flashinfer_nvfp4, "GRAPH_ROWS", 8192)
+    got, receipt = served(packed, "auto")
+    assert receipt["nvfp4_product"] == {"graphs": "flashinfer-cutlass", "rows": 8192}
+    assert captured_calls
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
+    want, receipt = served(packed, "auto")
+    assert receipt["nvfp4_product"] == {"skipped": "absent"}
+    # the same FP4 products summed in another order
+    assert (numbers(got) - numbers(want)).abs().max() < 0.01
+    # an explicit --dtype runs exact kernels only, which keep cuBLAS
+    assert "nvfp4_product" not in served(packed, "float16")[1]
+
+
+def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(
+    blackwell, tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.accel import nvfp4
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    plain = write_quantized_fixture(
+        d3_text_package, tmp_path / "plain", scheme="nvfp4", dequantized=True
+    )
+    got, parameters, size = gpu_answers(packed)
+    assert numbers(gpu_answers(packed)[0]).equal(numbers(got))
+    _, plain_parameters, plain_size = gpu_answers(plain)
+    assert parameters == plain_parameters and size < plain_size
+
+    prepare = NVFP4Linear.prepare
+
+    def keep_weight(self):
+        self.reference = nvfp4.dequantize(
+            self.weight_packed, self.weight_scale, self.weight_global_scale
+        )
+        prepare(self)
+        self.quantize = lambda rows, global_scale: (rows, None)  # the BF16 rows
+
+    def emulated(self, rows, _):
+        # each layer quantizes the rows it gets itself, so shared slices are checked too
+        q, scales = nvfp4.quantize(rows, self.input_global_scale)
+        out = nvfp4.dequantize(q, scales, self.input_global_scale) @ self.reference.T
+        return out.to(torch.bfloat16)
+
+    monkeypatch.setattr(NVFP4Linear, "prepare", keep_weight)
+    monkeypatch.setattr(NVFP4Linear, "_product", emulated)
+    want = gpu_answers(packed)[0]
+    # the same FP4 values multiplied in FP32: only the products' BF16 rounding separates them
+    assert (numbers(got) - numbers(want)).abs().max() < 0.02
