@@ -511,3 +511,33 @@ def test_accounting_headers_must_be_non_negative_numbers():
     assert bench.valid_router_header_value("x-vsr-routing-latency-ms", "0.412")
     assert not bench.valid_router_header_value("x-vsr-cost", "-1")
     assert not bench.valid_router_header_value("x-vsr-routing-latency-ms", "fast")
+
+
+def test_require_router_diagnostics_sends_debug_header():
+    bench = load_benchmark_module()
+    args = bench.parse_args(["--require-router-diagnostics"])
+    headers = bench.request_headers(args, "session-1")
+    assert headers["x-vsr-debug"] == "true"
+
+
+def test_require_router_diagnostics_keeps_explicit_debug_override():
+    bench = load_benchmark_module()
+    args = bench.parse_args(
+        ["--require-router-diagnostics", "--extra-header", "x-vsr-debug=false"]
+    )
+    headers = bench.request_headers(args, "session-1")
+    assert headers["x-vsr-debug"] == "false"
+
+    args = bench.parse_args(
+        ["--require-router-diagnostics", "--extra-header", "X-VSR-Debug=1"]
+    )
+    headers = bench.request_headers(args, "session-1")
+    assert "x-vsr-debug" not in headers
+    assert headers["X-VSR-Debug"] == "1"
+
+
+def test_request_headers_omit_debug_without_diagnostics_flag():
+    bench = load_benchmark_module()
+    args = bench.parse_args([])
+    headers = bench.request_headers(args, "session-1")
+    assert "x-vsr-debug" not in {name.lower() for name in headers}
