@@ -236,6 +236,52 @@
      "type": "noul"
     }
    },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.5297194296346442,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.8434792036272141,
+      "1": 0.12182552303143905,
+      "2": 0.03469527334134691
+     },
+     "score": 0.19121606971413285,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.7172897283253366,
+     "probabilities": {
+      "code": 0.9068348537042784,
+      "math": 0.00010073861112596252,
+      "other": 0.09306440768459565
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.42313616481843663,
+     "probabilities": {
+      "blue": 0.012332611820654484,
+      "green": 0.33321488182892456,
+      "other": 0.6307727747382177,
+      "red": 0.023679731612203256
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.028030330611560645,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.06374549168158689,
+     "type": "noul"
+    }
+   },
    "cuda:sm_89": {
     "difficulty": {
      "confidence": 0.5261988142793741,
@@ -379,6 +425,52 @@
      "type": "noul"
     }
    },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.5962198320384222,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.10471091676918245,
+      "1": 0.8719126176129739,
+      "2": 0.023376465617843643
+     },
+     "score": 0.9186655488486611,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9500629885441634,
+     "probabilities": {
+      "code": 0.9913945981075434,
+      "math": 0.002723349076833407,
+      "other": 0.005882052815623181
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.5506576139666831,
+     "probabilities": {
+      "blue": 0.023129894984813108,
+      "green": 0.12712783922064544,
+      "other": 0.818078326909567,
+      "red": 0.03166393888497444
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.015151903259037484,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.39114425751996806,
+     "type": "noul"
+    }
+   },
    "rocm": {
     "difficulty": {
      "confidence": 0.6024126468763933,
@@ -473,6 +565,52 @@
     },
     "reasoning": {
      "noul": 0.0463528838376765,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.37337791926380104,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.7126370668411255,
+      "1": 0.2607592046260834,
+      "2": 0.026603728532791138
+     },
+     "score": 0.31396666169166565,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9401442022206378,
+     "probabilities": {
+      "code": 0.9883353303446738,
+      "math": 0.0005578465413769297,
+      "other": 0.011106823113949274
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "green",
+     "confidence": 0.4064411093661826,
+     "probabilities": {
+      "blue": 0.013555773581467428,
+      "green": 0.685224071177016,
+      "other": 0.24560648091840218,
+      "red": 0.05561367432311438
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.022709998472072234,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.045213966214240606,
      "type": "noul"
     }
    },
@@ -573,6 +711,52 @@
      "type": "noul"
     }
    },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.49249773239558436,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.2057234895014323,
+      "1": 0.7852670367512145,
+      "2": 0.009009473747353215
+     },
+     "score": 0.8032859842459209,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9774839612059654,
+     "probabilities": {
+      "code": 0.9965083546647604,
+      "math": 0.0029555017067904752,
+      "other": 0.0005361436284491457
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.33179498089926196,
+     "probabilities": {
+      "blue": 0.06745009492430305,
+      "green": 0.3005604277983069,
+      "other": 0.6106904999898467,
+      "red": 0.021298977287543343
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.08514880452415946,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.39604671609262476,
+     "type": "noul"
+    }
+   },
    "rocm": {
     "difficulty": {
      "confidence": 0.48985309907326846,
@@ -667,6 +851,52 @@
     },
     "reasoning": {
      "noul": 0.060777807885987106,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.3472401100437711,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.43132377755431645,
+      "1": 0.5626391909935122,
+      "2": 0.006037031452171364
+     },
+     "score": 0.574713253897855,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9728529752855739,
+     "probabilities": {
+      "code": 0.9957146373111869,
+      "math": 0.000884387670972914,
+      "other": 0.0034009750178401596
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.5007428398157454,
+     "probabilities": {
+      "blue": 0.010191447757601751,
+      "green": 0.2930675963880864,
+      "other": 0.690863590654876,
+      "red": 0.0058773651994358835
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.002102784488770995,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.062418155609546846,
      "type": "noul"
     }
    },
