@@ -233,13 +233,14 @@ func (f *sessionFallback) failedAttempt(outcome routing.Outcome) fallback.Attemp
 		Duration:   outcome.Duration,
 		Discarded:  true,
 	}
+	body := failedReplyBody(outcome)
 	if f.current != nil {
-		attempt.ErrorMessage = string(outcome.Body)
+		attempt.ErrorMessage = string(body)
 		return attempt
 	}
 	message := fmt.Sprintf("upstream returned status %d", outcome.Status)
-	if len(outcome.Body) > 0 {
-		message = fmt.Sprintf("upstream returned status %d: %s", outcome.Status, outcome.Body)
+	if len(body) > 0 {
+		message = fmt.Sprintf("upstream returned status %d: %s", outcome.Status, body)
 	}
 	attempt.Error, attempt.ErrorMessage = errors.New(message), message
 	return attempt
