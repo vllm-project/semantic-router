@@ -24,6 +24,24 @@ def run_resolver(**overrides: str) -> str:
 
 
 class DockerBuildArgumentTests(unittest.TestCase):
+    def test_native_definition_cannot_fall_back_to_generic_buildx(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=REPO_ROOT,
+                env=os.environ
+                | {
+                    "MATRIX_IMAGE": "vllm-sr-riscv64",
+                    "BUILD_STRATEGY": "native",
+                    "GITHUB_OUTPUT": str(Path(tmp) / "output"),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("tools/docker/riscv64/build.py", result.stderr)
+
     def test_no_image_builds_model_bundles(self) -> None:
         for image in ("envoy", "vllm-sr", "vllm-sr-rocm"):
             self.assertNotIn("VELA_OMNI", run_resolver(MATRIX_IMAGE=image))

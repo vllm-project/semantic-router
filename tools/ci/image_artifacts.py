@@ -17,6 +17,7 @@ import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
 ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
+ATTACHED_DOCKERFILE = "tools/docker/Dockerfile.attached"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
@@ -24,12 +25,14 @@ DEFINITIONS = {
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
     "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
 # Router images are one Dockerfile target per accelerator: (target, accelerator).
 ROUTER_BUILDS = {
     "vllm-sr": ("vllm-sr", "cpu"),
+    "vllm-sr-riscv64": ("vllm-sr-attached", "cpu"),
     "vllm-sr-cuda": ("vllm-sr", "cuda"),
     "vllm-sr-rocm": ("vllm-sr", "rocm"),
 }
@@ -227,6 +230,9 @@ def main() -> None:
         names = json.loads(args.images)
         if not isinstance(names, list) or not names or len(set(names)) != len(names):
             raise ValueError("Image inventory must be a nonempty unique list")
+        for name in names:
+            if name in DEFINITIONS and "linux/amd64" not in DEFINITIONS[name][2]:
+                raise ValueError("Hosted image loading requires a Linux AMD64 artifact")
         receipts = []
         for name in names:
             if name not in DEFINITIONS:
@@ -285,7 +291,7 @@ def main() -> None:
         parser.error("--image is required")
     context, dockerfile, supported = DEFINITIONS[args.image]
     target, accelerator = ROUTER_BUILDS.get(args.image, ("", ""))
-    platforms = supported if args.multiarch else ["linux/amd64"]
+    platforms = supported if args.multiarch else supported[:1]
     if args.command == "definition":
         values = {
             "context": context,
@@ -294,6 +300,12 @@ def main() -> None:
             "accelerator": accelerator,
             "platforms": ",".join(platforms),
             "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
+            "build_strategy": "native" if args.image == "vllm-sr-riscv64" else "buildx",
+            "build_script": (
+                "tools/docker/riscv64/build.py"
+                if args.image == "vllm-sr-riscv64"
+                else ""
+            ),
         }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():
