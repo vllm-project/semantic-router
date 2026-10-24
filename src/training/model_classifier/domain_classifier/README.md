@@ -54,6 +54,10 @@ uv run --project src/training/model_classifier/domain_classifier \
   --output artifacts/vela/domain
 ```
 
+Without `--annotations`, the corpus holds only Global-MMLU rows and its
+manifest records `annotations_sha256: null`. Use it to exercise the pipeline,
+not to replace the released model.
+
 The reference contract supplies the original 14 label IDs, and the written
 contract sets `classifier_pooling` to `cls`, as the released Vela Domain uses. New Vela Domain
 training starts from the shared Vela Base with a fresh classification head,

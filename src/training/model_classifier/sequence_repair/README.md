@@ -116,7 +116,9 @@ python -m src.training.model_classifier.sequence_repair.train \
 ```
 
 The manual loop keeps parameters and cross-entropy accumulation in FP32, uses
-BF16 autocast and SDPA, and enables non-reentrant gradient checkpointing. It
+BF16 autocast and SDPA, and enables non-reentrant gradient checkpointing.
+`--device` defaults to `cuda`; `--device cpu` trains in FP32 without autocast,
+and the run receipt records the device and precision. It
 checks real losses and gradients for finiteness. Each equally sized microbatch
 contributes mean CE divided by the number of accumulation steps. The optional
 Torch test compares this gradient with a full batch; this avoids relying on
@@ -325,6 +327,45 @@ float32` disables GPU autocast for a precision-controlled comparison. Forward
 batch timings exclude tokenization and HTTP serving overhead and are not request
 latency. Native and ONNX execution need their own parity and serving validation.
 A short merge-equivalence check alone is not a quality or 32K-runtime test.
+
+## Promote or reject
+
+Declare the gate before training and keep it with the evidence. It names the
+baseline, the test split, and the minimum macro-F1 deltas:
+
+```json
+{
+  "promote_if": {
+    "macro_f1_min_delta": -0.01,
+    "per_language_macro_f1_min_delta": -0.03
+  }
+}
+```
+
+Evaluate the pinned baseline and the frozen candidate on the same test file,
+and qualify the frozen candidate on the model runtime. Then decide. The gate
+refuses evaluations of different data or rows, accepts only a `Qualification`
+from the training contract, rejects one that is incompatible or names another
+runtime than `model-runtime` 1, and records the agreement between the two
+prediction sets:
+
+```bash
+python -m src.training.model_classifier.sequence_repair.promotion_gate \
+  --gate artifacts/vela/domain-gate.json \
+  --candidate artifacts/vela/evidence/domain-final.json \
+  --baseline artifacts/vela/evidence/domain-baseline.json \
+  --qualification artifacts/vela/evidence/domain-qualification.json \
+  --output artifacts/vela/evidence/domain-decision.json
+```
+
+A promoted candidate is published to a
+new repository and becomes active when its repository and revision replace the
+Domain entry in `src/model-runtime/vllm_srun/registry/tables/vela1.py` and
+`src/semantic-router/pkg/config/registry.go`, and
+`src/model-runtime/tools/golden_answers.py --family task_heads --record`
+records its golden answers. Roll back by restoring
+the previous repository and revision, which the decision receipt names as the
+baseline. A rejected candidate leaves the pin unchanged.
 
 ## Historical adapter recovery
 
