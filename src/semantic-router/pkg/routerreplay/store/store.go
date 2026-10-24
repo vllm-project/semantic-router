@@ -123,6 +123,8 @@ type ToolTraceStep struct {
 
 // LooperUsage is content-free token accounting for one Looper attempt.
 type LooperUsage struct {
+	// Unreported means these counts are a reported subtotal, not a complete total.
+	Unreported       bool  `json:"unreported,omitempty"`
 	PromptTokens     int64 `json:"prompt_tokens,omitempty"`
 	CompletionTokens int64 `json:"completion_tokens,omitempty"`
 	TotalTokens      int64 `json:"total_tokens,omitempty"`

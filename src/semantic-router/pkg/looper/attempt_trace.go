@@ -121,6 +121,7 @@ type attemptSpec struct {
 
 // attemptResult contains terminal observations used to finish an attempt.
 type attemptResult struct {
+	usage           *TokenUsage
 	response        *ModelResponse
 	err             error
 	reason          AttemptReason
@@ -302,6 +303,9 @@ func (a *attemptHandle) finish(result attemptResult) {
 				latency := firstByteAt.Sub(a.startedAt).Milliseconds()
 				attempt.FirstByteLatencyMs = &latency
 			}
+			if result.usage != nil {
+				attempt.Usage = *result.usage
+			}
 			if result.response != nil {
 				attempt.Usage = result.response.Usage
 				attempt.ActualCost = actualAttemptCost(a.pricing, result.response.Usage)
@@ -327,6 +331,13 @@ func (a *attemptHandle) finish(result attemptResult) {
 		}
 		if !firstByteAt.IsZero() {
 			attrs = append(attrs, attribute.Int64("looper.attempt.first_byte_latency_ms", firstByteAt.Sub(a.startedAt).Milliseconds()))
+		}
+		if result.usage != nil {
+			attrs = append(attrs,
+				attribute.Int64("looper.attempt.prompt_tokens", result.usage.PromptTokens),
+				attribute.Int64("looper.attempt.completion_tokens", result.usage.CompletionTokens),
+				attribute.Bool("looper.attempt.usage_unreported", result.usage.Unreported),
+			)
 		}
 		if result.response != nil {
 			attrs = append(attrs,

@@ -25435,6 +25435,9 @@
                                             },
                                             "total_tokens": {
                                               "type": "integer"
+                                            },
+                                            "unreported": {
+                                              "type": "boolean"
                                             }
                                           }
                                         },
@@ -25470,6 +25473,9 @@
                                       },
                                       "total_tokens": {
                                         "type": "integer"
+                                      },
+                                      "unreported": {
+                                        "type": "boolean"
                                       }
                                     }
                                   },
@@ -30186,6 +30192,9 @@
                                       },
                                       "total_tokens": {
                                         "type": "integer"
+                                      },
+                                      "unreported": {
+                                        "type": "boolean"
                                       }
                                     }
                                   },
@@ -30221,6 +30230,9 @@
                                 },
                                 "total_tokens": {
                                   "type": "integer"
+                                },
+                                "unreported": {
+                                  "type": "boolean"
                                 }
                               }
                             },

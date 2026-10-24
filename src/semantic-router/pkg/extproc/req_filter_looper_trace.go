@@ -60,6 +60,7 @@ func looperReplayDiagnostics(trace looper.ExecutionTrace) *routerreplay.LooperDi
 
 func replayLooperUsage(usage looper.TokenUsage) routerreplay.LooperUsage {
 	return routerreplay.LooperUsage{
+		Unreported:   usage.Unreported,
 		PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, TotalTokens: usage.TotalTokens,
 	}
 }

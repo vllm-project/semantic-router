@@ -19,10 +19,9 @@ Usage:
 import argparse
 import json
 import logging
-import statistics
+import random
 from dataclasses import dataclass
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import List, Tuple
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import torch
 
@@ -33,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     HAS_TRANSFORMERS = True
 except ImportError:
@@ -106,14 +105,14 @@ Is this answer correct?"""
             )
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-            logger.info(f"Verifier model loaded successfully")
+            logger.info("Verifier model loaded successfully")
         else:
             self.tokenizer = None
             self.model = None
 
     def verify(
         self, question: str, answer: str, context: str = ""
-    ) -> Tuple[float, List[str]]:
+    ) -> tuple[float, list[str]]:
         """
         Verify an answer using few-shot entailment checking.
 
@@ -127,11 +126,19 @@ Is this answer correct?"""
             confidence: float in [0, 1] representing p(correct)
             sample_responses: list of individual sample responses
         """
+        confidence, samples, _ = self.verify_with_usage(question, answer, context)
+        return confidence, samples
+
+    def verify_with_usage(self, question: str, answer: str, context: str = ""):
+        """Return confidence, samples, and measured token use for all generations.
+
+        Every sample processes the input again. Count model tokens, including
+        special tokens, before decoding; text length is not token accounting.
+        A missing model cannot report measured consumption.
+        """
         if not self.model:
             # Fallback: random confidence
-            import random
-
-            return random.uniform(0.5, 0.9), ["NO_MODEL"]
+            return random.uniform(0.5, 0.9), ["NO_MODEL"], None
 
         # Build prompt
         full_question = f"{context}\n{question}" if context else question
@@ -145,25 +152,34 @@ Is this answer correct?"""
         # Sample k times
         verified_count = 0
         sample_responses = []
+        input_tokens = inputs["input_ids"].shape[-1]
+        prompt_tokens = 0
+        completion_tokens = 0
 
         for i in range(self.num_samples):
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
                     max_new_tokens=10,
-                    do_sample=True if i > 0 else False,  # First sample is greedy
+                    do_sample=i > 0,  # First sample is greedy
                     temperature=self.temperature if i > 0 else 1.0,
                     pad_token_id=self.tokenizer.pad_token_id,
                 )
 
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = response[len(prompt) :].strip().upper()
+            prompt_tokens += input_tokens
+            completion_tokens += outputs.shape[-1] - input_tokens
+            response = self.tokenizer.decode(
+                outputs[0, input_tokens:], skip_special_tokens=True
+            )
+            response = response.strip().upper()
             sample_responses.append(response)
 
             # Check if verified
-            if response.startswith("YES") or response.startswith("Y"):
-                verified_count += 1
-            elif "YES" in response and "NO" not in response:
+            if (
+                response.startswith("YES")
+                or response.startswith("Y")
+                or ("YES" in response and "NO" not in response)
+            ):
                 verified_count += 1
 
         # Compute confidence
@@ -172,7 +188,12 @@ Is this answer correct?"""
         logger.info(
             f"Verification: {verified_count}/{self.num_samples} = {confidence:.2f}"
         )
-        return confidence, sample_responses
+        usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        }
+        return confidence, sample_responses, usage
 
     def should_escalate(self, confidence: float, threshold: float = 0.7) -> bool:
         """
@@ -189,7 +210,7 @@ class VerificationResult:
 
     confidence: float
     should_escalate: bool
-    samples: List[str]
+    samples: list[str]
     verified_count: int
     total_samples: int
 
@@ -217,7 +238,9 @@ class AutoMixHandler(BaseHTTPRequestHandler):
                     return
 
                 # Verify the answer
-                confidence, samples = self.verifier.verify(question, answer, context)
+                confidence, samples, usage = self.verifier.verify_with_usage(
+                    question, answer, context
+                )
                 should_escalate = self.verifier.should_escalate(confidence, threshold)
 
                 verified_count = sum(
@@ -235,6 +258,8 @@ class AutoMixHandler(BaseHTTPRequestHandler):
                     "threshold": threshold,
                 }
 
+                if usage is not None:
+                    response["usage"] = usage
                 self._send_json(200, response)
 
             except json.JSONDecodeError:
@@ -303,7 +328,7 @@ def main():
             ("Who wrote Hamlet?", "William Shakespeare", True),
         ]
         for question, answer, expected in test_cases:
-            confidence, samples = verifier.verify(question, answer)
+            confidence, _samples = verifier.verify(question, answer)
             escalate = verifier.should_escalate(confidence)
             print(f"\nQ: {question}")
             print(f"A: {answer}")

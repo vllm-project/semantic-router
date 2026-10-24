@@ -229,3 +229,13 @@ func automixVerifierCacheReset() {
 		return true
 	})
 }
+
+func (l *ConfidenceLooper) performAutoMixEntailment(
+	ctx context.Context, req *Request, evaluator *ConfidenceEvaluator, modelName, responseContent string,
+) (float64, bool, error) {
+	result, err := l.performAutoMixVerification(ctx, req, evaluator, modelName, responseContent)
+	if err != nil {
+		return 0, false, err
+	}
+	return *result.Confidence, result.Disposition == DispositionApprove, nil
+}
