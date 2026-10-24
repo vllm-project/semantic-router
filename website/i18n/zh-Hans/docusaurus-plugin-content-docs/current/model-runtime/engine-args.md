@@ -4,7 +4,7 @@ description: 用 vLLM 风格的引擎参数调整批处理、精度和共享上�
 translation:
   source_commit: "1c55d8a0e21995a99d46eb7f6f36fa2ac779ebe7"
   source_file: "docs/model-runtime/engine-args.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 

@@ -439,6 +439,7 @@ export interface PluginConfig {
     | 'context_compression'
     | 'prompt_cache'
     | 'shadow_dispatch'
+    | 'masking'
   configuration: Record<string, unknown>
 }
 

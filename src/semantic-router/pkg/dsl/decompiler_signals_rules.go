@@ -48,6 +48,9 @@ func (d *decompiler) decompileKeywordSignals() {
 		if kw.NgramArity != 0 {
 			d.write("  ngram_arity: %d\n", kw.NgramArity)
 		}
+		if kw.IncludeHistory {
+			d.write("  include_history: true\n")
+		}
 		d.write("}\n\n")
 	}
 }

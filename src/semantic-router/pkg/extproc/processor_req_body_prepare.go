@@ -3,7 +3,6 @@ package extproc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -74,9 +73,15 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		if errors.Is(decisionErr, errBenchmarkCallLimit) {
 			return requestDecisionState{}, r.createErrorResponse(412, errBenchmarkCallLimit.Error())
 		}
-		if errors.Is(decisionErr, context.Canceled) ||
-			errors.Is(decisionErr, context.DeadlineExceeded) {
-			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
+		if errors.Is(decisionErr, context.DeadlineExceeded) {
+			ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorUpstreamTimeout, "request_timeout", "request timed out", decisionErr)
+			return requestDecisionState{}, r.createErrorResponse(http.StatusGatewayTimeout, "request timed out")
+		}
+		if errors.Is(decisionErr, context.Canceled) {
+			// Envoy's HttpStatus enum cannot represent 499. Preserve cancellation
+			// in the protocol error while using a supported HTTP error status.
+			ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInternal, "request_canceled", "request canceled", decisionErr)
+			return requestDecisionState{}, r.createErrorResponse(http.StatusInternalServerError, "request canceled")
 		}
 		if errors.Is(decisionErr, errNoContextEligibleDecisionModel) {
 			logRoutingFailure(ctx, "decision_context_ineligible", routingFailureContextLength.code, decisionErr)
@@ -94,6 +99,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
+	ctx.PluginBackendModel = selectedModel
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
@@ -121,7 +127,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
-		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
+		return requestDecisionState{}, r.createErrorResponse(503, "RAG retrieval failed")
 	}
 
 	return requestDecisionState{

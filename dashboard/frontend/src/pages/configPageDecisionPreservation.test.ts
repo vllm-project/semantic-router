@@ -83,6 +83,16 @@ describe('decision editor preservation', () => {
     ).toThrow(/cannot be combined/)
   })
 
+  it('rejects on_error on a composite root', () => {
+    expect(() =>
+      decisionRulesForSave({
+        operator: 'AND',
+        on_error: 'match',
+        conditions: [{ type: 'keyword', name: 'urgent' }],
+      }),
+    ).toThrow(/only applies to leaf conditions/)
+  })
+
   it('keeps a single root condition instead of saving an unconditional match', () => {
     expect(decisionRulesForSave({ type: 'jailbreak', name: 'prompt_injection' })).toEqual({
       type: 'jailbreak',

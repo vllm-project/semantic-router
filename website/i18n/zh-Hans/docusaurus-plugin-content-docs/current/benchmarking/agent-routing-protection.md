@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Agent 路由保护基线
 sidebar_position: 8
 translation:

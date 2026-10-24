@@ -32,6 +32,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	if !shouldRetrieve {
 		return nil
 	}
+	if applies, reason := r.pluginApplies(ctx, config.DecisionPluginMemory); !applies {
+		// pluginApplies already counted the skip; only the replay-visible outcome is set here.
+		ctx.MemoryStatus, ctx.MemoryReason = "skipped", string(reason)
+		return nil
+	}
 	store := r.getMemoryStore()
 	if store == nil || !store.IsEnabled() {
 		logging.Debugf("Memory: Store not available or disabled, skipping retrieval")
