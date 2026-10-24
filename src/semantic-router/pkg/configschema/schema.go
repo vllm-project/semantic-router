@@ -17,6 +17,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 const (
@@ -270,6 +271,11 @@ func setCoreEnums(root *jsonschema.Schema) {
 		string(routerconfig.ConfigSourceFile),
 		string(routerconfig.ConfigSourceKubernetes),
 	})
+	if lossy := definitionProperty(root, "CanonicalRouterGlobal", "allow_lossy_translation"); lossy != nil && lossy.Items != nil {
+		for _, field := range llmprotocol.OptInLossyFields() {
+			lossy.Items.Enum = append(lossy.Items.Enum, field)
+		}
+	}
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "context", []string{routerconfig.CandidateContextKnownLimits})
