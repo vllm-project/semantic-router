@@ -19,6 +19,7 @@ from .activity import CallActivity
 from .adapters import get_adapter
 from .contracts import SESSION_AWARE, digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
+from .grading import BINARY_RESULT, frozen_result_kind, validate_result
 from .native_output import capacity as native_capacity
 from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
@@ -456,17 +457,19 @@ class Engine:
                 }
             else:
                 result = get_adapter(case["benchmark"]).execute(case, ctx)
-                if (
-                    not isinstance(result, dict)
-                    or not isinstance(result.get("correct"), bool)
-                    or result.get("score") not in {0, 1}
-                ):
-                    raise ValueError(
-                        "Adapter result requires a terminal binary graded outcome"
-                    )
+                validate_result(
+                    kind=frozen_result_kind(
+                        manifest=manifest, benchmark=case["benchmark"]
+                    ),
+                    result=result,
+                )
             self._completed_case(ctx, result, started)
         except Exception as exc:
-            if ctx.quality_failure:
+            if (
+                ctx.quality_failure
+                and frozen_result_kind(manifest=manifest, benchmark=case["benchmark"])
+                == BINARY_RESULT
+            ):
                 self._completed_case(ctx, {}, started)
                 return
             # Exception strings from subprocesses/HTTP can contain secrets; only controlled errors escape.
@@ -488,6 +491,16 @@ class Engine:
                     "finished_at": now(),
                     "latency_s": time.monotonic() - started,
                     "partial": getattr(exc, "partial", {}),
+                    **(
+                        {
+                            "details": {
+                                "quality_failure": ctx.quality_failure,
+                                "output_complete": False,
+                            }
+                        }
+                        if ctx.quality_failure
+                        else {}
+                    ),
                 },
             )
             with self.lock:
@@ -505,6 +518,15 @@ class Engine:
 
     def _completed_case(self, ctx, result, started):
         if ctx.quality_failure:
+            if (
+                frozen_result_kind(
+                    manifest=ctx.manifest, benchmark=ctx.case["benchmark"]
+                )
+                != BINARY_RESULT
+            ):
+                raise CallFailure(
+                    "Subject output limit reached; weighted rubric grading is incomplete"
+                )
             result = {
                 "answer": None,
                 "correct": False,

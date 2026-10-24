@@ -100,7 +100,7 @@ def benchmark(ctx, url, store, no_autostart):
 
 @benchmark.command("catalog")
 def catalog_command():
-    """Show the nine benchmark adapters and evaluation profiles."""
+    """Show benchmark adapters, diagnostics, and evaluation profiles."""
     output(catalog())
 
 
