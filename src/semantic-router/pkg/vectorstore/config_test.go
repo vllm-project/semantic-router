@@ -52,6 +52,25 @@ var _ = Describe("VectorStoreConfig Validate", func() {
 		Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', 'llama_stack', 'valkey', or 'qdrant'"))
 	})
 
+	It("should accept supported_formats that have a text extractor", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled: true, BackendType: "memory",
+			SupportedFormats: []string{".txt", "MD", ".json", ".csv", ".html", ".htm"},
+		}
+		Expect(cfg.Validate()).NotTo(HaveOccurred())
+	})
+
+	It("should fail with a supported_formats entry that has no text extractor", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled: true, BackendType: "memory",
+			SupportedFormats: []string{".txt", ".pdf"},
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("supported_formats must contain only"))
+		Expect(err.Error()).To(ContainSubstring("'.pdf'"))
+	})
+
 	Context("milvus", func() {
 		It("should fail without milvus config", func() {
 			cfg := &config.VectorStoreConfig{Enabled: true, BackendType: "milvus"}
