@@ -57,6 +57,25 @@ func TestVLLMMessagesToolUseStreamPassesThrough(t *testing.T) {
 	}
 }
 
+// vLLM 0.11 through 0.18 write "data: [DONE]" after message_stop (message_stream_converter
+// in vllm/entrypoints/anthropic), so the capture gets that line appended.
+func TestVLLMMessagesStreamAcceptsDoneOnlyAfterMessageStop(t *testing.T) {
+	capture := string(vllmMessagesCapture(t, "vllm-messages-tool-use-stream.sse"))
+	out := translateMatchedStopStream(t, llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1,
+		capture+"data: [DONE]\n\n")
+	if !strings.HasSuffix(out, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n") || strings.Contains(out, "[DONE]") {
+		t.Fatalf("stream should end at message_stop without the sentinel:\n%s", out)
+	}
+
+	stream, err := NewBuiltinEngine().NewStreamWithMutation(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1,
+		llmprotocol.StreamContext{Source: llmprotocol.AnthropicMessagesV1, Target: llmprotocol.AnthropicMessagesV1, PublicModel: "m"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err = stream.Push([]byte(capture + "event: ping\ndata: {\"type\":\"ping\"}\n\n"))
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_event_after_terminal")
+}
+
 func TestVLLMMessagesNotFoundEnvelopeDecodes(t *testing.T) {
 	transportError, _, err := AnthropicMessagesCodec{}.DecodeTransportError(
 		vllmMessagesCapture(t, "vllm-messages-not-found-error-out.json"), llmprotocol.DefaultPolicy(),
