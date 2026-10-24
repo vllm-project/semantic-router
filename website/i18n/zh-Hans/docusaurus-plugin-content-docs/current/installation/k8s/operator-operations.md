@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 title: 运维 Operator 部署
 sidebar_label: Kubernetes 操作符
 description: 监控、更新、扩缩容并排查由 Kubernetes Operator 管理的 SemanticRouter。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/k8s/operator-operations.md"
-  outdated: false
+  outdated: true
 ---
 
 # 运维 Operator 部署

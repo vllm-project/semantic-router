@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/api/router.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由器接口 {#router-api}
@@ -37,6 +38,27 @@ Engine 模式关闭配方路由，并提供原生 System One 接口。在
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
 
 客户端到后端的转换矩阵、后端 `api_format` 值以及字段级可移植边界，见[协议兼容性](../installation/protocol-compatibility)。
+
+### System One API 稳定性 {#system-one-api-stability}
+
+公开的 System One API 是 Router 监听器提供的接口：`POST /v1/systemone`、
+`POST /v1/decisions` 和 `GET /v1/systemone/models`，以及 `/health` 和
+`/ready`。它是唯一带兼容性承诺的 System One 接口：
+
+- 在同一发布线内只做增量变更：新增可选请求字段、新增响应字段和新增错误码，每个错误码都注明其
+  HTTP 状态码。
+- 删除某项或改变其含义，至少提前一个版本在发布说明中公告。
+
+Router 在模型读取请求的 `options` 之前，先按此 API 检查它们。可用选项为
+`deadline_ms`（大于 0 的数）、`max_tokens`（不小于 1 的整数）和 `return_meta`
+（`true` 或 `false`）；`null` 表示不设置任何选项。其他选项或类型不符的值返回
+`400` 和 `invalid_request`，消息中会指出该项。`options.profile` 已在
+[#5071](https://github.com/vllm-project/semantic-router/pull/5071) 中移除：请求按其
+deployment 的[引擎参数](../model-runtime/engine-args.md)运行，`meta` 报告 `dtype` 和
+`numerics`，不再报告 `profile`。
+
+Router 调用的模型运行时 HTTP API 属于单个发布版本，不作此类承诺。Router 只接受恰好提供其契约版本的运行时；见
+[挂到你自己跑的 runtime](../model-runtime/deploy.md#attach-to-a-runtime-you-run)。
 
 ## 发送路由请求 {#send-a-routed-request}
 

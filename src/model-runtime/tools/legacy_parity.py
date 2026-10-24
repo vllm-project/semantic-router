@@ -46,7 +46,7 @@ GO_TEST = "zz_legacy_parity_dump_test.go"
 PARTIAL = "provider truncated its input"
 CPU_THRESHOLDS = {"probability": 1e-3, "near_tie": 1e-3, "label": 1.0, "spans": 0.995}
 ROCM_THRESHOLDS = {"probability": 0.02, "near_tie": 1e-3, "label": 0.995, "spans": 0.98}
-# A reduced copy (max_speed) against exact: 99% agreement, near ties counted, |Δp| reported.
+# A reduced copy against the reference forwards: 99% agreement, near ties counted, |Δp| reported.
 REDUCED_THRESHOLDS = {
     "probability": math.inf,
     "near_tie": 0.0,
@@ -162,6 +162,10 @@ def corpus(seed: int = 0) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     items = [{"id": f"p{i:04d}", "text": text} for i, text in enumerate(base)]
     items += [{"id": f"e{i:02d}", "text": text} for i, text in enumerate(EDGE)]
+    if not base:
+        raise SystemExit(
+            "acceptance corpus is empty; refuse to substitute edge prompts"
+        )
     for index, count in enumerate([8, 16, 32, 48, 64, 96, 128, 192, 256, 384]):
         picked = rng.sample(base, k=min(count, len(base)))
         items.append({"id": f"l{index:02d}", "text": "\n".join(picked)})
@@ -633,13 +637,22 @@ def runtime_body(spec: dict[str, Any], item: dict[str, str]) -> dict[str, Any]:
     return {"model": spec["Job"], "input": [value], "options": options}
 
 
-async def runtime_call(runtime: Any, body: dict[str, Any]) -> tuple[int, Any]:
-    """One request as the HTTP server makes it: with its encoded size (small ones plan inline)."""
-    return await runtime.call("classify", body, len(json.dumps(body)))
+async def runtime_call(
+    runtime: Any, body: dict[str, Any], alone: bool = False
+) -> tuple[int, Any]:
+    """One request as the HTTP server makes it: with its encoded size (small ones plan inline).
 
+    ``alone`` answers it in its released forwards instead (the golden check's path).
+    """
+    if not alone:
+        return await runtime.call("classify", body, len(json.dumps(body)))
+    from vllm_srun.errors import RuntimeServiceError
 
-def with_profile(body: dict[str, Any], profile: str) -> dict[str, Any]:
-    return {**body, "options": {**body["options"], "profile": profile}}
+    try:
+        served = runtime.lookup(body["model"])
+        return 200, await asyncio.to_thread(served.answer_alone, "classify", body)
+    except RuntimeServiceError as exc:
+        return exc.status, exc.body()
 
 
 def serve_runtime(
@@ -651,9 +664,7 @@ def serve_runtime(
     from vllm_srun.runtime import Runtime
 
     models = tuple(
-        ModelConfig(
-            model=spec["Repo"], name=spec["Job"], device=device, profile=args.profile
-        )
+        ModelConfig(model=spec["Repo"], name=spec["Job"], device=device)
         for spec in specs
     )
     runtime = Runtime(
@@ -709,7 +720,7 @@ async def runtime_load(
     runtime: Any,
     spec: dict[str, Any],
     args: argparse.Namespace,
-    profile: str | None = None,
+    alone: bool = False,
 ) -> dict[str, Any]:
     """``args.concurrency`` callers for ``args.seconds``: concurrent requests on one event loop."""
     deadline = time.monotonic() + args.seconds
@@ -720,9 +731,7 @@ async def runtime_load(
         while time.monotonic() < deadline:
             body = runtime_body(spec, spec["Inputs"][position % len(spec["Inputs"])])
             start = time.perf_counter_ns()
-            await runtime_call(
-                runtime, with_profile(body, profile) if profile else body
-            )
+            await runtime_call(runtime, body, alone)
             latencies.append(time.perf_counter_ns() - start)
             position += args.concurrency
 
@@ -848,9 +857,10 @@ def run_ab(args: argparse.Namespace) -> None:
     """Alternate legacy and runtime work on the same cores, round after round.
 
     Both sides then see the same moment's contention on a shared host. Per
-    input, one legacy call and one runtime ``exact`` call alternate (the order
-    flips every round); with ``--concurrency``, load windows of the legacy
-    facade, the runtime's ``exact`` profile and the models' profile rotate.
+    input, one legacy call and one runtime call alone in its released forwards
+    alternate (the order flips every round); with ``--concurrency``, load
+    windows of the legacy facade, the runtime's requests alone and with the
+    default engine arguments (rows of concurrent requests merged) rotate.
     The legacy side is the ``build-legacy`` binary in serve mode, the runtime
     side this process. Every finished round goes to ``<out>.raw.json``, which
     ``--resume`` continues.
@@ -875,17 +885,17 @@ def run_ab(args: argparse.Namespace) -> None:
     while legacy.stdout.readline().strip() != "READY":
         if legacy.poll() is not None:
             raise SystemExit("the legacy binary exited before it was ready")
-    runtime = serve_runtime(args, specs, "cpu")
-    sides = ["legacy", "exact", *([args.profile] if args.profile != "exact" else [])]
+    runtime = serve_runtime(args, specs, args.device)
+    sides = ["legacy", "alone", "merged"]
 
     def call_legacy(spec: dict[str, Any], item: dict[str, str]) -> int:
         legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")
         return int(legacy.stdout.readline())
 
     async def call_runtime(spec: dict[str, Any], item: dict[str, str]) -> int:
-        body = with_profile(runtime_body(spec, item), "exact")
+        body = runtime_body(spec, item)
         start = time.perf_counter_ns()
-        status, _ = await runtime_call(runtime, body)
+        status, _ = await runtime_call(runtime, body, alone=True)
         elapsed = time.perf_counter_ns() - start
         return elapsed if status == HTTPStatus.OK else -1
 
@@ -900,7 +910,7 @@ def run_ab(args: argparse.Namespace) -> None:
 
     async def window(side: str, spec: dict[str, Any]) -> float:
         if side != "legacy":
-            load = await runtime_load(runtime, spec, args, side)
+            load = await runtime_load(runtime, spec, args, side == "alone")
         else:
             legacy.stdin.write(
                 f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n"
@@ -1286,7 +1296,6 @@ def main(argv: Iterable[str] | None = None) -> int:
             sub.add_argument("--compile-cache", help="ORT compilation cache directory")
         else:
             sub.add_argument("--device", default="cpu")
-            sub.add_argument("--profile", default="exact")
             sub.add_argument("--threads", type=int)
     build = commands.add_parser("build-legacy")
     build.add_argument("--cache", required=True)
@@ -1306,12 +1315,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab_parser.add_argument("--tree", required=True)
     ab_parser.add_argument("--libs")
     ab_parser.add_argument("--cache", required=True)
+    ab_parser.add_argument("--device", default="cpu")
     ab_parser.add_argument("--threads", type=int)
-    ab_parser.add_argument(
-        "--profile",
-        default="batching",
-        help="the models' profile (exact is always measured)",
-    )
     ab_parser.add_argument("--rounds", type=int, default=2)
     ab_parser.add_argument(
         "--concurrency", type=int, default=0, help="callers per load window (0: none)"

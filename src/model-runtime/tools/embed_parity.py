@@ -165,9 +165,7 @@ class OmniParity:
         body: dict[str, Any] = {"input": [part]}
         if input_type:
             body["input_type"] = input_type
-        request = SurfaceRequest(
-            "embeddings", body, None, "exact", False, time.monotonic()
-        )
+        request = SurfaceRequest("embeddings", body, None, False, time.monotonic())
         started = time.perf_counter()
         plan = self.model.plan_surface("embeddings", request)
         results = (
@@ -336,8 +334,8 @@ class OmniParity:
 def serve(
     model: Any, surface: str, body: dict[str, Any], reduced: bool = False
 ) -> tuple[Any, dict[str, Any]]:
-    """One request through the exact path, or through the reduced copy (``max_speed``)."""
-    request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
+    """One request through the reference path, or through the reduced copy (``run_approximate``)."""
+    request = SurfaceRequest(surface, body, None, False, time.monotonic())
     plan = model.plan_surface(surface, request)
     run = model.run_approximate if reduced else model.run
     return plan, model.finish_surface(plan, run(plan.items))
@@ -606,7 +604,7 @@ class EncoderParity:
 
 
 class ReducedParity:
-    """A model's reduced copy (``max_speed``) against its exact path: agreement and latency.
+    """A model's reduced copy (``run_approximate``) against its reference path: agreement and latency.
 
     Embeddings need cosine >= 0.999 per vector, reranking 99 % pairwise order
     agreement on document pairs whose exact logits differ by more than ``TIE``

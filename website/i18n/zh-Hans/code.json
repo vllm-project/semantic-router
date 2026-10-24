@@ -2973,10 +2973,10 @@
     "message": "Rebellions 前沿部署工程师，结合机器学习工程与解决方案架构，推动大语言模型在 NPU 上的推理部署。"
   },
   "team.members.TwilightTechie.role": {
-    "message": "技术团队成员"
+    "message": "工程研发"
   },
   "team.members.TwilightTechie.bio": {
-    "message": "Nutanix 软件工程师，从事分布式存储开发，关注大模型推理、模型服务和智能请求路由。"
+    "message": "Sarvam AI 软件工程师，关注大模型推理、模型服务和智能请求路由。"
   },
   "team.members.yaojiejia.role": {
     "message": "软件与数据工程师"
@@ -3855,6 +3855,18 @@
     "message": "个人贡献者"
   },
   "team.members.yuluo-yx.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.PharosEast.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.PharosEast.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.Zi-Yi-Ming.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.Zi-Yi-Ming.bio": {
     "message": "vLLM Semantic Router 开源贡献者。"
   }
 }

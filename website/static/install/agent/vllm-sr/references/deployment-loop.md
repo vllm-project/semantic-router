@@ -11,7 +11,8 @@ it applies.
 `/dev/kfd` and `/dev/dri` into the Router container, and runs the Router's own
 models on the GPU by default. AMD Instinct MI300X and MI325X are validated.
 `--platform cuda` selects `vllm-sr-cuda` and passes `--gpus all`; it needs
-the NVIDIA Container Toolkit and works, but is not yet validated. On macOS the
+the NVIDIA Container Toolkit (validated; H200, A100, Tesla T4 records; fused
+kernels without bit-exact evidence stay off the exact profile). On macOS the
 Docker target runs on the CPU only.
 
 - The Router container sees every GPU. To keep some for the user's own model
@@ -47,8 +48,10 @@ workers and are not automatically exposed by this frontend. Use `vllm-sr stop`
 with the same stack identity to stop the persistent stack.
 
 MODEL replaces only the configured default judgment deployment's artifact.
-Other model flags are optional: `--runtime-profile` preserves the configured
-value unless supplied; `--revision` resolves a branch, tag or full commit once
+Other model flags are optional: the engine flags (`--max-num-seqs`,
+`--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`,
+`--enable-shared-context`) preserve the configured engine arguments unless
+supplied; `--revision` resolves a branch, tag or full commit once
 before startup and records the immutable pin for every replica. Built-in
 models use their release pin by default. Bare serve keeps the configured
 default deployment, or starts with Vela 2.0 0.3B for a new config.

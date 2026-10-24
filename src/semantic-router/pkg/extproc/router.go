@@ -97,6 +97,7 @@ type OpenAIRouter struct {
 	LookupTable          lookuptable.LookupTable
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          memory.Store
+	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
 	// hopCaller, when set, sends Looper hops instead of the configuration
@@ -236,6 +237,7 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	statusCode = errorResponseStatusCode(statusCode)
 	errorType := "invalid_request_error"
 	if statusCode >= 500 {
 		errorType = "api_error"
@@ -298,13 +300,6 @@ func (r *OpenAIRouter) PreloadKnowledgeBases() error {
 		return nil
 	}
 	return r.Classifier.PreloadKnowledgeBases()
-}
-
-func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {
-	if r.ToolsRegistry == nil {
-		r.ToolsRegistry = tools.NewRegistry()
-	}
-	r.ToolsRegistry.Register(name, retriever)
 }
 
 func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fallback.Orchestrator {

@@ -1,3 +1,7 @@
+---
+is_mtpe: false
+---
+
 # Vela Router 模型 {#vela-router-models}
 
 ## 概览 {#overview}
@@ -111,7 +115,7 @@ PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按
 
 ## 推理引擎与硬件 {#inference-engines-and-hardware}
 
-模型运行时用 PyTorch 在 CPU、CUDA 或 ROCm 上运行 Vela。支持的输入长度是容量上限，不是时延保证。长输入在少核 CPU 上可能超过请求截止时间；请按实际输入长度和并发测量，选择足够的 CPU 容量或 GPU，而不是假设延长超时就能解决容量不足。[Profiles](../../model-runtime/profiles) 在精确与速度之间取舍，[选择模型](../../model-runtime/choose-a-model.md)列出每个模型的开销。
+模型运行时用 PyTorch 在 CPU、CUDA 或 ROCm 上运行 Vela。支持的输入长度是容量上限，不是时延保证。长输入在少核 CPU 上可能超过请求截止时间；请按实际输入长度和并发测量，选择足够的 CPU 容量或 GPU，而不是假设延长超时就能解决容量不足。[引擎参数](../../model-runtime/engine-args)调整批处理和精度，[选择模型](../../model-runtime/choose-a-model.md)列出每个模型的开销。
 
 [Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform rocm` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
 

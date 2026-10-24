@@ -33,7 +33,10 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
-			func(context.Context) { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
+			func(context.Context) {
+				c.evaluateKeywordSignalWithHistory(results, mu,
+					textForSignal(config.SignalTypeKeyword), input.PriorUserMessages)
+			},
 		},
 		{
 			config.SignalTypeEmbedding, "Embedding",
