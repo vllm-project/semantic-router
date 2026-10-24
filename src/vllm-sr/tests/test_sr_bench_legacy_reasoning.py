@@ -6,7 +6,8 @@ import sys
 
 from cli.sr_bench.adapters import get_adapter
 from cli.sr_bench.contracts import BENCHMARK_WEIGHTS, BENCHMARKS, catalog
-from cli.sr_bench.setup import setup
+from cli.sr_bench.external import HARNESSES
+from cli.sr_bench.setup import PACKAGES, setup
 
 CONFIGURATIONS: tuple[str, ...] = (
     "arc",
@@ -67,3 +68,7 @@ def test_default_setup_does_not_include_legacy_environment(
     monkeypatch.setenv("SR_BENCH_HOME", str(tmp_path))
     names = {row["benchmark"] for row in setup(install=False)["benchmarks"]}
     assert not any(name.startswith("legacy-") for name in names)
+
+
+def test_harness_preflight_names_have_trusted_package_specs() -> None:
+    assert HARNESSES.keys() <= PACKAGES.keys()

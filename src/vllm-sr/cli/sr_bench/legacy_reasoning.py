@@ -106,7 +106,7 @@ def inspect_runtime(cache: dict[str, Any] | None = None) -> dict[str, Any]:
     if cache is not None and key in cache:
         return cache[key]
     _preflight_harness(
-        benchmark="legacy-arc", config={"source_revision": SOURCE_REVISION}
+        benchmark=ENVIRONMENT, config={"source_revision": SOURCE_REVISION}
     )
     result = worker_request(
         operation="inspect", payload={}, root=root, interpreter=interpreter

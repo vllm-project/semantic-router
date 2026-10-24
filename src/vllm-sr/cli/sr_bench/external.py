@@ -20,7 +20,7 @@ from .harness_worker import (
     frozen_terminal_image,
     validate_terminal_compose,
 )
-from .legacy_reasoning import CONFIGURATIONS
+from .legacy_reasoning import ENVIRONMENT
 from .setup import harness_paths, scicode_test_path, validate_tau3_text_assets
 from .target_contracts import resolve_auxiliary_target
 from .transport import CallFailure
@@ -30,7 +30,7 @@ HARNESSES = {
     "livecodebench": ("LCB", "lcb_runner"),
     "scicode": ("SCICODE", "inspect_evals"),
     "terminal-bench-2.1": ("TERMINAL", "harbor"),
-    **{"legacy-" + name: ("LEGACY_REASONING", "reasoning") for name in CONFIGURATIONS},
+    ENVIRONMENT: ("LEGACY_REASONING", "reasoning"),
 }
 GIT_REVISION_LENGTH = 40
 MAX_HARNESS_STEPS = 1000

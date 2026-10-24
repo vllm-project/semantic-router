@@ -46,7 +46,7 @@ def export_manifest(
         raise ValueError("categories must contain nonempty native category names")
     name = configuration(dataset)
     _preflight_harness(
-        benchmark="legacy-" + name, config={"source_revision": SOURCE_REVISION}
+        benchmark=ENVIRONMENT, config={"source_revision": SOURCE_REVISION}
     )
     root, interpreter = harness_paths(ENVIRONMENT)
     exported = worker_request(
