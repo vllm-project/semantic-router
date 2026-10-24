@@ -338,6 +338,18 @@ the recipe and decision it reached, and the error. Anthropic Messages clients
 get the same status and message in Anthropic's error envelope, which has no
 code field.
 
+When routing decision processing exceeds its deadline, the Router returns
+`504` with `request_timeout` and the message `request timed out`. A canceled
+decision returns `500` with `request_canceled` and the message `request canceled`
+if the connection still permits a response. Both use `server_error` in OpenAI
+Chat Completions and Responses. Anthropic Messages uses `timeout_error` for the
+deadline and `api_error` for cancellation. A disconnected client may receive no
+response.
+
+Router-generated immediate responses preserve HTTP status codes supported by
+Envoy. Unsupported or invalid status codes fall back to `500`; an error body
+is never intentionally sent with a success status.
+
 ## Request budget errors
 
 With `candidate_requirements.context: known_limits`, the Router checks estimated
