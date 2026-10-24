@@ -109,6 +109,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-embeddings-rerank",
 		"decision-runtime-routing",
 		"decision-runtime-set-span",
+		"decision-prior-user-turns",
 		"model-runtime-bundles",
 		"model-runtime-long-history",
 		"model-runtime-fail-open",
