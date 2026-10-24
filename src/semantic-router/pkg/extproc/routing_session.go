@@ -198,6 +198,9 @@ func (s *routingSession) phase(
 		s.end(err)
 		return nil, err
 	}
+	if s.ctx.streamedBodyRejected {
+		s.end(nil)
+	}
 	return effect, nil
 }
 
@@ -207,6 +210,7 @@ func (s *routingSession) end(err error) {
 	}
 	s.ended = true
 	releaseInflightAdmission(s.ctx)
+	releaseStreamedBody(s.ctx)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {
 		s.release()
