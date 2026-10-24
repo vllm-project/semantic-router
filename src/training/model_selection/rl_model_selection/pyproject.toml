@@ -1,0 +1,18 @@
+[project]
+name = "rl-model-selection"
+version = "0.0.0"
+description = "Environment for the RL model selection trainers under src/training/model_selection/rl_model_selection"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    "numpy>=1.24.0,<3",
+    "pyyaml>=6.0,<7",
+    "torch>=2.0.0,<3",
+    "torch-geometric>=2.4.0,<3",
+    "tqdm>=4.65.0,<5",
+    "transformers>=4.35.0,<6",
+    "trl>=0.7.0,<2",
+]
+
+[tool.uv]
+package = false
