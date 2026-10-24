@@ -254,9 +254,33 @@ var configContractRequiredDocs = []docNeedles{
 			"routing:\n  decisions:",
 		},
 	},
+	{
+		path: repoRel("website", "versioned_docs", "version-v0.3", "tutorials", "algorithm", "selection", "automix.md"),
+		needles: []string{
+			"verification_threshold",
+			"max_escalations",
+			"cost_aware_routing",
+			"cost_quality_tradeoff",
+			"discount_factor",
+			"use_logprob_verification",
+		},
+	},
 }
 
 var configContractForbiddenDocs = []docNeedles{
+	{
+		path: repoRel("website", "versioned_docs", "version-v0.3", "tutorials", "algorithm", "selection", "automix.md"),
+		needles: []string{
+			"enable_cascade",
+			"verifier_server_url",
+			"use_pomdp_router",
+			"enable_self_verification",
+			"belief_particles",
+			"cost_lambda",
+			"verification_samples",
+			"verification_temperature",
+		},
+	},
 	{
 		path: repoRel("website", "docs", "installation", "milvus.md"),
 		needles: []string{
