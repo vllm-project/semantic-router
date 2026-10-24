@@ -391,35 +391,31 @@ func startProfilingServerIfEnabled(
 }
 
 func initializeRuntimeDependencies(
-	ctx context.Context,
 	cfg *config.RouterConfig,
 	writer startupstatus.StatusWriter,
 	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
-) (modelruntime.EmbeddingRuntimeState, error) {
+) error {
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "initializing_models",
 		Ready:   false,
-		Message: "Initializing embedding models and router dependencies...",
+		Message: "Initializing router dependencies...",
 	}, "Failed to write initialization startup status")
-
-	embeddingState := modelruntime.EmbeddingRuntimeState{}
-
-	writeStartupState(writer, startupstatus.State{
-		Phase:             "initializing_models",
-		Ready:             false,
-		Message:           "Runtime dependencies initialized. Starting router services...",
-		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
-	}, "Failed to write runtime dependency startup status")
 
 	// Vector store ingestion embeds through the managed model runtime.
 	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	// Explicit global stores serve management APIs as well as routing and
 	// keep their own scoped embedding lease across capability changes.
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
-		return embeddingState, err
+		return err
 	}
-	return embeddingState, nil
+
+	writeStartupState(writer, startupstatus.State{
+		Phase:   "initializing_models",
+		Ready:   false,
+		Message: "Runtime dependencies initialized. Starting router services...",
+	}, "Failed to write runtime dependency startup status")
+	return nil
 }
 
 // startModelRuntimeManager starts the model_runtime deployments the config
