@@ -13,6 +13,13 @@ config:
     defaults:
       model: MoM
     models:
+      - name: mock/sglang-chat
+        api_format: openai
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.provider-protocols-system.svc.cluster.local:8000
+            weight: 1
+            provider: sglang
       - name: MoM
         # The selected backend accepts Anthropic Messages. Keep this explicit:
         # the Router owns semantic mutation and emits the backend-native wire
@@ -31,6 +38,16 @@ config:
           score: 0.5
   routing:
     decisions:
+      - name: sglang_stop_sequence
+        priority: 110
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: sglang_stop_sequence
+        modelRefs:
+          - model: mock/sglang-chat
+            use_reasoning: false
       - name: json_prompt_keyword
         description: Distinguish original JSON text from the bounded signal view
         priority: 100
@@ -90,6 +107,10 @@ config:
             use_reasoning: false
     signals:
       keywords:
+        - name: sglang_stop_sequence
+          operator: OR
+          keywords:
+            - "__mock_sglang_stop_sequence__"
         - name: json_prompt_marker
           operator: OR
           keywords:
@@ -111,6 +132,10 @@ config:
             # safety-net in case the router produces no match.
             - ""
     modelCards:
+      - name: mock/sglang-chat
+        description: Deterministic SGLang Chat response fixture
+        capabilities:
+          - chat
       - name: MoM
         description: Deterministic Anthropic Messages provider fixture
         capabilities:

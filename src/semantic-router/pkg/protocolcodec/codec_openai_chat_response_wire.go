@@ -18,7 +18,7 @@ type chatResponseWire struct {
 	Provider            *string                   `json:"provider,omitempty"`
 	Choices             []chatChoiceWire          `json:"choices"`
 	Usage               *chatUsageWire            `json:"usage,omitempty"`
-	Metadata            map[string]string         `json:"metadata,omitempty"`
+	Metadata            chatResponseMetadataWire  `json:"metadata,omitempty"`
 	Moderation          json.RawMessage           `json:"moderation,omitempty"`
 	Error               *chatErrorWire            `json:"error,omitempty"`
 	ServiceTier         *chatServiceTierWire      `json:"service_tier,omitempty"`
@@ -40,6 +40,47 @@ type chatResponseWire struct {
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
 	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+}
+
+// Chat response metadata is provider evidence, separate from canonical
+// request/Responses metadata. SGLang adds weight-version ranges to its strings.
+type chatResponseMetadataWire map[string]json.RawMessage
+
+func (metadata *chatResponseMetadataWire) UnmarshalJSON(raw []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for key, value := range fields {
+		var target any = new(string)
+		if key == "weight_versions" && bytes.HasPrefix(bytes.TrimSpace(value), []byte("[")) {
+			// encoding/json matches struct keys without regard to case. Check
+			// the exact provider range keys before decoding their typed values.
+			var ranges []map[string]json.RawMessage
+			if err := json.Unmarshal(value, &ranges); err != nil {
+				return err
+			}
+			for _, interval := range ranges {
+				for field := range interval {
+					if field != "version" && field != "start" && field != "end" {
+						return fmt.Errorf("chat response metadata %q: unknown range field %q", key, field)
+					}
+				}
+			}
+			target = &[]struct {
+				Version string `json:"version"`
+				Start   int64  `json:"start"`
+				End     int64  `json:"end"`
+			}{}
+		}
+		decoder := json.NewDecoder(bytes.NewReader(value))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(target); err != nil {
+			return fmt.Errorf("chat response metadata %q: %w", key, err)
+		}
+	}
+	*metadata = fields
+	return nil
 }
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
@@ -67,6 +108,7 @@ type chatChoiceWire struct {
 	// metadata and is not replayed to the client.
 	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
 	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
+	MatchedStop            *chatStopReasonWire `json:"matched_stop,omitempty"` // SGLang matched stop string or token id.
 	TokenIDs               []int64             `json:"token_ids,omitempty"`
 	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
