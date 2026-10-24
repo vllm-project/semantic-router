@@ -94,10 +94,11 @@ def _external_preflight(case, manifest, cache):
     preflight_case(case, manifest, cache)
 
 
-def _initialize():
+def _initialize() -> None:
     with _lock:
         if _loaded.is_set():
             return
+        from . import legacy_mmlu  # noqa: PLC0415 - adapter registry cycle
         from .contracts import (  # noqa: PLC0415 - registry cycle
             BENCHMARK_WEIGHTS,
             BENCHMARKS,
@@ -126,6 +127,7 @@ def _initialize():
         from .legacy_reasoning import ADAPTERS  # noqa: PLC0415 - registry cycle
 
         found.update((adapter.id, adapter) for adapter in ADAPTERS)
+        found[legacy_mmlu.ADAPTER.id] = legacy_mmlu.ADAPTER
         # Only the operator's installed Python environment supplies entry points.
         for entry in entry_points(group="vllm_sr.sr_bench.adapters"):
             value = entry.load()

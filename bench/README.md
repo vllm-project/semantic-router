@@ -53,6 +53,18 @@ files, or committed configuration.
 
 ## Reasoning evaluations
 
+sr-bench also runs the suite's MMLU-Pro plain-prompt protocol as the
+[`legacy-mmlu-pro` diagnostic](../website/docs/benchmarking/sr-bench/tasks-and-targets.md#legacy-mmlu-pro-diagnostic).
+It uses sr-bench's request accounting and limits without changing the published
+MMLU-Pro protocol or score. Its prepared samples need not match this runner's
+per-category samples; compare the same frozen questions explicitly.
+
+The existing package and all 18 registered names remain available, including
+the `mmlu`/`mmlu-pro` and `gpqa`/`gpqa-main` aliases. Other datasets, explicit-CoT,
+reasoning-mode evaluation and plots have not migrated. `looper-tts` remains in
+this distribution. Runner retirement is tracked in
+[the migration issue](https://github.com/vllm-project/semantic-router/issues/4255).
+
 List the datasets registered by the installed package, then run a small
 comparison:
 
