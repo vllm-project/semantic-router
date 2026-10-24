@@ -55,7 +55,7 @@ func TestStoreImportsListsAndIdempotentlyInstallsExactFiveZIP(t *testing.T) {
 		t.Fatalf("List() = %#v, %v", list, err)
 	}
 	var record packageRecord
-	if err := readStrictJSONFile(recordRefPath(store.root, packageRecord{ID: "accuracy", Version: "0.1.0"}), 1<<20, &record); err != nil {
+	if err := readStrictJSONFile(recordRefPath(store.root, packageRecord{ID: "accuracy", Version: "0.2.0"}), 1<<20, &record); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(record.SourceURL, "signature") || strings.Contains(record.SourceURL, "hidden") {
@@ -643,6 +643,28 @@ providers:
 	reserved := []byte("value: ${PATH}\n")
 	if _, err := extractEnvironmentBindings(reserved); err == nil {
 		t.Fatal("reserved process environment binding was accepted")
+	}
+}
+
+// The Dashboard always holds the management credential, so a Recipe may not
+// bind it, however the operator's allowlist reads.
+func TestRecipeCannotBindTheManagementCredential(t *testing.T) {
+	t.Setenv(ManagementCredentialEnv, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if _, err := parseRecipeEnvironmentAllowlist(ManagementCredentialEnv); err == nil {
+		t.Fatal("the allowlist accepted the management credential")
+	}
+	for _, config := range []string{
+		"providers:\n  models:\n    - name: m\n      backend_refs:\n        - api_key: ${" + ManagementCredentialEnv + "}\n",
+		"providers:\n  models:\n    - name: m\n      backend_refs:\n        - api_key_env: " + ManagementCredentialEnv + "\n",
+	} {
+		if err := ValidateEnvironmentBindings([]byte(config)); err == nil {
+			t.Fatalf("a Recipe bound the management credential:\n%s", config)
+		}
+	}
+	// The Dashboard's own binding of it under management_api is not a Recipe input.
+	binding := []byte("global:\n  services:\n    management_api:\n      auth:\n        tokens:\n          - env: " + ManagementCredentialEnv + "\n")
+	if err := ValidateEnvironmentBindings(binding); err != nil {
+		t.Fatalf("ValidateEnvironmentBindings(management binding) = %v", err)
 	}
 }
 

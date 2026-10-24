@@ -124,8 +124,9 @@ func completeRetentionTestResponse(t *testing.T, router *OpenAIRouter, ctx *Requ
 			t.Fatal("streaming generation did not complete")
 		}
 	case "immediate":
-		ctx.SemanticResponse = memoryTestResponse("The conference starts on Monday.")
-		ctx.SemanticResponse.ID = ctx.ResponseObjectState.GeneratedResponseID
+		if _, _, _, err := router.encodeSyntheticTextResponse(ctx, "The conference starts on Monday.", false); err != nil {
+			t.Fatal(err)
+		}
 		router.persistImmediateResponseObject(createImmediateJSONResponse(200, []byte(`{"status":"completed"}`)), ctx)
 	}
 }

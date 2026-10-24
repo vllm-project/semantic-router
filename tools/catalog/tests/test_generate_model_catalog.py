@@ -865,6 +865,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
 
         expected_models = {
             "xai/grok-4.6": "grok-4.6",
+            "xai/grok-4.7": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
             "moonshot/kimi-k3": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
@@ -885,6 +886,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3-ultra": "nemotron-ultra",
             "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-2-30b-a3b": "nemotron-thinking-toggle",
+            "nvidia/nemotron-cascade-8b": "nemotron-thinking-toggle",
         }
         self.assertEqual(
             {

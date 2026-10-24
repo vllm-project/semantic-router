@@ -264,8 +264,11 @@ func TestDeepSeekV4HasEffortIsolatedEvaluationAndProviderBindings(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	for _, modelID := range []string{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"} {
-		assertDeepSeekModelSupport(t, registry, modelID)
+	for modelID, providerIDs := range map[string][]string{
+		"deepseek/deepseek-v4-flash": {"vllm"},
+		"deepseek/deepseek-v4-pro":   {"deepseek", "vllm"},
+	} {
+		assertDeepSeekModelSupport(t, registry, modelID, providerIDs)
 	}
 
 	provider, ok := registry.Provider("deepseek")
@@ -274,7 +277,34 @@ func TestDeepSeekV4HasEffortIsolatedEvaluationAndProviderBindings(t *testing.T) 
 	}
 }
 
-func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string) {
+func TestDeepSeekFirstPartyFlashNameBindsV41Flash(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := registry.Provider("deepseek")
+	if !ok {
+		t.Fatal("deepseek provider is missing")
+	}
+	// DeepSeek serves the retired deepseek-v4-flash name with V4.1 Flash, so
+	// binding it to the V4 Flash card would attach the wrong model's evidence.
+	if providerBindsModel(provider, "deepseek/deepseek-v4-flash") {
+		t.Fatal("deepseek provider must not bind the retired V4 Flash card")
+	}
+	for _, binding := range provider.Models {
+		if binding.ID != "deepseek-flash" {
+			continue
+		}
+		if binding.Catalog != "deepseek/deepseek-v4.1-flash" ||
+			binding.Relationship != CatalogModelRelationshipFirstParty {
+			t.Fatalf("deepseek-flash has the wrong binding: %+v", binding)
+		}
+		return
+	}
+	t.Fatal("deepseek provider has no deepseek-flash binding")
+}
+
+func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string, providerIDs []string) {
 	t.Helper()
 	defaultResult, ok := registry.IndexResult(modelID, "vllm-sr/intelligence@1.0.0")
 	if ok {
@@ -284,7 +314,7 @@ func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string
 	if !ok || result.Status != "available" || result.Score == nil || result.Coverage != 1 {
 		t.Fatalf("%s max-effort intelligence result is incomplete: %+v", modelID, result)
 	}
-	for _, providerID := range []string{"deepseek", "vllm"} {
+	for _, providerID := range providerIDs {
 		provider, ok := registry.Provider(providerID)
 		if !ok || !providerBindsModel(provider, modelID) {
 			t.Fatalf("%s is missing its %s provider binding", modelID, providerID)

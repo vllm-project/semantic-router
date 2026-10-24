@@ -14,7 +14,7 @@ from pathlib import Path
 
 import tomllib
 from check_cli_wheel import check_wheel
-from prepare_dev_package import prepare_version
+from prepare_dev_package import prepare_version, record_source_revision
 from runtime_evidence import host_platform
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,8 +57,22 @@ def verify_resources(wheel: Path, sdist: Path) -> None:
             "prometheus.serve.yaml",
         )
     )
+    generated = {
+        "cli/config_schema/router-config-v0.3.schema.json": ROOT
+        / "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        "cli/config_schema/releases.generated.json": ROOT
+        / "src/model-runtime/vllm_srun/registry/releases.generated.json",
+    }
     with zipfile.ZipFile(wheel) as whl, tarfile.open(sdist) as archive:
         prefix = archive.getmembers()[0].name.split("/")[0]
+        for name, source in generated.items():
+            member = archive.extractfile(prefix + "/" + name)
+            if (
+                member is None
+                or member.read() != source.read_bytes()
+                or whl.read(name) != source.read_bytes()
+            ):
+                raise ValueError(f"Packaged generated resource differs: {name}")
         for path in paths:
             if not path.is_file() or path.suffix == ".pyc":
                 continue
@@ -203,6 +217,8 @@ def main() -> None:
                 )
             )
             prepare_version(project, epoch)
+        if args.mode == "main":
+            record_source_revision(project, manifest["source_sha"])
         value = tomllib.loads((project / "pyproject.toml").read_text())["project"][
             "version"
         ]
@@ -238,7 +254,8 @@ def main() -> None:
     )
     check("package.resources", lambda: verify_resources(wheels[0], sources[0]))
     if not args.build_only:
-        check("package.installed", lambda: check_wheel(wheels[0]))
+        image_tag = manifest["source_sha"] if args.mode == "main" else None
+        check("package.installed", lambda: check_wheel(wheels[0], image_tag))
     manifest["files"] = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in wheels + sources

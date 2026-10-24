@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
@@ -27,6 +28,7 @@ require (
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.4.10-0.20240819025435-512e3b98866a // indirect
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/openai/openai-go v1.12.0 // indirect
 	github.com/pemistahl/lingua-go v1.4.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -44,9 +46,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/valkey-io/valkey-glide/go/v2 v2.3.0 // indirect
-	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000 // indirect
-	github.com/vllm-project/semantic-router/onnx-binding v0.0.0-00010101000000-000000000000 // indirect
-	github.com/vllm-project/semantic-router/openvino-binding v0.0.0-00010101000000-000000000000 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
@@ -63,13 +62,3 @@ require (
 )
 
 replace github.com/vllm-project/semantic-router/src/semantic-router => ../src/semantic-router
-
-replace github.com/vllm-project/semantic-router/candle-binding => ../candle-binding
-
-replace github.com/vllm-project/semantic-router/ml-binding => ../ml-binding
-
-replace github.com/vllm-project/semantic-router/nlp-binding => ../nlp-binding
-
-replace github.com/vllm-project/semantic-router/openvino-binding => ../openvino-binding
-
-replace github.com/vllm-project/semantic-router/onnx-binding => ../onnx-binding

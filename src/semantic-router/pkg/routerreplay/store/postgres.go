@@ -379,6 +379,7 @@ func (p *PostgresStore) UpdateLifecycle(
 		return err
 	}
 	defer release()
+	reason = sanitizePostgresText(reason)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -414,6 +415,7 @@ func (p *PostgresStore) AttachRequest(ctx context.Context, id string, body strin
 		return err
 	}
 	defer release()
+	body = sanitizePostgresText(body)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -453,6 +455,7 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 		return err
 	}
 	defer release()
+	body = sanitizePostgresText(body)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -492,7 +495,7 @@ func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Ou
 		return err
 	}
 	defer release()
-	outcomeJSON, err := json.Marshal([]Outcome{cloneOutcome(outcome)})
+	outcomeJSON, err := postgresOutcomeJSON(outcome)
 	if err != nil {
 		return fmt.Errorf("failed to marshal outcome: %w", err)
 	}
@@ -535,14 +538,9 @@ func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string
 		return err
 	}
 	defer release()
-	spansJSON, err := json.Marshal(spans)
+	spansJSON, spanDetailsJSON, err := postgresHallucinationJSON(spans, spanDetails)
 	if err != nil {
-		return fmt.Errorf("failed to marshal hallucination spans: %w", err)
-	}
-
-	spanDetailsJSON, err := json.Marshal(spanDetails)
-	if err != nil {
-		return fmt.Errorf("failed to marshal hallucination span details: %w", err)
+		return err
 	}
 
 	availability := HallucinationScore{}
@@ -657,7 +655,7 @@ func (p *PostgresStore) UpdateToolTrace(ctx context.Context, id string, trace To
 		return err
 	}
 	defer release()
-	traceJSON, err := marshalReplayOptionalJSON(&trace)
+	traceJSON, err := postgresToolTraceJSON(trace)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tool trace: %w", err)
 	}

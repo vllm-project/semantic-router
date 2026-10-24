@@ -19,7 +19,7 @@ func (*lifecyclePairScorer) ScorePairs(context.Context, string, []tasks.QueryDoc
 
 func TestPrepareRerankersReachabilityAndCandidateRollback(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"local": {Provider: "candle", Artifact: "model"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"local": {Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Input: config.ModelInputBudget{Overflow: "reject"}}}
 	for _, name := range []config.RecipeName{"a", "b", "unused"} {
 		cfg.Recipes = append(cfg.Recipes, config.RoutingRecipe{Name: name, Profile: config.RoutingProfile{ModelBindings: map[string]config.ModelBinding{config.RAGRerankerConsumer: {Deployment: "local", Adapter: "vela_reranker", Contract: config.RelevanceScoresContract}}, Decisions: []config.Decision{{Name: "retrieve", Plugins: []config.DecisionPlugin{{Type: "rag", Configuration: config.MustStructuredPayload(config.RAGPluginConfig{Enabled: true, Backend: "vectorstore", Rerank: &config.RAGRerankConfig{}})}}}}}})
 	}

@@ -16,7 +16,7 @@ func TestToolSelectionRequestsUseOwnedEntrypoints(t *testing.T) {
 			req := buildToolSelectionChatRequest(tc)
 			model := "e2e-plugins"
 			if tc.Name == "pii_decision_runs_before_tool_selection" {
-				model = "MoM"
+				model = "e2e-pii-precedence"
 				precedenceCases++
 			} else {
 				featureCases++

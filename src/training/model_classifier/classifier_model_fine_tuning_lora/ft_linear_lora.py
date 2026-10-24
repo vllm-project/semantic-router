@@ -142,7 +142,7 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str | None = No
         return AutoTokenizer.from_pretrained(model_path)
 
 
-DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
+DEFAULT_SUPPLEMENT_DATASET = "vllm-sr/category-classifier-supplement"
 
 
 class MMLUDataset:

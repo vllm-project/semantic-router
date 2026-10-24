@@ -309,7 +309,7 @@ At this milestone, the project stands at **1,734 commits** and **150+ contributo
   <em>Figure 14: Building the MoM engine is an open systems problem that needs the full model and infrastructure community.</em>
 </p>
 
-Join us on [GitHub](https://github.com/vllm-project/semantic-router), explore the [documentation](https://vllm-sr.ai), try the [MoM model family](https://huggingface.co/LLM-Semantic-Router), and meet the community in the `#semantic-router` channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN).
+Join us on [GitHub](https://github.com/vllm-project/semantic-router), explore the [documentation](https://vllm-sr.ai), try the [MoM model family](https://huggingface.co/vllm-sr), and meet the community in the `#semantic-router` channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN).
 
 vLLM Semantic Router began by helping infrastructure choose the right model for each request.
 

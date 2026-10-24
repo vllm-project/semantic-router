@@ -12,7 +12,7 @@ func TestVelaOmniDefaultsAndPublishedRepresentations(t *testing.T) {
 	}
 	for variant, dimension := range map[string]int{"nano": 384, "mini": 768} {
 		spec := GetModelByPath("omni-" + variant)
-		if spec == nil || spec.EmbeddingDim != dimension || spec.DefaultAdapter != "vela_omni" || spec.DefaultProvider != "ort" || spec.DefaultDevice != "cpu" || len(spec.Revision) != 40 || spec.PreparedArtifact != "vela_omni" || spec.ArtifactBundle != "vela-1.0-omni-"+variant {
+		if spec == nil || spec.EmbeddingDim != dimension || spec.DefaultAdapter != "vela_omni" || len(spec.Revision) != 40 || !spec.RuntimeProvisioned {
 			t.Fatalf("invalid %s contract: %+v", variant, spec)
 		}
 	}

@@ -59,6 +59,13 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	if strings.EqualFold(strings.TrimSpace(profile.Type), snowflakeCortexProviderType) {
 		return llmprotocol.ResponseVendorSnowflake
 	}
+	// A vLLM-type profile pointed at an OpenAI-compatible gateway tolerates
+	// the gateway's injected usage metering fields — but only when the
+	// operator opts in, so a plain vLLM backend keeps the strict contract
+	// even if it ever starts emitting such fields.
+	if strings.EqualFold(strings.TrimSpace(profile.Type), "vllm") && profile.OpenAICompatGateway {
+		return llmprotocol.ResponseVendorOpenAICompatGateway
+	}
 	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
 		return llmprotocol.ResponseVendorAzure
 	}

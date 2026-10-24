@@ -271,7 +271,7 @@
   text-wrap: balance;
 }
 
-.theme-doc-markdown > :is(pre, table, img, figure, .tabs-container, details),
+.theme-doc-markdown > :is(pre, img, figure, .tabs-container, details),
 .theme-doc-markdown > div:has(> table),
 .theme-doc-markdown > div:has(> pre) {
   max-width: none;

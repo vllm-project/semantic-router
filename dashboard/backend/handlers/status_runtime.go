@@ -1,29 +1,33 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy bool, credentialProvider ...routerauth.CredentialProvider) *RouterRuntimeStatus {
-	if routerAPIURL != "" {
-		if state := fetchStartupStatusFromAPI(routerAPIURL, credentialProvider...); state != nil {
+func resolveRouterRuntimeStatus(ctx context.Context, runtimePath, routerAPIURL string, routerHealthy bool, credentialProvider ...routerauth.CredentialProvider) *RouterRuntimeStatus {
+	if routerAPIURL != "" && routerHealthy {
+		if state := fetchStartupStatusFromAPI(ctx, routerAPIURL, credentialProvider...); state != nil {
 			return runtimeStatusFromState(state)
 		}
 	}
 
 	if state, err := loadRouterRuntimeState(runtimePath); err == nil && state != nil {
+		// The file outlives the Router that wrote it. Of a Router that does not
+		// answer, it still tells only why its startup failed.
+		if !routerHealthy && state.Phase != "error" {
+			return nil
+		}
 		runtime := runtimeStatusFromState(state)
 		if runtime.Ready && routerAPIURL != "" {
-			readyHealthy := checkRouterManagementHealth(routerAPIURL+"/ready", credentialProvider...)
+			readyHealthy := checkRouterManagementHealth(ctx, routerAPIURL+"/ready", credentialProvider...)
 			if !readyHealthy {
 				runtime.Ready = false
 				runtime.Phase = "starting"
@@ -37,8 +41,8 @@ func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy 
 	return nil
 }
 
-func fetchStartupStatusFromAPI(routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) *startupstatus.State {
-	resp, err := routerManagementGET(routerAPIURL+"/startup-status", 3*time.Second, credentialProvider...)
+func fetchStartupStatusFromAPI(ctx context.Context, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) *startupstatus.State {
+	resp, err := routerManagementGET(ctx, routerAPIURL+"/startup-status", 3*time.Second, credentialProvider...)
 	if err != nil {
 		return nil
 	}
@@ -103,15 +107,4 @@ func loadRouterRuntimeState(runtimePath string) (*startupstatus.State, error) {
 
 	fallbackPath := filepath.Join(parentDir, "router-runtime.json")
 	return startupstatus.Load(fallbackPath)
-}
-
-func getContainerLogsTailForContainer(containerName string, lines int) string {
-	// #nosec G204 -- containerName is repository-managed and lines is converted from int.
-	tailArg := strconv.Itoa(lines)
-	cmd := exec.Command("docker", "logs", "--tail", tailArg, containerName)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return ""
-	}
-	return string(output)
 }

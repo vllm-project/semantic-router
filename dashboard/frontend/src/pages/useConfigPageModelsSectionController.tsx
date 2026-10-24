@@ -248,7 +248,7 @@ function useEvaluationRecordInventory(
 }
 
 export function useConfigPageModelsSectionController(props: ConfigPageModelsSectionProps) {
-  const { catalog, error: catalogError } = useBuiltInModelCatalog()
+  const { catalog, error: catalogError, ready, loading, retry } = useBuiltInModelCatalog()
   const filters = useModelInventoryFilters(props)
   const forms = useModelFormActions(props, catalog)
   const deletion = useModelDeletion(props, filters.referenceCounts)
@@ -269,7 +269,7 @@ export function useConfigPageModelsSectionController(props: ConfigPageModelsSect
     forms,
     deletion,
     reasoning,
-    evaluations,
+    evaluations: { ...evaluations, ready, loading, retry },
     connect: { open: connectOpen, setOpen: setConnectOpen, catalog, catalogError },
     liveVerification,
     toggleExpand,

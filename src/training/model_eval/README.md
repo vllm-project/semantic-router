@@ -33,7 +33,18 @@ without compatible data.
 
 ```bash
 cd src/training/model_eval
-pip install -r requirements.txt
+uv sync --locked
+```
+
+`pyproject.toml` bounds each dependency and `uv.lock` pins the exact versions, so a clean checkout resolves
+to the same environment every time. `uv run python <script>` runs a script in it. The locked `torch` is
+the default PyPI build, which is the CUDA build on Linux.
+
+The tests import `src.training.model_eval`, so run them from the repository root:
+
+```bash
+uv run --project src/training/model_eval python -m unittest discover \
+  -s src/training/model_eval/tests -p 'test_*.py'
 ```
 
 ## Run
@@ -76,10 +87,11 @@ Useful options:
 Use underscores in option names, as shown by
 `python mom_collection_eval.py --help`.
 
-Download evaluation native snapshots with `make download-eval-models`. Production
-`make download-models` continues to use the Router's downloader, including its
-runtime artifact validation. Existing `download-mmbert-*` targets remain legacy
-utilities; they do not download Vela. Legacy adapters must declare an available
+Download evaluation native snapshots with `make download-eval-models`. In
+production, the model runtime downloads each model it serves on first start, and
+the Router provisions only label maps, custom-registry models and the Omni
+bundles. Existing `download-mmbert-*` targets remain legacy utilities; they do not
+download Vela. Legacy adapters must declare an available
 base and save every newly initialized task-head parameter; otherwise evaluation
 rejects them instead of scoring a random head.
 
@@ -113,12 +125,12 @@ the result.
 
 ```
 python src/training/model_eval/quality_baseline.py \
-    --task fact-check --device cuda --output-dir baseline/fact-check
+    --task domain --device cuda --output-dir baseline/domain
 
 # From src/training/model_eval. The served artifacts predate the training-run
 # manifests, so this reports one missing run_ref per artifact until a run
 # publishes one. Everything else has to pass.
-python -m provenance.cli validate baseline/fact-check/manifests
+python -m provenance.cli validate baseline/domain/manifests
 
 python src/training/model_eval/gap_report.py \
     --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
@@ -136,12 +148,42 @@ itself, so the runner refuses that artifact for this task. The kept questions
 cover nine of the fourteen categories, since health, history, law, other and
 philosophy come only from MMLU. A label with no rows keeps its per-label entry
 with support 0, is left out of macro F1, and is listed in the result's
-`unsupported_labels` and as unmeasured in the gap report.
+`unsupported_labels` and as unmeasured in the gap report. The mirror case -
+rows whose label the artifact does not define - is dropped before scoring, and
+the result's `dataset.dropped_rows` names those labels with the row count each
+dropped, so the scored row count is never read as the size of the split.
 
 The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
 before accessing that dataset. Use the custom-data collection evaluator above
 for reviewed instruction-attack annotations.
+
+The `fact-check` task scores the corpus-matched fact-check test of the [router
+signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite) at a
+pinned revision: its NF-CATS, Open Question Type, Search Arena and URS rows,
+read file by file. Inside every corpus, script, length, question-mark and
+capitalisation stratum the two classes are equal, so the corpus, a question mark
+or the length alone scores AUC 0.5 on it. Dolly is left out because the mmBERT
+fact-check checkpoint trained on it. Both fact-check checkpoints are scored.
+
+The `feedback` task scores the fresh held-out feedback set of the [router
+signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite) at a
+pinned revision: its CrossWOZ rows, read file by file. CrossWOZ is a corpus the
+suite never touched and the fresh build deduplicated against every suite row,
+so it is new to both feedback checkpoints - the legacy detector trained on the
+feedback-detector dataset and Vela Feedback on WildFeedback and
+Schema-Guided Dialogue. The fresh build keeps the corpus's own label
+proportions, and in CrossWOZ every satisfied turn is a question-mark-free thank
+while 68% of the other turns are questions, so the punctuation alone would
+separate the classes. The runner therefore scores a class-matched subset, drawn
+in a seeded order inside the source, script, length and question-mark strata,
+and records the pinned distribution beside the kept counts in the result's
+`dataset.stratum_matched`. The dialogue act a label is read from (`subsource`)
+names the class rather than matching it. Both feedback checkpoints are scored.
+The set carries SAT and NO_FEEDBACK; WRONG_ANSWER and WANT_DIFFERENT have no
+published held-out text yet, so those classes stay unmeasured. The legacy
+checkpoint's label map predates NO_FEEDBACK, so it scores the SAT rows the
+matched selection keeps.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the
@@ -192,7 +234,7 @@ rather than a constant kept here.
 
 ```bash
 python src/training/model_eval/jailbreak_guard_eval.py \
-    --model llm-semantic-router/Vela-1.0-Encoder-307M-Guard \
+    --model vllm-sr/Vela-1.0-Encoder-307M-Guard \
     --dataset local:guard-eval-v1.json --dataset-version v1 \
     --label-col attack --slice-col source --slice-col language \
     --dev-dataset local:guard-dev-v1.json --budget 0.01 \

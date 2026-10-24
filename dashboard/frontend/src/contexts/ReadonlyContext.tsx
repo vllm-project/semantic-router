@@ -9,6 +9,7 @@ import React, {
 import { useAuth } from './AuthContext'
 import { preloadPlatformAssets } from '../utils/platformAssets'
 import { decodeDashboardSettings } from './dashboardSettings'
+import { withRequestTimeout } from '../utils/boundedRequest'
 
 interface ReadonlyContextType {
   isReadonly: boolean
@@ -21,8 +22,6 @@ interface ReadonlyContextType {
   platform: string
   envoyUrl: string
   routerEvalEndpoint: string
-  srBenchAvailable: boolean
-  srBenchUnavailableReason: string
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
@@ -36,8 +35,6 @@ const ReadonlyContext = createContext<ReadonlyContextType>({
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
-  srBenchAvailable: false,
-  srBenchUnavailableReason: 'Evaluation availability has not been loaded.',
 })
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -61,17 +58,12 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [platform, setPlatform] = useState('')
   const [envoyUrl, setEnvoyUrl] = useState('')
   const [routerEvalEndpoint, setRouterEvalEndpoint] = useState('')
-  const [srBenchAvailable, setSrBenchAvailable] = useState(false)
-  const [srBenchUnavailableReason, setSrBenchUnavailableReason] = useState(
-    'Evaluation availability has not been loaded.',
-  )
 
   const refreshSettings = useCallback(() => {
     setIsReadonly(true)
     setServerReadonly(true)
     setRuntimeConfigWritable(false)
     setRecipeStoreWritable(false)
-    setSrBenchAvailable(false)
     setSettingsError(null)
     setIsLoading(true)
     setSettingsRevision((revision) => revision + 1)
@@ -83,8 +75,6 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setServerReadonly(true)
       setRuntimeConfigWritable(false)
       setRecipeStoreWritable(false)
-      setSrBenchAvailable(false)
-      setSrBenchUnavailableReason('Evaluation is unavailable without an authenticated session.')
       setPlatform('')
       setEnvoyUrl('')
       setRouterEvalEndpoint('')
@@ -94,6 +84,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     }
 
     const controller = new AbortController()
+
     const fetchSettings = async () => {
       setIsLoading(true)
       setSettingsError(null)
@@ -104,27 +95,25 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setServerReadonly(true)
       setRuntimeConfigWritable(false)
       setRecipeStoreWritable(false)
-      setSrBenchAvailable(false)
-      setSrBenchUnavailableReason('Evaluation availability is being checked.')
       let failureMessage = 'Dashboard access settings are unavailable. Refresh access to retry.'
       try {
-        const response = await fetch('/api/settings', { signal: controller.signal })
-        if (!response.ok) {
-          if (response.status === 403) {
-            failureMessage =
-              'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
+        const data = await withRequestTimeout(async (signal) => {
+          const response = await fetch('/api/settings', { signal })
+          if (!response.ok) {
+            if (response.status === 403) {
+              failureMessage =
+                'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
+            }
+            throw new Error(`Dashboard settings request failed (${response.status})`)
           }
-          throw new Error(`Dashboard settings request failed (${response.status})`)
-        }
-        const data = decodeDashboardSettings(await response.json())
+          return decodeDashboardSettings(await response.json())
+        }, controller.signal)
         if (controller.signal.aborted) return
         setSettingsError(null)
         setIsReadonly(data.readonlyMode)
         setServerReadonly(data.serverReadonly)
         setRuntimeConfigWritable(data.runtimeConfigWritable)
         setRecipeStoreWritable(data.recipeStoreWritable)
-        setSrBenchAvailable(data.srBenchAvailable)
-        setSrBenchUnavailableReason(data.srBenchUnavailableReason)
         const platformValue = data.platform
         setPlatform(platformValue)
         setEnvoyUrl(data.envoyUrl)
@@ -133,7 +122,6 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       } catch (error) {
         if (!controller.signal.aborted) {
           setSettingsError(failureMessage)
-          setSrBenchUnavailableReason('Dashboard settings are unavailable.')
           console.warn('Failed to fetch dashboard settings:', error)
         }
       } finally {
@@ -158,8 +146,6 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         platform,
         envoyUrl,
         routerEvalEndpoint,
-        srBenchAvailable,
-        srBenchUnavailableReason,
       }}
     >
       {children}

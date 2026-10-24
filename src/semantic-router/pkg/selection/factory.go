@@ -227,6 +227,9 @@ func (f *Factory) Create() Selector {
 	case MethodLatencyAware:
 		selector = NewLatencyAwareSelector(nil)
 
+	case MethodRandom:
+		selector = NewRandomSelector()
+
 	case MethodMultiFactor:
 		multiFactorSelector := NewMultiFactorSelector(f.cfg.MultiFactor)
 		if f.modelConfig != nil {
@@ -355,7 +358,7 @@ func (f *Factory) CreateAll() *Registry {
 		registry.Register(MethodSVM, svmAdapter)
 	}
 
-	// Create MLP selector (GPU-accelerated via Candle)
+	// Create MLP selector
 	mlpAdapter, err := CreateMLPSelector(mlCfg, nil)
 	if err != nil {
 		logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
@@ -392,6 +395,9 @@ func (f *Factory) CreateAll() *Registry {
 	// Create LatencyAware selector
 	latencyAwareSelector := NewLatencyAwareSelector(nil)
 	registry.Register(MethodLatencyAware, latencyAwareSelector)
+
+	// Create Random selector
+	registry.Register(MethodRandom, NewRandomSelector())
 
 	// Create MultiFactor selector
 	multiFactorSelector := NewMultiFactorSelector(f.cfg.MultiFactor)

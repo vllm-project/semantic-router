@@ -36,7 +36,7 @@ func TestDecisionScoreAvailabilityReachesHeadersReplayAndTools(t *testing.T) {
 					t.Fatalf("header score availability = %v, want %v", found, tc.available)
 				}
 			}
-			record := buildReplayRoutingRecord(ctx, "auto", "backend", "route")
+			record := buildReplayRoutingRecord(ctx, "vllm-sr/auto", "backend", "route")
 			if record.ConfidenceScoreAvailable != tc.available {
 				t.Fatal("replay lost decision score availability")
 			}

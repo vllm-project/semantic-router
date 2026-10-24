@@ -166,7 +166,8 @@ func (s *ResponseCacheService) LookupExact(
 	if !result.ExpiresAt.IsZero() {
 		ttl = TTL(time.Until(result.ExpiresAt))
 	}
-	s.l1.put(key, result.ResponseBody, ttl)
+	// Promotion retains the backend's age, including unknown age, and expiry.
+	s.l1.put(key, result, ttl)
 	return result, nil
 }
 
@@ -231,7 +232,7 @@ func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite)
 		s.recordOperation("store_exact", write.Identity, CacheResult{}, err, start)
 		return err
 	}
-	s.l1.put(key, write.ResponseBody, write.TTL)
+	s.l1.put(key, CacheResult{ResponseBody: write.ResponseBody, AgeKnown: true}, write.TTL)
 	s.recordOperation("store_exact", write.Identity, CacheResult{}, nil, start)
 	return nil
 }
@@ -252,6 +253,11 @@ func (s *ResponseCacheService) LookupSemantic(
 	if err != nil {
 		s.failOpen.Add(1)
 		return CacheResult{}, err
+	}
+	if result.Found && lookup.MaxAge != nil &&
+		(!result.AgeKnown || result.Age > *lookup.MaxAge) {
+		s.staleMisses.Add(1)
+		result = CacheResult{HitKind: HitKindMiss}
 	}
 	if result.Found {
 		result.HitKind = HitKindSemantic

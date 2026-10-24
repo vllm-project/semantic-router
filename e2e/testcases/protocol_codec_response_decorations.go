@@ -28,7 +28,7 @@ func init() {
 }
 
 func testAnthropicResponseDiagnostics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	return runResponseDecorationMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1",
+	return runResponseDecorationMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1",
 		"__mock_anthropic_diagnostics__ __mock_protocol_matrix__", protocolCodecAnthropicReply,
 		assertAnthropicResponseDiagnostics)
 }

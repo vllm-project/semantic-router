@@ -24,6 +24,51 @@ class MainWorkflowContractTests(unittest.TestCase):
             "main push runs must remain per-commit so change classification cannot skip a commit",
         )
 
+    def test_pypi_accepts_only_qualified_main_dispatch_or_stable_tag(self) -> None:
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/pypi-publish.yml").read_text()
+        )
+        condition = workflow["jobs"]["pypi"]["if"]
+        # Evaluate the workflow's actual guard across publication boundaries.
+        for event, ref, channel, prebuilt, allowed in (
+            ("workflow_dispatch", "refs/heads/main", "dev", True, True),
+            ("workflow_dispatch", "refs/heads/main", "dev", False, False),
+            ("workflow_dispatch", "refs/heads/feature", "dev", True, False),
+            ("push", "refs/heads/main", "dev", True, False),
+            ("pull_request", "refs/heads/main", "dev", True, False),
+            ("push", "refs/tags/v0.5.0", "stable", True, True),
+            ("workflow_dispatch", "refs/tags/v0.5.0", "stable", True, False),
+        ):
+            with self.subTest(event=event, ref=ref, channel=channel, prebuilt=prebuilt):
+                expression = condition
+                for key, value in {
+                    "inputs.build-only": False,
+                    "inputs.prebuilt-dist": prebuilt,
+                    "inputs.channel": channel,
+                    "needs.build.result": "success",
+                    "github.repository": "vllm-project/semantic-router",
+                    "github.event_name": event,
+                    "github.ref": ref,
+                }.items():
+                    expression = expression.replace(key, repr(value))
+                expression = expression.replace("&&", " and ").replace("||", " or ")
+                expression = expression.replace("!", "not ")
+                self.assertEqual(
+                    eval(
+                        expression,
+                        {"__builtins__": {}},
+                        {
+                            "always": lambda: True,
+                            "cancelled": lambda: False,
+                            "failure": lambda: False,
+                            "startsWith": lambda value, prefix: value.startswith(
+                                prefix
+                            ),
+                        },
+                    ),
+                    allowed,
+                )
+
 
 class PullRequestGateContractTests(unittest.TestCase):
     def setUp(self) -> None:

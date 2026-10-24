@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 
 	yamlv3 "gopkg.in/yaml.v3"
@@ -30,8 +29,6 @@ var maintainedFullConfigAssets = []string{
 	repoRel("e2e", "config", "config.response-api-redis.yaml"),
 	repoRel("e2e", "config", "config.response-api.yaml"),
 	repoRel("e2e", "config", "config.testing.yaml"),
-	repoRel("e2e", "config", "onnx-binding", "config.onnx-binding-test.yaml"),
-	repoRel("e2e", "config", "onnx-binding", "config.onnx-classifiers-test.yaml"),
 	repoRel("e2e", "profiles", "routing-strategies", "config-with-embedding.yaml"),
 	repoRel("bench", "hallucination", "config.yaml"),
 	repoRel("bench", "hallucination", "config-7b.yaml"),
@@ -63,12 +60,10 @@ var maintainedValuesConfigAssets = []string{
 	"deploy/kubernetes/istio/semantic-router-values/values.yaml",
 	"deploy/kubernetes/llm-d/semantic-router-values/values.yaml",
 	repoRel("e2e", "profiles", "ai-gateway", "values.yaml"),
-	repoRel("e2e", "profiles", "aibrix", "values.yaml"),
 	repoRel("e2e", "profiles", "authz-rbac", "values.yaml"),
 	repoRel("e2e", "profiles", "category-remote-backend", "values.yaml"),
 	repoRel("e2e", "profiles", "dashboard", "values.yaml"),
 	repoRel("e2e", "profiles", "dynamic-config", "values.yaml"),
-	repoRel("e2e", "profiles", "llm-d", "values.yaml"),
 	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
 	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
 	repoRel("e2e", "profiles", "multimodal-routing", "values.yaml"),
@@ -80,29 +75,6 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "routing-strategies", "values-mcp.yaml"),
 	repoRel("e2e", "profiles", "routing-strategies", "values.yaml"),
 	repoRel("e2e", "profiles", "streaming", "values.yaml"),
-}
-
-type templatedConfigAsset struct {
-	rel          string
-	replacements map[string]string
-}
-
-var maintainedTemplatedConfigAssets = []templatedConfigAsset{
-	{
-		rel: repoRel("bench", "cpu-vs-gpu", "config-bench.yaml"),
-		replacements: map[string]string{
-			"USE_CPU_PLACEHOLDER":                       "false",
-			"PROMPT_COMPRESSION_PLACEHOLDER":            "false",
-			"PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER": "512",
-		},
-	},
-	{
-		rel: repoRel("bench", "cpu-vs-gpu", "config-bench-candle.yaml"),
-		replacements: map[string]string{
-			"PROMPT_COMPRESSION_PLACEHOLDER":            "false",
-			"PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER": "512",
-		},
-	},
 }
 
 func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
@@ -123,11 +95,35 @@ func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 			validateMaintainedConfigAsset(t, rel, readValuesConfigAsset(t, rel))
 		})
 	}
+}
 
-	for _, asset := range maintainedTemplatedConfigAssets {
-		t.Run(asset.rel, func(t *testing.T) {
-			validateMaintainedConfigAsset(t, asset.rel, readTemplatedConfigAsset(t, asset))
-		})
+func TestIstioEnvoyFilterRouterNameIsUnique(t *testing.T) {
+	const rel = "deploy/kubernetes/istio/envoyfilter.yaml"
+	root := decodeYAMLMap(t, mustReadRepoFile(t, rel), rel)
+	patches, ok := mustAssetMapValue(t, root, "spec", rel)["configPatches"].([]interface{})
+	if !ok || len(patches) == 0 {
+		t.Fatalf("%s has no configPatches", rel)
+	}
+	routerFilters := 0
+	for i, item := range patches {
+		patch, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s configPatches[%d] is not a map", rel, i)
+		}
+		value := mustAssetMapValue(t, mustAssetMapValue(t, patch, "patch", rel), "value", rel)
+		typed, _ := value["typed_config"].(map[string]interface{})
+		if typed["@type"] != "type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor" {
+			continue
+		}
+		routerFilters++
+		// Istio keys InferencePool per-route ext_proc config by this name.
+		name, _ := value["name"].(string)
+		if name == "" || name == "envoy.filters.http.ext_proc" {
+			t.Fatalf("%s configPatches[%d] names the router filter %q; it needs a unique name or InferencePool routes override it", rel, i, name)
+		}
+	}
+	if routerFilters == 0 {
+		t.Fatalf("%s has no ext_proc router filter patch", rel)
 	}
 }
 
@@ -220,16 +216,6 @@ func readValuesConfigAsset(t *testing.T, rel string) []byte {
 		t.Fatalf("failed to marshal %s config block: %v", rel, err)
 	}
 	return data
-}
-
-func readTemplatedConfigAsset(t *testing.T, asset templatedConfigAsset) []byte {
-	t.Helper()
-	content := string(mustReadRepoFile(t, asset.rel))
-	replacerPairs := make([]string, 0, len(asset.replacements)*2)
-	for oldValue, newValue := range asset.replacements {
-		replacerPairs = append(replacerPairs, oldValue, newValue)
-	}
-	return []byte(strings.NewReplacer(replacerPairs...).Replace(content))
 }
 
 func validateMaintainedConfigAsset(t *testing.T, rel string, data []byte) {

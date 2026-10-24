@@ -86,7 +86,7 @@
 .commandShell {
   display: grid;
   width: 100%;
-  max-width: 46rem;
+  max-width: 58rem;
   margin-inline: auto;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -165,7 +165,8 @@
 
 .command {
   display: block;
-  overflow-x: auto;
+  min-width: 0;
+  overflow: visible;
   padding: 0 0 0 0.15rem;
   border: 0;
   background: transparent;
@@ -173,14 +174,28 @@
   font-family: var(--ifm-font-family-monospace);
   font-size: clamp(0.9rem, 1.1vw, 1.05rem);
   line-height: 1.5;
-  white-space: nowrap;
-  scrollbar-width: thin;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agentPrompt {
   overflow: visible;
   white-space: normal;
   word-break: normal;
+}
+
+.channelNote {
+  max-width: 58rem;
+  margin: 0.85rem auto 0;
+  color: var(--site-muted);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.channelNote strong {
+  color: var(--site-accent-strong);
+  font-weight: 600;
 }
 
 .actions {
@@ -220,8 +235,7 @@
   }
 
   .command {
-    white-space: pre-wrap;
-    word-break: break-all;
+    word-break: normal;
     font-size: 0.82rem;
   }
 

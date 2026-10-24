@@ -4,7 +4,7 @@ import { mockAuthenticatedAppShell } from "./support/auth";
 const importedConfig = {
   version: "v0.3",
   providers: {
-    default_model: "remote-model-primary",
+    defaults: { model: "remote-model-primary" },
     models: [
       {
         name: "remote-model-primary",
@@ -62,8 +62,12 @@ const importedConfig = {
   },
 };
 
-async function mockFirstRunSetup(page: Page) {
+async function mockFirstRunSetup(
+  page: Page,
+  capabilities: Record<string, Record<string, unknown>> = {},
+) {
   await mockAuthenticatedAppShell(page, {
+    capabilities,
     setupState: {
       setupMode: true,
       listenerPort: 8700,
@@ -84,6 +88,46 @@ async function mockFirstRunSetup(page: Page) {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
   });
 }
+
+test.describe("Setup wizard activation access", () => {
+  test("disables Activate and explains why when the caller cannot deploy", async ({
+    page,
+  }) => {
+    await mockFirstRunSetup(page, {
+      setup: {
+        authorized: false,
+        state: "unauthorized",
+        reason: "permission_required",
+        remediation: "Your role lacks the config.deploy permission.",
+      },
+    });
+    await page.route("**/api/setup/validate", async (route) => {
+      const payload = route.request().postDataJSON() as { config: unknown };
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valid: true,
+          config: payload.config,
+          models: 1,
+          decisions: 1,
+          signals: 0,
+          canActivate: true,
+        }),
+      });
+    });
+
+    await page.goto("/setup");
+    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Review and activate" }),
+    ).toBeVisible();
+
+    await expect(page.getByText("Your role lacks the config.deploy permission.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Activate", exact: true })).toBeDisabled();
+  });
+});
 
 test.describe("Setup wizard routing import", () => {
   test("validates the default from-scratch config once and reaches ready", async ({
@@ -135,7 +179,7 @@ test.describe("Setup wizard routing import", () => {
         config: {
           providers: {
             defaults: {
-              default_model: "qwen/qwen3.5-rocm",
+              model: "qwen/qwen3.5-rocm",
             },
             models: [
               {
@@ -147,18 +191,13 @@ test.describe("Setup wizard routing import", () => {
                     weight: 100,
                     endpoint: "vllm:8000",
                     protocol: "http",
+                    provider: "vllm",
                   },
                 ],
               },
             ],
           },
           routing: {
-            modelCards: [
-              {
-                name: "qwen/qwen3.5-rocm",
-                modality: "text",
-              },
-            ],
             decisions: [
               {
                 name: "default-route",
