@@ -45,9 +45,16 @@ class RecipeConformanceTest(unittest.TestCase):
         self.assertEqual(
             set(mom.decisions),
             {
-                "balance:simple",
-                "balance:medium",
-                "balance:reasoning",
+                "balance:long_context",
+                "balance:vision",
+                "balance:recovery",
+                "balance:agentic",
+                "balance:facts",
+                "balance:frontier",
+                "balance:code",
+                "balance:hard",
+                "balance:standard",
+                "balance:fast",
                 "speed:fast",
                 "speed:tools",
                 "speed:reasoning",
@@ -63,12 +70,15 @@ class RecipeConformanceTest(unittest.TestCase):
                 "vault:private",
             },
         )
-        self.assertEqual(len(mom.decisions), 16)
-        self.assertEqual(mom.variants, 347)
+        self.assertEqual(len(mom.decisions), 23)
+        self.assertEqual(mom.variants, 365)
         self.assertNotIn("classifier", mom.coverage["signals"]["by_family"])
         self.assertEqual(len(mom.probe_shard_sizes), 16)
         self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
-        self.assertEqual(set(mom.algorithms), {"multi_factor", "fusion", "workflows"})
+        self.assertEqual(
+            set(mom.algorithms),
+            {"static", "decision", "multi_factor", "fusion", "workflows"},
+        )
         self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:
@@ -319,7 +329,7 @@ class RecipeConformanceTest(unittest.TestCase):
         )
         by_name = {recipe.name: recipe for recipe in inventory}
         self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
-        self.assertEqual(by_name["decision-balance"].required_devices, ("rocm",))
+        hardware = {recipe.name for recipe in inventory if recipe.required_devices}
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -333,13 +343,17 @@ class RecipeConformanceTest(unittest.TestCase):
                 for shard in matrix["include"]
                 for name in shard["recipes"].split(",")
             }
-            self.assertEqual(planned, set(by_name) - {"decision-balance", "vela-amd"})
+            self.assertEqual(planned, set(by_name) - hardware)
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
                 [
-                    {"recipe": "decision-balance", "required_devices": ["rocm"]},
-                    {"recipe": "vela-amd", "required_devices": ["rocm:0"]},
+                    {
+                        "recipe": recipe.name,
+                        "required_devices": list(recipe.required_devices),
+                    }
+                    for recipe in inventory
+                    if recipe.required_devices
                 ],
             )
 
