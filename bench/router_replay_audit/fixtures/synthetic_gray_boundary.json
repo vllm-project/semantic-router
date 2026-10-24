@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1",
+  "evidence_class": "synthetic-stress",
+  "replay": {
+    "id": "synthetic-gray-boundary",
+    "decision": "guarded_route",
+    "selected_model": "safe-model",
+    "signals": {
+      "safety": [
+        "gray_risk"
+      ]
+    },
+    "signal_values": {
+      "safety:gray_risk": 0.55
+    }
+  },
+  "boundary_probe": {
+    "key": "safety:gray_risk",
+    "threshold": 0.5,
+    "critical_margin": 0.05,
+    "route_if_gte": "guarded_route",
+    "route_if_lt": "normal_route"
+  }
+}
