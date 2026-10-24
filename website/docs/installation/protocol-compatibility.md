@@ -275,6 +275,11 @@ The Router handles them as follows:
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
 
+In Responses output, `usage.input_tokens_details.cache_write_tokens` is omitted
+when the backend does not report a cache-write count. Reported zero and positive
+counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
+rejects, without treating unknown usage as a measured zero.
+
 Codex can also request reasoning summaries. The Router forwards
 `reasoning.summary` to a Responses backend. A Chat Completions or Messages
 backend cannot request a summary, so the Router accepts the turn and reports

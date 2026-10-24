@@ -24,7 +24,8 @@
       "additionalProperties": false,
       "properties": {
         "request_timeout_seconds": {"type": "number", "minimum": 1, "maximum": 1200},
-        "concurrency": {"type": "integer", "minimum": 1, "maximum": 64}
+        "concurrency": {"type": "integer", "minimum": 1, "maximum": 64},
+        "shards": {"type": "integer", "minimum": 1, "maximum": 16}
       }
     },
     "acceptance": {
