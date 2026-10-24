@@ -381,6 +381,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Hardware',
               items: [
+                'installation/amd-ai-pc',
                 'installation/amd-rocm',
                 'installation/nvidia-cuda',
                 'installation/ascend-npu',
