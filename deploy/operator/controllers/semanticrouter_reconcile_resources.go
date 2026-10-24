@@ -281,6 +281,7 @@ func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vll
 func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, baseSR *vllmv1alpha1.SemanticRouter) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		sr.Status.ObservedGeneration = sr.Generation
+		meta.RemoveStatusCondition(&sr.Status.Conditions, typeDegradedSemanticRouter)
 
 		deployment := &appsv1.Deployment{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, deployment)
