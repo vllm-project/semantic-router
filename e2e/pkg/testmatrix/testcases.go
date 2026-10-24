@@ -37,6 +37,8 @@ var BaselineRouterContract = []string{
 	"decision-priority-selection",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
+	// Retrieved context reaches the provider as a correlated RAG tool exchange (issue #3180)
+	"rag-provider-boundary",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
 	"decision-fallback-behavior",
