@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -819,4 +821,32 @@ func TestValkeyProjectScopeDoesNotWidenPastEfRuntime(t *testing.T) {
 	require.GreaterOrEqual(t, limitAt, 0)
 	require.Less(t, limitAt+2, len(cmd))
 	assert.Equal(t, "4096", cmd[limitAt+2])
+}
+
+func TestValkeyStoreCloseOwnedClientOnce(t *testing.T) {
+	var closeCalls atomic.Int32
+	store := &ValkeyStore{
+		closeClient: func() error {
+			closeCalls.Add(1)
+			return nil
+		},
+	}
+
+	const closers = 16
+	errs := make(chan error, closers)
+	var wg sync.WaitGroup
+	for range closers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- store.Close()
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, int32(1), closeCalls.Load())
 }

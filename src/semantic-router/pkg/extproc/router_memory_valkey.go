@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 
 // createValkeyMemoryStore creates a ValkeyStore backend.
 func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
+	return createValkeyMemoryStoreWithContext(context.Background(), cfg, sets...)
+}
+
+func createValkeyMemoryStoreWithContext(ctx context.Context, cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	vc := cfg.Memory.Valkey
 	if vc == nil {
 		return nil, fmt.Errorf("memory.valkey configuration is required when backend is 'valkey'")
@@ -54,7 +59,7 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 
 	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Model)
 
-	clientConfig, err := buildValkeyClientConfig(vc, host, port)
+	clientConfig, err := buildValkeyClientConfig(vc, host, port, remainingContextTimeout(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -64,12 +69,13 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		return nil, fmt.Errorf("failed to create Valkey client: %w", err)
 	}
 
-	store, err := memory.NewValkeyStore(memory.ValkeyStoreOptions{
-		Client:          valkeyClient,
-		Config:          cfg.Memory,
-		ValkeyConfig:    vc,
-		Enabled:         true,
-		EmbeddingConfig: embeddingConfig,
+	store, err := memory.NewValkeyStoreWithContext(ctx, memory.ValkeyStoreOptions{
+		Client:             valkeyClient,
+		Config:             cfg.Memory,
+		ValkeyConfig:       vc,
+		Enabled:            true,
+		EmbeddingConfig:    embeddingConfig,
+		CloseClientOnClose: true,
 	})
 	if err != nil {
 		valkeyClient.Close()
@@ -83,7 +89,7 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 }
 
 // buildValkeyClientConfig constructs the valkey-glide client configuration.
-func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port int) (*glideconfig.ClientConfiguration, error) {
+func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port int, attemptTimeout ...time.Duration) (*glideconfig.ClientConfiguration, error) {
 	clientConfig := glideconfig.NewClientConfiguration().
 		WithAddress(&glideconfig.NodeAddress{
 			Host: host,
@@ -101,24 +107,54 @@ func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port in
 		clientConfig = clientConfig.WithDatabaseId(vc.Database)
 	}
 
-	if vc.Timeout > 0 {
-		timeout := time.Duration(vc.Timeout) * time.Second
-		clientConfig = clientConfig.WithRequestTimeout(timeout)
+	requestTimeout := time.Duration(vc.Timeout) * time.Second
+	var connectTimeout time.Duration
+	if len(attemptTimeout) > 0 && attemptTimeout[0] > 0 {
+		connectTimeout = attemptTimeout[0]
+		if requestTimeout <= 0 || connectTimeout < requestTimeout {
+			requestTimeout = connectTimeout
+		}
+	}
+	if requestTimeout > 0 {
+		clientConfig = clientConfig.WithRequestTimeout(requestTimeout)
 	}
 
+	advanced := glideconfig.NewAdvancedClientConfiguration()
+	useAdvanced := false
+	if connectTimeout > 0 {
+		advanced = advanced.WithConnectionTimeout(connectTimeout)
+		useAdvanced = true
+	}
 	if vc.TLSEnabled {
 		tlsCfg, tlsErr := buildValkeyTLSConfig(vc)
 		if tlsErr != nil {
 			return nil, tlsErr
 		}
-		clientConfig = clientConfig.WithUseTLS(true).
-			WithAdvancedConfiguration(
-				glideconfig.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsCfg),
-			)
+		advanced = advanced.WithTlsConfiguration(tlsCfg)
+		useAdvanced = true
+		clientConfig = clientConfig.WithUseTLS(true)
 		logging.Infof("Memory: Valkey TLS enabled (ca_path=%q, insecure_skip_verify=%v)", vc.TLSCAPath, vc.TLSInsecureSkipVerify)
+	}
+	if useAdvanced {
+		clientConfig = clientConfig.WithAdvancedConfiguration(advanced)
 	}
 
 	return clientConfig, nil
+}
+
+func remainingContextTimeout(ctx context.Context) time.Duration {
+	if ctx == nil {
+		return 0
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return 0
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return time.Nanosecond
+	}
+	return remaining
 }
 
 // buildValkeyTLSConfig constructs a glide TLS configuration from the Valkey config.

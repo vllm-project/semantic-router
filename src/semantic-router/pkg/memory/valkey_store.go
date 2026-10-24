@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	glide "github.com/valkey-io/valkey-glide/go/v2"
@@ -32,6 +33,9 @@ type ValkeyStore struct {
 	collectionPrefix string
 	metricType       string
 	dimension        int
+	closeClient      func() error
+	closeOnce        sync.Once
+	closeErr         error
 }
 
 // valkeyMemoryClient is the subset of Glide used by ValkeyStore. Keeping the
@@ -57,10 +61,21 @@ type ValkeyStoreOptions struct {
 	Enabled bool
 	// EmbeddingConfig is the unified embedding configuration.
 	EmbeddingConfig *EmbeddingConfig
+	// CloseClientOnClose transfers client ownership to a successfully constructed store.
+	CloseClientOnClose bool
 }
 
 // NewValkeyStore creates a new ValkeyStore instance.
 func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
+	return NewValkeyStoreWithContext(context.Background(), options)
+}
+
+// NewValkeyStoreWithContext creates a Valkey store whose index initialization
+// is bounded by ctx as well as the configured request timeout.
+func NewValkeyStoreWithContext(ctx context.Context, options ValkeyStoreOptions) (*ValkeyStore, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !options.Enabled {
 		logging.Debugf("ValkeyStore: disabled, returning stub")
 		return &ValkeyStore{enabled: false}, nil
@@ -122,16 +137,22 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 		metricType:       strings.ToUpper(metricType),
 		dimension:        dimension,
 	}
+	if options.CloseClientOnClose {
+		store.closeClient = func() error {
+			options.Client.Close()
+			return nil
+		}
+	}
 
 	// Use the configured timeout for index initialization (default 10s).
 	indexTimeout := 10 * time.Second
 	if vc.Timeout > 0 {
 		indexTimeout = time.Duration(vc.Timeout) * time.Second
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), indexTimeout)
+	initCtx, cancel := context.WithTimeout(ctx, indexTimeout)
 	defer cancel()
 
-	if err := store.initializeSearchIndex(ctx); err != nil {
+	if err := store.initializeSearchIndex(initCtx); err != nil {
 		return nil, err
 	}
 
@@ -829,6 +850,13 @@ func (v *ValkeyStore) CheckConnection(ctx context.Context) error {
 
 // Close releases resources held by the store.
 func (v *ValkeyStore) Close() error {
-	// The caller is responsible for managing the client lifecycle
-	return nil
+	if v == nil {
+		return nil
+	}
+	v.closeOnce.Do(func() {
+		if v.closeClient != nil {
+			v.closeErr = v.closeClient()
+		}
+	})
+	return v.closeErr
 }
