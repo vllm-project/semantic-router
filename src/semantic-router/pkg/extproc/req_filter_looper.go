@@ -292,15 +292,10 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	reqCtx.VSRLooperDiagnostics = looperReplayDiagnostics(resp.ExecutionTrace)
 	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
 	r.updateLooperReplayUsage(reqCtx, resp.Usage)
-	if resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
-		// Looper usage is an aggregate across potentially differently priced
-		// calls. Preserve continuity and token totals without charging the whole
-		// cascade at the final response model's price.
-		recordSessionTurn(reqCtx, responseUsageMetrics{
-			promptTokens:     int(resp.Usage.PromptTokens),
-			completionTokens: int(resp.Usage.CompletionTokens),
-		}, sessiontelemetry.TurnPricing{})
-	}
+	// Looper usage is an aggregate across potentially differently priced
+	// calls. Preserve continuity, cache buckets, and completeness without
+	// charging the whole cascade at the final response model's price.
+	recordSessionTurn(reqCtx, looperResponseUsageMetrics(resp.Usage), sessiontelemetry.TurnPricing{})
 
 	// Update router replay with success status (looper returns immediate response with 200)
 	r.updateRouterReplayStatus(reqCtx, 200, false)
@@ -319,21 +314,59 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 }
 
 func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage) {
+	if usage.Unreported {
+		return
+	}
 	promptTokens := int(usage.PromptTokens)
 	completionTokens := int(usage.CompletionTokens)
 	totalTokens := int(usage.TotalTokens)
-	if promptTokens == 0 && completionTokens == 0 && totalTokens == 0 {
+	if promptTokens == 0 && completionTokens == 0 && totalTokens == 0 &&
+		usage.CachedInputTokens == 0 && usage.CacheWriteTokens == 0 {
+		return
+	}
+	if !usage.Complete() {
 		return
 	}
 
 	// A looper result can aggregate differently priced model calls. Persist its
-	// exact reported token counts, but leave pricing fields unset rather than
-	// attributing the whole cascade to the selected model's price.
+	// exact reported token counts, including cache buckets, but leave pricing
+	// fields unset rather than attributing the whole cascade to the selected
+	// model's price. Unreported and otherwise incomplete aggregates are omitted
+	// so partial usage cannot look complete in replay.
 	r.updateRouterReplayUsageCost(ctx, routerreplay.UsageCost{
-		PromptTokens:     replayIntPtr(promptTokens),
-		CompletionTokens: replayIntPtr(completionTokens),
-		TotalTokens:      replayIntPtr(totalTokens),
+		PromptTokens:       replayIntPtr(promptTokens),
+		CachedPromptTokens: replayIntPtr(int(usage.CachedInputTokens)),
+		CacheWriteTokens:   replayIntPtr(int(usage.CacheWriteTokens)),
+		CompletionTokens:   replayIntPtr(completionTokens),
+		TotalTokens:        replayIntPtr(totalTokens),
 	})
+}
+
+func looperResponseUsageMetrics(usage looper.TokenUsage) responseUsageMetrics {
+	if usage.Unreported {
+		return responseUsageMetrics{invalid: true, invalidReason: "looper_usage_unreported"}
+	}
+	metrics := responseUsageMetrics{
+		promptTokens:               int(usage.PromptTokens),
+		promptTokensReported:       true,
+		cachedPromptTokens:         int(usage.CachedInputTokens),
+		cachedPromptTokensReported: true,
+		cacheWriteTokens:           int(usage.CacheWriteTokens),
+		cacheWriteTokensReported:   true,
+		completionTokens:           int(usage.CompletionTokens),
+		completionTokensReported:   true,
+		totalTokens:                int(usage.TotalTokens),
+		totalTokensReported:        true,
+	}
+	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 &&
+		usage.CachedInputTokens == 0 && usage.CacheWriteTokens == 0 {
+		return metrics
+	}
+	if !usage.Complete() {
+		metrics.invalid = true
+		metrics.invalidReason = "looper_usage_incomplete"
+	}
+	return metrics
 }
 
 func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.GroundingBackends {
