@@ -117,6 +117,13 @@ type CanonicalBackendRef struct {
 	// usage metering fields, so the decoder tolerates them. A plain vLLM
 	// backend must leave it unset.
 	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
+	// Engine names the serving engine behind this backend (vllm, sglang,
+	// atom or tensorrt-llm) so the Router can read its load metrics. An
+	// empty engine leaves the backend without telemetry.
+	Engine string `yaml:"engine,omitempty"`
+	// Metrics overrides where the engine exposes its metrics. It requires
+	// Engine.
+	Metrics *CanonicalBackendMetrics `yaml:"metrics,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

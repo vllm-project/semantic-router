@@ -21,6 +21,9 @@ const (
 	// ComponentUpstream is the upstream layer: clusters, endpoints, their
 	// connection pools and health.
 	ComponentUpstream Component = "upstream"
+	// ComponentBackendTelemetry collects serving-engine load metrics from the
+	// backends that name an engine.
+	ComponentBackendTelemetry Component = "backend_telemetry"
 )
 
 // Dependencies says which resources each component is built from. A
@@ -31,6 +34,8 @@ var Dependencies = map[Component][]Kind{
 	ComponentModelService: {KindRuntimeModel, KindSettings, KindProgram, KindListener},
 	ComponentSignals:      {KindRuntimeModel, KindSettings, KindProgram},
 	ComponentUpstream:     {KindEndpoint, KindCluster, KindListener},
+	// Settings carry global.services.observability.backend_telemetry.
+	ComponentBackendTelemetry: {KindEndpoint, KindSettings},
 }
 
 // ComponentKey identifies what component c is built from in the snapshot:

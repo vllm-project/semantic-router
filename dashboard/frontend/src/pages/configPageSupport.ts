@@ -179,6 +179,20 @@ export interface BackendRefEntry {
   chat_path?: string
   api_key?: string
   api_key_env?: string
+  engine?: BackendEngine
+  metrics?: BackendMetrics
+}
+
+/** Load-balancing policies a provider model's reliability block accepts. */
+export const PROVIDER_LB_POLICIES = ['round_robin', 'least_request', 'load_aware'] as const
+
+/** Serving engines whose load metrics backend telemetry can read. */
+export const BACKEND_ENGINES = ['vllm', 'sglang', 'atom', 'tensorrt-llm'] as const
+export type BackendEngine = (typeof BACKEND_ENGINES)[number]
+
+export interface BackendMetrics {
+  port?: number
+  path?: string
 }
 
 export interface ModelReasoningConfig {
