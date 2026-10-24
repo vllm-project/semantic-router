@@ -115,6 +115,15 @@ func applyMemoryMetadataMap(memory *Memory, metadata map[string]interface{}) {
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
+	if createdByUserID, ok := metadata["created_by_user_id"].(string); ok {
+		memory.CreatedByUserID = createdByUserID
+	}
+	if conversationID, ok := metadata["conversation_id"].(string); ok {
+		memory.ConversationID = conversationID
+	}
+	if createdVia, ok := metadata["created_via"].(string); ok {
+		memory.CreatedVia = createdVia
+	}
 }
 
 type listResultColumns struct {
