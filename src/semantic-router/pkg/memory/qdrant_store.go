@@ -331,6 +331,10 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		RecordMemoryRetrieval("qdrant", "retrieve", status, time.Since(start).Seconds(), resultCount)
 	}()
 
+	if opts.UserID == "" {
+		return nil, fmt.Errorf("user id is required")
+	}
+
 	emb, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
