@@ -28,15 +28,29 @@ providers:
           provider: anthropic
           extra_headers:
             anthropic-version: '2023-06-01'
+    - name: MiniMax-M3.1-Flash
+      backend_refs:
+        - name: minimax
+          base_url: https://api.minimax.io
+          provider: minimax
+        - name: minimax-cn
+          base_url: https://api.minimaxi.com
+          provider: minimax
     - name: MiniMax-M3
       backend_refs:
         - name: minimax
           base_url: https://api.minimax.io
           provider: minimax
+        - name: minimax-cn
+          base_url: https://api.minimaxi.com
+          provider: minimax
     - name: MiniMax-M2.7
       backend_refs:
         - name: minimax
           base_url: https://api.minimax.io
+          provider: minimax
+        - name: minimax-cn
+          base_url: https://api.minimaxi.com
           provider: minimax
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
@@ -105,6 +119,8 @@ routing:
       description: GPT-4o Mini — OpenAI only
     - name: claude-sonnet-4-20250514
       description: Claude Sonnet 4 — Anthropic
+    - name: MiniMax-M3.1-Flash
+      description: MiniMax M3.1 Flash — MiniMax (OpenAI-compatible)
     - name: MiniMax-M3
       description: MiniMax M3 — MiniMax (OpenAI-compatible)
     - name: MiniMax-M2.7

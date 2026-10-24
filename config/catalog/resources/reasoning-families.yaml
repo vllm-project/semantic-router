@@ -194,11 +194,23 @@
   default: medium
   modes: [enabled]
   default_mode: enabled
+- id: minimax-m3.1-flash
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh, max]
+  default: max
+  modes: [adaptive]
+  default_mode: adaptive
 - id: minimax-m3
   type: reasoning_mode
   parameter: thinking_mode
   modes: [disabled, adaptive, enabled]
   default_mode: adaptive
+- id: minimax-m2-always-on
+  type: reasoning_mode
+  parameter: thinking_mode
+  modes: [enabled]
+  default_mode: enabled
 - id: muse-glimmer
   type: reasoning_effort
   parameter: reasoning_strength

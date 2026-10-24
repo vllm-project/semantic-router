@@ -60,6 +60,21 @@ describe('catalog-backed model matching', () => {
     expect(models).toContain('gpt-5.4')
   })
 
+  it('suggests Flash then M3 while preserving explicit legacy MiniMax bindings', () => {
+    expect(modelInventoryForProvider(catalog, 'minimax')).toEqual([
+      'MiniMax-M3.1-Flash',
+      'MiniMax-M3',
+    ])
+    const available = modelsForProvider(catalog, 'minimax')
+    expect(available.get('MiniMax-M2.7')).toBe('minimax/minimax-m2.7')
+    expect(available.get('MiniMax-M2.5')).toBe('minimax/minimax-m2.5')
+    expect(mergeModelInventory(modelInventoryForProvider(catalog, 'minimax'), [
+      'MiniMax-M2.7', 'saved-custom-model',
+    ])).toEqual([
+      'MiniMax-M3.1-Flash', 'MiniMax-M3', 'MiniMax-M2.7', 'saved-custom-model',
+    ])
+  })
+
   it('keeps built-in choices when provider discovery adds live models', () => {
     expect(mergeModelInventory(['gpt-5.6-sol', 'gpt-5.4'], ['gpt-5.4', 'custom-preview'])).toEqual([
       'gpt-5.6-sol',
