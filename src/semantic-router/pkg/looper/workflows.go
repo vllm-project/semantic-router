@@ -758,12 +758,21 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	baseReq *Request,
 ) (*ModelResponse, error) {
 	callReq := workflowModelRequest(req, cfg, allowTools)
+	var authoredStage *int64
+	if cfg.MaxCompletionTokens > 0 {
+		authoredStage = authoredStageMaxOutputTokens(cfg.MaxCompletionTokens)
+	}
 	return l.dispatchModel(
 		ctx,
 		baseReq,
 		callReq,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
-		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration, ToolStage: toolStage},
+		CallOptions{
+			DecisionName:         baseReq.DecisionName,
+			Iteration:            iteration,
+			ToolStage:            toolStage,
+			StageMaxOutputTokens: authoredStage,
+		},
 	)
 }
 

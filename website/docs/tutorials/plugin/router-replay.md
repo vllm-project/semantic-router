@@ -135,11 +135,17 @@ body. Internal Looper calls and response-time fallback attempts are not part of
 this single-dispatch receipt. Because the digest is content-derived, responses
 without `replay.detail` omit the field.
 
-Confidence Looper requests also include `route_diagnostics.looper`: bounded
-attempts, token and cost accounting, timings, disposition reasons, and the final
-attempt. This diagnostic object excludes prompts, tool arguments, credentials,
-and raw errors. Attempt details require replay-detail permission, and any
-truncation is marked.
+Ordinary records also include `effective_max_output_tokens`,
+`effective_max_output_tokens_source`, and
+`effective_max_output_tokens_fallback` on `route_diagnostics`. Confidence Looper
+records include a versioned `route_diagnostics.looper` object with bounded
+attempt metadata, token and cost accounting, latencies, disposition reason
+codes, the OpenTelemetry trace ID when tracing is active, and
+`final_attempt_ordinal`. Looper attempts repeat the three completion-ceiling
+fields so Confidence escalation can show each model's composed ceiling. Attempt
+details are omitted from viewer-redacted responses and remain available to
+principals with replay-detail permission. This diagnostic object excludes
+prompts, tool arguments, credentials, and raw errors. Any truncation is marked.
 
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

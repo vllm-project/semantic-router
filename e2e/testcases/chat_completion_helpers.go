@@ -48,11 +48,18 @@ func sendLocalChatConversation(
 	messages []map[string]string,
 	timeout time.Duration,
 ) (*localChatCompletionResponse, error) {
-	requestBody := map[string]interface{}{
+	return sendLocalChatJSON(ctx, localPort, map[string]interface{}{
 		"model":    model,
 		"messages": messages,
-	}
+	}, timeout)
+}
 
+func sendLocalChatJSON(
+	ctx context.Context,
+	localPort string,
+	requestBody map[string]interface{},
+	timeout time.Duration,
+) (*localChatCompletionResponse, error) {
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
