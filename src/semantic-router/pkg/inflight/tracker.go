@@ -49,7 +49,7 @@ type modelState struct {
 }
 
 var (
-	mu          sync.RWMutex
+	mu          sync.Mutex
 	states      = map[string]*modelState{}
 	maxAge      = DefaultMaxAge
 	nextTokenID uint64 // Never reset; stale tokens must not match later requests.
