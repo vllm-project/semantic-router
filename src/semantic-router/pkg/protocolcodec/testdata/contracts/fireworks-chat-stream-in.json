@@ -1,0 +1,15 @@
+{
+  "id": "fw-stream-fixture",
+  "object": "chat.completion.chunk",
+  "created": 1,
+  "model": "accounts/fireworks/models/glm-5p3",
+  "choices": [
+    {
+      "index": 0,
+      "delta": {"role": "assistant", "content": "hi"},
+      "finish_reason": null,
+      "raw_output": "hi",
+      "message": {"tools": [{"name": "lookup"}]}
+    }
+  ]
+}

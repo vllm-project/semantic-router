@@ -108,6 +108,24 @@ type chatChunkChoiceWire struct {
 	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs           []int64             `json:"token_ids,omitempty"`
 	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	// Fireworks repeats the raw decoded text on streamed choices too, and
+	// some of its models attach a message object carrying tool definitions
+	// beside the delta. Both are recognized here and dropped with a
+	// diagnostic; the delta remains the streamed output.
+	RawOutput *string               `json:"raw_output,omitempty"`
+	Message   *chatChunkMessageWire `json:"message,omitempty"`
+}
+
+// chatChunkMessageWire is the closed shape of the message object Fireworks
+// attaches to some streamed chunks. Only the observed tools field is
+// modeled; its content is provider metadata, not streamed output.
+type chatChunkMessageWire struct {
+	Tools json.RawMessage `json:"tools,omitempty"`
+}
+
+func (choice chatChunkChoiceWire) hasMessageTools() bool {
+	return choice.Message != nil && len(choice.Message.Tools) > 0 &&
+		!bytes.Equal(bytes.TrimSpace(choice.Message.Tools), []byte("null"))
 }
 
 type chatChunkDeltaWire struct {
@@ -360,6 +378,22 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"choices.delta.tool_calls.function.TokenizedArguments",
 			"provider tokenization metadata is not model output",
 		)
+	}
+	for _, choice := range chunk.Choices {
+		if choice.RawOutput != nil {
+			decoder.appendStreamOmission(
+				&diagnostics,
+				"stream.choices.raw_output",
+				"the provider's raw decoded output duplicates the parsed message and is not replayed",
+			)
+		}
+		if choice.hasMessageTools() {
+			decoder.appendStreamOmission(
+				&diagnostics,
+				"stream.choices.message.tools",
+				"provider tool metadata beside the delta is not streamed output",
+			)
+		}
 	}
 	if chunk.hasLegacyKVTransferMetadata() {
 		decoder.appendStreamOmission(
