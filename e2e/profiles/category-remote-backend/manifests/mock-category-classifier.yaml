@@ -36,6 +36,9 @@ data:
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 self.send_json(400, {"error": "invalid request"})
                 return
+            if "__CATEGORY_BACKEND_UNAVAILABLE__" in str(text):
+                self.send_json(503, {"error": "unavailable"})
+                return
             is_math = "__CATEGORY_BACKEND_MATH__" in str(text)
             labels = [
                 "business",

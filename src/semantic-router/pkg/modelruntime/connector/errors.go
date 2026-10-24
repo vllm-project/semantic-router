@@ -39,8 +39,13 @@ type Error struct {
 	Retryable  bool
 	Cause      error
 
-	body      []byte
-	truncated bool
+	// Body transport failures affect availability without changing the public kind
+	// or retry policy. Response-size and contract failures leave this false.
+	availabilityFailure bool
+	// An interrupted backoff retains a neutral attempt despite KindTransport.
+	availabilityNeutral bool
+	body                []byte
+	truncated           bool
 }
 
 func (e *Error) Error() string {
@@ -65,4 +70,9 @@ func (e *Error) Unwrap() error {
 // reports whether the connector truncated it.
 func (e *Error) ResponseBody() ([]byte, bool) {
 	return append([]byte(nil), e.body...), e.truncated
+}
+
+func (e *Error) isAvailabilityFailure() bool {
+	return !e.availabilityNeutral && (e.Kind == KindTransport || e.availabilityFailure ||
+		(e.Kind == KindStatus && retryableStatus(e.StatusCode)))
 }
