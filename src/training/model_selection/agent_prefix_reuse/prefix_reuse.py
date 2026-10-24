@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import collections
 import hashlib
+import itertools
 import json
 import statistics
 import sys
@@ -92,7 +93,7 @@ def analyse(trace, ttls):
     last_end = {}
     requests = flatten(trace)
     main_calls = [r for r in requests if r["stream"][0] == "main" and r.get("hash_ids")]
-    following = {id(a): b["hash_ids"] for a, b in zip(main_calls, main_calls[1:])}
+    following = {id(a): b["hash_ids"] for a, b in itertools.pairwise(main_calls)}
     main_model, main_length = None, 0
     for request in requests:
         blocks = request.get("hash_ids") or []
