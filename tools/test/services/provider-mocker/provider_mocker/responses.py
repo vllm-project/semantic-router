@@ -1,11 +1,17 @@
 """Native Responses API HTTP route."""
 
+from __future__ import annotations
+
 import asyncio
+from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_keys
+from .fault_schedule import (
+    apply_response_fault,
+    request_fault,
+)
 from .provider_boundary import SESSION_HEADER, parse_provider_request
 from .responses_wire import (
     build_responses_custom_tool_response,
@@ -26,8 +32,8 @@ from .settings import apply_fixture_delay
 router = APIRouter()
 
 
-@router.post("/v1/responses")
-async def responses(request: Request):
+@router.post("/v1/responses", response_model=None)
+async def responses(request: Request) -> Response | dict[str, Any]:
     raw_body = await request.body()
     body, error_response = await parse_provider_request(request, "openai_responses")
     if error_response is not None:
@@ -39,33 +45,39 @@ async def responses(request: Request):
         session_id, body, request.headers, raw_body, request.url.path
     )
 
-    fault_tracker = getattr(request.app.state, "fault_tracker", None)
-    fault = None
-    if fault_tracker is not None:
-        schedule_key, counter_key = get_fault_keys(request.headers)
-        if schedule_key or counter_key:
-            _, fault = fault_tracker.record_call_and_match(schedule_key, counter_key)
-            if fault is not None:
-                if fault.delay and fault.delay > 0:
-                    await asyncio.sleep(fault.delay)
-                if fault.status is not None:
-                    return JSONResponse(
-                        status_code=fault.status,
-                        content={
-                            "error": {
-                                "message": f"fault schedule injected {fault.status}",
-                                "type": "fault_schedule_injected",
-                                "param": None,
-                                "code": f"fault_{fault.status}",
-                            }
-                        },
-                        headers={FAULT_INJECTED_HEADER: "true"},
-                    )
+    execution = request_fault(request)
+    fault = execution.fault if execution is not None else None
+    if fault is not None:
+        if fault.delay and fault.delay > 0:
+            await asyncio.sleep(fault.delay)
+        if fault.status is not None:
+            return apply_response_fault(
+                response=JSONResponse(
+                    status_code=fault.status,
+                    content={
+                        "error": {
+                            "message": f"fault schedule injected {fault.status}",
+                            "type": "fault_schedule_injected",
+                            "param": None,
+                            "code": f"fault_{fault.status}",
+                        }
+                    },
+                ),
+                fault=fault,
+                execution=execution,
+                provider_model=body.get("model"),
+            )
 
-    fault_headers = {FAULT_INJECTED_HEADER: "true"} if fault is not None else {}
+    return apply_response_fault(
+        response=_responses_reply(body),
+        fault=fault,
+        execution=execution,
+        provider_model=body.get("model"),
+    )
+
+
+def _responses_reply(body: dict[str, Any]) -> Response | dict[str, Any]:
     is_complete = not response_input_contains(body, "__mock_incomplete_stream__")
-    if fault is not None and fault.stream_cut_short:
-        is_complete = False
 
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
@@ -78,7 +90,6 @@ async def responses(request: Request):
                     "code": "rate_limit_exceeded",
                 }
             },
-            headers=fault_headers if fault_headers else None,
         )
     if response_input_contains(body, "__mock_responses_custom_tool__") and body.get(
         "tools"
@@ -90,13 +101,9 @@ async def responses(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        custom_res = build_responses_custom_tool_response(body)
-        if fault_headers:
-            return JSONResponse(content=custom_res, headers=fault_headers)
-        return custom_res
+        return build_responses_custom_tool_response(body)
     if response_has_tool_result(body):
         body = {**body, "input": "tool result accepted"}
     elif response_input_contains(body, "__mock_tool_call__") and body.get("tools"):
@@ -107,13 +114,9 @@ async def responses(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        tool_res = build_responses_tool_response(body)
-        if fault_headers:
-            return JSONResponse(content=tool_res, headers=fault_headers)
-        return tool_res
+        return build_responses_tool_response(body)
     if response_requests_image_generation(body):
         if body.get("stream"):
             return StreamingResponse(
@@ -122,17 +125,11 @@ async def responses(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        img_res = build_responses_image_generation_response(body)
-        if fault_headers:
-            return JSONResponse(content=img_res, headers=fault_headers)
-        return img_res
+        return build_responses_image_generation_response(body)
     response, item_id = build_responses_response(body)
     if not body.get("stream"):
-        if fault is not None:
-            return JSONResponse(content=response, headers=fault_headers)
         return response
     if response_input_contains(body, "__mock_midstream_error__"):
         return StreamingResponse(
@@ -141,7 +138,6 @@ async def responses(request: Request):
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                **fault_headers,
             },
         )
     return StreamingResponse(
@@ -154,6 +150,5 @@ async def responses(request: Request):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            **fault_headers,
         },
     )

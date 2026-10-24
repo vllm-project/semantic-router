@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .chat_request import ChatMessage, ChatRequest
+
+if TYPE_CHECKING:
+    from fastapi.responses import Response
 
 ChatContains = Callable[[ChatRequest, str], bool]
 ChatHasToolResult = Callable[[ChatRequest], bool]
@@ -48,10 +51,8 @@ def mock_chat_control_response(
     created_ts: int,
     helpers: ChatControlHelpers,
     *,
-    fault_headers: dict[str, str] | None = None,
     complete: bool = True,
-) -> Any | None:
-    f_headers = fault_headers or {}
+) -> Response | dict[str, Any] | None:
     if helpers.chat_contains(req, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
@@ -63,12 +64,9 @@ def mock_chat_control_response(
                     "code": "rate_limit_exceeded",
                 }
             },
-            headers=f_headers if f_headers else None,
         )
     workflow_response = mock_workflow_chat_response(req, created_ts, helpers)
     if workflow_response is not None:
-        if f_headers:
-            return JSONResponse(content=workflow_response, headers=f_headers)
         return workflow_response
     if helpers.chat_has_tool_result(req):
         content = "tool result accepted"
@@ -83,11 +81,8 @@ def mock_chat_control_response(
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **f_headers,
                 },
             )
-        if f_headers:
-            return JSONResponse(content=response, headers=f_headers)
         return response
     if helpers.chat_requests_mock_tool(req):
         if req.stream:
@@ -97,13 +92,9 @@ def mock_chat_control_response(
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **f_headers,
                 },
             )
-        tool_res = helpers.mock_chat_tool_response(req, created_ts)
-        if f_headers:
-            return JSONResponse(content=tool_res, headers=f_headers)
-        return tool_res
+        return helpers.mock_chat_tool_response(req, created_ts)
     return None
 
 

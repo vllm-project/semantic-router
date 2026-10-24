@@ -5,14 +5,18 @@ from __future__ import annotations
 import json
 import threading
 import time
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
 
 import pytest
 from cli.sr_bench.adapters import BenchmarkAdapter
 from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
-from cli.sr_bench.report import fault_summary, make_report
+from cli.sr_bench.report import _comparison_protocol, fault_summary, make_report
 from cli.sr_bench.store import TERMINAL, Store
+from cli.sr_bench.transport import FAULT_RECEIPT_HEADER, CallFailure, fault_receipt
 
 
 def wait_run(store, run_id, timeout=10):
@@ -81,6 +85,7 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
                 self.send_response(status_code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("x-vsr-fault-injected", "true")
+                self.send_header(FAULT_RECEIPT_HEADER, json.dumps(active_fault))
                 self.send_header("x-vsr-selected-model", selected_model)
                 self.send_header("x-vsr-selected-decision", decision)
                 self.end_headers()
@@ -104,6 +109,7 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("x-vsr-fault-injected", "true")
+                self.send_header(FAULT_RECEIPT_HEADER, json.dumps(active_fault))
                 self.send_header("x-vsr-selected-model", selected_model)
                 self.send_header("x-vsr-selected-decision", decision)
                 self.end_headers()
@@ -126,6 +132,7 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         if active_fault:
             self.send_header("x-vsr-fault-injected", "true")
+            self.send_header(FAULT_RECEIPT_HEADER, json.dumps(active_fault))
         self.send_header("x-vsr-selected-model", selected_model)
         self.send_header("x-vsr-selected-decision", decision)
         self.end_headers()
@@ -533,9 +540,7 @@ def test_sr_bench_run_with_status_fault_on_one_task(tmp_path, fault_target):
         for r in fault_target.received_requests
         if r["headers"].get("x-vsr-fault-schedule-id")
     }
-    assert "task-faulted" in reqs_by_schedule_id
-    assert "task-clean-1" in reqs_by_schedule_id
-    assert "task-clean-2" in reqs_by_schedule_id
+    assert set(reqs_by_schedule_id) == {"task-faulted"}
 
     # Check also x-vsr-fault-session-id has per-target/task scoped session
     reqs_by_session_id = {
@@ -544,8 +549,7 @@ def test_sr_bench_run_with_status_fault_on_one_task(tmp_path, fault_target):
         if r["headers"].get("x-vsr-fault-session-id")
     }
     assert any(k.endswith(":task-faulted") for k in reqs_by_session_id)
-    assert any(k.endswith(":task-clean-1") for k in reqs_by_session_id)
-    assert any(k.endswith(":task-clean-2") for k in reqs_by_session_id)
+    assert len(reqs_by_session_id) == 1
 
     report = make_report(store, run["id"])
     assert "fault_summary" in report
@@ -960,3 +964,162 @@ def test_sr_bench_multi_target_sharing_same_case_receives_schedule(
     assert f_summary["faulted_tasks"]["failed"] == 2
     targets_reported = {t["target_id"] for t in f_summary["faulted_tasks"]["tasks"]}
     assert targets_reported == {"target-a", "target-b"}
+
+
+@pytest.mark.parametrize(
+    "planned_fault",
+    [
+        {"delay": 0.01},
+        {"status": HTTPStatus.SERVICE_UNAVAILABLE},
+        {"stream_cut_short": True},
+    ],
+    ids=["delay", "different-status", "stream-cut"],
+)
+def test_mismatched_observed_fault_does_not_exempt_failure(
+    tmp_path: Path, fault_target: ThreadingHTTPServer, planned_fault: dict[str, Any]
+) -> None:
+    fault_target.fault_schedules = {
+        "task-failing": [{"call_index": 0, "status": HTTPStatus.INTERNAL_SERVER_ERROR}]
+    }
+    store = Store(tmp_path)
+    engine = Engine(store)
+    run = engine.start(
+        {
+            "version": "sr-bench-1.0",
+            "cost_policy": "capability_only",
+            "targets": [
+                {
+                    "id": "single",
+                    "kind": "single",
+                    "model": "model",
+                    "base_url": f"http://127.0.0.1:{fault_target.server_port}/v1",
+                }
+            ],
+            "cases": [
+                {
+                    "id": "task-failing",
+                    "benchmark": "mmlu-pro",
+                    "messages": [{"role": "user", "content": "Question"}],
+                    "answer": "A",
+                    "fault_schedule": [{"call_index": 0, **planned_fault}],
+                },
+                {
+                    "id": "task-subsequent",
+                    "benchmark": "mmlu-pro",
+                    "messages": [{"role": "user", "content": "Next question"}],
+                    "answer": "A",
+                },
+            ],
+            "limits": {
+                "concurrency": 1,
+                "total_timeout_s": 5,
+                "idle_timeout_s": 2,
+                "max_run_seconds": 10,
+            },
+        }
+    )
+    wait_run(store, run["id"])
+    assert len(fault_target.received_requests) == 1
+    results = store.results(run["id"])
+    assert len(results) == 1
+    assert results[0]["status"] == "failed"
+    call = store.calls(run["id"])[0]
+    assert call["fault_injected"] is True
+    assert call["response_status"] == HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@pytest.fixture
+def simple_fault_manifest(fault_target: ThreadingHTTPServer) -> dict[str, Any]:
+    return {
+        "version": "sr-bench-1.0",
+        "cost_policy": "capability_only",
+        "targets": [
+            {
+                "id": "single",
+                "kind": "single",
+                "model": "model",
+                "base_url": f"http://127.0.0.1:{fault_target.server_port}/v1",
+            }
+        ],
+        "cases": [
+            {
+                "id": "question",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question"}],
+                "answer": "A",
+            }
+        ],
+    }
+
+
+def test_unscheduled_tasks_do_not_send_fault_identifiers(
+    tmp_path: Path,
+    fault_target: ThreadingHTTPServer,
+    simple_fault_manifest: dict[str, Any],
+) -> None:
+    store = Store(tmp_path)
+    run = Engine(store).start(simple_fault_manifest)
+    assert wait_run(store=store, run_id=run["id"])["status"] == "completed"
+    assert len(fault_target.received_requests) == 1
+    headers = fault_target.received_requests[0]["headers"]
+    assert "x-vsr-fault-schedule-id" not in headers
+    assert "x-vsr-fault-session-id" not in headers
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [None, {}, {"question": [{"call_index": 0, "delay": 0.01}]}],
+    ids=["unset", "empty", "changed"],
+)
+def test_run_level_fault_schedule_is_part_of_comparison_protocol(
+    simple_fault_manifest: dict[str, Any], schedule: dict[str, Any] | None
+) -> None:
+    baseline = plan(simple_fault_manifest)
+    candidate = plan({**simple_fault_manifest, "fault_schedules": schedule})
+    assert baseline["case_sha256"] == candidate["case_sha256"]
+    if schedule:
+        with pytest.raises(ValueError, match="fault_schedules"):
+            _comparison_protocol(baseline=baseline, candidate=candidate)
+    else:
+        _comparison_protocol(baseline=baseline, candidate=candidate)
+
+
+def test_fault_summary_does_not_guess_an_unobserved_model() -> None:
+    summary = fault_summary(
+        results=[{"case_id": "case", "target_id": "router", "status": "failed"}],
+        subject_calls=[
+            {
+                "id": "call",
+                "case_id": "case",
+                "target_id": "router",
+                "status": "failed",
+                "model": "virtual-entrypoint",
+                "selected_model": None,
+                "fault_injected": True,
+                "injected_fault": {"call_index": 0, "status": 503},
+            }
+        ],
+    )
+    assert (
+        summary["faulted_tasks"]["tasks"][0]["faulted_calls"][0]["selected_model"]
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None,
+        "not-json",
+        '{"call_index":true,"status":503}',
+        '{"call_index":0,"status":503,"provider_model":{}}',
+        '{"call_index":0,"delay":Infinity}',
+        '{"call_index":0,"status":503,"secret":"unexpected"}',
+    ],
+)
+def test_fault_receipt_rejects_unverifiable_metadata(raw: str | None) -> None:
+    headers = {"x-vsr-fault-injected": "true"}
+    if raw is not None:
+        headers[FAULT_RECEIPT_HEADER] = raw
+    with pytest.raises(CallFailure, match="fault receipt"):
+        fault_receipt(headers)

@@ -297,7 +297,7 @@ def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
                         "status": call.get("response_status"),
                         "injected": True,
                     }
-                selected_model = _observed_model(call) or call.get("model")
+                selected_model = _observed_model(call)
                 faulted_calls.append(
                     {
                         "call_id": call.get("id"),
@@ -782,7 +782,7 @@ def make_report(store, run_id):
     }
 
 
-def _comparison_protocol(baseline, candidate):
+def _comparison_protocol(baseline: dict[str, Any], candidate: dict[str, Any]) -> None:
     if baseline.get("output_policy", "bounded") != candidate.get(
         "output_policy", "bounded"
     ):
@@ -802,6 +802,11 @@ def _comparison_protocol(baseline, candidate):
     ):
         if baseline.get(key) != candidate.get(key):
             raise ValueError(f"Cannot compare different {key}")
+
+    if (baseline.get("fault_schedules") or {}) != (
+        candidate.get("fault_schedules") or {}
+    ):
+        raise ValueError("Cannot compare different fault_schedules")
 
     if effective_auxiliary_targets(baseline) != effective_auxiliary_targets(candidate):
         raise ValueError("Cannot compare changed effective judge/simulator targets")

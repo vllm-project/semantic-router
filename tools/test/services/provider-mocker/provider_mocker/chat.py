@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import time
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 
 from . import ollama_fixture, openrouter_fixture, vllm_fixture, workflow_chat
@@ -23,7 +25,10 @@ from .chat_wire import (
     generate_chat_tool_stream,
     mock_chat_tool_response,
 )
-from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_keys
+from .fault_schedule import (
+    apply_response_fault,
+    request_fault,
+)
 from .provider_boundary import (
     SESSION_HEADER,
     invalid_request_response,
@@ -93,16 +98,15 @@ def mock_chat_control_response(
     req: ChatRequest,
     created_ts: int,
     *,
-    fault_headers: dict[str, str] | None = None,
     complete: bool = True,
-) -> Any | None:
+) -> Response | dict[str, Any] | None:
     return workflow_chat.mock_chat_control_response(
-        req, created_ts, _chat_control, fault_headers=fault_headers, complete=complete
+        req=req, created_ts=created_ts, helpers=_chat_control, complete=complete
     )
 
 
-@router.post("/v1/chat/completions")
-async def chat_completions(request: Request):
+@router.post("/v1/chat/completions", response_model=None)
+async def chat_completions(request: Request) -> Response | dict[str, Any]:
     raw_body = await request.body()
     body, error_response = await parse_provider_request(
         request, "openai_chat_completions"
@@ -121,33 +125,41 @@ async def chat_completions(request: Request):
         field = ".".join(str(part) for part in detail.get("loc", ())) or None
         return invalid_request_response(detail["msg"], field)
 
-    fault_tracker = getattr(request.app.state, "fault_tracker", None)
-    fault = None
-    if fault_tracker is not None:
-        schedule_key, counter_key = get_fault_keys(request.headers)
-        if schedule_key or counter_key:
-            _, fault = fault_tracker.record_call_and_match(schedule_key, counter_key)
-            if fault is not None:
-                if fault.delay and fault.delay > 0:
-                    await asyncio.sleep(fault.delay)
-                if fault.status is not None:
-                    return JSONResponse(
-                        status_code=fault.status,
-                        content={
-                            "error": {
-                                "message": f"fault schedule injected {fault.status}",
-                                "type": "fault_schedule_injected",
-                                "param": None,
-                                "code": f"fault_{fault.status}",
-                            }
-                        },
-                        headers={FAULT_INJECTED_HEADER: "true"},
-                    )
+    execution = request_fault(request)
+    fault = execution.fault if execution is not None else None
+    if fault is not None:
+        if fault.delay and fault.delay > 0:
+            await asyncio.sleep(fault.delay)
+        if fault.status is not None:
+            return apply_response_fault(
+                response=JSONResponse(
+                    status_code=fault.status,
+                    content={
+                        "error": {
+                            "message": f"fault schedule injected {fault.status}",
+                            "type": "fault_schedule_injected",
+                            "param": None,
+                            "code": f"fault_{fault.status}",
+                        }
+                    },
+                ),
+                fault=fault,
+                execution=execution,
+                provider_model=req.model,
+            )
 
-    fault_headers = {FAULT_INJECTED_HEADER: "true"} if fault is not None else {}
+    return apply_response_fault(
+        response=await _chat_reply(request=request, req=req),
+        fault=fault,
+        execution=execution,
+        provider_model=req.model,
+    )
+
+
+async def _chat_reply(
+    *, request: Request, req: ChatRequest
+) -> Response | dict[str, Any]:
     is_complete = not chat_contains(req, "__mock_incomplete_stream__")
-    if fault is not None and fault.stream_cut_short:
-        is_complete = False
 
     await apply_fixture_delay()
     created_ts = int(time.time())
@@ -162,20 +174,11 @@ async def chat_completions(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        resp = openrouter_fixture.buffered_reply(req, created_ts)
-        if fault_headers:
-            return JSONResponse(content=resp, headers=fault_headers)
-        return resp
+        return openrouter_fixture.buffered_reply(req, created_ts)
     vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
     if vllm_reasoning is not None:
-        if fault_headers:
-            if isinstance(vllm_reasoning, StreamingResponse):
-                vllm_reasoning.headers.update(fault_headers)
-            else:
-                return JSONResponse(content=vllm_reasoning, headers=fault_headers)
         return vllm_reasoning
     vllm_stop = vllm_fixture.matched_stop(req)
     if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
@@ -186,13 +189,9 @@ async def chat_completions(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        resp = vllm_fixture.buffered_reply(req, created_ts, vllm_stop)
-        if fault_headers:
-            return JSONResponse(content=resp, headers=fault_headers)
-        return resp
+        return vllm_fixture.buffered_reply(req, created_ts, vllm_stop)
     if req.tools and chat_contains(req, ollama_fixture.MARKER):
         if req.stream:
             return StreamingResponse(
@@ -201,13 +200,9 @@ async def chat_completions(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        resp = ollama_fixture.buffered_tool_call(req, created_ts)
-        if fault_headers:
-            return JSONResponse(content=resp, headers=fault_headers)
-        return resp
+        return ollama_fixture.buffered_tool_call(req, created_ts)
     if (
         req.stream
         and req.tools
@@ -233,15 +228,11 @@ async def chat_completions(request: Request):
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    **fault_headers,
                 },
             )
-        custom_tool_res = build_chat_custom_tool_response(req, created_ts)
-        if fault_headers:
-            return JSONResponse(content=custom_tool_res, headers=fault_headers)
-        return custom_tool_res
+        return build_chat_custom_tool_response(req, created_ts)
     control_response = mock_chat_control_response(
-        req, created_ts, fault_headers=fault_headers, complete=is_complete
+        req=req, created_ts=created_ts, complete=is_complete
     )
     if control_response is not None:
         return control_response
@@ -261,8 +252,6 @@ async def chat_completions(request: Request):
     usage = build_chat_usage(req, content)
     response = build_chat_response(req, content, usage, created_ts)
     if not req.stream:
-        if fault is not None:
-            return JSONResponse(content=response, headers=fault_headers)
         return response
 
     if chat_contains(req, "__mock_midstream_error__"):
@@ -272,7 +261,6 @@ async def chat_completions(request: Request):
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                **fault_headers,
             },
         )
 
@@ -289,6 +277,5 @@ async def chat_completions(request: Request):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            **fault_headers,
         },
     )
