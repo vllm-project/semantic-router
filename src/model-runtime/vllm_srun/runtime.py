@@ -544,6 +544,9 @@ class ServedModel:
             ),
             device_fault=placement.accelerator.device_fault,
             planning=self.runtime.planning_before,
+            on_failure=lambda error: self.runtime.degrade(
+                f"model worker failed: {type(error).__name__}: {error}", self
+            ),
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
@@ -1380,7 +1383,7 @@ class Runtime:
         )
         if any(isinstance(result, BaseException) for result in results):
             failure = served.device_failure()
-            if failure is not None:
+            if failure is not None and served.health.state != "degraded":
                 self.degrade(f"{type(failure).__name__}: {failure}", served)
         finished = time.monotonic()
         compute_ms = (finished - submitted) * 1000.0
