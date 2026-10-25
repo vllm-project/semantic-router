@@ -175,6 +175,14 @@ html[data-route-kind="blog"] .nav-docs-only {
   display: none;
 }
 
+/* Docusaurus puts the className on the dropdown's inner link, so the rule above
+ * leaves the dropdown wrapper (and its width) in the navbar. Hide the wrapper. */
+html[data-route-kind="home"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only),
+html[data-route-kind="page"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only),
+html[data-route-kind="blog"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only) {
+  display: none;
+}
+
 .dropdown__menu,
 .menu {
   border: 1px solid var(--site-border);
@@ -222,7 +230,9 @@ html[data-route-kind="blog"] .nav-docs-only {
   text-transform: none;
 }
 
-/* Keep desktop row visible down to 996px collapse point. */
+/* Keep desktop row visible down to 996px collapse point. The locale dropdown
+ * is dropped here so the right group fits beside the primary links; it stays
+ * available in the collapsed navigation. */
 @media (min-width: 997px) and (max-width: 1339px) {
   .site-root .navbar__inner .navbar__items--right > .navbar__item.navbar__link {
     display: inline-flex;
@@ -230,6 +240,10 @@ html[data-route-kind="blog"] .nav-docs-only {
 
   .site-root .navbar__inner .navbar__items--right > .navbar__item.dropdown {
     display: inline-flex;
+  }
+
+  .site-root .navbar__inner .navbar__items--right > .navbar__item.dropdown:has(> .nav-locale) {
+    display: none;
   }
 }
 
