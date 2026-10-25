@@ -525,7 +525,7 @@ class Engine:
                 != BINARY_RESULT
             ):
                 raise CallFailure(
-                    "Subject output limit reached; weighted rubric grading is incomplete"
+                    "Subject output limit reached; non-binary grading is incomplete"
                 )
             result = {
                 "answer": None,

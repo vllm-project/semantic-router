@@ -18,7 +18,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does session routing preserve continuity and tool-loop invariants? | `agentic_routing_experiment.py` and `agentic_routing_live_benchmark.py` |
 | How does routing handle a recorded coding-agent session with a tool catalog? | `agent_session_replay.py` |
 | Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
-| Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
+| Does a routed model complete maintained multi-turn agent tasks? | [sr-bench Chat diagnostic](../website/docs/benchmarking/sr-bench/tasks-and-targets.md#scripted-agent-task-chat-diagnostic), or retained `agent_task_live_benchmark.py` for Chat and Responses |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
 | How fast does Router Memory cover a new user, and how often is the retrieved memory wrong? | [`memory_coldstart/`](#router-memory-cold-start) |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
@@ -161,8 +161,17 @@ For a live comparison, provide both endpoints and set explicit acceptance
 thresholds. `--require-router-diagnostics` checks the maintained `x-vsr-*`
 response-header contract.
 
-The maintained task runner has explicit protocol and continuation modes. Chat
-Completions always uses full message history:
+The maintained task runner shares its standard-library task, prompt and grading
+kernel with sr-bench. This source-only script and its tests require Python 3.10+
+and the CLI installed in the same environment:
+
+```bash
+python -m pip install -e src/vllm-sr
+```
+
+This prerequisite does not change the bench distribution or Looper's requirements.
+The retained runner has explicit protocol and continuation modes. Chat Completions
+always uses full message history:
 
 ```bash
 python bench/agent_task_live_benchmark.py \
@@ -186,7 +195,9 @@ python bench/agent_task_live_benchmark.py \
 `--continuation-mode previous-response-id` is rejected for Chat Completions,
 so Responses-only fields cannot accidentally enter a Chat request. Each output
 row records the protocol, continuation mode, effective turn identity, response
-lineage, selected model, and normalized token usage.
+lineage, selected model, and normalized token usage. Both protocols, stateful
+Responses continuation and plots remain available. The opt-in sr-bench diagnostic
+covers scripted Chat full-history tasks only; it does not retire this runner.
 
 The related tools are intentionally separate:
 
@@ -263,9 +274,11 @@ python -m pytest \
   bench/router_flow/real_eval/test_*.py
 ```
 
-`make test-bench-tools` runs the grounded fusion, hallucination, reasoning, Router
-Flow and agent crew tests, which CI runs when those directories change. Each area
-also has its own target, such as `make test-agent-crew`.
+`make test-bench-tools` runs the registered benchmark checks, including
+`make test-agent-task-bench`. Evaluation & Quality owns the agent-task check.
+It installs the CLI prerequisite and compares the retained runner with sr-bench
+through a local HTTP endpoint, without models or credentials. Run
+`make verify DOMAIN=agent-task-bench` for the same explicit integration check.
 
 When changing a CLI, update its `--help`, tests, and this index only if the
 reader's choice of runner or first command changes. Detailed experiment design

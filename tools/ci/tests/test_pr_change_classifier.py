@@ -424,6 +424,24 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(manual["expected_verification_ids"], [identity])
                 self.assertEqual(len(manual["component_batches"]), 1)
 
+    def test_agent_task_migration_keeps_native_and_cli_checks(self) -> None:
+        for path in (
+            "bench/agent_task_live_benchmark.py",
+            "bench/test_agent_task_live_benchmark.py",
+            "src/vllm-sr/cli/sr_bench/agent_task.py",
+            "src/vllm-sr/cli/sr_bench/agent_task_kernel.py",
+            "src/vllm-sr/tests/test_sr_bench_agent_task.py",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("agent-task-bench", result.domains)
+                self.assertIn("bench-tools", result.selected_jobs)
+                if path.startswith("src/"):
+                    self.assertIn("cli-unit", result.selected_jobs)
+        domain = load_domain_registry()["domains"]["agent-task-bench"]
+        self.assertEqual(domain["checks"], ["make test-agent-task-bench"])
+        self.assertEqual(domain["verify"], ["make test-agent-task-bench"])
+
     def test_shared_component_execution_selects_every_component_consumer(self):
         components = {
             identity
