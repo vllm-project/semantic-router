@@ -109,9 +109,11 @@ def output_diagnostics(results, subject_calls, total):
     }
 
 
-def _observed_model(call: dict) -> str | None:
+def _observed_model(call: dict[str, Any]) -> str | None:
     if call.get("selected_model"):
         return call["selected_model"]
+    if call.get("provider_model_observed") is False:
+        return None
     return call.get("model") if call.get("status") == "completed" else None
 
 

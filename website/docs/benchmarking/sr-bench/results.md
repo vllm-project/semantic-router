@@ -56,6 +56,12 @@ enabled in its configuration. Preview and replay reports remain `stateless`. To
 compare both modes on the same tasks, include a target of each mode against the
 same Router.
 
+A selected-model response header takes precedence over the model named in the
+stream. Successful receipts record `provider_model_observed` separately from
+the requested model used for request and pricing identity. If neither the header
+nor the stream names a model, the selection stays unknown. Reports keep the
+legacy fallback only for older receipts without this observation field.
+
 Subject call receipts include `phase` and `phase_source`. For MoM targets,
 sr-bench requests the Router debug response headers to read its session policy
 phase. A `router` source means the response contained `x-vsr-session-phase`; a

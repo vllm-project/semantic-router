@@ -453,9 +453,11 @@ def chat(
             obj = json.loads(data)
             if obj.get("error"):
                 raise CallFailure("Target returned an error event")
-            if native_evidence is not None and obj.get("model") is not None:
-                native_output.validate_response(native_evidence, obj["model"], None)
-                provider_model_observed = True
+            if obj.get("model") is not None:
+                if native_evidence is not None:
+                    native_output.validate_response(native_evidence, obj["model"], None)
+                if isinstance(obj["model"], str) and obj["model"]:
+                    provider_model_observed = True
             model = obj.get("model") or model
             if obj.get("usage"):
                 raw_usage = obj["usage"]
@@ -590,7 +592,10 @@ def chat(
         result["config_hash"] = response.headers.get(
             "x-sr-bench-config-hash"
         ) or response.headers.get("x-vsr-config-hash")
-        result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
+        result["provider_model_observed"] = provider_model_observed
+        result["selected_model"] = response.headers.get("x-vsr-selected-model") or (
+            model if provider_model_observed else None
+        )
         result["decision"] = response.headers.get("x-vsr-selected-decision")
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:
             raise CallFailure(
