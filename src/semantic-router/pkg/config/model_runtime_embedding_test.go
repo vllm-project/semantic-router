@@ -103,3 +103,21 @@ func TestModelRuntimeEmbeddingPlanExcludesDormantRecipe(t *testing.T) {
 		t.Fatalf("global tools must still prepare their embedding: %v", used)
 	}
 }
+
+func TestModelRuntimePlansLegacyGlobalCacheWithSystemOneGrant(t *testing.T) {
+	cfg := DefaultGlobalConfig()
+	cfg.ModelDeployments["published"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/decision", PublicName: "public-model"}
+	cfg.Listeners = []Listener{{Name: "public", SystemOne: &ListenerSystemOne{Models: []string{"public-model"}}}}
+	// The built-in Chat entrypoint and its legacy cache remain active without decisions.
+	used := ModelRuntimeDeploymentsInUse(&cfg)
+	if len(used) != 2 || used["published"].Artifact != "org/decision" ||
+		used["@embedding.mmbert"].Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" {
+		t.Fatalf("listener grant and legacy cache must both be planned: %v", used)
+	}
+
+	cfg.SemanticCache.Enabled = false
+	used = ModelRuntimeDeploymentsInUse(&cfg)
+	if len(used) != 1 || used["published"].Artifact != "org/decision" {
+		t.Fatalf("disabled cache must leave only the listener grant: %v", used)
+	}
+}
