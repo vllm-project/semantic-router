@@ -64,12 +64,19 @@ def test_gpu_platform_materializes_meaningful_default_placement():
     assert len(primary["revision"]) == 40
 
 
-def test_same_source_restart_retains_resolved_model_profile_and_replicas(startup):
+def test_same_source_restart_retains_resolved_model_engine_args_and_replicas(
+    startup,
+):
     source, prepare = startup
     authored = source.read_bytes()
     path = prepare(
         engine=True,
-        model_options={"artifact": MODEL, "profile": "exact", "data_parallel_size": 2},
+        model_options={
+            "artifact": MODEL,
+            "max_num_seqs": 128,
+            "dtype": "float32",
+            "data_parallel_size": 2,
+        },
     )
     chosen = yaml.safe_load(path.read_text())["global"]["model_catalog"]
     assert_owned(path)
@@ -97,7 +104,7 @@ def test_source_change_replaces_old_cli_selection_without_three_way_merge(
                     "provider": "model_runtime",
                     "artifact": replacement_model,
                     "device": "cpu",
-                    "profile": "exact",
+                    "batch_window_ms": 1.0,
                 }
             },
         }

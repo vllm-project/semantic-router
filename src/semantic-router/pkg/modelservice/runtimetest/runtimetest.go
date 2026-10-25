@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +50,10 @@ type Model struct {
 	Joint          bool
 	MaxInputTokens int
 	Device         string
+	// MaxNumSeqs and MaxNumBatchedTokens replace the card's default batch
+	// limits when set.
+	MaxNumSeqs          int
+	MaxNumBatchedTokens int
 }
 
 // Runtime is the fake runtime state; Handler serves it.
@@ -69,7 +74,7 @@ type Runtime struct {
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
 // changes it.
-const APIVersion = "2.2.0"
+const APIVersion = "3.2.0"
 
 // defaultLimits are the runtime's default process limits. Like the runtime,
 // the fake reports its limits in /v1/models and refuses a larger bundle or
@@ -112,7 +117,8 @@ func (r *Runtime) SetFailed(id, reason string) {
 	r.failed[id] = reason
 }
 
-// SetAPIVersion changes the contract version /health and /v1/models report.
+// SetAPIVersion changes the contract version /health and /v1/models report,
+// as a runtime of another release does.
 func (r *Runtime) SetAPIVersion(version string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -288,12 +294,19 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
-	device, dtype, profile := model.Device, "float32", "exact"
+	device, dtype, numerics := model.Device, "float32", api.ModelCardNumericsExact
+	args := api.EngineArgs{MaxNumSeqs: 8192, MaxNumBatchedTokens: 65536, BatchWindowMs: 2, Dtype: api.Auto}
+	if model.MaxNumSeqs != 0 {
+		args.MaxNumSeqs = model.MaxNumSeqs
+	}
+	if model.MaxNumBatchedTokens != 0 {
+		args.MaxNumBatchedTokens = model.MaxNumBatchedTokens
+	}
 	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens, MaxInputs: &maxInputs}
 	if model.ModelSHA256 != "" {
 		sha = model.ModelSHA256
 	}
-	card := api.ModelCard{Repo: &model.Repo, Revision: &model.Revision, Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
+	card := api.ModelCard{Repo: &model.Repo, Revision: &model.Revision, Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, EngineArgs: &args, Numerics: &numerics, Limits: &limits}
 	switch {
 	case model.Embedding != nil:
 		card.Surfaces, card.Embedding = []string{"embeddings"}, embeddingCard(model.Embedding)
@@ -417,11 +430,7 @@ func (r *Runtime) model(id *string, surface string) (Model, int, *api.ErrorBody)
 func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *api.ErrorBody) {
 	r.mu.Lock()
 	r.decisions = append(r.decisions, body)
-	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	if body.States != nil && apiVersion < "2.2" {
-		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "unknown request fields: ['states']"}
-	}
 	status, response, errBody := r.decideState(body)
 	if status != http.StatusOK || body.States == nil {
 		return status, response, errBody
@@ -534,8 +543,15 @@ func answer(question api.Question) api.Answer {
 		if question.Levels != nil {
 			levels = len(*question.Levels)
 		}
+		// Half of the mass on each middle level (one level when the count is odd).
+		probabilities := make(map[string]float64, levels)
+		for index := range levels {
+			probabilities[strconv.Itoa(index)] = 0
+		}
+		probabilities[strconv.Itoa(levels/2)] += 0.5
+		probabilities[strconv.Itoa((levels-1)/2)] += 0.5
 		score, confidence := float64(levels-1)/2, 0.5
-		result.Score, result.Confidence = &score, &confidence
+		result.Score, result.Confidence, result.Probabilities = &score, &confidence, &probabilities
 	default:
 		if question.Choices != nil && len(*question.Choices) > 0 {
 			choices := *question.Choices

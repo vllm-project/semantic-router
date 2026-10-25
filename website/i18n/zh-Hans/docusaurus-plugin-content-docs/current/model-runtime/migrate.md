@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
-description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名或 NLI 解释器的配置。
+description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名、NLI 解释器或模型运行时旧档位（profile）的配置。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/migrate.md"
-  outdated: false
+  outdated: true
 ---
 
 # 从原生绑定迁移
@@ -28,7 +29,8 @@ translation:
   `models/mmbert-embed-32k-2d-matryoshka` 或 `lettucedect`；
 - NLI 解释器（`hallucination_explainer`、`nli_model`、`enable_nli_filtering`、`use_nli`）
   或响应缓存的 `polarity_guard` 设置；
-- 使用 `backend: endpoint` 的幻觉检测器。
+- 使用 `backend: endpoint` 的幻觉检测器；
+- 模型运行时 deployment 上的 `profile`（见[引擎参数](#engine-arguments)）。
 
 路由器在启动时会拒绝这些设置，并提示你运行迁移命令。
 
@@ -45,7 +47,7 @@ Changes to review
   global.model_catalog.deployments.vela-domain
       provider candle -> model_runtime, device cuda:0
   global.model_catalog.deployments.vela-domain.precision
-      fp16 -> profile max_speed (the default exact profile runs FP32)
+      removed fp16: the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
 ```
 
 对于仍需你亲自处理的事项，它会打印 **Warning**：无法安全改写的、指向你自有模型的相对路径
@@ -62,8 +64,8 @@ Changes to review
 | `device: rocm:N` 或 `migraphx:N` | `device: rocm:N` |
 | `device: metal:0` | `device: mps` |
 | OpenVINO 设备（`CPU`、`GPU`、`NPU` 等） | `device: cpu`；Intel GPU 可使用 `device: xpu:0`（尚未验证） |
-| `precision: fp16` | `profile: max_speed`（近似；见 [Profiles](model-runtime/profiles.md)） |
-| `precision: native` 或 `fp32` | 移除：默认的 `exact` profile 本就以 FP32 运行 |
+| `precision: fp16` | 移除：模型以发布精度运行；`dtype: float16` 在 GPU 上以半精度运行（见[引擎参数](model-runtime/engine-args.md#precision)） |
+| `precision: native` 或 `fp32` | 移除：默认的 `dtype: auto` 本就以发布精度运行，这些模型是 FP32 |
 | `custom_ops_profile`、`compilation_cache_dir` | 移除：运行时自行选择内核 |
 | 计算图 `head`，例如 `onnx/model_fa.onnx` | 移除：运行时自行选择模型的计算图 |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`，即 Hub 仓库 |
@@ -211,7 +213,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
         device: cuda:0
-        profile: max_speed
     modules:
       prompt_guard:
         enabled: true
@@ -229,6 +230,28 @@ global:
 
 响应缓存原本没有 `embedding_model`，因此使用的是此前的默认模型 MiniLM；现在它指定 Vela Embedding。
 对迁移后的文件再次运行该命令不会做任何修改。
+
+## 引擎参数 {#engine-arguments}
+
+模型运行时以前用档位（profile）选择批处理和数值行为：`exact`（默认）、`batching`、`shared_context` 或 `max_speed`。现在它像 vLLM 一样默认对并发请求做批处理，改用 vLLM 风格的[引擎参数](model-runtime/engine-args.md)。路由器会拒绝仍设置 `profile` 的 deployment，`vllm-sr config migrate` 会改写它：
+
+| 之前 | 之后 |
+| --- | --- |
+| `profile: exact` | 移除。并发请求现在共用前向，答案可能因舍入而变动；没有引擎参数能恢复每次前向只跑一个请求 |
+| `profile: batching` | 移除：批处理就是默认行为 |
+| `profile: shared_context` | `enable_shared_context: true`；其他请求的行现在也会共用前向 |
+| `profile: max_speed` | `enable_shared_context: true`；它的批处理和更快的内核已是默认 |
+| 其他任何 `profile` | 移除，并给出警告：设置它所代表的引擎参数 |
+
+deployment 已设置的引擎参数会保留。命令行参数和请求选项也随之变化；使用已移除的参数会报错，并给出替代参数：
+
+| 之前 | 之后 |
+| --- | --- |
+| `vllm-sr serve --runtime-profile P` | 引擎参数，例如 `--max-num-seqs` 和 `--dtype` |
+| `vllm-srun serve --profile P` | 同样的引擎参数 |
+| `vllm-srun serve --max-batch-tokens N` | `--max-num-batched-tokens N` |
+| 请求上的 `"options": {"profile": "exact"}` | 拒绝（`invalid_request`）：请求按其 deployment 的引擎参数运行 |
+| `GET /v1/models` 和响应 `meta` 中的 `profile` | `engine_args`、`dtype` 和 `numerics`（`exact` 或 `approximate`） |
 
 ## 更换 embedding 模型时重新向量化 {#re-embed-when-the-embedding-model-changes}
 

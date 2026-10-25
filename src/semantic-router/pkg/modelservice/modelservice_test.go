@@ -162,6 +162,7 @@ func TestClientDecideOverUnixSocket(t *testing.T) {
 	}
 	request := sampleRequest("text")
 	request.Model = "kai"
+	request.Questions = append(request.Questions, Question{ID: "level", Type: "score", Instructions: "Level?", Levels: []string{"low", "mid", "high"}})
 	response, err := client.Decide(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
@@ -172,18 +173,22 @@ func TestClientDecideOverUnixSocket(t *testing.T) {
 	if got := response.Answers["kind"]; got.Choice != "code" || got.Probabilities["code"] != 0.7 {
 		t.Fatalf("choice answer = %+v", got)
 	}
+	if got := response.Answers["level"]; got.Error != "" || got.Score != 1 {
+		t.Fatalf("score answer = %+v", got)
+	}
 }
 
 func TestManagedCommandAndModelsFile(t *testing.T) {
 	got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "/cache", 0), " ")
-	if want := "vllm-srun serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 67108864 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
+	if want := "vllm-srun serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 100663296 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
 		t.Fatalf("command\n got %s\nwant %s", got, want)
 	}
 	if got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-bundle-tasks 1024 --threads 4") {
 		t.Fatalf("a CPU share passes its thread count: %s", got)
 	}
+	seqs, shared := 4, false
 	plan := planProcesses(map[string]config.ModelDeployment{
-		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", Profile: "batching"},
+		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", MaxNumSeqs: &seqs, EnableSharedContext: &shared},
 	}, nil, "", 0, "")[0]
 	path := filepath.Join(t.TempDir(), "models.json")
 	if err := plan.writeModelsFile(path); err != nil {
@@ -191,8 +196,12 @@ func TestManagedCommandAndModelsFile(t *testing.T) {
 	}
 	info, _ := os.Stat(path)
 	data, _ := os.ReadFile(path)
-	if info.Mode().Perm() != 0o600 || !strings.Contains(string(data), `"profile": "batching"`) || !strings.Contains(string(data), `"name": "kai"`) {
+	file := string(data)
+	if info.Mode().Perm() != 0o600 || !strings.Contains(file, `"max_num_seqs": 4`) || !strings.Contains(file, `"enable_shared_context": false`) || !strings.Contains(file, `"name": "kai"`) {
 		t.Fatalf("models file (%v): %s", info.Mode(), data)
+	}
+	if strings.Contains(file, "profile") || strings.Contains(file, "dtype") || strings.Contains(file, "max_num_batched_tokens") {
+		t.Fatalf("unset engine arguments must keep the runtime's defaults: %s", data)
 	}
 }
 
@@ -417,8 +426,16 @@ func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 	}
 }
 
-func TestCardRefusesARuntimeOfAnotherContractMajor(t *testing.T) {
-	for _, version := range []string{"3.0.0", ""} {
+func TestCardAcceptsOnlyARuntimeOfItsOwnContractVersion(t *testing.T) {
+	for version, served := range map[string]string{
+		RuntimeAPIVersion: "",
+		"3.0.1":           "serves contract 3.0.1",
+		"3.0.0":           "serves contract 3.0.0",
+		"3":               "serves contract 3",
+		"2.4.0":           "serves contract 2.4.0",
+		"4.0.0":           "serves contract 4.0.0",
+		"":                "reports no contract version",
+	} {
 		runtime := fakeModels([]modelEntry{{Name: "decider", Model: "vllm-sr/Decision-2.0-Kai-0.6B"}})
 		runtime.SetAPIVersion(version)
 		server := httptest.NewServer(runtime.Handler())
@@ -433,21 +450,30 @@ func TestCardRefusesARuntimeOfAnotherContractMajor(t *testing.T) {
 		started := time.Now()
 		_, err = lease.Card(ctx, "decider")
 		cancel()
-		if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "this router speaks "+RuntimeAPIMajor+".x") {
+		statuses := lease.Statuses()
+		_ = manager.Shutdown(context.Background())
+		server.Close()
+		if served == "" {
+			if err != nil || !statuses[0].Ready {
+				t.Fatalf("a runtime of contract %s is accepted: %v %+v", version, err, statuses)
+			}
+			continue
+		}
+		reason := "the model runtime " + served + "; this router was built for " + RuntimeAPIVersion +
+			"; a router and its model runtime must come from the same release"
+		if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), reason) {
 			t.Fatalf("api_version %q must be refused, got %v", version, err)
 		}
 		if time.Since(started) > 5*time.Second {
 			t.Fatal("the refusal must not wait for the deadline")
 		}
-		if statuses := lease.Statuses(); statuses[0].Ready || statuses[0].State != "incompatible" {
+		if statuses[0].Ready || statuses[0].State != "incompatible" || statuses[0].Reason != reason {
 			t.Fatalf("the deployment reports the incompatible contract: %+v", statuses)
 		}
-		_ = manager.Shutdown(context.Background())
-		server.Close()
 	}
 }
 
-func TestRuntimeAPIMajorIsTheContractsMajor(t *testing.T) {
+func TestRuntimeAPIVersionIsTheContractsVersion(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", "model-runtime", "vllm_srun", "api", "openapi.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -460,10 +486,10 @@ func TestRuntimeAPIMajorIsTheContractsMajor(t *testing.T) {
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		t.Fatal(err)
 	}
-	if major, _, _ := strings.Cut(spec.Info.Version, "."); major != RuntimeAPIMajor {
-		t.Fatalf("openapi.yaml info.version %s: RuntimeAPIMajor is %s; regenerate the client and move the constant together", spec.Info.Version, RuntimeAPIMajor)
+	if spec.Info.Version != RuntimeAPIVersion {
+		t.Fatalf("openapi.yaml info.version %s: RuntimeAPIVersion is %s; regenerate the client and move the constant together", spec.Info.Version, RuntimeAPIVersion)
 	}
-	if major, _, _ := strings.Cut(runtimetest.APIVersion, "."); major != RuntimeAPIMajor {
+	if runtimetest.APIVersion != RuntimeAPIVersion {
 		t.Fatalf("the fake serves %s", runtimetest.APIVersion)
 	}
 }

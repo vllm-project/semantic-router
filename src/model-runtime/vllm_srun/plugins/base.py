@@ -1,11 +1,12 @@
-"""Plugin interfaces: model family, engine, accelerator and numerics profile.
+"""Plugin interfaces: model family, engine and accelerator.
 
 A family owns a model format's task contract (package format, rendering,
 readout, answers, limits) and declares the API surfaces it serves. An engine
 executes a backbone described by a ``ModelSpec`` on an accelerator and returns
 gathered hidden rows (decoders), hidden states at layer exits (encoders) or
 named graph outputs. An accelerator describes a device class and supplies
-kernels. A profile is a numerics and scheduling policy. Built-in plugins
+kernels. How queued requests become forwards is the scheduler's, set by each
+served model's engine arguments (``scheduler/batching.py``). Built-in plugins
 register through the same entry points as third-party ones
 (``plugins/registry.py``).
 """
@@ -30,11 +31,14 @@ from typing import (
     final,
 )
 
+from ..quantization import FLOAT8, FLOAT8_DEVICES
+from .registry import names
+
 if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
-    from ..config import ServeConfig
+    from ..quantization import QuantizedWeights
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -138,22 +142,25 @@ class VerifiedPackage:
 class DtypePolicy:
     """How a backbone holds and computes its tensors on a device.
 
+    This is the precision the model was published in, which ``--dtype auto``
+    runs (``dtypes.apply`` derives the policy of any other ``--dtype``).
     ``autocast`` applies only on GPUs; CPU inference runs in ``weights`` dtype.
     ``bf16_resident`` holds BF16-exact Linear weights in BF16 on GPUs, which
     BF16 autocast multiplies with anyway. ``gpu_weights`` holds every backbone
     parameter in that dtype on GPUs, so the hidden-state stream follows it
-    (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
-    ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
-    the backbone's linear layers when the configured profile asks for one
+    (released runtimes that load the backbone in BF16); CPU keeps ``weights``
+    unless ``cpu_weights`` names the dtype a released runtime held there too.
+    ``reduced_gpu`` / ``reduced_cpu`` consent to a faster copy of the
+    backbone's linear layers, which the batches that merge requests run
     (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
     ``"bfloat16"`` (only where ``DeviceInfo.bf16``), ``"float32-packed"``
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
-    exact weights. A family consents only
-    where its records show at least 99% label agreement with the exact path
-    (embeddings: cosine of at least 0.999). ``approximate_kernels`` consents,
-    on the same evidence per question type, to the accelerator's approximate
-    kernels when the profile allows them (``EngineOptions.exact_kernels_only``
-    off).
+    exact weights. ``approximate_kernels`` consents to the accelerator's
+    approximate kernels (``EngineOptions.exact_kernels_only`` off). Consented
+    copies and kernels run by default at the published precision, so a family
+    consents only where its records show no decision changed and at least 99%
+    agreement per answer type against the model's own batches (embeddings:
+    cosine of at least 0.999).
     """
 
     weights: str = "float32"
@@ -161,9 +168,15 @@ class DtypePolicy:
     head: str = "float32"
     bf16_resident: bool = True
     gpu_weights: str | None = None
+    cpu_weights: str | None = None
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
+
+    @property
+    def needs_gpu_bf16(self) -> bool:
+        """Whether GPU autocast or weight storage requires BF16 support."""
+        return self.autocast == "bfloat16" or self.gpu_weights == "bfloat16"
 
 
 @dataclass(frozen=True)
@@ -194,7 +207,8 @@ class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
-    batch selects one with ``EncoderBatch.branch``.
+    batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
+    layers the checkpoint holds as int4, FP8 or NVFP4 weights (``quantization.py``).
     """
 
     model_type: str
@@ -203,14 +217,25 @@ class BackboneSpec:
     weight_prefix: str = ""
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
+    quantized: QuantizedWeights | None = None
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
         """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
 
         Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+        FP8 weights need FP8 matrix units and NVFP4 weights FP4 matrix units,
+        which every accelerator must report.
         """
-        return {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        from ..quantization import NVFP4, NVFP4_CAPABILITY
+
+        requires = {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
+        scheme = self.quantized.scheme if self.quantized is not None else None
+        capability = {FLOAT8: "float8", NVFP4: NVFP4_CAPABILITY}.get(scheme or "")
+        if capability is not None:
+            for name in names("accelerators"):
+                requires[name] = (*requires.get(name, ()), capability)
+        return requires
 
 
 @dataclass(frozen=True)
@@ -277,10 +302,11 @@ class DeviceInfo:
 
 @dataclass(frozen=True)
 class EngineOptions:
-    """Execution switches a profile may change. Defaults are the exact path.
+    """Execution switches the runtime derives from a model's engine arguments. Defaults are the exact path.
 
-    ``reduced_precision`` loads, next to the exact weights, the reduced copy the
-    model's ``DtypePolicy`` consents to on its device. ``cpu_neighbors`` names
+    ``exact_kernels_only`` off lets the kernels the model's ``DtypePolicy``
+    consents to run. ``reduced_precision`` loads, next to the exact weights,
+    the copy the policy consents to on its device. ``cpu_neighbors`` names
     the engines of the process's other CPU models (``auto`` where only loading
     can tell): threads an engine leaves spinning after a run slow another
     engine's next forward on those cores.
@@ -297,6 +323,40 @@ class EngineOptions:
 
 
 @dataclass
+class VideoInputs:
+    """The videos of a decoder batch: their tower ``features`` (merged, every row's videos, rows in order).
+
+    ``grids`` holds each video's (t, h, w) patch grid in the same order; each
+    group of ``h * w`` patches (a pair of frames) takes the next run of the
+    batch's ``token_id`` placeholders.
+    """
+
+    features: torch.Tensor
+    grids: list[tuple[int, int, int]]
+    token_id: int
+
+
+@dataclass
+class ImageInputs:
+    """The images of a decoder batch, for a model whose ``ModelSpec.towers`` holds a vision tower.
+
+    ``pixel_values`` holds the patch rows of every image of every row, rows in
+    order and each row's images in order; ``grids`` each image's (t, h, w)
+    patch grid in the same order. The tower's features replace the batch's
+    ``token_id`` placeholders, in the same order. ``features``, when given, are
+    those features already computed (``EngineModel.tower_features``) and
+    ``pixel_values`` is not read; ``videos`` are the rows' video inputs.
+    """
+
+    pixel_values: torch.Tensor | None
+    grids: list[tuple[int, int, int]]
+    token_id: int
+    tower: str = "vision"
+    features: torch.Tensor | None = None
+    videos: VideoInputs | None = None
+
+
+@dataclass
 class ForwardBatch:
     """Padded token rows and the positions whose hidden states the readout needs.
 
@@ -304,7 +364,14 @@ class ForwardBatch:
     ``query`` holds one query position per row; ``lengths`` the unpadded lengths.
     ``shared_prefix`` > 0 asks an engine that ``supports_shared_context`` to run the
     rows as one shared-context tree whose first ``shared_prefix`` tokens (common to
-    every row, before any endpoint) are computed once.
+    every row, before any endpoint) are computed once. ``images`` are the rows'
+    image inputs, for a backbone that reads them. ``packed`` asks an engine that
+    ``supports_packed`` to run the rows back to back with no padding:
+    ``input_ids`` is then ``[1, sum(lengths)]``, the rows in order, and ``gather``
+    and ``query`` index that one row. ``states`` holds, per row, how many of its
+    real tokens are its state block, for a backbone with a state-once layout
+    (``BranchBatch``): each row then runs alone under the backbone's state-once
+    mask, the computation a branched forward reproduces (never packed).
     """
 
     input_ids: torch.Tensor
@@ -313,6 +380,9 @@ class ForwardBatch:
     query: torch.Tensor
     lengths: list[int]
     shared_prefix: int = 0
+    images: ImageInputs | None = None
+    packed: bool = False
+    states: list[int] | None = None
 
 
 @dataclass
@@ -391,6 +461,30 @@ class TreeOutput:
     hidden: torch.Tensor
 
 
+@dataclass
+class BranchBatch:
+    """States encoded once and the question blocks that branch from them, for a backbone with a state-once layout.
+
+    ``states`` holds each state block's token IDs, ``blocks`` each question
+    block's and ``owners`` the state each block continues; ``media`` holds each
+    state's image (and video) inputs, None for a text state. The backbone's
+    layout (its config's ``attention_mode``) never lets a state token attend to
+    a block, so every block of a state branches from one encoding of it, with
+    positions that continue after the state: a block's hidden states are those
+    of the row state + block under that layout, up to rounding. The batch may
+    hold the states of several requests; ``EngineModel.branch`` returns the
+    final hidden state of each block's last token, ``[blocks, hidden]``.
+    """
+
+    states: list[list[int]]
+    blocks: list[list[int]]
+    owners: list[int]
+    media: list[ImageInputs | None] | None = None
+    # Per block, the readout positions as offsets from its last token (None: the last token only); ``branch``
+    # then returns one hidden state per readout, blocks in batch order.
+    readouts: list[tuple[int, ...]] | None = None
+
+
 class EngineModel(ABC):
     """A backbone loaded on one device.
 
@@ -404,7 +498,7 @@ class EngineModel(ABC):
     hidden_states: ClassVar[bool] = True
     # Whether ``forward`` runs a batch's ``shared_prefix`` once, as a shared-context tree.
     supports_shared_context: ClassVar[bool] = False
-    # The spec an engine that builds the backbone loaded; profiles read its config.
+    # The spec an engine that builds the backbone loaded; shared context reads its config.
     spec: ModelSpec | None = None
     # Set at load when every encoder forward returns each row the same alone or in any batch.
     batch_invariant: bool = False
@@ -412,6 +506,11 @@ class EngineModel(ABC):
     @property
     def replays_graphs(self) -> bool:
         """Whether decoder forwards replay captured device graphs."""
+        return False
+
+    @property
+    def approximate_kernels(self) -> bool:
+        """Whether a kernel this model runs is not bit-exact against its reference (``KernelSet``)."""
         return False
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -425,6 +524,30 @@ class EngineModel(ABC):
     def tree(self, batch: TreeBatch) -> TreeOutput:
         """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
         raise NotImplementedError(f"{type(self).__name__} has no tree forward")
+
+    def branch(self, batch: BranchBatch) -> torch.Tensor:
+        """Encode each state once and branch its question blocks from it (backbones with a state-once layout)."""
+        raise NotImplementedError(f"{type(self).__name__} has no branched forward")
+
+    @property
+    def supports_packed(self) -> bool:
+        """Whether ``forward`` runs ``ForwardBatch.packed`` rows back to back (the device's kernels allow it)."""
+        return False
+
+    def tower_features(
+        self,
+        name: str,
+        pixel_values: torch.Tensor,
+        grids: list[tuple[int, int, int]],
+        packed: bool = False,
+    ) -> torch.Tensor:
+        """A tower's merged features for its inputs (``ImageInputs.features``), on the device.
+
+        ``packed`` lets an engine that ``supports_packed`` attend over all the
+        inputs in one variable-length call instead of one call per input, which
+        rounds differently: only forwards that merge requests ask for it.
+        """
+        raise NotImplementedError(f"{type(self).__name__} has no {name} tower")
 
     @abstractmethod
     def parameter_count(self) -> int: ...
@@ -448,26 +571,33 @@ class EngineModel(ABC):
     def close(self) -> None:  # noqa: B027 - optional hook
         """Release device memory."""
 
+    def begin_traffic(self) -> None:  # noqa: B027 - optional hook
+        """The startup verification has passed; serving traffic may begin."""
+
 
 class Engine(ABC):
     """Runs backbones that ``supports`` accepts on an accelerator's devices.
 
     ``auto_priority`` places the engine in ``--engine auto``'s order, lowest
     first, after the engine a built-in model's table prefers for the device
-    class; engines without one (the default) follow, by name.
+    class; engines without one (the default) follow, by name. ``dtypes`` are
+    the ``--dtype`` values it runs: ``auto`` alone for an engine that runs a
+    model only in its published precision (a graph's own dtypes); an engine
+    that honours any ``DtypePolicy`` lists the others too.
     """
 
     name: ClassVar[str]
     auto_priority: ClassVar[int | None] = None
+    dtypes: ClassVar[tuple[str, ...]] = ("auto",)
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
-        """Capability descriptor listed in ``/v1/models``: ``auto_priority``, then architectures, outputs, devices.
+        """Capability descriptor listed in ``/v1/models``: ``auto_priority`` and ``dtypes``, then architectures, outputs, devices.
 
         An engine's own descriptor extends this one, so every card shows where
         ``auto`` tries the engine.
         """
-        return {"auto_priority": cls.auto_priority}
+        return {"auto_priority": cls.auto_priority, "dtypes": list(cls.dtypes)}
 
     @abstractmethod
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
@@ -530,8 +660,14 @@ class Accelerator(ABC):
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
 
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        """Optional hardware reference key; callers own device-class fallback."""
+        return f"{self.name}:{device.arch}" if device.arch else None
+
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        if capability == "float8":
+            return f"{device.label}: {FLOAT8_DEVICES}"
         return f"{device.label} lacks {capability}"
 
     def autocast(
@@ -608,7 +744,11 @@ class RerankInfo:
 
 @dataclass(frozen=True)
 class ModelInfo:
-    """What ``/v1/models`` reports about a loaded model."""
+    """What ``/v1/models`` reports about a loaded model.
+
+    ``modalities`` are the inputs a decisions request may carry: ``text``, and
+    ``image`` for a model that reads a request's ``images``.
+    """
 
     id: str
     family: str
@@ -626,6 +766,13 @@ class ModelInfo:
     embedding: EmbeddingInfo | None = None
     rerank: RerankInfo | None = None
     presets: tuple[str, ...] = ()
+    modalities: tuple[str, ...] = ("text",)
+    # Where a decisions model reads images: ``state`` and, where it reads a question's own images,
+    # ``instructions`` and ``criteria``; empty means ``state`` for a model with the image modality.
+    image_placements: tuple[str, ...] = ()
+    # How ``usage.input_tokens`` counts a request: ``state_once`` when the state counts once;
+    # None when each question counts its own copy of the state.
+    usage: str | None = None
 
 
 @dataclass(frozen=True)
@@ -633,16 +780,15 @@ class SurfaceRequest:
     """A validated request to one surface of one model.
 
     ``body`` is the JSON body; the runtime has checked its top-level fields
-    and parsed the generic options (deadline, profile, return_meta). The
-    family validates everything else in ``plan_surface``. ``part`` marks one
-    state of a decisions request with several (``states``): only the whole
-    request is refused when none of its questions is valid.
+    and parsed the generic options (deadline, return_meta). The family
+    validates everything else in ``plan_surface``. ``part`` marks one state
+    of a decisions request with several (``states``): only the whole request
+    is refused when none of its questions is valid.
     """
 
     surface: str
     body: dict[str, Any]
     deadline: float | None
-    profile: str
     return_meta: bool
     received: float
     part: bool = False
@@ -683,15 +829,24 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     and the item metrics read every surface through ``golden_values``,
     ``golden_compare`` and ``outcomes``.
 
-    ``fuse_bundled_jobs`` lets the ``exact`` profile run the jobs of one
-    bundle as one batch, so a family can compute each distinct input once for
-    several heads; decision families keep it off because their released
-    numerics batch one request at a time. ``batch_invariant``, set at load,
-    says every row's result on this device is the same alone or inside any
-    batch (a test must show it); the ``exact`` profile then runs the jobs of
-    concurrent requests that are queued together in shared batches, without
-    waiting for more. ``packs_rows`` says ``run`` lays rows back to back with
-    no padding, so rows of any lengths share those batches at no extra cost.
+    ``batch_invariant``, set at load, says every row's result on this device
+    is the same alone or inside any batch (a test must show it); the jobs of
+    concurrent requests that are queued together then share batches without
+    waiting for the batching window, and their answers never change.
+    ``packs_rows`` says ``run`` lays rows back to back with no padding, so
+    rows of any lengths share those batches at no extra cost.
+    ``packs_merged_rows`` says the same of ``run_approximate``: a forward that
+    merges requests then costs the sum of its rows, not its rows times its
+    longest, and the planner fills it in arrival order instead of grouping
+    rows of like lengths. ``lane`` sorts items into lanes the planner never
+    mixes in one merged forward and the scheduler prices apart (text rows and
+    rows that read images, say).
+    ``shared_context_default`` is whether the model runs shared-context trees
+    when the engine arguments leave ``enable_shared_context`` unset: on only
+    where the family's records show no accuracy loss. ``merges_shared_batches``
+    says each item names its own shared context (a state-once model's state),
+    so one shared-context batch may hold several requests: the batcher then
+    packs whole requests into shared forwards.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -703,10 +858,12 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
     info: ModelInfo
     engine_model: EngineModel
-    fuse_bundled_jobs: ClassVar[bool] = False
     device_thread: ClassVar[bool] = True
+    shared_context_default: ClassVar[bool] = False
+    merges_shared_batches: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
+    packs_merged_rows: bool = False
 
     @abstractmethod
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:
@@ -727,7 +884,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         )
 
     def run_approximate(self, items: list[ItemT]) -> list[ResultT]:
-        """``run`` for a batch of an approximate profile, where a family may trade exactness for speed."""
+        """``run`` for a batch that merges concurrent requests, where a family may trade exactness for speed."""
         return self.run(items)
 
     @abstractmethod
@@ -775,14 +932,35 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         """Most padded tokens one forward may hold; None when nothing limits it."""
         return None
 
+    def lane(self, item: ItemT) -> str:
+        """The lane of an item: merged forwards hold one lane's rows, and each lane keeps its own cost per token."""
+        return "text"
+
+    def coalesced_token_budget(self, lane: str = "text") -> int | None:
+        """Most tokens a forward that merges requests of ``lane`` should hold; None leaves it to ``--max-num-batched-tokens``.
+
+        A family whose forwards take long per token keeps merged forwards short this way, so a full queue is
+        answered over several forwards in expected-finish order instead of in one long one.
+        """
+        return None
+
+    def calibration_items(self, rows: int, row_tokens: int) -> list[ItemT] | None:
+        """``rows`` text items of about ``row_tokens`` tokens each that ``run_approximate`` can time, or None.
+
+        The startup calibration (``scheduler.calibration``) times merged
+        forwards of these to choose the batch limits a model leaves to the
+        runtime; a model that returns None keeps its device class's limits.
+        """
+        return None
+
     def shared_context(
         self, items: list[ItemT], token_budget: int | None
     ) -> int | None:
-        """How a job's items share context on the shared-context path.
+        """How a job's items share context when shared context is enabled.
 
         A positive value runs them through ``run_shared(items, value)``,
-        0 runs them exactly, and None lets the profile find the common token
-        prefix of decision items itself.
+        0 batches them as usual, and None lets the scheduler find the common
+        token prefix of decision items itself.
         """
         return None
 
@@ -791,8 +969,8 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
         None (the default) is one padded batch, split only by the forward
         token budget. A family whose released runtime batches otherwise (for
-        example in fixed physical batches) returns its split, which ``exact``
-        and the exact fallback of the other profiles then run.
+        example in fixed physical batches) returns its split, which the golden
+        check runs.
         """
         return None
 
@@ -867,7 +1045,7 @@ class ModelFamily(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Profiles
+# Scheduling
 # ---------------------------------------------------------------------------
 
 
@@ -876,67 +1054,39 @@ class Job:
     """One request's rendered items waiting for execution.
 
     Jobs submitted together for one model (a bundle's tasks) share a
-    ``group``; ``exact`` may run a group as one batch when the model allows it
-    (``LoadedModel.fuse_bundled_jobs``).
+    ``group``. A ``reference`` job (the golden check) runs alone, in its
+    released forwards, whatever the model's engine arguments. An ``alone``
+    job comes from the only request the runtime is serving: no other request
+    is on its way to join it, so it does not hold the batching window.
     """
 
     items: list[WorkItem]
     deadline: float | None
     enqueued: float
-    profile: str
     payload: Any = None
     group: int | None = None
+    reference: bool = False
+    alone: bool = False
 
 
 @dataclass
 class Batch:
     """Items from one or more jobs that run as one forward, in order.
 
-    ``shared_prefix`` > 0 (shared-context profile): the items' common prefix length, run once.
-    ``exact`` False marks a batch an approximate profile formed (``LoadedModel.run_approximate``).
+    ``shared_prefix`` > 0 (shared context): the items' common prefix length, run once;
+    on a model that ``merges_shared_batches``, each item's own context runs once.
+    ``exact`` False marks a batch that merges concurrent requests (``LoadedModel.run_approximate``).
+    ``lane`` is the ``LoadedModel.lane`` of its items when it merges requests.
+    ``sub`` holds the batches of a turn that merges several lanes (``parts`` is
+    then their union): each runs as its own forward and its rows are answered
+    as soon as it ran.
     """
 
     parts: list[tuple[Job, list[int]]]
     shared_prefix: int = 0
     exact: bool = True
+    lane: str = "text"
+    sub: tuple[Batch, ...] = ()
 
     def items(self) -> list[WorkItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]
-
-
-class Profile(ABC):
-    """How queued jobs become forwards.
-
-    ``coalesces`` profiles merge jobs of concurrent requests into one batch, so
-    the scheduler holds a queue that has any of their jobs for the batching
-    window before planning it.
-    """
-
-    name: ClassVar[str]
-    numerics: ClassVar[Literal["exact", "approximate"]]
-    description: ClassVar[str]
-    coalesces: ClassVar[bool] = False
-
-    @classmethod
-    def descriptor(cls) -> dict[str, Any]:
-        """Capability descriptor listed in ``/v1/models``."""
-        return {"numerics": cls.numerics, "coalesces": cls.coalesces}
-
-    @classmethod
-    def from_config(cls, config: ServeConfig) -> Profile:
-        """The profile a process's options ask for; one that reads none ignores them."""
-        return cls()
-
-    def engine_options(self, base: EngineOptions) -> EngineOptions:
-        return base
-
-    def available(self, model: LoadedModel[Any, Any]) -> str | None:
-        """None when the profile can run on ``model``, else the reason it cannot."""
-        return None
-
-    def bind(self, model: LoadedModel[Any, Any]) -> None:  # noqa: B027 - optional hook
-        """Take what planning needs from the model this instance serves, once ``available`` passed."""
-
-    @abstractmethod
-    def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
-        """Turn pending jobs into forwards; every item of every job must appear once."""

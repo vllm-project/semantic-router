@@ -489,11 +489,57 @@
     {
       "name": "stop_sequence",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_capability"
-        }
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "matched_stop_sequence",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -596,10 +642,6 @@
         },
         "diagnostics": [
           {
-            "field": "usage.cache_creation",
-            "action": "dropped"
-          },
-          {
             "field": "usage.inference_geo",
             "action": "dropped"
           },
@@ -609,6 +651,10 @@
           },
           {
             "field": "usage.service_tier",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cache_creation",
             "action": "dropped"
           }
         ]

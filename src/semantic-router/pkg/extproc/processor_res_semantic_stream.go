@@ -72,6 +72,7 @@ func (r *OpenAIRouter) initializeSemanticResponseStream(ctx *RequestContext) {
 type semanticStreamBuffers struct {
 	translated []byte
 	public     []byte
+	errorFrame []byte
 	streamErr  error
 }
 
@@ -87,6 +88,9 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		if frame := failureFrame(frames, events); frame != nil {
+			buffers.errorFrame = frame
+		}
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
@@ -94,8 +98,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
 	if ctx.ProtocolResponseStream != nil {
+		// A failure the Router raised, in this read or an earlier one, is not the
+		// provider's error event, so its frame stays on the abort path.
+		routerFailed := buffers.streamErr != nil || ctx.StreamingAborted
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		if frame := failureFrame(frames, events); frame != nil && !routerFailed {
+			buffers.errorFrame = frame
+		}
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
@@ -136,7 +146,28 @@ func observeProtocolStream(
 	ctx.SemanticStreamState.observe(events)
 }
 
+// failureFrame returns the frame the encoder wrote for an upstream failure in
+// this batch. The Chat encoder writes a failure as the batch's last frame
+// (TestChatStreamFailureEndsItsBatch).
+func failureFrame(frames [][]byte, events []llmprotocol.Event) []byte {
+	for _, event := range events {
+		if event.Type == llmprotocol.EventResponseFailed && len(frames) > 0 {
+			return frames[len(frames)-1]
+		}
+	}
+	return nil
+}
+
 func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *ext_proc.ProcessingResponse {
+	// A Chat client of a Chat upstream gets the public filter's output up to an
+	// upstream error event, then the Router's error frame for it, however the
+	// upstream body is split into reads. A client that needs a rewrite keeps the
+	// codec's frames.
+	if ctx.PublicChatUsageFilter.UpstreamFailed() && len(buffers.errorFrame) > 0 && !requiresClientResponseRewrite(ctx) {
+		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{Body: append(buffers.public, buffers.errorFrame...)},
+		}, nil)
+	}
 	if ctx.ProtocolResponseStream != nil &&
 		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted) {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
@@ -404,6 +435,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		return
 	}
 	r.updateResponseCache(ctx, encoded)
+	r.updateKVAddressRegistry(ctx)
 	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.persistResponseObject(ctx)
 	r.attachRouterReplayResponse(ctx, encoded, true)

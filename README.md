@@ -16,8 +16,8 @@
 <a href="https://trendshift.io/repositories/15581?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-15581" target="_blank" rel="noopener noreferrer">
   <img src="https://trendshift.io/api/badge/trendshift/repositories/15581/daily?language=Go" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
 </a>
-<a href="https://huggingface.co/collections/vllm-sr/decision-20">
-  <img src="website/static/img/hf-trending.svg" alt="Decision 2.0 — #1 on Hugging Face Trending Collections, October 6, 2026" width="300" height="55"/>
+<a href="https://huggingface.co/collections/vllm-sr/decision-30">
+  <img src="website/static/img/hf-trending.svg" alt="Decision 3.0 — #1 on Hugging Face Trending Collections, October 14, 2026" width="300" height="55"/>
 </a>
 
 [![Main](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml/badge.svg)](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml)
@@ -60,7 +60,7 @@ For pip, uv, or agent-driven installation, see the **[Installation Guide](https:
 
 Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
 
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for setup and compatibility.
+Follow **[Connect an agent harness](https://vllm-sr.ai/docs/next/installation/agent-harness/)** for setup and compatibility.
 
 ### Online playground
 
@@ -73,7 +73,8 @@ Credentials:
 
 ## Latest News
 
-- [2026/10/06] [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20) reached #1 on Hugging Face Trending Collections.
+- [2026/10/14] [d3](https://huggingface.co/vllm-sr/d3) ranks #1 on text and vision in the [Jev Decision Index](https://huggingface.co/spaces/multimodalart/jev-decision-index), with smaller sizes on the Pareto frontier.
+- [2026/10/14] [Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30), [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20), and [Vela 2.0](https://huggingface.co/collections/vllm-sr/vela-20) reached Hugging Face Trending Collections.
 - [2026/10/06] [Vela 2.0: Towards Open Foundation Routing Models](https://vllm-sr.ai/blog/vela-2-0-open-foundation-routing-models/)
 - [2026/09/24] [vLLM Semantic Router v0.4 Hermes: Many Models, One Improving System](https://vllm-sr.ai/blog/v0.4-vllm-sr-hermes-release/)
 - [2026/09/22] [Introducing Decision 1.0: Open Decision Foundation Models](https://vllm-sr.ai/blog/decision-models/)

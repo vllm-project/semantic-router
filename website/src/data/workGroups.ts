@@ -100,6 +100,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/snorfyang.png',
         profile: 'https://github.com/snorfyang',
       },
+      {
+        name: 'Abhinav Mahajan',
+        avatar: 'https://github.com/abhinav-m22.png',
+        profile: 'https://github.com/abhinav-m22',
+      },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
     ],
   },
   {
@@ -221,6 +231,21 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/ankit373.png',
         profile: 'https://github.com/ankit373',
       },
+      {
+        name: 'Abhijit Roy',
+        avatar: 'https://github.com/Roy214.png',
+        profile: 'https://github.com/Roy214',
+      },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
+      {
+        name: 'Alex Weng',
+        avatar: 'https://github.com/Alex-Wengg.png',
+        profile: 'https://github.com/Alex-Wengg',
+      },
     ],
   },
   {
@@ -297,6 +322,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/colinmcnamara.png',
         profile: 'https://github.com/colinmcnamara',
       },
+      {
+        name: 'Paramveer singh',
+        avatar: 'https://github.com/Paramveersingh-S.png',
+        profile: 'https://github.com/Paramveersingh-S',
+      },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
     ],
   },
   {
@@ -353,6 +388,11 @@ export const workGroups: WorkGroup[] = [
         name: 'zdy782',
         avatar: 'https://github.com/zdy782.png',
         profile: 'https://github.com/zdy782',
+      },
+      {
+        name: 'lyy26299',
+        avatar: 'https://github.com/lyy26299.png',
+        profile: 'https://github.com/lyy26299',
       },
     ],
   },
@@ -425,6 +465,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Kritoooo.png',
         profile: 'https://github.com/Kritoooo',
       },
+      {
+        name: 'PepperoniBlvd',
+        avatar: 'https://github.com/PepperoniBlvd.png',
+        profile: 'https://github.com/PepperoniBlvd',
+      },
     ],
   },
   {
@@ -476,6 +521,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Zi-Yi-Ming.png',
         profile: 'https://github.com/Zi-Yi-Ming',
       },
+      {
+        name: 'Alex Weng',
+        avatar: 'https://github.com/Alex-Wengg.png',
+        profile: 'https://github.com/Alex-Wengg',
+      },
+      {
+        name: 'Rudraksh Karpe',
+        avatar: 'https://github.com/rudrakshkarpe.png',
+        profile: 'https://github.com/rudrakshkarpe',
+      },
     ],
   },
   {
@@ -526,6 +581,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Haoyu Jing',
         avatar: 'https://github.com/PharosEast.png',
         profile: 'https://github.com/PharosEast',
+      },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
       },
     ],
   },

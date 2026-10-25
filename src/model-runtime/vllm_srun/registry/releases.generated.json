@@ -30,5 +30,13 @@
   "vllm-sr/Vela-2.0-0.3B": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
   "vllm-sr/Vela-2.0-0.8B": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
   "vllm-sr/Vela-2.0-4B": "c1e64d4f872cb38bc58502e6888340100bab9d55",
-  "vllm-sr/Vela-2.0-9B": "bc8761637d8788619dfbaf6d8890128efe85fd40"
+  "vllm-sr/Vela-2.0-9B": "bc8761637d8788619dfbaf6d8890128efe85fd40",
+  "vllm-sr/d3": "cbff3a3cb0b074b6585fe9f747b9f9f5557a0e75",
+  "vllm-sr/d3-edge": "18d61df78684675463af9ae732872478845c5a79",
+  "vllm-sr/d3-flash": "521525effa79469d899a570726547dd7f00da3af",
+  "vllm-sr/d3-lite": "a8d25a91ef75552803f7009d25b7bd435991abd9",
+  "vllm-sr/d3-mini": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
+  "vllm-sr/d3-nano": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
+  "vllm-sr/d3-turbo": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
+  "vllm-sr/d3-ultra": "2f9a5e5e1e3a1e2c06ea62787186f379af17d5e8"
 }
