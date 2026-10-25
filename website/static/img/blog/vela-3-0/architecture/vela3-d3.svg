@@ -1,0 +1,4678 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1152pt" height="648pt" viewBox="0 0 1152 648" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 648 
+L 1152 648 
+L 1152 0 
+L 0 0 
+z
+" style="fill: #f2f2ec"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 59.904 61.56 
+L 37.31616 25.92 
+L 50.0832 25.92 
+z
+" style="fill: #00918a; opacity: 0.16"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 59.904 61.56 
+L 69.7248 25.92 
+L 82.49184 25.92 
+z
+" style="fill: #00918a; opacity: 0.16"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 46.08 106.92 
+L 63.744 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.009167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 63.744 106.92 
+L 81.408 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.0275; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_3">
+    <path d="M 81.408 106.92 
+L 99.072 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.045833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_4">
+    <path d="M 99.072 106.92 
+L 116.736 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.064167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_5">
+    <path d="M 116.736 106.92 
+L 134.4 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.0825; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_6">
+    <path d="M 134.4 106.92 
+L 152.064 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.100833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_7">
+    <path d="M 152.064 106.92 
+L 169.728 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.119167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_8">
+    <path d="M 169.728 106.92 
+L 187.392 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.1375; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_9">
+    <path d="M 187.392 106.92 
+L 205.056 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.155833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_10">
+    <path d="M 205.056 106.92 
+L 222.72 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.174167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_11">
+    <path d="M 222.72 106.92 
+L 240.384 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.1925; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_12">
+    <path d="M 240.384 106.92 
+L 258.048 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.210833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_13">
+    <path d="M 258.048 106.92 
+L 275.712 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.229167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_14">
+    <path d="M 275.712 106.92 
+L 293.376 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.2475; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_15">
+    <path d="M 293.376 106.92 
+L 311.04 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.265833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_16">
+    <path d="M 311.04 106.92 
+L 328.704 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.284167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_17">
+    <path d="M 328.704 106.92 
+L 346.368 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.3025; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_18">
+    <path d="M 346.368 106.92 
+L 364.032 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.320833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_19">
+    <path d="M 364.032 106.92 
+L 381.696 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.339167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_20">
+    <path d="M 381.696 106.92 
+L 399.36 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.3575; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_21">
+    <path d="M 399.36 106.92 
+L 417.024 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.375833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_22">
+    <path d="M 417.024 106.92 
+L 434.688 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.394167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_23">
+    <path d="M 434.688 106.92 
+L 452.352 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.4125; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_24">
+    <path d="M 452.352 106.92 
+L 470.016 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.430833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_25">
+    <path d="M 470.016 106.92 
+L 487.68 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.449167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_26">
+    <path d="M 487.68 106.92 
+L 505.344 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.4675; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_27">
+    <path d="M 505.344 106.92 
+L 523.008 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.485833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_28">
+    <path d="M 523.008 106.92 
+L 540.672 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.504167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_29">
+    <path d="M 540.672 106.92 
+L 558.336 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.5225; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_30">
+    <path d="M 558.336 106.92 
+L 576 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.540833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_31">
+    <path d="M 576 106.92 
+L 593.664 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.540833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_32">
+    <path d="M 593.664 106.92 
+L 611.328 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.5225; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_33">
+    <path d="M 611.328 106.92 
+L 628.992 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.504167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_34">
+    <path d="M 628.992 106.92 
+L 646.656 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.485833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_35">
+    <path d="M 646.656 106.92 
+L 664.32 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.4675; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_36">
+    <path d="M 664.32 106.92 
+L 681.984 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.449167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_37">
+    <path d="M 681.984 106.92 
+L 699.648 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.430833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_38">
+    <path d="M 699.648 106.92 
+L 717.312 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.4125; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_39">
+    <path d="M 717.312 106.92 
+L 734.976 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.394167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_40">
+    <path d="M 734.976 106.92 
+L 752.64 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.375833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_41">
+    <path d="M 752.64 106.92 
+L 770.304 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.3575; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_42">
+    <path d="M 770.304 106.92 
+L 787.968 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.339167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_43">
+    <path d="M 787.968 106.92 
+L 805.632 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.320833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_44">
+    <path d="M 805.632 106.92 
+L 823.296 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.3025; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_45">
+    <path d="M 823.296 106.92 
+L 840.96 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.284167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_46">
+    <path d="M 840.96 106.92 
+L 858.624 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.265833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_47">
+    <path d="M 858.624 106.92 
+L 876.288 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.2475; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_48">
+    <path d="M 876.288 106.92 
+L 893.952 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.229167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_49">
+    <path d="M 893.952 106.92 
+L 911.616 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.210833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_50">
+    <path d="M 911.616 106.92 
+L 929.28 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.1925; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_51">
+    <path d="M 929.28 106.92 
+L 946.944 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.174167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_52">
+    <path d="M 946.944 106.92 
+L 964.608 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.155833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_53">
+    <path d="M 964.608 106.92 
+L 982.272 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.1375; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_54">
+    <path d="M 982.272 106.92 
+L 999.936 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.119167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_55">
+    <path d="M 999.936 106.92 
+L 1017.6 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.100833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_56">
+    <path d="M 1017.6 106.92 
+L 1035.264 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.0825; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_57">
+    <path d="M 1035.264 106.92 
+L 1052.928 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.064167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_58">
+    <path d="M 1052.928 106.92 
+L 1070.592 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.045833; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_59">
+    <path d="M 1070.592 106.92 
+L 1088.256 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.0275; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_60">
+    <path d="M 1088.256 106.92 
+L 1105.92 106.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-opacity: 0.009167; stroke-width: 1.4"/>
+   </g>
+   <g id="line2d_61">
+    <path d="M 59.904 61.56 
+L 43.69968 25.92 
+" style="fill: none; stroke: #00918a; stroke-width: 2.2; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_62">
+    <path d="M 59.904 61.56 
+L 76.10832 25.92 
+" style="fill: none; stroke: #00918a; stroke-width: 2.2; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_63">
+    <defs>
+     <path id="mc0913fc0c6" d="M 0 2.5 
+C 0.663008 2.5 1.29895 2.236584 1.767767 1.767767 
+C 2.236584 1.29895 2.5 0.663008 2.5 0 
+C 2.5 -0.663008 2.236584 -1.29895 1.767767 -1.767767 
+C 1.29895 -2.236584 0.663008 -2.5 0 -2.5 
+C -0.663008 -2.5 -1.29895 -2.236584 -1.767767 -1.767767 
+C -2.236584 -1.29895 -2.5 -0.663008 -2.5 0 
+C -2.5 0.663008 -2.236584 1.29895 -1.767767 1.767767 
+C -1.29895 2.236584 -0.663008 2.5 0 2.5 
+z
+" style="stroke: #07090d"/>
+    </defs>
+    <g>
+     <use xlink:href="#mc0913fc0c6" x="59.904" y="61.56" style="fill: #07090d; stroke: #07090d"/>
+    </g>
+   </g>
+   <g id="text_1">
+    <!-- VELA 3.0 · ARCHITECTURE · vela3-lite · -mini · -flash · -turbo -->
+    <g style="fill: #56606d" transform="translate(92.16 43.023656) scale(0.11 -0.11)">
+     <defs>
+      <path id="MartianMono-Regular-56" d="M 1094 5120 
+L 2227 544 
+L 2291 544 
+L 3430 5120 
+L 4147 5120 
+L 2835 0 
+L 1645 0 
+L 333 5120 
+L 1094 5120 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-45" d="M 896 0 
+L 896 5120 
+L 3923 5120 
+L 3923 4435 
+L 1626 4435 
+L 1626 2899 
+L 3603 2899 
+L 3603 2259 
+L 1626 2259 
+L 1626 685 
+L 3859 685 
+L 3859 0 
+L 896 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-4c" d="M 1152 0 
+L 1152 5120 
+L 1882 5120 
+L 1882 685 
+L 4051 685 
+L 4051 0 
+L 1152 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-41" d="M 333 0 
+L 1645 5120 
+L 2835 5120 
+L 4147 0 
+L 3386 0 
+L 2253 4576 
+L 2189 4576 
+L 1050 0 
+L 333 0 
+z
+M 1133 1734 
+L 1133 2426 
+L 3347 2426 
+L 3347 1734 
+L 1133 1734 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-20" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-33" d="M 3936 1363 
+Q 3936 928 3721 595 
+Q 3507 262 3136 80 
+Q 2765 -102 2285 -102 
+Q 1760 -102 1376 86 
+Q 992 275 781 636 
+Q 570 998 557 1498 
+L 1254 1498 
+Q 1318 1056 1587 819 
+Q 1856 582 2278 582 
+Q 2554 582 2762 684 
+Q 2970 787 3085 976 
+Q 3200 1165 3200 1414 
+Q 3200 1792 2960 2029 
+Q 2720 2266 2323 2266 
+L 1722 2266 
+L 1722 2944 
+L 2323 2944 
+Q 2733 2944 2982 3161 
+Q 3232 3379 3232 3725 
+Q 3232 4090 2979 4314 
+Q 2726 4538 2304 4538 
+Q 1862 4538 1587 4288 
+Q 1312 4038 1222 3558 
+L 525 3558 
+Q 550 4090 774 4461 
+Q 998 4832 1388 5027 
+Q 1779 5222 2310 5222 
+Q 2797 5222 3168 5043 
+Q 3539 4864 3747 4544 
+Q 3955 4224 3955 3776 
+Q 3955 3360 3734 3065 
+Q 3514 2771 3149 2675 
+L 3149 2573 
+Q 3507 2477 3721 2153 
+Q 3936 1830 3936 1363 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-2e" d="M 2240 -51 
+Q 1958 -51 1804 109 
+Q 1651 269 1651 563 
+Q 1651 851 1804 1011 
+Q 1958 1171 2240 1171 
+Q 2522 1171 2675 1011 
+Q 2829 851 2829 563 
+Q 2829 269 2675 109 
+Q 2522 -51 2240 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-30" d="M 2240 -102 
+Q 1306 -102 838 563 
+Q 371 1229 371 2560 
+Q 371 3891 838 4556 
+Q 1306 5222 2240 5222 
+Q 3174 5222 3641 4556 
+Q 4109 3891 4109 2560 
+Q 4109 1229 3641 563 
+Q 3174 -102 2240 -102 
+z
+M 2240 582 
+Q 2829 582 3104 1062 
+Q 3379 1542 3379 2560 
+Q 3379 3578 3104 4058 
+Q 2829 4538 2240 4538 
+Q 1651 4538 1376 4058 
+Q 1101 3578 1101 2560 
+Q 1101 1542 1376 1062 
+Q 1651 582 2240 582 
+z
+M 890 1965 
+L 3565 3987 
+L 3565 3155 
+L 890 1133 
+L 890 1965 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-b7" d="M 2240 1933 
+Q 1958 1933 1804 2093 
+Q 1651 2253 1651 2547 
+Q 1651 2835 1804 2995 
+Q 1958 3155 2240 3155 
+Q 2522 3155 2675 2995 
+Q 2829 2835 2829 2547 
+Q 2829 2253 2675 2093 
+Q 2522 1933 2240 1933 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-52" d="M 736 0 
+L 736 5120 
+L 2470 5120 
+Q 2963 5120 3328 4941 
+Q 3693 4762 3894 4429 
+Q 4096 4096 4096 3642 
+Q 4096 3213 3891 2893 
+Q 3686 2573 3321 2390 
+Q 2957 2208 2470 2208 
+L 1466 2208 
+L 1466 0 
+L 736 0 
+z
+M 3392 0 
+L 2010 2336 
+L 2797 2336 
+L 4224 0 
+L 3392 0 
+z
+M 1466 2842 
+L 2483 2842 
+Q 2886 2842 3126 3059 
+Q 3366 3277 3366 3635 
+Q 3366 4000 3126 4217 
+Q 2886 4435 2483 4435 
+L 1466 4435 
+L 1466 2842 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-43" d="M 2349 -102 
+Q 1434 -102 976 560 
+Q 518 1222 518 2560 
+Q 518 3898 988 4560 
+Q 1459 5222 2406 5222 
+Q 2918 5222 3289 5004 
+Q 3661 4787 3875 4368 
+Q 4090 3949 4128 3347 
+L 3456 3347 
+Q 3366 3930 3100 4234 
+Q 2835 4538 2406 4538 
+Q 1811 4538 1529 4058 
+Q 1248 3578 1248 2560 
+Q 1248 1542 1513 1062 
+Q 1779 582 2349 582 
+Q 2758 582 3008 864 
+Q 3258 1146 3341 1683 
+L 4013 1683 
+Q 3974 1114 3769 714 
+Q 3565 314 3203 106 
+Q 2842 -102 2349 -102 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-48" d="M 595 0 
+L 595 5120 
+L 1325 5120 
+L 1325 2925 
+L 3155 2925 
+L 3155 5120 
+L 3885 5120 
+L 3885 0 
+L 3155 0 
+L 3155 2234 
+L 1325 2234 
+L 1325 0 
+L 595 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-49" d="M 595 0 
+L 595 685 
+L 1875 685 
+L 1875 4435 
+L 595 4435 
+L 595 5120 
+L 3885 5120 
+L 3885 4435 
+L 2605 4435 
+L 2605 685 
+L 3885 685 
+L 3885 0 
+L 595 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-54" d="M 1875 0 
+L 1875 4435 
+L 365 4435 
+L 365 5120 
+L 4115 5120 
+L 4115 4435 
+L 2605 4435 
+L 2605 0 
+L 1875 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-55" d="M 544 5120 
+L 1274 5120 
+L 1274 1747 
+Q 1274 1203 1530 892 
+Q 1786 582 2253 582 
+Q 2720 582 2976 892 
+Q 3232 1203 3232 1747 
+L 3232 5120 
+L 3936 5120 
+L 3936 1683 
+Q 3936 819 3501 358 
+Q 3066 -102 2240 -102 
+Q 1414 -102 979 358 
+Q 544 819 544 1683 
+L 544 5120 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-76" d="M 429 3840 
+L 1178 3840 
+L 2234 634 
+L 2298 634 
+L 3347 3840 
+L 4051 3840 
+L 2778 0 
+L 1702 0 
+L 429 3840 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-65" d="M 1146 2310 
+L 3456 2310 
+L 3219 1978 
+Q 3219 2624 2988 2963 
+Q 2758 3302 2317 3302 
+Q 1837 3302 1568 2947 
+Q 1299 2592 1299 1952 
+Q 1299 1267 1568 902 
+Q 1837 538 2336 538 
+Q 2662 538 2905 701 
+Q 3149 864 3315 1178 
+L 3974 1178 
+Q 3878 781 3651 493 
+Q 3424 205 3088 51 
+Q 2752 -102 2336 -102 
+Q 1798 -102 1411 141 
+Q 1024 384 819 845 
+Q 614 1306 614 1952 
+Q 614 2566 822 3011 
+Q 1030 3456 1414 3699 
+Q 1798 3942 2317 3942 
+Q 2810 3942 3155 3712 
+Q 3501 3482 3686 3043 
+Q 3872 2605 3872 1984 
+Q 3872 1914 3869 1837 
+Q 3866 1760 3859 1690 
+L 1146 1690 
+L 1146 2310 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-6c" d="M 832 5427 
+L 2701 5427 
+L 2701 659 
+L 3859 659 
+L 3859 0 
+L 832 0 
+L 832 659 
+L 1997 659 
+L 1997 4768 
+L 832 4768 
+L 832 5427 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-61" d="M 3110 2400 
+L 3110 1779 
+L 1958 1600 
+Q 1690 1555 1558 1414 
+Q 1427 1274 1427 1043 
+Q 1427 826 1590 691 
+Q 1754 557 2010 557 
+Q 2291 557 2524 691 
+Q 2758 826 2899 1053 
+Q 3040 1280 3040 1555 
+L 3040 2496 
+Q 3040 2867 2816 3078 
+Q 2592 3290 2202 3290 
+Q 1926 3290 1708 3200 
+Q 1491 3110 1353 2937 
+Q 1216 2765 1165 2515 
+L 493 2515 
+Q 525 2957 745 3277 
+Q 966 3597 1344 3769 
+Q 1722 3942 2221 3942 
+Q 2938 3942 3331 3577 
+Q 3725 3213 3725 2541 
+L 3725 0 
+L 3040 0 
+L 3040 352 
+L 2848 352 
+Q 2694 134 2448 19 
+Q 2202 -96 1843 -96 
+Q 1491 -96 1232 41 
+Q 973 179 829 428 
+Q 685 678 685 1011 
+Q 685 1491 992 1801 
+Q 1299 2112 1869 2202 
+L 3110 2400 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-2d" d="M 429 1920 
+L 429 2560 
+L 4051 2560 
+L 4051 1920 
+L 429 1920 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-69" d="M 928 3840 
+L 2797 3840 
+L 2797 659 
+L 3955 659 
+L 3955 0 
+L 928 0 
+L 928 659 
+L 2093 659 
+L 2093 3181 
+L 928 3181 
+L 928 3840 
+z
+M 2392 4410 
+Q 2142 4410 2001 4547 
+Q 1861 4685 1861 4928 
+Q 1861 5171 2001 5308 
+Q 2142 5446 2392 5446 
+Q 2642 5446 2782 5308 
+Q 2923 5171 2923 4928 
+Q 2923 4685 2782 4547 
+Q 2642 4410 2392 4410 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-74" d="M 2067 4838 
+L 2067 3840 
+L 3795 3840 
+L 3795 3181 
+L 2067 3181 
+L 2067 1261 
+Q 2067 922 2208 739 
+Q 2349 557 2618 557 
+Q 2899 557 3056 752 
+Q 3213 947 3290 1344 
+L 3910 1344 
+Q 3878 640 3539 269 
+Q 3200 -102 2592 -102 
+Q 2003 -102 1683 250 
+Q 1363 602 1363 1235 
+L 1363 3181 
+L 518 3181 
+L 518 3840 
+L 1363 3840 
+L 1363 4838 
+L 2067 4838 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-6d" d="M 486 3840 
+L 1190 3840 
+L 1190 3533 
+L 1696 3533 
+L 1318 3309 
+Q 1338 3603 1501 3772 
+Q 1664 3942 1926 3942 
+Q 2176 3942 2342 3750 
+Q 2509 3558 2547 3232 
+L 2150 3501 
+L 2976 3501 
+L 2618 3296 
+Q 2637 3590 2819 3766 
+Q 3002 3942 3283 3942 
+Q 3616 3942 3817 3664 
+Q 4019 3386 4019 2918 
+L 4019 0 
+L 3347 0 
+L 3347 2643 
+Q 3347 2906 3251 3037 
+Q 3155 3168 2963 3168 
+Q 2778 3168 2682 3037 
+Q 2586 2906 2586 2643 
+L 2586 0 
+L 1920 0 
+L 1920 2643 
+Q 1920 2906 1824 3037 
+Q 1728 3168 1542 3168 
+Q 1350 3168 1254 3037 
+Q 1158 2906 1158 2643 
+L 1158 0 
+L 486 0 
+L 486 3840 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-6e" d="M 723 0 
+L 723 3840 
+L 1427 3840 
+L 1427 3552 
+L 1619 3552 
+Q 1766 3738 1996 3840 
+Q 2227 3942 2502 3942 
+Q 2906 3942 3200 3763 
+Q 3494 3584 3660 3257 
+Q 3827 2931 3827 2490 
+L 3827 0 
+L 3123 0 
+L 3123 2298 
+Q 3123 2778 2908 3024 
+Q 2694 3270 2278 3270 
+Q 1862 3270 1644 3024 
+Q 1427 2778 1427 2298 
+L 1427 0 
+L 723 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-66" d="M 2400 0 
+L 1696 0 
+L 1696 3181 
+L 838 3181 
+L 838 3840 
+L 1696 3840 
+L 1696 4256 
+Q 1696 4851 2038 5190 
+Q 2381 5530 2989 5530 
+Q 3565 5530 3907 5235 
+Q 4250 4941 4282 4416 
+L 3642 4416 
+Q 3552 4640 3389 4758 
+Q 3226 4877 2989 4877 
+Q 2707 4877 2553 4704 
+Q 2400 4531 2400 4211 
+L 2400 3840 
+L 3859 3840 
+L 3859 3181 
+L 2400 3181 
+L 2400 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-73" d="M 1350 1178 
+Q 1440 877 1677 717 
+Q 1914 557 2285 557 
+Q 2669 557 2873 694 
+Q 3078 832 3078 1088 
+Q 3078 1261 2912 1376 
+Q 2746 1491 2419 1536 
+L 1952 1606 
+Q 1325 1702 1024 1977 
+Q 723 2253 723 2746 
+Q 723 3302 1136 3622 
+Q 1549 3942 2272 3942 
+Q 3008 3942 3437 3584 
+Q 3866 3226 3891 2586 
+L 3251 2586 
+Q 3162 2925 2912 3104 
+Q 2662 3283 2259 3283 
+Q 1856 3283 1638 3145 
+Q 1421 3008 1421 2752 
+Q 1421 2579 1587 2464 
+Q 1754 2349 2080 2304 
+L 2547 2234 
+Q 3181 2138 3478 1862 
+Q 3776 1587 3776 1094 
+Q 3776 723 3593 454 
+Q 3411 186 3078 42 
+Q 2746 -102 2278 -102 
+Q 1562 -102 1149 237 
+Q 736 576 698 1178 
+L 1350 1178 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-68" d="M 723 0 
+L 723 5427 
+L 1427 5427 
+L 1427 3552 
+L 1619 3552 
+Q 1766 3738 1996 3840 
+Q 2227 3942 2502 3942 
+Q 2906 3942 3200 3763 
+Q 3494 3584 3660 3257 
+Q 3827 2931 3827 2490 
+L 3827 0 
+L 3123 0 
+L 3123 2298 
+Q 3123 2778 2908 3024 
+Q 2694 3270 2278 3270 
+Q 1862 3270 1644 3024 
+Q 1427 2778 1427 2298 
+L 1427 0 
+L 723 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-75" d="M 3757 3840 
+L 3757 0 
+L 3053 0 
+L 3053 288 
+L 2861 288 
+Q 2714 102 2486 0 
+Q 2259 -102 1978 -102 
+Q 1581 -102 1283 77 
+Q 986 256 819 582 
+Q 653 909 653 1350 
+L 653 3840 
+L 1357 3840 
+L 1357 1542 
+Q 1357 1062 1571 816 
+Q 1786 570 2202 570 
+Q 2618 570 2835 816 
+Q 3053 1062 3053 1542 
+L 3053 3840 
+L 3757 3840 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-72" d="M 608 3840 
+L 2106 3840 
+L 2106 3558 
+L 2298 3558 
+Q 2413 3744 2611 3843 
+Q 2810 3942 3066 3942 
+Q 3526 3942 3795 3619 
+Q 4064 3296 4064 2733 
+L 4064 2176 
+L 3334 2176 
+L 3334 2630 
+Q 3334 3277 2810 3277 
+Q 2477 3277 2313 2979 
+Q 2150 2682 2150 2093 
+L 2150 659 
+L 3341 659 
+L 3341 0 
+L 723 0 
+L 723 659 
+L 1446 659 
+L 1446 3181 
+L 608 3181 
+L 608 3840 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-62" d="M 2509 -102 
+Q 2202 -102 1946 22 
+Q 1690 147 1562 352 
+L 1370 352 
+L 1370 0 
+L 666 0 
+L 666 5427 
+L 1370 5427 
+L 1370 3488 
+L 1562 3488 
+Q 1690 3699 1946 3820 
+Q 2202 3942 2509 3942 
+Q 2989 3942 3341 3696 
+Q 3693 3450 3885 2995 
+Q 4077 2541 4077 1920 
+Q 4077 1299 3885 844 
+Q 3693 390 3341 144 
+Q 2989 -102 2509 -102 
+z
+M 2362 557 
+Q 2842 557 3107 915 
+Q 3373 1274 3373 1920 
+Q 3373 2566 3107 2924 
+Q 2842 3283 2362 3283 
+Q 1875 3283 1609 2924 
+Q 1344 2566 1344 1920 
+Q 1344 1274 1609 915 
+Q 1875 557 2362 557 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-6f" d="M 2240 -102 
+Q 1709 -102 1318 144 
+Q 928 390 713 844 
+Q 499 1299 499 1920 
+Q 499 2541 713 2995 
+Q 928 3450 1318 3696 
+Q 1709 3942 2240 3942 
+Q 2778 3942 3165 3696 
+Q 3552 3450 3766 2995 
+Q 3981 2541 3981 1920 
+Q 3981 1299 3766 844 
+Q 3552 390 3165 144 
+Q 2778 -102 2240 -102 
+z
+M 2240 557 
+Q 2733 557 3008 915 
+Q 3283 1274 3283 1920 
+Q 3283 2566 3008 2924 
+Q 2733 3283 2240 3283 
+Q 1747 3283 1472 2924 
+Q 1197 2566 1197 1920 
+Q 1197 1274 1472 915 
+Q 1747 557 2240 557 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-56"/>
+     <use xlink:href="#MartianMono-Regular-45" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-4c" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-41" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-33" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-2e" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-30" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-41" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-52" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-43" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-48" transform="translate(979.999786 0)"/>
+     <use xlink:href="#MartianMono-Regular-49" transform="translate(1049.999771 0)"/>
+     <use xlink:href="#MartianMono-Regular-54" transform="translate(1119.999756 0)"/>
+     <use xlink:href="#MartianMono-Regular-45" transform="translate(1189.999741 0)"/>
+     <use xlink:href="#MartianMono-Regular-43" transform="translate(1259.999725 0)"/>
+     <use xlink:href="#MartianMono-Regular-54" transform="translate(1329.99971 0)"/>
+     <use xlink:href="#MartianMono-Regular-55" transform="translate(1399.999695 0)"/>
+     <use xlink:href="#MartianMono-Regular-52" transform="translate(1469.99968 0)"/>
+     <use xlink:href="#MartianMono-Regular-45" transform="translate(1539.999664 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1609.999649 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(1679.999634 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1749.999619 0)"/>
+     <use xlink:href="#MartianMono-Regular-76" transform="translate(1819.999603 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1889.999588 0)"/>
+     <use xlink:href="#MartianMono-Regular-6c" transform="translate(1959.999573 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(2029.999557 0)"/>
+     <use xlink:href="#MartianMono-Regular-33" transform="translate(2099.999542 0)"/>
+     <use xlink:href="#MartianMono-Regular-2d" transform="translate(2169.999527 0)"/>
+     <use xlink:href="#MartianMono-Regular-6c" transform="translate(2239.999512 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(2309.999496 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(2379.999481 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(2449.999466 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(2519.999451 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(2589.999435 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(2659.99942 0)"/>
+     <use xlink:href="#MartianMono-Regular-2d" transform="translate(2729.999405 0)"/>
+     <use xlink:href="#MartianMono-Regular-6d" transform="translate(2799.99939 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(2869.999374 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(2939.999359 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(3009.999344 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(3079.999329 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(3149.999313 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(3219.999298 0)"/>
+     <use xlink:href="#MartianMono-Regular-2d" transform="translate(3289.999283 0)"/>
+     <use xlink:href="#MartianMono-Regular-66" transform="translate(3359.999268 0)"/>
+     <use xlink:href="#MartianMono-Regular-6c" transform="translate(3429.999252 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(3499.999237 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(3569.999222 0)"/>
+     <use xlink:href="#MartianMono-Regular-68" transform="translate(3639.999207 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(3709.999191 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(3779.999176 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(3849.999161 0)"/>
+     <use xlink:href="#MartianMono-Regular-2d" transform="translate(3919.999146 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(3989.99913 0)"/>
+     <use xlink:href="#MartianMono-Regular-75" transform="translate(4059.999115 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(4129.9991 0)"/>
+     <use xlink:href="#MartianMono-Regular-62" transform="translate(4199.999084 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(4269.999069 0)"/>
+    </g>
+   </g>
+   <g id="text_2">
+    <!-- A frozen d3 decoder with gated adapters. -->
+    <g style="fill: #07090d" transform="translate(92.16 72.027656) scale(0.21 -0.21)">
+     <defs>
+      <path id="Unbounded-Medium-41" d="M 1280 1011 
+L 1280 1894 
+L 4608 1894 
+L 4608 1011 
+L 1280 1011 
+z
+M 3667 4800 
+L 5914 0 
+L 4755 0 
+L 2790 4358 
+L 3149 4358 
+L 1184 0 
+L 26 0 
+L 2272 4800 
+L 3667 4800 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-20" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-66" d="M 2797 4218 
+Q 2349 4218 2150 4042 
+Q 1952 3866 1952 3475 
+L 1952 0 
+L 883 0 
+L 883 3405 
+Q 883 3904 1078 4265 
+Q 1274 4627 1674 4825 
+Q 2074 5024 2669 5024 
+Q 2944 5024 3161 4982 
+Q 3379 4941 3603 4870 
+L 3603 4064 
+Q 3418 4141 3219 4179 
+Q 3021 4218 2797 4218 
+z
+M 122 2560 
+L 122 3366 
+L 3526 3366 
+L 3526 2560 
+L 122 2560 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-72" d="M 230 3642 
+L 1312 3642 
+L 1530 2330 
+L 1530 0 
+L 461 0 
+L 461 2445 
+L 230 3642 
+z
+M 3302 3680 
+L 3302 2758 
+Q 3136 2797 2969 2816 
+Q 2803 2835 2656 2835 
+Q 2336 2835 2080 2700 
+Q 1824 2566 1677 2284 
+Q 1530 2003 1530 1574 
+L 1306 1843 
+Q 1344 2234 1446 2576 
+Q 1549 2918 1731 3177 
+Q 1914 3437 2182 3587 
+Q 2451 3738 2822 3738 
+Q 2944 3738 3069 3722 
+Q 3194 3706 3302 3680 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-6f" d="M 2490 -96 
+Q 1811 -96 1299 144 
+Q 787 384 499 816 
+Q 211 1248 211 1818 
+Q 211 2394 499 2826 
+Q 787 3258 1299 3498 
+Q 1811 3738 2490 3738 
+Q 3168 3738 3680 3498 
+Q 4192 3258 4477 2826 
+Q 4762 2394 4762 1818 
+Q 4762 1248 4477 816 
+Q 4192 384 3680 144 
+Q 3168 -96 2490 -96 
+z
+M 2490 717 
+Q 2861 717 3126 851 
+Q 3392 986 3536 1232 
+Q 3680 1478 3680 1818 
+Q 3680 2163 3536 2409 
+Q 3392 2656 3126 2790 
+Q 2861 2925 2490 2925 
+Q 2125 2925 1856 2790 
+Q 1587 2656 1443 2409 
+Q 1299 2163 1299 1818 
+Q 1299 1478 1443 1232 
+Q 1587 986 1856 851 
+Q 2125 717 2490 717 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-7a" d="M 243 0 
+L 243 755 
+L 2918 3040 
+L 3635 2848 
+L 262 2848 
+L 262 3642 
+L 4045 3642 
+L 4045 2886 
+L 1370 602 
+L 755 787 
+L 4058 787 
+L 4058 0 
+L 243 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-65" d="M 2458 -96 
+Q 1811 -96 1302 144 
+Q 794 384 502 819 
+Q 211 1254 211 1830 
+Q 211 2400 489 2829 
+Q 768 3258 1254 3498 
+Q 1741 3738 2362 3738 
+Q 2995 3738 3449 3459 
+Q 3904 3181 4150 2675 
+Q 4397 2170 4397 1485 
+L 1069 1485 
+L 1069 2195 
+L 3821 2195 
+L 3405 1939 
+Q 3379 2259 3248 2483 
+Q 3117 2707 2893 2828 
+Q 2669 2950 2368 2950 
+Q 2042 2950 1802 2819 
+Q 1562 2688 1430 2454 
+Q 1299 2221 1299 1907 
+Q 1299 1530 1465 1261 
+Q 1632 992 1952 851 
+Q 2272 710 2726 710 
+Q 3136 710 3552 828 
+Q 3968 947 4301 1165 
+L 4301 448 
+Q 3942 192 3465 48 
+Q 2989 -96 2458 -96 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-6e" d="M 230 3642 
+L 1299 3642 
+L 1530 2253 
+L 1530 0 
+L 461 0 
+L 461 2413 
+L 230 3642 
+z
+M 2918 3738 
+Q 3437 3738 3801 3530 
+Q 4166 3322 4358 2938 
+Q 4550 2554 4550 2022 
+L 4550 0 
+L 3482 0 
+L 3482 1862 
+Q 3482 2355 3245 2608 
+Q 3008 2861 2554 2861 
+Q 2246 2861 2012 2723 
+Q 1779 2586 1654 2342 
+Q 1530 2099 1530 1760 
+L 1178 1946 
+Q 1242 2522 1485 2918 
+Q 1728 3315 2099 3526 
+Q 2470 3738 2918 3738 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-64" d="M 3757 0 
+L 3603 1376 
+L 3808 1811 
+L 3610 2342 
+L 3898 4928 
+L 5005 4928 
+L 4653 1894 
+L 4864 0 
+L 3757 0 
+z
+M 4019 1818 
+Q 3917 1242 3645 810 
+Q 3373 378 2960 141 
+Q 2547 -96 2035 -96 
+Q 1504 -96 1094 144 
+Q 685 384 457 816 
+Q 230 1248 230 1818 
+Q 230 2394 457 2826 
+Q 685 3258 1094 3498 
+Q 1504 3738 2035 3738 
+Q 2547 3738 2960 3501 
+Q 3373 3264 3648 2832 
+Q 3923 2400 4019 1818 
+z
+M 1312 1818 
+Q 1312 1498 1443 1254 
+Q 1574 1011 1804 873 
+Q 2035 736 2336 736 
+Q 2637 736 2902 873 
+Q 3168 1011 3373 1254 
+Q 3578 1498 3693 1818 
+Q 3578 2138 3373 2384 
+Q 3168 2630 2902 2768 
+Q 2637 2906 2336 2906 
+Q 2035 2906 1804 2768 
+Q 1574 2630 1443 2384 
+Q 1312 2138 1312 1818 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-33" d="M 333 3283 
+Q 371 3738 656 4102 
+Q 941 4467 1465 4681 
+Q 1990 4896 2726 4896 
+Q 3373 4896 3846 4729 
+Q 4320 4563 4582 4268 
+Q 4845 3974 4845 3571 
+Q 4845 3245 4649 2979 
+Q 4454 2714 4044 2557 
+Q 3635 2400 3008 2406 
+L 3008 2528 
+Q 3616 2560 4048 2435 
+Q 4480 2310 4717 2048 
+Q 4954 1786 4954 1389 
+Q 4954 960 4682 624 
+Q 4410 288 3891 96 
+Q 3373 -96 2630 -96 
+Q 1907 -96 1369 109 
+Q 832 314 531 685 
+Q 230 1056 205 1555 
+L 1293 1555 
+Q 1344 1171 1677 966 
+Q 2010 762 2630 762 
+Q 3232 762 3539 947 
+Q 3846 1133 3846 1466 
+Q 3846 1664 3744 1798 
+Q 3642 1933 3395 2000 
+Q 3149 2067 2726 2067 
+L 1882 2067 
+L 1882 2829 
+L 2726 2829 
+Q 3277 2829 3513 2995 
+Q 3750 3162 3750 3424 
+Q 3750 3718 3481 3878 
+Q 3213 4038 2669 4038 
+Q 2112 4038 1798 3843 
+Q 1485 3648 1421 3283 
+L 333 3283 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-63" d="M 4582 1485 
+Q 4518 1018 4220 659 
+Q 3923 301 3456 102 
+Q 2989 -96 2413 -96 
+Q 1760 -96 1264 144 
+Q 768 384 489 819 
+Q 211 1254 211 1818 
+Q 211 2387 489 2819 
+Q 768 3251 1264 3494 
+Q 1760 3738 2413 3738 
+Q 2989 3738 3456 3536 
+Q 3923 3334 4220 2979 
+Q 4518 2624 4582 2150 
+L 3514 2150 
+Q 3430 2522 3132 2723 
+Q 2835 2925 2413 2925 
+Q 2074 2925 1821 2793 
+Q 1568 2662 1433 2416 
+Q 1299 2170 1299 1818 
+Q 1299 1472 1433 1225 
+Q 1568 979 1821 848 
+Q 2074 717 2413 717 
+Q 2842 717 3139 928 
+Q 3437 1139 3514 1485 
+L 4582 1485 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-77" d="M 5261 582 
+L 4909 582 
+L 6048 3642 
+L 7117 3642 
+L 5709 0 
+L 4614 0 
+L 3398 3142 
+L 3782 3142 
+L 2547 0 
+L 1453 0 
+L 45 3642 
+L 1126 3642 
+L 2272 582 
+L 1907 582 
+L 3072 3642 
+L 4115 3642 
+L 5261 582 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-69" d="M 403 3680 
+L 934 3578 
+L 1472 3680 
+L 1472 0 
+L 403 0 
+L 403 3680 
+z
+M 934 4058 
+Q 646 4058 464 4208 
+Q 282 4358 282 4608 
+Q 282 4864 464 5014 
+Q 646 5165 934 5165 
+Q 1229 5165 1408 5014 
+Q 1587 4864 1587 4608 
+Q 1587 4358 1408 4208 
+Q 1229 4058 934 4058 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-74" d="M 32 2835 
+L 32 3309 
+L 794 3558 
+L 1248 4602 
+L 1862 4602 
+L 1862 3642 
+L 3475 3642 
+L 3475 2835 
+L 1862 2835 
+L 1862 1510 
+Q 1862 1088 2038 918 
+Q 2214 749 2650 749 
+Q 2925 749 3136 800 
+Q 3347 851 3539 947 
+L 3539 115 
+Q 3354 38 3046 -29 
+Q 2739 -96 2413 -96 
+Q 1843 -96 1488 86 
+Q 1133 269 963 595 
+Q 794 922 794 1357 
+L 794 2835 
+L 32 2835 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-68" d="M 403 4928 
+L 1472 4928 
+L 1472 0 
+L 403 0 
+L 403 4928 
+z
+M 2861 3738 
+Q 3379 3738 3744 3530 
+Q 4109 3322 4301 2938 
+Q 4493 2554 4493 2022 
+L 4493 0 
+L 3424 0 
+L 3424 1862 
+Q 3424 2355 3187 2608 
+Q 2950 2861 2502 2861 
+Q 2189 2861 1955 2723 
+Q 1722 2586 1597 2342 
+Q 1472 2099 1472 1760 
+L 1120 1946 
+Q 1190 2522 1430 2918 
+Q 1670 3315 2041 3526 
+Q 2413 3738 2861 3738 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-67" d="M 3642 902 
+L 3642 1536 
+L 3680 1670 
+L 3680 2464 
+L 3642 2598 
+L 3642 3642 
+L 4710 3642 
+L 4710 973 
+Q 4710 282 4406 -192 
+Q 4102 -666 3564 -909 
+Q 3027 -1152 2317 -1152 
+Q 1818 -1152 1398 -1024 
+Q 979 -896 576 -634 
+L 576 205 
+Q 966 -96 1392 -224 
+Q 1818 -352 2253 -352 
+Q 2925 -352 3283 -38 
+Q 3642 275 3642 902 
+z
+M 1984 333 
+Q 1478 333 1078 544 
+Q 678 755 448 1139 
+Q 218 1523 218 2035 
+Q 218 2547 448 2928 
+Q 678 3309 1078 3523 
+Q 1478 3738 1984 3738 
+Q 2368 3738 2685 3619 
+Q 3002 3501 3254 3309 
+Q 3507 3117 3680 2889 
+Q 3853 2662 3945 2435 
+Q 4038 2208 4038 2022 
+Q 4038 1786 3894 1491 
+Q 3750 1197 3481 934 
+Q 3213 672 2835 502 
+Q 2458 333 1984 333 
+z
+M 2336 1088 
+Q 2752 1088 3088 1315 
+Q 3424 1542 3680 2035 
+Q 3424 2534 3085 2761 
+Q 2746 2989 2336 2989 
+Q 2010 2989 1776 2870 
+Q 1542 2752 1417 2537 
+Q 1293 2323 1293 2035 
+Q 1293 1754 1414 1539 
+Q 1536 1325 1773 1206 
+Q 2010 1088 2336 1088 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-61" d="M 3738 0 
+L 3584 1331 
+L 3757 1818 
+L 3584 2298 
+L 3738 3642 
+L 4845 3642 
+L 4634 1818 
+L 4845 0 
+L 3738 0 
+z
+M 4019 1818 
+Q 3917 1242 3645 810 
+Q 3373 378 2960 141 
+Q 2547 -96 2035 -96 
+Q 1504 -96 1094 144 
+Q 685 384 457 816 
+Q 230 1248 230 1818 
+Q 230 2394 457 2826 
+Q 685 3258 1094 3498 
+Q 1504 3738 2035 3738 
+Q 2547 3738 2960 3501 
+Q 3373 3264 3648 2832 
+Q 3923 2400 4019 1818 
+z
+M 1312 1818 
+Q 1312 1498 1443 1254 
+Q 1574 1011 1804 873 
+Q 2035 736 2336 736 
+Q 2637 736 2902 873 
+Q 3168 1011 3373 1254 
+Q 3578 1498 3693 1818 
+Q 3578 2138 3373 2384 
+Q 3168 2630 2902 2768 
+Q 2637 2906 2336 2906 
+Q 2035 2906 1804 2768 
+Q 1574 2630 1443 2384 
+Q 1312 2138 1312 1818 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-70" d="M 403 3642 
+L 1472 3642 
+L 1472 2483 
+L 1427 2342 
+L 1427 1466 
+L 1472 1203 
+L 1472 -1056 
+L 403 -1056 
+L 403 3642 
+z
+M 1101 1818 
+Q 1210 2400 1482 2832 
+Q 1754 3264 2166 3501 
+Q 2579 3738 3085 3738 
+Q 3622 3738 4028 3498 
+Q 4435 3258 4665 2826 
+Q 4896 2394 4896 1818 
+Q 4896 1248 4665 816 
+Q 4435 384 4028 144 
+Q 3622 -96 3085 -96 
+Q 2573 -96 2166 141 
+Q 1760 378 1485 810 
+Q 1210 1242 1101 1818 
+z
+M 3814 1818 
+Q 3814 2138 3683 2384 
+Q 3552 2630 3321 2768 
+Q 3091 2906 2790 2906 
+Q 2490 2906 2221 2768 
+Q 1952 2630 1750 2384 
+Q 1549 2138 1434 1818 
+Q 1549 1498 1750 1254 
+Q 1952 1011 2221 873 
+Q 2490 736 2790 736 
+Q 3091 736 3321 873 
+Q 3552 1011 3683 1254 
+Q 3814 1498 3814 1818 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-73" d="M 4390 1146 
+Q 4390 755 4163 473 
+Q 3936 192 3488 48 
+Q 3040 -96 2394 -96 
+Q 1728 -96 1235 67 
+Q 742 230 467 531 
+Q 192 832 173 1229 
+L 1261 1229 
+Q 1299 1050 1452 918 
+Q 1606 787 1852 716 
+Q 2099 646 2426 646 
+Q 2880 646 3113 748 
+Q 3347 851 3347 1056 
+Q 3347 1203 3184 1280 
+Q 3021 1357 2586 1395 
+L 1907 1446 
+Q 1299 1498 940 1651 
+Q 582 1805 432 2038 
+Q 282 2272 282 2554 
+Q 282 2944 525 3206 
+Q 768 3469 1206 3603 
+Q 1645 3738 2221 3738 
+Q 2810 3738 3270 3578 
+Q 3731 3418 4009 3136 
+Q 4288 2854 4326 2483 
+L 3238 2483 
+Q 3213 2618 3094 2736 
+Q 2976 2854 2752 2931 
+Q 2528 3008 2170 3008 
+Q 1766 3008 1548 2915 
+Q 1331 2822 1331 2637 
+Q 1331 2509 1465 2429 
+Q 1600 2349 1965 2317 
+L 2848 2246 
+Q 3437 2195 3776 2051 
+Q 4115 1907 4252 1676 
+Q 4390 1446 4390 1146 
+z
+" transform="scale(0.015625)"/>
+      <path id="Unbounded-Medium-2e" d="M 890 -58 
+Q 717 -58 573 25 
+Q 429 109 345 253 
+Q 262 397 262 570 
+Q 262 749 345 893 
+Q 429 1037 573 1120 
+Q 717 1203 890 1203 
+Q 1069 1203 1213 1120 
+Q 1357 1037 1440 893 
+Q 1523 749 1523 570 
+Q 1523 397 1440 253 
+Q 1357 109 1213 25 
+Q 1069 -58 890 -58 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#Unbounded-Medium-41"/>
+     <use xlink:href="#Unbounded-Medium-20" transform="translate(92.799988 0)"/>
+     <use xlink:href="#Unbounded-Medium-66" transform="translate(118.399979 0)"/>
+     <use xlink:href="#Unbounded-Medium-72" transform="translate(174.699966 0)"/>
+     <use xlink:href="#Unbounded-Medium-6f" transform="translate(227.699951 0)"/>
+     <use xlink:href="#Unbounded-Medium-7a" transform="translate(305.499939 0)"/>
+     <use xlink:href="#Unbounded-Medium-65" transform="translate(372.699936 0)"/>
+     <use xlink:href="#Unbounded-Medium-6e" transform="translate(444.899918 0)"/>
+     <use xlink:href="#Unbounded-Medium-20" transform="translate(521.499908 0)"/>
+     <use xlink:href="#Unbounded-Medium-64" transform="translate(547.099899 0)"/>
+     <use xlink:href="#Unbounded-Medium-33" transform="translate(627.899887 0)"/>
+     <use xlink:href="#Unbounded-Medium-20" transform="translate(709.999878 0)"/>
+     <use xlink:href="#Unbounded-Medium-64" transform="translate(735.599869 0)"/>
+     <use xlink:href="#Unbounded-Medium-65" transform="translate(816.399857 0)"/>
+     <use xlink:href="#Unbounded-Medium-63" transform="translate(888.599838 0)"/>
+     <use xlink:href="#Unbounded-Medium-6f" transform="translate(962.899826 0)"/>
+     <use xlink:href="#Unbounded-Medium-64" transform="translate(1040.699814 0)"/>
+     <use xlink:href="#Unbounded-Medium-65" transform="translate(1121.499802 0)"/>
+     <use xlink:href="#Unbounded-Medium-72" transform="translate(1193.699783 0)"/>
+     <use xlink:href="#Unbounded-Medium-20" transform="translate(1246.699768 0)"/>
+     <use xlink:href="#Unbounded-Medium-77" transform="translate(1272.299759 0)"/>
+     <use xlink:href="#Unbounded-Medium-69" transform="translate(1384.299744 0)"/>
+     <use xlink:href="#Unbounded-Medium-74" transform="translate(1413.599731 0)"/>
+     <use xlink:href="#Unbounded-Medium-68" transform="translate(1471.499725 0)"/>
+     <use xlink:href="#Unbounded-Medium-20" transform="translate(1547.199707 0)"/>
+     <use xlink:href="#Unbounded-Medium-67" transform="translate(1572.799698 0)"/>
+     <use xlink:href="#Unbounded-Medium-61" transform="translate(1652.399689 0)"/>
+     <use xlink:href="#Unbounded-Medium-74" transform="translate(1732.99968 0)"/>
+     <use xlink:href="#Unbounded-Medium-65" transform="translate(1790.899673 0)"/>
+     <use xlink:href="#Unbounded-Medium-64" transform="translate(1863.099655 0)"/>
+     <use xlink:href="#Unbounded-Medium-20" transform="translate(1943.899643 0)"/>
+     <use xlink:href="#Unbounded-Medium-61" transform="translate(1969.499634 0)"/>
+     <use xlink:href="#Unbounded-Medium-64" transform="translate(2050.099625 0)"/>
+     <use xlink:href="#Unbounded-Medium-61" transform="translate(2130.899612 0)"/>
+     <use xlink:href="#Unbounded-Medium-70" transform="translate(2211.499603 0)"/>
+     <use xlink:href="#Unbounded-Medium-74" transform="translate(2291.499588 0)"/>
+     <use xlink:href="#Unbounded-Medium-65" transform="translate(2349.399582 0)"/>
+     <use xlink:href="#Unbounded-Medium-72" transform="translate(2421.599564 0)"/>
+     <use xlink:href="#Unbounded-Medium-73" transform="translate(2474.599548 0)"/>
+     <use xlink:href="#Unbounded-Medium-2e" transform="translate(2546.499542 0)"/>
+    </g>
+   </g>
+   <g id="text_3">
+    <!-- An ordinary question runs on the d3 base with every adapter off, so its answer is the base's own: 561 of 561 identical on each card's check. -->
+    <g style="fill: #27303b" transform="translate(92.16 98.9415) scale(0.135 -0.135)">
+     <defs>
+      <path id="HankenGrotesk-Regular-41" d="M 109 0 
+L 1811 4461 
+L 2259 4461 
+L 3962 0 
+L 3347 0 
+L 2042 3654 
+L 730 0 
+L 109 0 
+z
+M 1056 1050 
+L 1229 1555 
+L 2842 1555 
+L 3027 1050 
+L 1056 1050 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-6e" d="M 461 0 
+L 461 3155 
+L 1005 3155 
+L 1005 2483 
+L 877 2438 
+Q 966 2682 1120 2851 
+Q 1274 3021 1491 3113 
+Q 1709 3206 1971 3206 
+Q 2490 3206 2784 2902 
+Q 3078 2598 3078 2003 
+L 3078 0 
+L 2534 0 
+L 2534 1805 
+Q 2534 2285 2358 2512 
+Q 2182 2739 1824 2739 
+Q 1562 2739 1379 2617 
+Q 1197 2496 1101 2237 
+Q 1005 1978 1005 1574 
+L 1005 0 
+L 461 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-20" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-6f" d="M 1850 -51 
+Q 1408 -51 1059 157 
+Q 710 365 512 736 
+Q 314 1107 314 1581 
+Q 314 2054 509 2422 
+Q 704 2790 1053 2998 
+Q 1402 3206 1850 3206 
+Q 2298 3206 2640 2998 
+Q 2982 2790 3180 2422 
+Q 3379 2054 3379 1581 
+Q 3379 1107 3180 739 
+Q 2982 371 2636 160 
+Q 2291 -51 1850 -51 
+z
+M 1850 429 
+Q 2150 429 2371 573 
+Q 2592 717 2713 976 
+Q 2835 1235 2835 1581 
+Q 2835 1933 2713 2192 
+Q 2592 2451 2371 2592 
+Q 2150 2733 1850 2733 
+Q 1542 2733 1318 2589 
+Q 1094 2445 972 2189 
+Q 851 1933 851 1581 
+Q 851 1235 972 976 
+Q 1094 717 1318 573 
+Q 1542 429 1850 429 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-72" d="M 461 0 
+L 461 3155 
+L 1005 3155 
+L 1005 2310 
+L 864 2278 
+Q 909 2560 1078 2768 
+Q 1248 2976 1475 3091 
+Q 1702 3206 1920 3206 
+Q 2067 3206 2201 3174 
+Q 2336 3142 2477 3066 
+L 2208 2579 
+Q 2131 2618 2025 2643 
+Q 1920 2669 1824 2669 
+Q 1670 2669 1520 2611 
+Q 1370 2554 1248 2432 
+Q 1126 2310 1062 2106 
+Q 1037 2016 1021 1872 
+Q 1005 1728 1005 1478 
+L 1005 0 
+L 461 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-64" d="M 1747 -51 
+Q 1318 -51 995 163 
+Q 672 378 493 749 
+Q 314 1120 314 1581 
+Q 314 2080 506 2445 
+Q 698 2810 1024 3008 
+Q 1350 3206 1747 3206 
+Q 2048 3206 2285 3088 
+Q 2522 2970 2685 2768 
+Q 2848 2566 2912 2317 
+L 2758 2214 
+L 2758 4461 
+L 3296 4461 
+L 3296 0 
+L 2758 0 
+L 2758 941 
+L 2938 883 
+Q 2854 608 2688 397 
+Q 2522 186 2285 67 
+Q 2048 -51 1747 -51 
+z
+M 1837 448 
+Q 2125 448 2342 592 
+Q 2560 736 2681 992 
+Q 2803 1248 2803 1581 
+Q 2803 1914 2681 2170 
+Q 2560 2426 2342 2570 
+Q 2125 2714 1837 2714 
+Q 1549 2714 1328 2570 
+Q 1107 2426 982 2170 
+Q 858 1914 858 1581 
+Q 858 1248 982 992 
+Q 1107 736 1328 592 
+Q 1549 448 1837 448 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-69" d="M 454 0 
+L 454 3155 
+L 992 3155 
+L 992 0 
+L 454 0 
+z
+M 402 3725 
+L 402 4461 
+L 1042 4461 
+L 1042 3725 
+L 402 3725 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-61" d="M 2534 0 
+L 2496 634 
+L 2496 1978 
+Q 2496 2342 2294 2540 
+Q 2093 2739 1696 2739 
+Q 1440 2739 1216 2633 
+Q 992 2528 781 2278 
+L 390 2611 
+Q 653 2918 992 3062 
+Q 1331 3206 1734 3206 
+Q 2355 3206 2694 2886 
+Q 3034 2566 3034 1978 
+L 3034 0 
+L 2534 0 
+z
+M 1491 -51 
+Q 1133 -51 867 73 
+Q 602 198 458 422 
+Q 314 646 314 941 
+Q 314 1203 419 1385 
+Q 525 1568 691 1670 
+Q 858 1779 1072 1820 
+Q 1286 1862 1523 1862 
+L 2547 1862 
+L 2547 1453 
+L 1600 1453 
+Q 1459 1453 1305 1427 
+Q 1152 1402 1037 1318 
+Q 954 1254 906 1158 
+Q 858 1062 858 934 
+Q 858 685 1043 537 
+Q 1229 390 1542 390 
+Q 1805 390 2019 512 
+Q 2234 634 2365 848 
+Q 2496 1062 2496 1331 
+L 2720 1101 
+Q 2682 762 2515 499 
+Q 2349 237 2089 93 
+Q 1830 -51 1491 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-79" d="M 774 -1299 
+L 1376 154 
+L 147 3155 
+L 742 3155 
+L 1664 698 
+L 2592 3155 
+L 3181 3155 
+L 1363 -1299 
+L 774 -1299 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-71" d="M 2758 -1306 
+L 2758 941 
+L 2912 794 
+Q 2848 550 2685 358 
+Q 2522 166 2285 57 
+Q 2048 -51 1747 -51 
+Q 1350 -51 1024 147 
+Q 698 346 506 714 
+Q 314 1082 314 1574 
+Q 314 2042 493 2410 
+Q 672 2778 995 2992 
+Q 1318 3206 1747 3206 
+Q 2048 3206 2285 3104 
+Q 2522 3002 2685 2806 
+Q 2848 2611 2931 2336 
+L 2758 2214 
+L 2758 3155 
+L 3296 3155 
+L 3296 -1306 
+L 2758 -1306 
+z
+M 1837 442 
+Q 2125 442 2342 586 
+Q 2560 730 2681 986 
+Q 2803 1242 2803 1574 
+Q 2803 1907 2681 2163 
+Q 2560 2419 2342 2563 
+Q 2125 2707 1837 2707 
+Q 1549 2707 1328 2563 
+Q 1107 2419 982 2163 
+Q 858 1907 858 1574 
+Q 858 1242 982 986 
+Q 1107 730 1328 586 
+Q 1549 442 1837 442 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-75" d="M 1523 -51 
+Q 1184 -51 934 86 
+Q 685 224 553 493 
+Q 422 762 422 1158 
+L 422 3155 
+L 960 3155 
+L 960 1350 
+Q 960 1037 1040 829 
+Q 1120 621 1280 521 
+Q 1440 422 1677 422 
+Q 1939 422 2121 547 
+Q 2304 672 2400 928 
+Q 2496 1184 2496 1587 
+L 2496 3155 
+L 3034 3155 
+L 3034 0 
+L 2496 0 
+L 2496 672 
+L 2630 672 
+Q 2496 320 2201 134 
+Q 1907 -51 1523 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-65" d="M 1792 -51 
+Q 1421 -51 1142 73 
+Q 864 198 681 422 
+Q 499 646 406 937 
+Q 314 1229 314 1555 
+Q 314 1882 403 2179 
+Q 493 2477 669 2707 
+Q 845 2938 1113 3072 
+Q 1382 3206 1741 3206 
+Q 2106 3206 2371 3081 
+Q 2637 2957 2806 2739 
+Q 2976 2522 3059 2253 
+Q 3142 1984 3142 1696 
+Q 3142 1670 3139 1577 
+Q 3136 1485 3123 1414 
+L 851 1414 
+Q 870 954 1120 698 
+Q 1370 442 1798 442 
+Q 2074 442 2278 531 
+Q 2483 621 2662 819 
+L 3040 486 
+Q 2867 301 2675 182 
+Q 2483 64 2268 6 
+Q 2054 -51 1792 -51 
+z
+M 2605 1690 
+Q 2618 1741 2621 1792 
+Q 2624 1843 2624 1894 
+Q 2624 2048 2569 2201 
+Q 2515 2355 2409 2480 
+Q 2304 2605 2141 2678 
+Q 1978 2752 1754 2752 
+Q 1478 2752 1280 2624 
+Q 1082 2496 973 2285 
+Q 864 2074 845 1818 
+L 2784 1818 
+L 2605 1690 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-73" d="M 1504 -51 
+Q 1184 -51 928 45 
+Q 672 141 489 301 
+Q 307 461 198 640 
+L 576 960 
+Q 698 717 938 560 
+Q 1178 403 1510 403 
+Q 1811 403 1990 531 
+Q 2170 659 2170 877 
+Q 2170 1056 2061 1158 
+Q 1952 1261 1773 1325 
+Q 1594 1389 1382 1440 
+Q 1203 1485 1020 1549 
+Q 838 1613 691 1709 
+Q 544 1805 454 1958 
+Q 365 2112 365 2336 
+Q 365 2726 669 2966 
+Q 973 3206 1466 3206 
+Q 1824 3206 2121 3056 
+Q 2419 2906 2586 2605 
+L 2240 2349 
+Q 2112 2573 1904 2672 
+Q 1696 2771 1446 2771 
+Q 1197 2771 1030 2668 
+Q 864 2566 864 2387 
+Q 864 2253 941 2169 
+Q 1018 2086 1168 2028 
+Q 1318 1971 1536 1920 
+Q 1734 1875 1939 1811 
+Q 2144 1747 2317 1644 
+Q 2490 1542 2595 1372 
+Q 2701 1203 2701 934 
+Q 2701 640 2553 416 
+Q 2406 192 2137 70 
+Q 1869 -51 1504 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-74" d="M 1510 -51 
+Q 1286 -51 1104 35 
+Q 922 122 819 314 
+Q 717 506 717 806 
+L 717 4000 
+L 1267 4307 
+L 1267 947 
+Q 1267 685 1350 541 
+Q 1434 397 1651 397 
+Q 1715 397 1804 413 
+Q 1894 429 1997 454 
+L 1997 32 
+Q 1875 -13 1750 -32 
+Q 1626 -51 1510 -51 
+z
+M 64 2733 
+L 64 3155 
+L 1997 3155 
+L 1997 2733 
+L 64 2733 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-68" d="M 461 0 
+L 461 4461 
+L 1005 4461 
+L 1005 2483 
+L 870 2432 
+Q 960 2675 1120 2848 
+Q 1280 3021 1497 3113 
+Q 1715 3206 1971 3206 
+Q 2490 3206 2784 2902 
+Q 3078 2598 3078 2003 
+L 3078 0 
+L 2534 0 
+L 2534 1805 
+Q 2534 2285 2358 2512 
+Q 2182 2739 1824 2739 
+Q 1434 2739 1219 2460 
+Q 1005 2182 1005 1574 
+L 1005 0 
+L 461 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-33" d="M 1760 -51 
+Q 1280 -51 921 125 
+Q 563 301 364 617 
+Q 166 934 166 1357 
+L 704 1389 
+Q 704 966 998 720 
+Q 1293 474 1779 474 
+Q 2099 474 2329 576 
+Q 2560 678 2685 870 
+Q 2810 1062 2810 1318 
+Q 2810 1555 2707 1712 
+Q 2605 1869 2429 1961 
+Q 2253 2054 2016 2092 
+Q 1779 2131 1510 2131 
+L 1510 2560 
+Q 1709 2560 1897 2595 
+Q 2086 2630 2236 2713 
+Q 2387 2797 2473 2937 
+Q 2560 3078 2560 3290 
+Q 2560 3501 2457 3661 
+Q 2355 3821 2176 3907 
+Q 1997 3994 1754 3994 
+Q 1357 3994 1133 3776 
+Q 909 3558 902 3219 
+L 371 3251 
+Q 371 3622 550 3907 
+Q 730 4192 1046 4352 
+Q 1363 4512 1773 4512 
+Q 2163 4512 2460 4361 
+Q 2758 4211 2931 3948 
+Q 3104 3686 3104 3341 
+Q 3104 3149 3046 2998 
+Q 2989 2848 2883 2733 
+Q 2778 2618 2640 2538 
+Q 2502 2458 2349 2406 
+Q 2541 2362 2720 2278 
+Q 2899 2195 3040 2060 
+Q 3181 1926 3264 1740 
+Q 3347 1555 3347 1312 
+Q 3347 909 3145 601 
+Q 2944 294 2589 121 
+Q 2234 -51 1760 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-62" d="M 2010 -51 
+Q 1709 -51 1469 67 
+Q 1229 186 1065 397 
+Q 902 608 819 883 
+L 998 941 
+L 998 0 
+L 461 0 
+L 461 4461 
+L 998 4461 
+L 998 2214 
+L 845 2304 
+Q 915 2554 1075 2758 
+Q 1235 2963 1472 3084 
+Q 1709 3206 2010 3206 
+Q 2406 3206 2732 3008 
+Q 3059 2810 3251 2445 
+Q 3443 2080 3443 1581 
+Q 3443 1120 3264 749 
+Q 3085 378 2761 163 
+Q 2438 -51 2010 -51 
+z
+M 1920 448 
+Q 2208 448 2429 592 
+Q 2650 736 2774 992 
+Q 2899 1248 2899 1581 
+Q 2899 1914 2774 2170 
+Q 2650 2426 2429 2570 
+Q 2208 2714 1920 2714 
+Q 1632 2714 1414 2570 
+Q 1197 2426 1075 2170 
+Q 954 1914 954 1581 
+Q 954 1248 1075 992 
+Q 1197 736 1414 592 
+Q 1632 448 1920 448 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-77" d="M 1114 0 
+L 179 3155 
+L 755 3155 
+L 1395 819 
+L 2150 3155 
+L 2630 3155 
+L 3386 832 
+L 4032 3155 
+L 4608 3155 
+L 3667 0 
+L 3168 0 
+L 2394 2400 
+L 1619 0 
+L 1114 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-76" d="M 1440 0 
+L 147 3155 
+L 742 3155 
+L 1664 698 
+L 2592 3155 
+L 3181 3155 
+L 1894 0 
+L 1440 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-70" d="M 461 -1306 
+L 461 3155 
+L 998 3155 
+L 998 2214 
+L 826 2336 
+Q 909 2611 1072 2806 
+Q 1235 3002 1472 3104 
+Q 1709 3206 2010 3206 
+Q 2438 3206 2761 2992 
+Q 3085 2778 3264 2410 
+Q 3443 2042 3443 1574 
+Q 3443 1082 3251 714 
+Q 3059 346 2732 147 
+Q 2406 -51 2010 -51 
+Q 1709 -51 1472 57 
+Q 1235 166 1075 358 
+Q 915 550 845 794 
+L 998 941 
+L 998 -1306 
+L 461 -1306 
+z
+M 1920 442 
+Q 2208 442 2429 586 
+Q 2650 730 2774 986 
+Q 2899 1242 2899 1574 
+Q 2899 1907 2774 2163 
+Q 2650 2419 2429 2563 
+Q 2208 2707 1920 2707 
+Q 1632 2707 1414 2563 
+Q 1197 2419 1075 2163 
+Q 954 1907 954 1574 
+Q 954 1242 1075 986 
+Q 1197 730 1414 586 
+Q 1632 442 1920 442 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-66" d="M 717 0 
+L 717 2733 
+L 64 2733 
+L 64 3155 
+L 723 3155 
+L 723 3565 
+Q 723 3923 838 4131 
+Q 954 4339 1155 4425 
+Q 1357 4512 1606 4512 
+Q 1779 4512 1913 4480 
+Q 2048 4448 2170 4384 
+L 1990 3974 
+Q 1920 4013 1837 4035 
+Q 1754 4058 1664 4058 
+Q 1459 4058 1360 3930 
+Q 1261 3802 1261 3565 
+L 1261 3155 
+L 1997 3155 
+L 1997 2733 
+L 1261 2733 
+L 1261 0 
+L 717 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-2c" d="M 154 -986 
+L 749 941 
+L 1350 941 
+L 518 -986 
+L 154 -986 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-27" d="M 326 2650 
+L 326 4461 
+L 787 4461 
+L 787 2650 
+L 326 2650 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-3a" d="M 448 2266 
+L 448 3014 
+L 1088 3014 
+L 1088 2266 
+L 448 2266 
+z
+M 448 0 
+L 448 742 
+L 1088 742 
+L 1088 0 
+L 448 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-35" d="M 1779 -51 
+Q 1389 -51 1059 115 
+Q 730 282 515 576 
+Q 301 870 230 1248 
+L 762 1344 
+Q 806 1101 937 899 
+Q 1069 698 1283 582 
+Q 1498 467 1773 467 
+Q 2093 467 2317 617 
+Q 2541 768 2659 1011 
+Q 2778 1254 2778 1530 
+Q 2778 1798 2666 2019 
+Q 2554 2240 2339 2371 
+Q 2125 2502 1811 2502 
+Q 1530 2502 1299 2374 
+Q 1069 2246 902 2003 
+L 371 2150 
+L 787 4461 
+L 3142 4461 
+L 3142 3955 
+L 986 3955 
+L 1274 4186 
+L 960 2458 
+L 806 2490 
+Q 1056 2784 1334 2899 
+Q 1613 3014 1888 3014 
+Q 2317 3014 2646 2812 
+Q 2976 2611 3161 2272 
+Q 3347 1933 3347 1530 
+Q 3347 1210 3232 925 
+Q 3117 640 2905 419 
+Q 2694 198 2406 73 
+Q 2118 -51 1779 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-36" d="M 2310 4461 
+L 1171 2637 
+L 1107 2720 
+Q 1254 2816 1414 2867 
+Q 1574 2918 1734 2918 
+Q 2150 2918 2486 2720 
+Q 2822 2522 3017 2189 
+Q 3213 1856 3213 1446 
+Q 3213 1018 3001 678 
+Q 2790 339 2441 144 
+Q 2093 -51 1664 -51 
+Q 1242 -51 886 144 
+Q 531 339 320 678 
+Q 109 1018 109 1440 
+Q 109 1658 176 1866 
+Q 243 2074 352 2253 
+L 1690 4461 
+L 2310 4461 
+z
+M 1664 2438 
+Q 1395 2438 1168 2310 
+Q 941 2182 803 1958 
+Q 666 1734 666 1446 
+Q 666 1165 800 941 
+Q 934 717 1161 589 
+Q 1389 461 1664 461 
+Q 1939 461 2166 589 
+Q 2394 717 2528 941 
+Q 2662 1165 2662 1453 
+Q 2662 1734 2528 1958 
+Q 2394 2182 2170 2310 
+Q 1946 2438 1664 2438 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-31" d="M 1862 0 
+L 1862 3597 
+L 2029 3315 
+L 698 3315 
+L 698 3750 
+L 1472 3750 
+Q 1664 3750 1763 3833 
+Q 1862 3917 1862 4122 
+L 1862 4461 
+L 2406 4461 
+L 2406 0 
+L 1862 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-63" d="M 1773 -51 
+Q 1421 -51 1149 77 
+Q 877 205 691 432 
+Q 506 659 410 953 
+Q 314 1248 314 1581 
+Q 314 1907 410 2201 
+Q 506 2496 691 2723 
+Q 877 2950 1149 3078 
+Q 1421 3206 1773 3206 
+Q 2221 3206 2557 2988 
+Q 2893 2771 3053 2323 
+L 2573 2138 
+Q 2483 2406 2284 2572 
+Q 2086 2739 1773 2739 
+Q 1459 2739 1254 2572 
+Q 1050 2406 950 2144 
+Q 851 1882 851 1581 
+Q 851 1280 950 1014 
+Q 1050 749 1254 585 
+Q 1459 422 1773 422 
+Q 2086 422 2284 585 
+Q 2483 749 2573 1024 
+L 3053 838 
+Q 2893 390 2557 169 
+Q 2221 -51 1773 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-6c" d="M 1094 -51 
+Q 806 -51 627 128 
+Q 448 307 448 698 
+L 448 4461 
+L 986 4461 
+L 986 800 
+Q 986 614 1062 531 
+Q 1139 448 1267 448 
+Q 1325 448 1395 461 
+Q 1466 474 1542 499 
+L 1542 38 
+Q 1434 -6 1312 -28 
+Q 1190 -51 1094 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-6b" d="M 2611 0 
+L 1562 1626 
+L 941 960 
+L 941 1658 
+L 2394 3155 
+L 3091 3155 
+L 1958 1990 
+L 3258 0 
+L 2611 0 
+z
+M 461 0 
+L 461 4461 
+L 1005 4461 
+L 1005 0 
+L 461 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-2e" d="M 448 0 
+L 448 742 
+L 1088 742 
+L 1088 0 
+L 448 0 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#HankenGrotesk-Regular-41"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(63.699997 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(118.399994 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(144.399979 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(202.099976 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(242.799973 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(301.499969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(324.09996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(378.799957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(432.799942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(473.499939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(525.59993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-71" transform="translate(551.599915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(610.299911 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(664.999908 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(718.999893 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(765.999878 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(800.599869 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(823.19986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(880.899857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(935.599854 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(961.599838 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(1002.299835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1056.999832 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1111.699829 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1158.699814 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1184.699799 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1242.399796 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1297.099792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1323.099777 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(1357.699768 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1412.399765 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1466.39975 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(1492.399734 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(1551.099731 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1607.099716 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(1633.099701 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1691.799698 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1745.799683 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1792.799667 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1846.799652 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(1872.799637 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1947.599625 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1970.199615 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(2004.799606 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2059.499603 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(2085.499588 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-76" transform="translate(2139.499573 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(2191.599564 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(2245.599548 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(2286.299545 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2338.399536 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(2364.399521 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(2418.399506 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(2477.099503 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(2531.099487 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(2589.799484 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(2624.399475 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(2678.39946 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2719.099457 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(2745.099442 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(2802.799438 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(2836.299423 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(2869.799408 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2893.799393 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(2919.799377 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(2966.799362 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3024.499359 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(3050.499344 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(3073.099335 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(3107.699326 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3154.69931 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(3180.699295 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(3234.69928 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(3289.399277 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(3336.399261 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3411.199249 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(3465.199234 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3505.899231 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(3531.899216 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(3554.499207 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3601.499191 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(3627.499176 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(3662.099167 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3716.799164 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3770.799149 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(3796.799133 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(3855.49913 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(3909.499115 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3956.4991 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-27" transform="translate(4010.499084 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(4027.899078 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4074.899063 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(4100.899048 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(4158.599045 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(4233.399033 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-3a" transform="translate(4288.09903 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4312.099014 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-35" transform="translate(4338.098999 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-36" transform="translate(4394.098984 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-31" transform="translate(4450.098969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4506.098953 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(4532.098938 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(4589.798935 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4623.29892 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-35" transform="translate(4649.298904 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-36" transform="translate(4705.298889 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-31" transform="translate(4761.298874 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4817.298859 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(4843.298843 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(4865.898834 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(4924.598831 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(4978.598816 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(5033.298813 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(5067.898804 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(5090.498795 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(5142.298782 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(5196.298767 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5222.798752 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(5248.798737 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(5306.498734 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5361.19873 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(5387.198715 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(5441.1987 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(5495.198685 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(5546.998672 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5601.698669 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(5627.698654 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(5679.498642 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(5733.498627 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(5774.198624 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-27" transform="translate(5832.898621 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(5850.298615 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5897.298599 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(5923.298584 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(5975.098572 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(6029.798569 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(6083.798553 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6b" transform="translate(6135.598541 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(6188.798538 0)"/>
+    </g>
+   </g>
+   <g id="text_4">
+    <!-- Bases at a pinned revision: d3-lite (0.8B), d3-mini (4B), d3-flash (9B), d3-turbo v1.0 (27B). The adapters add 154 MB to vela3-lite and 5 GB to vela3-turbo. -->
+    <g style="fill: #56606d" transform="translate(46.08 615.206091) scale(0.102 -0.102)">
+     <defs>
+      <path id="HankenGrotesk-Regular-42" d="M 506 0 
+L 506 4461 
+L 1933 4461 
+Q 2566 4461 2928 4166 
+Q 3290 3872 3290 3347 
+Q 3290 3014 3142 2764 
+Q 2995 2515 2726 2387 
+Q 3117 2278 3318 1990 
+Q 3520 1702 3520 1261 
+Q 3520 659 3145 329 
+Q 2771 0 2086 0 
+L 506 0 
+z
+M 1069 518 
+L 2048 518 
+Q 2963 518 2963 1286 
+Q 2963 1651 2755 1852 
+Q 2547 2054 2170 2054 
+L 1069 2054 
+L 1069 518 
+z
+M 1069 2560 
+L 2022 2560 
+Q 2342 2560 2537 2749 
+Q 2733 2938 2733 3264 
+Q 2733 3584 2521 3763 
+Q 2310 3942 1933 3942 
+L 1069 3942 
+L 1069 2560 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-2d" d="M 256 1741 
+L 256 2144 
+L 1843 2144 
+L 1843 1741 
+L 256 1741 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-28" d="M 915 -1306 
+Q 730 -1043 589 -694 
+Q 448 -346 352 41 
+Q 256 429 208 822 
+Q 160 1216 160 1568 
+Q 160 2093 246 2621 
+Q 333 3149 502 3622 
+Q 672 4096 922 4461 
+L 1414 4461 
+Q 1133 4070 950 3584 
+Q 768 3098 681 2582 
+Q 595 2067 595 1574 
+Q 595 1216 646 825 
+Q 698 435 803 48 
+Q 909 -339 1062 -688 
+Q 1216 -1037 1414 -1306 
+L 915 -1306 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-30" d="M 1805 -51 
+Q 1434 -51 1174 86 
+Q 915 224 748 461 
+Q 582 698 496 995 
+Q 410 1293 374 1616 
+Q 339 1939 339 2246 
+Q 339 2547 371 2867 
+Q 403 3187 489 3481 
+Q 576 3776 739 4009 
+Q 902 4243 1158 4380 
+Q 1414 4518 1786 4518 
+Q 2144 4518 2397 4387 
+Q 2650 4256 2816 4029 
+Q 2982 3802 3075 3510 
+Q 3168 3219 3206 2892 
+Q 3245 2566 3245 2240 
+Q 3245 1907 3206 1580 
+Q 3168 1254 3075 960 
+Q 2982 666 2819 438 
+Q 2656 211 2406 80 
+Q 2157 -51 1805 -51 
+z
+M 1805 474 
+Q 2138 474 2333 704 
+Q 2528 934 2611 1331 
+Q 2694 1728 2694 2221 
+Q 2694 2739 2608 3139 
+Q 2522 3539 2323 3769 
+Q 2125 4000 1786 4000 
+Q 1517 4000 1344 3859 
+Q 1171 3718 1075 3472 
+Q 979 3226 937 2906 
+Q 896 2586 896 2227 
+Q 896 1882 937 1565 
+Q 979 1248 1078 1005 
+Q 1178 762 1354 618 
+Q 1530 474 1805 474 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-38" d="M 1792 -51 
+Q 1395 -51 1040 99 
+Q 685 250 464 547 
+Q 243 845 243 1286 
+Q 243 1683 444 1984 
+Q 646 2285 1018 2426 
+Q 774 2547 627 2780 
+Q 480 3014 480 3328 
+Q 480 3706 672 3968 
+Q 864 4230 1165 4371 
+Q 1466 4512 1798 4512 
+Q 2157 4512 2454 4365 
+Q 2752 4218 2928 3949 
+Q 3104 3680 3104 3309 
+Q 3104 2995 2960 2771 
+Q 2816 2547 2566 2426 
+Q 2938 2285 3139 1984 
+Q 3341 1683 3341 1286 
+Q 3341 845 3120 547 
+Q 2899 250 2547 99 
+Q 2195 -51 1792 -51 
+z
+M 1792 461 
+Q 2067 461 2294 560 
+Q 2522 659 2659 854 
+Q 2797 1050 2797 1338 
+Q 2797 1606 2669 1801 
+Q 2541 1997 2313 2102 
+Q 2086 2208 1792 2208 
+Q 1498 2208 1270 2102 
+Q 1043 1997 912 1801 
+Q 781 1606 781 1338 
+Q 781 1050 921 854 
+Q 1062 659 1292 560 
+Q 1523 461 1792 461 
+z
+M 1805 2579 
+Q 2138 2579 2352 2771 
+Q 2566 2963 2566 3270 
+Q 2566 3597 2358 3798 
+Q 2150 4000 1798 4000 
+Q 1587 4000 1411 3917 
+Q 1235 3834 1129 3677 
+Q 1024 3520 1024 3296 
+Q 1024 2970 1241 2774 
+Q 1459 2579 1805 2579 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-29" d="M 506 -1306 
+L 6 -1306 
+Q 211 -1037 361 -688 
+Q 512 -339 617 48 
+Q 723 435 774 825 
+Q 826 1216 826 1574 
+Q 826 2067 739 2582 
+Q 653 3098 470 3584 
+Q 288 4070 6 4461 
+L 499 4461 
+Q 755 4096 921 3622 
+Q 1088 3149 1174 2621 
+Q 1261 2093 1261 1568 
+Q 1261 1216 1213 822 
+Q 1165 429 1069 41 
+Q 973 -346 832 -694 
+Q 691 -1043 506 -1306 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-6d" d="M 461 0 
+L 461 3155 
+L 1005 3155 
+L 1005 2342 
+L 896 2342 
+Q 954 2566 1053 2729 
+Q 1152 2893 1286 2998 
+Q 1421 3104 1577 3155 
+Q 1734 3206 1907 3206 
+Q 2195 3206 2412 3097 
+Q 2630 2989 2771 2768 
+Q 2912 2547 2963 2208 
+L 2656 2189 
+Q 2752 2515 2899 2742 
+Q 3046 2970 3267 3088 
+Q 3488 3206 3795 3206 
+Q 4186 3206 4422 3030 
+Q 4659 2854 4768 2563 
+Q 4877 2272 4877 1920 
+L 4877 0 
+L 4339 0 
+L 4339 1792 
+Q 4339 2086 4272 2297 
+Q 4205 2509 4061 2624 
+Q 3917 2739 3674 2739 
+Q 3443 2739 3280 2624 
+Q 3117 2509 3030 2275 
+Q 2944 2042 2944 1696 
+L 2944 0 
+L 2400 0 
+L 2400 1837 
+Q 2400 2291 2233 2515 
+Q 2067 2739 1747 2739 
+Q 1517 2739 1350 2620 
+Q 1184 2502 1094 2272 
+Q 1005 2042 1005 1696 
+L 1005 0 
+L 461 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-34" d="M 2227 0 
+L 2227 1062 
+L 102 1062 
+L 102 1491 
+L 2272 4461 
+L 2771 4461 
+L 2771 1568 
+L 3488 1568 
+L 3488 1062 
+L 2771 1062 
+L 2771 0 
+L 2227 0 
+z
+M 557 1376 
+L 512 1568 
+L 2227 1568 
+L 2227 3853 
+L 2291 3808 
+L 557 1376 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-39" d="M 1139 0 
+L 2278 1824 
+L 2342 1741 
+Q 2202 1645 2038 1593 
+Q 1875 1542 1715 1542 
+Q 1299 1542 963 1740 
+Q 627 1939 432 2272 
+Q 237 2605 237 3014 
+Q 237 3443 448 3782 
+Q 659 4122 1011 4317 
+Q 1363 4512 1786 4512 
+Q 2214 4512 2566 4317 
+Q 2918 4122 3129 3786 
+Q 3341 3450 3341 3021 
+Q 3341 2803 3273 2598 
+Q 3206 2394 3098 2208 
+L 1760 0 
+L 1139 0 
+z
+M 1786 2022 
+Q 2061 2022 2285 2150 
+Q 2509 2278 2646 2502 
+Q 2784 2726 2784 3014 
+Q 2784 3302 2649 3523 
+Q 2515 3744 2288 3872 
+Q 2061 4000 1786 4000 
+Q 1510 4000 1283 3872 
+Q 1056 3744 921 3520 
+Q 787 3296 787 3008 
+Q 787 2726 921 2502 
+Q 1056 2278 1283 2150 
+Q 1510 2022 1786 2022 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-32" d="M 307 0 
+L 307 448 
+Q 531 627 828 844 
+Q 1126 1062 1430 1318 
+Q 1734 1574 1993 1862 
+Q 2253 2150 2413 2470 
+Q 2573 2790 2573 3130 
+Q 2573 3507 2361 3744 
+Q 2150 3981 1741 3981 
+Q 1440 3981 1238 3843 
+Q 1037 3706 937 3466 
+Q 838 3226 832 2918 
+L 301 2957 
+Q 301 3270 397 3548 
+Q 493 3827 678 4041 
+Q 864 4256 1136 4381 
+Q 1408 4506 1760 4506 
+Q 2163 4506 2464 4336 
+Q 2765 4166 2934 3862 
+Q 3104 3558 3104 3149 
+Q 3104 2790 2973 2457 
+Q 2842 2125 2608 1824 
+Q 2374 1523 2073 1254 
+Q 1773 986 1433 749 
+Q 1094 512 742 314 
+L 883 506 
+L 3283 506 
+L 3283 0 
+L 307 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-37" d="M 666 0 
+L 2842 4147 
+L 2989 3955 
+L 179 3955 
+L 179 4461 
+L 3379 4461 
+L 3379 4045 
+L 1267 0 
+L 666 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-54" d="M 1594 0 
+L 1594 3955 
+L 96 3955 
+L 96 4461 
+L 3654 4461 
+L 3654 3955 
+L 2163 3955 
+L 2163 0 
+L 1594 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-4d" d="M 506 0 
+L 506 4461 
+L 1338 4461 
+L 2739 934 
+L 2637 934 
+L 4038 4461 
+L 4864 4461 
+L 4864 0 
+L 4301 0 
+L 4301 3808 
+L 4346 3802 
+L 2963 378 
+L 2413 378 
+L 1024 3802 
+L 1069 3808 
+L 1069 0 
+L 506 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-47" d="M 2349 -77 
+Q 1747 -77 1289 211 
+Q 832 499 576 1020 
+Q 320 1542 320 2234 
+Q 320 2925 579 3443 
+Q 838 3962 1302 4250 
+Q 1766 4538 2381 4538 
+Q 3053 4538 3545 4205 
+Q 4038 3872 4256 3283 
+L 3731 3085 
+Q 3565 3520 3219 3760 
+Q 2874 4000 2381 4000 
+Q 1926 4000 1587 3782 
+Q 1248 3565 1065 3171 
+Q 883 2778 883 2234 
+Q 883 1690 1065 1293 
+Q 1248 896 1587 678 
+Q 1926 461 2381 461 
+Q 2611 461 2854 525 
+Q 3098 589 3302 749 
+Q 3507 909 3632 1187 
+Q 3757 1466 3757 1894 
+L 3757 2221 
+L 3885 1837 
+L 2630 1837 
+L 2630 2342 
+L 4256 2342 
+L 4256 0 
+L 3757 0 
+L 3680 870 
+L 3776 800 
+Q 3661 493 3443 301 
+Q 3226 109 2941 16 
+Q 2656 -77 2349 -77 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#HankenGrotesk-Regular-42"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(60.099991 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(114.099976 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(161.09996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(215.099945 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(262.09993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(288.099915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(342.099899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(376.69989 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(402.699875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(456.69986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(482.699844 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(541.399841 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(563.999832 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(618.699829 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(673.399826 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(727.399811 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(786.099808 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(812.099792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(852.799789 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-76" transform="translate(906.799774 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(958.899765 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(981.499756 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1028.499741 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1051.099731 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1108.799728 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-3a" transform="translate(1163.499725 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1187.49971 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(1213.499695 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(1272.199692 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(1328.199677 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(1360.899673 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1387.399658 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1409.999649 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1444.59964 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1498.599625 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-28" transform="translate(1524.599609 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-30" transform="translate(1546.799606 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(1602.799591 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-38" transform="translate(1626.799576 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-42" transform="translate(1682.799561 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-29" transform="translate(1742.899551 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(1765.099548 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1789.099533 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(1815.099518 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(1873.799515 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(1929.7995 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6d" transform="translate(1962.499496 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(2045.299484 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(2067.899475 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(2122.599472 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2145.199463 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-28" transform="translate(2171.199448 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-34" transform="translate(2193.399445 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-42" transform="translate(2249.399429 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-29" transform="translate(2309.49942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(2331.699417 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2355.699402 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(2381.699387 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(2440.399384 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(2496.399368 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(2529.099365 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(2562.59935 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(2589.099335 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(2643.099319 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(2690.099304 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2744.799301 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-28" transform="translate(2770.799286 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-39" transform="translate(2792.999283 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-42" transform="translate(2848.999268 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-29" transform="translate(2909.099258 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(2931.299255 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2955.29924 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(2981.299225 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(3039.999222 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(3095.999207 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(3128.699203 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(3163.299194 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(3217.999191 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(3258.699188 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(3317.399185 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3375.099182 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-76" transform="translate(3401.099167 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-31" transform="translate(3453.199158 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(3509.199142 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-30" transform="translate(3533.199127 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3589.199112 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-28" transform="translate(3615.199097 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-32" transform="translate(3637.399094 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-37" transform="translate(3693.399078 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-42" transform="translate(3749.399063 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-29" transform="translate(3809.499054 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(3831.699051 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3855.699036 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-54" transform="translate(3881.69902 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(3940.399017 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3995.099014 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4049.098999 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(4075.098984 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(4129.098969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(4187.798965 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(4241.79895 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(4300.498947 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(4335.098938 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(4389.098923 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(4429.79892 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4476.798904 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(4502.798889 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(4556.798874 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(4615.498871 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4674.198868 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-31" transform="translate(4700.198853 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-35" transform="translate(4756.198837 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-34" transform="translate(4812.198822 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4868.198807 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-4d" transform="translate(4894.198792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-42" transform="translate(4978.098785 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5038.198776 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(5064.198761 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(5098.798752 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5156.498749 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-76" transform="translate(5182.498734 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(5234.598724 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(5288.598709 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(5315.098694 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(5369.098679 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(5425.098663 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(5457.79866 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(5484.298645 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(5506.898636 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(5541.498627 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5595.498611 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(5621.498596 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(5675.498581 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(5730.198578 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5788.898575 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-35" transform="translate(5814.89856 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5870.898544 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-47" transform="translate(5896.898529 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-42" transform="translate(5969.99852 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(6030.098511 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(6056.098495 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(6090.698486 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(6148.398483 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-76" transform="translate(6174.398468 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(6226.498459 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(6280.498444 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(6306.998428 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(6360.998413 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(6416.998398 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(6449.698395 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(6484.298386 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(6538.998383 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(6579.69838 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(6638.398376 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(6696.098373 0)"/>
+    </g>
+    <!-- vela3-mini and -flash can also write one definition per label you only named, cached per label set. Source: the cards, How it works. -->
+    <g style="fill: #56606d" transform="translate(46.08 627.774563) scale(0.102 -0.102)">
+     <defs>
+      <path id="HankenGrotesk-Regular-53" d="M 1869 -70 
+Q 1197 -70 768 282 
+Q 339 634 243 1216 
+L 794 1350 
+Q 864 902 1161 668 
+Q 1459 435 1888 435 
+Q 2138 435 2336 531 
+Q 2534 627 2649 803 
+Q 2765 979 2765 1203 
+Q 2765 1440 2637 1593 
+Q 2509 1747 2281 1862 
+Q 2054 1978 1754 2093 
+Q 1382 2234 1104 2400 
+Q 826 2566 672 2800 
+Q 518 3034 518 3373 
+Q 518 3712 684 3974 
+Q 851 4237 1152 4387 
+Q 1453 4538 1850 4538 
+Q 2272 4538 2598 4346 
+Q 2925 4154 3123 3776 
+L 2675 3501 
+Q 2528 3763 2317 3900 
+Q 2106 4038 1830 4038 
+Q 1613 4038 1443 3955 
+Q 1274 3872 1178 3725 
+Q 1082 3578 1082 3386 
+Q 1082 3181 1197 3037 
+Q 1312 2893 1529 2784 
+Q 1747 2675 2054 2560 
+Q 2445 2413 2726 2240 
+Q 3008 2067 3165 1827 
+Q 3322 1587 3322 1235 
+Q 3322 858 3136 563 
+Q 2950 269 2624 99 
+Q 2298 -70 1869 -70 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-48" d="M 506 0 
+L 506 4461 
+L 1069 4461 
+L 1069 2547 
+L 3270 2547 
+L 3270 4461 
+L 3834 4461 
+L 3834 0 
+L 3270 0 
+L 3270 2022 
+L 1069 2022 
+L 1069 0 
+L 506 0 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#HankenGrotesk-Regular-76"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(52.099991 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(106.099976 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(132.59996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(186.599945 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(242.59993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6d" transform="translate(275.299927 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(358.099915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(380.699905 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(435.399902 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(457.999893 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(483.999878 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(537.999863 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(592.69986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(651.399857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2d" transform="translate(677.399841 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(710.099838 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(743.599823 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(770.099808 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(824.099792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(871.099777 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(925.799774 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(951.799759 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1003.599747 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1057.599731 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1112.299728 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1138.299713 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(1192.299698 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1218.799683 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1265.799667 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1323.499664 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(1349.499649 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(1424.299637 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1464.999634 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1487.599625 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1522.199615 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1576.1996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1602.199585 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1659.899582 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1714.599579 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1768.599564 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(1794.599548 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1853.299545 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(1907.29953 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1940.799515 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1963.399506 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(2018.099503 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(2040.699493 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(2075.299484 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(2097.899475 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(2155.599472 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2210.299469 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(2236.299454 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(2294.999451 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(2348.999435 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2389.699432 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(2415.699417 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(2442.199402 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(2496.199387 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(2554.899384 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(2608.899368 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2635.399353 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(2661.399338 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(2713.499329 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(2771.199326 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(2825.899323 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(2851.899307 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(2909.599304 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(2964.299301 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(2990.799286 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3042.899277 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(3068.899261 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(3123.599258 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6d" transform="translate(3177.599243 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3260.399231 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(3314.399216 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(3373.099213 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3397.099197 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(3423.099182 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(3474.89917 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(3528.899155 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(3580.699142 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3635.399139 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(3689.399124 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3748.099121 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(3774.099106 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(3832.799103 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(3886.799088 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(3927.499084 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(3953.499069 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(3979.999054 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(4033.999039 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(4092.699036 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(4146.69902 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4173.199005 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(4199.19899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(4246.198975 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(4300.198959 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(4334.79895 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4358.798935 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-53" transform="translate(4384.79892 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(4441.198914 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(4498.898911 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(4553.598907 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(4594.298904 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(4646.098892 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-3a" transform="translate(4700.098877 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4724.098862 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(4750.098846 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(4784.698837 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(4839.398834 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(4893.398819 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(4919.398804 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(4971.198792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(5025.198776 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(5065.898773 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(5124.59877 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(5171.598755 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5195.59874 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-48" transform="translate(5221.598724 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(5289.398712 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(5347.098709 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5421.898697 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(5447.898682 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(5470.498672 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(5505.098663 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(5531.098648 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(5605.898636 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(5663.598633 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6b" transform="translate(5704.29863 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(5757.498627 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2e" transform="translate(5804.498611 0)"/>
+    </g>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_4">
+    <path d="M 59.904 537.84 
+L 279.936 537.84 
+Q 293.76 537.84 293.76 530.064 
+L 293.76 156.816 
+Q 293.76 149.04 279.936 149.04 
+L 59.904 149.04 
+Q 46.08 149.04 46.08 156.816 
+L 46.08 530.064 
+Q 46.08 537.84 59.904 537.84 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #fbfbf7; stroke: #d3d6cd; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 359.424 537.84 
+L 838.656 537.84 
+Q 852.48 537.84 852.48 530.064 
+L 852.48 156.816 
+Q 852.48 149.04 838.656 149.04 
+L 359.424 149.04 
+Q 345.6 149.04 345.6 156.816 
+L 345.6 530.064 
+Q 345.6 537.84 359.424 537.84 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #fbfbf7; stroke: #00918a; stroke-width: 1.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 376.704 528.12 
+L 821.376 528.12 
+Q 835.2 528.12 835.2 520.344 
+L 835.2 506.736 
+Q 835.2 498.96 821.376 498.96 
+L 376.704 498.96 
+Q 362.88 498.96 362.88 506.736 
+L 362.88 520.344 
+Q 362.88 528.12 376.704 528.12 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #d3d6cd; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 918.144 537.84 
+L 1092.096 537.84 
+Q 1105.92 537.84 1105.92 530.064 
+L 1105.92 383.616 
+Q 1105.92 375.84 1092.096 375.84 
+L 918.144 375.84 
+Q 904.32 375.84 904.32 383.616 
+L 904.32 530.064 
+Q 904.32 537.84 918.144 537.84 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #fbfbf7; stroke: #00918a; stroke-width: 1.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 918.144 356.4 
+L 1092.096 356.4 
+Q 1105.92 356.4 1105.92 348.624 
+L 1105.92 156.816 
+Q 1105.92 149.04 1092.096 149.04 
+L 918.144 149.04 
+Q 904.32 149.04 904.32 156.816 
+L 904.32 348.624 
+Q 904.32 356.4 918.144 356.4 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #fbfbf7; stroke: #00918a; stroke-width: 1.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_5">
+    <!-- system_one(state, questions) -->
+    <g style="fill: #07090d" transform="translate(62.208 173.416) scale(0.11 -0.11)">
+     <defs>
+      <path id="MartianMono-Regular-79" d="M 435 3840 
+L 1190 3840 
+L 2176 966 
+L 2624 966 
+L 2426 320 
+L 1658 320 
+L 435 3840 
+z
+M 4051 3840 
+L 2637 -557 
+Q 2509 -947 2253 -1164 
+Q 1997 -1382 1658 -1382 
+Q 1171 -1382 889 -1113 
+Q 608 -845 570 -333 
+L 1210 -333 
+Q 1286 -544 1379 -640 
+Q 1472 -736 1632 -736 
+Q 1773 -736 1859 -646 
+Q 1946 -557 2016 -352 
+L 3354 3840 
+L 4051 3840 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-5f" d="M 429 -960 
+L 429 -320 
+L 4051 -320 
+L 4051 -960 
+L 429 -960 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-28" d="M 3539 5248 
+Q 2835 4998 2473 4288 
+Q 2112 3578 2112 2432 
+Q 2112 1286 2473 576 
+Q 2835 -134 3539 -384 
+L 3539 -1024 
+Q 2835 -858 2361 -413 
+Q 1888 32 1648 745 
+Q 1408 1459 1408 2432 
+Q 1408 3405 1648 4118 
+Q 1888 4832 2361 5277 
+Q 2835 5722 3539 5888 
+L 3539 5248 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-2c" d="M 1574 -1152 
+Q 1811 -960 1996 -646 
+Q 2182 -333 2240 0 
+L 2240 1171 
+Q 2579 1171 2736 979 
+Q 2893 787 2893 390 
+Q 2893 102 2841 -186 
+Q 2790 -474 2700 -723 
+Q 2611 -973 2483 -1152 
+L 1574 -1152 
+z
+M 2240 -51 
+Q 1958 -51 1804 109 
+Q 1651 269 1651 563 
+Q 1651 851 1804 1011 
+Q 1958 1171 2240 1171 
+Q 2522 1171 2675 1011 
+Q 2829 851 2829 563 
+Q 2829 269 2675 109 
+Q 2522 -51 2240 -51 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-71" d="M 3110 -1280 
+L 3110 352 
+L 2918 352 
+Q 2797 147 2541 22 
+Q 2285 -102 1971 -102 
+Q 1491 -102 1142 144 
+Q 794 390 598 844 
+Q 403 1299 403 1920 
+Q 403 2541 598 2995 
+Q 794 3450 1142 3696 
+Q 1491 3942 1971 3942 
+Q 2285 3942 2541 3820 
+Q 2797 3699 2918 3488 
+L 3110 3488 
+L 3110 3840 
+L 3814 3840 
+L 3814 -1280 
+L 3110 -1280 
+z
+M 2118 557 
+Q 2605 557 2870 915 
+Q 3136 1274 3136 1920 
+Q 3136 2566 2870 2924 
+Q 2605 3283 2118 3283 
+Q 1638 3283 1372 2924 
+Q 1107 2566 1107 1920 
+Q 1107 1274 1372 915 
+Q 1638 557 2118 557 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-29" d="M 941 5248 
+L 941 5888 
+Q 1645 5722 2118 5277 
+Q 2592 4832 2832 4118 
+Q 3072 3405 3072 2432 
+Q 3072 1459 2832 745 
+Q 2592 32 2118 -413 
+Q 1645 -858 941 -1024 
+L 941 -384 
+Q 1645 -134 2006 576 
+Q 2368 1286 2368 2432 
+Q 2368 3578 2006 4288 
+Q 1645 4998 941 5248 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-73"/>
+     <use xlink:href="#MartianMono-Regular-79" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-6d" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-5f" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-28" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(979.999786 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1049.999771 0)"/>
+     <use xlink:href="#MartianMono-Regular-2c" transform="translate(1119.999756 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1189.999741 0)"/>
+     <use xlink:href="#MartianMono-Regular-71" transform="translate(1259.999725 0)"/>
+     <use xlink:href="#MartianMono-Regular-75" transform="translate(1329.99971 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1399.999695 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(1469.99968 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(1539.999664 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(1609.999649 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(1679.999634 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(1749.999619 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(1819.999603 0)"/>
+     <use xlink:href="#MartianMono-Regular-29" transform="translate(1889.999588 0)"/>
+    </g>
+   </g>
+   <g id="text_6">
+    <!-- state: text, JSON or images -->
+    <g style="fill: #27303b" transform="translate(62.208 200.620063) scale(0.106 -0.106)">
+     <defs>
+      <path id="HankenGrotesk-Regular-78" d="M 173 0 
+L 1306 1587 
+L 173 3155 
+L 838 3155 
+L 1664 1958 
+L 2502 3155 
+L 3155 3155 
+L 2016 1587 
+L 3155 0 
+L 2490 0 
+L 1664 1210 
+L 826 0 
+L 173 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-4a" d="M 1638 -77 
+Q 1018 -77 621 300 
+Q 224 678 179 1338 
+L 736 1395 
+Q 768 909 1005 678 
+Q 1242 448 1638 448 
+Q 2093 448 2301 749 
+Q 2509 1050 2509 1613 
+L 2509 3955 
+L 742 3955 
+L 742 4461 
+L 3072 4461 
+L 3072 1581 
+Q 3072 1062 2902 691 
+Q 2733 320 2413 121 
+Q 2093 -77 1638 -77 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-4f" d="M 2381 -77 
+Q 1766 -77 1302 211 
+Q 838 499 579 1017 
+Q 320 1536 320 2227 
+Q 320 2925 579 3443 
+Q 838 3962 1302 4250 
+Q 1766 4538 2381 4538 
+Q 3008 4538 3475 4250 
+Q 3942 3962 4201 3443 
+Q 4461 2925 4461 2227 
+Q 4461 1536 4198 1017 
+Q 3936 499 3469 211 
+Q 3002 -77 2381 -77 
+z
+M 2381 461 
+Q 2848 461 3184 678 
+Q 3520 896 3705 1293 
+Q 3891 1690 3891 2227 
+Q 3891 2771 3705 3168 
+Q 3520 3565 3184 3782 
+Q 2848 4000 2381 4000 
+Q 1926 4000 1587 3785 
+Q 1248 3571 1065 3174 
+Q 883 2778 883 2227 
+Q 883 1683 1065 1286 
+Q 1248 890 1587 675 
+Q 1926 461 2381 461 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-4e" d="M 506 0 
+L 506 4461 
+L 1101 4461 
+L 3386 730 
+L 3258 730 
+L 3258 4461 
+L 3821 4461 
+L 3821 0 
+L 3213 0 
+L 941 3738 
+L 1069 3738 
+L 1069 0 
+L 506 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="HankenGrotesk-Regular-67" d="M 1734 -1363 
+Q 1056 -1363 659 -1113 
+Q 262 -864 262 -422 
+Q 262 -390 265 -339 
+Q 269 -288 282 -243 
+L 1069 326 
+L 1254 198 
+L 806 -358 
+Q 800 -384 800 -403 
+Q 800 -422 800 -442 
+Q 800 -698 1069 -822 
+Q 1338 -947 1734 -947 
+Q 2086 -947 2316 -848 
+Q 2547 -749 2547 -525 
+Q 2547 -397 2473 -317 
+Q 2400 -237 2262 -192 
+Q 2125 -147 1939 -115 
+Q 1754 -83 1523 -51 
+Q 1235 -6 963 77 
+Q 691 160 515 320 
+Q 339 480 339 742 
+Q 339 966 496 1152 
+Q 653 1338 909 1459 
+L 1254 1235 
+Q 1037 1184 947 1078 
+Q 858 973 858 826 
+Q 858 704 944 627 
+Q 1030 550 1193 508 
+Q 1357 467 1587 435 
+Q 1894 390 2163 339 
+Q 2432 288 2640 195 
+Q 2848 102 2963 -54 
+Q 3078 -211 3078 -461 
+Q 3078 -896 2720 -1129 
+Q 2362 -1363 1734 -1363 
+z
+M 1658 986 
+Q 1293 986 1011 1126 
+Q 730 1267 573 1516 
+Q 416 1766 416 2086 
+Q 416 2419 579 2672 
+Q 742 2925 1020 3065 
+Q 1299 3206 1638 3206 
+Q 1971 3206 2246 3065 
+Q 2522 2925 2688 2669 
+Q 2854 2413 2854 2067 
+Q 2854 1741 2700 1497 
+Q 2547 1254 2278 1120 
+Q 2010 986 1658 986 
+z
+M 1645 1427 
+Q 1965 1427 2141 1622 
+Q 2317 1818 2317 2099 
+Q 2317 2400 2131 2585 
+Q 1946 2771 1645 2771 
+Q 1338 2771 1146 2582 
+Q 954 2394 954 2106 
+Q 954 1818 1139 1622 
+Q 1325 1427 1645 1427 
+z
+M 2650 2566 
+L 2259 2829 
+L 2925 3379 
+L 3200 3040 
+L 2650 2566 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#HankenGrotesk-Regular-73"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(46.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(81.599976 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(135.59996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(170.199951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-3a" transform="translate(224.199936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(248.199921 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(274.199905 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(308.799896 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-78" transform="translate(362.799881 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(414.799866 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(449.399857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(473.399841 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-4a" transform="translate(499.399826 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-53" transform="translate(554.599823 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-4f" transform="translate(610.999817 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-4e" transform="translate(685.799805 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(753.399796 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(779.39978 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(837.099777 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(877.799774 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(903.799759 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6d" transform="translate(926.39975 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1009.199738 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-67" transform="translate(1063.199722 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1114.599716 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1168.599701 0)"/>
+    </g>
+   </g>
+   <g id="text_7">
+    <!-- questions: a dictionary you write -->
+    <g style="fill: #27303b" transform="translate(62.208 244.556531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-71"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(58.699997 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(113.399994 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(167.399979 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(214.399963 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(248.999954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(271.599945 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(329.299942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(383.999939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-3a" transform="translate(430.999924 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(454.999908 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(480.999893 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(534.999878 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(560.999863 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(619.69986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(642.29985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(694.099838 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(728.699829 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(751.29982 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(808.999817 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(863.699814 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(917.699799 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(958.399796 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1010.499786 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(1036.499771 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1088.599762 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(1146.299759 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1200.999756 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(1226.999741 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(1301.799728 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1342.499725 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1365.099716 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1399.699707 0)"/>
+    </g>
+   </g>
+   <g id="text_8">
+    <!--   choice   one of the options -->
+    <g style="fill: #27303b" transform="translate(62.208 266.673) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-20"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(25.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(51.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(103.799957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(158.499954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(216.199951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(238.799942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(290.59993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(344.599915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(370.599899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(396.599884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(422.599869 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(480.299866 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(534.999863 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(588.999847 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(614.999832 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(672.699829 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(706.199814 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(732.199799 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(766.799789 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(821.499786 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(875.499771 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(901.499756 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(959.199753 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1017.89975 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1052.499741 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1075.099731 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1132.799728 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1187.499725 0)"/>
+    </g>
+   </g>
+   <g id="text_9">
+    <!--   yes / no p(yes) -->
+    <g style="fill: #27303b" transform="translate(62.208 288.620531) scale(0.106 -0.106)">
+     <defs>
+      <path id="HankenGrotesk-Regular-2f" d="M -269 -1350 
+L 2016 4461 
+L 2438 4461 
+L 147 -1350 
+L -269 -1350 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#HankenGrotesk-Regular-20"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(25.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(51.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(104.09996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(158.099945 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(205.09993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2f" transform="translate(231.099915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(272.899902 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(298.899887 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(353.599884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(411.299881 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(437.299866 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-28" transform="translate(495.999863 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(518.19986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(570.29985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(624.299835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-29" transform="translate(671.29982 0)"/>
+    </g>
+   </g>
+   <g id="text_10">
+    <!--   score    ordered levels -->
+    <g style="fill: #27303b" transform="translate(62.208 310.652531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-20"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(25.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(51.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(98.999954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(150.799942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(208.499939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(249.199936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(303.199921 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(329.199905 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(355.19989 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(381.199875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(407.19986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(464.899857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(505.599854 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(564.29985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(618.299835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(658.999832 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(712.999817 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(771.699814 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(797.699799 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(824.199783 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-76" transform="translate(878.199768 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(930.299759 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(984.299744 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1010.799728 0)"/>
+    </g>
+   </g>
+   <g id="text_11">
+    <!--   span     labels you name -->
+    <g style="fill: #27303b" transform="translate(62.208 332.684531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-20"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(25.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(51.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(98.999954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(157.699951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(211.699936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(266.399933 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(292.399918 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(318.399902 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(344.399887 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(370.399872 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(396.399857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(422.899841 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(476.899826 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(535.599823 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(589.599808 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(616.099792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(663.099777 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(689.099762 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(741.199753 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(798.89975 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(853.599747 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(879.599731 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(934.299728 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6d" transform="translate(988.299713 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1071.099701 0)"/>
+    </g>
+   </g>
+   <g id="text_12">
+    <!-- question router -->
+    <g style="fill: #00918a" transform="translate(361.728 174.358187) scale(0.13 -0.13)">
+     <use xlink:href="#MartianMono-Regular-71"/>
+     <use xlink:href="#MartianMono-Regular-75" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-75" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(979.999786 0)"/>
+    </g>
+   </g>
+   <g id="text_13">
+    <!-- each question switches on only its own adapters -->
+    <g style="fill: #27303b" transform="translate(361.728 195.308531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-65"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(53.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(107.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(159.799957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(214.499954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-71" transform="translate(240.499939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(299.199936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(353.899933 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(407.899918 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(454.899902 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(489.499893 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(512.099884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(569.799881 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(624.499878 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(650.499863 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(697.499847 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(772.299835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(794.899826 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(829.499817 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(881.299805 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(935.999802 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(989.999786 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1036.999771 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1062.999756 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1120.699753 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1175.39975 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1201.399734 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1259.099731 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(1313.799728 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(1340.299713 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1392.399704 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(1418.399689 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1440.99968 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1475.59967 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1522.599655 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(1548.59964 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(1606.299637 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1681.099625 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(1735.799622 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1761.799606 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(1815.799591 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1874.499588 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(1928.499573 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1987.19957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(2021.799561 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(2075.799545 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(2116.499542 0)"/>
+    </g>
+   </g>
+   <g id="text_14">
+    <!-- the d3 base's own answer -->
+    <g style="fill: #56606d" transform="translate(663.526734 271.214906) scale(0.098 -0.098)">
+     <use xlink:href="#HankenGrotesk-Regular-74"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(34.599991 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(89.299988 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(143.299973 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(169.299957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-33" transform="translate(227.999954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(283.999939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(309.999924 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(368.699921 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(422.699905 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(469.69989 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-27" transform="translate(523.699875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(541.099869 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(588.099854 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(614.099838 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(671.799835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(746.599823 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(801.29982 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(827.299805 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(881.299789 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(935.999786 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(982.999771 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1057.799759 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(1111.799744 0)"/>
+    </g>
+   </g>
+   <g id="text_15">
+    <!-- the router's trained signals -->
+    <g style="fill: #56606d" transform="translate(661.660141 368.414906) scale(0.098 -0.098)">
+     <use xlink:href="#HankenGrotesk-Regular-74"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(34.599991 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(89.299988 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(143.299973 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(169.299957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(209.999954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(267.699951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(322.399948 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(356.999939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(410.999924 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-27" transform="translate(451.699921 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(469.099915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(516.099899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(542.099884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(576.699875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(617.399872 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(671.399857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(693.999847 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(748.699844 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(802.699829 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(861.399826 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(887.399811 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(934.399796 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-67" transform="translate(956.999786 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1008.39978 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(1063.099777 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(1117.099762 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(1143.599747 0)"/>
+    </g>
+   </g>
+   <g id="text_16">
+    <!-- labels you name -->
+    <g style="fill: #56606d" transform="translate(684.293547 465.614906) scale(0.098 -0.098)">
+     <use xlink:href="#HankenGrotesk-Regular-6c"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(26.499985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(80.499969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(139.199966 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(193.199951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(219.699936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(266.699921 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(292.699905 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(344.799896 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(402.499893 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(457.19989 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(483.199875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(537.899872 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6d" transform="translate(591.899857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(674.699844 0)"/>
+    </g>
+   </g>
+   <g id="text_17">
+    <!-- decisions -->
+    <g style="fill: #00918a" transform="translate(920.448 401.119594) scale(0.13 -0.13)">
+     <defs>
+      <path id="MartianMono-Regular-64" d="M 1971 -102 
+Q 1491 -102 1142 144 
+Q 794 390 598 844 
+Q 403 1299 403 1920 
+Q 403 2541 598 2995 
+Q 794 3450 1142 3696 
+Q 1491 3942 1971 3942 
+Q 2285 3942 2541 3820 
+Q 2797 3699 2918 3488 
+L 3110 3488 
+L 3110 5427 
+L 3814 5427 
+L 3814 0 
+L 3110 0 
+L 3110 352 
+L 2918 352 
+Q 2797 147 2541 22 
+Q 2285 -102 1971 -102 
+z
+M 2118 557 
+Q 2605 557 2870 915 
+Q 3136 1274 3136 1920 
+Q 3136 2566 2870 2924 
+Q 2605 3283 2118 3283 
+Q 1638 3283 1372 2924 
+Q 1107 2566 1107 1920 
+Q 1107 1274 1372 915 
+Q 1638 557 2118 557 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-63" d="M 2330 -102 
+Q 1805 -102 1421 141 
+Q 1037 384 825 835 
+Q 614 1286 614 1901 
+Q 614 2528 832 2985 
+Q 1050 3443 1450 3692 
+Q 1850 3942 2394 3942 
+Q 2867 3942 3225 3747 
+Q 3584 3552 3789 3197 
+Q 3994 2842 4013 2355 
+L 3366 2355 
+Q 3283 2797 3024 3040 
+Q 2765 3283 2368 3283 
+Q 1862 3283 1587 2918 
+Q 1312 2554 1312 1901 
+Q 1312 1267 1581 912 
+Q 1850 557 2330 557 
+Q 2688 557 2934 771 
+Q 3181 986 3277 1370 
+L 3923 1370 
+Q 3891 922 3680 592 
+Q 3469 262 3120 80 
+Q 2771 -102 2330 -102 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-64"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-63" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(559.999878 0)"/>
+    </g>
+   </g>
+   <g id="text_18">
+    <!-- a probability per option, -->
+    <g style="fill: #27303b" transform="translate(920.448 427.292531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-61"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(53.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(79.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(138.699966 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(179.399963 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(237.09996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(295.799957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(349.799942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(408.499939 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(431.09993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(457.599915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(480.199905 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(514.799896 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(566.899887 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(592.899872 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(651.599869 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(705.599854 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(746.29985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(772.299835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-70" transform="translate(829.999832 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(888.699829 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(923.29982 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(945.899811 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(1003.599808 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(1058.299805 0)"/>
+    </g>
+   </g>
+   <g id="text_19">
+    <!-- p(yes) or a score, -->
+    <g style="fill: #27303b" transform="translate(920.448 449.324531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-70"/>
+     <use xlink:href="#HankenGrotesk-Regular-28" transform="translate(58.699997 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(80.899994 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(132.999985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(186.999969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-29" transform="translate(233.999954 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(256.199951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(282.199936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(339.899933 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(380.59993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(406.599915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(460.599899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(486.599884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(533.599869 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(585.399857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(643.099854 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(683.79985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(737.799835 0)"/>
+    </g>
+   </g>
+   <g id="text_20">
+    <!-- per question -->
+    <g style="fill: #27303b" transform="translate(920.448 471.356531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-70"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(58.699997 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(112.699982 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(153.399979 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-71" transform="translate(179.399963 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(238.09996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(292.799957 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(346.799942 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(393.799927 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(428.399918 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(450.999908 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(508.699905 0)"/>
+    </g>
+   </g>
+   <g id="text_21">
+    <!-- typed spans -->
+    <g style="fill: #00918a" transform="translate(920.448 174.319594) scale(0.13 -0.13)">
+     <defs>
+      <path id="MartianMono-Regular-70" d="M 666 -1280 
+L 666 3840 
+L 1370 3840 
+L 1370 3488 
+L 1562 3488 
+Q 1690 3699 1946 3820 
+Q 2202 3942 2509 3942 
+Q 2989 3942 3341 3696 
+Q 3693 3450 3885 2995 
+Q 4077 2541 4077 1920 
+Q 4077 1299 3885 844 
+Q 3693 390 3341 144 
+Q 2989 -102 2509 -102 
+Q 2202 -102 1946 22 
+Q 1690 147 1562 352 
+L 1370 352 
+L 1370 -1280 
+L 666 -1280 
+z
+M 2362 557 
+Q 2842 557 3107 915 
+Q 3373 1274 3373 1920 
+Q 3373 2566 3107 2924 
+Q 2842 3283 2362 3283 
+Q 1875 3283 1609 2924 
+Q 1344 2566 1344 1920 
+Q 1344 1274 1609 915 
+Q 1875 557 2362 557 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-74"/>
+     <use xlink:href="#MartianMono-Regular-79" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-70" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-64" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-70" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(699.999847 0)"/>
+    </g>
+   </g>
+   <g id="text_22">
+    <!-- label · start · end · -->
+    <g style="fill: #27303b" transform="translate(920.448 200.492531) scale(0.106 -0.106)">
+     <defs>
+      <path id="HankenGrotesk-Regular-b7" d="M 698 1862 
+L 698 2605 
+L 1338 2605 
+L 1338 1862 
+L 698 1862 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#HankenGrotesk-Regular-6c"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(26.499985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-62" transform="translate(80.499969 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(139.199966 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6c" transform="translate(193.199951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(219.699936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-b7" transform="translate(245.699921 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(279.099915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(305.099899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(352.099884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(386.699875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(440.69986 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(481.399857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(515.999847 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-b7" transform="translate(541.999832 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(575.399826 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(601.399811 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(655.399796 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-64" transform="translate(710.099792 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(768.799789 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-b7" transform="translate(794.799774 0)"/>
+    </g>
+   </g>
+   <g id="text_23">
+    <!-- text · score, with character -->
+    <g style="fill: #27303b" transform="translate(920.448 222.524531) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-74"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(34.599991 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-78" transform="translate(88.599976 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(140.59996 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(175.199951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-b7" transform="translate(201.199936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(234.59993 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(260.599915 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(307.599899 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(359.399887 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(417.099884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(457.799881 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-2c" transform="translate(511.799866 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(535.79985 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-77" transform="translate(561.799835 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(636.599823 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(659.199814 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(693.799805 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(748.499802 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(774.499786 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-68" transform="translate(826.299774 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(880.999771 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(934.999756 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-61" transform="translate(975.699753 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-63" transform="translate(1029.699738 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(1081.499725 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(1116.099716 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(1170.099701 0)"/>
+    </g>
+   </g>
+   <g id="text_24">
+    <!-- offsets into your text -->
+    <g style="fill: #27303b" transform="translate(920.448 244.629406) scale(0.106 -0.106)">
+     <use xlink:href="#HankenGrotesk-Regular-6f"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(57.699997 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-66" transform="translate(91.199982 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(124.699966 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(171.699951 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(225.699936 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-73" transform="translate(260.299927 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(307.299911 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-69" transform="translate(333.299896 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6e" transform="translate(355.899887 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(410.599884 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(445.199875 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(502.899872 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-79" transform="translate(528.899857 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-6f" transform="translate(580.999847 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-75" transform="translate(638.699844 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-72" transform="translate(693.399841 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-20" transform="translate(734.099838 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(760.099823 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-65" transform="translate(794.699814 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-78" transform="translate(848.699799 0)"/>
+     <use xlink:href="#HankenGrotesk-Regular-74" transform="translate(900.699783 0)"/>
+    </g>
+   </g>
+   <g id="patch_9">
+    <path d="M 374.4 259.2 
+L 547.2 259.2 
+Q 558.72 259.2 558.72 252.72 
+L 558.72 220.32 
+Q 558.72 213.84 547.2 213.84 
+L 374.4 213.84 
+Q 362.88 213.84 362.88 220.32 
+L 362.88 252.72 
+Q 362.88 259.2 374.4 259.2 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #00918a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 616.32 259.2 
+L 823.68 259.2 
+Q 835.2 259.2 835.2 252.72 
+L 835.2 220.32 
+Q 835.2 213.84 823.68 213.84 
+L 616.32 213.84 
+Q 604.8 213.84 604.8 220.32 
+L 604.8 252.72 
+Q 604.8 259.2 616.32 259.2 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #d3d6cd; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 374.4 356.4 
+L 547.2 356.4 
+Q 558.72 356.4 558.72 349.92 
+L 558.72 317.52 
+Q 558.72 311.04 547.2 311.04 
+L 374.4 311.04 
+Q 362.88 311.04 362.88 317.52 
+L 362.88 349.92 
+Q 362.88 356.4 374.4 356.4 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #00918a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 616.32 356.4 
+L 823.68 356.4 
+Q 835.2 356.4 835.2 349.92 
+L 835.2 317.52 
+Q 835.2 311.04 823.68 311.04 
+L 616.32 311.04 
+Q 604.8 311.04 604.8 317.52 
+L 604.8 349.92 
+Q 604.8 356.4 616.32 356.4 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #00918a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 374.4 453.6 
+L 547.2 453.6 
+Q 558.72 453.6 558.72 447.12 
+L 558.72 414.72 
+Q 558.72 408.24 547.2 408.24 
+L 374.4 408.24 
+Q 362.88 408.24 362.88 414.72 
+L 362.88 447.12 
+Q 362.88 453.6 374.4 453.6 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #00918a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 616.32 453.6 
+L 823.68 453.6 
+Q 835.2 453.6 835.2 447.12 
+L 835.2 414.72 
+Q 835.2 408.24 823.68 408.24 
+L 616.32 408.24 
+Q 604.8 408.24 604.8 414.72 
+L 604.8 447.12 
+Q 604.8 453.6 616.32 453.6 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #f2f2ec; stroke: #00918a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_25">
+    <!-- choice · yes-no · score -->
+    <g style="fill: #07090d" transform="translate(383.52 239.568) scale(0.096 -0.096)">
+     <use xlink:href="#MartianMono-Regular-63"/>
+     <use xlink:href="#MartianMono-Regular-68" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-63" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-79" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-2d" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(979.999786 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1049.999771 0)"/>
+     <use xlink:href="#MartianMono-Regular-b7" transform="translate(1119.999756 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1189.999741 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(1259.999725 0)"/>
+     <use xlink:href="#MartianMono-Regular-63" transform="translate(1329.99971 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(1399.999695 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(1469.99968 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1539.999664 0)"/>
+    </g>
+   </g>
+   <g id="text_26">
+    <!-- adapters off -->
+    <g style="fill: #56606d" transform="translate(679.68 239.7075) scale(0.096 -0.096)">
+     <use xlink:href="#MartianMono-Regular-61"/>
+     <use xlink:href="#MartianMono-Regular-64" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-70" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-66" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-66" transform="translate(769.999832 0)"/>
+    </g>
+   </g>
+   <g id="text_27">
+    <!-- router signals -->
+    <g style="fill: #07090d" transform="translate(413.76 336.768) scale(0.096 -0.096)">
+     <defs>
+      <path id="MartianMono-Regular-67" d="M 3827 128 
+Q 3827 -333 3625 -672 
+Q 3424 -1011 3049 -1196 
+Q 2675 -1382 2150 -1382 
+Q 1664 -1382 1299 -1232 
+Q 934 -1082 723 -803 
+Q 512 -525 493 -147 
+L 1165 -147 
+Q 1267 -435 1523 -588 
+Q 1779 -742 2150 -742 
+Q 2611 -742 2867 -502 
+Q 3123 -262 3123 173 
+L 3123 582 
+L 2931 582 
+Q 2803 397 2560 288 
+Q 2317 179 2035 179 
+Q 1568 179 1222 406 
+Q 877 634 691 1056 
+Q 506 1478 506 2048 
+Q 506 2630 691 3056 
+Q 877 3482 1222 3712 
+Q 1568 3942 2035 3942 
+Q 2323 3942 2566 3827 
+Q 2810 3712 2931 3520 
+L 3123 3520 
+L 3123 3840 
+L 3827 3840 
+L 3827 128 
+z
+M 1203 2048 
+Q 1203 1466 1462 1139 
+Q 1722 813 2182 813 
+Q 2650 813 2909 1139 
+Q 3168 1466 3168 2048 
+Q 3168 2630 2909 2956 
+Q 2650 3283 2182 3283 
+Q 1722 3283 1462 2956 
+Q 1203 2630 1203 2048 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-72"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-75" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-67" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-6c" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(909.999802 0)"/>
+    </g>
+   </g>
+   <g id="text_28">
+    <!-- decision LoRAs on -->
+    <g style="fill: #07090d" transform="translate(662.88 336.83025) scale(0.096 -0.096)">
+     <use xlink:href="#MartianMono-Regular-64"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-63" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-4c" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-52" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-41" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(979.999786 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(1049.999771 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(1119.999756 0)"/>
+    </g>
+   </g>
+   <g id="text_29">
+    <!-- span questions -->
+    <g style="fill: #07090d" transform="translate(413.76 434.0445) scale(0.096 -0.096)">
+     <use xlink:href="#MartianMono-Regular-73"/>
+     <use xlink:href="#MartianMono-Regular-70" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-71" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-75" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(909.999802 0)"/>
+    </g>
+   </g>
+   <g id="text_30">
+    <!-- span LoRA + span head -->
+    <g style="fill: #07090d" transform="translate(649.44 434.03025) scale(0.096 -0.096)">
+     <defs>
+      <path id="MartianMono-Regular-2b" d="M 1920 429 
+L 1920 1920 
+L 429 1920 
+L 429 2560 
+L 1920 2560 
+L 1920 4051 
+L 2560 4051 
+L 2560 2560 
+L 4051 2560 
+L 4051 1920 
+L 2560 1920 
+L 2560 429 
+L 1920 429 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-73"/>
+     <use xlink:href="#MartianMono-Regular-70" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-4c" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-52" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-41" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-2b" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-70" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(979.999786 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(1049.999771 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1119.999756 0)"/>
+     <use xlink:href="#MartianMono-Regular-68" transform="translate(1189.999741 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1259.999725 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(1329.99971 0)"/>
+     <use xlink:href="#MartianMono-Regular-64" transform="translate(1399.999695 0)"/>
+    </g>
+   </g>
+   <g id="text_31">
+    <!-- d3 decoder, frozen: every lane reads the same base weights -->
+    <g style="fill: #07090d" transform="translate(404.16 516.651) scale(0.096 -0.096)">
+     <defs>
+      <path id="MartianMono-Regular-7a" d="M 794 3840 
+L 3686 3840 
+L 3686 2618 
+L 1235 723 
+L 1235 659 
+L 3686 659 
+L 3686 0 
+L 794 0 
+L 794 1222 
+L 3245 3117 
+L 3245 3181 
+L 794 3181 
+L 794 3840 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-3a" d="M 2240 -51 
+Q 1958 -51 1804 109 
+Q 1651 269 1651 563 
+Q 1651 851 1804 1011 
+Q 1958 1171 2240 1171 
+Q 2522 1171 2675 1011 
+Q 2829 851 2829 563 
+Q 2829 269 2675 109 
+Q 2522 -51 2240 -51 
+z
+M 2240 2701 
+Q 1958 2701 1804 2861 
+Q 1651 3021 1651 3315 
+Q 1651 3603 1804 3763 
+Q 1958 3923 2240 3923 
+Q 2522 3923 2675 3763 
+Q 2829 3603 2829 3315 
+Q 2829 3021 2675 2861 
+Q 2522 2701 2240 2701 
+z
+" transform="scale(0.015625)"/>
+      <path id="MartianMono-Regular-77" d="M 877 0 
+L 192 3840 
+L 896 3840 
+L 1216 1792 
+L 1350 512 
+L 1414 512 
+L 1779 3840 
+L 2752 3840 
+L 3130 512 
+L 3194 512 
+L 3322 1792 
+L 3648 3840 
+L 4288 3840 
+L 3603 0 
+L 2650 0 
+L 2272 3347 
+L 2208 3347 
+L 1843 0 
+L 877 0 
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#MartianMono-Regular-64"/>
+     <use xlink:href="#MartianMono-Regular-33" transform="translate(69.999985 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(139.999969 0)"/>
+     <use xlink:href="#MartianMono-Regular-64" transform="translate(209.999954 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(279.999939 0)"/>
+     <use xlink:href="#MartianMono-Regular-63" transform="translate(349.999924 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(419.999908 0)"/>
+     <use xlink:href="#MartianMono-Regular-64" transform="translate(489.999893 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(559.999878 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(629.999863 0)"/>
+     <use xlink:href="#MartianMono-Regular-2c" transform="translate(699.999847 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(769.999832 0)"/>
+     <use xlink:href="#MartianMono-Regular-66" transform="translate(839.999817 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(909.999802 0)"/>
+     <use xlink:href="#MartianMono-Regular-6f" transform="translate(979.999786 0)"/>
+     <use xlink:href="#MartianMono-Regular-7a" transform="translate(1049.999771 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1119.999756 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(1189.999741 0)"/>
+     <use xlink:href="#MartianMono-Regular-3a" transform="translate(1259.999725 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1329.99971 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1399.999695 0)"/>
+     <use xlink:href="#MartianMono-Regular-76" transform="translate(1469.99968 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(1539.999664 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(1609.999649 0)"/>
+     <use xlink:href="#MartianMono-Regular-79" transform="translate(1679.999634 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(1749.999619 0)"/>
+     <use xlink:href="#MartianMono-Regular-6c" transform="translate(1819.999603 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(1889.999588 0)"/>
+     <use xlink:href="#MartianMono-Regular-6e" transform="translate(1959.999573 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(2029.999557 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(2099.999542 0)"/>
+     <use xlink:href="#MartianMono-Regular-72" transform="translate(2169.999527 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(2239.999512 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(2309.999496 0)"/>
+     <use xlink:href="#MartianMono-Regular-64" transform="translate(2379.999481 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(2449.999466 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(2519.999451 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(2589.999435 0)"/>
+     <use xlink:href="#MartianMono-Regular-68" transform="translate(2659.99942 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(2729.999405 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(2799.99939 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(2869.999374 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(2939.999359 0)"/>
+     <use xlink:href="#MartianMono-Regular-6d" transform="translate(3009.999344 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(3079.999329 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(3149.999313 0)"/>
+     <use xlink:href="#MartianMono-Regular-62" transform="translate(3219.999298 0)"/>
+     <use xlink:href="#MartianMono-Regular-61" transform="translate(3289.999283 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(3359.999268 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(3429.999252 0)"/>
+     <use xlink:href="#MartianMono-Regular-20" transform="translate(3499.999237 0)"/>
+     <use xlink:href="#MartianMono-Regular-77" transform="translate(3569.999222 0)"/>
+     <use xlink:href="#MartianMono-Regular-65" transform="translate(3639.999207 0)"/>
+     <use xlink:href="#MartianMono-Regular-69" transform="translate(3709.999191 0)"/>
+     <use xlink:href="#MartianMono-Regular-67" transform="translate(3779.999176 0)"/>
+     <use xlink:href="#MartianMono-Regular-68" transform="translate(3849.999161 0)"/>
+     <use xlink:href="#MartianMono-Regular-74" transform="translate(3919.999146 0)"/>
+     <use xlink:href="#MartianMono-Regular-73" transform="translate(3989.99913 0)"/>
+    </g>
+   </g>
+   <g id="patch_15">
+    <path d="M 563.027203 236.52 
+Q 581.186989 236.52 597.781527 236.52 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #56606d; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 591.381527 233.32 
+L 597.781527 236.52 
+L 591.381527 239.72 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #56606d; stroke: #56606d; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 563.027203 333.72 
+Q 581.186989 333.72 597.781527 333.72 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 591.381527 330.52 
+L 597.781527 333.72 
+L 591.381527 336.92 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #00918a; stroke: #00918a; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 563.027203 430.92 
+Q 581.186989 430.92 597.781527 430.92 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 591.381527 427.72 
+L 597.781527 430.92 
+L 591.381527 434.12 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #00918a; stroke: #00918a; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="patch_18">
+    <path d="M 299.215687 343.44 
+Q 320.256342 343.44 339.284535 343.44 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-width: 1.8; stroke-linecap: round"/>
+    <path d="M 332.884535 340.24 
+L 339.284535 343.44 
+L 332.884535 346.64 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #00918a; stroke: #00918a; stroke-width: 1.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_19">
+    <path d="M 856.539633 435.123457 
+Q 878.402097 447.121151 898.500302 458.150654 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-width: 1.8; stroke-linecap: round"/>
+    <path d="M 894.429146 452.266294 
+L 898.500302 458.150654 
+L 891.350121 457.876962 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #00918a; stroke: #00918a; stroke-width: 1.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_20">
+    <path d="M 856.539633 271.196543 
+Q 878.402097 259.198849 898.500302 248.169346 
+" clip-path="url(#p4d8d50b71b)" style="fill: none; stroke: #00918a; stroke-width: 1.8; stroke-linecap: round"/>
+    <path d="M 891.350121 248.443038 
+L 898.500302 248.169346 
+L 894.429146 254.053706 
+z
+" clip-path="url(#p4d8d50b71b)" style="fill: #00918a; stroke: #00918a; stroke-width: 1.8; stroke-linecap: round"/>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p4d8d50b71b">
+   <rect x="0" y="0" width="1152" height="648"/>
+  </clipPath>
+ </defs>
+</svg>
