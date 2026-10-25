@@ -64,8 +64,8 @@ func newScoringHTTPBackend(cfg *config.ExternalModelConfig, deadline time.Durati
 	timeout := 5 * time.Second
 	if deadline > 0 {
 		timeout = deadline
-	} else if cfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
+	} else if configured := config.DurationFromSeconds(cfg.TimeoutSeconds); configured > 0 {
+		timeout = configured
 	}
 
 	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型、入口与服务
 description: 连接推理后端，为 Agent Harness 提供可编程的模型入口。
 translation:
