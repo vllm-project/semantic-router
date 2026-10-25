@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from cli.sr_bench.adapters import get_adapter
@@ -74,6 +75,14 @@ def test_default_setup_does_not_include_legacy_environment(
 
 def test_harness_preflight_names_have_trusted_package_specs() -> None:
     assert HARNESSES.keys() <= PACKAGES.keys()
+
+
+def test_native_checks_require_explicit_collection(pytestconfig: pytest.Config) -> None:
+    suite = Path(__file__).with_name("sr_bench_legacy_reasoning_native_checks.py")
+    assert suite.is_file()
+    assert not any(
+        suite.match(pattern) for pattern in pytestconfig.getini("python_files")
+    )
 
 
 def test_standard_profile_cannot_claim_a_native_holdout(tmp_path) -> None:
