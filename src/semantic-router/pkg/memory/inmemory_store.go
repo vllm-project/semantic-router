@@ -249,6 +249,15 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 	if memory.Source != "" {
 		existing.Source = memory.Source
 	}
+	if memory.CreatedByUserID != "" {
+		existing.CreatedByUserID = memory.CreatedByUserID
+	}
+	if memory.ConversationID != "" {
+		existing.ConversationID = memory.ConversationID
+	}
+	if memory.CreatedVia != "" {
+		existing.CreatedVia = memory.CreatedVia
+	}
 
 	logging.Debugf("InMemoryStore: updated memory id=%s", id)
 	return nil

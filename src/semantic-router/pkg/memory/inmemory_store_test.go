@@ -335,3 +335,70 @@ func TestInMemoryStore_Retrieve_ThresholdWithMultipleUsers(t *testing.T) {
 			"User2's memory should not appear in user1's results")
 	}
 }
+
+// TestInMemoryStore_Update_Provenance verifies that Update persists the
+// provenance fields (CreatedByUserID, ConversationID, CreatedVia) the same way
+// ValkeyStore.Update does: set values are copied onto the stored memory, and
+// empty values leave the stored provenance in place instead of erasing it.
+func TestInMemoryStore_Update_Provenance(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("update with provenance set persists new values", func(t *testing.T) {
+		store := newTestInMemoryStore()
+		require.NoError(t, store.Store(ctx, &Memory{
+			ID:              "prov-set",
+			Type:            MemoryTypeSemantic,
+			Content:         "User likes Hawaii vacations",
+			UserID:          "user1",
+			CreatedAt:       time.Now(),
+			CreatedByUserID: "creator-1",
+			ConversationID:  "conv-1",
+			CreatedVia:      "llm_extraction",
+		}))
+
+		require.NoError(t, store.Update(ctx, "prov-set", &Memory{
+			Content:         "User loves Hawaii vacations",
+			Type:            MemoryTypeSemantic,
+			CreatedByUserID: "creator-2",
+			ConversationID:  "conv-2",
+			CreatedVia:      "api",
+		}))
+
+		updated, err := store.Get(ctx, "prov-set")
+		require.NoError(t, err)
+		assert.Equal(t, "creator-2", updated.CreatedByUserID,
+			"Update must persist a set CreatedByUserID like ValkeyStore.Update")
+		assert.Equal(t, "conv-2", updated.ConversationID,
+			"Update must persist a set ConversationID like ValkeyStore.Update")
+		assert.Equal(t, "api", updated.CreatedVia,
+			"Update must persist a set CreatedVia like ValkeyStore.Update")
+	})
+
+	t.Run("update with provenance empty keeps stored values", func(t *testing.T) {
+		store := newTestInMemoryStore()
+		require.NoError(t, store.Store(ctx, &Memory{
+			ID:              "prov-keep",
+			Type:            MemoryTypeSemantic,
+			Content:         "User likes Hawaii vacations",
+			UserID:          "user1",
+			CreatedAt:       time.Now(),
+			CreatedByUserID: "creator-1",
+			ConversationID:  "conv-1",
+			CreatedVia:      "llm_extraction",
+		}))
+
+		require.NoError(t, store.Update(ctx, "prov-keep", &Memory{
+			Content: "User loves Hawaii vacations",
+			Type:    MemoryTypeSemantic,
+		}))
+
+		updated, err := store.Get(ctx, "prov-keep")
+		require.NoError(t, err)
+		assert.Equal(t, "creator-1", updated.CreatedByUserID,
+			"Update must not erase stored CreatedByUserID when the update leaves it empty")
+		assert.Equal(t, "conv-1", updated.ConversationID,
+			"Update must not erase stored ConversationID when the update leaves it empty")
+		assert.Equal(t, "llm_extraction", updated.CreatedVia,
+			"Update must not erase stored CreatedVia when the update leaves it empty")
+	})
+}
