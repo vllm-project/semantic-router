@@ -182,6 +182,30 @@ func TestMergeScopedExperienceReportsConflict(t *testing.T) {
 	}
 }
 
+func TestMergeScopedExperienceChecksEveryBroaderScope(t *testing.T) {
+	hits := []scopedExperience{
+		{
+			scope: successEvidenceScopeDecision,
+			found: true,
+			exp:   routerLearningModelExperience{GoodFitCount: 10},
+		},
+		{
+			scope: successEvidenceScopeTier,
+			found: true,
+			exp:   routerLearningModelExperience{GoodFitCount: 10},
+		},
+		{
+			scope: successEvidenceScopeGlobal,
+			found: true,
+			exp:   routerLearningModelExperience{GoodFitCount: 10, FailedCount: 90},
+		},
+	}
+	_, scope, status, reason := mergeScopedExperience(hits)
+	if status != successEstimateConflict || reason != successFallbackConflictingScopes || scope != successEvidenceScopeDecision {
+		t.Fatalf("expected the agreeing tier row to still expose the global conflict, got scope=%q status=%q reason=%q", scope, status, reason)
+	}
+}
+
 func TestSuccessEstimateObserveWiringDoesNotChangeSelection(t *testing.T) {
 	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
 	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
@@ -227,6 +251,24 @@ func TestSuccessEstimateObservePathReportsConflictingScopes(t *testing.T) {
 	frontier := observeEstimateByModel(t, ctx, "frontier")
 	if frontier.Status != successEstimateConflict || frontier.FallbackReason != successFallbackConflictingScopes || frontier.Probability != 0 {
 		t.Fatalf("expected observe-path conflicting scopes, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathReportsGlobalConflictBehindAgreeingTier(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	rt := router.routerLearningRuntimeState()
+	// recordModelExperience writes the decision, tier, and global rows together.
+	// Extra global failures must still fail closed when the narrower rows agree.
+	rt.recordModelExperience("adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 90)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("three-scope conflict must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateConflict || frontier.FallbackReason != successFallbackConflictingScopes || frontier.Probability != 0 {
+		t.Fatalf("expected agreeing decision and tier rows to still conflict with global history, got %#v", frontier)
 	}
 }
 

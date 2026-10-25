@@ -51,8 +51,9 @@ func (s routerLearningEvidenceSnapshot) resolveExperience(model string) (routerL
 }
 
 // mergeScopedExperience is the request-path merge. Hierarchical lookup falls
-// back instead of averaging; conflicting populated decision/global scopes
-// fail closed as `conflict`.
+// back instead of averaging. The selected populated scope is compared with
+// every broader populated scope; a large rate disagreement fails closed as
+// `conflict`.
 func mergeScopedExperience(hits []scopedExperience) (routerLearningModelExperience, string, successEstimateStatus, string) {
 	populated := make([]scopedExperience, 0, len(hits))
 	for _, hit := range hits {
@@ -63,11 +64,11 @@ func mergeScopedExperience(hits []scopedExperience) (routerLearningModelExperien
 	if len(populated) == 0 {
 		return defaultRouterLearningModelExperience(), successEvidenceScopeGlobal, successEstimateInsufficient, successFallbackSeedOnly
 	}
-	if len(populated) == 1 {
-		return populated[0].exp, populated[0].scope, "", ""
+	selected := populated[0]
+	for _, other := range populated[1:] {
+		if scopedExperienceRatesConflict(selected.exp, other.exp) {
+			return routerLearningModelExperience{}, selected.scope, successEstimateConflict, successFallbackConflictingScopes
+		}
 	}
-	if scopedExperienceRatesConflict(populated[0].exp, populated[1].exp) {
-		return routerLearningModelExperience{}, populated[0].scope, successEstimateConflict, successFallbackConflictingScopes
-	}
-	return populated[0].exp, populated[0].scope, "", ""
+	return selected.exp, selected.scope, "", ""
 }
