@@ -11,7 +11,7 @@ type routerLearningEvidenceSnapshot struct {
 	decision string
 	tier     int
 	cohort   string
-	byKey    map[string]routerLearningModelExperience
+	byKey    map[routerLearningExperienceKey]routerLearningModelExperience
 }
 
 func (rt *routerLearningRuntime) freezeEvidenceSnapshot(
@@ -25,7 +25,7 @@ func (rt *routerLearningRuntime) freezeEvidenceSnapshot(
 		decision: strings.TrimSpace(decision),
 		tier:     tier,
 		cohort:   strings.TrimSpace(cohort),
-		byKey:    map[string]routerLearningModelExperience{},
+		byKey:    map[routerLearningExperienceKey]routerLearningModelExperience{},
 	}
 	if rt != nil && rt.shared != nil {
 		rt.shared.mu.Lock()
@@ -46,8 +46,8 @@ func (rt *routerLearningRuntime) freezeEvidenceSnapshot(
 	return snap
 }
 
-func snapshotExperienceKeys(decision string, tier int, cohort string, model string) []string {
-	keys := make([]string, 0, 4)
+func snapshotExperienceKeys(decision string, tier int, cohort string, model string) []routerLearningExperienceKey {
+	keys := make([]routerLearningExperienceKey, 0, 4)
 	if cohort != "" {
 		keys = append(keys, modelExperienceKey(cohort, tier, model))
 	}

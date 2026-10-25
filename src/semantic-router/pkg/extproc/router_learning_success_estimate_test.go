@@ -208,7 +208,10 @@ func TestMergeScopedExperienceChecksEveryBroaderScope(t *testing.T) {
 
 func TestSuccessEstimateObserveWiringDoesNotChangeSelection(t *testing.T) {
 	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
 		t.Fatalf("observe wiring must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}
@@ -224,7 +227,10 @@ func TestSuccessEstimateObservePathReportsStaleEvidence(t *testing.T) {
 	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
 	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
 		t.Fatalf("stale observe path must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}
@@ -244,7 +250,10 @@ func TestSuccessEstimateObservePathReportsConflictingScopes(t *testing.T) {
 	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
 	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 10)
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
 		t.Fatalf("conflict observe path must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}
@@ -262,7 +271,10 @@ func TestSuccessEstimateObservePathReportsGlobalConflictBehindAgreeingTier(t *te
 	rt.recordModelExperience("adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
 	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 90)
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
 		t.Fatalf("three-scope conflict must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}
@@ -282,7 +294,10 @@ func TestSuccessEstimateObservePathUsesDecisionStaleHorizon(t *testing.T) {
 	}
 	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
 		t.Fatalf("decision stale horizon must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}
@@ -301,7 +316,10 @@ func TestSuccessEstimateObservePathInheritsGlobalStaleHorizon(t *testing.T) {
 	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
 	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
 
-	_, _, _, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, _, _, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied {
 		t.Fatal("global stale horizon must not change selection")
 	}
@@ -321,7 +339,10 @@ func TestSuccessEstimateObservePathKeepsFreshEvidenceWhenHorizonDisabled(t *test
 	}
 	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
 
-	_, _, _, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, _, _, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied {
 		t.Fatal("disabled stale horizon must not change selection")
 	}
@@ -407,7 +428,10 @@ func TestSuccessEstimateObservePathLooksUpSingleAdapterIdentity(t *testing.T) {
 		4,
 	)
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "frontier" || selected.LoRAName != "math-lora" || result.SelectedModel != "math-lora" {
 		t.Fatalf("adapter observe path must not change the selected adapter, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}
@@ -437,7 +461,10 @@ func TestSuccessEstimateObservePathKeepsDistinctAdaptersOnSharedBase(t *testing.
 	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 10)
 	recordScopedExperience(rt, "adaptive", 2, "code-lora", routerLearningOutcomeFailed, 6)
 
-	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	_, result, selected, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	if applied || selected == nil || selected.Model != "frontier" || selected.LoRAName != "math-lora" || result.SelectedModel != "math-lora" {
 		t.Fatalf("shared-base adapter observe path must not change selection, result=%#v selected=%#v applied=%v", result, selected, applied)
 	}

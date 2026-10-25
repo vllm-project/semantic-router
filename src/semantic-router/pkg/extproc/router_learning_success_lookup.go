@@ -27,7 +27,7 @@ func (s routerLearningEvidenceSnapshot) lookupChain(model string) []scopedExperi
 	return hits
 }
 
-func (s routerLearningEvidenceSnapshot) hit(scope string, key string) scopedExperience {
+func (s routerLearningEvidenceSnapshot) hit(scope string, key routerLearningExperienceKey) scopedExperience {
 	exp, found := s.byKey[key]
 	return scopedExperience{scope: scope, exp: exp, found: found}
 }
