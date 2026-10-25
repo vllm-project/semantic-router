@@ -93,20 +93,153 @@ You pass the text as the state, and the questions you want answered as a diction
 
 ## One request, every question
 
-A router asks two kinds of question about every request. A decision asks which way: which domain, is it a jailbreak, does the answer need a fact check, which model should take it. An extraction asks what exactly: which words are personal data, which claims of the answer the context does not support, which sentence is the evidence. Vela answers both in one call.
+A router asks two kinds of question about every request. A decision asks which way: which domain, is it a jailbreak, does the answer need a fact check, which model should take it. An extraction asks what exactly: which words are personal data, which claims of the answer the context does not support, which sentence is the evidence. Vela answers both in one `system_one` call, as Vela 2.0 did. The state is plain text or named parts (`user`, `context`, `answer`), and each named question is a Choice, a Noul (yes / no), a Score, a Set of router labels or a Span over labels you name.
+
+What changes in 3.0 is what sits behind the call. Each model has one frozen backbone. Every question is sent to exactly one network on top of it: the backbone itself for an ordinary decision, or one adapter trained for that kind of question.
 
 <ArticleFigure
-  src="/img/blog/vela-3-0/architecture/vela3-fast.svg"
-  width={1600} height={900}
-  alt="vela3-fast: a system_one request with a state and named questions goes into a UltraBERT-380M encoder. A frozen decision backbone, distilled from d3, answers ordinary choice, yes-no and score questions with adapters off. Gated LoRA adapters for spans, evidence, entities, relations, router signals, and domain, fact-check and feedback switch on only for their own questions. The outputs are decisions with a probability per option and typed spans with label, offsets and score."
+  src="/img/blog/vela-3-0/architecture/07-question-routing.svg"
+  width={1640} height={1170}
+  alt="Question routing. In vela3-fast, choice and noul questions that are not router texts go to the decision backbone with no adapter; router texts go to the router adapter or the domain, fact-check and feedback adapters; span questions go to the span-set adapter for PII and hallucination label sets, the evidence adapter, the relation adapter, the NER adapter for names-only entity labels, or the span adapter. In the d3 sizes, ordinary choice, noul and score questions run on the d3 base with every adapter off; router question ids switch on a decision LoRA; span questions use the span, relation or NER LoRA with their heads."
   diagram
 >
-  vela3-fast: one call, one encoder pass per question, no generated text. The decision backbone is frozen; each adapter switches on only for its own kind of question.
+  Each question is routed on its own, by its type, its wording and its label set. The rules are checked top to bottom, and an ordinary decision never touches an adapter.
 </ArticleFigure>
 
-**Spans as decisions.** The labels you name are presented to the model as options. A span head scores every word against every label, and neighbouring words that agree join into a span with character offsets and a score. A span question therefore costs about as much as a decision: on vela3-fast, 18 ms at 200 tokens against 14 ms for four decisions.
+```python
+def system_one(state, questions):
+    for qid, q in questions.items():
+        if q["type"] == "span":
+            net = span_route(q)            # span-set (PII, halu) · evidence · relation · NER · span
+        elif is_router_question(q):
+            net = router_adapter(q)        # router, or the domain / fact-check / feedback adapter
+        else:
+            net = decision_backbone        # choice / noul (and score on the d3 sizes): no adapter
+        answers[qid] = net.answer(state, q)
+```
 
-**A frozen backbone with routed adapters.** Once the decision backbone is trained, it is frozen. Every other job gets its own small LoRA adapter on top, and a router in the package switches each adapter on only for its own kind of question. Because the backbone never moves, a new adapter cannot change an existing answer.
+## Inside vela3-fast
+
+vela3-fast is a 24-layer [UltraBERT-380M](https://huggingface.co/dmis-lab/UltraBERT-380M) encoder: hidden width 1,024, SwiGLU width 3,072, 8 attention heads of width 128 and pre-RMSNorm blocks. Attention is bidirectional. Two of every three layers see a window of ±128 tokens, and every third layer is global, with RoPE θ of 10,000 on local layers and 2,560,000 on global ones. Local attention keeps long inputs cheap, and one input can hold up to 32,768 tokens. The vocabulary is UltraBERT's 49,152 tokens plus eight marker tokens: `[Q]`, `[O]`, `[ABS]`, `[SEP_SCHEMA]`, `[E]` and one `[SEG_*]` per state part.
+
+**A decision backbone distilled from d3.** A decision is one encoder input, rendered exactly as in training:
+
+```text
+[BOS] [Q] instructions [O] key_1: description_1 [O] key_2 ... [SEP_SCHEMA] [SEG_user] state [EOS]
+```
+
+The readout scores each option at its `[O]` marker. A cosine between the option-plus-question projection and the pooled state is added to an MLP on the raw option state, and a softmax runs over the question's options. A Noul is the two-option choice `{no, yes}`, and its answer is p(yes). The readout has the same form as the Vela 2.0 0.3B decision readout, at width 1,024.
+
+<ArticleFigure
+  src="/img/blog/vela-3-0/architecture/09-vela3-fast-decision-readout.svg"
+  width={1600} height={1380}
+  alt="vela3-fast decision readout: the [O] option marker, the [Q] question marker and the mean of the state part each pass a shared LayerNorm and a 1,024-to-256 projection. Option and question projections are summed and L2-normalised, the state projection is L2-normalised, and their dot product divided by a learned tau is added to an MLP score of the raw option state. A softmax over the options gives the answer. In training, the target is d3's answer distribution, mixed half and half with the gold label where one exists, under a soft-target cross-entropy."
+  diagram
+>
+  The decision readout of the frozen backbone. During training, its softmax is fitted to d3's whole answer distribution over the same options, not only to d3's top answer.
+</ArticleFigure>
+
+```python
+H = backbone(ids)                                      # [L, 1024], final RMSNorm
+v = normalize(W_p(norm(mean(H[state]))))               # 1024 -> 256
+for i, o in enumerate(option_markers):
+    u = normalize(W_o(norm(H[o])) + W_q(norm(H[q_marker])))
+    z[i] = dot(u, v) / tau + mlp(H[o])                 # mlp: 1024 -> 2048 -> 1
+p = softmax(z)                                         # training: cross-entropy against d3's distribution
+```
+
+**The soup.** The shipped decision backbone is a uniform average of four students trained from the same distilled checkpoint (see [How we trained it](#how-we-trained-it)). Weight averaging adds no cost at inference: it is one set of weights.
+
+**Gated adapters that cannot move a decision.** Every other job runs on an adapter: LoRA on the query, key, value, output and three feed-forward projections of all 24 layers (rank 64, or 128 for entities and relations), its own copies of the top layers (the top 4 for the span family, the top 8 for the router, fact-check and feedback, the top 12 for domain) and its own readout head. An adapter file holds only these tensors. At load time, each adapter network takes every other weight from the frozen backbone by reference, so the adapters never duplicate the backbone.
+
+A decision question takes the decision path: the backbone and its readout, with no adapter in the forward. Adding, retraining or removing an adapter therefore cannot change a decision, which is what lets the family grow one task at a time.
+
+## Spans in Vela 3.0
+
+Spans keep the Vela 2.0 idea: a span question is a grid of yes / no decisions, one for every word of the target text and every label in the question. Words that say yes for the same label and sit next to each other become one span, with character offsets into the original text.
+
+**In vela3-fast**, the span pass keeps the Vela 2.0 encoder layout unchanged:
+
+```text
+<bos> ([Q] question ([O] name: description)* [ABS]?)* ([E] label: description)* [SEP_SCHEMA] ([SEG_role] part)* <eos>
+```
+
+Each word is read at its first sub-word token and each label at its `[E]` marker, and a word × label cosine divided by a learned τ gives the grid. Inputs are windowed at 8,192 tokens with 512 overlap, as in Vela 2.0. Evidence questions are the exception: they read the whole document in one window of up to 32,768 tokens on their own adapter. What is new is the split. Vela 2.0 chose between two heads, router and broad. vela3-fast gives each span family its own adapter: personal data and hallucination labels, evidence, relations, names-only entities, and a general span adapter for every other label set.
+
+**In the d3 sizes**, the span pass is a forward of the frozen d3 base with a span-family LoRA switched on, over d3's own prompt. The labels you name become its option lines, `<code>: label[: description]`, and a SpanHeadV2 with the Vela 2.0 topology scores every word against every label: LayerNorm and centring, 64 label slots, and a scaled bilinear plus GELU MLP score at width 256.
+
+<ArticleFigure
+  src="/img/blog/vela-3-0/architecture/10-d3-span-pass.svg"
+  width={1600} height={1300}
+  alt="The d3 span pass: d3's prompt with the state, the span question and one option line per label goes through the frozen d3 decoder with noncausal full attention and a span-family LoRA switched on. The first sub-token of each word of the target part and the mean over each option line feed a SpanHeadV2, whose word-by-label logits pass a sigmoid and a per-label-set threshold before neighbouring words are merged into character-offset spans."
+  diagram
+>
+  One span question, one forward of the frozen base with its span-family LoRA on. Targets over 2,048 tokens run in word-aligned windows of up to 1,800 tokens with stride 1,536.
+</ArticleFigure>
+
+The Vela 2.0 decoders read every word from a second copy of the text, placed after the labels, because a causal mask showed each word only the words to its left. The d3 bases are read with noncausal full attention, so every word already sees the whole text and every label. Vela 3.0 drops the second copy, and each label vector is the mean over its own option line.
+
+## The d3 sizes: a frozen decoder with row-gated adapters
+
+vela3-lite, -mini, -flash and -turbo wrap a Decision 3.0 model, unchanged, at a pinned revision. The bases are Qwen3.5 hybrid decoders that repeat three Gated-DeltaNet layers and one gated grouped-query attention layer: 24 layers at width 1,024 for d3-lite, 32 at 2,560 for d3-mini, 32 at 4,096 for d3-flash and 64 at 5,120 for d3-turbo v1.0, each with its own vision tower. d3 answers a decision with its own readout: the options are listed under single-token answer codes, and the code logits at the last position give the answer.
+
+The adapters sit on the base's Linear layers. Decision LoRAs cover every layer, for the router's built-in question ids. Span, entity, relation and image-hallucination LoRAs start part-way up the stack (on vela3-lite from layer 12 of 24, the entity LoRA from layer 6), and each has its own span head. Each adapted layer keeps a gate:
+
+```python
+y = base(x)                                       # the frozen d3 Linear layer
+if GATE.name in self.adapters:                    # at most one adapter is on in any forward
+    A, B, scale = self.adapters[GATE.name]
+    d = ((x.float() @ A.T) @ B.T * scale).to(y.dtype)
+    y = y + d if GATE.rows is None else torch.where(GATE.rows[:, None, None], y + d, y)
+return y                                          # no adapter on: base(x) itself
+```
+
+<ArticleFigure
+  src="/img/blog/vela-3-0/architecture/08-row-gated-lora.svg"
+  width={1500} height={1040}
+  alt="Row-gated LoRA: the layer input goes through the frozen base Linear and, for the active adapter, through A and B scaled by alpha over r. The sum passes a row gate that keeps the base output on rows that are off the gate, so those rows get base(x) bit for bit. With no adapter active, the layer returns base(x) itself."
+  diagram
+>
+  A row mask lets router questions and ordinary questions share d3's own batching. The rows off the gate keep the base output bit for bit.
+</ArticleFigure>
+
+With no adapter active, every layer returns the base's own output, so an ordinary choice, yes / no or score question is answered by the base model, bit for bit: each card's check finds 561 of 561 answers identical. Router questions are batched with the other questions as d3 batches them. The decision adapter is switched on only for their rows, and `torch.where` keeps the other rows exact. vela3-mini and -flash can also write a one-line definition for a label you only named, generated by the base with no adapter on, and cache it per label set. The adapters add 154 MB to vela3-lite and 5 GB to vela3-turbo.
+
+## vela3-fast-vision: three backbones, one question each
+
+vela3-fast-vision is built on [UltraVBERT](https://huggingface.co/athrael-soju/UltraVBERT): a 12-layer SigLIP2-B/16 vision encoder whose patches are pixel-shuffled into a 24-layer UltraBERT-150M text encoder (width 768, the same local and global attention pattern as vela3-fast). At 1,024 px an image is read as 2 × 2 tiles of 512 px plus one global view, 320 image tokens in all.
+
+Rather than ask one set of weights to do everything, the package ships three UltraVBERT backbone files and sends each question to one network:
+
+- **Decisions**, with or without images: a decision-trained backbone and its head. The head averages each option's tokens and scores them, and a softmax runs over the options. Text-only decisions that are not router questions take this path too.
+- **Region pointing**: a second decision-trained backbone with a LoRA adapter and a head that scores every image token, one 64 × 64 px cell each, and returns a box and a point.
+- **Image hallucination spans and the OCR check**: the original UltraVBERT with a LoRA adapter each, scoring every word of the answer, or of the OCR text, against the image.
+
+Router signals, text spans and entities run on the frozen text encoder of the original UltraVBERT, with the vela3-fast runtime and its own router, span, entity, domain and feedback adapters.
+
+<ArticleFigure
+  src="/img/blog/vela-3-0/architecture/02-vela3-fast-vision-architecture.svg"
+  width={1640} height={1560}
+  alt="vela3-fast-vision: three UltraVBERT backbone files share one topology, a SigLIP2-B/16 vision encoder with pixel shuffle and connector feeding an UltraBERT-150M text encoder. The decision-trained backbone answers image and text decisions with a mean-of-option-tokens head; a second decision-trained backbone with LoRA scores image tokens for region pointing; the original UltraVBERT with LoRA scores answer words for image hallucination spans and the OCR check. A frozen text side carries the router, span, NER, domain and feedback adapters."
+  diagram
+>
+  Each question is answered by one network: the decision, box or span backbone, or the text side. Each costs one pass of at most 0.3B parameters.
+</ArticleFigure>
+
+## Where Vela 3.0 sits
+
+| | Typed decisions (Choice / Noul / Score) | Spans for labels named in the request | Relations | Grounded check (context vs answer) | Images | Trained on router signals |
+| --- | --- | --- | --- | --- | --- | --- |
+| GLiNER | — | entities | — | — | — | — |
+| GLiNER2 | classification | entities and structured fields | yes | — | — | — |
+| GLiFormer | classification | entities | yes | — | — | — |
+| GLiClass v4 | instruction-following classification and scoring | — | — | — | — | — |
+| LettuceDetect | — | fixed label (unsupported) | — | yes | — | hallucination only |
+| Decision 3.0 | yes | — | — | — | yes | — |
+| Vela 2.0 | yes | router spans; hybrids add a broad head | broad head | yes | — | yes |
+| **Vela 3.0** | **yes, the d3 sizes bit for bit as their base** | **one adapter per span family** | **dedicated adapter** | **yes, also against an image** | **yes, from 0.3B** | **yes** |
+
+The extractors on the first rows read their labels from the request. GLiClass v4 and Decision 3.0 answer typed decisions. Vela 2.0 put both in one call with routing-specific training. Vela 3.0 keeps that interface and freezes the decision model under it, so extraction, relations, images and router signals are added beside the decisions without changing them.
 
 ## Results
 
@@ -208,16 +341,14 @@ Medians at 200 tokens, one request at a time, on one AMD Instinct MI325X. A span
 ## Six models, one interface
 
 <ArticleChartGallery label="Choose a Vela 3.0 architecture" charts={[
-  { label: 'vela3-fast (0.4B)', src: '/img/blog/vela-3-0/architecture/vela3-fast.svg', width: 1600, height: 900, diagram: true, alt: 'vela3-fast: a UltraBERT-380M encoder with a frozen decision backbone distilled from d3 and gated LoRA adapters for spans, evidence, entities, relations and router signals.', children: 'The encoder: a frozen decision backbone, distilled from d3, and gated adapters, one per job.' },
-  { label: 'd3 sizes (0.8B to 27B)', src: '/img/blog/vela-3-0/architecture/vela3-d3.svg', width: 1600, height: 900, diagram: true, alt: 'vela3-lite, -mini, -flash and -turbo: a frozen d3 decoder. A question router sends ordinary choice, yes-no and score questions to the base with adapters off, router signals to decision LoRAs, and span questions to a span LoRA and span head.', children: 'The decoder sizes: a frozen d3 base at a pinned revision, with gated adapters. Ordinary questions run with every adapter off.' },
-  { label: 'vela3-fast-vision (0.3B)', src: '/img/blog/vela-3-0/architecture/vela3-vision.svg', width: 1600, height: 900, diagram: true, alt: 'vela3-fast-vision: three UltraVBERT backbones, each answering one kind of question: a decision backbone for image and text decisions, a decision-trained backbone with a box adapter for region pointing, and the original frozen backbone with adapters for image hallucination spans, the OCR check and text.', children: 'The image model: three UltraVBERT backbones, one question each, so each question costs one 0.3B pass.' },
+  { label: 'vela3-fast (0.4B)', src: '/img/blog/vela-3-0/architecture/01-vela3-fast-architecture.svg', width: 1560, height: 1700, diagram: true, alt: 'vela3-fast: a 24-layer UltraBERT-380M bidirectional encoder, hidden width 1,024, SwiGLU width 3,072, 8 heads of width 128, local attention within 128 tokens and every third layer global, a 49,160-row token embedding and a final RMSNorm. The frozen pass feeds the decision readout; one routed adapter, with LoRA on all 24 layers, its own top layers and its own head, feeds the router and span readouts.', children: 'The encoder: a frozen decision backbone with its decision readout, and one routed adapter per non-decision question.' },
+  { label: 'vela3-lite (0.8B)', src: '/img/blog/vela-3-0/architecture/03-vela3-lite-architecture.svg', width: 1560, height: 1700, diagram: true, alt: 'vela3-lite: the frozen d3-lite decoder, 24 Qwen3.5 hybrid layers in six cycles of three Gated-DeltaNet layers and one gated GQA layer, hidden width 1,024, SwiGLU width 3,584, GQA 8 query and 2 key-value heads of width 256, with row-gated LoRA adapters, the d3 code readout and SpanHeadV2 span heads.', children: 'd3-lite, frozen, with eight row-gated LoRA adapters: four decision adapters and four span-family adapters.' },
+  { label: 'vela3-mini (4B)', src: '/img/blog/vela-3-0/architecture/04-vela3-mini-architecture.svg', width: 1560, height: 1700, diagram: true, alt: 'vela3-mini: the frozen d3-mini decoder, 32 hybrid layers, hidden width 2,560, SwiGLU width 9,216, GQA 16 query and 4 key-value heads, with decision, domain and feedback, opt-in decision, span, NER, relation and image-hallucination LoRAs.', children: 'd3-mini, frozen, with its decision and span-family adapters. It also writes label definitions.' },
+  { label: 'vela3-flash (9B)', src: '/img/blog/vela-3-0/architecture/05-vela3-flash-architecture.svg', width: 1560, height: 1700, diagram: true, alt: 'vela3-flash: the frozen d3-flash decoder, 32 hybrid layers, hidden width 4,096, SwiGLU width 12,288, GQA 16 query and 4 key-value heads, with decision, domain and feedback, span, NER, relation and image-hallucination LoRAs.', children: 'd3-flash, frozen. Its adapters have higher ranks than the 4B ones.' },
+  { label: 'vela3-turbo (27B)', src: '/img/blog/vela-3-0/architecture/06-vela3-turbo-architecture.svg', width: 1560, height: 1700, diagram: true, alt: 'vela3-turbo: the frozen d3-turbo v1.0 decoder, 64 hybrid layers in 16 cycles, hidden width 5,120, SwiGLU width 17,408, GQA 24 query and 4 key-value heads, with decision, domain and feedback, span, NER and relation LoRAs.', children: 'd3-turbo v1.0, frozen. Its runtime reads the state once and branches every question from it.' },
 ]} />
 
-The six models share the question format. vela3-fast and vela3-fast-vision are encoders: they answer in one forward pass and write no text. vela3-lite, -mini, -flash and -turbo wrap a Decision 3.0 (d3) model, unchanged, at a pinned revision: d3-lite, d3-mini, d3-flash and d3-turbo v1.0.
-
-**The d3 sizes.** The base model stays frozen. An ordinary choice, yes / no or score question goes to the base with every adapter off, so the answer is the base's own, bit for bit: each card's check finds 561 of 561 identical. Router signals switch on their decision adapters, and span questions switch on a span adapter and span head. vela3-mini and -flash can also write a one-line definition for each label you only named, and they cache it per label set. The adapters add 154 MB to vela3-lite and 5 GB to vela3-turbo.
-
-**vela3-fast-vision.** Rather than ask one set of weights to do everything, it keeps three [UltraVBERT](https://huggingface.co/athrael-soju/UltraVBERT) backbones, each a SigLIP2-B vision encoder feeding an UltraBERT-150M text encoder at 1024 px, and sends each question to one of them: a decision backbone for image and text decisions, a second decision-trained backbone with the region-pointing adapter, and the original frozen backbone with the adapters for image hallucination spans, the OCR check and text.
+The six models share the question format, with independently trained weights. Every dimension in the diagrams is read from the released packages' own configuration files at their release revisions, and vela3-fast-vision is drawn [above](#vela3-fast-vision-three-backbones-one-question-each). <a href="/img/blog/vela-3-0/architecture/README.md">Source notes and editable SVG generators</a> accompany the figures.
 
 ## How we trained it
 
@@ -302,7 +433,6 @@ r = m.system_one(
 
 Swap the repo name to change the size; the questions stay the same. vela3-fast-vision loads from its snapshot like vela3-fast and takes images with `images=[...]`; see [its card](https://huggingface.co/vllm-sr/vela3-fast-vision).
 
-{/* Studio: the Space vllm-sr/vela3-studio is private as of 25 Oct; it goes public on release day. */}
 The [Vela 3.0 Studio](https://huggingface.co/spaces/vllm-sr/vela3-studio) runs the examples with hover-to-source, live on vela3-fast-vision.
 
 ## In vLLM Semantic Router
