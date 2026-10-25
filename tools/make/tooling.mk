@@ -60,7 +60,9 @@ test-sr-bench-legacy-reasoning: vllm-sr-install-cli ## Test the pinned native ca
 	@PATH="$(AGENT_VENV)/bin:$$PATH" SR_BENCH_HOME="$(LEGACY_REASONING_HOME)" "$(AGENT_PYTHON)" -c \
 		'from cli.sr_bench.setup import setup; setup(benchmark="legacy-reasoning", install=True)'
 	@SR_BENCH_HOME="$(LEGACY_REASONING_HOME)" SR_BENCH_NATIVE_REASONING_TESTS=1 \
-		"$(AGENT_PYTHON)" -m pytest -q -s src/vllm-sr/tests/sr_bench_legacy_reasoning_native_checks.py
+		"$(AGENT_PYTHON)" -m pytest -q -s \
+			src/vllm-sr/tests/sr_bench_legacy_reasoning_native_checks.py \
+			src/vllm-sr/tests/sr_bench_legacy_reasoning_modes_checks.py
 
 test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope helpers without a remote host
 	@"$(AGENT_PYTHON)" -m pytest -q bench/router_flow

@@ -329,6 +329,109 @@ visible: for example, `Answer: AB` against an index reference raises the native
 records through a real local HTTP server and isolated workers. This fixture
 coverage is not model-quality or full native-corpus qualification.
 
+## Legacy reasoning conditions
+
+The local condition compiler uses one native selection for every requested
+condition, including MMLU-Pro. It uses the same pinned `legacy-reasoning`
+environment and local source-bundle format described above. It does not download
+datasets or call a model during export.
+
+Create a run template with a target profile for each condition:
+
+```json
+{
+  "version": "sr-bench-1.0",
+  "profile": "smoke",
+  "cost_policy": "capability_only",
+  "targets": [
+    {
+      "id": "standard",
+      "kind": "single",
+      "model": "Qwen/Qwen3-0.6B",
+      "base_url": "http://127.0.0.1:8000/v1"
+    },
+    {
+      "id": "reasoning",
+      "kind": "single",
+      "model": "Qwen/Qwen3-0.6B",
+      "base_url": "http://127.0.0.1:8000/v1"
+    },
+    {
+      "id": "explicit",
+      "kind": "single",
+      "model": "Qwen/Qwen3-0.6B",
+      "base_url": "http://127.0.0.1:8000/v1"
+    }
+  ],
+  "legacy_reasoning_conditions": {
+    "version": 1,
+    "conditions": [
+      {"target_id": "standard", "mode": "standard"},
+      {"target_id": "reasoning", "mode": "reasoning"},
+      {"target_id": "explicit", "mode": "XC"}
+    ]
+  }
+}
+```
+
+Use `api_key_env` when a target needs credentials. Every target must have one
+condition; aliases cannot duplicate a mode on the same endpoint/model. Keep
+non-reasoning request settings equal within that group.
+
+```bash
+python -m cli.sr_bench.legacy_reasoning_modes \
+  --dataset mmlu-pro --source-bundle sources.json \
+  --manifest condition-template.json --output condition-run.json \
+  --seed 42 --samples-per-category 1
+vllm-sr benchmark plan --manifest condition-run.json
+vllm-sr benchmark run --manifest condition-run.json
+```
+
+The compiler accepts the 18 native names and preserves their aliases. It uses
+native category filtering and sampling once, rather than independently preparing
+each condition. MMLU-Pro's existing dataset preparation command retains its
+separate stratified sampler. Use `smoke` or `quick`; these selections do not
+establish a holdout. Exported files are private and refuse overwrite.
+
+| Condition | Prompt | Frozen reasoning control |
+| --- | --- | --- |
+| `NR` or `standard` | Existing plain case | Native helper's false setting |
+| `NR_REASONING` or `reasoning` | Identical plain case | Native helper's true setting |
+| `AR` | Existing plain case | Explicit supported control in the target's `request_params` |
+| `Router_NR` | Existing plain case | No client override; requires a `mom` target |
+| `XC` | Native explicit-CoT formatter | No reasoning override |
+
+The native helper selects Qwen3's `enable_thinking`, DeepSeek's `thinking`, or
+GPT-OSS's nested `reasoning_effort` from the requested model name. GPT-OSS's
+false/true pair is low/high effort, not proof that reasoning is disabled/enabled.
+Unknown native toggles and the legacy OpenAI `reasoning: bool` shape fail
+explicitly. An AR profile may use a supported top-level `reasoning_effort` or
+native `chat_template_kwargs` control. Controls belong in target profiles, not
+shared `sampling`; conflicting or incorrectly typed controls are rejected.
+No adapter overrides frozen generation parameters during execution.
+
+XC runs only when at least one of the first ten selected questions has nonblank
+CoT content. Otherwise the frozen contract retains the skipped condition and
+reason, without scheduling calls for it. An XC-only request with no eligible
+questions fails rather than creating an empty run. Once eligible, XC covers
+the whole selection, including questions without CoT. Some native formatters
+include the supplied explanation; others request steps without including it.
+Plain requests never receive the reference explanation.
+
+The native multi-mode runner's XC path sends no toggle even though its nearby
+comment suggests false. This compiler preserves the actual request. Its explicit
+condition list is a new opt-in contract; it does not repair the native runner's
+unused `exec_modes` or CLI `ar_extra_body` options.
+
+Plain adapters retain `bench-reasoning-plain-v1` and
+`bench-mmlu-pro-plain-v1`. Explicit-CoT uses separate
+`legacy-<configuration>-explicit-cot` adapters with
+`bench-reasoning-explicit-cot-v1`. The frozen selection records source content
+digests, native order, per-case hashes, eligibility and target bindings.
+`execution_cells` prevents a target from receiving another condition's prompt.
+The [condition report](./results.md#reasoning-condition-measurements) reads the
+same saved request and result evidence.
+
 ## Register targets
 
 Register operator-owned targets for Dashboard:

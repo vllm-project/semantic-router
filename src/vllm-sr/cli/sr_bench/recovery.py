@@ -7,6 +7,7 @@ import copy
 from .accounting import correction_metadata, effective_calls
 from .contracts import digest, plan_digest, planned_cells
 from .experiments import inherit_membership
+from .legacy_reasoning_modes import FIELD as REASONING_CONDITIONS
 from .store import TERMINAL, RecoveryClaimError
 
 MODES = {"undispatched", "failed"}
@@ -21,6 +22,10 @@ def recovery_plan(store, parent_id, mode="undispatched"):
     if mode not in MODES:
         raise ValueError("Recovery mode must be undispatched or failed")
     parent = store.get(parent_id)
+    if REASONING_CONDITIONS in parent["manifest"]:
+        raise ValueError(
+            "Recovery does not support reasoning condition matrices; retain the original condition report"
+        )
     if parent["status"] not in TERMINAL or parent["manifest"]["mode"] != "live":
         raise ValueError("Recovery requires a terminal live parent attempt")
     results = {

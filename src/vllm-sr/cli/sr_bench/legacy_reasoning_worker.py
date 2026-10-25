@@ -15,13 +15,19 @@ import reasoning
 from datasets import Dataset
 from packaging.requirements import Requirement
 from reasoning.dataset_factory import DatasetFactory
-from reasoning.dataset_interface import Question
+from reasoning.dataset_interface import DatasetInterface, Question
 from reasoning.reasoning_mode_eval import _is_correct_answer
-from reasoning.router_reason_bench_multi_dataset import extract_answer
+from reasoning.router_reason_bench_multi_dataset import (
+    build_extra_body_for_model,
+    extract_answer,
+)
 
+from . import legacy_reasoning_explicit_cot as xc
 from .canonical import digest
 from .dataset_io import MAX_ROWS, bounded_lines, read_small
 from .harness_worker import call
+from .legacy_mmlu import PROTOCOL as MMLU_PROTOCOL
+from .legacy_mmlu import normalize_records
 from .legacy_reasoning import (
     ALIASES,
     CONFIGURATIONS,
@@ -33,6 +39,7 @@ from .legacy_reasoning import (
     configuration,
     validate_case,
 )
+from .legacy_reasoning_modes import native_dataset
 
 
 def inspect_runtime(source_root: Path) -> dict[str, Any]:
@@ -59,8 +66,9 @@ def inspect_runtime(source_root: Path) -> dict[str, Any]:
     }
 
 
-def export_cases(request: dict[str, Any]) -> dict[str, Any]:
-    name = configuration(request["dataset"])
+def load_selection(
+    request: dict[str, Any], *, name: str
+) -> tuple[DatasetInterface, list[Question], dict[str, Any], dict[str, Any]]:
     bundle_path = Path(request["source_bundle"])
     bundle = json.loads(read_small(bundle_path, MAX_EXPORT_BYTES))
     if (
@@ -167,6 +175,17 @@ def export_cases(request: dict[str, Any]) -> dict[str, Any]:
         "revision_verification": "declared-revision-with-content-digest",
         "files": used,
     }
+    return dataset, questions, source, selection
+
+
+def plain_cases(
+    *,
+    dataset: DatasetInterface,
+    questions: list[Question],
+    source: dict[str, Any],
+    selection: dict[str, Any],
+) -> dict[str, Any]:
+    name = selection["dataset"]
     source_sha256 = digest(source)
     benchmark = "legacy-" + name
     config = {
@@ -212,6 +231,149 @@ def export_cases(request: dict[str, Any]) -> dict[str, Any]:
     return {"cases": cases, "benchmark_options": {benchmark: config}}
 
 
+def export_cases(request: dict[str, Any]) -> dict[str, Any]:
+    dataset, questions, source, selection = load_selection(
+        request=request, name=configuration(request["dataset"])
+    )
+    return plain_cases(
+        dataset=dataset, questions=questions, source=source, selection=selection
+    )
+
+
+def condition_controls(request: dict[str, Any]) -> dict[str, Any]:
+    return {
+        item["target_id"]: build_extra_body_for_model(
+            model_name=item["model"],
+            reasoning={"NR": False, "NR_REASONING": True}.get(item["mode"]),
+        )
+        for item in request["conditions"]
+    }
+
+
+def export_mode_cases(request: dict[str, Any]) -> dict[str, Any]:
+    name = native_dataset(request["dataset"])
+    dataset, questions, source, selection = load_selection(request=request, name=name)
+    if name == "mmlu-pro":
+        plain = {
+            "cases": normalize_records(
+                [xc.mmlu_record(asdict(question)) for question in questions]
+            ),
+            "benchmark_options": {
+                "legacy-mmlu-pro": {
+                    "protocol": MMLU_PROTOCOL,
+                    "source_revision": SOURCE_REVISION,
+                    "requirements_sha256": hashlib.sha256(
+                        REQUIREMENTS.read_bytes()
+                    ).hexdigest(),
+                    "source": source,
+                    "selection": selection,
+                }
+            },
+        }
+        if any(
+            case["messages"]
+            != [{"role": "user", "content": dataset.format_prompt(question, "plain")}]
+            for case, question in zip(plain["cases"], questions, strict=True)
+        ):
+            raise ValueError("MMLU plain adapter differs from native formatting")
+    else:
+        plain = plain_cases(
+            dataset=dataset, questions=questions, source=source, selection=selection
+        )
+    benchmark = "legacy-" + name + xc.SUFFIX
+    config = {
+        "protocol": xc.PROTOCOL,
+        "source_revision": SOURCE_REVISION,
+        "requirements_sha256": hashlib.sha256(REQUIREMENTS.read_bytes()).hexdigest(),
+        "source": source,
+        "selection": selection,
+        "plain_options": (
+            plain["benchmark_options"].get("legacy-" + name, {})
+            if name != "mmlu-pro"
+            else {}
+        ),
+    }
+    explicit: list[dict[str, Any]] = []
+    members: list[dict[str, Any]] = []
+    for question, plain_case in zip(questions, plain["cases"], strict=True):
+        native = asdict(question)
+        messages = [
+            {"role": "user", "content": dataset.format_prompt(question, "explicit_cot")}
+        ]
+        identity = case_identity(
+            benchmark=benchmark,
+            source_sha256=digest(source),
+            selection=selection,
+            native_id=question.question_id,
+        )
+        case = {
+            "id": identity,
+            "benchmark": benchmark,
+            "messages": messages,
+            "answer": {"question": native, "plain_case": plain_case},
+            "metadata": {
+                "protocol": xc.PROTOCOL,
+                "native_dataset": name,
+                "native_question_id": question.question_id,
+                "native_question_sha256": digest(native),
+                "source_sha256": digest(source),
+                "plain_case_sha256": digest(plain_case),
+                "prompt_sha256": digest(messages),
+                "stratum": question.category,
+            },
+        }
+        xc.validate_case(case=case, config=config)
+        explicit.append(case)
+        members.append(
+            {
+                "native_id": question.question_id,
+                "native_sha256": digest(native),
+                "stratum": question.category,
+                "has_cot": bool(question.cot_content and question.cot_content.strip()),
+                "plain_id": plain_case["id"],
+                "plain_sha256": digest(plain_case),
+                "xc_id": identity,
+                "xc_sha256": digest(case),
+            }
+        )
+    return {
+        "plain_cases": plain["cases"],
+        "explicit_cases": explicit,
+        "benchmark_options": {**plain["benchmark_options"], benchmark: config},
+        "source": source,
+        "selection": selection,
+        "members": members,
+        "controls": condition_controls(request),
+    }
+
+
+def execute_explicit_cot(request: dict[str, Any]) -> dict[str, Any]:
+    inspect_runtime(source_root=Path(request["source_root"]))
+    case = request["case"]
+    xc.validate_case(case=case, config=request["config"])
+    dataset = DatasetFactory.create_dataset(name=case["metadata"]["native_dataset"])
+    question = Question(**case["answer"]["question"])
+    messages = [
+        {"role": "user", "content": dataset.format_prompt(question, "explicit_cot")}
+    ]
+    if messages != case["messages"]:
+        raise ValueError("Frozen prompt differs from the native explicit-CoT formatter")
+    response = call(messages=messages)
+    answer = extract_answer(response=response["final"], question=question)
+    correct = _is_correct_answer(question=question, predicted_answer=answer)
+    return {
+        "answer": answer,
+        "correct": correct,
+        "score": float(correct),
+        "details": {
+            "grader_version": xc.PROTOCOL,
+            "native_dataset": case["metadata"]["native_dataset"],
+            "native_question_id": question.question_id,
+            "answer_status": "parsed" if answer else "unparsed",
+        },
+    }
+
+
 def execute(request: dict[str, Any]) -> dict[str, Any]:
     inspect_runtime(source_root=Path(request["source_root"]))
     case, config = request["case"], request["config"]
@@ -245,6 +407,10 @@ def main() -> None:
         result = runtime
     elif operation == "export":
         result = export_cases(request)
+    elif operation == "export-modes":
+        result = export_mode_cases(request)
+    elif operation == "controls":
+        result = condition_controls(request)
     else:
         raise ValueError("Unsupported legacy reasoning operation")
     content = (json.dumps(result, ensure_ascii=False) + "\n").encode()

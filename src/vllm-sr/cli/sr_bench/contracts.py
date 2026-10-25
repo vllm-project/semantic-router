@@ -29,6 +29,8 @@ from .dataset_io import (
     verified_lines,
 )
 from .experiments import validate_membership, validate_role
+from .legacy_reasoning_modes import FIELD as REASONING_CONDITIONS
+from .legacy_reasoning_modes import validate_conditions
 from .native_output import configure as configure_output_policy
 
 MAX_PARAMETER_BYTES = 65536
@@ -597,8 +599,10 @@ def plan(manifest, *, policy=None):
     if m.get("adapter_versions", versions) != versions:
         raise ValueError("Frozen adapter versions differ from installed adapters")
     m["adapter_versions"] = versions
+    cache = {}
+    if REASONING_CONDITIONS in m:
+        validate_conditions(m, cache)
     if m["mode"] == "live":
-        cache = {}
         for case in cases:
             adapter = get_adapter(case["benchmark"])
             if adapter.preflight is not None:

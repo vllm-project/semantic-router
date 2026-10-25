@@ -60,9 +60,9 @@ MMLU-Pro protocol or score. Its prepared samples need not match this runner's
 per-category samples; compare the same frozen questions explicitly.
 
 The existing package and all 18 registered names remain available, including
-the `mmlu`/`mmlu-pro` and `gpqa`/`gpqa-main` aliases. Other datasets, explicit-CoT,
-reasoning-mode evaluation and plots have not migrated. `looper-tts` remains in
-this distribution. Runner retirement is tracked in
+the `mmlu`/`mmlu-pro` and `gpqa`/`gpqa-main` aliases. The sr-bench diagnostics do
+not establish complete replacement parity or retire native evaluations and
+plots. `looper-tts` remains in this distribution. Runner retirement is tracked in
 [the migration issue](https://github.com/vllm-project/semantic-router/issues/4255).
 
 List the datasets registered by the installed package, then run a small
@@ -89,6 +89,13 @@ to preserve source bytes, selection and reference meaning. The fixture gate is
 `make test-sr-bench-legacy-reasoning`, also included in `make test-reasoning-bench`.
 Fixture results do not qualify a full corpus or model quality. Existing commands,
 explicit-CoT evaluation, reasoning-mode comparisons and plots remain supported.
+
+The [reasoning-condition compiler](../website/docs/benchmarking/sr-bench/tasks-and-targets.md#legacy-reasoning-conditions)
+shares one native selection across requested NR/AR/XC conditions and
+standard/reasoning aliases. It preserves each plain protocol and gives
+explicit-CoT its own identity. Its reports provide descriptive condition/category
+measurements, not production recommendations or configuration patches.
+The native first-ten CoT eligibility rule remains visible as an explicit skip.
 
 ### Compare a model's reasoning modes
 

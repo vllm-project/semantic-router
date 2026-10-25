@@ -124,10 +124,14 @@ def _initialize() -> None:
                 not in {"scicode", "tau3", "terminal-bench-2.1"},
                 weight=BENCHMARK_WEIGHTS[identity],
             )
+        from . import legacy_reasoning_explicit_cot  # noqa: PLC0415 - registry cycle
         from .legacy_reasoning import ADAPTERS  # noqa: PLC0415 - registry cycle
 
         found.update((adapter.id, adapter) for adapter in ADAPTERS)
         found[legacy_mmlu.ADAPTER.id] = legacy_mmlu.ADAPTER
+        found.update(
+            (adapter.id, adapter) for adapter in legacy_reasoning_explicit_cot.ADAPTERS
+        )
         # Only the operator's installed Python environment supplies entry points.
         for entry in entry_points(group="vllm_sr.sr_bench.adapters"):
             value = entry.load()
