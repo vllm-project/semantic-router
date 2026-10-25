@@ -1,0 +1,2 @@
+# Documentation builds inspect source commands without installing the CLI package.
+-r ../tools/docs/requirements.txt

@@ -37,8 +37,8 @@ const postgresInsertQueryTemplate = `
 			prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
-			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66)
+			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -48,6 +48,7 @@ const postgresCreateTableQueryTemplate = `
 			request_id VARCHAR(255),
 			recipe TEXT,
  safety_evidence JSONB,
+			routing_metadata JSONB,
 			decision VARCHAR(255),
 			decision_tier INTEGER DEFAULT 0,
 			decision_priority INTEGER DEFAULT 0,
@@ -106,6 +107,7 @@ const postgresCreateTableQueryTemplate = `
 		);
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe TEXT;
  ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS safety_evidence JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS routing_metadata JSONB;
 		ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
@@ -377,6 +379,7 @@ func (p *PostgresStore) UpdateLifecycle(
 		return err
 	}
 	defer release()
+	reason = sanitizePostgresText(reason)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -412,6 +415,7 @@ func (p *PostgresStore) AttachRequest(ctx context.Context, id string, body strin
 		return err
 	}
 	defer release()
+	body = sanitizePostgresText(body)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -451,6 +455,7 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 		return err
 	}
 	defer release()
+	body = sanitizePostgresText(body)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -490,7 +495,7 @@ func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Ou
 		return err
 	}
 	defer release()
-	outcomeJSON, err := json.Marshal([]Outcome{cloneOutcome(outcome)})
+	outcomeJSON, err := postgresOutcomeJSON(outcome)
 	if err != nil {
 		return fmt.Errorf("failed to marshal outcome: %w", err)
 	}
@@ -533,14 +538,9 @@ func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string
 		return err
 	}
 	defer release()
-	spansJSON, err := json.Marshal(spans)
+	spansJSON, spanDetailsJSON, err := postgresHallucinationJSON(spans, spanDetails)
 	if err != nil {
-		return fmt.Errorf("failed to marshal hallucination spans: %w", err)
-	}
-
-	spanDetailsJSON, err := json.Marshal(spanDetails)
-	if err != nil {
-		return fmt.Errorf("failed to marshal hallucination span details: %w", err)
+		return err
 	}
 
 	availability := HallucinationScore{}
@@ -655,7 +655,7 @@ func (p *PostgresStore) UpdateToolTrace(ctx context.Context, id string, trace To
 		return err
 	}
 	defer release()
-	traceJSON, err := marshalReplayOptionalJSON(&trace)
+	traceJSON, err := postgresToolTraceJSON(trace)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tool trace: %w", err)
 	}

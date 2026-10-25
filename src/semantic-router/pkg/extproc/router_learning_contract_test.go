@@ -1,11 +1,54 @@
 package extproc
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
+
+func TestSessionProtectionRecordsEligibilitySeparatelyFromSparseScores(t *testing.T) {
+	ctx := &selection.SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "proposal"}},
+		AgenticSession:  &selection.AgenticSessionContext{PreviousModel: "current"},
+	}
+	base := &selection.SelectionResult{
+		SelectedModel: "proposal", Method: selection.MethodStatic,
+		AllScores: map[string]float64{"proposal": 0},
+	}
+	identity := routerLearningIdentity{scope: config.RouterLearningScopeSession}
+	result, held := sessionScopeProtectedResult(config.RouterLearningProtectionConfig{}, base, ctx, identity)
+	if !held || result.SelectedModel != "current" {
+		t.Fatal("session protection must retain the eligible current model")
+	}
+	policy := newRouterLearningPolicy(routerLearningMethodProtection)
+	policy.Details.Protection = newRouterLearningProtectionDiagnostics(result.SessionPolicy, routerLearningIdentityDiagnostics{})
+	diagnostics := policy.toReplayProtection()
+	if !reflect.DeepEqual(diagnostics.CandidateModels, []string{"current", "proposal"}) ||
+		!reflect.DeepEqual(diagnostics.BaseScores, map[string]float64{"proposal": 0}) {
+		t.Fatalf("eligibility must not be inferred from scores or invent missing scores: %+v", diagnostics)
+	}
+	raw, err := json.Marshal(diagnostics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Candidates []string `json:"candidate_models"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil || len(wire.Candidates) != 2 {
+		t.Fatalf("candidate inventory lost in replay JSON: %s (%v)", raw, err)
+	}
+	result.SessionPolicy.CandidateModels[0] = "changed"
+	if diagnostics.CandidateModels[0] != "current" {
+		t.Fatal("replay candidate inventory must own its snapshot")
+	}
+	ctx.CandidateModels = ctx.CandidateModels[1:]
+	if _, held := sessionScopeProtectedResult(config.RouterLearningProtectionConfig{}, base, ctx, identity); held {
+		t.Fatal("recorded candidates must not authorize a model outside the current pool")
+	}
+}
 
 func TestRouterLearningPolicySerializationKeepsCommonFieldsAuthoritative(t *testing.T) {
 	policy := newRouterLearningPolicy(routerLearningMethodProtection)

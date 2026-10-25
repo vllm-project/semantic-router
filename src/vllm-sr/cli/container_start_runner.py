@@ -16,12 +16,20 @@ from cli.container_services import (
     container_status,
     container_stop_container,
 )
+from cli.sr_bench_runtime import BenchWorkerKeptError, reconcile_bench_container
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
 
-def run_container_specs(container_specs, *, storage_secret_values: dict[str, str]):
+def run_container_specs(
+    container_specs,
+    *,
+    router_secret_values: dict[str, str],
+    dashboard_secret_values: dict[str, str] | None = None,
+    bench_secret_values: dict[str, str] | None = None,
+    bench_token_env: str = "SR_BENCH_TOKEN",
+):
     """Bring up each service in order, unwinding the stack on the first failure.
 
     A service can need more than one command, so a container is registered for
@@ -40,7 +48,11 @@ def run_container_specs(container_specs, *, storage_secret_values: dict[str, str
         return_code, stdout, stderr = _run_service_commands(
             commands,
             service_name,
-            storage_secret_values,
+            router_secret_values,
+            dashboard_secret_values=dashboard_secret_values or {},
+            bench_secret_values=bench_secret_values or {},
+            bench_token_env=bench_token_env,
+            container_name=container_name,
             on_created=lambda name=container_name: started_containers.append(name),
         )
         if stdout:
@@ -55,7 +67,15 @@ def run_container_specs(container_specs, *, storage_secret_values: dict[str, str
 
 
 def _run_service_commands(
-    commands, service_name: str, storage_secret_values: dict[str, str], *, on_created
+    commands,
+    service_name: str,
+    router_secret_values: dict[str, str],
+    *,
+    on_created,
+    dashboard_secret_values: dict[str, str] | None = None,
+    bench_secret_values: dict[str, str] | None = None,
+    bench_token_env: str = "SR_BENCH_TOKEN",
+    container_name: str = "",
 ):
     """Run one service's commands in order and stop at the first failure.
 
@@ -65,7 +85,20 @@ def _run_service_commands(
 
     # Only the creating command resolves the inheriting `-e NAME` flags, so it
     # is the only child that is handed the credential values.
-    creation_env = _service_child_env(service_name, storage_secret_values)
+    creation_env = _service_child_env(service_name, router_secret_values)
+    if service_name == "sr-bench":
+        values = bench_secret_values or {}
+        creation_env = {
+            **os.environ,
+            **values,
+            "SR_BENCH_TOKEN": values.get(bench_token_env, ""),
+        }
+    elif service_name == "dashboard":
+        values = dict(dashboard_secret_values or {})
+        if bench_secret_values:
+            values[bench_token_env] = bench_secret_values[bench_token_env]
+        if values:
+            creation_env = {**os.environ, **values}
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
 
@@ -80,9 +113,46 @@ def _run_service_commands(
                 env=creation_env if index == 0 else None,
             )
         except subprocess.CalledProcessError as exc:
+            if service_name == "sr-bench" and index == 0:
+                try:
+                    action = reconcile_bench_container(
+                        cmd, container_name, bench_secret_values or {}
+                    )
+                except BenchWorkerKeptError as kept:
+                    log.warning(f"{kept} Router and Dashboard start without it.")
+                    break
+                except (ValueError, subprocess.SubprocessError) as reconciliation_error:
+                    return (1, "\n".join(stdout_chunks), str(reconciliation_error))
+                if action == "reuse":
+                    log.info(
+                        "Reusing the independent sr-bench service; active runs continue"
+                    )
+                    continue
+                if action == "replace":
+                    log.info(
+                        "Replacing the idle sr-bench service; saved evidence is preserved"
+                    )
+                    try:
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            check=True,
+                            env=creation_env,
+                        )
+                    except subprocess.CalledProcessError as upgrade_error:
+                        return (
+                            upgrade_error.returncode,
+                            upgrade_error.stdout or "",
+                            upgrade_error.stderr or "sr-bench replacement failed",
+                        )
+                    on_created()
+                    stdout_chunks.append(result.stdout or "")
+                    stderr_chunks.append(result.stderr or "")
+                    continue
             if exc.stdout:
                 stdout_chunks.append(exc.stdout)
-            stderr_chunks.append(exc.stderr)
+            stderr_chunks.append(exc.stderr or "Container command failed")
             return (exc.returncode, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
         if index == 0:
             on_created()
@@ -95,21 +165,20 @@ def _run_service_commands(
 
 
 def _service_child_env(
-    service_name: str, storage_secret_values: dict[str, str]
+    service_name: str, router_secret_values: dict[str, str]
 ) -> dict[str, str] | None:
-    """Hand the storage credentials to the Router's creating command alone.
+    """Hand the Router's credentials to the Router's creating command alone.
 
     The values travel in this one child's environment, paired with the
     inheriting ``-e NAME`` flag, so they never appear in a command line. They
     are never assigned into ``os.environ``: that would expose them to every
-    other process the CLI spawns, including ``docker exec`` and OpenClaw
-    workloads. ``None`` means "inherit", which is what every other service
-    gets.
+    other process the CLI spawns, including ``docker exec``. ``None`` means
+    "inherit", which is what every service without secrets gets.
     """
 
-    if service_name != "router" or not storage_secret_values:
+    if service_name != "router" or not router_secret_values:
         return None
-    return {**os.environ, **storage_secret_values}
+    return {**os.environ, **router_secret_values}
 
 
 def _cleanup_started_containers(container_names: list[str]) -> None:

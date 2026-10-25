@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -117,20 +118,22 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // result.
 func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
 	bestRisk := float32(-1)
-	for _, chunk := range jailbreakSignalChunks(text) {
-		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
-		if err == nil {
-			err = validateJailbreakDistribution(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
-		}
-		if err != nil {
-			logging.Errorf("jailbreak classification failed on one chunk: %v", err)
-			lastErr = err
-			continue
-		}
-		risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
-		if risk > bestRisk {
-			bestRisk = risk
-			result = chunkResult
+	for _, chunk := range c.jailbreakModelInputs(text) {
+		for _, window := range c.classifyJailbreakWindows(ctx, chunk) {
+			chunkResult, err := window.result, window.err
+			if err == nil {
+				err = validateJailbreakDistribution(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+			}
+			if err != nil {
+				logging.Errorf("jailbreak classification failed on one chunk: %v", err)
+				lastErr = err
+				continue
+			}
+			risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+			if risk > bestRisk {
+				bestRisk = risk
+				result = chunkResult
+			}
 		}
 	}
 	return result, bestRisk >= 0, lastErr
@@ -238,6 +241,9 @@ func (c *Classifier) CheckForJailbreakRiskWithThreshold(ctx context.Context, tex
 }
 
 func validateJailbreakDistribution(mapping *JailbreakMapping, positiveLabels []string, result SequenceClassificationResult) error {
+	if err := validateJailbreakInputCoverage(result.Input); err != nil {
+		return err
+	}
 	if mapping == nil || len(result.Probabilities) != mapping.GetJailbreakTypeCount() {
 		return fmt.Errorf("jailbreak distribution does not match the configured label set")
 	}
@@ -253,6 +259,17 @@ func validateJailbreakDistribution(mapping *JailbreakMapping, positiveLabels []s
 	}
 	if math.IsNaN(float64(jailbreakRiskScore(mapping, positiveLabels, result))) {
 		return fmt.Errorf("jailbreak positive-label probability is unavailable: %w", tasks.ErrProbabilitiesUnavailable)
+	}
+	return nil
+}
+
+// A provider may return valid probabilities for only a prefix. All Guard
+// consumers must treat that as an unscanned input, not a clean full one: the
+// error is an input limit, which a jailbreak rule matches whatever on_error
+// says. Older backends without input metadata retain their existing contract.
+func validateJailbreakInputCoverage(input *tasks.InputUsage) error {
+	if input != nil && (input.Truncated || input.ProcessedTokens < input.OriginalTokens) {
+		return fmt.Errorf("%w: jailbreak input is incomplete: processed %d of %d tokens (truncated=%t)", binding.ErrInputLimit, input.ProcessedTokens, input.OriginalTokens, input.Truncated)
 	}
 	return nil
 }

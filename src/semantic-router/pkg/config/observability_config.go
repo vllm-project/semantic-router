@@ -1,7 +1,15 @@
 package config
 
+// EmbeddingAPIConfig prepares the globally configured embedding for diagnostics
+// even when no routing recipe needs it. Explicit recipe requests stay isolated.
+type EmbeddingAPIConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type APIConfig struct {
+	Embeddings          EmbeddingAPIConfig        `yaml:"embeddings,omitempty"`
 	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
+	RoutingPreview      RoutingPreviewConfig      `yaml:"routing_preview,omitempty"`
 }
 
 type ObservabilityConfig struct {
@@ -33,11 +41,10 @@ type ProfilingConfig struct {
 }
 
 type WindowedMetricsConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	TimeWindows          []string `yaml:"time_windows,omitempty"`
-	UpdateInterval       string   `yaml:"update_interval,omitempty"`
-	QueueDepthEstimation bool     `yaml:"queue_depth_estimation"`
-	MaxModels            int      `yaml:"max_models,omitempty"`
+	Enabled        bool     `yaml:"enabled"`
+	TimeWindows    []string `yaml:"time_windows,omitempty"`
+	UpdateInterval string   `yaml:"update_interval,omitempty"`
+	MaxModels      int      `yaml:"max_models,omitempty"`
 }
 
 type TracingConfig struct {

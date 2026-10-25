@@ -120,17 +120,56 @@ catalog versions and compatibility without reproducing these release steps.
 Stable releases are created from an explicitly reviewed candidate; nightly
 artifacts are never promoted automatically.
 
-1. Confirm the candidate commit passes the required CI and release checks.
-2. Update the repository's version-bearing surfaces and validate their shared
-   version contract.
-3. Create the matching built-in catalog snapshot as described above.
-4. Push the reviewed `v<version>` tag to start the canonical Docker, Helm,
+1. Confirm the candidate commit passes the required CI and release checks,
+   and compare its performance with the cycle's base (see below).
+2. Point the docs at the release (the upgrade runbook and its image list) and
+   create the matching built-in catalog snapshot as described above.
+3. Run `make release RELEASE_VERSION=X.Y.Z` (and `NEXT_VERSION` when the next
+   cycle isn't the next minor). It writes the release commit, which sets the
+   CLI version and pins the source Helm chart's images to `vX.Y.Z`, checks it
+   with `make release-check RELEASE_VERSION=X.Y.Z` and tags it. Then it writes
+   the commit that starts the next development cycle: the next CLI version and
+   the chart back on the development images (`latest`), checked by
+   `make release-check`.
+4. Push the branch with the reviewed `v<version>` tag
+   (`git push origin HEAD --follow-tags`) to start the canonical Docker, Helm,
    Python, crate, and Operator publishers.
 5. Verify every publisher before treating the GitHub release as complete.
 
-Fleet Simulator uses its own package version and tag stream. Keep that release
-independent from the main Router version unless a documented compatibility
-constraint requires coordinated updates.
+The version contract has two modes, and `tools/release/check_version_contract.py`
+enforces both:
+
+- **Development cycle** (`main` between releases): the CLI carries the next
+  version, so dev builds sort after the last release; every image the source
+  chart deploys defaults to `latest`, the image `main` publishes for the same
+  templates; the docs and the upgrade runbook stay on the last release.
+- **Release commit** (the `vX.Y.Z` tag): the CLI is `X.Y.Z`, the chart's
+  images default to `vX.Y.Z`, the docs pin `X.Y.Z`, and the `vX.Y` catalog
+  snapshot exists.
+
+The chart's images all follow its `appVersion`, so no image in `values.yaml`
+pins its own tag. A pull request that changes a file the contract reads runs
+the development-cycle check in the harness tests.
+
+### Performance base
+
+Each release compares its classify and cache benchmarks with a base that runs
+the same harness on the same pinned models:
+
+```bash
+make perf-check PERF_BASE_REF="$(python3 tools/ci/ci_plan.py performance-base --version X.Y.Z)"
+```
+
+The base is the previous release unless `PERFORMANCE_BASES` in
+`tools/ci/ci_plan.py` declares one for the cycle. 0.5.0 declares `abae8ff99`
+(#4707): v0.4.0 predates the model runtime, so the harness could only record a
+reset against it, while #4707 pinned the classify benchmarks to the Vela 1.0
+specialists and its own Production Benchmarks job passed with that harness.
+From 0.5.0 on, the previous release has the model runtime. When a
+cycle's previous release can't run the current harness, declare a reviewed
+`main` commit whose Production Benchmarks job passed with it before the
+release; resolution refuses a previous release that predates the model runtime
+rather than resetting the comparison.
 
 ## Commands
 
@@ -190,7 +229,9 @@ contract without making roadmap, priority, or close decisions:
   Maintainer reclassification is not reverted from stale form text;
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
-  project work or `owner/maintainers` for repository governance;
+  project work or `owner/maintainers` for repository governance; each exact
+  `/accept` event runs a paginated repository-wide reconciliation so earlier
+  valid decisions recover from queued, failed, or interrupted workflow runs;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;
@@ -233,6 +274,98 @@ are retained.
 Use the maintainer board to decide what needs review, rebase, unblock, or
 close-candidate follow-up. Use `stale.yml` only for the automated stale/close
 lifecycle.
+
+### Assignee inactivity policy
+
+Open `accepted` issues with at least one assignee are subject to a daily
+two-stage inactivity sweep run by `maintenance.yml` →
+`unassign-inactive-assignees.yml`. Each assignee moves through the stages
+independently:
+
+- **15 days** without activity from that assignee: they receive a warning
+  comment naming them. No label is applied — the comment is the record.
+- **30 days** without activity **and** at least the 15-day grace window since
+  their own warning: the assignee is removed and a notice is posted. The issue
+  stays open and `accepted` for anyone to pick up.
+
+An assignee is never removed without a warning on record. An assignee first
+seen well past 30 days is warned on that run and only becomes removable a full
+grace window later, so a contributor cannot be dropped without notice on the
+sweep's first encounter with them.
+
+#### What counts as activity
+
+Activity is attributed to one assignee at a time, from Timeline API events:
+
+- their own comments and reviews on the issue;
+- their own comments, reviews, and force-pushes on a pull request
+  cross-referenced from the issue, plus opening such a pull request;
+- commits on those pull requests whose GitHub author or committer is that
+  assignee, read from the commit list rather than the timeline, which carries
+  only a git identity;
+- being assigned to the issue, which starts or restarts their clock.
+
+Every cross-referenced pull request in the same repository is evaluated, not
+just the most recent; the scan stops early only once activity recent enough to
+settle the outcome as active has been found.
+
+Deliberately excluded: bot writes, label and milestone churn, mentions, and
+anything done by another person. A linked pull request's `updated_at` is not
+used, so review traffic and CI writes on somebody else's pull request cannot
+keep an inactive assignee assigned, and an active co-assignee never shields an
+inactive one.
+
+#### Recovering and overriding
+
+- **Activity resumes.** Any qualifying event supersedes a pending warning; the
+  next sweep reports the assignee as recovered and takes no action. A fresh
+  warning is only posted if they go quiet for another 15 days.
+- **Extending an assignment.** Reassign the contributor (`gh issue edit
+  <n> --add-assignee <login>`) — the `assigned` event restarts their clock.
+- **Pausing an issue entirely.** Add the `hold` label. Issues carrying any
+  label listed in the workflow's `exempt_labels` input (default `hold`) are
+  skipped. Locked issues are skipped too, since they cannot receive a warning.
+- **Undoing a removal.** Re-assign the contributor. The removal notice from the
+  previous cycle is superseded by the new `assigned` event.
+
+#### Failure behaviour
+
+Every read that could prove recent activity fails closed: if the timeline,
+linked pull request, or comment lookup fails, that assignment is left untouched
+and the run is marked failed. Every write is guarded by a per-assignee marker
+comment, so a run that dies partway through resumes rather than double-posting
+or re-removing; the removal notice is always posted before the assignment is
+removed, and the removal is retried on the next run if it did not land. Re-run
+the workflow to retry a failed sweep — it only redoes what did not complete.
+
+Each run writes a job summary listing every transition, the days of inactivity
+behind it, and any failed evaluation.
+
+#### Running it manually
+
+```bash
+gh workflow run maintenance.yml -f task=unassign
+```
+
+That runs the standard policy with the scheduled defaults. To preview a sweep or
+override a threshold, dispatch the workflow itself, which takes `dry_run`,
+`warn_after_days`, `unassign_after_days`, and `exempt_labels`:
+
+```bash
+gh workflow run unassign-inactive-assignees.yml -f dry_run=true
+```
+
+A direct dispatch defaults to `dry_run=true`, so it reports the transitions it
+would make and mutates nothing until you pass `-f dry_run=false`.
+
+Sweeps are serialized repository-wide by a single concurrency group, so a manual
+dispatch queues behind an in-flight scheduled sweep instead of racing it and
+double-posting a warning or removal notice.
+
+The workflow logic lives in `.github/scripts/unassign-inactive.js` and is
+covered by `.github/scripts/__tests__/`, run in CI by the `github-scripts-tests`
+pre-commit hook. Run it locally with `npm --prefix .github/scripts ci && npm
+--prefix .github/scripts test`.
 
 Manual trigger example:
 

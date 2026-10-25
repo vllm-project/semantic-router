@@ -78,8 +78,14 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 }
 
 func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := validateArtifactDownload(spec); err != nil {
 		return err
+	}
+	if err := invalidateModelRevision(spec); err != nil {
+		return fmt.Errorf("invalidate model revision: %w", err)
 	}
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
@@ -114,6 +120,9 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if immutableModelRevision(spec) {
+			return fmt.Errorf("failed to download pinned model %s: %w", spec.RepoID, err)
+		}
 		if !spec.Strict && IsGatedModelError(err, spec.RepoID, config.HFToken) {
 			logging.Warnf("⚠️  Skipping model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
 			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
@@ -131,15 +140,9 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		if !complete {
 			return fmt.Errorf("downloaded artifact %s is missing required provider files", spec.LocalPath)
 		}
-		if immutableRevision(spec.Revision) {
-			matched, err := cachedRevisionMatches(spec)
-			if err != nil {
-				return err
-			}
-			if !matched {
-				return fmt.Errorf("downloaded artifact %q does not have a consistent HF snapshot at %q; use a separate empty directory", spec.LocalPath, spec.Revision)
-			}
-		}
+	}
+	if err := recordDownloadedModelRevision(spec); err != nil {
+		return fmt.Errorf("record downloaded model revision: %w", err)
 	}
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
@@ -175,16 +178,7 @@ func buildDownloadArgs(spec ModelSpec) []string {
 	return args
 }
 
-// EnsureModels ensures all required models are downloaded
-func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
-	return EnsureModelsWithProgress(specs, config, nil)
-}
-
-// EnsureModelsWithProgress ensures all required models are downloaded and reports progress.
-func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter ProgressReporter) error {
-	return EnsureModelsWithProgressContext(context.Background(), specs, config, reporter)
-}
-
+// EnsureModelsWithProgressContext ensures all required models are downloaded and reports progress.
 func EnsureModelsWithProgressContext(
 	ctx context.Context,
 	specs []ModelSpec,
@@ -244,13 +238,13 @@ func EnsureModelsWithProgressContext(
 		return nil
 	}
 
-	successCount, skippedCount := downloadMissingModels(ctx, missing, config, specs, &pendingModels, &readyCount, reporter)
+	successCount, skippedCount, downloadErr := downloadMissingModels(ctx, missing, config, specs, &pendingModels, &readyCount, reporter)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	if successCount+skippedCount < len(missing) {
-		return fmt.Errorf("failed to download %d out of %d models", len(missing)-successCount-skippedCount, len(missing))
+		return fmt.Errorf("failed to download %d out of %d models: %w", len(missing)-successCount-skippedCount, len(missing), downloadErr)
 	}
 
 	if skippedCount > 0 {
@@ -279,10 +273,10 @@ func downloadMissingModels(
 	pendingModels *[]string,
 	readyCount *int,
 	reporter ProgressReporter,
-) (successCount, skippedCount int) {
+) (successCount, skippedCount int, downloadErr error) {
 	for _, spec := range missing {
 		if ctx.Err() != nil {
-			return successCount, skippedCount
+			return successCount, skippedCount, downloadErr
 		}
 		reportProgress(reporter, ProgressState{
 			Phase:            "downloading",
@@ -294,7 +288,7 @@ func downloadMissingModels(
 		})
 		if err := DownloadModelWithProgressContext(ctx, spec, config); err != nil {
 			if ctx.Err() != nil {
-				return successCount, skippedCount
+				return successCount, skippedCount, downloadErr
 			}
 			if errors.Is(err, ErrGatedModelSkipped) || strings.Contains(err.Error(), ErrGatedModelSkipped.Error()) {
 				skippedCount++
@@ -310,6 +304,7 @@ func downloadMissingModels(
 				})
 				continue
 			}
+			downloadErr = errors.Join(downloadErr, fmt.Errorf("%s: %w", spec.LocalPath, err))
 			logging.Warnf("Failed to download model %s: %v", spec.RepoID, err)
 			continue
 		}
@@ -324,7 +319,7 @@ func downloadMissingModels(
 			Message:       fmt.Sprintf("Model %s is ready", spec.LocalPath),
 		})
 	}
-	return successCount, skippedCount
+	return successCount, skippedCount, downloadErr
 }
 
 func reportProgress(reporter ProgressReporter, state ProgressState) {

@@ -6,7 +6,6 @@ import {
   buildExactChatRequestBody,
   buildPlaygroundRequestHeaders,
   collectResponseHeaders,
-  PLAYGROUND_REQUEST_TIMEOUT_MS,
   type OutboundChatMessage,
 } from './chatRequestSupport'
 import {
@@ -22,6 +21,7 @@ import {
 import {
   assertPlaygroundResponseSuccess,
   consumePlaygroundResponseBody,
+  PlaygroundIncompleteResponseFailure,
 } from './chatTaskResponseSupport'
 import { ChatTaskResponseState } from './chatTaskResponseState'
 import { runToolLoop } from './chatTaskToolLoop'
@@ -40,7 +40,6 @@ type ExecuteTools = (
 
 interface RunPlaygroundTaskOptions {
   buildTaskTools: (task: PlaygroundTask) => ToolDefinition[]
-  clawManagementDisabled: boolean
   clearConversationActiveTask: (conversationId: string, taskId: string) => void
   endpoint: string
   executeTools: ExecuteTools
@@ -71,7 +70,6 @@ interface PlaygroundExecutionRuntime {
   abortController: AbortController
   assistantMessageId: string
   responseState: ChatTaskResponseState
-  timeoutHandle: ReturnType<typeof globalThis.setTimeout>
 }
 
 const preparePlaygroundTask = (task: PlaygroundTask): PreparedPlaygroundTask | null => {
@@ -124,14 +122,6 @@ const beginTaskExecution = (
 
   const assistantMessageId = generateId()
   const abortController = new AbortController()
-  const timeoutHandle = globalThis.setTimeout(() => {
-    abortController.abort(
-      new DOMException(
-        `Playground request timed out after ${PLAYGROUND_REQUEST_TIMEOUT_MS / 1000} seconds.`,
-        'TimeoutError',
-      ),
-    )
-  }, PLAYGROUND_REQUEST_TIMEOUT_MS)
   const userMessage = createUserMessage(task, preparedTask, generateId)
   const assistantMessage: Message = {
     id: assistantMessageId,
@@ -158,7 +148,6 @@ const beginTaskExecution = (
       requestStartedAt: Date.now(),
       updateConversationMessages: options.updateConversationMessages,
     }),
-    timeoutHandle,
   }
 }
 
@@ -166,7 +155,7 @@ const buildExecutionRequest = (
   options: RunPlaygroundTaskOptions,
   preparedTask: PreparedPlaygroundTask,
 ): PlaygroundExecutionRequest => {
-  const { buildTaskTools, clawManagementDisabled, getConversationMessagesSnapshot, task } = options
+  const { buildTaskTools, getConversationMessagesSnapshot, task } = options
   const exactTools = Array.isArray(task.exactRequest?.tools)
     ? (task.exactRequest.tools as ToolDefinition[])
     : null
@@ -176,7 +165,6 @@ const buildExecutionRequest = (
     : buildChatMessages(
         getConversationMessagesSnapshot(task.conversationId),
         preparedTask.trimmedInput,
-        task.requestOptions.enableClawMode && !clawManagementDisabled,
         preparedTask.attachments,
       )
   const requestBody = task.exactRequest
@@ -254,6 +242,21 @@ const handleTaskExecutionFailure = (
   runtime: PlaygroundExecutionRuntime,
   error: unknown,
 ): void => {
+  if (error instanceof PlaygroundIncompleteResponseFailure) {
+    if (runtime.responseState.toolCallsMap.size > 0) {
+      runtime.responseState.skipPendingToolCalls()
+    }
+    runtime.responseState.finalize()
+    options.setConversationError(options.task.conversationId, playgroundErrorPresentation(error))
+    options.updateConversationMessages(options.task.conversationId, (prev) =>
+      prev.map((message) =>
+        message.id === runtime.assistantMessageId
+          ? { ...message, incomplete: error.productMessage }
+          : message,
+      ),
+    )
+    return
+  }
   runtime.responseState.cancelStreamingChoiceSync()
   if (error instanceof Error && error.name === 'AbortError') return
 
@@ -267,7 +270,6 @@ const finishTaskExecution = (
   options: RunPlaygroundTaskOptions,
   runtime: PlaygroundExecutionRuntime,
 ): void => {
-  globalThis.clearTimeout(runtime.timeoutHandle)
   runtime.responseState.cancelStreamingChoiceSync()
   options.setConversationThinking(options.task.conversationId, false)
   options.clearConversationActiveTask(options.task.conversationId, options.task.id)

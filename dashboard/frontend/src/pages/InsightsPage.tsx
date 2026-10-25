@@ -8,6 +8,7 @@ import ProductLoadingState from '../components/ProductLoadingState'
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
+import InsightsEmptyState from './InsightsEmptyState'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
@@ -359,51 +360,7 @@ export default function InsightsPage() {
           </div>
 
           {!hasReplayData && !loading ? (
-            <div className={styles.emptyState}>
-              {replayUnavailable ? (
-                <div className={styles.emptyHint}>
-                  <p>
-                    Insights stay empty until router replay is enabled and requests flow through the
-                    router.
-                  </p>
-                  <p className={styles.emptySubtext}>
-                    Enable `global.services.router_replay.enabled`, or override a specific decision
-                    with `router_replay.enabled: true`. Use `enabled: false` on a decision only when
-                    you need to turn replay off for that route.
-                  </p>
-                </div>
-              ) : error ? (
-                <div className={styles.emptyHint}>
-                  <p>
-                    Unable to load insights. If replay is disabled, enable router replay globally or
-                    on the affected decision, then send traffic through the router.
-                  </p>
-                  <pre className={styles.configHint}>{`global:
-  services:
-    router_replay:
-      enabled: true
-      store_backend: memory  # or redis, postgres, milvus
-
-routing:
-  decisions:
-    - name: some-route
-      plugins:
-        - type: router_replay
-          configuration:
-            enabled: false  # optional per-decision opt-out`}</pre>
-                  <p className={styles.emptySubtext}>
-                    Then restart the router and send some requests.
-                  </p>
-                </div>
-              ) : (
-                <div className={styles.emptyHint}>
-                  <p>Insights records will appear here once requests are processed.</p>
-                  <p className={styles.emptySubtext}>
-                    Send chat completion traffic through the router to populate this view.
-                  </p>
-                </div>
-              )}
-            </div>
+            <InsightsEmptyState replayUnavailable={replayUnavailable} hasError={Boolean(error)} />
           ) : (
             <DataTable
               columns={tableColumns}

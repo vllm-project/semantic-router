@@ -97,9 +97,9 @@
   border: 1px solid var(--site-border);
   background:
     radial-gradient(circle at top right, var(--site-accent-soft), transparent 38%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 52%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 52%),
     var(--site-surface);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--site-shadow-soft);
   transition:
     border-color 180ms ease,
     transform 180ms ease,
@@ -113,19 +113,19 @@
   border-color: var(--site-hover-border);
   background:
     radial-gradient(circle at top right, rgba(48, 162, 255, 0.2), transparent 40%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 58%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 58%),
     var(--site-surface-alt);
   box-shadow: var(--site-hover-glow);
 }
 
 .paperCard:hover .paperTitle {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
 }
 
 .spotlightCard {
   background:
     radial-gradient(circle at top right, rgba(48, 162, 255, 0.2), transparent 36%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 56%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 56%),
     var(--site-surface-raised);
 }
 
@@ -151,13 +151,13 @@
 
 .cardMeta {
   color: var(--site-muted-bright);
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--site-surface-soft);
 }
 
 .categoryBadge {
-  color: #030303;
-  background: var(--site-accent);
-  border-color: var(--site-accent);
+  color: var(--site-cta-text);
+  background: var(--site-cta-bg);
+  border-color: var(--site-cta-border);
 }
 
 .cardCopy {
@@ -205,13 +205,13 @@
   padding: 0.6rem 0.95rem;
   border: 1px solid var(--site-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--site-surface-soft);
   color: var(--site-text);
   font-size: 0.74rem;
   text-decoration: none;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 var(--site-border);
   transition:
     background 180ms ease,
     color 180ms ease,
@@ -220,10 +220,10 @@
 }
 
 .paperLink:hover {
-  background: var(--site-accent);
-  color: #030303;
-  border-color: var(--site-accent);
-  box-shadow: 0 12px 24px rgba(48, 162, 255, 0.18);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
+  border-color: var(--site-cta-border);
+  box-shadow: var(--site-cta-shadow);
   text-decoration: none;
 }
 

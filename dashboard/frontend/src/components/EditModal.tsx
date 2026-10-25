@@ -44,7 +44,7 @@ export interface FieldConfig<TForm extends object = EditFormData> {
   step?: number
   shouldHide?: BivariantCallback<(data: TForm) => boolean>
   customRender?: BivariantCallback<
-    (value: unknown, onChange: (value: unknown) => void) => React.ReactNode
+    (value: unknown, onChange: (value: unknown) => void, data?: TForm) => React.ReactNode
   >
 }
 
@@ -396,8 +396,10 @@ const EditModal: React.FC<EditModalProps> = ({
                                 aria-labelledby={`${fieldId}-label`}
                                 aria-describedby={field.description ? descriptionId : undefined}
                               >
-                                {field.customRender(readField(field.name), (value) =>
-                                  handleChange(field.name, value),
+                                {field.customRender(
+                                  readField(field.name),
+                                  (value) => handleChange(field.name, value),
+                                  formData,
                                 )}
                               </div>
                             )}

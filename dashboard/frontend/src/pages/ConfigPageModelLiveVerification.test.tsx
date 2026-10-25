@@ -17,6 +17,8 @@ describe('ConfigPageModelLiveVerification', () => {
 
     expect(markup).toContain('Checking')
     expect(markup).toContain('Checking… logical-model with a real inference query')
+    expect(markup).toContain('title="Checking…"')
+    expect(markup).not.toContain('Checking…</button>')
     expect(markup).toContain('disabled=""')
     expect(markup).not.toContain('Live')
     expect(markup).not.toContain('liveVerificationDotSuccess')
@@ -49,6 +51,8 @@ describe('ConfigPageModelLiveVerification', () => {
     expect(markup).toContain('liveVerificationDotSuccess')
     expect(markup).toContain('liveVerificationLabelSuccess')
     expect(markup).toContain('Check again logical-model with a real inference query')
+    expect(markup).toContain('title="Check again"')
+    expect(markup).not.toContain('Check again</button>')
     expect(markup).not.toContain('OK from provider')
     expect(markup).not.toContain('openai · 18 ms')
     expect(markup).not.toContain('catalog verified')
@@ -83,6 +87,9 @@ describe('ConfigPageModelLiveVerification', () => {
     )
 
     expect(markup).toContain('Not checked')
+    expect(markup).toContain('Check logical-model with a real inference query')
+    expect(markup).toContain('title="Check"')
+    expect(markup).not.toContain('Check</button>')
     expect(markup).not.toContain('liveVerificationDotSuccess')
     expect(markup).not.toContain('liveVerificationLabelSuccess')
   })

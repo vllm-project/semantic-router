@@ -1,0 +1,140 @@
+.section {
+  margin: 1.25rem 0;
+  min-width: 0;
+}
+
+.description {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.rows,
+.callRows {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(300px, 2fr);
+  align-items: start;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border-color, #38383e);
+}
+
+.model {
+  display: grid;
+  gap: 0.25rem;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.model span,
+.metrics dt,
+.metrics small,
+.rate,
+.callTotal,
+.unassessed {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.metrics dd {
+  margin: 0.2rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.metrics small {
+  display: block;
+}
+
+.rate {
+  margin-left: 0.35rem;
+}
+
+.affected strong {
+  color: var(--color-warning, #e2a650);
+}
+
+.finishReasons {
+  border-top: 1px solid var(--border-color, #38383e);
+  padding-top: 0.65rem;
+}
+
+.finishReasons summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 12px;
+  list-style: none;
+}
+
+.finishReasons summary::-webkit-details-marker {
+  display: none;
+}
+
+.finishReasons[open] summary svg {
+  transform: rotate(90deg);
+}
+
+.finishReasons summary:focus-visible {
+  outline: 2px solid var(--color-primary, #ff565e);
+  outline-offset: 3px;
+}
+
+.callRows {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  font-size: 13px;
+}
+
+.callRows > li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.callTotal,
+.unassessed {
+  display: block;
+}
+
+.reasonCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin: 0.45rem 0 0;
+  font-size: 12px;
+}
+
+.reasonCounts div {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.reasonCounts dt {
+  color: var(--text-secondary);
+}
+
+.reasonCounts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+  }
+}

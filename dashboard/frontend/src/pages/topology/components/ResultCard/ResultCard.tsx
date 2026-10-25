@@ -57,7 +57,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
             <div className={styles.compactItem}>
               <span className={styles.label}>Decision:</span>
               <span className={styles.value}>
-                {result.matchedDecision || 'Default'}
+                {result.matchedDecision || (result.isAccurate ? 'Default' : 'Unavailable')}
                 {result.decisionConfidenceAvailable === false && ' · Score unavailable'}
               </span>
             </div>
@@ -68,6 +68,21 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
               </span>
             </div>
           </div>
+
+          {result.selectionReason && (
+            <div className={styles.fallbackReason}>
+              {result.selectionReason}
+            </div>
+          )}
+
+          {result.signalErrors && Object.keys(result.signalErrors).length > 0 && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Signal errors:</span>
+              {Object.entries(result.signalErrors).map(([signal, error]) => (
+                <div key={signal} className={styles.signalReason}>{signal}: {error}</div>
+              ))}
+            </div>
+          )}
 
           {/* Matched Signals */}
           {matchedSignals.length > 0 && (

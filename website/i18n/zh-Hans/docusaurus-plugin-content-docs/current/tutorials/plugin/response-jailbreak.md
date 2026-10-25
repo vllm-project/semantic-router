@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 translation:
-  source_commit: "7c874be2"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/response-jailbreak.md"
   outdated: false
 ---
 
-# 响应越狱检测（Response Jailbreak）
+# 响应越狱检测
 
 ## 概览
 
@@ -24,7 +25,7 @@ translation:
 ## 何时使用
 
 - 路由需要最终的响应侧越狱筛查
-- 输出应在返回前被拦截，或通过响应 header 标记
+- 输出应在返回前被拦截，或通过响应头标记
 - 仅靠请求侧筛查不足以满足该工作负载的要求
 
 ## 配置
@@ -40,5 +41,7 @@ plugins:
       action: block
 ```
 
-该插件使用已配置的 prompt-guard 运行时处理生成的响应文本。它会增加延迟，也可能产生误报，因此应校准阈值，并根据策略选择 `block` 或仅通过 header 处理。完整示例见：
+该插件使用已配置的 prompt-guard 运行时处理生成的响应文本。它会增加延迟，也可能产生误报，因此应校准阈值，并根据策略选择 `block` 或仅通过请求头处理。完整示例见：
 [`config/fragments/plugin/response-jailbreak/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-jailbreak/strict.yaml)。
+
+流式响应中的已声明响应阶段信号在流结束后记录，标为 `not_enforced_streaming`。客户端此时已经收到文本，插件不能撤回内容；需要拦截时请使用非流式响应。

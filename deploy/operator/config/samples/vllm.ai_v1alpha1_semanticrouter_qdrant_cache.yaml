@@ -39,7 +39,7 @@ spec:
   # Semantic router configuration
   config:
     embedding_models:
-      mmbert_model_path: "models/mom-embedding-ultra"
+      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
       use_cpu: true
 
     # Semantic cache with Qdrant backend
@@ -48,7 +48,7 @@ spec:
       backend_type: qdrant
       similarity_threshold: "0.90"
       ttl_seconds: 7200
-      embedding_model: bert
+      embedding_model: mmbert
 
       # Qdrant configuration
       # NOTE: Update host to match your Qdrant deployment namespace

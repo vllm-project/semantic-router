@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,10 +26,12 @@ type TestReport struct {
 	KindVersion string    `json:"kind_version,omitempty"`
 
 	// Test Results
-	TestResults []TestResult `json:"test_results"`
-	TotalTests  int          `json:"total_tests"`
-	PassedTests int          `json:"passed_tests"`
-	FailedTests int          `json:"failed_tests"`
+	ExpectedCases []string     `json:"expected_cases"`
+	TestResults   []TestResult `json:"test_results"`
+	TotalTests    int          `json:"total_tests"`
+	PassedTests   int          `json:"passed_tests"`
+	FailedTests   int          `json:"failed_tests"`
+	FlakyTests    int          `json:"flaky_tests"`
 
 	// Cluster Information
 	ClusterInfo ClusterInfo `json:"cluster_info"`
@@ -95,13 +98,29 @@ func (rg *ReportGenerator) AddTestResults(results []TestResult) {
 	rg.report.TotalTests = len(results)
 
 	passedCount := 0
+	flakyCount := 0
 	for _, result := range results {
 		if result.Passed {
 			passedCount++
 		}
+		if result.Flaked {
+			flakyCount++
+		}
 	}
 	rg.report.PassedTests = passedCount
 	rg.report.FailedTests = rg.report.TotalTests - passedCount
+	rg.report.FlakyTests = flakyCount
+}
+
+// flakyTestNames lists the tests that only passed after a retry.
+func flakyTestNames(results []TestResult) []string {
+	names := make([]string, 0)
+	for _, result := range results {
+		if result.Flaked {
+			names = append(names, result.Name)
+		}
+	}
+	return names
 }
 
 // SetEnvironment sets environment variables in the report
@@ -209,7 +228,7 @@ func (rg *ReportGenerator) WriteJSON(filename string) error {
 		return fmt.Errorf("failed to marshal report: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write report file: %w", err)
 	}
 
@@ -220,7 +239,7 @@ func (rg *ReportGenerator) WriteJSON(filename string) error {
 func (rg *ReportGenerator) WriteMarkdown(filename string) error {
 	md := rg.generateMarkdown()
 
-	if err := os.WriteFile(filename, []byte(md), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(md), 0o644); err != nil {
 		return fmt.Errorf("failed to write markdown report: %w", err)
 	}
 
@@ -253,6 +272,7 @@ func (rg *ReportGenerator) generateMarkdown() string {
 | Total Tests | %d |
 | Passed Tests | %d |
 | Failed Tests | %d |
+| Flaky Tests | %d |
 | Success Rate | %.1f%% |
 
 ### 🔧 Cluster Statistics
@@ -270,7 +290,7 @@ func (rg *ReportGenerator) generateMarkdown() string {
 		statusColor, r.Status, r.Profile,
 		r.Duration, r.ClusterName,
 		r.ExitCode,
-		r.TotalTests, r.PassedTests, r.FailedTests,
+		r.TotalTests, r.PassedTests, r.FailedTests, r.FlakyTests,
 		float64(r.PassedTests)/float64(r.TotalTests)*100,
 		r.ClusterInfo.TotalPods,
 		r.ClusterInfo.RunningPods,
@@ -280,17 +300,31 @@ func (rg *ReportGenerator) generateMarkdown() string {
 	)
 
 	// Add test case results
+	if flaky := flakyTestNames(r.TestResults); len(flaky) > 0 {
+		md += fmt.Sprintf(
+			"\n> ⚠️ **%d test(s) passed only after a retry and are flaky:** %s\n",
+			len(flaky), strings.Join(flaky, ", "),
+		)
+	}
+
 	md += "\n### 📝 Test Cases\n\n"
 	for _, result := range r.TestResults {
 		status := "✅"
-		if !result.Passed {
+		switch {
+		case !result.Passed:
 			status = "❌"
+		case result.Flaked:
+			status = "⚠️"
 		}
 		errorMsg := ""
 		if result.Error != nil {
 			errorMsg = fmt.Sprintf(" - Error: `%s`", result.Error.Error())
 		}
-		md += fmt.Sprintf("- %s **%s** (%s)%s\n", status, result.Name, result.Duration, errorMsg)
+		flakyNote := ""
+		if result.Flaked {
+			flakyNote = fmt.Sprintf(" - passed on attempt %d", result.Attempts)
+		}
+		md += fmt.Sprintf("- %s **%s** (%s)%s%s\n", status, result.Name, result.Duration, flakyNote, errorMsg)
 
 		// Add details if available
 		if len(result.Details) > 0 {

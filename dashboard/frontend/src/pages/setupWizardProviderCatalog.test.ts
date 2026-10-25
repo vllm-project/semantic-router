@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { modelProviderCatalog } from './modelProviderCatalog'
 import {
+  DEFAULT_SETUP_OLLAMA_BASE_URL,
   DEFAULT_SETUP_PROVIDER_ID,
   getSetupProviderOption,
   isSetupRuntimeProvider,
@@ -28,6 +29,8 @@ describe('setup wizard provider catalog', () => {
   it('derives runtime and wire behavior instead of maintaining provider conditionals', () => {
     expect(DEFAULT_SETUP_PROVIDER_ID).toBe('vllm')
     expect(isSetupRuntimeProvider('vllm')).toBe(true)
+    expect(isSetupRuntimeProvider('ollama')).toBe(true)
+    expect(getSetupProviderOption('ollama').initialBaseUrl).toBe(DEFAULT_SETUP_OLLAMA_BASE_URL)
     expect(isSetupRuntimeProvider('openai-compatible')).toBe(false)
     expect(getSetupProviderOption('anthropic').apiFormat).toBe('anthropic')
     expect(getSetupProviderOption('anthropic').initialBaseUrl).toBe('https://api.anthropic.com')

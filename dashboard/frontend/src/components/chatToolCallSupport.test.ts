@@ -25,6 +25,7 @@ Let me search for more specific technical details.
     expect(result.toolCalls).toEqual([
       {
         index: 0,
+        argumentMode: 'snapshot',
         functionName: 'search_web',
         functionArguments: JSON.stringify({
           query: 'vLLM Semantic Router architecture technical details',
@@ -49,13 +50,13 @@ Let me search for more specific technical details.
 })
 
 describe('mergeToolCallArgumentChunk', () => {
-  it('does not duplicate cumulative or repeated streaming arguments', () => {
-    expect(mergeToolCallArgumentChunk('{"query":"vllm', '{"query":"vllm-sr"}')).toBe(
+  it('replaces arguments only for explicitly complete snapshots', () => {
+    expect(mergeToolCallArgumentChunk('{"query":"vllm', '{"query":"vllm-sr"}', 'snapshot')).toBe(
       '{"query":"vllm-sr"}',
     )
-    expect(mergeToolCallArgumentChunk('{"query":"vllm-sr"}', '{"query":"vllm-sr"}')).toBe(
-      '{"query":"vllm-sr"}',
-    )
+    expect(
+      mergeToolCallArgumentChunk('{"query":"vllm-sr"}', '{"query":"vllm-sr"}', 'snapshot'),
+    ).toBe('{"query":"vllm-sr"}')
   })
 
   it('still appends true delta chunks', () => {

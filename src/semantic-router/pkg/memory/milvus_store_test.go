@@ -1,11 +1,11 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package memory
 
 import (
 	"context"
 	"errors"
-	"os"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,22 +14,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
-
-// TestMain initializes the embedding model before running tests
-func TestMain(m *testing.M) {
-	// Initialize embedding model for tests
-	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
-	if err != nil {
-		os.Exit(1)
-	}
-
-	// Run tests
-	code := m.Run()
-	os.Exit(code)
-}
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
@@ -64,10 +49,12 @@ func (m *MockMilvusClient) HasCollection(ctx context.Context, coll string) (bool
 }
 
 // Stub out other required methods to satisfy client.Client interface
-func (m *MockMilvusClient) Close() error                                             { return nil }
+func (m *MockMilvusClient) Close() error { return nil }
+
 func (m *MockMilvusClient) CheckHealth(context.Context) (*entity.MilvusState, error) { return nil, nil }
 func (m *MockMilvusClient) UsingDatabase(context.Context, string) error              { return nil }
 func (m *MockMilvusClient) ListDatabases(context.Context) ([]entity.Database, error) { return nil, nil }
+
 func (m *MockMilvusClient) CreateDatabase(context.Context, string, ...client.CreateDatabaseOption) error {
 	return nil
 }
@@ -129,6 +116,7 @@ func (m *MockMilvusClient) AlterAlias(context.Context, string, string) error  { 
 func (m *MockMilvusClient) GetReplicas(context.Context, string) ([]*entity.ReplicaGroup, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) BackupRBAC(context.Context) (*entity.RBACMeta, error)   { return nil, nil }
 func (m *MockMilvusClient) RestoreRBAC(context.Context, *entity.RBACMeta) error    { return nil }
 func (m *MockMilvusClient) CreateCredential(context.Context, string, string) error { return nil }
@@ -318,6 +306,7 @@ func (m *MockMilvusClient) DropResourceGroup(context.Context, string) error { re
 func (m *MockMilvusClient) DescribeResourceGroup(context.Context, string) (*entity.ResourceGroup, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) ListResourceGroups(context.Context) ([]string, error)      { return nil, nil }
 func (m *MockMilvusClient) TransferNode(context.Context, string, string, int32) error { return nil }
 func (m *MockMilvusClient) TransferReplica(context.Context, string, string, string, int64) error {
@@ -350,10 +339,10 @@ func (m *MockMilvusClient) ReplicateMessage(context.Context, string, uint64, uin
 
 func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
-	// Use bert embedding config for tests since that's initialized in TestMain
+	// The qwen3 model type stores the test provider's full output
 	testEmbeddingConfig := EmbeddingConfig{
 		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelBERT,
+		Model:    EmbeddingModelQwen3,
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -755,6 +744,28 @@ func TestMilvusStore_Store_Success(t *testing.T) {
 	assert.GreaterOrEqual(t, len(capturedColumns), 7, "Expected at least 7 columns for insert")
 }
 
+func TestMilvusStore_Store_RetryAfterTransientInsertUsesUpsert(t *testing.T) {
+	store, mockClient := setupTestStore()
+	store.retryBaseDelay = time.Millisecond
+
+	mockClient.InsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, errors.New("context deadline exceeded")
+	}
+	mockClient.UpsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, nil
+	}
+
+	err := store.Store(context.Background(), &Memory{
+		ID:      "test-mem-retry",
+		Content: "User prefers window seats",
+		UserID:  "user-123",
+		Type:    MemoryTypeSemantic,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockClient.InsertCallCount)
+	assert.Equal(t, 1, mockClient.UpsertCallCount)
+}
+
 func TestMilvusStore_Store_MissingRequiredFields(t *testing.T) {
 	store, _ := setupTestStore()
 	ctx := context.Background()
@@ -915,6 +926,59 @@ func TestMilvusStore_ForgetByScope_MissingUserID(t *testing.T) {
 	assert.Contains(t, err.Error(), "user ID is required")
 }
 
+func TestMilvusStore_ForgetByScope_ProjectID_ReturnsDeleteErrors(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+	deleteErr := errors.New("permanent test delete error")
+
+	mockClient.QueryFunc = func(
+		ctx context.Context,
+		coll string,
+		parts []string,
+		expr string,
+		out []string,
+		opts ...client.SearchQueryOptionFunc,
+	) (client.ResultSet, error) {
+		return []entity.Column{
+			entity.NewColumnVarChar("id", []string{"mem-1", "mem-2"}),
+			entity.NewColumnVarChar("metadata", []string{
+				`{"project_id":"p"}`,
+				`{"project_id":"p"}`,
+			}),
+		}, nil
+	}
+
+	attemptedIDs := make(map[string]bool)
+
+	mockClient.DeleteFunc = func(
+		ctx context.Context,
+		coll string,
+		part string,
+		expr string,
+	) error {
+		switch expr {
+		case `id == "mem-1"`:
+			attemptedIDs["mem-1"] = true
+			return deleteErr
+		case `id == "mem-2"`:
+			attemptedIDs["mem-2"] = true
+			return nil
+		default:
+			return fmt.Errorf("unexpected delete expression: %s", expr)
+		}
+	}
+
+	err := store.ForgetByScope(ctx, MemoryScope{
+		UserID:    "u",
+		ProjectID: "p",
+	})
+
+	require.Error(t, err, "ForgetByScope must report individual deletion failures")
+	assert.ErrorIs(t, err, deleteErr)
+	assert.True(t, attemptedIDs["mem-1"], "must attempt the failing deletion")
+	assert.True(t, attemptedIDs["mem-2"], "must continue to the next deletion")
+}
+
 func TestMilvusStore_Update_Success(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
@@ -987,7 +1051,7 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 
 	testEmbeddingConfig := EmbeddingConfig{
 		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelBERT,
+		Model:    EmbeddingModelQwen3,
 	}
 
 	config := DefaultMemoryConfig()
@@ -1101,4 +1165,82 @@ func TestMilvusStore_Retrieve_HybridExpandsTopK(t *testing.T) {
 		Query: "test", UserID: "u1", Limit: 5, HybridSearch: true,
 	})
 	assert.Equal(t, 40, capturedTopK, "Hybrid should use 8x multiplier for broader candidate pool")
+}
+
+func TestMilvusStore_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.T) {
+	const legacyCount = 50
+
+	tests := []struct {
+		name      string
+		opts      RetrieveOptions
+		wantTopKs []int
+		wantEfs   []int
+	}{
+		{
+			name:      "vector",
+			opts:      RetrieveOptions{HybridSearch: false},
+			wantTopKs: []int{20, 40, 80},
+			wantEfs:   []int{64, 64, 81},
+		},
+		{
+			name:      "hybrid",
+			opts:      RetrieveOptions{HybridSearch: true, HybridMode: "weighted"},
+			wantTopKs: []int{40, 80},
+			wantEfs:   []int{64, 81},
+		},
+		{
+			name:      "adaptive",
+			opts:      RetrieveOptions{AdaptiveThreshold: true},
+			wantTopKs: []int{20, 40, 80},
+			wantEfs:   []int{64, 64, 81},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store, mockClient := setupTestStore()
+			var gotTopKs []int
+			var gotEfs []int
+			mockClient.SearchFunc = func(_ context.Context, _ string, _ []string, expr string, _ []string, _ []entity.Vector, _ string, _ entity.MetricType, topK int, sp entity.SearchParam, _ ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+				gotTopKs = append(gotTopKs, topK)
+				gotEfs = append(gotEfs, sp.Params()["ef"].(int))
+				assert.Contains(t, expr, `project_id == "default"`)
+
+				count := min(topK, legacyCount+1)
+				ids := make([]string, count)
+				contents := make([]string, count)
+				types := make([]string, count)
+				metadata := make([]string, count)
+				scores := make([]float32, count)
+				for i := range ids {
+					ids[i], contents[i], types[i] = "legacy", "legacy unscoped memory", string(MemoryTypeSemantic)
+					metadata[i], scores[i] = `{"project_id":""}`, 0.99
+				}
+				if count == legacyCount+1 {
+					ids[legacyCount], contents[legacyCount], types[legacyCount] = "named-default", "explicit default memory", string(MemoryTypeSemantic)
+					metadata[legacyCount], scores[legacyCount] = `{"project_id":"default"}`, 0.80
+				}
+				return []client.SearchResult{{
+					ResultCount: count,
+					Scores:      scores,
+					Fields: []entity.Column{
+						entity.NewColumnVarChar("id", ids),
+						entity.NewColumnVarChar("content", contents),
+						entity.NewColumnVarChar("memory_type", types),
+						entity.NewColumnVarChar("metadata", metadata),
+					},
+				}}, nil
+			}
+
+			opts := tt.opts
+			opts.Query, opts.UserID, opts.ProjectID, opts.Limit, opts.Threshold = "project facts", "alice", "default", 5, 0.1
+			results, err := store.Retrieve(context.Background(), opts)
+
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, "named-default", results[0].Memory.ID)
+			assert.Equal(t, tt.wantTopKs, gotTopKs)
+			assert.Equal(t, tt.wantEfs, gotEfs)
+		})
+	}
 }

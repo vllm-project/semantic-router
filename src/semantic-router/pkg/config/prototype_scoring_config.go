@@ -11,6 +11,15 @@ type PrototypeScoringConfig struct {
 	MarginThreshold            float32 `json:"margin_threshold,omitempty" yaml:"margin_threshold,omitempty"`
 }
 
+// Resolve uses the family config only when no rule override was declared.
+// A present override gets built-in defaults, without merging family fields.
+func (c *PrototypeScoringConfig) Resolve(family PrototypeScoringConfig) PrototypeScoringConfig {
+	if c == nil {
+		return family.WithDefaults()
+	}
+	return c.WithDefaults()
+}
+
 func (c PrototypeScoringConfig) WithDefaults() PrototypeScoringConfig {
 	result := c
 	if result.Enabled == nil {

@@ -110,6 +110,10 @@
 }
 
 .notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   margin-top: 0.65rem;
   padding: 0.65rem 0.8rem;
   border: 1px solid rgba(245, 158, 11, 0.25);
@@ -117,6 +121,37 @@
   background: rgba(245, 158, 11, 0.07);
   color: #f6cd7a;
   font-size: 0.75rem;
+}
+
+.notice strong,
+.notice span {
+  display: block;
+  line-height: 1.5;
+}
+
+.notice strong {
+  font-weight: 600;
+}
+
+.notice button {
+  flex-shrink: 0;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.notice button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.notice button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }
 
 .explorer {

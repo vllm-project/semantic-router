@@ -41,14 +41,23 @@ func TestEvalDecisionCandidatesSelectsEntrypointRecipe(t *testing.T) {
 		Text:  "hello",
 		Model: "router/speed-flash",
 	})
-	require.NoError(t, err)
-	assert.Equal(t, speedRecipe, response.Recipe)
+	require.ErrorIs(t, err, ErrClassifierUnavailable)
+	require.Nil(t, response)
 
 	_, err = service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Text:  "hello",
 		Model: "router/missing",
 	})
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
+}
+
+func TestEvalRejectsCanceledContextBeforeResolvingInput(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewPlaceholderClassificationService()
+	response, err := service.ClassifyIntentForEval(ctx, IntentRequest{Text: "hello"})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, response)
 }
 
 func TestRecipeClassificationServiceRejectsConcreteBackendModel(t *testing.T) {

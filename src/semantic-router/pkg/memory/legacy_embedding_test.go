@@ -2,16 +2,31 @@ package memory
 
 import (
 	"context"
+	"math"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
-// Existing BERT fixture initialization belongs to these integration tests.
-// Runtime memory stores must receive their generation-owned provider explicitly.
+// Test-owned vectors exercise retrieval thresholds without loading a language model.
 func memoryTestEmbeddingProvider() embedding.Provider {
-	provider, _ := embedding.NewFuncProvider("test-candle-bert", 384, func(_ context.Context, text string) ([]float32, error) {
-		return candle.GetEmbedding(text, 0)
+	fixture := storageMemoryVectors()
+	provider, _ := embedding.NewFuncProvider("memory-fixture", 384, func(ctx context.Context, text string) ([]float32, error) {
+		var score float32
+		switch text {
+		case "What is my budget for Hawaii?", "What is my budget?":
+			score = 1
+		case "User's budget for Hawaii vacation is $10,000":
+			score = 0.6
+		case "User prefers direct flights", "User prefers direct flights to Hawaii":
+			score = 0.4
+		case "The weather in Hawaii is sunny":
+			score = -0.5
+		default:
+			return fixture.Embed(ctx, text)
+		}
+		vector := make([]float32, 384)
+		vector[0], vector[1] = score, float32(math.Sqrt(1-float64(score)*float64(score)))
+		return vector, nil
 	})
 	return provider
 }

@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import ProductIcon from '../components/ProductIcon'
 
+import { buildConversationLabels } from './insightsConversationIdentity'
 import styles from './InsightsPage.module.css'
 import type {
   InsightsRecord,
@@ -19,6 +20,7 @@ interface InsightsRecordTraceProps {
 }
 
 interface TraceTurn {
+  conversationId: string
   index: number
   messages: InsightsTrajectoryMessage[]
 }
@@ -34,6 +36,10 @@ export default function InsightsRecordTrace({
     [record, trajectory],
   )
   const turns = useMemo(() => groupTraceTurns(messages), [messages])
+  const conversationLabels = useMemo(
+    () => buildConversationLabels([...(trajectory?.routes ?? []), ...messages]),
+    [trajectory, messages],
+  )
   const toolCount = messages.reduce(
     (count, message) => count + (message.tool_calls?.length ?? 0),
     0,
@@ -85,7 +91,11 @@ export default function InsightsRecordTrace({
                   <summary className={styles.recordTraceTurnSummary}>
                     <span className={styles.recordTraceTurnIndex}>{turnPosition + 1}</span>
                     <span className={styles.recordTraceTurnLabel}>
-                      <strong>Turn {turnPosition + 1}</strong>
+                      <strong title={turn.conversationId || undefined}>
+                        {turn.conversationId
+                          ? `${conversationLabels.get(turn.conversationId)} · Turn ${turn.index + 1}`
+                          : `Turn ${turnPosition + 1}`}
+                      </strong>
                       <span>{buildTurnPreview(turn)}</span>
                     </span>
                     <span className={styles.recordTraceTurnMeta}>
@@ -200,13 +210,15 @@ function ToolResult({ message }: { message: InsightsTrajectoryMessage }) {
 
 function groupTraceTurns(messages: InsightsTrajectoryMessage[]): TraceTurn[] {
   const turns: TraceTurn[] = []
-  const positions = new Map<number, number>()
+  const positions = new Map<string, number>()
   for (const message of messages) {
     const index = message.turn_index ?? 0
-    const existing = positions.get(index)
+    const conversationId = message.conversation_id ?? ''
+    const key = JSON.stringify([conversationId, index])
+    const existing = positions.get(key)
     if (existing === undefined) {
-      positions.set(index, turns.length)
-      turns.push({ index, messages: [message] })
+      positions.set(key, turns.length)
+      turns.push({ index, conversationId, messages: [message] })
       continue
     }
     turns[existing].messages.push(message)
@@ -267,7 +279,7 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
         break
     }
   }
-  return messages
+  return messages.map((message) => ({ ...message, conversation_id: record.conversation_id }))
 }
 
 function formatTracePayload(value: string) {

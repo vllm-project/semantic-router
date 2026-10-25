@@ -264,6 +264,10 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"chat_image_url_input":            reflect.TypeOf(chatImageURLWire{}),
 		"chat_audio_input":                reflect.TypeOf(chatInputAudioWire{}),
 		"chat_function_definition":        reflect.TypeOf(chatFunctionDefinitionWire{}),
+		"chat_custom_tool":                reflect.TypeOf(chatCustomToolWire{}),
+		"custom_tool_format":              reflect.TypeOf(customToolFormatWire{}),
+		"custom_tool_grammar":             reflect.TypeOf(customToolGrammarWire{}),
+		"chat_custom_tool_call":           reflect.TypeOf(chatCustomCallWire{}),
 		"chat_function_call":              reflect.TypeOf(chatFunctionCallWire{}),
 		"chat_tool_call":                  reflect.TypeOf(chatToolCallWire{}),
 		"chat_stream_tool_call":           reflect.TypeOf(chatChunkToolCallWire{}),
@@ -275,6 +279,8 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"chat_error":                      reflect.TypeOf(chatErrorWire{}),
 		"chat_prompt_usage_details":       reflect.TypeOf(chatPromptTokensDetailsWire{}),
 		"chat_completion_usage_details":   reflect.TypeOf(chatCompletionTokensDetailsWire{}),
+		"chat_openrouter_cost_details":    reflect.TypeOf(chatOpenRouterCostDetailsWire{}),
+		"chat_openrouter_server_tool_use": reflect.TypeOf(chatOpenRouterServerToolUseWire{}),
 		"openai_transport_error":          reflect.TypeOf(openAITransportErrorWire{}),
 		"openai_transport_error_detail":   reflect.TypeOf(openAITransportErrorDetailWire{}),
 		"responses_reasoning":             reflect.TypeOf(responsesReasoningWire{}),
@@ -282,6 +288,7 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"responses_text":                  reflect.TypeOf(responsesTextWire{}),
 		"responses_output_format":         reflect.TypeOf(responsesFormatWire{}),
 		"responses_tool_union":            reflect.TypeOf(responsesToolWire{}),
+		"responses_custom_tool_format":    reflect.TypeOf(responsesCustomToolFormat{}),
 		"responses_image_generation_mask": reflect.TypeOf(responsesImageGenMaskWire{}),
 		"responses_content":               reflect.TypeOf(responsesContentWire{}),
 		"responses_url_citation":          reflect.TypeOf(responsesAnnotationWire{}),
@@ -432,6 +439,11 @@ func collectNestedFixtureFields(
 		t.Fatalf("nested inventory %s/%s has invalid fixture path %q", protocol, wire, fixture)
 	}
 	fixturePath := filepath.Join("testdata", "golden", clean)
+	if strings.HasPrefix(clean, "contracts"+string(filepath.Separator)) {
+		// A small reviewed JSON document can witness newly published fields
+		// without adding a full translation golden for telemetry we only decode.
+		fixturePath = filepath.Join("testdata", clean)
+	}
 	if _, err := os.Stat(fixturePath); err != nil {
 		t.Fatalf("nested inventory %s/%s fixture %q: %v", protocol, wire, fixture, err)
 	}

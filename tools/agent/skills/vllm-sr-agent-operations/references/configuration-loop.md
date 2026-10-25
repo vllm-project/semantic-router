@@ -1,73 +1,67 @@
-# Configuration and Recipe loop
+# Configuration and recipes
 
-## Canonical configuration
-
-YAML is the only operator-authored configuration representation. Before
-editing, discover only the relevant schema surface:
+Set `ROUTER_ORIGIN` to the intended stack's management origin. Inspect only the
+schema needed for the change:
 
 ```bash
-vllm-sr config schema --endpoint http://router-management:8080
-vllm-sr config schema --endpoint http://router-management:8080 \
-  --section providers.models
-vllm-sr config schema --endpoint http://router-management:8080 \
-  --section routing.decisions.modelRefs
-vllm-sr config schema --endpoint http://router-management:8080 \
-  --surface algorithm:multi_factor
+vllm-sr config schema --endpoint "$ROUTER_ORIGIN" --section providers.models
+vllm-sr config schema --endpoint "$ROUTER_ORIGIN" --surface algorithm:multi_factor
 ```
 
-Section requests return compact field directories that link to child paths.
-Add `--expanded` only when tooling needs a self-contained schema for that
-section, and use `--full` only when it genuinely needs the entire JSON Schema.
+Follow section child paths; use expanded/full output only when needed. Installed
+help and the Router's advertised API define the supported contract.
 
-Read an active document with `vllm-sr config get`. In a fresh workspace, run
-`vllm-sr config init --output candidate.yaml` for a minimal canonical starter.
-The same physical model name must occur under `providers.models`,
-`routing.modelCards`, and the applicable decision's `modelRefs`; a provider or
-Model Card alone does not make a model routable.
+## Activate a change
 
-## Validate, plan, apply
+For a new stack, write the configuration as the [main skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
+does, or start from `config init` and replace its placeholders (its listener
+address, `0.0.0.0`, publishes the API on every interface). Validate locally and
+launch; there is no remote revision to plan against before startup.
+
+On the Docker target the Router serves `.vllm-sr/runtime-config.yaml`, not
+`config.yaml`: editing the source file changes nothing until it is applied.
+
+For a running stack, derive the candidate from its fresh canonical config:
 
 ```bash
-export VSR_MGMT_TOKEN='...'
-
-vllm-sr config validate --config candidate.yaml \
-  --endpoint http://router-management:8080
-vllm-sr config plan --config candidate.yaml --mode replace \
-  --endpoint http://router-management:8080
-vllm-sr config apply --config candidate.yaml --mode replace \
-  --endpoint http://router-management:8080
+vllm-sr config get --format yaml --endpoint "$ROUTER_ORIGIN" > active.yaml
+cp active.yaml candidate.yaml
+# Edit the intended policy, then:
+vllm-sr config validate --config candidate.yaml --endpoint "$ROUTER_ORIGIN"
+vllm-sr config plan --config candidate.yaml --mode replace --endpoint "$ROUTER_ORIGIN"
+vllm-sr config apply --config candidate.yaml --mode replace --endpoint "$ROUTER_ORIGIN"
 ```
 
-`plan` performs the same canonical parse, merge/replace, and hot-reload checks
-as mutation but writes nothing. `apply` plans again and uses the returned ETag
-as a compare-and-swap precondition. Listener and provider-backend topology is
-rendered into Envoy, so a plan that changes it returns `RESTART_REQUIRED` and
-must be activated through the deployment workflow. For local Docker, the
-explicit operation is `vllm-sr serve --config <candidate>
---replace-active-config`; without that flag, `serve` preserves Dashboard-edited
-runtime state. The Router apply API is for hot-reloadable state. Prefer
-`replace` for a complete reviewed document; use `merge` only for an
-intentionally partial patch.
+An old launch file may omit materialized defaults and cause unrelated changes.
+Review the plan and choose whole-document replacement or a partial patch
+intentionally. `apply` plans again and protects its own write with an ETag; a
+separate earlier `plan` does not pin that later call. Use the discovered API's
+`If-Match` contract when the reviewed revision must be fixed; there is no CLI
+`--etag` option.
 
-Inspect or recover state with:
+`apply` waits up to 120 s (`--timeout`). A timeout doesn't mean the change
+failed: it can activate a moment later, so read `config versions` before
+retrying.
 
-```bash
-vllm-sr config get --endpoint http://router-management:8080
-vllm-sr config versions --endpoint http://router-management:8080
-vllm-sr config rollback <version> --endpoint http://router-management:8080
-```
+A change the running Router can't take (in standalone mode a listener change;
+with `--gateway extproc`, also the provider topology) is `restart_required`.
+On a local Docker stack, `config apply` saves it and prints `Restart required:
+run vllm-sr serve to apply.`; `status` reports it until `serve` applies it.
+Elsewhere, use the authorized deployment replacement workflow, such as
+`helm upgrade` on Kubernetes. Verify readiness, active revision and representative
+routed requests after activation. Discover `config versions` and
+`config rollback` when recovery is needed.
 
-## Recipes
+## Packaged recipes
 
-Use the same online lifecycle for one named Recipe:
+Use `recipe builtin list`, then inspect `builtin export` or `builtin init`.
+Export preserves bundle bytes; initialization binds a selected recipe to actual
+providers. Preserve algorithm candidate counts and required capability/quality
+evidence. Explicitly excluded decisions create a derivative with reduced coverage.
+Keep relative assets valid when moving a derived configuration.
 
-```bash
-vllm-sr recipe validate recipe.yaml --endpoint http://router-management:8080
-vllm-sr recipe plan recipe.yaml --endpoint http://router-management:8080
-vllm-sr recipe apply recipe.yaml --endpoint http://router-management:8080
-```
-
-A Recipe file declares its `name` and `routing` object. Model identities,
-evaluation records, index selection, cost data, and minimum coverage remain
-typed YAML fields discoverable from the running schema. Do not copy a field
-from website examples without validating it against the target Router.
+A bundle, recipe name and public entrypoint are different identities.
+`vllm-sr/auto` cannot be rebound to a named recipe. Discover the activated binding
+and use recipe-specific validate/plan/apply commands for package activation;
+`--replace-active-config` does not replace an active recipe package.
+Verify both [routing and delivery](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md).

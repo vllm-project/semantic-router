@@ -13,6 +13,9 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 	if err := r.applyOperatorModelCatalog(canonical, spec); err != nil {
 		return err
 	}
+	if err := applyOperatorDecisionModel(canonical, spec); err != nil {
+		return err
+	}
 	if err := r.applyOperatorStoresAndIntegrations(canonical, spec); err != nil {
 		return err
 	}
@@ -27,6 +30,13 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 	}
 	if spec.Strategy != "" {
 		canonical.Global.Router.Strategy = routerconfig.RoutingStrategy(spec.Strategy)
+	}
+	if spec.StreamedBody != nil {
+		canonical.Global.Router.StreamedBody = routerconfig.CanonicalStreamedBody{
+			Enabled:    spec.StreamedBody.Enabled,
+			MaxBytes:   spec.StreamedBody.MaxBytes,
+			TimeoutSec: spec.StreamedBody.TimeoutSec,
+		}
 	}
 	return nil
 }
@@ -47,18 +57,6 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		promptGuard, err := convertToTypedConfig[routerconfig.CanonicalPromptGuardModule](r, spec.PromptGuard)
 		if err != nil {
 			return fmt.Errorf("config.prompt_guard: %w", err)
-		}
-		// Variant/Protocol are mutually exclusive and, unlike the CRD's other
-		// PromptGuardConfig fields, deliberately carry no kubebuilder default
-		// for Variant (a per-field CRD default would be injected even when
-		// only Protocol is set, tripping mutual-exclusion validation). Apply
-		// the "neither set" default here instead, once both fields are read.
-		if promptGuard.Variant == "" && promptGuard.Protocol == "" && promptGuard.Backend == nil {
-			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
-		}
-		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {
-			promptGuard.JailbreakMappingPath = routerconfig.DefaultCanonicalGlobal().
-				ModelCatalog.Modules.PromptGuard.JailbreakMappingPath
 		}
 		canonical.Global.ModelCatalog.Modules.PromptGuard = promptGuard
 	}
@@ -172,7 +170,7 @@ func (r *SemanticRouterReconciler) convertClassifierModule(spec *vllmv1alpha1.Cl
 		return routerconfig.CanonicalClassifierModule{}, nil
 	}
 
-	var classifier routerconfig.CanonicalClassifierModule
+	classifier := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier
 
 	if spec.CategoryModel != nil {
 		domain, err := convertToTypedConfig[routerconfig.CanonicalCategoryModule](r, spec.CategoryModel)

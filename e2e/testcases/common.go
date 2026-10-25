@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -24,8 +24,7 @@ func setupServiceConnection(ctx context.Context, client *kubernetes.Clientset, o
 }
 
 // setupRouterAPIConnection sets up port forwarding to the semantic-router API service
-// This is used for accessing /api/v1/feedback and /api/v1/ratings endpoints
-// which are not exposed through the Envoy Gateway
+// This is used for diagnostics endpoints that are not exposed through the Envoy Gateway.
 func setupRouterAPIConnection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, func(), error) {
 	session, err := fixtures.OpenRouterAPISession(ctx, client, opts)
 	if err != nil {

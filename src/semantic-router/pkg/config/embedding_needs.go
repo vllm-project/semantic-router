@@ -2,14 +2,49 @@ package config
 
 import "strings"
 
+const (
+	// DefaultEmbeddingModel serves the semantic cache, memory and vector
+	// stores when they name no model: Vela Embedding on the model runtime,
+	// which replaces the retired bert and gemma embedders.
+	DefaultEmbeddingModel = "mmbert"
+	// RAGQueryEmbeddingModel embeds the queries of RAG backends whose
+	// collections are populated outside the router (milvus, qdrant, hybrid,
+	// and external APIs that take an embedding).
+	RAGQueryEmbeddingModel = DefaultEmbeddingModel
+)
+
+// ragEmbedsQueries reports whether a RAG backend searches with a query
+// vector the router computes.
+func ragEmbedsQueries(rag *RAGPluginConfig) bool {
+	switch rag.Backend {
+	case "milvus", "qdrant", "hybrid":
+		return true
+	case "external_api":
+		external, err := rag.ExternalAPIBackendConfig()
+		return err == nil && strings.Contains(external.RequestFormat, "embedding")
+	}
+	return false
+}
+
 // EmbeddingModelsNeeded identifies actual consumers in a single prepared scope.
 func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices bool) map[string]bool {
+	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
 	needed := map[string]bool{}
-	if len(cfg.EmbeddingRules) > 0 || len(cfg.ReaskRules) > 0 || len(cfg.KnowledgeBases) > 0 || (len(cfg.ComplexityRules) > 0 && cfg.ComplexityModel.Backend == nil) {
+	if sharedServices && cfg.API.Embeddings.Enabled {
 		needed[primary] = true
 	}
-	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceModel.ContrastiveEnabled() {
+	if len(cfg.EmbeddingRules) > 0 || (len(cfg.ReaskRules) > 0 && !cfg.ReaskUsesDecisionTask()) || len(cfg.KnowledgeBases) > 0 {
+		needed[primary] = true
+	}
+	if cfg.ComplexityModel.Backend == nil {
+		for _, rule := range cfg.ComplexityRules {
+			if cfg.ComplexityRuleUsesPrototypes(rule) {
+				needed[primary] = true
+			}
+		}
+	}
+	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceUsesPrototypes() {
 		model := strings.ToLower(strings.TrimSpace(cfg.PreferenceModel.EmbeddingModel))
 		if model == "" {
 			model = "mmbert"
@@ -30,7 +65,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if sharedServices && cfg.Tools.Enabled {
 		needed[primary] = true
 	}
-	if sharedServices && cfg.SemanticCache.Enabled {
+	if cacheNeeded {
 		needed[SemanticCacheEmbeddingModel(cfg)] = true
 	}
 	if sharedServices && MemoryConfigured(cfg) {
@@ -39,12 +74,9 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if sharedServices && cfg.VectorStore != nil && cfg.VectorStore.Enabled {
 		model := cfg.VectorStore.EmbeddingModel
 		if model == "" {
-			model = "bert"
+			model = DefaultEmbeddingModel
 		}
 		needed[model] = true
-	}
-	if cfg.ModelSelection.Enabled && cfg.ModelSelection.ML.ModelsPath != "" {
-		needed[primary] = true
 	}
 	for _, decision := range cfg.Decisions {
 		if algorithm := decision.Algorithm; algorithm != nil {
@@ -55,22 +87,11 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 				needed[primary] = true
 			}
 		}
-		if decision.HasPlugin("tool_selection") {
-			needed[primary] = true
-		}
 		if compression := decision.GetContextCompressionConfig(); compression != nil && compression.EffectiveScoring().Method != ContextCompressionScoringBM25 {
 			needed[primary] = true
 		}
-		if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled {
-			switch rag.Backend {
-			case "milvus", "qdrant", "hybrid":
-				needed["bert"] = true
-			case "external_api":
-				ext, err := rag.ExternalAPIBackendConfig()
-				if err == nil && strings.Contains(ext.RequestFormat, "embedding") {
-					needed["bert"] = true
-				}
-			}
+		if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled && ragEmbedsQueries(rag) {
+			needed[RAGQueryEmbeddingModel] = true
 		}
 	}
 	return needed
@@ -114,10 +135,8 @@ func SemanticCacheEmbeddingModel(cfg *RouterConfig) string {
 		return "multimodal"
 	case cfg.Qwen3ModelPath != "":
 		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
 	default:
-		return "bert"
+		return DefaultEmbeddingModel
 	}
 }
 
@@ -134,9 +153,7 @@ func MemoryEmbeddingModel(cfg *RouterConfig) string {
 		return "multimodal"
 	case cfg.Qwen3ModelPath != "":
 		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
 	default:
-		return "bert"
+		return DefaultEmbeddingModel
 	}
 }

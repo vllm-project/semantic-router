@@ -7,13 +7,11 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 import requests
 import torch
-import torch.nn as nn
 from datasets import load_dataset
-from sentence_transformers import InputExample, SentenceTransformer, models
 from sklearn.model_selection import train_test_split
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModel, AutoTokenizer, get_linear_schedule_with_warmup
 
@@ -35,7 +33,7 @@ class MultitaskBertModel(nn.Module):
             task_configs: Dict mapping task names to their configurations
                          {"task_name": {"num_classes": int, "weight": float}}
         """
-        super(MultitaskBertModel, self).__init__()
+        super().__init__()
 
         # Shared BERT base model
         self.bert = AutoModel.from_pretrained(base_model_name)
@@ -218,17 +216,17 @@ class MultitaskTrainer:
     def _load_pii_dataset(self):
         """Load PII dataset (improved version with better data handling)."""
         # Download Presidio dataset
-        url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/master/data/synth_dataset_v2.json"
+        url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/main/data/synth_dataset_v2.json"
         dataset_path = "presidio_synth_dataset_v2.json"
 
         if not Path(dataset_path).exists():
-            logger.info(f"Downloading Presidio dataset...")
+            logger.info("Downloading Presidio dataset...")
             response = requests.get(url)
             response.raise_for_status()
             with open(dataset_path, "w", encoding="utf-8") as f:
                 f.write(response.text)
 
-        with open(dataset_path, "r", encoding="utf-8") as f:
+        with open(dataset_path, encoding="utf-8") as f:
             data = json.load(f)
 
         samples = []

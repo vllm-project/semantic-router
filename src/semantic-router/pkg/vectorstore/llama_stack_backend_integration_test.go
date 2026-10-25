@@ -27,21 +27,19 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 var _ = Describe("LlamaStackBackend integration", func() {
-	Context("integration tests (require Llama Stack)", func() {
-		skipLlamaStack := os.Getenv("SKIP_LLAMA_STACK_TESTS") != "false"
-
+	Context("integration tests (require Llama Stack)", Label("storage", "storage:llama_stack"), func() {
 		var (
 			endpoint       string
 			embeddingModel string
 		)
 
 		BeforeEach(func() {
-			if skipLlamaStack {
-				Skip("Skipping Llama Stack tests (set SKIP_LLAMA_STACK_TESTS=false to enable)")
-			}
+			storagetest.Require(GinkgoT(), "llama_stack")
 
 			endpoint = os.Getenv("LLAMA_STACK_ENDPOINT")
 			if endpoint == "" {

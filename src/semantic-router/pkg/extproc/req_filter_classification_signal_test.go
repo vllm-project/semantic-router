@@ -20,6 +20,8 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 		currentUserMessage: "user question",
 		nonUserMessages:    []string{"system setup", "assistant reply"},
 		hasAssistantReply:  true,
+		lastMessageRole:    "user",
+		lastUserHasText:    true,
 	})
 
 	assert.Equal(t, "user question", input.evaluationText)
@@ -27,6 +29,20 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 	assert.Equal(t, "user question", input.compressedText)
 	assert.True(t, input.hasAssistantReply)
 	assert.Nil(t, input.skipCompressionSignals)
+}
+
+func TestPrepareSignalEvaluationInputCopiesToolResultTexts(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	history := signalConversationHistory{
+		toolResultTexts:          []string{"customer@example.com", "order result"},
+		toolResultScanIncomplete: true,
+	}
+
+	input := router.prepareSignalEvaluationInput(history)
+	history.toolResultTexts[0] = "mutated"
+
+	assert.Equal(t, []string{"customer@example.com", "order result"}, input.toolResultTexts)
+	assert.True(t, input.toolResultScanIncomplete)
 }
 
 func TestPrepareSignalEvaluationInput_UsesNonUserMessagesWhenUserContentMissing(t *testing.T) {

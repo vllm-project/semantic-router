@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -173,5 +173,46 @@ func TestHandleStartupStatusReturns503WhenDownloading(t *testing.T) {
 	}
 	if state.DownloadingModel != "models/test" {
 		t.Fatalf("expected DownloadingModel=%q, got %q", "models/test", state.DownloadingModel)
+	}
+}
+
+func TestReadinessNamesTheModelDeploymentsStartupWaitsFor(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+		startupStateLoader: func() *startupstatus.State {
+			return &startupstatus.State{
+				Phase: startupstatus.PhaseLoadingModelDeployments, Message: "Waiting for Router-managed model deployments",
+				PendingModels: []string{"decider"}, TotalModels: 1,
+				ModelDeployments: []startupstatus.ModelDeploymentStatus{
+					{Name: "decider", Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Process: "cpu", State: "loading"},
+				},
+			}
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	apiServer.handleReady(rr, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	var ready map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &ready); err != nil {
+		t.Fatal(err)
+	}
+	if rr.Code != http.StatusServiceUnavailable || ready["ready"] != false || ready["phase"] != startupstatus.PhaseLoadingModelDeployments ||
+		ready["total_models"] != float64(1) || ready["ready_models"] != float64(0) {
+		t.Fatalf("/ready while a deployment loads: %d %s", rr.Code, rr.Body.String())
+	}
+	if pending, _ := ready["pending_models"].([]interface{}); len(pending) != 1 || pending[0] != "decider" {
+		t.Fatalf("/ready names the deployment still loading: %s", rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	apiServer.handleStartupStatus(rr, httptest.NewRequest(http.MethodGet, "/startup-status", nil))
+	var status startupstatus.State
+	if err := json.Unmarshal(rr.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if rr.Code != http.StatusServiceUnavailable || len(status.ModelDeployments) != 1 ||
+		status.ModelDeployments[0] != (startupstatus.ModelDeploymentStatus{Name: "decider", Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Process: "cpu", State: "loading"}) {
+		t.Fatalf("/startup-status lists the deployment with its state: %d %s", rr.Code, rr.Body.String())
 	}
 }

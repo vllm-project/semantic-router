@@ -57,6 +57,14 @@ func normalizeModelCatalogDocument(raw []byte) ([]byte, error) {
 	// `configured` is interactive local-config state owned by the CLI. Never
 	// expose paths, credentials, or other local state through the catalog API.
 	envelope.Configured = nil
+	for modelIndex := range envelope.Models {
+		for roleIndex := range envelope.Models[modelIndex].Roles {
+			role := &envelope.Models[modelIndex].Roles[roleIndex]
+			if role.RecommendedPool == nil {
+				role.RecommendedPool = []string{}
+			}
+		}
+	}
 	return json.Marshal(envelope)
 }
 
@@ -709,8 +717,9 @@ func validModelCatalogRoles(roles []modelcatalog.ModelRole) bool {
 		return false
 	}
 	for _, role := range roles {
-		if role.Name == "" || role.MinimumCandidates < 1 || len(role.Traits) == 0 ||
-			len(role.RecommendedPool) < role.MinimumCandidates {
+		// Recommendations are advisory. The minimum applies to the operator's
+		// eventual assignment, which is not part of this catalog response.
+		if role.Name == "" || role.MinimumCandidates < 1 || len(role.Traits) == 0 {
 			return false
 		}
 	}

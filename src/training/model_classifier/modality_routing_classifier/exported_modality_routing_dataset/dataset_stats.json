@@ -1,0 +1,34 @@
+{
+  "total_rows": 5055,
+  "label_counts": {
+    "AR": 2000,
+    "DIFFUSION": 2000,
+    "BOTH": 1055
+  },
+  "splits": {
+    "train": {
+      "num_rows": 3538,
+      "label_counts": {
+        "AR": 1400,
+        "DIFFUSION": 1400,
+        "BOTH": 738
+      }
+    },
+    "validation": {
+      "num_rows": 758,
+      "label_counts": {
+        "AR": 300,
+        "DIFFUSION": 300,
+        "BOTH": 158
+      }
+    },
+    "test": {
+      "num_rows": 759,
+      "label_counts": {
+        "AR": 300,
+        "DIFFUSION": 300,
+        "BOTH": 159
+      }
+    }
+  }
+}

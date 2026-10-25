@@ -1,20 +1,49 @@
 """Algorithm configuration models for multi-model orchestration."""
 
 import math
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from cli.config_schema import surface_types
 
+from .config_contract import QuorumFailurePolicy
+from .models_decision import DecisionSelectionConfig
+from .models_native import AlgorithmBudget, NativeQuality, NativeStage
+
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
+
+# Types the Router retired, whose blocks are refused rather than passed on as
+# a Router build's own algorithm.
+RETIRED_ALGORITHM_TYPES = frozenset(
+    {
+        "policy",
+        "session_aware",
+        "elo",
+        "rl_driven",
+        "gmtrouter",
+        "bandit",
+        "personalization",
+        "thompson",
+        "router_r1",
+    }
+)
 
 
 class ModelRef(BaseModel):
     """Model reference in decision."""
 
     model: str
-    use_reasoning: bool | None = False
+    # Omission is not an authored false: runtime serialization must preserve
+    # the caller's choice and leave canonical defaulting to the Router.
+    use_reasoning: bool | None = None
     reasoning_description: str | None = None
     reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
     reasoning_effort: str | None = None  # Model-specific reasoning effort level.
@@ -129,9 +158,10 @@ class FusionGroundingConfig(BaseModel):
     """Configuration for grounding-aware fusion.
 
     Scores each panel response for faithfulness before the judge synthesizes,
-    then ranks/filters the panel. Uses local encoder models (hallucination
-    detector + NLI) and makes no extra LLM calls. Bounds here MUST match the Go
-    validator in pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
+    then ranks/filters the panel. Uses the router's hallucination detector
+    (against the request's context, else against each peer response) and makes
+    no extra LLM calls. Bounds here MUST match the Go validator in
+    pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -145,7 +175,7 @@ class FusionGroundingConfig(BaseModel):
     policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
-    nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
+    contradiction_penalty: float | None = Field(default=1.0, ge=0)
     on_error: Literal["skip", "fail"] | None = "skip"
 
 
@@ -186,10 +216,29 @@ class FusionAlgorithmConfig(BaseModel):
     include_analysis: bool | None = True
     include_intermediate_responses: bool | None = True
     on_error: Literal["skip", "fail"] | None = "skip"
+    # Panel-level policy for a usable-response count below
+    # min_successful_responses. Independent of on_error, which only governs a
+    # single failed panel attempt. Bounds here MUST match the Go validator in
+    # pkg/config/fusion_config.go (validateFusionQuorumFailure).
+    quorum_failure_policy: QuorumFailurePolicy | None = None
+    quorum_fallback_target: str | None = None
     analysis_template: str | None = None
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_quorum_failure_policy(self):
+        target = (self.quorum_fallback_target or "").strip()
+        if self.quorum_failure_policy == "fallback" and not target:
+            raise ValueError(
+                "quorum_failure_policy 'fallback' requires quorum_fallback_target"
+            )
+        if self.quorum_failure_policy != "fallback" and target:
+            raise ValueError(
+                "quorum_fallback_target requires quorum_failure_policy 'fallback'"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_analysis_override_models(self):
@@ -437,6 +486,7 @@ class MultiFactorSelectionConfig(BaseModel):
     slo: MultiFactorSLOConfig | None = None
     quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
+    latency_metric: Literal["ttft", "tpot"] | None = None
     on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
 
     @model_validator(mode="after")
@@ -487,16 +537,56 @@ class AlgorithmConfig(BaseModel):
 
     type: str
 
+    # The block of an algorithm type a Router build registers beyond the
+    # generated contract, under the type's name. The Router validates it.
+    extensions: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_extension_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        algorithm_type = str(data.get("type", "")).strip().lower()
+        if (
+            algorithm_type in SUPPORTED_ALGORITHM_TYPES
+            or algorithm_type in RETIRED_ALGORITHM_TYPES
+            or algorithm_type not in data
+        ):
+            return data
+        data = dict(data)
+        data["extensions"] = {algorithm_type: data.pop(algorithm_type)}
+        return data
+
     @field_validator("type")
     @classmethod
-    def validate_algorithm_type(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in SUPPORTED_ALGORITHM_TYPES:
+    def normalize_algorithm_type(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @model_validator(mode="after")
+    def validate_algorithm_type(self):
+        if self.type in RETIRED_ALGORITHM_TYPES:
+            raise ValueError(f"unsupported retired algorithm type {self.type!r}")
+        if (
+            self.type not in SUPPORTED_ALGORITHM_TYPES
+            and self.type not in self.extensions
+        ):
             supported = ", ".join(sorted(SUPPORTED_ALGORITHM_TYPES))
             raise ValueError(
-                f"unsupported algorithm type {value!r}; choose one of: {supported}"
+                f"unsupported algorithm type {self.type!r}; choose one of: {supported}"
             )
-        return normalized
+        return self
+
+    @model_serializer(mode="wrap")
+    def inline_extension_block(self, handler):
+        data = handler(self)
+        if isinstance(data, dict):
+            data.update(self.extensions)
+        return data
+
+    # Native payloads are structural projections of the generated Go schema.
+    quality: NativeQuality | None = None
+    stages: list[NativeStage] | None = None
+    budget: AlgorithmBudget | None = None
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None
@@ -512,8 +602,30 @@ class AlgorithmConfig(BaseModel):
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
     prompt: PromptSelectionConfig | None = None
+    decision: DecisionSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
+
+    @model_validator(mode="after")
+    def native_execution_fields(self):
+        if self.type == "cascade":
+            if self.minimum_candidates is not None:
+                raise ValueError("cascade uses authored stages, not minimum_candidates")
+            if "on_error" not in self.model_fields_set:
+                self.on_error = None
+            elif self.on_error:
+                raise ValueError("native algorithms do not support on_error")
+            if not self.quality or not self.stages or not self.budget:
+                raise ValueError(
+                    "cascade requires quality, stages and algorithm.budget"
+                )
+        elif (
+            self.quality is not None
+            or self.stages is not None
+            or self.budget is not None
+        ):
+            raise ValueError("native budget, quality and stages require cascade")
+        return self
 
     @model_validator(mode="after")
     def normalize_prompt_fallback(self):
@@ -526,4 +638,8 @@ class AlgorithmConfig(BaseModel):
                 raise ValueError("prompt on_error must be fallback")
         elif self.prompt is not None:
             raise ValueError("prompt configuration requires algorithm.type=prompt")
+        if self.type == "decision" and self.decision is None:
+            raise ValueError("algorithm.type=decision requires decision configuration")
+        if self.type != "decision" and self.decision is not None:
+            raise ValueError("decision configuration requires algorithm.type=decision")
         return self

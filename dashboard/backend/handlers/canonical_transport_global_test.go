@@ -67,6 +67,9 @@ func requireTransportHTTPResult(t *testing.T, handler http.HandlerFunc, path str
 // only the decoder or a zero-valued Go struct misses the original misrouting.
 func TestSetupSparseGlobalRoundTrip(t *testing.T) {
 	isolateConfigMutationRuntime(t)
+	// The fixture server is on loopback; declare it the way an operator would
+	// declare a real internal target (#1388).
+	allowLoopbackForTest(t)
 	for _, tc := range sparseTransportGlobalCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -126,7 +129,7 @@ func TestConfigEditorSparseGlobalRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			read := httptest.NewRecorder()
-			ConfigHandler(configPath)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
+			ConfigHandler(configPath, false)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
 			if read.Code != http.StatusOK {
 				t.Fatalf("read config: %s", read.Body.String())
 			}

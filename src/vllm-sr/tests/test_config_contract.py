@@ -4,18 +4,34 @@ import pytest
 from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    QUORUM_FAILURE_POLICY_VALUES,
     UNKNOWN_POLICY_VALUES,
+    QuorumFailurePolicy,
     UnknownPolicy,
     build_projection_reference_index,
     build_signal_reference_index,
     signal_reference_exists,
 )
-from cli.models import Decision, Projections, Signals
+from cli.models import Decision, PIIRule, Projections, Signals
+
+
+def test_pii_source_survives_cli_round_trip_and_rejects_unknown_values():
+    rule = PIIRule(name="tool-data", threshold=0.8, source="tool_result")
+
+    assert rule.model_dump(exclude_none=True)["source"] == "tool_result"
+    assert PIIRule(name="legacy", threshold=0.8, source="").source is None
+    with pytest.raises(ValueError):
+        PIIRule(name="invalid", threshold=0.8, source="prompt")
 
 
 def test_unknown_policy_literal_matches_allowed_values():
     assert get_args(UnknownPolicy) == UNKNOWN_POLICY_VALUES
     assert UNKNOWN_POLICY_VALUES == ("no_match", "match", "fail_request")
+
+
+def test_quorum_failure_policy_literal_matches_allowed_values():
+    assert get_args(QuorumFailurePolicy) == QUORUM_FAILURE_POLICY_VALUES
+    assert QUORUM_FAILURE_POLICY_VALUES == ("fail", "fallback")
 
 
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
@@ -59,6 +75,14 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
     }
     assert signal_names["authz"] == {"admin-access"}
     assert signal_names["event"] == {"critical_event"}
+
+
+def test_action_signals_accept_only_the_fixed_vocabulary():
+    signals = Signals(actions=[{"name": "fix"}, {"name": "explain"}])
+
+    assert build_signal_reference_index(signals)["action"] == {"fix", "explain"}
+    with pytest.raises(ValueError, match="actions"):
+        Signals(actions=[{"name": "review"}])
 
 
 def test_signal_reference_exists_is_scoped_by_family_and_exact_runtime_name():

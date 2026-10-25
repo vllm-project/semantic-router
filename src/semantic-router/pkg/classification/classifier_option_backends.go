@@ -54,48 +54,15 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 }
 
 func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *CategoryMapping) error {
-	variant, err := b.cfg.CategoryModel.EffectiveVariant()
-	if err != nil {
-		return err
+	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
+	spec, err := models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
+	var labels []string
+	if categoryMapping != nil {
+		labels = indexedNativeLabels(categoryMapping.IdxToCategory)
 	}
-	if b.models != nil {
-		if variant == "" || variant == config.CategoryVariantCandle {
-			variant = "auto"
-		}
-		spec := b.models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, variant, config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU)
-		var labels []string
-		if categoryMapping != nil {
-			labels = indexedNativeLabels(categoryMapping.IdxToCategory)
-		}
-		backend := ownedCategoryBackend{&ownedSequenceBackend{runtime: b.models.runtime, spec: spec, labels: labels}}
-		b.options = append(b.options, withCategory(categoryMapping, backend, backend))
-		return nil
-	}
-	categoryInitializer, categoryInference := categoryDependenciesForVariant(variant)
-	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
+	backend := ownedCategoryBackend{&ownedSequenceBackend{runtime: models.runtime, spec: spec, err: err, labels: labels}}
+	b.options = append(b.options, withCategory(categoryMapping, backend, backend))
 	return nil
-}
-
-func categoryDependenciesForVariant(variant string) (CategoryInitializer, CategoryInference) {
-	switch variant {
-	case config.CategoryVariantMmBERT32K:
-		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
-			"backend": "mmbert_32k",
-		})
-		return createMmBERT32KCategoryInitializer(), createMmBERT32KCategoryInference()
-	case config.CategoryVariantModernBERT:
-		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
-			"backend": "modernbert",
-		})
-		return createModernBERTCategoryInitializer(), createModernBERTCategoryInference()
-	case config.CategoryVariantCandle:
-		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
-			"backend": "candle",
-		})
-		return createCandleCategoryInitializer(), CandleCategoryInferenceImpl{}
-	default:
-		return createCategoryInitializer(), createCategoryInference()
-	}
 }
 
 func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
@@ -108,36 +75,49 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 }
 
 func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (JailbreakInitializer, SequenceClassifierBackend, error) {
-	if len(models) > 0 && cfg.PromptGuard.Protocol == "" && cfg.PromptGuard.Backend == nil {
-		adapter := cfg.PromptGuard.Variant
-		if adapter == "" || adapter == config.PromptGuardVariantCandle {
-			adapter = "auto"
+	if cfg.PromptGuard.Window != nil {
+		if jailbreakMapping == nil {
+			// No reachable model consumer loaded a mapping for this recipe.
+			return nil, nil, nil
 		}
-		spec := models[0].localSpec("prompt_guard", cfg.PromptGuard.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU)
-		var labels []string
-		if jailbreakMapping != nil {
-			labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
-		}
-		backend := &ownedSequenceBackend{runtime: models[0].runtime, spec: spec, labels: labels}
-		return backend, backend, nil
+		backend, err := newWindowedJailbreakBackend(cfg.PromptGuard, jailbreakMapping, models...)
+		return backend, backend, err
 	}
-	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping, models...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
-	}
-	if cfg.PromptGuard.Protocol != "" || cfg.PromptGuard.Backend != nil {
+	if cfg.PromptGuard.Backend != nil {
 		// Remote backends have no local model to initialize.
+		jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping, models...)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
+		}
 		return nil, jailbreakInference, nil
 	}
-	switch cfg.PromptGuard.Variant {
-	case config.PromptGuardVariantMmBERT32K:
-		return createMmBERT32KJailbreakInitializer(), jailbreakInference, nil
-	default:
-		return createJailbreakInitializer(), jailbreakInference, nil
+	runtime := consumerModelRuntime(models)
+	spec, err := runtime.localSpec("prompt_guard", cfg.PromptGuard.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
+	var labels []string
+	if jailbreakMapping != nil {
+		labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
 	}
+	backend := &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, err: err, labels: labels}
+	return backend, backend, nil
 }
 
 func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, models ...*classifierModelRuntime) (PIIInitializer, PIIInference, error) {
+	if cfg.NeedsPIIMappingForRouting() && cfg.PIIModel.Backend == nil && cfg.PIIModel.Window == nil {
+		backend, err := prepareDecisionPII(consumerModelRuntime(models))
+		if err != nil {
+			return nil, nil, err
+		}
+		if backend != nil {
+			return backend, backend, nil
+		}
+	}
+	if cfg.PIIModel.Window != nil {
+		backend, err := newWindowedPIIBackend(cfg.PIIModel, piiMapping, models...)
+		if err != nil {
+			return nil, nil, err
+		}
+		return backend, backend, nil
+	}
 	if cfg.PIIModel.Backend != nil {
 		if piiMapping == nil {
 			// The mapping loader is skipped on purpose when no reachable routing
@@ -181,26 +161,14 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		})
 		return nil, inference, nil
 	}
-	if len(models) > 0 {
-		adapter := "auto"
-		if cfg.PIIModel.UseMmBERT32K {
-			adapter = "mmbert32k"
-		}
-		spec := models[0].localSpec("pii_classifier", cfg.PIIModel.ModelID, adapter, config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU)
-		var labels []string
-		if piiMapping != nil {
-			labels = indexedNativeLabels(piiMapping.IdxToLabel)
-		}
-		backend := &ownedTokenBackend{runtime: models[0].runtime, spec: spec, labels: labels}
-		return backend, backend, nil
+	runtime := consumerModelRuntime(models)
+	spec, err := runtime.localSpec("pii_classifier", cfg.PIIModel.ModelID, "auto", config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
+	var labels []string
+	if piiMapping != nil {
+		labels = indexedNativeLabels(piiMapping.IdxToLabel)
 	}
-	if cfg.PIIModel.UseMmBERT32K {
-		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
-			"backend": "mmbert_32k",
-		})
-		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference(), nil
-	}
-	return createPIIInitializer(), createPIIInference(), nil
+	backend := &ownedTokenBackend{runtime: runtime.runtime, spec: spec, err: err, labels: labels}
+	return backend, backend, nil
 }
 
 // addComplexityBackend attaches the complexity signal's remote scorer, if one

@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -211,5 +213,71 @@ func TestImageFileDispatchFailureRendersClient400(t *testing.T) {
 	other := errors.New("backend unavailable")
 	if immediate, err := router.imageFileDispatchFailure(other, ctx); immediate != nil || !errors.Is(err, other) {
 		t.Fatalf("unrelated error was rewritten: %+v, %v", immediate, err)
+	}
+}
+
+func TestResponsesImageFileDispatchHonorsCanonicalModelCapabilities(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		capabilities string
+		image        bool
+		reject       bool
+	}{
+		{name: "text-only rejects image", capabilities: "capabilities: [chat]", image: true, reject: true},
+		{name: "vision accepts image", capabilities: "capabilities: [chat, image_input]", image: true},
+		{name: "unannotated preserves wire compatibility", image: true},
+		{name: "text-only accepts text", capabilities: "capabilities: [chat]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
+version: v0.3
+providers:
+  models:
+    - name: vision-model
+      backend_refs:
+        - name: local
+          provider: vllm
+          endpoint: 127.0.0.1:8000
+          weight: 1
+routing:
+  modelCards:
+    - name: vision-model
+      %s
+`, tc.capabilities)))
+			if err != nil {
+				t.Fatalf("parse model capabilities: %v", err)
+			}
+			router, files := newImageFileRouter(t)
+			router.Config = cfg
+			body := []byte(`{"model":"vision-model","input":"Summarize this note."}`)
+			if tc.image {
+				fileID := saveImageFile(t, files, "sample.png", imageFilePNGBytes)
+				body = responsesImageFileRequest(fileID)
+			}
+			request, ctx := decodeImageFileRequest(t, router, body)
+			dispatch, err := router.prepareProviderDispatch(request, "vision-model", "", false, ctx)
+			if tc.image {
+				image := firstImageContent(t, request)
+				if image.FileID != "" || image.Data == "" {
+					t.Fatal("dispatch must preserve the resolved file image before checking model capabilities")
+				}
+			}
+			if !tc.reject {
+				if err != nil || dispatch == nil || ctx.ImmediateProtocolError != nil {
+					t.Fatalf("compatible request rejected: %v", err)
+				}
+				return
+			}
+			if err == nil || dispatch != nil {
+				t.Fatal("text-only model accepted a resolved image")
+			}
+			response, converted := router.processBodyRoutingError(err, ctx)
+			if !converted || ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "unsupported_capability" {
+				t.Fatalf("capability rejection lost its protocol error: %v", err)
+			}
+			response = router.encodeImmediateResponseForClient(response, ctx)
+			assertBodyImmediateErrorResponse(t, response, typev3.StatusCode_BadRequest,
+				`model "vision-model" does not declare the required tasks: image_input`)
+		})
 	}
 }

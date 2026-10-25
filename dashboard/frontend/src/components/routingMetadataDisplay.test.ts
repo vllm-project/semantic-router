@@ -5,6 +5,8 @@ import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
 describe('formatRoutingMetadataValue', () => {
   it.each([
+    ['route', 'Route'],
+    ['unified_route', 'Route'],
     ['unified_balance_recovery', 'Balance Recovery'],
     ['unified_speed_first_route', 'Speed First'],
     ['unified_cost_reasoning', 'Cost Reasoning'],
@@ -52,8 +54,8 @@ describe('formatRoutingMetadataValue', () => {
     )
 
     expect(decisions).toHaveLength(21)
-    expect(signals.length).toBeGreaterThan(40)
-    expect(projections).toHaveLength(14)
+    expect(signals).toHaveLength(23)
+    expect(projections).toHaveLength(0)
 
     for (const decision of decisions) {
       expect(formatRoutingMetadataValue('x-vsr-selected-decision', decision)).not.toMatch(

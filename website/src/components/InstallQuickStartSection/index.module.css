@@ -86,7 +86,7 @@
 .commandShell {
   display: grid;
   width: 100%;
-  max-width: 46rem;
+  max-width: 58rem;
   margin-inline: auto;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -141,7 +141,7 @@
 
 .copyButton:hover {
   border-color: var(--site-hover-border);
-  background: rgba(48, 162, 255, 0.1);
+  background: var(--site-accent-soft);
   color: var(--site-accent-strong);
 }
 
@@ -153,7 +153,7 @@
 .copyButtonSuccess,
 .copyButtonSuccess:hover {
   border-color: rgba(48, 162, 255, 0.55);
-  color: var(--site-brand-blue);
+  color: var(--site-accent-strong);
 }
 
 .copyButton svg {
@@ -165,7 +165,8 @@
 
 .command {
   display: block;
-  overflow-x: auto;
+  min-width: 0;
+  overflow: visible;
   padding: 0 0 0 0.15rem;
   border: 0;
   background: transparent;
@@ -173,14 +174,28 @@
   font-family: var(--ifm-font-family-monospace);
   font-size: clamp(0.9rem, 1.1vw, 1.05rem);
   line-height: 1.5;
-  white-space: nowrap;
-  scrollbar-width: thin;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agentPrompt {
   overflow: visible;
   white-space: normal;
   word-break: normal;
+}
+
+.channelNote {
+  max-width: 58rem;
+  margin: 0.85rem auto 0;
+  color: var(--site-muted);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.channelNote strong {
+  color: var(--site-accent-strong);
+  font-weight: 600;
 }
 
 .actions {
@@ -193,16 +208,16 @@
 }
 
 .guideLink.guideLink {
-  border-color: var(--site-brand-blue) !important;
-  background: var(--site-brand-blue) !important;
-  color: #030303 !important;
-  box-shadow: 0 10px 24px rgba(48, 162, 255, 0.16) !important;
+  border-color: var(--site-cta-border) !important;
+  background: var(--site-cta-bg) !important;
+  color: var(--site-cta-text) !important;
+  box-shadow: var(--site-cta-shadow) !important;
 }
 
 .guideLink.guideLink:hover {
-  border-color: var(--site-brand-blue-light) !important;
-  background: var(--site-brand-blue-light) !important;
-  color: #030303 !important;
+  border-color: var(--site-cta-border-hover) !important;
+  background: var(--site-cta-bg-hover) !important;
+  color: var(--site-cta-text) !important;
   box-shadow: var(--site-hover-glow) !important;
   transform: translateY(-1px);
 }
@@ -210,7 +225,7 @@
 .docsLink.docsLink:hover {
   border-color: var(--site-hover-border) !important;
   background: var(--site-hover-surface-bg-soft) !important;
-  color: var(--site-brand-blue) !important;
+  color: var(--site-accent-strong) !important;
   box-shadow: var(--site-hover-inset) !important;
 }
 
@@ -220,8 +235,7 @@
   }
 
   .command {
-    white-space: pre-wrap;
-    word-break: break-all;
+    word-break: normal;
     font-size: 0.82rem;
   }
 

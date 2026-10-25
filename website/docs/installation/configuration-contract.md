@@ -128,6 +128,31 @@ Do not add consumer field allowlists, copies of signal/algorithm/plugin
 inventories, or a consumer-only semantic rule. A rule that determines whether
 the Router can run belongs in Go first.
 
+### Startup and Kubernetes reconciliation
+
+The Router checks static global settings during every config load, including
+when `global.router.config_source` is `kubernetes`. Invalid cache, memory,
+embedding, classifier backend, learning, tool-filtering, and admission settings
+fail startup before runtime resources are created.
+
+File-based configuration also validates the complete routing graph at load
+time. Kubernetes defers routing contracts until `IntelligentPool` and
+`IntelligentRoute` have been merged. Reconciliation then rechecks global
+settings and validates routing references, recipe compatibility, and signal
+rules before activating the candidate. Deployment definitions are static;
+routing and recipe bindings are compiled only at the complete-config stage.
+PII and Prompt Guard backend settings, error policies, and window geometry are
+checked during static loading. Window provider and input-budget compatibility
+are checked for each recipe at the complete-config stage.
+Invalid candidates report `ValidationFailed` on the CRDs and leave the active
+configuration in place.
+
+Validator registration and stage selection live together in
+`src/semantic-router/pkg/config/validator_dispatch.go`. Register a new global
+validator there so both startup and reconciliation execute it; only checks
+that require CRD routing state belong in the deferred routing groups. Keep
+each rule's implementation in its configuration family's validator.
+
 ## Agent authoring loop
 
 An automation or deployment agent should:
@@ -139,11 +164,14 @@ An automation or deployment agent should:
    surface references;
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
 6. plan the mutation; apply a hot-reloadable change with the returned
-   `current_etag` in `If-Match`, or use the deployment workflow when listener
-   or provider topology returns `RESTART_REQUIRED` (for local Docker, use the
-   explicit `vllm-sr serve --config <candidate> --replace-active-config`
-   operation after approval);
-7. poll `activation_status` and probe the Envoy data plane before keeping the
+   `current_etag` in `If-Match`. A change the running Router can't take returns
+   `RESTART_REQUIRED`: a listener change in standalone mode, or a listener or
+   provider topology change with `--gateway extproc`. On local Docker,
+   `vllm-sr config apply` saves such a change and the next `vllm-sr serve`
+   applies it (or, after approval, run the explicit
+   `vllm-sr serve --config <candidate> --replace-active-config`); elsewhere,
+   use the deployment workflow;
+7. poll `activation_status` and probe the data plane before keeping the
    change.
 
 Agents should never infer a field from an example or send unknown keys when a

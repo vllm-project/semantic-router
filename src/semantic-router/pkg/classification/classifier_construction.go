@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -28,10 +27,8 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 }
 
 func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
-	if CurrentNativeBackendCapabilities().Name != "openvino" {
-		if err := b.prepareEmbeddingSet(); err != nil {
-			return nil, err
-		}
+	if err := b.prepareEmbeddingSet(); err != nil {
+		return nil, err
 	}
 	if b.cfg.RoutingScope == config.DefaultRecipeName && !b.cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
 		return b.options, nil
@@ -49,6 +46,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildEventClassifierOption,
 		b.buildGenericClassifiersOption,
 		b.buildModalityClassifierOption,
+		b.buildSafetyClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	b.options = append(b.options, parallelOptions...)
@@ -109,24 +107,6 @@ func (b *classifierOptionBuilder) closePending() {
 		}
 	}
 	_ = classifier.Close()
-}
-
-func classifierBuildParallelism(stepCount int) int {
-	if stepCount <= 1 {
-		return 1
-	}
-	backend := embeddingBackendOverride()
-	if backend == "" || backend == "candle" {
-		return 1
-	}
-	parallelism := runtime.NumCPU()
-	if parallelism <= 0 {
-		parallelism = 1
-	}
-	if parallelism > stepCount {
-		parallelism = stepCount
-	}
-	return parallelism
 }
 
 func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {

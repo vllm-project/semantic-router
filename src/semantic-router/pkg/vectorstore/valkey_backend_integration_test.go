@@ -25,6 +25,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 func uniqueSuffix() string { return strconv.FormatInt(time.Now().UnixNano(), 36) }
@@ -36,9 +38,7 @@ func cleanupCollection(ctx context.Context, b *ValkeyBackend, vsID string) {
 }
 
 func newIntegBackend() (*ValkeyBackend, context.Context) {
-	if os.Getenv("SKIP_VALKEY_TESTS") != "false" {
-		Skip("Skipping Valkey tests (set SKIP_VALKEY_TESTS=false to enable)")
-	}
+	storagetest.Require(GinkgoT(), "valkey")
 	host := os.Getenv("VALKEY_HOST")
 	if host == "" {
 		host = "localhost"
@@ -60,7 +60,7 @@ func newIntegBackend() (*ValkeyBackend, context.Context) {
 // CRUD
 // ---------------------------------------------------------------------------
 
-var _ = Describe("ValkeyBackend integ collection ops", func() {
+var _ = Describe("ValkeyBackend integ collection ops", Label("storage", "storage:valkey"), func() {
 	var (
 		backend *ValkeyBackend
 		ctx     context.Context
@@ -115,7 +115,7 @@ var _ = Describe("ValkeyBackend integ collection ops", func() {
 	})
 })
 
-var _ = Describe("ValkeyBackend integ insert and delete", func() {
+var _ = Describe("ValkeyBackend integ insert and delete", Label("storage", "storage:valkey"), func() {
 	var (
 		backend *ValkeyBackend
 		ctx     context.Context
@@ -214,7 +214,7 @@ var _ = Describe("ValkeyBackend integ insert and delete", func() {
 // Search
 // ---------------------------------------------------------------------------
 
-var _ = Describe("ValkeyBackend integ Search", func() {
+var _ = Describe("ValkeyBackend integ Search", Label("storage", "storage:valkey"), func() {
 	var (
 		backend *ValkeyBackend
 		ctx     context.Context
@@ -283,7 +283,7 @@ var _ = Describe("ValkeyBackend integ Search", func() {
 	})
 })
 
-var _ = Describe("ValkeyBackend integ Search filter", func() {
+var _ = Describe("ValkeyBackend integ Search filter", Label("storage", "storage:valkey"), func() {
 	var (
 		backend *ValkeyBackend
 		ctx     context.Context
@@ -330,12 +330,10 @@ var _ = Describe("ValkeyBackend integ Search filter", func() {
 // Advanced
 // ---------------------------------------------------------------------------
 
-var _ = Describe("ValkeyBackend integ config variants", func() {
+var _ = Describe("ValkeyBackend integ config variants", Label("storage", "storage:valkey"), func() {
 	var ctx context.Context
 	BeforeEach(func() {
-		if os.Getenv("SKIP_VALKEY_TESTS") != "false" {
-			Skip("Skipping Valkey tests (set SKIP_VALKEY_TESTS=false to enable)")
-		}
+		storagetest.Require(GinkgoT(), "valkey")
 		ctx = context.Background()
 	})
 
@@ -395,7 +393,7 @@ var _ = Describe("ValkeyBackend integ config variants", func() {
 	})
 })
 
-var _ = Describe("ValkeyBackend integ edge cases", func() {
+var _ = Describe("ValkeyBackend integ edge cases", Label("storage", "storage:valkey"), func() {
 	var (
 		backend *ValkeyBackend
 		ctx     context.Context

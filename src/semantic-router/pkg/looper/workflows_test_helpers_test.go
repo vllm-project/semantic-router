@@ -165,6 +165,7 @@ func workflowToolLooperRequest(req *openai.ChatCompletionNewParams) *Request {
 			},
 		},
 		DecisionName: "tool-flow-test",
+		RecipeName:   config.DefaultRecipeName,
 	}
 }
 
@@ -377,6 +378,12 @@ func workflowStoredPendingState(t *testing.T, stateDir string, toolCallID string
 	}
 	data, err := os.ReadFile(filepath.Join(stateDir, stateID+".json"))
 	if err != nil {
+		namespaced, nsErr := workflowNamespacedStateID(config.DefaultRecipeName, stateID)
+		if nsErr == nil {
+			data, err = os.ReadFile(filepath.Join(stateDir, workflowStateStoreFileName(namespaced)))
+		}
+	}
+	if err != nil {
 		t.Fatalf("read workflow state for %q: %v", stateID, err)
 	}
 	var state workflowPendingToolState
@@ -572,7 +579,7 @@ func newWorkflowTestServer(t *testing.T, responses map[string]string) *httptest.
 			t.Fatalf("decode request: %v", err)
 		}
 		content := responses[payload.Model]
-		if payload.Model == "qwen-coordinator" && strings.Contains(r.Header.Get("x-vsr-looper-iteration"), "4") {
+		if payload.Model == "qwen-coordinator" && strings.Contains(r.Header.Get(testHopIteration), "4") {
 			content = "final synthesized answer"
 		}
 		if payload.Model == "qwen-coordinator" && !json.Valid([]byte(content)) {

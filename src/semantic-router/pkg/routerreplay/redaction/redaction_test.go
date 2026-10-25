@@ -63,7 +63,7 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 		"pii_entities":["private-canary"],
 		"hallucination_spans":["private-canary"],
 		"hallucination_span_details":[{"text":"private-canary","explanation":"private-canary","severity":2}],
-		"outcomes":[{"source":"user","target":"model","target_ref":"private-canary","verdict":"failed","reason":"private-canary","metadata":{"note":"private-canary"}}],
+		"outcomes":[{"source":"user","target":"model","target_ref":"private-canary","verdict":"failed","reason":"private-canary","metadata":{"note":"private-canary"},"idempotency_key":"private-canary"}],
 		"session_policy":{"user_id":"private-canary"},
 		"route_diagnostics":{"selected_model":"model-a","selection_reasoning":"private-canary","annotations":{"note":"private-canary"},"signal_errors":{"signal":"private-canary"}},
 		"learning":{"adaptation":{"method":"routing_sampling","reason":"private-canary"}}
@@ -78,6 +78,37 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 	assertRedactedRecordStructure(t, record)
 	assertRedactedHallucinationDetail(t, record)
 	assertRedactedOutcome(t, record)
+}
+
+func TestRedactResponseBodyRemovesPreparedDispatchReceipt(t *testing.T) {
+	body, err := json.Marshal(store.Record{
+		ID: "prepared-dispatch",
+		RouteDiagnostics: &store.RouteDiagnostics{
+			SelectedModel: "model-a",
+			PreparedDispatch: &store.PreparedDispatchReceipt{
+				Version:    1,
+				WireFormat: "openai.chat.v1",
+				SHA256:     "private-payload-fingerprint",
+				ByteLength: 137,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal prepared dispatch Replay record: %v", err)
+	}
+
+	redacted := mustRedactChanged(t, body)
+	if bytes.Contains(redacted, []byte("private-payload-fingerprint")) {
+		t.Fatalf("redacted record retained prepared dispatch fingerprint: %s", redacted)
+	}
+	record := decodeRedactedRecord(t, redacted)
+	diagnostics := record["route_diagnostics"].(map[string]any)
+	if diagnostics["selected_model"] != "model-a" {
+		t.Fatalf("selected model changed during redaction: %#v", diagnostics)
+	}
+	if _, exists := diagnostics["prepared_dispatch"]; exists {
+		t.Fatalf("prepared dispatch receipt was not removed: %#v", diagnostics["prepared_dispatch"])
+	}
 }
 
 func mustRedactChanged(t *testing.T, body []byte) []byte {
@@ -122,7 +153,8 @@ func assertRedactedHallucinationDetail(t *testing.T, record map[string]any) {
 func assertRedactedOutcome(t *testing.T, record map[string]any) {
 	t.Helper()
 	outcome := record["outcomes"].([]any)[0].(map[string]any)
-	if outcome["target_ref"] != "" || outcome["reason"] != "" || len(outcome["metadata"].(map[string]any)) != 0 {
+	if outcome["target_ref"] != "" || outcome["reason"] != "" || outcome["idempotency_key"] != "" ||
+		len(outcome["metadata"].(map[string]any)) != 0 {
 		t.Fatalf("outcome content not cleared: %#v", outcome)
 	}
 	if outcome["source"] != "user" || outcome["target"] != "model" || outcome["verdict"] != "failed" {

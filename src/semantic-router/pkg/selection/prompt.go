@@ -168,6 +168,7 @@ func (s *PromptSelector) selectionResult(
 ) *SelectionResult {
 	return &SelectionResult{
 		SelectedModel:          selected.Model,
+		SelectedCandidate:      &selected,
 		LoRAName:               selected.LoRAName,
 		Score:                  1.0,
 		Confidence:             1.0,

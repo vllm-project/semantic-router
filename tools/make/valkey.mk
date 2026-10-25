@@ -59,11 +59,10 @@ clean-valkey: stop-valkey ## Clean up Valkey data
 # ---------------------------------------------------------------------------
 
 # Test vector store with Valkey backend
-test-valkey-vectorstore: start-valkey rust ## Test vector store with Valkey backend
+test-valkey-vectorstore: start-valkey ## Test vector store with Valkey backend
 	@$(LOG_TARGET)
 	@echo "Testing vector store with Valkey backend..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
 	export SKIP_VALKEY_TESTS=false && \
@@ -71,11 +70,10 @@ test-valkey-vectorstore: start-valkey rust ## Test vector store with Valkey back
 	@echo "Consider running 'make stop-valkey' when done testing"
 
 # Test vector store against an already-running Valkey instance (no container management)
-test-valkey-vectorstore-no-container: rust ## Test vector store against existing Valkey (VALKEY_PORT=6379)
+test-valkey-vectorstore-no-container: ## Test vector store against existing Valkey (VALKEY_PORT=6379)
 	@$(LOG_TARGET)
 	@echo "Testing vector store against existing Valkey on port $${VALKEY_PORT:-6379}..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=$${VALKEY_HOST:-localhost} && \
 	export VALKEY_PORT=$${VALKEY_PORT:-6379} && \
 	export SKIP_VALKEY_TESTS=false && \
@@ -86,19 +84,17 @@ test-valkey-vectorstore-no-container: rust ## Test vector store against existing
 # ---------------------------------------------------------------------------
 
 # Test Valkey memory store (unit tests only, no container needed)
-test-valkey-memory-unit: rust ## Run ValkeyStore unit tests (no live Valkey required)
+test-valkey-memory-unit: ## Run ValkeyStore unit tests (no live Valkey required)
 	@$(LOG_TARGET)
 	@echo "Running ValkeyStore unit tests..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/memory/ -run "TestValkey|TestMemoryValkeyConfig|TestNewValkeyStore|TestCachingStore|TestNewCachingStore" -count=1
 
 # Test Valkey memory store integration (requires live Valkey with Search module)
-test-valkey-memory: start-valkey rust ## Test ValkeyStore integration against containerised Valkey
+test-valkey-memory: start-valkey ## Test ValkeyStore integration against containerised Valkey
 	@$(LOG_TARGET)
 	@echo "Testing Valkey memory store integration..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
 	export SKIP_VALKEY_TESTS=false && \
@@ -106,11 +102,10 @@ test-valkey-memory: start-valkey rust ## Test ValkeyStore integration against co
 	@echo "Consider running 'make stop-valkey' when done testing"
 
 # Test Valkey memory store against an already-running Valkey instance
-test-valkey-memory-no-container: rust ## Test ValkeyStore integration against existing Valkey (VALKEY_PORT=6379)
+test-valkey-memory-no-container: ## Test ValkeyStore integration against existing Valkey (VALKEY_PORT=6379)
 	@$(LOG_TARGET)
 	@echo "Testing Valkey memory store against existing Valkey on port ${VALKEY_PORT:-6379}..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=${VALKEY_HOST:-localhost} && \
 	export VALKEY_PORT=${VALKEY_PORT:-6379} && \
 	export SKIP_VALKEY_TESTS=false && \
@@ -121,11 +116,10 @@ test-valkey-memory-no-container: rust ## Test ValkeyStore integration against ex
 # ---------------------------------------------------------------------------
 
 # Test semantic cache with Valkey backend
-test-valkey-cache: start-valkey rust ## Test semantic cache with Valkey backend
+test-valkey-cache: start-valkey ## Test semantic cache with Valkey backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Valkey backend..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/cache/ -run TestValkeyCache
@@ -135,8 +129,7 @@ test-valkey-cache: start-valkey rust ## Test semantic cache with Valkey backend
 test-semantic-router-valkey: build-router start-valkey ## Test semantic-router with Valkey cache backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Valkey cache backend..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
@@ -147,11 +140,10 @@ test-semantic-router-valkey: build-router start-valkey ## Test semantic-router w
 # ---------------------------------------------------------------------------
 
 # Test all Valkey backends (cache + vector store + memory)
-test-valkey-all: start-valkey rust ## Test all Valkey backends
+test-valkey-all: start-valkey ## Test all Valkey backends
 	@$(LOG_TARGET)
 	@echo "Testing all Valkey backends..."
-	@export $(NATIVE_ENV) && \
-	export SR_TEST_MODE=true && \
+	@export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
 	export SKIP_VALKEY_TESTS=false && \
@@ -165,50 +157,50 @@ test-valkey-all: start-valkey rust ## Test all Valkey backends
 # ---------------------------------------------------------------------------
 
 # Run Valkey cache example
-run-valkey-cache-example: start-valkey rust ## Run the Valkey cache example
+run-valkey-cache-example: start-valkey ## Run the Valkey cache example
 	@$(LOG_TARGET)
 	@echo "Running Valkey cache example..."
 	@cd src/semantic-router && \
-		export $(NATIVE_ENV) && \
+		\
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \
-		go run ../../tools/valkey/valkey-cache.go
+		go run ../../tools/dev/examples/valkey/valkey-cache.go
 	@echo ""
 	@echo "Example complete! Check Valkey using:"
 	@echo "  • docker exec -it valkey-semantic-cache valkey-cli"
 
 # Run Valkey cache example without starting container (use existing Valkey server)
-run-valkey-cache-example-no-container: rust ## Run the Valkey cache example using existing Valkey server
+run-valkey-cache-example-no-container: ## Run the Valkey cache example using existing Valkey server
 	@$(LOG_TARGET)
 	@echo "Running Valkey cache example (using existing server)..."
 	@echo "Note: Expects Valkey server at VALKEY_HOST:VALKEY_PORT (default: localhost:6379)"
 	@cd src/semantic-router && \
-		export $(NATIVE_ENV) && \
+		\
 		export VALKEY_HOST=$${VALKEY_HOST:-localhost} && \
 		export VALKEY_PORT=$${VALKEY_PORT:-6379} && \
-		go run ../../tools/valkey/valkey-cache.go
+		go run ../../tools/dev/examples/valkey/valkey-cache.go
 	@echo ""
 	@echo "Example complete!"
 
 # Run Valkey vector store example
-run-valkey-vectorstore-example: start-valkey rust ## Run the Valkey vector store example
+run-valkey-vectorstore-example: start-valkey ## Run the Valkey vector store example
 	@$(LOG_TARGET)
 	@echo "Running Valkey vector store example..."
 	@cd src/semantic-router && \
-		export $(NATIVE_ENV) && \
-		go run ../../tools/valkey/valkey-vectorstore.go
+		\
+		go run ../../tools/dev/examples/valkey/valkey-vectorstore.go
 	@echo ""
 	@echo "Example complete! Inspect Valkey using:"
 	@echo "  • make valkey-cli"
 	@echo "  • make valkey-info"
 
 # Run Valkey vector store example without starting container (use existing Valkey server)
-run-valkey-vectorstore-example-no-container: rust ## Run the Valkey vector store example using existing Valkey server
+run-valkey-vectorstore-example-no-container: ## Run the Valkey vector store example using existing Valkey server
 	@$(LOG_TARGET)
 	@echo "Running Valkey vector store example (using existing server)..."
 	@cd src/semantic-router && \
-		export $(NATIVE_ENV) && \
-		go run ../../tools/valkey/valkey-vectorstore.go
+		\
+		go run ../../tools/dev/examples/valkey/valkey-vectorstore.go
 
 # ---------------------------------------------------------------------------
 # Deprecated / Compatibility Aliases
@@ -283,7 +275,7 @@ valkey-cli: ## Open Valkey CLI for interactive commands
 	@$(CONTAINER_RUNTIME) exec -it valkey-semantic-cache valkey-cli
 
 # Benchmark Valkey cache performance
-benchmark-valkey: rust start-valkey ## Run Valkey cache performance benchmark
+benchmark-valkey: start-valkey ## Run Valkey cache performance benchmark
 	@$(LOG_TARGET)
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo "  Valkey Cache Performance Benchmark"
@@ -291,8 +283,7 @@ benchmark-valkey: rust start-valkey ## Run Valkey cache performance benchmark
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/valkey
-	@export $(NATIVE_ENV) && \
-		export USE_CPU=${USE_CPU:-false} && \
+	@export USE_CPU=${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \

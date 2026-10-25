@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type canonicalRoutingOverrideFields struct {
-	modelBindings bool
-	modelCards    bool
-	signals       bool
-	projections   bool
-	decisions     bool
+	candidateRequirements bool
+	modelBindings         bool
+	modelCards            bool
+	signals               bool
+	projections           bool
+	decisions             bool
 }
 
 func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig.CanonicalRouting, canonicalRoutingOverrideFields, error) {
@@ -36,6 +36,8 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 
 	for key := range object {
 		switch key {
+		case "candidate_requirements":
+			fields.candidateRequirements = true
 		case "model_bindings":
 			fields.modelBindings = true
 		case "modelCards":
@@ -49,12 +51,24 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 		}
 	}
 
-	data, err := yaml.Marshal(object)
+	decoded, err := decodeCanonicalModelObject[routerconfig.CanonicalRouting](raw)
 	if err != nil {
 		return routing, fields, err
 	}
-	if err := yaml.Unmarshal(data, &routing); err != nil {
-		return routing, fields, err
+	routing = decoded
+	if fields.candidateRequirements {
+		payload, err := json.Marshal(object["candidate_requirements"])
+		if err != nil {
+			return routing, fields, err
+		}
+		policy, err := decodeCanonicalModelObject[routerconfig.CandidateRequirements](&apiextensionsv1.JSON{Raw: payload})
+		if err != nil {
+			return routing, fields, fmt.Errorf("candidate_requirements: %w", err)
+		}
+		if err := policy.Validate(); err != nil {
+			return routing, fields, err
+		}
+		routing.CandidateRequirements = &policy
 	}
 	if fields.modelBindings {
 		bindingsJSON, err := json.Marshal(object["model_bindings"])
@@ -76,6 +90,9 @@ func applyCanonicalRoutingOverrides(
 	routing routerconfig.CanonicalRouting,
 	fields canonicalRoutingOverrideFields,
 ) {
+	if fields.candidateRequirements {
+		canonical.Routing.CandidateRequirements = routing.CandidateRequirements.Clone()
+	}
 	if fields.modelBindings {
 		canonical.Routing.ModelBindings = routing.ModelBindings
 	}

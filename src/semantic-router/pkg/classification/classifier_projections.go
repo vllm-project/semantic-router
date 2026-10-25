@@ -25,6 +25,10 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 	}
 
 	for _, score := range orderedScores {
+		if projectionScoreHasFailedInput(score, results) {
+			recordProjectionFailure(score.Name, mappingBySource[score.Name], results)
+			continue
+		}
 		results.ProjectionScores[score.Name] = projectionScoreValue(score, results)
 
 		for _, mapping := range mappingBySource[score.Name] {
@@ -35,4 +39,21 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 
 	results.ProjectionTrace = mergeProjectionTrace(results, c.Config.Projections)
 	return results
+}
+
+// Unknown inputs cannot become numeric zeros: doing so could turn an unavailable
+// risk detector into a low-risk band before the decision's on_unknown policy runs.
+func recordProjectionFailure(name string, mappings []config.ProjectionMapping, results *SignalResults) {
+	if results.SignalErrors == nil {
+		results.SignalErrors = make(map[string]string)
+	}
+	results.SignalErrors[signalConfidenceKey(config.SignalTypeProjection, name)] = "projection_input_failed"
+	delete(results.ProjectionScores, name)
+	for _, mapping := range mappings {
+		for _, output := range mapping.Outputs {
+			key := signalConfidenceKey(config.SignalTypeProjection, output.Name)
+			results.SignalErrors[key] = "projection_input_failed"
+			delete(results.SignalConfidences, key)
+		}
+	}
 }

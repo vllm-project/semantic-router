@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -10,6 +11,7 @@ import (
 
 // ModalityClassificationResult holds the result of modality signal classification.
 type ModalityClassificationResult struct {
+	Err                 error   // No modality verdict was produced when inference fails.
 	Modality            string  // "AR", "DIFFUSION", or "BOTH"
 	Confidence          float32 // Internal policy strength; a model score only when ConfidenceAvailable.
 	ConfidenceAvailable bool
@@ -36,8 +38,7 @@ func (c *Classifier) classifyModalityWithContext(ctx context.Context, text strin
 	case config.ModalityDetectionHybrid:
 		return c.classifyModalityHybrid(ctx, text, detectionConfig)
 	default:
-		logging.Errorf("[ModalitySignal] BUG: unknown detection method %q; defaulting to AR", method)
-		return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "error/unknown-method"}
+		return ModalityClassificationResult{Err: fmt.Errorf("unknown modality detection method %q", method), Method: "error/unknown-method"}
 	}
 }
 
@@ -55,8 +56,7 @@ func (c *Classifier) classifyModalityByClassifier(ctx context.Context, text stri
 		}
 	}
 
-	logging.Errorf("[ModalitySignal] Classifier unavailable: %v; defaulting to AR", err)
-	return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "classifier/error"}
+	return ModalityClassificationResult{Err: err, Method: "classifier/error"}
 }
 
 // classifyModalityByKeyword uses keyword patterns from config to detect modality.

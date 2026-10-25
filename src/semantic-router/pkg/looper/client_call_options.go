@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // ModelTarget identifies one concrete model deployment for a Looper call.
@@ -51,9 +53,17 @@ func responseMode(streaming bool) ResponseMode {
 type CallOptions struct {
 	DecisionName string
 	Iteration    int
-	FusionDepth  int
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
+
+	// ToolStage is this attempt's trusted-facts role. Every call that keeps
+	// tools must name one: an empty stage matches no configured role, so an
+	// authoritative policy denies its tools.
+	ToolStage llmprotocol.TrustedStage
+
+	// candidateRequest retains admission policy through final wire mutations.
+	// It is request-scoped; a shared Client never stores recipe policy.
+	candidateRequest *Request
 }
 
 func (options CallOptions) validate(target ModelTarget) error {
@@ -62,9 +72,6 @@ func (options CallOptions) validate(target ModelTarget) error {
 	}
 	if options.Iteration <= 0 {
 		return fmt.Errorf("looper iteration must be positive")
-	}
-	if options.FusionDepth < 0 {
-		return fmt.Errorf("fusion depth must not be negative")
 	}
 	if options.Mode != ResponseJSON && options.Mode != ResponseSSE {
 		return fmt.Errorf("unsupported looper response mode %d", options.Mode)
@@ -90,8 +97,27 @@ func (c *Client) CallModelWithOptions(
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	if c.connector == nil {
+	if c.connector == nil && c.hops == nil {
 		return nil, fmt.Errorf("looper connector is required")
 	}
+	request = gateAttemptTools(options, request)
 	return c.callModel(ctx, &request, target, options)
+}
+
+// gateAttemptTools applies the recipe's per-stage tool gate to one outbound
+// attempt. The gate sees the attempt's own stage, so a policy that authorizes
+// only final cannot send tools on a candidate or verifier call. Attempts that
+// carry no tools have nothing to gate, so they skip it and record nothing.
+func gateAttemptTools(options CallOptions, request openai.ChatCompletionNewParams) openai.ChatCompletionNewParams {
+	if options.candidateRequest == nil || options.candidateRequest.ToolStageGate == nil {
+		return request
+	}
+	if len(request.Tools) == 0 && len(request.Functions) == 0 {
+		return request
+	}
+	gated := options.candidateRequest.ToolStageGate(options.ToolStage, &request)
+	if gated == nil {
+		return request
+	}
+	return *gated
 }

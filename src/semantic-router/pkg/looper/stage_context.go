@@ -24,6 +24,8 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // StageContextWindowError reports a Looper-generated request that no longer
@@ -54,6 +56,10 @@ func (l *BaseLooper) dispatchModel(
 	if err := validateLooperStageContext(baseReq, stageReq, target.Name); err != nil {
 		return nil, err
 	}
+	options.candidateRequest = baseReq
+	if baseReq != nil {
+		ctx = contextWithRoutingRecipe(ctx, baseReq.RecipeName)
+	}
 	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
 }
 
@@ -63,6 +69,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
 	modelName, stage, role string,
+	toolStage llmprotocol.TrustedStage,
 	streaming bool,
 	iteration int,
 	logprobsConfig *LogprobsConfig,
@@ -77,16 +84,19 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	decisionName := ""
 	if baseReq != nil {
 		decisionName = baseReq.DecisionName
+		attemptCtx = contextWithRoutingRecipe(attemptCtx, baseReq.RecipeName)
 	}
 	response, err := l.client.CallModelWithOptions(
 		attemptCtx,
 		*stageReq,
 		ModelTarget{Name: modelName, AccessKey: accessKey},
 		CallOptions{
-			DecisionName: decisionName,
-			Iteration:    iteration,
-			Mode:         responseMode(streaming),
-			Logprobs:     logprobsConfig,
+			candidateRequest: baseReq,
+			DecisionName:     decisionName,
+			Iteration:        iteration,
+			Mode:             responseMode(streaming),
+			Logprobs:         logprobsConfig,
+			ToolStage:        toolStage,
 		},
 	)
 	if err != nil && attempt != nil {
@@ -100,6 +110,11 @@ func validateLooperStageContext(
 	stageReq *openai.ChatCompletionNewParams,
 	modelName string,
 ) error {
+	if baseReq != nil && selection.CandidateRequirementsEnabled(baseReq.CandidateRequirements) {
+		// The final wire check counts the whole stage plus its actual output
+		// limit once. The legacy original-plus-growth estimate is not additive.
+		return nil
+	}
 	if baseReq == nil || baseReq.BaseContextTokens <= 0 || stageReq == nil {
 		return nil
 	}

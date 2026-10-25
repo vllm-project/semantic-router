@@ -17,7 +17,7 @@ controls of the surrounding platform.
 
 ```mermaid
 flowchart LR
-    Client["Client"] --> Listener["Public Envoy listener"]
+    Client["Client"] --> Listener["Standalone frontend / external gateway"]
     Listener --> Router["Semantic Router"]
     Router --> Provider["Model providers"]
     Admin["Authenticated Dashboard / API"] --> Router
@@ -36,16 +36,17 @@ Review each boundary separately:
 
 ## Protect the public listener
 
-The maintained Envoy configuration removes internal control headers before a
-client request reaches the Router. Do the same when supplying a custom Envoy or
-gateway configuration. Internal examples include:
+The standalone frontend strips untrusted identity and proxy-control headers.
+Configure listener API keys, Chat model allowlists, and native model grants
+separately; see [Gateway Modes](gateway-modes). Do not treat a Dashboard login
+as a public inference credential.
+
+The maintained Envoy configuration also removes internal control headers. Keep
+that boundary when supplying a custom Envoy or gateway configuration. Internal
+examples include:
 
 ```yaml
 request_headers_to_remove:
-  - x-vsr-looper-request
-  - x-vsr-looper-secret
-  - x-vsr-looper-decision
-  - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
 ```
@@ -58,7 +59,7 @@ Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |
 | --- | --- | --- |
-| `feedback.submit` | Submit routing feedback. | admin, write |
+| `feedback.submit` | Submit routing feedback. Read-role feedback is recorded on the replay without updating model experience. | admin, write, read |
 | `replay.read` | List replay records. | admin, write, read |
 | `logs.read` | Read bounded local-stack service logs. | admin, write |
 
@@ -81,7 +82,7 @@ api_key: ${MODEL_API_KEY}
 Do not commit literal API keys, passwords, authorization headers, credential
 query parameters, or URLs containing user information.
 
-For `vllm-sr serve --target k8s`, the CLI places sensitive environment values
+For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment values
 in an immutable Secret revision scoped to the namespace and Helm release. Helm
 values and the Deployment reference the Secret by name; they do not contain
 the credential value. A failed upgrade keeps the previous workload and Secret
@@ -92,50 +93,25 @@ Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
 
-### Isolate Evaluation broker credentials
+### Isolate sr-bench credentials
 
-Production Evaluation uses a server-owned HTTP broker. The sandboxed Python
-worker receives neither origins nor credential values in its environment and
-can request only the operation, frozen case identity, bounded timeout, and
-validated payload allowed by the run manifest. The Go broker selects the exact
-Router, Envoy, or evidence-ledger origin and attaches its bearer token.
+The Dashboard proxies a server-owned sr-bench origin and forwards authenticated
+user ownership. `SR_BENCH_TOKEN_ENV` names the service token environment variable
+(default `SR_BENCH_TOKEN`). Keep this token separate from model API credentials
+and Router management credentials. Browser manifests cannot change registered
+target endpoints, prices, credential references or execution harness options.
 
-Use a dedicated Router Evaluation token:
+The managed core worker receives only the registered model credential references
+and its service token through inherited environment variables, not command-line
+values. Its private store and adjacent token file live outside the common Router
+and Dashboard mounts; the worker has no Docker socket or GPU passthrough.
+Dashboard receives the service token but not model credential values.
 
-```yaml
-global:
-  services:
-    management_api:
-      auth:
-        mode: bearer
-        tokens:
-          - env: ROUTER_EVAL_TOKEN
-            role: evaluation
-        roles:
-          evaluation:
-            - classify.invoke
-```
-
-Then reference its name, never its value:
-
-```bash
-export ROUTER_EVAL_TOKEN="<secret-manager value>"
-export EVALUATION_ROUTER_API_KEY_ENV=ROUTER_EVAL_TOKEN
-```
-
-The Evaluation token must differ from
-`VLLM_SR_DASHBOARD_RECIPE_TOKEN`, which is the Dashboard control-plane
-identity. Envoy, fault-recovery, hard-policy, and production-experiment
-ledgers must each use another environment reference. Reusing a reference or a
-ledger origin is rejected. `vllm-sr serve` renders referenced secret names as
-inheriting `-e NAME` container arguments, so values stay out of process
-arguments, generated manifests, API responses, reports, and logs. A configured
-reference with no non-empty host value fails startup; an authenticated Router
-with no dedicated Evaluation reference keeps routing Evaluation unavailable
-instead of falling back to the broader Dashboard credential.
-
-See [Evaluation Plane](../benchmarking/evaluation-plane#configure-production-evidence-services)
-for the complete endpoint and timeout surface.
+For code/agent evaluation, use an independently prepared worker host and set
+`SR_BENCH_URL` to an authenticated origin reachable by the Dashboard. The
+standalone service binds loopback by default and requires a service token for
+non-loopback binding. Keep its source, sandbox and model credentials confined to
+that host. See [sr-bench 1.0](../benchmarking/sr-bench) for setup and limits.
 
 ## Secure the local stack's storage credentials
 
@@ -180,15 +156,14 @@ The local stack runs on two bridge networks.
 | Router | yes | yes |
 | Envoy, Dashboard | yes | no |
 | Jaeger, Prometheus, Grafana | yes | no |
-| OpenClaw workloads | yes | no |
 
 Router is the only container on both. Requests reach it over the application
 network; it reaches the stores over the data network. A named stack prefixes
 both names, so two stacks share neither. Milvus joins the data network even
 though it has no credentials of its own yet.
 
-This closes east-west reachability. A container on the application network --
-a sidecar or an image chosen for an OpenClaw workload -- cannot
+This closes east-west reachability. A container on the application network,
+such as a sidecar, cannot
 open a connection to `vllm-sr-redis:6379` or `vllm-sr-postgres:5432` at all. The
 storage ports remain published on `127.0.0.1` only, which closes the same
 exposure from the host side.
@@ -251,17 +226,49 @@ the stack's named volume (`vllm-sr-postgres-data` / `vllm-sr-redis-data`, with
 the stack prefix for a named stack). The CLI does not guess which orphaned
 volume is yours.
 
-**Recipe activation reports that the credentials are not readable.** Dashboard
-can start a managed store while activating a Recipe, but it runs as a separate,
-less trusted account -- it holds the container-runtime socket, which is exactly
-what these credentials are kept away from -- so it cannot read the credential
-state, and it will not guess which volume holds the data. Run `vllm-sr serve`
-from the account that owns the stack to provision the store, then activate the
-Recipe again.
-
 **An older CLI is used against a rotated stack.** It will fail to authenticate.
 That is the intended outcome. Either upgrade the CLI, or reset the passwords by
 hand through the container runtime.
+
+## Secure the local stack's management credential
+
+The Dashboard calls the Router management API with one service credential, the
+`dashboard_control_plane` role. When a Recipe turns on bearer authentication,
+the Router accepts the Dashboard only with that credential. `vllm-sr serve`
+creates both containers, so it owns the value:
+
+- It uses `VLLM_SR_DASHBOARD_RECIPE_TOKEN` from its own environment when you
+  set it (64 lowercase hexadecimal characters, such as the output of
+  `openssl rand -hex 32`), and never writes that value down.
+- Otherwise the stack generates one on its first start and keeps it in
+  `<state-root>/.vllm-sr/management-credential/dashboard[.<stack>].json`, mode
+  `0600`, in an owner-verified `0700` directory.
+- The Dashboard always receives it, and the Router whenever its runtime config
+  binds it, as an inherited environment name. It never appears in a `docker`
+  command line, a generated config file, the Recipe store or a log record, and
+  the Dashboard keeps no copy on disk. A Recipe cannot bind the name as one of
+  its environment inputs.
+
+Who can read it: the user who runs `vllm-sr serve`, the Router and Dashboard
+processes, and anyone who can inspect the containers through the container
+runtime. To rotate it, delete the state file and run `vllm-sr serve`: it
+generates a new value and recreates the Router and the Dashboard with it.
+
+### Recipe store permissions
+
+`vllm-sr serve` reads the Dashboard's Recipe store before it starts the stack
+and finishes interrupted activations, as the user who runs it. The store,
+`<state-root>/.vllm-sr/recipe-store/<stack>`, is therefore shared with that
+user's group: its files are group-readable and its directories group-writable.
+`.vllm-sr` around it stays open to its owner and the Dashboard only, so other
+host users cannot reach the store, and the store holds package and config
+documents only, no credential.
+
+A store written by an earlier Dashboard is private to the Dashboard's account.
+If `vllm-sr serve` reports that it cannot read it, share it once with the
+command it prints (`chgrp -R` to your group and `chmod -R g+rwX`); the Dashboard
+keeps it shared from then on. Rootless Docker and Podman map container users to
+other host IDs, so this sharing does not reach the host user there.
 
 ## Review stored request data
 
@@ -285,20 +292,18 @@ guides.
 
 ## Limit container-runtime access
 
-Some Dashboard workflows can manage local containers. The CLI mounts a
-container-runtime socket only when it is a Unix socket with a safe owner and
-group mode; it rejects symlinks, world-accessible sockets, and unsafe group
-ownership. The Dashboard repeats the check inside the container and runs as a
-non-root user.
+`vllm-sr serve` is the only part of the local stack that uses the container
+runtime. It creates, recreates and stops the stack's containers, and applies
+every change saved in the Dashboard that needs them created anew. No stack
+container mounts the runtime socket, and the Dashboard image contains no
+container CLI. The Dashboard runs as a non-root user and reads service status
+from the Router's and Envoy's HTTP probes and the files the CLI keeps beside
+the runtime config, and service logs from the bounded log spool.
 
-When the socket is missing or rejected, Router and Dashboard still start, but
-container-management features report the runtime as unavailable. Do not make a
-socket world-writable to bypass this protection. Use
-`VLLM_SR_CONTAINER_SOCKET` for a non-default rootless runtime socket and verify
-its user-namespace and supplementary-group mapping.
-
-If the deployment does not need Dashboard-managed containers, do not mount a
-runtime socket.
+Treat access to the runtime as administrator access to the stack. A caller who
+can reach it can read container environments, including the management
+credential, and bypass the storage passwords. Keep the socket to the runtime's
+administrators, and do not mount it into a stack container.
 
 ## Production checklist
 
@@ -316,5 +321,5 @@ runtime socket.
 - [ ] Rotate the local stack's storage credentials on the same schedule as
       every other credential.
 - [ ] Test backup, restore, credential rotation, upgrade, and rollback.
-- [ ] Leave the container-runtime socket unmounted unless a workflow requires
-      it.
+- [ ] Keep the container-runtime socket out of every stack container; only
+      `vllm-sr serve` uses the runtime.

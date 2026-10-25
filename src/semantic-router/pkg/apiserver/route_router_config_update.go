@@ -1,8 +1,9 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -12,11 +13,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -68,6 +72,7 @@ func (s *ClassificationAPIServer) handleConfigMutation(
 
 	s.commitRouterConfigDocument(
 		w,
+		r,
 		paths,
 		existingData,
 		yamlBytes,
@@ -113,14 +118,21 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 	sourceConfigPath string,
 	mode routerConfigMutationMode,
 ) ([]byte, []byte, bool) {
-	existingDoc, existingData, err := readConfigDocument(sourceConfigPath)
+	existingData, err := readPersistedSourceConfig(sourceConfigPath)
 	if err != nil && !os.IsNotExist(err) {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read existing config: %v", err))
 		return nil, nil, false
 	}
 
+	// Only a merge reads the persisted document; a replacement also corrects
+	// one that does not parse.
 	nextDoc := patchDoc
 	if mode == routerConfigMutationMerge {
+		existingDoc, decodeErr := decodeYAMLDocument(existingData)
+		if decodeErr != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read existing config: %v", decodeErr))
+			return nil, nil, false
+		}
 		nextDoc = mergeConfigDocuments(existingDoc, patchDoc)
 	}
 
@@ -129,16 +141,14 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIG_VALIDATION_ERROR", err.Error())
 		return nil, nil, false
 	}
-	if len(existingData) > 0 {
-		if err := validateHotReloadCompatibility(existingData, yamlBytes); err != nil {
-			s.writeErrorResponse(
-				w,
-				http.StatusConflict,
-				"RESTART_REQUIRED",
-				scrubSecretsInErrorMessage(err.Error()),
-			)
-			return nil, nil, false
-		}
+	if err := s.validateHotReloadFromServing(existingData, yamlBytes); err != nil {
+		s.writeErrorResponse(
+			w,
+			http.StatusConflict,
+			"RESTART_REQUIRED",
+			scrubSecretsInErrorMessage(err.Error()),
+		)
+		return nil, nil, false
 	}
 
 	if len(existingData) == 0 {
@@ -159,7 +169,30 @@ func validateAndEncodeRouterConfigDocument(doc map[string]any) ([]byte, error) {
 	return normalizeRouterConfigDocument(doc)
 }
 
+// validateHotReloadFromServing checks that next can replace the serving
+// configuration without a restart. The persisted document may be a rejected
+// change that never served, so it stands in for the serving configuration only
+// in an API without the Router's runtime.
+func (s *ClassificationAPIServer) validateHotReloadFromServing(persisted []byte, next []byte) error {
+	serving := s.servingConfig()
+	if serving == nil {
+		if len(persisted) == 0 {
+			return nil
+		}
+		return validateHotReloadCompatibilityInMode(s.gatewayMode, persisted, next)
+	}
+	nextCfg, err := config.ParseYAMLBytes(next)
+	if err != nil {
+		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
+	}
+	return validateParsedHotReloadCompatibilityInMode(s.gatewayMode, serving, nextCfg)
+}
+
 func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
+	return validateHotReloadCompatibilityInMode(config.GatewayExtProc, currentYAML, nextYAML)
+}
+
+func validateHotReloadCompatibilityInMode(mode config.GatewayMode, currentYAML []byte, nextYAML []byte) error {
 	currentCfg, err := config.ParseYAMLBytes(currentYAML)
 	if err != nil {
 		return fmt.Errorf("failed to parse current config for reload validation: %w", err)
@@ -168,15 +201,45 @@ func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
 	}
-	return validateParsedHotReloadCompatibility(currentCfg, nextCfg)
+	return validateParsedHotReloadCompatibilityInMode(mode, currentCfg, nextCfg)
 }
 
 func validateParsedHotReloadCompatibility(
 	currentCfg *config.RouterConfig,
 	nextCfg *config.RouterConfig,
 ) error {
-	if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
-		return err
+	return validateParsedHotReloadCompatibilityInMode(config.GatewayExtProc, currentCfg, nextCfg)
+}
+
+// validateParsedHotReloadCompatibilityInMode checks a reload in the Router's
+// gateway mode. In standalone mode the Router binds only its listeners at
+// startup; its upstream layer rebuilds provider backends on every reload.
+func validateParsedHotReloadCompatibilityInMode(
+	mode config.GatewayMode,
+	currentCfg *config.RouterConfig,
+	nextCfg *config.RouterConfig,
+) error {
+	if nextCfg.RoutingEnabled() {
+		if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
+			return err
+		}
+		if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
+			return err
+		}
+	}
+	if currentCfg != nil && nextCfg != nil &&
+		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {
+		return fmt.Errorf(
+			"tracing configuration changed; the tracer provider is initialized at startup and cannot be activated by the Router hot-reload API; activate the candidate through the deployment workflow",
+		)
+	}
+	if mode == config.GatewayStandalone {
+		if currentCfg != nil && nextCfg != nil && !reflect.DeepEqual(currentCfg.Listeners, nextCfg.Listeners) {
+			return fmt.Errorf(
+				"listeners changed; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate them; restart the Router with this configuration",
+			)
+		}
+		return nil
 	}
 	if !reflect.DeepEqual(
 		envoyDeploymentProjectionFromConfig(currentCfg),
@@ -248,11 +311,18 @@ func normalizeRouterConfigDocument(doc map[string]any) ([]byte, error) {
 	return normalizeRouterConfigDocumentWithParser(doc, config.ParseYAMLBytes)
 }
 
-func normalizeRouterConfigDocumentWithoutEnv(doc map[string]any) ([]byte, error) {
-	return normalizeRouterConfigDocumentWithParser(
-		doc,
-		config.ParseYAMLBytesWithoutEnvExpansion,
-	)
+// normalizeRouterConfigDocumentWithoutEnv validates doc as the Router loads
+// it, with environment references unresolved, and returns its warnings.
+func normalizeRouterConfigDocumentWithoutEnv(doc map[string]any) ([]byte, []config.ConfigWarning, error) {
+	warnings := []config.ConfigWarning{}
+	normalized, err := normalizeRouterConfigDocumentWithParser(doc, func(data []byte) (*config.RouterConfig, error) {
+		cfg, err := config.ParseYAMLBytesWithoutEnvExpansion(data)
+		if err == nil {
+			warnings = append(warnings, config.Warnings(cfg)...)
+		}
+		return cfg, err
+	})
+	return normalized, warnings, err
 }
 
 func normalizeRouterConfigDocumentWithParser(
@@ -275,7 +345,7 @@ func normalizeRouterConfigDocumentWithParser(
 }
 
 func readConfigDocument(path string) (map[string]any, []byte, error) {
-	data, err := os.ReadFile(path)
+	data, err := readPersistedSourceConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return map[string]any{}, nil, err
@@ -354,22 +424,31 @@ func cloneYAMLValue(value any) any {
 	}
 }
 
-func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte) (string, string) {
-	configDir := configPersistenceBaseDir(sourceConfigPath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	version := nextConfigVersion(backupDir, time.Now())
-	recordConfigBackup(backupDir, version, existingData, configVersionSourceAPI)
-
-	return version, backupDir
+func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte) (string, string, error) {
+	return s.preserveReplacedDocument(sourceConfigPath, existingData, configVersionSourceAPI)
 }
 
+// writeRouterConfigFiles persists yamlBytes and attributes the update the
+// Router makes from it to origin.
 func (s *ClassificationAPIServer) writeRouterConfigFiles(
 	w http.ResponseWriter,
 	paths configPersistencePaths,
 	previousData []byte,
 	yamlBytes []byte,
+	origin configsnapshot.Origin,
 ) bool {
-	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
+	withdraw := func() {}
+	if !paths.usesRuntimeOverride() {
+		withdraw = s.attributeConfigWrite(configDocumentETagHash(yamlBytes), origin)
+	}
+	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
+		withdraw()
+		if errors.Is(err, configwriter.ErrConfigMapChanged) {
+			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_CHANGED", "The ConfigMap changed during this request. Reload the configuration and retry.")
+			return false
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write source config: %v", err))
 		return false
 	}
@@ -382,11 +461,17 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 		s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
 		return false
 	}
+	// The generated runtime document is known only now; the Router may
+	// already be loading it, so this attribution is best effort.
+	if runtimeHash, err := configFileHash(paths.runtimePath); err == nil {
+		s.attributeConfigWrite(runtimeHash, origin)
+	}
 	return true
 }
 
 func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	w http.ResponseWriter,
+	r *http.Request,
 	paths configPersistencePaths,
 	previousData []byte,
 	yamlBytes []byte,
@@ -394,20 +479,33 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	action string,
 	message string,
 ) bool {
-	version, backupDir := s.recordRouterConfigArtifacts(paths.sourcePath, previousData)
-	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes) {
+	version, backupDir, err := s.recordRouterConfigArtifacts(paths.sourcePath, previousData)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BACKUP_ERROR", fmt.Sprintf("Failed to back up existing config: %v", err))
+		return false
+	}
+	afterAttempt := s.configActivationAttempt()
+	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes, managementOrigin(r, configsnapshot.SourceAPI)) {
 		return false
 	}
 
 	etag := configDocumentETag(yamlBytes)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, yamlBytes, afterAttempt)
 	responseStatus := "success"
 	responseCode := statusCode
 	switch runtimeStatus {
+	case "failed":
+		responseStatus = "activation_failed"
+		responseCode = http.StatusServiceUnavailable
+		message += " The config is persisted, but runtime activation failed. Inspect activation and correct or roll back the persisted configuration."
 	case "pending":
 		responseStatus = "accepted"
 		responseCode = http.StatusAccepted
 		message += " The config is persisted but runtime activation is still pending; poll /api/v1/config/hash until activation_status is active."
+	case "persisted":
+		responseStatus = "accepted"
+		responseCode = http.StatusAccepted
+		message += " The config is durably saved to the Kubernetes ConfigMap; it takes effect on the router's next restart. Live activation without a restart is not yet supported for Kubernetes deployments."
 	case "active":
 		message += " Runtime activation is complete."
 	default:
@@ -422,14 +520,16 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		paths.sourcePath,
 		paths.runtimePath,
 	)
-	configCleanupBackups(backupDir)
+	cleanupConfigBackups(backupDir)
 	s.writeJSONResponse(w, responseCode, RouterConfigUpdateResponse{
 		Status:               responseStatus,
 		Version:              version,
 		ETag:                 etag,
 		ActivationStatus:     runtimeStatus,
 		GeneratedRuntimeHash: runtimeHash,
+		ConfigVersion:        s.activatedConfigVersion(runtimeStatus, runtimeHash),
 		Message:              message,
+		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
 	})
 	return true
 }
@@ -462,7 +562,18 @@ func (s *ClassificationAPIServer) activeConfigDocumentHash() string {
 // hash only after the new router and classification service are atomically
 // available. Legacy/test servers without a runtime registry keep their
 // asynchronous behavior.
-func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string) (string, string) {
+//
+// generatedDocument is the document this write just persisted. On a
+// Kubernetes ConfigMap target, runtimePath is a read-only mount that this
+// write never touches, so hashing it and comparing against the active
+// runtime would find the old, unrelated match and falsely report "active"
+// (review on #3814). Report the honest "persisted" status instead, hashing
+// the document that was actually written rather than the untouched file.
+func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string, generatedDocument []byte, afterAttempt uint64) (string, string) {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		return configDocumentETagHash(generatedDocument), "persisted"
+	}
+
 	runtimeHash, err := configFileHash(runtimePath)
 	if err != nil {
 		return "", "unknown"
@@ -477,11 +588,21 @@ func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath str
 		if s.activeConfigDocumentHash() == runtimeHash {
 			return runtimeHash, "active"
 		}
+		if activation := s.configActivationAfter(runtimeHash, afterAttempt); activation != nil && activation.Status == "failed" {
+			return runtimeHash, "failed"
+		}
 		if time.Now().After(deadline) {
 			return runtimeHash, "pending"
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// configDocumentETagHash is configDocumentETag without the quoting an ETag
+// header needs, for reuse anywhere a plain hex digest is expected instead.
+func configDocumentETagHash(data []byte) string {
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
 }
 
 func syncRuntimeConfigOrRestore(paths configPersistencePaths, previousData []byte) error {
@@ -514,8 +635,73 @@ func restoreSourceConfig(sourcePath string, previousData []byte) error {
 // atomicRename is os.Rename by default; tests override it to simulate a rename failure.
 var atomicRename = os.Rename
 
-// writeConfigAtomically writes via a temp file and rename, and fails on a rename error instead of falling back to a non-atomic direct write.
+const configMapWriteTimeout = 10 * time.Second
+
+var (
+	configMapWriterMu       sync.Mutex
+	configMapWriterResult   *configwriter.ConfigMapWriter
+	configMapWriterErr      error
+	configMapWriterResolved bool
+	// newInClusterConfigMapWriter is a seam for tests; production always uses
+	// configwriter.NewInClusterConfigMapWriter.
+	newInClusterConfigMapWriter = configwriter.NewInClusterConfigMapWriter
+)
+
+// resolvedConfigMapWriter builds the in-cluster ConfigMap client once and
+// reuses it. Every shipped Kubernetes deployment mounts the config file
+// read-only (issue #3688); this is that mount's write path.
+func resolvedConfigMapWriter() (*configwriter.ConfigMapWriter, error) {
+	configMapWriterMu.Lock()
+	defer configMapWriterMu.Unlock()
+	if !configMapWriterResolved {
+		configMapWriterResult, configMapWriterErr = newInClusterConfigMapWriter()
+		configMapWriterResolved = true
+	}
+	return configMapWriterResult, configMapWriterErr
+}
+
+// writeConfigAtomically persists a canonical config document. On a
+// Kubernetes deployment that has declared a ConfigMap write target (see
+// configwriter.ConfigMapTargetFromEnv), it writes there via the Kubernetes API instead
+// of the local file, since that file is a read-only ConfigMap mount on every
+// shipped manifest. Every other deployment (local CLI, VM, plain Docker)
+// keeps writing the local file exactly as before: this only branches when the
+// deployment has opted in.
 func writeConfigAtomically(configPath string, yamlBytes []byte) error {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		// A subPath mount does not advance when the ConfigMap changes. Read the
+		// persisted document rather than comparing every subsequent write with
+		// the stale mounted revision.
+		expected, err := readPersistedSourceConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("read persisted config before ConfigMap update: %w", err)
+		}
+		return writeConfigAtomicallyIfUnchanged(configPath, expected, yamlBytes)
+	}
+	return writeConfigFileAtomically(configPath, yamlBytes)
+}
+
+// writeConfigAtomicallyIfUnchanged preserves the document observed by the
+// request as its compare-and-swap precondition. A concurrent API or external
+// ConfigMap update must not be overwritten by a stale request.
+func writeConfigAtomicallyIfUnchanged(configPath string, expected, yamlBytes []byte) error {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		writer, err := resolvedConfigMapWriter()
+		if err != nil {
+			return fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+		defer cancel()
+		if writeErr := writer.WriteIfUnchanged(ctx, target, expected, yamlBytes); writeErr != nil {
+			return writeErr
+		}
+		return nil
+	}
+	return writeConfigFileAtomically(configPath, yamlBytes)
+}
+
+// writeConfigFileAtomically writes via a temp file and rename, and fails on a rename error instead of falling back to a non-atomic direct write.
+func writeConfigFileAtomically(configPath string, yamlBytes []byte) error {
 	tmpConfigFile := configPath + ".tmp"
 	tmpFile, err := os.OpenFile(tmpConfigFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {

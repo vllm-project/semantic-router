@@ -122,16 +122,13 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 			return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 		}
 
-		// A complete immutable HF snapshot is reusable offline. Mutable refs and
-		// unknown/mismatched snapshots require the download path's safety check.
-		pinned := true
-		if spec.Revision != "" && spec.Revision != "main" {
-			pinned, err = cachedRevisionMatches(spec)
+		if complete && spec.Revision != "" && spec.Revision != "main" {
+			complete, err = cachedRevisionMatches(spec)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 			}
 		}
-		if !complete || !pinned {
+		if !complete {
 			missing = append(missing, spec)
 		}
 	}

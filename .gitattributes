@@ -11,6 +11,9 @@
 *.ico binary
 *.svg binary
 *.pdf binary
+*.safetensors.fixture binary
+*.gz binary
+*.zip binary
 
 # Catalog projections are deterministic compiler outputs. Review authored
 # facts under config/catalog instead of treating these as independent sources.
@@ -18,6 +21,4 @@ config/recipes/built-in/*/catalog.yaml linguist-generated=true
 src/semantic-router/pkg/catalog/zz_generated_catalog.go linguist-generated=true
 website/static/model-catalog/catalog.json linguist-generated=true
 
-# Prebuilt CK Flash Attention shared library (ROCm/gfx942)
-onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* binary
 *.a binary

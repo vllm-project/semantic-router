@@ -10,7 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func TestOwnedEmbeddingSkipsUnusedCatalogArtifacts(t *testing.T) {
@@ -53,7 +53,7 @@ func TestOwnedRemoteEmbeddingIndependentReferencesAndFailedCandidate(t *testing.
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
 	}))
 	defer server.Close()
-	runtime := native.New(binding.NewPool())
+	runtime := serving.New(nil, binding.NewPool())
 	makeConfig := func(model string) *config.RouterConfig {
 		cfg := &config.RouterConfig{}
 		cfg.EmbeddingConfig.ModelType = "remote"
@@ -106,7 +106,7 @@ func TestOwnedRecipeEmbeddingDoesNotProvisionSharedCache(t *testing.T) {
 	cfg.SemanticCache.Enabled = true
 	cfg.SemanticCache.EmbeddingModel = "mmbert"
 	cfg.MmBertModelPath = "/does-not-exist/shared-cache"
-	prepared, err := PrepareOwnedRecipeEmbeddings(context.Background(), cfg, nil)
+	prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestOwnedRecipeEmbeddingDoesNotProvisionSharedCache(t *testing.T) {
 	if prepared.Ready() {
 		t.Fatal("standalone recipe provisioned shared cache model")
 	}
-	if _, err := PrepareOwnedEmbeddings(context.Background(), cfg, nil); err == nil {
+	if _, err := PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, nil); err == nil {
 		t.Fatal("service runtime ignored required cache artifact")
 	}
 }

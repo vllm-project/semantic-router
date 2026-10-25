@@ -19,12 +19,74 @@ def test_container_status_uses_exact_inspect_name(monkeypatch):
     assert calls == [
         [
             "docker",
+            "container",
             "inspect",
             "--format",
             "{{.State.Status}}",
             "vllm-sr-router-container",
         ]
     ]
+
+
+def _podman_after_stop(kept_volumes):
+    """Podman's answers once `vllm-sr stop` removed the containers and kept volumes.
+
+    A typeless `inspect` that finds no container goes on to volumes and takes
+    an unambiguous name prefix, so the kept volume answers and the container
+    template fails on it; `container inspect` reports the container missing.
+    """
+
+    def run(command, **_kwargs):
+        name = command[-1]
+        if command[1:3] != ["container", "inspect"] and any(
+            volume.startswith(name) for volume in kept_volumes
+        ):
+            return subprocess.CompletedProcess(
+                command,
+                125,
+                stdout="",
+                stderr='Error: template: inspect:1:2: executing "inspect" at '
+                "<.State.Status>: can't evaluate field State in type interface {}",
+            )
+        return subprocess.CompletedProcess(
+            command, 125, stdout="", stderr=f"Error: no such container {name}"
+        )
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "status",
+    [container_services.container_status_strict, container_services.container_status],
+)
+def test_a_removed_container_is_absent_beside_the_volume_podman_keeps(
+    monkeypatch, status
+):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "podman")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        _podman_after_stop(("vllm-sr-grafana-data", "vllm-sr-jaeger-data")),
+    )
+
+    for name in ("vllm-sr-grafana", "vllm-sr-prometheus", "vllm-sr-jaeger"):
+        assert status(name) == "not found"
+
+
+def test_container_status_strict_still_fails_when_the_runtime_cannot_answer(
+    monkeypatch,
+):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "podman")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 125, stdout="", stderr="Error: cannot connect to Podman"
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="inspection failed"):
+        container_services.container_status_strict("vllm-sr-grafana")
 
 
 def test_container_status_reports_missing_exact_name(monkeypatch):
@@ -263,3 +325,30 @@ def test_mount_destinations_are_unknown_when_the_runtime_cannot_answer(monkeypat
     )
 
     assert container_services.container_mount_destinations("vllm-sr-redis") is None
+
+
+@pytest.mark.parametrize("operation", ["exec", "status", "logs_since", "logs"])
+def test_startup_container_operations_bound_subprocess_wait(monkeypatch, operation):
+    observed = []
+
+    def blocked(command, **kwargs):
+        observed.append(kwargs.get("timeout"))
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services.subprocess, "run", blocked)
+    if operation == "exec":
+        assert (
+            container_services.container_exec("router", ["curl"], timeout=0.25)[0]
+            == 124
+        )
+    elif operation == "status":
+        with pytest.raises(RuntimeError, match="inspection failed"):
+            container_services.container_status_strict("router", timeout=0.25)
+    elif operation == "logs_since":
+        assert (
+            container_services.container_logs_since("router", 0, timeout=0.25)[0] == 124
+        )
+    else:
+        assert container_services.container_logs("router", timeout=0.25) is False
+    assert observed == [0.25]

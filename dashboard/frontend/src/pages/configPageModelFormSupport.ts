@@ -5,6 +5,7 @@ import type {
   EvaluationRecordConfig,
   ModelPricing,
   ModelReasoningConfig,
+  NormalizedModel,
   ProviderReliability,
 } from './configPageSupport'
 
@@ -260,12 +261,19 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
   ) {
     normalized.cache_write_per_1m = pricing.cache_write_per_1m
   }
+  if (
+    typeof pricing.cache_write_1h_per_1m === 'number' &&
+    Number.isFinite(pricing.cache_write_1h_per_1m)
+  ) {
+    normalized.cache_write_1h_per_1m = pricing.cache_write_1h_per_1m
+  }
   if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m))
     normalized.completion_per_1m = pricing.completion_per_1m
   const hasRate = [
     normalized.prompt_per_1m,
     normalized.cached_input_per_1m,
     normalized.cache_write_per_1m,
+    normalized.cache_write_1h_per_1m,
     normalized.completion_per_1m,
   ].some((rate) => typeof rate === 'number')
   if (hasRate && !normalized.currency) normalized.currency = 'USD'
@@ -284,8 +292,22 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     'health_check_path',
     'health_check_interval',
     'health_check_timeout',
+    'connect_timeout',
+    'total_timeout',
+    'idle_timeout',
+    'per_try_timeout',
+    'first_byte_timeout',
+    'retry_back_off_base',
+    'retry_back_off_max',
+    'retry_after_max',
   ] as const
-  const numberFields = ['retry_count', 'consecutive_5xx', 'max_ejection_percent'] as const
+  const numberFields = [
+    'retry_count',
+    'consecutive_5xx',
+    'max_ejection_percent',
+    'retry_budget_percent',
+    'retry_budget_min_concurrency',
+  ] as const
 
   for (const field of stringFields) {
     if (typeof source[field] === 'string' && source[field].trim()) {
@@ -296,6 +318,11 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     if (typeof source[field] === 'number' && Number.isFinite(source[field])) {
       normalized[field] = source[field]
     }
+  }
+  const statusCodes = source.retriable_status_codes
+  if (Array.isArray(statusCodes)) {
+    const codes = statusCodes.filter((code): code is number => Number.isInteger(code))
+    if (codes.length > 0) normalized.retriable_status_codes = codes
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
@@ -326,4 +353,23 @@ export function buildProviderModelPayload(
     pricing: normalizeModelPricing(data.pricing),
     reliability: normalizeModelReliability(data.reliability),
   }
+}
+
+export function effectiveModelCardFormData(model: NormalizedModel): Record<string, unknown> {
+  return {
+    param_size: model.param_size ?? '',
+    context_window_size: model.context_window_size ?? '',
+    description: model.description ?? '',
+    capabilities: model.capabilities ?? [],
+    loras: model.loras ?? [],
+    tags: model.tags ?? [],
+    modality: model.modality ?? '',
+  }
+}
+
+// Selecting a catalog model replaces the hidden custom reasoning form. Do not
+// submit stale custom controls that the user can no longer see or edit.
+export function modelFormDataForSave(data: Record<string, unknown>): Record<string, unknown> {
+  if (typeof data.catalog !== 'string' || !data.catalog.trim()) return data
+  return { ...data, ...modelReasoningFormData() }
 }

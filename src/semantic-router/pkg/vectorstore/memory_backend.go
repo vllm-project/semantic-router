@@ -111,9 +111,25 @@ func (m *MemoryBackend) InsertChunks(_ context.Context, vectorStoreID string, ch
 	}
 
 	for _, chunk := range chunks {
-		if m.maxEntries > 0 && len(col.chunks) >= m.maxEntries {
+		if col.dimension > 0 && len(chunk.Embedding) != col.dimension {
+			return fmt.Errorf("embedding dimension mismatch for collection %s: expected %d, got %d", vectorStoreID, col.dimension, len(chunk.Embedding))
+		}
+	}
+
+	if m.maxEntries > 0 {
+		newIDs := make(map[string]struct{}, len(chunks))
+		for _, chunk := range chunks {
+			if _, exists := col.chunks[chunk.ID]; exists {
+				continue
+			}
+			newIDs[chunk.ID] = struct{}{}
+		}
+		if len(col.chunks)+len(newIDs) > m.maxEntries {
 			return fmt.Errorf("collection %s has reached maximum entries (%d)", vectorStoreID, m.maxEntries)
 		}
+	}
+
+	for _, chunk := range chunks {
 		col.chunks[chunk.ID] = chunk
 	}
 
@@ -295,7 +311,11 @@ func (m *MemoryBackend) HybridSearch(
 	fused := FuseScores(vectorScores, bm25Scores, ngramScores, config)
 
 	// 5. Apply threshold and topK, build results.
-	results := make([]SearchResult, 0, topK)
+	resultCapacity := topK
+	if resultCapacity < 0 {
+		resultCapacity = 0
+	}
+	results := make([]SearchResult, 0, resultCapacity)
 	for _, fc := range fused {
 		if fc.FinalScore < float64(threshold) {
 			continue

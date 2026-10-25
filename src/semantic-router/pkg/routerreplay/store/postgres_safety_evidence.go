@@ -9,6 +9,9 @@ import (
 // New safety metadata lives in one additive JSONB column. Historical rows
 // without it keep score availability false rather than guessing from zero.
 type postgresSafetyEvidence struct {
+	PIIDetected                     bool                 `json:"pii_detected,omitempty"`
+	PIIEntities                     []string             `json:"pii_entities,omitempty"`
+	PIIBlocked                      bool                 `json:"pii_blocked,omitempty"`
 	ConfidenceScoreAvailable        bool                 `json:"confidence_score_available"`
 	SignalErrorMatches              map[string]bool      `json:"signal_error_matches,omitempty"`
 	JailbreakDetected               bool                 `json:"jailbreak_detected,omitempty"`
@@ -27,6 +30,7 @@ type postgresSafetyEvidence struct {
 
 func marshalPostgresSafety(record Record) ([]byte, error) {
 	return json.Marshal(postgresSafetyEvidence{
+		PIIDetected: record.PIIDetected, PIIEntities: record.PIIEntities, PIIBlocked: record.PIIBlocked,
 		ConfidenceScoreAvailable: record.ConfidenceScoreAvailable, SignalErrorMatches: record.SignalErrorMatches,
 		JailbreakDetected: record.JailbreakDetected, JailbreakType: record.JailbreakType,
 		JailbreakConfidence:     availableFloat32(record.JailbreakConfidence, record.JailbreakScoreAvailable),
@@ -44,6 +48,9 @@ func unmarshalPostgresSafety(encoded []byte, record *Record) error {
 		return err
 	}
 	record.ConfidenceScoreAvailable = evidence.ConfidenceScoreAvailable
+	record.PIIDetected = evidence.PIIDetected
+	record.PIIEntities = evidence.PIIEntities
+	record.PIIBlocked = evidence.PIIBlocked
 	record.SignalErrorMatches = evidence.SignalErrorMatches
 	record.JailbreakDetected = evidence.JailbreakDetected
 	record.JailbreakType = evidence.JailbreakType

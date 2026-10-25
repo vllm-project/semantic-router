@@ -9,26 +9,20 @@ They are slower than unit tests and should be run with --integration flag.
 
 import os
 import shutil
-import subprocess
 import time
 import unittest
-from contextlib import contextmanager
 from pathlib import Path
-from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from cli_test_base import CLITestBase
+from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from serve_session import ServeSessionMixin
 
-DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
-MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
-MOCK_OPENAI_SERVER_PORT = 18080
-MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
 PULL_POLICY_PROBE_IMAGE = "example.invalid/vllm-sr-cli/pull-policy-probe:always"
 
 
-class TestServeIntegration(ServeSessionMixin, CLITestBase):
+class TestServeIntegration(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
     """Integration tests for the complete serve workflow."""
 
     # Timeout for waiting for container to be running
@@ -70,156 +64,6 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             pull_log,
         )
 
-    def test_wait_for_serve_success_does_not_terminate_a_successful_process(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.return_value = ("ready", "")
-        process.returncode = 0
-
-        self._wait_for_serve_success(process)
-
-        process.communicate.assert_called_once_with(timeout=self.HEALTH_CHECK_TIMEOUT)
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
-
-    def test_wait_for_serve_success_rejects_a_failed_process(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.return_value = ("", "startup failed")
-        process.returncode = 1
-
-        with self.assertRaisesRegex(AssertionError, "startup failed"):
-            self._wait_for_serve_success(process)
-
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
-
-    def test_wait_for_serve_success_terminates_and_drains_a_timeout(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.side_effect = [
-            subprocess.TimeoutExpired("vllm-sr serve", self.HEALTH_CHECK_TIMEOUT),
-            ("", "stopped after timeout"),
-        ]
-
-        with self.assertRaisesRegex(AssertionError, "before the timeout"):
-            self._wait_for_serve_success(process)
-
-        process.terminate.assert_called_once_with()
-        process.kill.assert_not_called()
-        self.assertEqual(process.communicate.call_count, 2)
-
-    @contextmanager
-    def _running_mock_upstream(
-        self, container_name: str, *, expected_authorization: str | None = None
-    ):
-        """Run the mock OpenAI upstream on the active stack network."""
-        image = os.getenv(MOCK_OPENAI_IMAGE_ENV, DEFAULT_MOCK_OPENAI_IMAGE)
-        expected_authorization_env = (
-            ["-e", f"MOCK_EXPECT_AUTHORIZATION={expected_authorization}"]
-            if expected_authorization is not None
-            else []
-        )
-        result = self._run_subprocess(
-            [
-                self.container_runtime,
-                "run",
-                "-d",
-                "--name",
-                container_name,
-                "--network",
-                self.runtime_stack.network_name,
-                "-v",
-                f"{MOCK_OPENAI_SERVER_PATH}:/mock_openai_upstream.py:ro",
-                *expected_authorization_env,
-                "--entrypoint",
-                "python3",
-                image,
-                "-u",
-                "/mock_openai_upstream.py",
-            ],
-            timeout=30,
-        )
-        self.assertEqual(
-            result.returncode,
-            0,
-            f"failed to start mock upstream: {result.stderr}",
-        )
-        self.assertTrue(
-            self.wait_for_container_running(
-                timeout=30,
-                container_name=container_name,
-            ),
-            "mock upstream did not reach running state",
-        )
-        try:
-            yield
-        finally:
-            self._run_subprocess(
-                [self.container_runtime, "rm", "-f", container_name],
-                timeout=30,
-            )
-
-    def _container_log_diagnostics(self, container_names: tuple[str, ...]) -> str:
-        """Collect bounded logs for a failed mock request."""
-        diagnostics = []
-        for container_name in container_names:
-            logs = self._run_subprocess(
-                [
-                    self.container_runtime,
-                    "logs",
-                    "--tail",
-                    "80",
-                    container_name,
-                ],
-                timeout=10,
-            )
-            diagnostics.append(
-                f"{container_name}:\n{(logs.stdout + logs.stderr)[-4000:]}"
-            )
-        return "\n".join(diagnostics)
-
-    def _send_mock_chat_completion(
-        self, mock_container: str, *, redact_values: tuple[str, ...] = ()
-    ):
-        """Send a chat request, retrying until the local stack is ready."""
-        listener_port = 8888 + self.runtime_stack.port_offset
-        request = urllib_request.Request(
-            f"http://localhost:{listener_port}/v1/chat/completions",
-            data=(
-                b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
-            ),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        deadline = time.time() + 60
-        last_error: Exception | None = None
-        while time.time() < deadline:
-            try:
-                with urllib_request.urlopen(request, timeout=10) as response:
-                    self.assertEqual(response.status, 200)
-                    response.read()
-                return
-            except urllib_error.HTTPError as exc:
-                body = exc.read().decode("utf-8", errors="replace")
-                last_error = RuntimeError(f"HTTP {exc.code}: {body}")
-                time.sleep(2)
-            except (
-                urllib_error.URLError,
-                ConnectionError,
-                TimeoutError,
-            ) as exc:
-                last_error = exc
-                time.sleep(2)
-
-        diagnostics = self._container_log_diagnostics(
-            (
-                mock_container,
-                self.ROUTER_CONTAINER_NAME,
-                self.ENVOY_CONTAINER_NAME,
-            )
-        )
-        for value in redact_values:
-            diagnostics = diagnostics.replace(value, "[redacted]")
-        self.fail(f"request did not reach mock upstream: {last_error}\n{diagnostics}")
-
     def _mock_upstream_paths(self, mock_container: str) -> set[str]:
         """Read request paths recorded by the mock upstream."""
         logs = self._run_subprocess(
@@ -236,15 +80,27 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         *,
         container_suffix: str,
         base_path: str,
+        request_path: str = "/v1/chat/completions",
+        direct_endpoint: bool = False,
+        skip_processing: bool = False,
+        selected_model_header: bool = False,
+        model: str = "test-model",
+        looper: bool = False,
     ) -> set[str]:
         """Route one chat request to a path-recording OpenAI mock upstream."""
         mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
-        base_url = f"http://{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+        upstream = f"{mock_container}:{PROVIDER_MOCKER_PORT}{base_path}"
+        serve_kwargs = (
+            {"endpoint": upstream}
+            if direct_endpoint
+            else {"base_url": f"http://{upstream}", "provider": "openai"}
+        )
 
         with self._running_serve(
-            base_url=base_url,
-            provider="openai",
             api_only=True,
+            skip_processing=skip_processing,
+            looper=looper,
+            **serve_kwargs,
         ):
             self.assertTrue(
                 self.wait_for_health(
@@ -254,7 +110,17 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
                 "router API did not become healthy",
             )
             with self._running_mock_upstream(mock_container):
-                self._send_mock_chat_completion(mock_container)
+                request_headers = {}
+                if skip_processing:
+                    request_headers["x-vsr-skip-processing"] = "true"
+                if selected_model_header:
+                    request_headers["x-selected-model"] = model
+                self._send_mock_chat_completion(
+                    mock_container,
+                    request_path=request_path,
+                    request_headers=request_headers or None,
+                    model=model,
+                )
                 return self._mock_upstream_paths(mock_container)
 
     @unittest.skipUnless(
@@ -271,6 +137,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         with self._running_serve(ensure_models_dir=True):
             self._check_health_endpoint()
             self._assert_volume_mounting()
+            self.assert_dashboard_holds_no_container_runtime()
             self._assert_status_command()
             self._assert_logs_command()
 
@@ -281,7 +148,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
     def test_base_url_path_rewrite_is_idempotent(self):
-        """Verify route cache recomputation does not apply a base path twice."""
+        """Do not rewrite the complete provider path after model selection."""
         self.print_test_header(
             "Idempotent Base URL Rewrite Integration Test",
             "Routes /v1/chat/completions once to a /v1beta/openai mock upstream",
@@ -302,18 +169,14 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
 
         self.print_test_result(True, "Base URL path was applied exactly once")
 
-    @unittest.skip(
-        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
-        "paths that still begin with the /v1 segment after rewriting."
-    )
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(self):
-        """Document the known gap for /v1/chat -> /v1/provider/chat rewrites."""
+    def test_base_url_path_rewrite_idempotency_for_v1_segment_prefix(self):
+        """Send a v1-prefixed provider path upstream exactly once."""
         self.print_test_header(
-            "Future Base URL Rewrite Integration Test",
+            "V1-Prefixed Base URL Rewrite Integration Test",
             "Routes /v1/chat/completions once to a /v1/provider mock upstream",
         )
 
@@ -326,7 +189,104 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             upstream_paths,
         )
 
-        self.print_test_result(True, "Future /v1 segment base URL was applied once")
+        self.print_test_result(True, "/v1 segment base URL was applied once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_with_overlapping_prefix(self):
+        """Keep ingress and provider paths distinct when their prefixes overlap."""
+        self.print_test_header(
+            "Overlapping Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1/chat mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="overlapping-rewrite-upstream",
+            base_path="/v1/chat",
+        )
+        self.assertEqual(
+            {"/v1/chat/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Overlapping base URL was applied once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_direct_endpoint_path_is_resolved_by_ext_proc(self):
+        """Use the materialized endpoint path without a selected-route rewrite."""
+        self.print_test_header(
+            "Direct Endpoint Path Integration Test",
+            "Routes the resolved provider path through a direct endpoint",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="direct-endpoint-path-upstream",
+            base_path="/compatible-mode/v1",
+            direct_endpoint=True,
+        )
+        self.assertEqual(
+            {"/compatible-mode/v1/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Direct endpoint path was resolved once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_looper_custom_prefix_uses_selected_route_without_rewrite(self):
+        """Keep Looper provider paths off the default rewriting route."""
+        self.print_test_header(
+            "Looper Provider Path Integration Test",
+            "Routes every Looper hop once to a /v1/provider mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="looper-provider-path-upstream",
+            base_path="/v1/provider",
+            model="vllm-sr/auto",
+            looper=True,
+        )
+        self.assertEqual(
+            {"/v1/provider/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Looper provider paths were resolved once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_skip_processing_keeps_direct_endpoint_prefix_rewrite(self):
+        """Keep the default-route prefix when semantic processing is skipped."""
+        self.print_test_header(
+            "Skip-Processing Direct Endpoint Integration Test",
+            "Preserves the default route prefix without semantic routing",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="skip-direct-endpoint-path-upstream",
+            base_path="/compatible-mode/v1",
+            request_path="/v1/chat/completions?api-version=test",
+            direct_endpoint=True,
+            skip_processing=True,
+            selected_model_header=True,
+        )
+        self.assertEqual(
+            {"/compatible-mode/v1/chat/completions?api-version=test"},
+            upstream_paths,
+        )
+
+        self.print_test_result(
+            True, "Skip processing preserved the default route prefix"
+        )
 
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""
@@ -431,6 +391,20 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
+    def test_host_gateway_ip_override_maps_host_alias(self):
+        """VLLM_SR_HOST_GATEWAY_IP replaces the derived host-gateway mapping."""
+        with self._running_serve(env={"VLLM_SR_HOST_GATEWAY_IP": "192.0.2.10"}):
+            return_code, extra_hosts, stderr = self.inspect_container(
+                "{{json .HostConfig.ExtraHosts}}"
+            )
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn("host.docker.internal:192.0.2.10", extra_hosts)
+            self.assertNotIn("host-gateway", extra_hosts)
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
     def test_envoy_log_level_is_safe_and_provider_key_is_not_logged(self):
         """Use a synthetic provider key to exercise the safe Envoy default."""
         canary = "synthetic-provider-key-canary"
@@ -438,7 +412,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             env={"PROVIDER_KEY_CANARY": canary},
             base_url=(
                 f"http://{self.runtime_stack.stack_name}-envoy-log-upstream:"
-                f"{MOCK_OPENAI_SERVER_PORT}"
+                f"{PROVIDER_MOCKER_PORT}"
             ),
             provider="openai",
             api_key_env="PROVIDER_KEY_CANARY",
@@ -575,6 +549,8 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         interceptor_env, pull_log = self._pull_interceptor_env()
         cmd = [
             "serve",
+            "--gateway",
+            "extproc",
             "--router-image",
             PULL_POLICY_PROBE_IMAGE,
             "--envoy-image",

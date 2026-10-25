@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	schemacel "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
+	kubejson "k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 )
@@ -21,7 +23,19 @@ import (
 // PerCallLimit and RuntimeCELCostBudget) without importing that package.
 func loadCRDValidator(t *testing.T) (*schema.Structural, *schemacel.Validator) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"))
+	structural := loadCRDStructural(t, filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"))
+	validator := schemacel.NewValidator(structural, true, 1_000_000)
+	if validator == nil {
+		t.Fatal("CRD schema has no x-kubernetes-validations; the CEL rules are gone")
+	}
+	return structural, validator
+}
+
+// loadCRDStructural reads a generated CRD copy into the structural schema the
+// API server validates and prunes custom resources with.
+func loadCRDStructural(t *testing.T, path string) *schema.Structural {
+	t.Helper()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read CRD: %v", err)
 	}
@@ -40,18 +54,20 @@ func loadCRDValidator(t *testing.T) (*schema.Structural, *schemacel.Validator) {
 	if err != nil {
 		t.Fatalf("structural schema: %v", err)
 	}
-	validator := schemacel.NewValidator(structural, true, 1_000_000)
-	if validator == nil {
-		t.Fatal("CRD schema has no x-kubernetes-validations; the CEL rules are gone")
-	}
-	return structural, validator
+	return structural
 }
 
 func celErrors(t *testing.T, structural *schema.Structural, validator *schemacel.Validator, cr string) []string {
 	t.Helper()
 	var obj map[string]interface{}
-	if err := yaml.Unmarshal([]byte(cr), &obj); err != nil {
+	data, err := yaml.YAMLToJSON([]byte(cr))
+	if err != nil {
 		t.Fatalf("parse CR: %v", err)
+	}
+	// API-server unstructured decoding preserves integer values. Standard
+	// encoding/json would make them float64, which CEL correctly rejects.
+	if err := kubejson.Unmarshal(data, &obj); err != nil {
+		t.Fatalf("decode CR: %v", err)
 	}
 	errs, _ := validator.Validate(context.Background(), field.NewPath(""), structural, obj, nil, 10_000_000)
 	out := make([]string, 0, len(errs))
@@ -133,5 +149,61 @@ spec:
 `)
 	if !strings.Contains(strings.Join(errs, "\n"), "backend.contract must be stated") {
 		t.Fatalf("complexity backend without contract was admitted: %v", errs)
+	}
+}
+
+// The Operator derives the gateway mode from spec.gateway, so args that set it
+// would contradict the ports and probes it renders.
+func TestCRDRefusesGatewayModeFlagsInArgs(t *testing.T) {
+	structural, validator := loadCRDValidator(t)
+	const cr = `
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata: {name: r}
+spec:
+  args: [%s]
+`
+	for _, test := range []struct {
+		args    string
+		refused bool
+	}{
+		{`"--secure=false"`, false},
+		{`"--secure=false", "-gateway=extproc"`, true},
+		{`"--gateway", "standalone"`, true},
+		{`"-listener-address=127.0.0.1"`, true},
+		{`"-gateway-mode-is-not-a-flag"`, false},
+	} {
+		errs := celErrors(t, structural, validator, strings.Replace(cr, "%s", test.args, 1))
+		refused := len(errs) > 0 && strings.Contains(strings.Join(errs, "; "), "spec.args must not set -gateway")
+		if refused != test.refused {
+			t.Errorf("args [%s]: refused = %v, errors = %v", test.args, refused, errs)
+		}
+	}
+}
+
+// The bounds on spec.args are what let the API server estimate the rule's
+// cost; the largest list they admit must also fit the per-call CEL budget, or
+// a valid CR would be refused when it is written.
+func TestCRDAdmitsTheLargestArgsItsBoundsAllow(t *testing.T) {
+	structural, validator := loadCRDValidator(t)
+	args := structural.Properties["spec"].Properties["args"]
+	if args.ValueValidation == nil || args.ValueValidation.MaxItems == nil ||
+		args.Items == nil || args.Items.ValueValidation == nil || args.Items.ValueValidation.MaxLength == nil {
+		t.Fatal("spec.args must bound its length and each item's, or the API server refuses the CRD")
+	}
+	item := strconv.Quote("--secure=" + strings.Repeat("x", int(*args.Items.ValueValidation.MaxLength)-len("--secure=")))
+	items := make([]string, *args.ValueValidation.MaxItems)
+	for i := range items {
+		items[i] = item
+	}
+	errs := celErrors(t, structural, validator, `
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata: {name: r}
+spec:
+  args: [`+strings.Join(items, ", ")+`]
+`)
+	if len(errs) != 0 {
+		t.Fatalf("%d args of %d characters were refused: %v", len(items), *args.Items.ValueValidation.MaxLength, errs)
 	}
 }

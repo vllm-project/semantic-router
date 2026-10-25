@@ -140,6 +140,8 @@ func TestMCPCreateAndUpdateResponsesRedactWhileRuntimeRetainsSecrets(t *testing.
 	}
 	handler := NewMCPHandler(manager, false)
 	config := handlerConfigWithSecrets("write-secret-server")
+	// The API rejects security settings; the read test covers stored OAuth redaction.
+	config.Security = nil
 
 	createBody, err := json.Marshal(config)
 	if err != nil {
@@ -177,7 +179,6 @@ func TestMCPCreateAndUpdateResponsesRedactWhileRuntimeRetainsSecrets(t *testing.
 	}
 	if stored.Connection.Env["API_TOKEN"] != handlerSecretCanaries[6] ||
 		stored.Connection.Headers["Authorization"] != handlerSecretCanaries[7] ||
-		stored.Security.OAuth.ClientSecret != handlerSecretCanaries[8] ||
 		!strings.Contains(stored.Connection.URL, handlerSecretCanaries[10]) {
 		t.Fatalf("runtime config did not retain original secrets: %#v", stored)
 	}

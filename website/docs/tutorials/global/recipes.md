@@ -13,10 +13,10 @@ strategy, selection or looper algorithms, and route-local plugins.
 
 ## What Problem Does It Solve?
 
-Recipes avoid two poor scaling patterns: mixing unrelated policies into one
-decision graph, or duplicating an entire Router deployment for every routing
-objective. They keep policy and runtime state separate while reusing expensive
-model endpoints and shared services.
+Recipes separate policy and runtime state for each objective while sharing
+model endpoints and services. They control routing and bounded model workflows;
+the [agent harness](../../installation/agent-harness) owns the outer loop, tools,
+and task state.
 
 ## When to Use
 

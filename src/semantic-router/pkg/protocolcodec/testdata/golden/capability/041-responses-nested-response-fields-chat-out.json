@@ -36,9 +36,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         },

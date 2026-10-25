@@ -3,6 +3,8 @@ package config
 import (
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 type UnknownPolicy string
@@ -52,6 +54,8 @@ type Decision struct {
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
+	Reliability         *DecisionReliability       `yaml:"reliability,omitempty" json:"reliability,omitempty"`
+	Fallback            *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
@@ -71,11 +75,13 @@ type EmitDirective struct {
 }
 
 // RetentionDirective expresses keep / drop / prefer-retain semantics over the
-// response/cache surface. All fields are tri-state pointers so we can
+// Router-owned response content. All fields are tri-state pointers so we can
 // distinguish "unset" from an explicit zero value.
 //
-// Runtime consumes Drop (semantic-cache write skip), TTLTurns (per-entry
-// cache TTL override), and KeepCurrentModel (model-switch-gate forced stay).
+// Runtime consumes Drop (response-cache, memory, and Responses-object write
+// suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
+// (model-switch-gate forced stay). Drop does not delete existing objects or
+// disable explicit history reads, telemetry, or backend-side persistence.
 // PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
 // header; its session-aware scoring bias and KV-cache eviction integration are
 // follow-up work. All set fields are also observed via log + trace attributes
@@ -107,6 +113,9 @@ type CandidateIterationOutputConfig struct {
 // AlgorithmConfig defines how multiple models should be executed and aggregated.
 type AlgorithmConfig struct {
 	Type              string                       `yaml:"type"`
+	Quality           *NativeQualityConfig         `yaml:"quality,omitempty"`
+	Stages            []CascadeStage               `yaml:"stages,omitempty"`
+	Budget            *AlgorithmBudget             `yaml:"budget,omitempty"`
 	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
 	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
 	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
@@ -122,9 +131,17 @@ type AlgorithmConfig struct {
 	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
 	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
+	Decision          *DecisionSelectionConfig     `yaml:"decision,omitempty"`
 	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
 	OnError           string                       `yaml:"on_error,omitempty"`
+	// Extensions holds the blocks of algorithm types registered outside the
+	// Router, each under its type's name.
+	Extensions map[string]*StructuredPayload `yaml:",inline" json:"-" jsonschema:"-"`
 }
+
+// extensionFields are the keys Extensions may hold: the registered
+// algorithm types the Router does not build in.
+func (*AlgorithmConfig) extensionFields() []string { return extensionAlgorithmTypes() }
 
 // PromptSelectionConfig configures deterministic, prompt-driven selection
 // among a decision's ModelRefs. The runtime owns the structured output schema,
@@ -189,7 +206,7 @@ type ReMoMAlgorithmConfig struct {
 }
 
 type ModelReasoningControl struct {
-	UseReasoning         *bool  `yaml:"use_reasoning"`
+	UseReasoning         *bool  `yaml:"use_reasoning,omitempty"`
 	ReasoningDescription string `yaml:"reasoning_description,omitempty"`
 	ReasoningMode        string `yaml:"reasoning_mode,omitempty"`
 	ReasoningEffort      string `yaml:"reasoning_effort,omitempty"`
@@ -223,6 +240,15 @@ func (n *RuleNode) IsLeaf() bool {
 // terminal decision. Evaluators must not infer that meaning for nested nodes.
 func (n *RuleNode) IsEmpty() bool {
 	return n.Type == "" && n.Name == "" && n.Operator == "" && len(n.Conditions) == 0
+}
+
+// IsCatchAll reports a decision that matches every request: omitted rules or
+// an explicit AND with no conditions.
+func (n *RuleNode) IsCatchAll() bool {
+	if n.IsEmpty() {
+		return true
+	}
+	return !n.IsLeaf() && strings.EqualFold(n.Operator, RuleOperatorAnd) && len(n.Conditions) == 0
 }
 
 type (

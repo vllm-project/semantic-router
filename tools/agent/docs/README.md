@@ -20,9 +20,8 @@ for those mappings is [domains.yaml](../domains.yaml).
 
 `check` runs changed-file formatting/lint, real dependency and generated
 contract checks, then the owning domains' smallest unit/contract commands.
-Numeric structure metrics are advisory. `verify` never guesses: callers name
-the integration domain or E2E profile. `ci-full` is the explicit expensive
-safety net.
+`verify` never guesses: callers name the integration domain or E2E profile.
+`ci-full` is the explicit expensive safety net.
 
 Use `make harness-check` for changes to harness code, workflows, the domain
 registry, or agent instructions.
@@ -31,7 +30,7 @@ registry, or agent instructions.
 
 - [change-surfaces.md](change-surfaces.md): cross-layer product contracts
 - [environments.md](environments.md): supported local and CI environments
-- [architecture-guardrails.md](architecture-guardrails.md): enforced versus advisory architecture checks
+- [architecture-guardrails.md](architecture-guardrails.md): enforced architecture checks and module design
 - [architecture-risks.md](architecture-risks.md): compact repository-only risk index
 - [maintainer-ops.md](maintainer-ops.md): reviewed GitHub and release operations
 - [openai-api-contracts.md](openai-api-contracts.md): protocol translation contracts

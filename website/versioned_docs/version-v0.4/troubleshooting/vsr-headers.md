@@ -1,0 +1,244 @@
+# VSR routing headers
+
+The router uses these request and response headers for session continuity,
+routing observability, replay correlation, and opt-in debugging.
+
+## What appears by default
+
+The router splits headers across two surfaces:
+
+- **Default surface** — every non-cache-hit response includes
+  `x-vsr-schema-version` and `x-vsr-response-path`. Successful routed responses
+  can also include the final recipe, decision, confidence, algorithm, model,
+  routing latency, cost, and replay id. Protocol markers appear when translation occurs; protocol
+  warnings appear only when there are warnings.
+- **Debug surface** — intermediate classification details, matched signals,
+  tool-selection metrics, and `x-vsr-retention-*` directives appear inline
+  only when the request sets `x-vsr-debug: true`. When replay is enabled, the
+  same diagnostic context remains available through `x-vsr-replay-id`.
+
+Decision and matched-signal headers additionally require all of the following:
+
+1. The upstream response is successful (`2xx`).
+2. The response was not served from the response cache.
+3. The router evaluated a routing decision or signal for the request.
+
+Cache-hit responses can emit cache headers, but they do not re-run routing and therefore do not attach fresh matched-signal headers.
+
+## Request headers
+
+| Header | Direction | Description |
+| ------ | --------- | ----------- |
+| `x-session-id` | request | Stable client-provided session identifier for Chat Completions. Router Learning protection uses this, together with the configured conversation identity, to reason about stay-vs-switch decisions across turns. |
+| `x-conversation-id` | request | Stable client-provided conversation or agent-run identifier. Router Learning protection uses this by default when `scope: conversation`. |
+| `x-claude-code-session-id` | request | Conversation identifier supplied by Claude Code on Messages API requests. `x-session-id` takes precedence when both are present. |
+| `x-disable-router-memory` | request | Set to `true` when the client already injects memory and router-managed memory would duplicate it. |
+| `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
+| `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
+
+## Protocol and replay headers
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-client-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. Emitted only on cross-protocol handling (client protocol differs from upstream), or when `x-vsr-debug` is set. |
+| `x-vsr-upstream-protocol` | Protocol shape sent to the selected upstream backend. Emitted only on cross-protocol handling, or when `x-vsr-debug` is set. |
+| `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. Emitted only when warnings exist. |
+| `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
+
+## Response warnings
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-response-warnings` | Comma-separated response-quality warning codes for the completion, in fixed order: `hallucination`, `unverified_factual`, `response_jailbreak`. Emitted only when at least one applies. |
+
+Per-warning detail, such as hallucination spans or jailbreak confidence, is
+kept in the replay record instead of being expanded into response headers.
+
+## Decision headers
+
+Final routing facts use the default surface. Intermediate details, including
+Router Learning observability, require `x-vsr-debug`.
+
+| Header | Surface | Description | Example |
+| ------ | ------- | ----------- | ------- |
+| `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `support` |
+| `x-vsr-selected-decision` | default | Final decision selected by the decision engine. | `complex-request` |
+| `x-vsr-selected-confidence` | default | Model-derived score for the selected decision. Absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy. | `0.9100` |
+| `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |
+| `x-vsr-selected-algorithm` | default | Model-selection algorithm used after the decision matched. | `static` |
+| `x-vsr-selected-model` | default | Logical model alias selected by the router. | `reasoning-model` |
+| `x-vsr-effective-input-tokens` | default | Actual selected-backend rendered input tokens for the finalized automatic-output dispatch, including its chat template. | `512` |
+| `x-vsr-effective-max-output-tokens` | default | Resolved output token limit sent in that automatic-output dispatch, including reasoning. This is a budget, not consumed tokens. | `261632` |
+| `x-vsr-routing-latency-ms` | default | Time the router spent choosing the model, in milliseconds with sub-millisecond precision. | `0.412` |
+| `x-vsr-selected-category` | debug | Domain/category classifier result when domain routing runs. | `math` |
+| `x-vsr-selected-reasoning` | debug | Reasoning mode selected for the request. | `on` |
+| `x-vsr-selected-modality` | debug | Modality result and optional method. | `AR;classifier` |
+| `x-vsr-session-phase` | debug | Protection trace phase from the selected routing policy. Detailed learning actions are exposed through the `x-vsr-learning-*` headers and Router Replay. | `user_turn`, `tool_loop`, `provider_state` |
+| `x-vsr-learning-methods` | debug | Router Learning methods summarized by this response. Full score/cache details live in Router Replay. | `adaptation,protection` |
+| `x-vsr-learning-actions` | debug | Method-keyed compact learning actions. | `adaptation=propose_switch,protection=allow_switch` |
+| `x-vsr-learning-scopes` | debug | Method-keyed identity scopes used by learning. | `protection=conversation` |
+| `x-vsr-learning-reasons` | debug | Method-keyed machine-readable reasons for actions. | `adaptation=sampled_win,protection=switch_allowed` |
+| `x-vsr-injected-system-prompt` | debug | Whether a system-prompt plugin injected text into the request. | `true` |
+
+For UI display guidance, translate `x-vsr-learning-actions` into user-facing
+phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`.
+Fresh conversation or session-start diagnostics are usually useful only in debug
+views, where they should be shown as neutral status text rather than a primary
+route state.
+
+The two effective-token headers are emitted together on successful upstream
+responses only when automatic output was resolved. They are available in the
+initial headers for both streaming and buffered responses. Explicit output
+limits, cache hits, skipped processing, and Looper responses omit them. Their
+values come from the final dispatch after request changes and backend rendering;
+they are not estimates or the model's configured maximum context length.
+
+## Matched signal headers
+
+Matched signal headers contain comma-separated rule names. They require
+`x-vsr-debug` and are omitted when that signal family did not match.
+
+| Header | Signal family |
+| ------ | ------------- |
+| `x-vsr-matched-keywords` | `keyword` |
+| `x-vsr-matched-embeddings` | `embedding` |
+| `x-vsr-matched-domains` | `domain` |
+| `x-vsr-matched-fact-check` | `fact_check` |
+| `x-vsr-matched-user-feedback` | `user_feedback` |
+| `x-vsr-matched-reask` | `reask` |
+| `x-vsr-matched-preference` | `preference` |
+| `x-vsr-matched-language` | `language` |
+| `x-vsr-matched-context` | `context` |
+| `x-vsr-context-token-count` | Context token estimate used by `context` |
+| `x-vsr-matched-structure` | `structure` |
+| `x-vsr-matched-complexity` | `complexity` |
+| `x-vsr-matched-modality` | `modality` |
+| `x-vsr-matched-authz` | `authz` |
+| `x-vsr-matched-jailbreak` | `jailbreak` |
+| `x-vsr-matched-pii` | `pii` |
+| `x-vsr-matched-kb` | `kb` |
+| `x-vsr-matched-conversation` | `conversation` |
+| `x-vsr-matched-event` | `event` |
+| `x-vsr-matched-input-modality` | `input_modality` |
+
+## Projection headers
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-matched-projections` | Comma-separated projection mapping outputs that matched the request. |
+
+Projection scores and full projection traces are stored in router replay records rather than expanded into response headers. Use `x-vsr-replay-id` to inspect those details in the Dashboard or through the authenticated Router management API; public inference listeners do not serve replay records.
+
+## Retention headers
+
+When a matched decision emits a retention directive, debug responses expose
+the fields that were set. These headers help operators verify policy wiring;
+clients should not use them as commands.
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-retention-drop` | Whether the response should be excluded from response-cache retention. |
+| `x-vsr-retention-ttl-turns` | Decision-level retention lifetime expressed in conversation turns. |
+| `x-vsr-retention-keep-current-model` | Whether the policy asks later routing to keep the current model. |
+| `x-vsr-retention-prefer-prefix` | Whether prefix retention is preferred when the runtime supports it. |
+
+Unset fields are omitted. Cache hits do not emit these headers because no
+decision was evaluated for that response.
+
+## Cross-model KV transfer headers (issue #2976)
+
+When the router attempts cross-model KV reuse on a model switch, it injects
+request-side hints on the upstream call. The target vLLM KVConnector plugin
+reports the outcome on the response. These headers are internal to the router
+and inference pool; clients should not depend on them.
+
+**Request (router → backend):**
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-kv-source-pod` | gRPC address of the pod holding the source model's KV cache. |
+| `x-vsr-kv-cache-id` | Opaque session or cache identifier for the source KV block. |
+| `x-vsr-kv-mapper-id` | Published ridge-mapper artifact for the source→target model pair. |
+
+**Response (backend → router):**
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-kv-transfer-status` | `applied`, `fallback_reprefill`, or `unsupported`. Absent ⇒ `unsupported`. |
+
+## Cost headers
+
+On a buffered (non-streaming) response, the router prices the usage the model
+reported with the served model's `pricing` configuration. This is a
+configured-price figure, not a provider bill. Streamed responses and models
+without `pricing` omit both headers.
+
+| Header | Surface | Description | Example |
+| ------ | ------- | ----------- | ------- |
+| `x-vsr-cost` | default | Usage tokens multiplied by the served model's configured prices. | `0.000054` |
+| `x-vsr-cost-currency` | default | Currency of `x-vsr-cost`, from `pricing.currency`. | `USD` |
+
+## Cache and plugin headers
+
+`x-vsr-cache-hit` and `x-vsr-fast-response` identify an immediate response on
+the default surface. Cache-similarity, tool-selection metrics, and prompt-cache
+receipts require `x-vsr-debug`.
+
+| Header | Surface | Description |
+| ------ | ------- | ----------- |
+| `x-vsr-cache-hit` | default | Response came from the response cache. |
+| `x-vsr-fast-response` | default | Response was generated by the `fast_response` plugin without an upstream model call. |
+| `x-vsr-cache-similarity` | debug | Similarity score from the response-cache lookup. |
+| `x-vsr-tools-strategy` | debug | Semantic tool-selection retriever strategy used for the request. |
+| `x-vsr-tools-confidence` | debug | Highest tool-selection retriever similarity score. |
+| `x-vsr-tools-latency-ms` | debug | Tool-selection retriever latency in milliseconds. |
+| `x-vsr-prompt-cache-action` | debug | Outcome of the `prompt_cache` plugin: `inserted`, `preserved`, `skipped`, or `rejected`. |
+| `x-vsr-prompt-cache-reason` | debug | Machine-readable reason for a non-`inserted` outcome: `caller_markers`, `no_eligible_target`, or `unsupported_target`. Omitted when the action is `inserted`. |
+| `x-vsr-prompt-cache-inserted` | debug | Count of router-inserted cache markers, at most `2` (one instruction block, one tool). |
+| `x-vsr-prompt-cache-preserved` | debug | Count of caller-supplied cache markers found anywhere in the request. |
+
+These headers are content-free: they report counts and outcomes, never the
+cached text itself, and they never claim a cache hit or provider-side savings.
+
+## Example response
+
+Default surface — keystone headers, final routing facts and the replay-id entry point:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+x-vsr-schema-version: 2
+x-vsr-response-path: upstream
+x-vsr-selected-recipe: default
+x-vsr-selected-decision: complex-request
+x-vsr-selected-algorithm: static
+x-vsr-selected-model: reasoning-model
+x-vsr-replay-id: replay_01J...
+```
+
+With `x-vsr-debug: true` on the request, the demoted intermediate details and matched signals are emitted inline as well:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+x-vsr-schema-version: 2
+x-vsr-response-path: upstream
+x-vsr-selected-recipe: default
+x-vsr-selected-decision: complex-request
+x-vsr-selected-algorithm: static
+x-vsr-selected-model: reasoning-model
+x-vsr-session-phase: tool_loop
+x-vsr-matched-context: long-context
+x-vsr-matched-projections: use-reasoning-model
+x-vsr-replay-id: replay_01J...
+```
+
+## Compatibility and interpretation
+
+- Use `x-vsr-schema-version` before parsing optional headers; the current value
+  is `2`.
+- `x-vsr-matched-projections` is the projection header. The singular form is
+  not part of the public contract.
+- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning/session identities. Use `x-vsr-selected-recipe` together with the local decision/signal names when correlating a response with Insights or metrics.
+- `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
+- Router Learning uses router-owned online state internally. Users enable online model-choice learning through `global.router.learning.adaptation`, enable stability protection through `global.router.learning.protection`, pass stable identity headers, and optionally set `routing.decisions[].adaptations.mode`, component modes, or `adaptations.adaptation.candidate_set`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `routing.decisions[].algorithm.session_aware` shape is not part of the public contract.

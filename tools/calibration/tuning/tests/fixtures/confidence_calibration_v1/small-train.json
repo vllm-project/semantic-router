@@ -1,0 +1,8 @@
+[
+  {
+    "question_id": "train-1",
+    "category": "math",
+    "avg_logprob": -1.5,
+    "correct": true
+  }
+]
