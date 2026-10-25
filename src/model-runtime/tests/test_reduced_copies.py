@@ -3,6 +3,7 @@
 import pytest
 import torch
 from torch import nn
+from vllm_srun.accel import onednn
 from vllm_srun.accel.onednn import PackedLinear
 from vllm_srun.engines.native.reduced import (
     linear_bytes,
@@ -68,16 +69,36 @@ def test_a_view_computes_close_to_the_exact_backbone(kind, tolerance):
     torch.testing.assert_close(actual, expected, rtol=0, atol=tolerance)
 
 
-def test_packed_linears_give_a_row_the_same_result_in_any_batch():
+def test_the_probe_says_whether_a_packed_linear_gives_a_row_the_same_result_in_any_batch():
     runnable("float32-packed")
     torch.manual_seed(0)
-    linear = PackedLinear(nn.Linear(64, 96))
-    rows = torch.randn(300, 64)
-    with torch.inference_mode():
-        alone = linear(rows[:3])
-        for count in (4, 17, 64, 300):
-            assert torch.equal(linear(rows[:count])[:3], alone)
-        assert linear(rows[None, :5]).shape == (1, 5, 96)
+    # a narrow product and ModernBERT's wide-K down-projection, which oneDNN
+    # 3.7 splits differently from 127 rows at some thread counts
+    for features in ((64, 96), (1152, 768)):
+        linear = PackedLinear(nn.Linear(*features))
+        rows = onednn.probe_rows(features[0], torch.Generator().manual_seed(0))
+        with torch.inference_mode():
+            alone = torch.cat([linear(rows[i : i + 1]) for i in range(rows.shape[0])])
+            same = all(
+                torch.equal(linear(rows[:count]), alone[:count])
+                for count in onednn.PROBE_ROWS
+            )
+            assert onednn.invariant([linear]) == same
+            assert linear(rows[None, :5]).shape == (1, 5, features[1])
+
+
+class _Drifting(PackedLinear):
+    """A packed linear whose rows move with the batch size, like a drifting kernel."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) + (x.shape[0] > 1) * 1e-6
+
+
+def test_the_probe_fails_a_product_whose_rows_move_with_the_batch():
+    runnable("float32-packed")
+    torch.manual_seed(0)
+    assert not onednn.invariant([_Drifting(nn.Linear(64, 96))])
+    assert onednn.invariant([]) is True
 
 
 def test_copies_that_cannot_run_on_a_device_say_why():
