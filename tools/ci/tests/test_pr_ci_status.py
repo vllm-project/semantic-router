@@ -23,6 +23,7 @@ from pr_ci_status import (
 
 REPO = "example/router"
 HEAD, BASE, MERGE = "a" * 40, "b" * 40, "c" * 40
+HEAD2 = "d" * 40
 
 
 class Client:
@@ -115,7 +116,7 @@ class Client:
             return [copy.deepcopy(self.pull)]
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
-        if path.startswith(f"commits/{HEAD}/check-runs?"):
+        if path.startswith("commits/") and "/check-runs?" in path:
             return {"check_runs": copy.deepcopy(self.checks)}
         if path.startswith("actions/runs/101/attempts/"):
             return {"jobs": copy.deepcopy(self.jobs)}
@@ -355,15 +356,11 @@ class PRStatusTests(unittest.TestCase):
         self.assertEqual(result["state"], "failure")
         self.assertNotIn("@everyone", json.dumps(result))
 
-    def test_stale_head_or_newer_run_does_not_write(self):
-        for mutate in [
-            lambda c: c.pull["head"].update(sha="f" * 40),
-            lambda c: setattr(c, "newer_run", True),
-        ]:
-            client = Client()
-            mutate(client)
-            self.assertIn("ignored", reconcile(client, REPO, 101))
-            self.assertEqual(client.writes, [])
+    def test_newer_same_head_run_does_not_write(self):
+        client = Client()
+        client.newer_run = True
+        self.assertIn("ignored", reconcile(client, REPO, 101))
+        self.assertEqual(client.writes, [])
 
     def test_changed_base_stays_pending_and_requests_branch_update(self):
         client = Client()
@@ -372,6 +369,70 @@ class PRStatusTests(unittest.TestCase):
         self.assertEqual(result["state"], "stale")
         self.assertEqual(result["check"]["status"], "in_progress")
         self.assertIn("Update the branch", result["comment"])
+
+    def test_superseded_run_holds_a_pending_gate_on_the_current_head(self):
+        client = Client()
+        client.pull["head"]["sha"] = HEAD2
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "stale")
+        self.assertEqual(result["comment"], None)
+        check = result["check"]
+        self.assertEqual(check["name"], "PR Gate")
+        self.assertEqual(check["head_sha"], HEAD2)
+        self.assertEqual(check["external_id"], f"{PREFIX}3:superseded")
+        self.assertEqual(check["status"], "in_progress")
+        self.assertNotIn("conclusion", check)
+        self.assertEqual(len(client.writes), 1)
+        endpoint, payload, _ = client.writes[0]
+        self.assertEqual(endpoint, f"repos/{REPO}/check-runs")
+        self.assertNotIn("conclusion", payload)
+
+    def test_superseded_run_never_touches_an_existing_gate(self):
+        client = Client()
+        client.pull["head"]["sha"] = HEAD2
+        client.checks = [
+            {
+                "id": 7,
+                "name": "PR Gate",
+                "app": {"id": APP_ID},
+                "external_id": f"{PREFIX}3:99:1",
+                "status": "completed",
+                "conclusion": "success",
+            }
+        ]
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(
+            result, {"ignored": "PR Gate already present on the current head"}
+        )
+        self.assertEqual(client.writes, [])
+
+    def test_verdict_for_the_current_revision_is_unchanged(self):
+        client = Client()
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        check = result["check"]
+        self.assertEqual(check["name"], "PR Gate")
+        self.assertEqual(check["head_sha"], HEAD)
+        self.assertEqual(check["conclusion"], "success")
+        self.assertEqual(check["external_id"], f"{PREFIX}3:101:1")
+
+    def test_superseded_pending_name_does_not_drift_with_publisher_ready(self):
+        for ready in (True, False):
+            with self.subTest(ready=ready):
+                client = Client()
+                client.ready = ready
+                client.pull["head"]["sha"] = HEAD2
+                result = reconcile(client, REPO, 101)
+                self.assertEqual(result["state"], "stale")
+                self.assertEqual(result["check"]["name"], "PR Gate")
+                self.assertEqual(result["check"]["status"], "in_progress")
+                self.assertNotIn("conclusion", result["check"])
 
     def test_late_event_reads_current_attempt_before_publishing(self):
         client = Client()

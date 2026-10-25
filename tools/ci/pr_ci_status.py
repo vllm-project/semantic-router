@@ -58,9 +58,13 @@ def pages(client, endpoint: str, key: str | None = None):
     raise ManualCIError("GitHub collection exceeds the reconciliation limit.")
 
 
-def current_pull(client, repo: str, run: dict) -> dict | None:
+def current_pull(
+    client, repo: str, run: dict, *, stale_head: bool = False
+) -> dict | None:
     # Both workflow_run.pull_requests and commits/{sha}/pulls can be empty for
     # fork commits. Resolve by source owner/branch, then bind the exact SHA.
+    # With stale_head the SHA binding is dropped, so a run whose head revision
+    # is no longer the PR's head still resolves the pull request.
     source_repo = (run.get("head_repository") or {}).get("full_name", "")
     if not isinstance(source_repo, str) or source_repo.count("/") != 1:
         raise ManualCIError("Invalid pull-request source repository.")
@@ -82,7 +86,7 @@ def current_pull(client, repo: str, run: dict) -> dict | None:
             pull.get("state") == "open"
             and base.get("ref") == "main"
             and (base.get("repo") or {}).get("full_name") == repo
-            and head.get("sha") == run["head_sha"]
+            and (stale_head or head.get("sha") == run["head_sha"])
             and head.get("ref") == run.get("head_branch")
             and (head.get("repo") or {}).get("full_name")
             == (run.get("head_repository") or {}).get("full_name")
@@ -432,6 +436,45 @@ def publish(
     return result
 
 
+def publish_superseded_pending(
+    client, repo: str, pull: dict, run: dict, *, dry_run=False
+) -> dict:
+    # This run tested a revision the PR no longer carries. It cannot reuse
+    # publish(): that pre-write recheck refuses any status from a stale run.
+    # The pending lands on the head the PR carries now and never carries a
+    # conclusion - only a run for the current revision may publish a verdict.
+    head_sha = pull["head"]["sha"]
+    gates = pages(
+        client,
+        f"repos/{repo}/commits/{head_sha}/check-runs?check_name=PR%20Gate&filter=all",
+        "check_runs",
+    )
+    if any(item.get("name") == CHECK for item in gates):
+        return {"ignored": "PR Gate already present on the current head"}
+    title, summary = presentation("stale", repo, pull, run, None)
+    payload = {
+        "name": CHECK,
+        "head_sha": head_sha,
+        "external_id": f"{PREFIX}{pull['number']}:superseded",
+        "details_url": f"https://github.com/{repo}/actions/runs/{run['id']}",
+        "status": "in_progress",
+        "output": {"title": title, "summary": summary},
+    }
+    result = {
+        "pr": pull["number"],
+        "state": "stale",
+        "check": payload,
+        "comment": None,
+    }
+    if dry_run:
+        return result
+    fresh = client.request(f"repos/{repo}/pulls/{pull['number']}")
+    if fresh.get("state") != "open" or fresh["head"]["sha"] != head_sha:
+        return {"ignored": "superseded while preparing status"}
+    client.write(f"repos/{repo}/check-runs", payload)
+    return result
+
+
 def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
     run = client.request(f"repos/{repo}/actions/runs/{run_id}")
     workflow = client.request(f"repos/{repo}/actions/workflows/pr.yml")
@@ -444,7 +487,13 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         return {"ignored": "not the current pull-request workflow"}
     pull = current_pull(client, repo, run)
     if not pull:
-        return {"ignored": "no matching current open pull request"}
+        # The head moved past this run's revision. The required gate must
+        # still exist on the head the PR carries now, as pending - this run's
+        # verdict only fits the revision it actually tested.
+        pull = current_pull(client, repo, run, stale_head=True)
+        if not pull:
+            return {"ignored": "no matching current open pull request"}
+        return publish_superseded_pending(client, repo, pull, run, dry_run=dry_run)
     checks = owned_checks(client, repo, pull)
     if run.get("status") != "completed":
         # On the first attempt, the required check is already Expected/pending.
