@@ -248,19 +248,20 @@ def _bind_controls(
                 raise ValueError(
                     "Frozen target differs from its native reasoning control"
                 )
-            params.update(
-                {
-                    key: value
-                    for key, value in expected.items()
-                    if key != "chat_template_kwargs"
-                }
-            )
-            if "chat_template_kwargs" in expected:
-                params["chat_template_kwargs"] = {
-                    **sampling.get("chat_template_kwargs", {}),
-                    **params.get("chat_template_kwargs", {}),
-                    **expected["chat_template_kwargs"],
-                }
+            if not frozen:
+                params.update(
+                    {
+                        key: value
+                        for key, value in expected.items()
+                        if key != "chat_template_kwargs"
+                    }
+                )
+                if "chat_template_kwargs" in expected:
+                    params["chat_template_kwargs"] = {
+                        **sampling.get("chat_template_kwargs", {}),
+                        **params.get("chat_template_kwargs", {}),
+                        **expected["chat_template_kwargs"],
+                    }
         elif mode == "AR":
             if not actual:
                 raise ValueError("AR requires an explicit supported reasoning profile")

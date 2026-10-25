@@ -573,6 +573,28 @@ def test_skipped_targets_still_require_valid_frozen_profiles(
     assert not target.requests
 
 
+def test_validation_uses_actual_frozen_template_kwargs(
+    bundle: Path, target: Any
+) -> None:
+    source = template(target)
+    source["sampling"] = {"chat_template_kwargs": {"date_string": "fixture-date"}}
+    compiled = export_manifest(
+        manifest=source,
+        dataset="mmlu",
+        source_bundle=bundle,
+        samples_per_category=1,
+    )
+    altered = copy.deepcopy(compiled)
+    for profile in (
+        altered["targets"][0],
+        altered[FIELD]["conditions"][0]["target"],
+    ):
+        profile["request_params"]["chat_template_kwargs"].pop("date_string", None)
+    with pytest.raises(ValueError, match="non-reasoning"):
+        plan(altered)
+    assert not target.requests
+
+
 def test_endpoint_token_ratio_is_not_router_child_usage(
     bundle: Path, target: Any, tmp_path: Path
 ) -> None:
