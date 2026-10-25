@@ -113,6 +113,41 @@ tuned-on cases by stable ID and input fingerprint. A different seed or a
 `holdout` split label does not establish independence. Retests remain useful,
 but report their exposure separately from unseen validation.
 
+## Scripted agent-task diagnostics
+
+`agent-task-chat-v1` declares `token-coverage-v1`. A task's credit is the native
+case-insensitive substring match fraction, rounded to four decimals. For example,
+three matched terms out of seven earn `0.4286`. These terms are required answer
+strings, not tokenizer usage. Each completed result retains expected, matched and
+missing terms plus an independent `full_credit` flag. Binary `correct` stays null.
+
+The `token_coverage` report block names planned, graded, failed, cancelled and
+pending task instances. `mean_credit` is the native four-decimal mean and appears
+only when the entire planned cohort is graded. A failed or unattempted grade is
+missing, not zero. `full_completion_rate` counts full-credit task completions over
+all planned instances; for an incomplete run it is an observed lower bound, not
+a success-only quality estimate.
+
+Scripted phases stay in `scripted_phase_counts` and each turn's `scripted_phase`.
+`observed_router_phase_counts` includes only Router response evidence;
+`derived_request_phase_counts` identifies the request-based fallback. Each turn
+links its call receipt, session ID, observed model, finish reason and error.
+Unattempted turns remain visible. `scripted_tool_loop_switches` counts observed
+model changes at scripted tool-loop turns, without claiming that tools ran.
+The separate `continuity` block retains request-level model and decision changes.
+
+These cohorts have no binary accuracy, Wilson interval, macro accuracy or
+published sr-bench score. Mixed runs expose each benchmark separately and have no
+combined quality score. Binary-only compare, replay, regrade and training export
+reject this result kind until those protocols are defined for it. Read the report
+JSON for these metrics; this slice does not add Dashboard charts.
+
+Healthy, fully graded cohorts preserve the native metrics. Streaming,
+visible-final-only grading, strict output limits and stopping after unexpected
+transport failures can change incomplete legacy results. Controlled HTTP fixtures
+establish transport and reporting behavior, not model quality or permission to
+retire the retained runner.
+
 ## Weighted rubric diagnostics
 
 DRACO uses the versioned `weighted-rubric-v1` result kind. Its

@@ -59,6 +59,9 @@ test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope h
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
+test-agent-task-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test native agent tasks and their sr-bench CLI against local HTTP
+	@"$(AGENT_PYTHON)" -m pytest -q bench/test_agent_task_live_benchmark.py src/vllm-sr/tests/test_sr_bench_agent_task.py
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-agent-task-bench ## Test every registered bench/ research tool
+
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-agent-task-bench test-bench-tools

@@ -659,6 +659,18 @@ domains:
     checks: [make test-agent-crew]
     verifications: [bench-tools]
 
+  agent-task-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_task_live_benchmark.py
+      - bench/test_agent_task_live_benchmark.py
+      - src/vllm-sr/cli/sr_bench/agent_task*.py
+      - src/vllm-sr/tests/test_sr_bench_agent_task.py
+      - tools/make/tooling.mk
+    checks: [make test-agent-task-bench]
+    verify: [make test-agent-task-bench]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]

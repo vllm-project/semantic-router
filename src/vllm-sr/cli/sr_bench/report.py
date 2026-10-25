@@ -9,7 +9,7 @@ from collections.abc import Collection
 from datetime import datetime
 from fractions import Fraction
 from itertools import pairwise
-from statistics import mean
+from statistics import fmean, mean
 from typing import Any
 
 from . import VERSION
@@ -18,6 +18,7 @@ from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
 from .grading import (
     BINARY_RESULT,
+    TOKEN_COVERAGE_RESULT,
     WEIGHTED_RUBRIC_RESULT,
     ResultKind,
     frozen_result_kind,
@@ -26,6 +27,7 @@ from .grading import (
 )
 from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
+from .transport import TOOL_LOOP_PHASE
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 COMPARABLE_STATUSES = frozenset({"completed", "failed"})
@@ -262,17 +264,17 @@ def metric(
     result_kinds: dict[str, ResultKind] | None = None,
 ) -> dict[str, Any]:
     result_kinds = result_kinds or {}
-    weighted = WEIGHTED_RUBRIC_RESULT in result_kinds.values()
+    non_binary = any(kind != BINARY_RESULT for kind in result_kinds.values())
     completed = [r for r in results if r["status"] == "completed"]
     scored: list[dict[str, Any]] = []
     for row in completed:
         kind = result_kinds.get(row.get("benchmark", ""), BINARY_RESULT)
-        if kind == WEIGHTED_RUBRIC_RESULT:
+        if kind != BINARY_RESULT:
             validate_result(kind=kind, result=row)
             scored.append(row)
         elif isinstance(row.get("correct"), bool):
             scored.append(row)
-    correct = None if weighted else sum(r["correct"] for r in scored)
+    correct = None if non_binary else sum(r["correct"] for r in scored)
     subject = [c for c in calls if c["role"] == "subject"]
     overhead = [c for c in calls if c["role"] != "subject"]
     receipted_cases = {c["case_id"] for c in subject if c.get("case_id")}
@@ -312,15 +314,15 @@ def metric(
         "pending": total - len(results),
         "scored": len(scored),
         "correct": correct,
-        "accuracy": correct / total if not weighted and total else None,
+        "accuracy": correct / total if not non_binary and total else None,
         "accuracy_denominator": (
-            "binary accuracy is unavailable for weighted or mixed cohorts"
-            if weighted
+            "binary accuracy is unavailable for non-binary or mixed cohorts"
+            if non_binary
             else "all_planned_cases; failures and unanswered count as incorrect"
         ),
         "complete": len(completed) == total and len(scored) == total,
         "output_diagnostics": output_diagnostics(results, subject, total),
-        "accuracy_ci95": None if weighted else wilson(correct, total),
+        "accuracy_ci95": None if non_binary else wilson(correct, total),
         "cost_usd": sum_cost(subject) if cost_complete else None,
         "cache_neutral_cost_usd": (
             sum(c["cache_neutral_cost_usd"] for c in subject)
@@ -372,11 +374,11 @@ def metric(
         ),
         "request_time_sum_s": sum(c.get("latency_s", 0) for c in subject),
     }
-    if weighted:
+    if non_binary:
         result["result_kind"] = (
             "mixed"
-            if BINARY_RESULT in result_kinds.values()
-            else WEIGHTED_RUBRIC_RESULT
+            if len(set(result_kinds.values())) > 1
+            else next(iter(result_kinds.values()))
         )
         result["continuity"]["switched_accuracy"] = None
         result["continuity"]["unswitched_accuracy"] = None
@@ -442,6 +444,114 @@ def weighted_rubric_report(
             domain: _rubric_cohort(cases=group, results=domain_results.get(domain, []))
             for domain, group in sorted(domains.items())
         },
+    }
+
+
+def token_coverage_report(
+    cases: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+) -> dict[str, Any]:
+    planned = {case["id"] for case in cases}
+    rows = [row for row in results if row["case_id"] in planned]
+    graded = [row for row in rows if row["status"] == "completed"]
+    for row in graded:
+        validate_result(kind=TOKEN_COVERAGE_RESULT, result=row)
+    complete = bool(planned) and len(graded) == len(planned)
+    full_credit = sum(row["details"]["token_coverage"]["full_credit"] for row in graded)
+    return {
+        "version": TOKEN_COVERAGE_RESULT,
+        "denominator": "all_planned_tasks; incomplete cohorts have no mean credit",
+        "planned": len(planned),
+        "graded": len(graded),
+        "failed": sum(row["status"] == "failed" for row in rows),
+        "cancelled": sum(row["status"] in {"cancelled", "interrupted"} for row in rows),
+        "pending": len(planned)
+        - len(rows)
+        + sum(row["status"] in {"queued", "running"} for row in rows),
+        "complete": complete,
+        "mean_credit": (
+            round(fmean(row["score"] for row in graded), 4) if complete else None
+        ),
+        "full_credit_tasks": full_credit,
+        "full_completion_rate": (
+            round(full_credit / len(planned), 4) if planned else None
+        ),
+        "full_completion_rate_denominator": (
+            "all_planned_tasks; incomplete cohorts report an observed lower bound"
+        ),
+        **_scripted_task_evidence(cases=cases, calls=calls),
+    }
+
+
+def _scripted_task_evidence(
+    cases: list[dict[str, Any]], calls: list[dict[str, Any]]
+) -> dict[str, Any]:
+    by_case: dict[str, list[dict[str, Any]]] = {}
+    for call in calls:
+        if call["role"] == "subject":
+            by_case.setdefault(call["case_id"], []).append(call)
+    turns: list[dict[str, Any]] = []
+    tool_loop_switches = 0
+    for case in cases:
+        metadata = case["metadata"]
+        task = metadata["scripted_task"]
+        requests = by_case.get(case["id"], [])
+        if len(requests) > len(task["turns"]):
+            raise ValueError("Agent task receipts exceed the frozen scripted turns")
+        previous_model: str | None = None
+        for index, turn in enumerate(task["turns"]):
+            call = requests[index] if index < len(requests) else {}
+            model = _observed_model(call)
+            if (
+                previous_model
+                and model
+                and previous_model != model
+                and turn["phase"] == TOOL_LOOP_PHASE
+            ):
+                tool_loop_switches += 1
+            if model:
+                previous_model = model
+            turns.append(
+                {
+                    "case_id": case["id"],
+                    "task": task["name"],
+                    "task_suite": task["suite"],
+                    "task_repetition": metadata["task_repetition"],
+                    "turn": index,
+                    "scripted_phase": turn["phase"],
+                    "call_id": call.get("id"),
+                    "status": call.get("status", "unattempted"),
+                    "session_id": call.get("session_id"),
+                    "selected_model": model,
+                    "observed_phase": (
+                        call.get("phase")
+                        if call.get("phase_source") == "router"
+                        else None
+                    ),
+                    "request_phase": (
+                        call.get("phase")
+                        if call.get("phase_source") == "request"
+                        else None
+                    ),
+                    "phase_source": call.get("phase_source"),
+                    "finish_reason": call.get("finish_reason"),
+                    "error": call.get("error"),
+                }
+            )
+    return {
+        "task_count": len({turn["task"] for turn in turns}),
+        "scripted_phase_counts": dict(
+            Counter(turn["scripted_phase"] for turn in turns)
+        ),
+        "observed_router_phase_counts": dict(
+            Counter(turn["observed_phase"] for turn in turns if turn["observed_phase"])
+        ),
+        "derived_request_phase_counts": dict(
+            Counter(turn["request_phase"] for turn in turns if turn["request_phase"])
+        ),
+        "scripted_tool_loop_switches": tool_loop_switches,
+        "turns": turns,
     }
 
 
@@ -523,6 +633,17 @@ def make_report(store, run_id):
                 )
                 if len(kinds) == 1:
                     metrics[-1]["weighted_rubric"] = benchmarks[-1]["weighted_rubric"]
+            if (
+                kinds[benchmark] == TOKEN_COVERAGE_RESULT
+                and manifest["mode"] != "preview"
+            ):
+                benchmarks[-1]["token_coverage"] = token_coverage_report(
+                    cases=[c for c in manifest["cases"] if c["id"] in ids],
+                    results=rows,
+                    calls=tcalls,
+                )
+                if len(kinds) == 1:
+                    metrics[-1]["token_coverage"] = benchmarks[-1]["token_coverage"]
     selected_ids = {cell["case_id"] for cell in cells}
     present = {c["benchmark"] for c in manifest["cases"] if c["id"] in selected_ids}
     weights = manifest["benchmark_weights"]
@@ -549,15 +670,19 @@ def make_report(store, run_id):
         )
         item["score_scope"] = (
             (
-                "weighted-rubric diagnostic; no combined accuracy"
-                if any("weighted_rubric" in row for row in rows)
+                "token-coverage diagnostic; no combined accuracy"
+                if any("token_coverage" in row for row in rows)
                 else (
-                    "full sr-bench 1.0"
-                    if target_full_suite
+                    "weighted-rubric diagnostic; no combined accuracy"
+                    if any("weighted_rubric" in row for row in rows)
                     else (
-                        "extension diagnostic; normalized adapter weights"
-                        if extension_subset
-                        else "selected benchmark subset; renormalized fixed weights"
+                        "full sr-bench 1.0"
+                        if target_full_suite
+                        else (
+                            "extension diagnostic; normalized adapter weights"
+                            if extension_subset
+                            else "selected benchmark subset; renormalized fixed weights"
+                        )
                     )
                 )
             )
