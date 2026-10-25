@@ -13,7 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -180,9 +179,6 @@ func (p *Profile) GetTestCases() []string {
 		"chat-completions-request-authz",
 		// Security test — validates that client-supplied identity headers are stripped
 		"authz-header-spoofing",
-		// NOTE: ratelimit-limitor is NOT run here: it requires x-authz-* from the client to reach
-		// the router, but EnvoyPatchPolicy Lua strips those headers (same as production anti-spoofing).
-		// Run ratelimit-limitor from a profile without header stripping, or after JWT sets headers post-strip.
 	}
 }
 

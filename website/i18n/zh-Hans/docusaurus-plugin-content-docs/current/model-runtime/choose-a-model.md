@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/choose-a-model.md"
-  outdated: false
+  outdated: true
 ---
 
 # 选择模型、规模和硬件
@@ -72,11 +73,11 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 
 - **问题：** 每个信号提出模型针对它训练过的问题，并沿用对应 Vela 1.0 模型的标签，因此规则和策略照旧读取答案。
   PII 和 hallucination 使用模型的片段头，片段保留精确的字符偏移。
-- **CPU profile：** 在 CPU 上该部署运行 `max_speed`，使用模型权重的打包副本：答案误差约在 0.00001 以内，
-  速度约为 `exact` 的 1.6 倍。
+- **在 CPU 上：** 该部署默认在模型权重的打包 FP32 副本上做批处理：答案误差约在 0.00001 以内，
+  速度约为在未打包权重上单独回答每个请求的 1.6 倍。
 - **输入：** 普通路由判断可以按模型输入上限截断。Prompt guard、safety、PII 和 hallucination 要求完整读取输入；
   支持窗口扫描的任务可在扫描预算内覆盖更长的输入。覆盖不完整时返回错误或未知结果。
-  具体限制和路由策略见[长输入](/docs/model-runtime/reference#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
+  具体限制和路由策略见[长输入](./reference#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
 - **阈值：** 模块默认阈值按 0.3B 的分数校准（见下文）。
 
 维护者选择了这个默认值，尽管它没有达到当初设定的两个目标
@@ -163,7 +164,7 @@ global:
 ## 选择规模 {#choose-a-size}
 
 默认决策绑定引用一个已声明的 deployment，用于 Router 判断任务及未指定覆盖的
-[`decision` 问题](tutorials/signal/learned/decision.md)。模型、设备和 profile 仅在该资源中声明；
+[`decision` 问题](tutorials/signal/learned/decision.md)。模型、设备和引擎参数仅在该资源中声明；
 没有覆盖配置时，内置默认模型为 Vela 2.0 0.3B。传入模型 artifact 可更新当前默认 deployment；
 `--platform` 选择运行平台，deployment 中显式设置的设备位置仍优先。例如：
 
@@ -227,8 +228,9 @@ global:
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
 | AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform rocm` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
-| NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
+| NVIDIA GPU | 已验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
+| 昇腾 NPU（910B、950） | 可用，尚未验证 | 设置 `device: npu:0`，把运行时安装在 torch_npu 旁边并备好宿主机 CANN 工具包。见[昇腾 NPU](../installation/ascend-npu.md)。 |
 | Apple 芯片 | 本版本仅支持 CPU | 在 macOS 上 docker 目标使用 CPU 镜像，因为 Docker 的 Linux 虚拟机拿不到 GPU。通过宿主机使用 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。 |
 
 在 AMD GPU 上，路由器镜像自带运行时经过验证的软件栈：ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0。
@@ -240,10 +242,12 @@ global:
 
 `device: auto`（默认）选择第一个有足够空闲显存的已验证 GPU，否则使用 CPU。
 你显式指定的 GPU 必须存在，否则模型会带着明确的原因加载失败，而不是悄悄在 CPU 上运行。
+尚未转正的加速器（`xpu`、`npu`）永远不会被 `auto` 选中——在装有它们的机器上 `auto` 仍选 CPU；
+要使用它们必须显式指定设备。
 
 ### 需要多少内存 {#how-much-memory}
 
-内存取决于模型家族和 profile，而不只是设备。FP32 权重约占每参数 4 字节，低精度模型可能约占 2 字节；
+内存取决于模型家族及其精度（`dtype`），而不只是设备。FP32 权重约占每参数 4 字节，低精度模型可能约占 2 字节；
 还需要为输入、激活和并发请求留出余量。307M FP32 任务模型仅权重就约需 1.3 GB。
 请查看模型记录并测量实际工作负载的峰值。每个副本有独立进程和权重副本，通过 `replicas` 配置设备位置
 （见[放置和扩展副本](model-runtime/deploy.md#place-and-scale-replicas)）。

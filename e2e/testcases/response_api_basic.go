@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const (
@@ -307,7 +308,7 @@ func testResponseAPITTLExpiry(ctx context.Context, client *kubernetes.Clientset,
 
 // -------- Redis persistence assertions (Response API E2E) --------
 func assertRedisResponseStored(ctx context.Context, client *kubernetes.Clientset, responseID string, opts pkgtestcases.TestCaseOptions) error {
-	podName, useCluster, found, err := getRedisPod(ctx, client)
+	podName, useCluster, found, err := getResponseAPIRedisPod(ctx, client, opts.Profile)
 	if err != nil {
 		return err
 	}
@@ -340,7 +341,7 @@ func assertRedisResponseStored(ctx context.Context, client *kubernetes.Clientset
 }
 
 func assertRedisResponseDeleted(ctx context.Context, client *kubernetes.Clientset, responseID string, opts pkgtestcases.TestCaseOptions) error {
-	podName, useCluster, found, err := getRedisPod(ctx, client)
+	podName, useCluster, found, err := getResponseAPIRedisPod(ctx, client, opts.Profile)
 	if err != nil {
 		return err
 	}
@@ -364,7 +365,7 @@ func assertRedisResponseDeleted(ctx context.Context, client *kubernetes.Clientse
 }
 
 func assertRedisResponseTTLSet(ctx context.Context, client *kubernetes.Clientset, responseID string, opts pkgtestcases.TestCaseOptions) error {
-	podName, useCluster, found, err := getRedisPod(ctx, client)
+	podName, useCluster, found, err := getResponseAPIRedisPod(ctx, client, opts.Profile)
 	if err != nil {
 		return err
 	}
@@ -389,6 +390,25 @@ func assertRedisResponseTTLSet(ctx context.Context, client *kubernetes.Clientset
 	}
 
 	return nil
+}
+
+// Redis-backed profiles require their declared persistence fixture. A missing
+// or wrong topology must not silently weaken their direct storage assertions.
+func getResponseAPIRedisPod(ctx context.Context, client *kubernetes.Clientset, profile string) (podName string, useCluster bool, found bool, err error) {
+	podName, useCluster, found, err = getRedisPod(ctx, client)
+	if err != nil {
+		return "", false, false, err
+	}
+	if profile != "response-api-redis" && profile != "response-api-redis-cluster" {
+		return podName, useCluster, found, nil
+	}
+	if !found {
+		return "", false, false, fmt.Errorf("profile %s requires its Redis fixture, but no Redis pod was found", profile)
+	}
+	if useCluster != (profile == "response-api-redis-cluster") {
+		return "", false, false, fmt.Errorf("profile %s found the wrong Redis topology (cluster=%t)", profile, useCluster)
+	}
+	return podName, useCluster, true, nil
 }
 
 func getRedisPod(ctx context.Context, client *kubernetes.Clientset) (podName string, useCluster bool, found bool, err error) {

@@ -14,10 +14,12 @@ import (
 // engine it does not manage.
 const ModelRuntimeProvider = "model_runtime"
 
+// modelRuntimeDtypes are the precisions a model_runtime backbone computes in.
+var modelRuntimeDtypes = map[string]bool{"auto": true, "float32": true, "bfloat16": true, "float16": true}
+
 var (
-	// The runtime owns profile and accelerator names, plugins' included: the
-	// Router checks their shape and leaves an unknown name to the runtime.
-	modelRuntimeProfile  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	// The runtime owns accelerator names, plugins' included: the Router checks
+	// their shape and leaves an unknown name to the runtime.
 	modelRuntimeDevice   = regexp.MustCompile(`^[a-z][a-z0-9_]*(:[0-9]+)?$`)
 	modelRuntimeRevision = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	hubRepositoryID      = regexp.MustCompile(`^[A-Za-z0-9][\w.-]*/[\w.-]+$`)
@@ -81,6 +83,22 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 			continue
 		}
 		for _, publicName := range listener.SystemOne.Models {
+			if cfg.IsSystemOneBackend(publicName) {
+				if deployment := cfg.ModelConfig[publicName].Deployment; deployment != "" {
+					mark(deployment)
+				}
+			}
+			if entrypoint, ok := cfg.ResolveEntrypoint(SystemOneAPI, publicName); ok && cfg.RoutingEnabled() {
+				if recipe := findRecipe(cfg.Recipes, entrypoint.Recipe); recipe != nil {
+					for _, decision := range recipe.Profile.Decisions {
+						for _, alias := range decision.Algorithm.NativeStageModels() {
+							if deployment := cfg.ModelConfig[alias].Deployment; deployment != "" {
+								mark(deployment)
+							}
+						}
+					}
+				}
+			}
 			if name, _, err := cfg.ResolveSystemOneDeployment(publicName); err == nil {
 				mark(name)
 			}
@@ -259,8 +277,8 @@ func (d ModelDeployment) validateModelRuntime() error {
 	default:
 		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
 	}
-	if !modelRuntimeProfile.MatchString(d.Profile) {
-		return fmt.Errorf("profile must be a profile name, such as exact or batching")
+	if err := d.validateEngineArgs(); err != nil {
+		return err
 	}
 	if d.Revision != "" && !modelRuntimeRevision.MatchString(d.Revision) {
 		return fmt.Errorf("revision must be a 40-hex commit")
@@ -300,6 +318,27 @@ func validateModelRuntimeEndpoint(endpoint string) error {
 		}
 	default:
 		return fmt.Errorf("endpoint must use unix://, http:// or https://")
+	}
+	return nil
+}
+
+// HasEngineArgs reports whether the deployment sets any engine argument.
+func (d ModelDeployment) HasEngineArgs() bool {
+	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil
+}
+
+func (d ModelDeployment) validateEngineArgs() error {
+	if d.MaxNumSeqs != nil && *d.MaxNumSeqs < 1 {
+		return fmt.Errorf("max_num_seqs must be at least 1")
+	}
+	if d.MaxNumBatchedTokens != nil && *d.MaxNumBatchedTokens < 8 {
+		return fmt.Errorf("max_num_batched_tokens must be at least 8")
+	}
+	if d.BatchWindowMS != nil && (*d.BatchWindowMS < 0 || *d.BatchWindowMS > 1000) {
+		return fmt.Errorf("batch_window_ms must be between 0 and 1000")
+	}
+	if d.Dtype != "" && !modelRuntimeDtypes[d.Dtype] {
+		return fmt.Errorf("dtype must be one of auto, float32, bfloat16 or float16")
 	}
 	return nil
 }

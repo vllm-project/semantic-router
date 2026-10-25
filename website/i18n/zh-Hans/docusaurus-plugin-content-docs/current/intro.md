@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 1
 sidebar_label: 简介
 description: 面向模型与算力的开放、可编程决策层。
@@ -50,7 +51,7 @@ Harness 负责任务循环、工具执行与任务状态；Router 负责每次�
 ## 从这里开始
 
 - 完成[快速开始](/zh-Hans/docs/installation)。
-- [连接 agent harness](/zh-Hans/docs/installation/agent-harness)。
+- [连接 agent harness](installation/agent-harness)。
 - 浏览[使用场景](overview/use-cases)。
 - 阅读[系统概览](overview/semantic-router-overview)和[路由流水线](overview/signal-driven-decisions)。
 - 用[入口与配方](tutorials/global/entrypoints-and-recipes)构建虚拟模型。

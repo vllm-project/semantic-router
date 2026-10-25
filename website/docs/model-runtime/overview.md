@@ -61,9 +61,12 @@ unscanned policy.
 - **Pinned and verified.** Built-in models are pinned to an exact Hugging Face
   revision. Every file is checked against its recorded SHA-256 before it is
   loaded, and code shipped inside a model repository is never run.
-- **Same answers as the released models.** The default `exact` profile gives
-  the answers the model publishers measured. Faster settings are opt-in and say
-  that they may change results. See [Profiles](./profiles.md).
+- **Throughput first, at the published precision.** Like vLLM, the runtime
+  batches concurrent requests by default and runs each model in the precision
+  it was published in. A batched answer can move by rounding, which the
+  records measure per model; a faster setting whose records don't show
+  unchanged accuracy is an explicit switch. See
+  [Engine arguments](./engine-args.md).
 - **Bounded waits.** Slow or unavailable models resolve through the signals'
   deadline and error policies. A model forward already running may continue
   after the caller times out and delay queued work. The router restarts a
@@ -77,11 +80,11 @@ unscanned policy.
 
 ## Hardware
 
-CPU and AMD GPUs (MI300X, MI325X) are validated. NVIDIA GPUs work but are not
-yet validated; Intel GPUs (`xpu`) and Apple GPUs (`mps`) are available and not
+CPU, AMD GPUs (MI300X, MI325X) and NVIDIA GPUs are validated. Intel GPUs
+(`xpu`), Ascend NPUs (`npu`) and Apple GPUs (`mps`) are available and not
 yet validated. Every router image runs models on the CPU. The AMD and NVIDIA
-images (`vllm-sr serve --platform rocm` or `--platform cuda`) also run them on
-the GPU.
+images (`vllm-sr serve --platform rocm` or `--platform cuda`) also run them
+on the GPU.
 
 ## Coming from an older release?
 

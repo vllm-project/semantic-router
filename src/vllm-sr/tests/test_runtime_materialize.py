@@ -84,6 +84,63 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
+def test_realize_runtime_config_round_trips_gateway_opt_in(tmp_path: Path):
+    """A backend_ref carrying the OpenAI-compatible gateway opt-in passes the
+    strict CLI validation and survives realization unchanged (issue #5046
+    review: the field must round-trip through the supported entry point)."""
+
+    source = tmp_path / "raw.yaml"
+    source.write_bytes(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "providers": {
+                    "models": [
+                        {
+                            "name": "relay-model",
+                            "backend_refs": [
+                                {
+                                    "name": "relay",
+                                    "endpoint": "https://relay.example.com/v1",
+                                    "provider": "vllm",
+                                    "openai_compat_gateway": True,
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "routing": {
+                    "decisions": [
+                        {
+                            "name": "default",
+                            "priority": 0,
+                            "modelRefs": [{"model": "relay-model"}],
+                        }
+                    ]
+                },
+                "global": {
+                    "model_catalog": {
+                        "embeddings": {
+                            "semantic": {
+                                "use_cpu": True,
+                                "embedding_config": {"model_type": "mmbert"},
+                            }
+                        }
+                    }
+                },
+            },
+            sort_keys=False,
+        ).encode("utf-8")
+    )
+    target = tmp_path / "state" / "runtime-config.yaml"
+
+    realize_runtime_config(source, target)
+
+    realized = yaml.safe_load(target.read_text(encoding="utf-8"))
+    backend_ref = realized["providers"]["models"][0]["backend_refs"][0]
+    assert backend_ref["openai_compat_gateway"] is True
+
+
 def test_realize_runtime_config_strict_atomic_replace(tmp_path: Path, monkeypatch):
     source = tmp_path / "raw.yaml"
     _write_source(source)

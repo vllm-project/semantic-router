@@ -135,7 +135,7 @@ and the next task step.
 For multi-turn routing, configure session identity and protection deliberately.
 An active tool loop or nonportable provider state can restrict model switches;
 a candidate excluded by policy cannot be restored merely to preserve continuity.
-See the [agent harness guide](/docs/installation/agent-harness) for these
+See the [agent harness guide](../installation/agent-harness) for these
 integration boundaries.
 
 ## Workload, Router, and pool

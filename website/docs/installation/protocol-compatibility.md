@@ -40,8 +40,10 @@ Responses object operations, and request examples.
 System One is a separate typed API, available in either startup mode when
 `listeners[].systemone.models` publishes a concrete model. It uses
 `POST /v1/systemone` (alias `/v1/decisions`) and
-`GET /v1/systemone/models`; it does not use this Chat protocol-translation
-matrix or the Chat model allowlist. See the
+`GET /v1/systemone/models`. Router mode can also publish an explicit native
+recipe through an `api: systemone` entrypoint and matching listener grant.
+These typed requests do not use the Chat protocol-translation matrix or the
+Chat model allowlist. See the
 [System One quickstart](../model-runtime/quickstart.md).
 
 ## Backend model protocols
@@ -127,6 +129,14 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+When translating Chat history to an Anthropic Messages backend, empty text
+blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
+behaves like `content: null`. Empty tool results keep their call IDs and use
+`content: []`; an empty system prompt is omitted. Non-empty text, including
+whitespace, is preserved. A conversation message containing only empty text
+is rejected, as is an empty text block carrying a cache directive, because
+removing either would discard a conversation turn or cache boundary.
+
 For an Anthropic Messages client using a Chat Completions or Responses backend,
 `thinking.type: adaptive` uses the backend model's default reasoning behavior;
 `output_config.effort` is retained. `thinking.display: omitted` removes reasoning
@@ -203,6 +213,12 @@ schema, streaming, tools, or error translation.
   backend formats match. Unknown or unsupported request fields fail closed.
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
+- Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
+  Responses requests. The default strict policy rejects this translation with
+  `lossy_translation`; a false or absent flag remains supported. Anthropic
+  backends preserve the flag. Codec callers explicitly using
+  `LossyAllowWithDiagnostic` may omit the flag with a `tool_result.is_error`
+  diagnostic; the tool-result content is not rewritten.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
@@ -216,6 +232,14 @@ schema, streaming, tools, or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- When an OpenAI-compatible Chat provider reports an error inside a successful
+  stream with an integer HTTP status as its `code`, as vLLM does, streamed
+  clients receive the provider's message. Responses and Anthropic Messages
+  clients get the Router's error frame, with the status as a string `code` for
+  Responses and the mapped error type for Messages. Chat clients get the stream
+  as the Router passes it up to the error event, then the Router's error frame
+  with a string `code` and no `[DONE]`, however the stream is split into body
+  chunks, as long as each frame is within the Router's SSE frame limit.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
@@ -243,6 +267,11 @@ The Router handles them as follows:
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
+
+In Responses output, `usage.input_tokens_details.cache_write_tokens` is omitted
+when the backend does not report a cache-write count. Reported zero and positive
+counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
+rejects, without treating unknown usage as a measured zero.
 
 Codex can also request reasoning summaries. The Router forwards
 `reasoning.summary` to a Responses backend. A Chat Completions or Messages

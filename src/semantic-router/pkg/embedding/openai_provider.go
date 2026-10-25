@@ -16,6 +16,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -32,7 +33,7 @@ type OpenAICompatibleConfig struct {
 	BaseURL           string
 	Model             string
 	APIKeyEnv         string
-	TimeoutSeconds    int
+	TimeoutSeconds    float64
 	MaxRetries        int
 	MaxResponseBytes  int64
 	Dimensions        int
@@ -103,11 +104,10 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, err
 	}
 
-	timeoutSeconds := cfg.TimeoutSeconds
-	if timeoutSeconds == 0 {
-		timeoutSeconds = defaultTimeoutSeconds
+	timeout := config.DurationFromSeconds(cfg.TimeoutSeconds)
+	if timeout == 0 {
+		timeout = time.Duration(defaultTimeoutSeconds) * time.Second
 	}
-	timeout := time.Duration(timeoutSeconds) * time.Second
 	client := cfg.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
@@ -266,6 +266,12 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
+	// The normal connector path accounts for its own calls. Only this
+	// mutually exclusive injected-client path needs a reservation here.
+	if budgetErr := budget.Consume(attemptCtx); budgetErr != nil {
+		_ = req.Body.Close()
+		return nil, budgetErr
+	}
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, err

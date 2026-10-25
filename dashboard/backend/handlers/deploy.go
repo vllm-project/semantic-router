@@ -268,7 +268,8 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+	// The Router resolves ${VAR} references with its own environment, which the Dashboard may not share.
+	if err := routerconfig.ValidateYAMLBytesDeferringEnv(yamlBytes); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -411,6 +412,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 // Node-level merging makes the transport forward-compatible: a new signal or
 // projection is carried without adding another field-by-field merge branch.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
+	preserveBaseDecisionAdaptations(baseRoot, fragmentRoot)
 	fragmentRouting := mappingValueNode(fragmentRoot, "routing")
 	if mode == DeployModeReplace {
 		if fragmentRouting == nil {

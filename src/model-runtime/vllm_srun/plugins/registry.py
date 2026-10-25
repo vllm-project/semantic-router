@@ -1,4 +1,4 @@
-"""Entry-point discovery for families, engines, accelerators and profiles.
+"""Entry-point discovery for families, engines and accelerators.
 
 Plugins come from the entry points of installed distributions. When the
 runtime itself runs uninstalled from a source tree, the entry points its own
@@ -19,7 +19,6 @@ GROUPS = {
     "families": "vllm_srun.families",
     "engines": "vllm_srun.engines",
     "accelerators": "vllm_srun.accelerators",
-    "profiles": "vllm_srun.profiles",
 }
 DISTRIBUTION = "vllm-srun"
 PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
@@ -30,13 +29,12 @@ class PluginError(RuntimeError):
 
 
 def _bases() -> dict[str, type]:
-    from .base import Accelerator, Engine, ModelFamily, Profile
+    from .base import Accelerator, Engine, ModelFamily
 
     return {
         "families": ModelFamily,
         "engines": Engine,
         "accelerators": Accelerator,
-        "profiles": Profile,
     }
 
 

@@ -39,7 +39,7 @@ internal architecture does not change the routing abstraction.
 
 Router system models support the decision process. A decision deployment can
 also be published directly through System One. Routing System One across
-several decision models is a [roadmap extension](component-architecture#roadmap-route-system-one-across-decision-models),
+several decision models uses an explicit [native recipe](component-architecture#route-system-one-across-decision-models),
 separate from the current Chat Mixture of Models.
 
 ## Execution patterns
@@ -106,35 +106,42 @@ policy that fits your harness's model calls:
 
 | Public model | Recipe | Decisions |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | **Balance**: everyday quality, latency, and cost | `simple`, `medium`, `reasoning` |
+| `vllm-sr/mom-v1-blend` | **Balance**: reasoning effort only where a request needs it | `simple`, `medium`, `reasoning` |
 | `vllm-sr/mom-v1-lite` | **Cost**: economical serving with targeted escalation | `economy`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-flash` | **Speed**: responsive conversation and streaming | `fast`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-ultra` | **Accuracy**: strong answers and explicit orchestration | `simple`, `reasoning`, `review`, `agent` |
 | `vllm-sr/mom-v1-vault` | **Vault**: processing within your private deployment | `private`, `sensitive`, `guard` |
 
-Balance combines task difficulty, consequential advice, and answer-recovery
-signals. Speed and Cost use lighter routing signals. Accuracy normally selects
-one strong model; independent review and workflows require explicit intent.
-Long input or a subject label alone does not cause multi-model execution.
+Balance asks the router's decision model five routing questions in one call:
+the kind of work, how much reasoning it needs, whether exact facts matter, what
+a good answer needs, and whether the user is correcting an earlier answer. An
+effort score from those answers selects `simple`, `medium` or `reasoning`;
+corrections and tool work go to `reasoning`, and exact facts stay on `medium`.
+Speed, Cost, Accuracy and Vault also route on named decision-model questions:
+whether the user asks to call a tool, whether the request is a hard problem,
+whether it reports a wrong answer, who should do the work (one assistant,
+several workers or several independent experts), and whether it carries
+confidential material, personal data, a risk of harm or a request for personal
+advice. Accuracy normally selects one strong model; independent review and
+workflows require an explicit request. The bundle declares Vela 2.0 0.8B as its
+decision model; on a CPU its calls are slow, so serve it on a GPU for live
+traffic. The Model Card lists every question and what it decides.
 
 Vault disables client tools, memory, response caching, and new Responses object
 writes on every path. Replay capture is configured separately and is enabled by
 default; see [Router Replay](../tutorials/plugin/router-replay). Its
-`guard` decision contains prompt attacks immediately. Safety and Hazard select
-`sensitive` for content risks, where an approved model can provide responsible
-help, explain risky material, or refuse harmful assistance. Hazard uses the
-model's published category thresholds.
+`guard` decision contains prompt attacks immediately. Personal identifiers,
+confidential material, a risk of harm and requests for personal advice select
+`sensitive`, where an approved model can provide responsible help, explain
+risky material, or refuse harmful assistance.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
-Vault's Guard and PII run on the default Vela 2.0 0.3B, which reads up to
-8,192 tokens and truncates beyond them. Its Hazard task has a 32,768-token
-triage input budget, including the conversation text evaluated by that task.
-This check runs before backend context checks. Exceeding it fails closed:
+Vault's prompt guard and PII judgments read the whole conversation up to the
+decision model's scan budget, and its questions read the start of the latest
+message. An unanswered judgment or an input past the budget fails closed:
 Preview returns HTTP 503 with signal errors and no selected model. A larger
-backend context window does not extend the triage budget. Hazard runs on CPU
-by default, so measure long-input triage latency even for requests within the
-budget; an accelerated deployment needs separate qualification.
+backend context window does not extend that budget.
 
 Start or resume the stack:
 
@@ -153,7 +160,7 @@ index at the assigned reasoning effort. **Preview** shows the signals, decision,
 and candidate-selection result. Send a real request to verify execution and
 latency before rollout.
 
-Policy version 3.0 keeps the decision names above and sends content risks to the sensitive pool. Validate new assignments before
+Policy version 4.0 keeps the decision names above; the decision model now selects every recipe's decisions, and Vault sends content risks to the sensitive pool. Validate new assignments before
 publishing an upgrade; existing published versions remain unchanged. See the
 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)
 for the complete requirements and data-handling policy.

@@ -4,7 +4,7 @@ import copy
 
 import pytest
 from cli.models import UserConfig
-from cli.validator import validate_user_config
+from cli.validator import collect_validation_warnings, validate_user_config
 from cli.validator_decision_model import model_runtime_deployment_error
 from pydantic import ValidationError
 
@@ -293,14 +293,27 @@ def test_decision_type_requires_its_configuration():
         ({"artifact": "vllm-sr/Decision-2.0-Kai-0.6B"}, None),
         ({"endpoint": "unix:///run/vllm-sr/runtime.sock"}, None),
         ({"endpoint": "http://runtime:8100", "device": "rocm:1"}, "cannot set device"),
-        ({"artifact": "/models/kai", "profile": "batching"}, None),
+        ({"artifact": "/models/kai", "max_num_seqs": 64, "dtype": "bfloat16"}, None),
+        ({"artifact": "/models/kai", "batch_window_ms": 0}, None),
+        ({"artifact": "/models/kai", "enable_shared_context": False}, None),
         ({"artifact": "./models/kai"}, "Hub repository ID or an absolute"),
         ({"artifact": "/models/kai", "revision": REVISION}, "only to Hub"),
         ({"artifact": "vllm-sr/x", "revision": "main"}, "40-hex"),
         ({"artifact": "vllm-sr/x", "device": "Metal 0"}, "device must be"),
         ({"artifact": "vllm-sr/x", "device": "xpu:1"}, None),
         ({"artifact": "vllm-sr/x", "device": "mps"}, None),
-        ({"artifact": "vllm-sr/x", "profile": "Fast!"}, "profile must be"),
+        ({"artifact": "vllm-sr/x", "max_num_seqs": 0}, "max_num_seqs must be"),
+        ({"artifact": "vllm-sr/x", "max_num_seqs": 1.5}, "max_num_seqs must be"),
+        (
+            {"artifact": "vllm-sr/x", "max_num_batched_tokens": 7},
+            "max_num_batched_tokens must be",
+        ),
+        ({"artifact": "vllm-sr/x", "batch_window_ms": 1001}, "batch_window_ms must"),
+        ({"artifact": "vllm-sr/x", "dtype": "half"}, "dtype must be"),
+        (
+            {"artifact": "vllm-sr/x", "enable_shared_context": 1},
+            "enable_shared_context must be",
+        ),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "truncate"}}, None),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "cut"}}, "input.overflow"),
         ({"artifact": "vllm-sr/x", "input": {"max_tokens": -1}}, "not be negative"),
@@ -323,12 +336,49 @@ def test_model_runtime_deployment_rules(deployment, message):
         assert error is not None and message in error
 
 
+@pytest.mark.parametrize(
+    "deployment, warned",
+    [
+        ({"artifact": "vllm-sr/d3-FP8"}, True),
+        ({"artifact": "vllm-sr/d3-FP8", "revision": REVISION}, False),
+        ({"artifact": "VLLM-SR/decision-2.0-kai-0.6b"}, False),
+        ({"artifact": "vllm-sr/d3-turbo"}, False),
+        ({"artifact": "vllm-sr/d3-ultra"}, False),
+        ({"artifact": "/models/d3-FP8"}, False),
+        ({"artifact": "vllm-sr/d3-FP8", "endpoint": "http://runtime:8100"}, False),
+        (
+            {
+                "artifact": "vllm-sr/d3-FP8",
+                "replicas": [{"endpoint": "http://runtime:8100"}, {"device": "rocm:0"}],
+            },
+            True,
+        ),
+    ],
+)
+def test_unpinned_hub_deployments_are_warned(deployment, warned):
+    document = copy.deepcopy(BASE)
+    document["global"]["model_catalog"]["deployments"]["decision-kai"] = {
+        "provider": "model_runtime",
+        **deployment,
+    }
+    config = UserConfig.model_validate(document)
+    assert _errors(document) == []
+    warnings = [
+        str(warning)
+        for warning in collect_validation_warnings(config)
+        if "decision-kai" in str(warning)
+    ]
+    assert bool(warnings) == warned
+    if warned:
+        assert "vllm-sr/d3-FP8 is not a built-in model" in warnings[0]
+
+
 def test_other_providers_reject_runtime_fields():
     def runtime_field(document):
         document["global"]["model_catalog"]["deployments"]["remote"] = {
             "provider": "http",
             "external_model": "x",
-            "profile": "exact",
+            "max_num_seqs": 8,
         }
 
     assert any(
@@ -402,6 +452,17 @@ def test_systemone_duplicate_identity_requires_explicit_public_names():
     assert _errors(document) == []
 
 
+def test_systemone_listener_bounds_the_request_deadline():
+    document = copy.deepcopy(BASE)
+    systemone = {"models": ["vllm-sr/Decision-2.0-Kai-0.6B"], "max_deadline_ms": 120000}
+    document["listeners"][0]["systemone"] = systemone
+    assert _errors(document) == []
+    for limit in (0, -1, "10m"):
+        systemone["max_deadline_ms"] = limit
+        with pytest.raises(ValidationError, match="max_deadline_ms"):
+            UserConfig.model_validate(document)
+
+
 def test_decision_window_input_is_a_supported_scan_budget():
     document = copy.deepcopy(BASE)
     document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
@@ -409,6 +470,101 @@ def test_decision_window_input_is_a_supported_scan_budget():
         "overflow": "window",
     }
     assert _errors(document) == []
+
+
+def _ask_the_default_decision_model(document):
+    for rule in document["routing"]["signals"]["decision"]:
+        del rule["deployment"]
+    del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+    document["global"]["model_catalog"]["system"] = {
+        "decision_model": {"deployment": "decision-kai"}
+    }
+
+
+def test_default_decision_model_rejects_a_task_input_budget():
+    def mutate(document):
+        _ask_the_default_decision_model(document)
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 32768,
+            "overflow": "reject",
+        }
+
+    assert any("never truncate" in error for error in _errors(_config(mutate)))
+
+
+def test_default_decision_model_accepts_a_scan_budget():
+    def mutate(document):
+        _ask_the_default_decision_model(document)
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 4096,
+            "overflow": "window",
+        }
+
+    assert _errors(_config(mutate)) == []
+
+
+@pytest.mark.parametrize(
+    "budget",
+    [
+        {"max_tokens": 32768, "overflow": "reject"},
+        {"max_tokens": 512, "overflow": "truncate"},
+    ],
+)
+def test_systemone_publication_rejects_a_task_input_budget(budget):
+    def publish(document):
+        document["listeners"][0]["systemone"] = {
+            "models": ["vllm-sr/Decision-2.0-Kai-0.6B"]
+        }
+        document["global"]["model_catalog"]["deployments"]["decision-kai"][
+            "input"
+        ] = budget
+
+    def alias(document):
+        publish(document)
+        document["providers"]["models"].append(
+            {
+                "name": "judge",
+                "api_format": "systemone",
+                "deployment": "decision-kai",
+            }
+        )
+        document["listeners"][0]["systemone"] = {"models": ["judge"]}
+
+    for mutate in (publish, alias):
+        assert any("never truncate" in error for error in _errors(_config(mutate)))
+
+
+def test_systemone_publication_accepts_a_scan_budget():
+    def mutate(document):
+        document["listeners"][0]["systemone"] = {
+            "models": ["vllm-sr/Decision-2.0-Kai-0.6B"]
+        }
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 4096,
+            "overflow": "window",
+        }
+
+    assert _errors(_config(mutate)) == []
+
+
+def test_systemone_publication_rejects_a_classifier_task_input():
+    def mutate(document):
+        document["global"]["model_catalog"]["deployments"]["vela-domain"] = {
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+            "device": "cpu",
+            "public_name": "encoder-public",
+            "input": {"max_tokens": 512, "overflow": "truncate"},
+        }
+        document["global"]["model_catalog"]["bindings"] = {
+            "domain_classifier": {
+                "deployment": "vela-domain",
+                "contract": "label_distribution.v1",
+            }
+        }
+        document["listeners"][0]["systemone"] = {"models": ["encoder-public"]}
+
+    assert any("never truncate" in error for error in _errors(_config(mutate)))
 
 
 @pytest.mark.parametrize(

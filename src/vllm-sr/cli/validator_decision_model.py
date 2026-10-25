@@ -15,9 +15,8 @@ from cli.models_decision import OPTION_QUESTION_TYPES
 from cli.validation_error import ValidationError
 
 MODEL_RUNTIME_PROVIDER = "model_runtime"
-# The runtime owns profile and accelerator names, plugins' included: the
-# validator checks their shape and leaves an unknown name to the runtime.
-MODEL_RUNTIME_PROFILE = re.compile(r"^[a-z][a-z0-9_]*$")
+# The runtime owns accelerator names, plugins' included: the validator checks
+# their shape and leaves an unknown name to the runtime.
 MODEL_RUNTIME_DEVICE = re.compile(r"^[a-z][a-z0-9_]*(:[0-9]+)?$")
 MODEL_RUNTIME_REVISION = re.compile(r"^[0-9a-f]{40}$")
 HUB_REPOSITORY_ID = re.compile(r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
@@ -35,6 +34,43 @@ def public_model_name(deployment: dict) -> str:
         and HUB_REPOSITORY_ID.fullmatch(artifact)
         else ""
     )
+
+
+MODEL_RUNTIME_DTYPES = ("auto", "float32", "bfloat16", "float16")
+# The runtime's bounds: a forward holds at least one row of 8 padded tokens,
+# and the batching window is at most a second.
+MIN_MAX_NUM_BATCHED_TOKENS = 8
+MAX_BATCH_WINDOW_MS = 1000
+
+
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def engine_args_error(deployment: dict) -> str | None:
+    """Why a deployment's engine arguments are malformed, or None (unset ones keep the runtime's defaults)."""
+    seqs = deployment.get("max_num_seqs")
+    if seqs is not None and (not _is_int(seqs) or seqs < 1):
+        return "max_num_seqs must be an integer of at least 1"
+    tokens = deployment.get("max_num_batched_tokens")
+    if tokens is not None and (
+        not _is_int(tokens) or tokens < MIN_MAX_NUM_BATCHED_TOKENS
+    ):
+        return "max_num_batched_tokens must be an integer of at least 8"
+    window = deployment.get("batch_window_ms")
+    if window is not None and (
+        isinstance(window, bool)
+        or not isinstance(window, (int, float))
+        or not 0 <= window <= MAX_BATCH_WINDOW_MS
+    ):
+        return "batch_window_ms must be a number between 0 and 1000"
+    dtype = deployment.get("dtype")
+    if dtype is not None and dtype not in MODEL_RUNTIME_DTYPES:
+        return "dtype must be one of auto, float32, bfloat16 or float16"
+    shared = deployment.get("enable_shared_context")
+    if shared is not None and not isinstance(shared, bool):
+        return "enable_shared_context must be a boolean"
+    return None
 
 
 def model_runtime_deployment_error(deployment: dict) -> str | None:
@@ -55,8 +91,9 @@ def model_runtime_deployment_error(deployment: dict) -> str | None:
         return "input.max_tokens must not be negative"
     if (budget.get("overflow") or "reject") not in INPUT_OVERFLOWS:
         return "input.overflow must be reject, truncate or window"
-    if not MODEL_RUNTIME_PROFILE.match(deployment.get("profile") or "exact"):
-        return "profile must be a profile name, such as exact or batching"
+    message = engine_args_error(deployment)
+    if message:
+        return message
     revision = deployment.get("revision") or ""
     if revision and not MODEL_RUNTIME_REVISION.match(revision):
         return "revision must be a 40-hex commit"
@@ -301,10 +338,26 @@ def validate_systemone_listener_models(
         if public_name:
             identities.setdefault(public_name, []).append((key, deployment))
     errors = []
+    # A routed entrypoint is not one deployment. A provider alias is checked
+    # with native execution, published or not; a remote alias has no deployment.
+    skipped = {
+        name
+        for entry in config.entrypoints
+        if entry.api == "systemone"
+        for name in entry.model_names
+    }
+    skipped.update(
+        model.name
+        for model in config.providers.models
+        if model.api_format == "systemone"
+    )
     for listener in config.listeners:
         if listener.systemone is None:
             continue
+        field = f"listeners.{listener.name}.systemone.models"
         for public_name in listener.systemone.models:
+            if public_name in skipped:
+                continue
             candidates = identities.get(public_name, [])
             message = None
             if not candidates:
@@ -313,10 +366,8 @@ def validate_systemone_listener_models(
                 message = f"public System One model {public_name!r} names multiple deployments; assign distinct public_name values"
             elif candidates[0][1].get("provider") != MODEL_RUNTIME_PROVIDER:
                 message = f"public System One model {public_name!r} requires a model_runtime deployment"
+            else:
+                message = _reference_error(deployments, candidates[0][0])
             if message:
-                errors.append(
-                    ValidationError(
-                        message, field=f"listeners.{listener.name}.systemone.models"
-                    )
-                )
+                errors.append(ValidationError(message, field=field))
     return errors

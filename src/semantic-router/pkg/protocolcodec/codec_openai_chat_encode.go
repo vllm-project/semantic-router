@@ -61,6 +61,9 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIChatV1); err != nil {
+		return diagnostics, err
+	}
 	for _, message := range request.Messages {
 		if message.ReasoningEffort != "" {
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
@@ -76,7 +79,7 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 			return diagnostics, err
 		}
 	}
-	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation == "" {
+	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation != llmprotocol.TruncationAuto {
 		return diagnostics, nil
 	}
 	err := appendLossy(
@@ -207,6 +210,9 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		wire.Content, _ = json.Marshal(state.parts[0].Text)
 	} else if len(state.parts) > 0 {
 		wire.Content, _ = json.Marshal(state.parts)
+	} else if message.Role == llmprotocol.RoleTool {
+		// Chat tool messages require content even when the result has no parts.
+		wire.Content = json.RawMessage(`""`)
 	}
 	return wire, nil
 }

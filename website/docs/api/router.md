@@ -24,14 +24,104 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | The model is in the request body |
-| `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
-| `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Questions answered by explicitly published decision models on a standalone listener |
+| `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration; in Engine mode, the listener's System One models, also as `models: [{name, description, release_date}]` for the System One SDKs |
+| `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
 | `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
 
 Engine mode serves the native System One paths with recipe routing disabled.
 Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
 allowlist does not grant native access. Both APIs use the listener's API keys.
 See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+
+The System One paths read bodies compressed with one layer of gzip or zstd
+(`415` with `unsupported_media_type` for any other coding) and
+`multipart/form-data` bodies whose image parts are the request's `assets`.
+The Router decodes these before it reads the request and forwards the JSON
+request, with each part's image as `data_base64`, to the model. On
+`/v1/systemone` a request with a failed question is answered as a whole with
+`question_failed`, the question's `question_error`, fixed `reason` and ID,
+while `/v1/decisions` answers each question in place. A model the listener does
+not publish returns `403` `model_not_allowed` with the models it does publish.
+See [System One compatibility](../model-runtime/reference.md#system-one-compatibility)
+for assets, Box, track and long context.
+
+### Route a System One request
+
+In Router mode, publish an `entrypoints` item with `api: systemone` and grant
+its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
+does not automatically publish a native entrypoint. Follow the
+[System One cascade guide](../tutorials/algorithm/native/cascade.md) to connect
+local deployments or remote Engine and compatible System One services.
+
+```bash
+curl -sS http://localhost:8899/v1/systemone \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "state": "Please explain how to reset my password.",
+    "questions": {
+      "task": {
+        "type": "choice",
+        "instructions": "Which team should handle this request?",
+        "criteria": {
+          "account": "Account access or authentication",
+          "billing": "Payments, invoices or refunds"
+        }
+      }
+    }
+  }'
+```
+
+Auto currently accepts explicit `choice`, `score` and `noul` questions, including
+multiple named states. The selected native response retains its answers,
+probabilities, usage and other fields. `model` stays the public entrypoint;
+the additional `routing` object identifies the execution. Set
+`options.return_meta: true` to include the selected model's runtime metadata.
+Calibrated cascades collect this provenance internally even when
+you leave response metadata disabled.
+
+```json
+{
+  "recipe": "native-cascade",
+  "decision": "classify",
+  "algorithm": "cascade",
+  "stage": "strong",
+  "selected_model": "vega",
+  "quality": "uncalibrated",
+  "model_calls": 2
+}
+```
+
+`model_calls` counts physical inference attempts within the selected algorithm,
+including its transport retries. Signal calls are outside this counter and have
+their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
+belongs to the returned native candidate and is not total cascade billing.
+The `quality` field names the configured acceptance method; it is not an
+accuracy score. Native discovery marks recipe entrypoints with `routing: true`
+and concrete models with `routing: false`.
+
+Malformed or unsupported auto questions return `400`. If no complete answer
+passes the declared acceptance rule within the call budget, the request
+returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
+returns `504` with `systemone_deadline_exceeded`. Failed
+candidates never become empty successful answers. Direct model requests keep
+their existing native API contract and do not run the cascade.
+
+A remote Engine backend must expose a concrete model. Native backend calls
+carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
+(`systemone_nested_routing`) if that request targets another recipe or remote
+forwarding alias. This prevents recursive cascades. The header grants no access:
+the receiving listener still checks its API key and model allowlist. An external
+compatible provider's internal execution remains outside the Router's call
+ledger.
+
+Auto execution exports `sr_systemone_stage_total` and
+`sr_systemone_stage_duration_seconds` by configured algorithm, stage and model,
+plus `sr_systemone_auto_requests_total` and
+`sr_systemone_auto_duration_seconds`. These distinguish accepted, rejected,
+invalid and failed attempts; they measure serving behavior, not label-based
+evaluation quality. The auto duration covers the algorithm; preceding recipe
+signals are outside that metric.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
 `/v1/vector_stores`, and Router Replay paths are not available on a public
@@ -46,6 +136,37 @@ body returns `400` from the Router and is never forwarded to a backend.
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
 field-level portability boundaries.
+
+### System One API stability
+
+The public System One API is what a Router's listener serves:
+`POST /v1/systemone`, `POST /v1/decisions` and `GET /v1/systemone/models`,
+with `/health` and `/ready`. It is the only System One interface with a
+compatibility promise:
+
+- Within a release line it changes only by addition: new optional request
+  fields, new response fields and new error codes, each documented with its
+  HTTP status.
+- A removal or a change of meaning is announced in the release notes at least
+  one release before it takes effect.
+
+The Router checks a request's `options` against this API before a model reads
+them. The options are `deadline_ms` (a number greater than 0),
+`long_context` (`true` or `false`), `max_tokens` (an integer of at least 1) and
+`return_meta` (`true` or `false`); `null` sets none. Any other option, or a value of another type, returns `400` with
+`invalid_request` and a message that names it. A request the Router sends to
+its model directly waits 30 seconds for the answer, or its `deadline_ms` when
+that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
+minutes, by default); a `long_context` request without `deadline_ms` waits
+that whole limit. `options.profile` was removed in
+[#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
+runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
+and `meta` reports `dtype` and `numerics` instead of `profile`.
+
+The model runtime's HTTP API, which the Router calls, belongs to one release
+and makes no such promise. A Router accepts only a runtime that serves exactly
+its contract version; see
+[Attach to a runtime you run](../model-runtime/deploy.md#attach-to-a-runtime-you-run).
 
 ## Send a routed request
 
@@ -216,6 +337,18 @@ The Router logs each of these failures at `WARN`, under the request's
 the recipe and decision it reached, and the error. Anthropic Messages clients
 get the same status and message in Anthropic's error envelope, which has no
 code field.
+
+When routing decision processing exceeds its deadline, the Router returns
+`504` with `request_timeout` and the message `request timed out`. A canceled
+decision returns `500` with `request_canceled` and the message `request canceled`
+if the connection still permits a response. Both use `server_error` in OpenAI
+Chat Completions and Responses. Anthropic Messages uses `timeout_error` for the
+deadline and `api_error` for cancellation. A disconnected client may receive no
+response.
+
+Router-generated immediate responses preserve HTTP status codes supported by
+Envoy. Unsupported or invalid status codes fall back to `500`; an error body
+is never intentionally sent with a success status.
 
 ## Request budget errors
 

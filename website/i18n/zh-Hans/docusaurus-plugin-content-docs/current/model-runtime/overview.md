@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
@@ -26,7 +27,7 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 
 内置功能会自动解析模型默认值。准备配置时，Router 只为实际模型使用方和显式发布的原生模型启动受管 worker；
 未使用的 deployment 不加载权重。启动会等待所需受管模型就绪；附加模型遵循
-[部署就绪规则](/docs/model-runtime/deploy#when-a-model-is-not-ready)。
+[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 之后如果运行时变慢或崩溃，信号截止时间会限制请求等待的时长。
 未完成的信号按配置的错误策略或未扫描策略处理。
 
@@ -57,8 +58,9 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 
 - **固定版本并经过校验。** 内置模型固定到确切的 Hugging Face revision。
   每个文件在加载前都会对照记录的 SHA-256 校验，模型仓库中附带的代码永远不会执行。
-- **与发布模型相同的答案。** 默认的 `exact` profile 给出模型发布方测得的答案。
-  更快的设置需要显式开启，并会说明可能改变结果。见 [Profiles](model-runtime/profiles.md)。
+- **吞吐优先，保持发布精度。** 和 vLLM 一样，运行时默认对并发请求做批处理，
+  并以模型发布时的精度运行。批处理后的答案可能因舍入而变动，记录按模型给出了变动幅度；
+  记录无法证明准确率不变的更快设置是显式开关。见[引擎参数](model-runtime/engine-args.md)。
 - **等待有上限。** 模型过慢或不可用时，按信号截止时间和错误策略处理。
   已开始的模型前向计算可能在调用方超时后继续执行，并延迟队列中的请求。
   路由器会重启崩溃的运行时。
@@ -70,8 +72,8 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 
 ## 硬件 {#hardware}
 
-CPU 和 AMD GPU（MI300X、MI325X）已经验证。NVIDIA GPU 可用但尚未验证；
-Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
+CPU、AMD GPU（MI300X、MI325X）和 NVIDIA GPU 已经验证。
+Intel GPU（`xpu`）、昇腾 NPU（`npu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
 AMD 和 NVIDIA 镜像（`vllm-sr serve --platform rocm` 或 `--platform cuda`）还能在 GPU 上运行它们。
 
 ## 从旧版本升级？ {#coming-from-an-older-release}

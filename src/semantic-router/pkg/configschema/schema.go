@@ -131,6 +131,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 
 	addRecipeRoutingDefinition(schema)
 	setCoreEnums(schema)
+	addNativeAlgorithmConditions(schema)
 	deployments := definitionProperty(schema, "CanonicalModelCatalog", "deployments")
 	if deployments == nil {
 		return nil, fmt.Errorf("canonical model deployment schema is missing")
@@ -283,6 +284,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 	})
 	setDefinitionPropertyEnum(root, "ProjectionScoreInput", "type", routerconfig.SupportedProjectionInputTypes())
 	setDefinitionPropertyEnum(root, "InputModalityRule", "modality", routerconfig.SupportedInputModalities())
+	setDefinitionPropertyEnum(root, "ActionRule", "name", routerconfig.SupportedActions())
 	setDefinitionPropertyEnum(root, "CanonicalRouting", "strategy", []string{
 		string(routerconfig.RoutingStrategyPriority),
 		string(routerconfig.RoutingStrategyConfidence),
@@ -537,6 +539,9 @@ func buildExtension(root *jsonschema.Schema, pluginRefs map[string]string) (sche
 		"type",
 		"minimum_candidates",
 		"on_error",
+		"quality",
+		"stages",
+		"budget",
 	); err != nil {
 		return schemaExtension{}, err
 	}

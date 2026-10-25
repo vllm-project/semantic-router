@@ -26,6 +26,9 @@ listeners:
     # Native System One inference has its own explicit public-model scope.
     systemone:
       models: [decision-public]
+      # The longest the listener waits for a model it calls directly, however
+      # long a request's options.deadline_ms asks for (10 minutes by default).
+      max_deadline_ms: 600000
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -91,6 +94,19 @@ providers:
           chat_path: /chat/completions
           api_key: static-demo-key
           weight: 100
+    # A vLLM-type entry pointed at a relay opts in to the OpenAI-compatible
+    # gateway response contract; the plain vLLM backends above keep the
+    # strict one.
+    - name: remote-vllm-gateway-reference
+      provider_model_id: remote-vllm-gateway-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-gateway-primary
+          base_url: https://gateway.example.com/v1
+          provider: vllm
+          openai_compat_gateway: true
+          api_key: static-demo-key
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
@@ -154,7 +170,25 @@ providers:
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
 
+    # A native alias references a shared deployment instead of a second endpoint.
+    - name: native-kai
+      api_format: systemone
+      deployment: decision-kai
+    - name: native-vega
+      api_format: systemone
+      provider_model_id: vllm-sr/Decision-2.0-Vega-27B
+      backend_refs:
+        - provider: systemone-compatible
+          base_url: https://native.example.com/v1
+          api_key_env: SYSTEMONE_API_KEY
+
 evaluation:
+  # Illustrative artifact identity: replace source and digest together after
+  # fitting and evaluating your task. This is not measured quality evidence.
+  calibrations:
+    - name: native-reference
+      source: ./calibration/native-reference.json
+      sha256: "0000000000000000000000000000000000000000000000000000000000000000"
   records:
     - model: qwen3-8b
       benchmark: vllm-sr/operator-rating@1.0.0
@@ -225,6 +259,8 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
+        - name: business-adapter
+          description: Adapter specialized for business strategy and operations prompts.
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -270,6 +306,14 @@ routing:
         case_sensitive: false
         fuzzy_match: true
         fuzzy_threshold: 82
+      # include_history also matches earlier user messages in the conversation,
+      # so a constraint such as "local model only" stated in an earlier turn
+      # still applies. Omitted (false) evaluates only the current user message.
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        case_sensitive: false
+        include_history: true
 
     embeddings:
       - name: technical_support
@@ -578,6 +622,7 @@ routing:
 
     pii:
       - name: restricted_pii
+        source: ""
         threshold: 0.01
         include_history: true
         pii_types_allowed:
@@ -703,6 +748,28 @@ routing:
       - name: audio_input
         description: Request contains at least one audio content part.
         modality: audio
+
+    actions:
+      - name: explain
+        description: Describe code or answer a question without editing anything.
+      - name: fix
+        description: Repair a bug or a failing behavior.
+
+    # Context-policy evidence: whether the live turn still depends on
+    # retained history. Not decision-referenceable; every declared rule runs
+    # before the context transformation stage and context policies read the
+    # typed result. Every field except name is optional (defaults shown).
+    topic_continuity:
+      - name: topic_boundary
+        description: Whether the live turn still depends on retained history.
+        include_assistant: true
+        thresholds:
+          continuation: 0.35
+          change: 0.08
+        limits:
+          max_prior_turns: 8
+          max_turn_bytes: 16384
+          max_input_bytes: 147456
 
     # Typed questions answered by a decision model through the built-in model
     # runtime (global.model_catalog.deployments, provider model_runtime).
@@ -847,6 +914,12 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+        # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
+        - model: qwen3-32b
+          lora_name: business-adapter
+          use_reasoning: true
+          reasoning_mode: enabled
+          reasoning_effort: low
       candidateIterations:
         - variable: candidate
           source: models
@@ -981,6 +1054,16 @@ routing:
               max_tools: 16
               max_new_tools_per_turn: 2
               pin_called_tools: true
+        - type: masking
+          configuration:
+            enabled: true
+            threshold: 0.85
+            entity_types:
+              - EMAIL_ADDRESS
+              - PHONE_NUMBER
+            placeholders:
+              EMAIL_ADDRESS: "[EMAIL_{index}]"
+              PHONE_NUMBER: "[PHONE_{index}]"
       emits:
         - kind: retention
           retention:
@@ -1658,6 +1741,21 @@ routing:
           latency_metric: ttft
           on_no_candidates: cheapest
 
+    - name: random_route
+      description: Uniform random baseline for routing experiments and evaluations.
+      priority: 122
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: qwen3-8b
+        - model: qwen3-32b
+      algorithm:
+        type: random
+        minimum_candidates: 2
+
     - name: fallback_knn_route
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
       priority: 120
@@ -1850,6 +1948,9 @@ entrypoints:
     recipe: default
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
+  - api: systemone
+    model_names: ["vllm-sr/auto"]
+    recipe: native-handwritten
 
 recipes:
   - name: privacy-first
@@ -1900,6 +2001,45 @@ recipes:
           consecutive_failures: 3
           cooldown_period: 30s
           half_open_probes: 1
+
+  - name: native-handwritten
+    description: Complete typed requests use explicit native stages and an algorithm execution budget.
+    routing:
+      decisions:
+        - name: typed-cascade
+          rules: {}
+          modelRefs: [{model: native-kai}, {model: native-vega}, {model: remote-openai-reference}]
+          algorithm:
+            type: cascade
+            budget: {deadline: 3s, max_calls: 4}
+            quality:
+              type: uncalibrated
+              acceptance:
+                rules:
+                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
+            stages:
+              # Measured pilot gate for the pinned Kai/Vega pair; re-evaluate
+              # when the model identity or question distribution changes.
+              - name: fast
+                kind: native
+                model: native-kai
+                accept:
+                  rules:
+                    - {question_type: choice, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: score, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: noul, field: top_probability, predicate: {gte: 0.6059704079536342}}
+              - name: strong
+                kind: native
+                model: native-vega
+                timeout: 1s
+              - name: review
+                kind: judge
+                enabled: false
+                model: remote-openai-reference
+                generation: {max_output_tokens: 256}
+                instructions: Select a complete prior response only when it answers every question.
 
 global:
   router:
@@ -2490,7 +2630,6 @@ global:
         public_name: decision-public
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
-        profile: exact
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
       # worker started elsewhere with `vllm-srun serve <hf-model>`.
@@ -2499,13 +2638,11 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
-        profile: exact
       content-risk:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: cpu
-        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
@@ -2514,7 +2651,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: cpu
-        profile: exact
         input:
           max_tokens: 4096
           overflow: reject
@@ -2524,7 +2660,6 @@ global:
         public_name: decision-replicas
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
-        profile: exact
         replicas:
           - device: cpu
           - endpoint: http://decision-worker:8100

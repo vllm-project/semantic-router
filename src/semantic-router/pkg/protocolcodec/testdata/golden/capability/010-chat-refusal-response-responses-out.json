@@ -34,7 +34,6 @@
     "usage": {
       "input_tokens": 4,
       "input_tokens_details": {
-        "cache_write_tokens": null,
         "cached_tokens": null
       },
       "output_tokens": 2,

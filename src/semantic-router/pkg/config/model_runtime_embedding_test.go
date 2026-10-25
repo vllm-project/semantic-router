@@ -18,6 +18,7 @@ func TestModelRuntimePlansImplicitEmbeddingConsumers(t *testing.T) {
 				cfg.Memory.Enabled = true
 			case "cache":
 				cfg.SemanticCache.Enabled = true
+				cfg.Decisions = []Decision{cacheDemandDecision("semantic", true)}
 			case "vector_store":
 				cfg.VectorStore = &VectorStoreConfig{Enabled: true}
 			case "api":

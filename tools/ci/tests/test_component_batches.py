@@ -21,45 +21,75 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 import run_component_batch as runner  # noqa: E402
 from check_ci_gate import evaluate_gate  # noqa: E402
 from ci_plan import github_outputs, make_plan  # noqa: E402
+from execution_batches import component_batches, validate_component_batch  # noqa: E402
 
 SHA = "a" * 40
 
 
 class ComponentBatchTests(unittest.TestCase):
-    def test_nine_contracts_use_nine_workers_without_changing_selection(self):
+    def test_component_workers_have_bounded_inventory_and_reject_metadata_changes(self):
+        row = make_plan([], source_sha=SHA, requested=("cli-unit",))["verifications"][0]
+        row = {**row, "batch_policy": "shared-components"}
+        workers = {"cli": {"display_name": "CLI", "go": False}}
+        records = [{**row, "id": f"cli-{index}"} for index in range(9)]
+        batches = component_batches(records, workers)
+        self.assertEqual([len(batch["verifications"]) for batch in batches], [4, 4, 1])
+        self.assertEqual(batches, component_batches(list(reversed(records)), workers))
+        for batch in batches:
+            validate_component_batch(batch, workers)
+        changed = copy.deepcopy(batches[0])
+        changed["job_timeout_minutes"] = 1
+        with self.assertRaises(ValueError):
+            validate_component_batch(changed, workers)
+
+    def test_component_contracts_default_to_independent_workers_without_changing_selection(
+        self,
+    ):
         full = make_plan([], source_sha=SHA, full=True)
         batches = full["component_batches"]
-        self.assertEqual(len(batches), 9)
-        self.assertTrue(all(len(batch["verifications"]) == 1 for batch in batches))
         rows = [row for batch in batches for row in batch["verifications"]]
         selected = [row for row in full["verifications"] if row["executor"] == "tools"]
-        self.assertEqual(rows, selected)
+        self.assertEqual(len(batches), len(selected))
+        for batch in batches:
+            self.assertGreaterEqual(len(batch["verifications"]), 1)
+            self.assertEqual(len(batch["verifications"]), 1)
         self.assertEqual(
-            [batch["id"] for batch in batches], [row["id"] for row in rows]
+            sorted(row["id"] for row in rows), sorted(row["id"] for row in selected)
         )
-        self.assertEqual(
-            [batch["worker"] for batch in batches], [row["worker"] for row in rows]
+        self.assertTrue(
+            all(
+                len({row["worker"] for row in batch["verifications"]}) == 1
+                for batch in batches
+            )
         )
         self.assertEqual(json.loads(github_outputs(full)["component_batches"]), batches)
-        partial = make_plan([], source_sha=SHA, requested=("model-runtime",))
-        self.assertEqual(len(partial["component_batches"]), 1)
-        self.assertEqual(
-            [row["id"] for row in partial["component_batches"][0]["verifications"]],
-            ["model-runtime"],
+        for batch in batches:
+            runner.validate_batch(batch)
+        partial = make_plan([], source_sha=SHA, requested=("model-runtime", "training"))
+        self.assertEqual(len(partial["component_batches"]), 2)
+        self.assertTrue(
+            all(
+                len(batch["verifications"]) == 1
+                for batch in partial["component_batches"]
+            )
         )
         self.assertNotIn("generated_contracts", full["quality_context"])
         self.assertNotIn("soak", full["quality_context"])
 
     def test_each_contract_keeps_its_own_events_and_source_bound_receipt(self):
         passed, plan, receipts, raw, calls = self.run_contracts(
-            ("onnx-artifacts", "ck-rewrite")
+            ("onnx-artifacts", "training")
         )
         self.assertTrue(passed)
         self.assertEqual(
-            {row["id"] for row in receipts}, {"onnx-artifacts", "ck-rewrite"}
+            {row["id"] for row in receipts}, {"onnx-artifacts", "training"}
         )
         self.assertTrue(evaluate_gate(plan, receipts).passed)
-        event_paths = {env["CI_PYTHON_TEST_EVENTS"] for _, env in calls}
+        event_paths = {
+            env["CI_PYTHON_TEST_EVENTS"]
+            for _, env in calls
+            if "CI_PYTHON_TEST_EVENTS" in env
+        }
         self.assertEqual(len(event_paths), 2)
         for row in receipts:
             self.assertEqual(row["source_sha"], SHA)
@@ -67,7 +97,9 @@ class ComponentBatchTests(unittest.TestCase):
             self.assertIn(row["id"] + "/python-events.jsonl", raw)
 
     def test_real_subprocess_observers_do_not_leak_between_contracts(self):
-        plan = make_plan([], source_sha=SHA, requested=("onnx-artifacts", "ck-rewrite"))
+        plan = make_plan(
+            [], source_sha=SHA, requested=("harness-tools", "mock-provider")
+        )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "tools").mkdir()
@@ -107,16 +139,31 @@ class ComponentBatchTests(unittest.TestCase):
 
     def test_failed_command_does_not_hide_successful_sibling_or_write_receipt(self):
         passed, plan, receipts, raw, calls = self.run_contracts(
-            ("onnx-artifacts", "ck-rewrite"), failure="onnx-artifact-test"
+            ("onnx-artifacts", "training"), failure="onnx-artifact-test"
         )
         self.assertFalse(passed)
-        self.assertEqual([row["id"] for row in receipts], ["ck-rewrite"])
+        self.assertEqual([row["id"] for row in receipts], ["training"])
         self.assertFalse(evaluate_gate(plan, receipts).passed)
         self.assertIn("onnx-artifacts/failure.txt", raw)
         self.assertEqual(
-            [command[1] for command, _ in calls],
-            ["onnx-artifact-test", "ck-rewrite-test"],
+            [self.stage(command) for command, _ in calls],
+            ["onnx-artifact-test", "torch", "training-deps", "test-training-contracts"],
         )
+
+    def test_timeout_fails_only_its_contract_and_setup_uses_the_same_deadline(self):
+        passed, _, receipts, raw, _ = self.run_contracts(
+            ("onnx-artifacts", "training"),
+            failure="onnx-artifact-test",
+            timeout=True,
+        )
+        self.assertFalse(passed)
+        self.assertEqual([row["id"] for row in receipts], ["training"])
+        self.assertIn("timed out", raw["onnx-artifacts/failure.txt"])
+        budgets = []
+        with patch.object(runner.time, "monotonic", side_effect=[0, 10, 20, 30]):
+            passed, _, _, _, _ = self.run_contracts(("training",), budgets=budgets)
+        self.assertTrue(passed)
+        self.assertEqual(budgets, [2690, 2680, 2670])
 
     def test_missing_skipped_or_wrong_source_evidence_cannot_qualify(self):
         for outcome in ("missing", "skipped", "failed", "wrong-source"):
@@ -131,6 +178,7 @@ class ComponentBatchTests(unittest.TestCase):
     def test_maintained_entrypoints_all_run_and_each_failure_propagates(self):
         stages = {
             "learning-tools": ["test-learning-tools", "test-calibration"],
+            "bench-tools": ["test-bench-tools"],
             "soak-tools": ["soak-test", "proxy-tests"],
             "mock-provider": ["test-provider-mocker"],
             "e2e-unit": ["test-e2e-unit"],
@@ -221,15 +269,21 @@ class ComponentBatchTests(unittest.TestCase):
             return "torch" if "torch==2.10.0" in command else "training-deps"
         return "proxy-tests"
 
-    def run_contracts(self, identities, *, failure="", outcome="passed"):
+    def run_contracts(
+        self, identities, *, failure="", outcome="passed", timeout=False, budgets=None
+    ):
         plan = make_plan([], source_sha=SHA, requested=identities)
         calls = []
 
         def process(command, *, env, stdout, **_kwargs):
             calls.append((command, env))
+            if budgets is not None:
+                budgets.append(_kwargs["timeout"])
             raw = Path(stdout.name).parent
             stage = self.stage(command)
             if stage == failure:
+                if timeout:
+                    raise subprocess.TimeoutExpired(command, _kwargs["timeout"])
                 return subprocess.CompletedProcess(command, 37)
             if stage == "test-e2e-unit":
                 (raw / "evidence.json").write_text(
@@ -274,7 +328,7 @@ class ComponentBatchTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0)
 
         with tempfile.TemporaryDirectory() as directory, patch.object(
-            runner.subprocess, "run", side_effect=process
+            runner, "run_isolated_command", side_effect=process
         ), patch.object(
             runner.subprocess,
             "check_output",

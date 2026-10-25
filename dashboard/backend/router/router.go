@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
+	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/statusstore"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
@@ -19,6 +20,7 @@ type Server struct {
 	Handler       http.Handler
 	Close         func() error
 	routePolicies *auth.PolicyMux
+	mcpManager    *mcp.Manager
 }
 
 // Setup configures all routes and returns the dashboard server bundle.
@@ -69,22 +71,31 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		statusHandler:            statusMonitor.Handler(),
 	})
 	registerSRBenchRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf)
+	mcpManager := SetupMCP(mux, cfg, wf)
 	registerMLPipelineRoutes(mux, cfg, wf)
+	setupTrainingRoutes(mux, cfg, wf)
 	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
+	capabilityProber := handlers.NewCapabilityProber(cfg, statusMonitor)
+	capabilityProber.Start()
+	registerCapabilityRoutes(mux, cfg, setupResolver, capabilityProber)
+	registerOpenAPIRoute(mux, mux)
 
 	// Static frontend must be registered last.
 	mux.HandleFallback("/", handlers.StaticFileServer(cfg.StaticDir))
 	mux.Seal()
 	return &Server{
-		Handler:       wrapWithAuth(mux, authSvc, mux),
+		Handler:       handlers.TrainingErrorEnvelope(wrapWithAuth(mux, authSvc, mux)),
 		routePolicies: mux,
+		mcpManager:    mcpManager,
 		Close: func() error {
+			if mcpManager != nil {
+				mcpManager.Close()
+			}
 			var projectionClose error
 			if cp != nil {
 				projectionClose = cp.Close()
 			}
-			return errors.Join(statusMonitor.Close(), statusHistory.Close(), projectionClose, wf.Close())
+			return errors.Join(statusMonitor.Close(), capabilityProber.Close(), statusHistory.Close(), projectionClose, wf.Close())
 		},
 	}
 }

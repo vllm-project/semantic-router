@@ -16,6 +16,13 @@ export type { FieldSchema } from './dslSchemaTypes'
 
 const PII_SIGNAL_FIELDS: FieldSchema[] = [
   {
+    key: 'source',
+    label: 'Source',
+    type: 'select',
+    options: ['tool_result'],
+    description: 'Inspect textual tool results instead of the legacy prompt/history scope',
+  },
+  {
     key: 'threshold',
     label: 'Threshold',
     type: 'number',
@@ -112,6 +119,12 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'bm25_threshold', label: 'BM25 Threshold', type: 'number' },
         { key: 'ngram_threshold', label: 'N-gram Threshold', type: 'number' },
         { key: 'ngram_arity', label: 'N-gram Arity', type: 'number' },
+        {
+          key: 'include_history',
+          label: 'Include History',
+          type: 'boolean',
+          description: 'Also match earlier user messages, not just the latest one',
+        },
       ]
     case 'embedding':
       return [

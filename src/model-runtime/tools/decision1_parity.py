@@ -3,7 +3,7 @@
     python3 tools/decision1_parity.py reference --package DIR --repo REPO --device cpu|cuda:0 \\
         --panel NAME:REQUESTS.jsonl:COUNT ... --answers REFERENCE.jsonl
     python3 tools/decision1_parity.py native --model REPO --revision REV --cache-dir DIR \\
-        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P] \\
+        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--merged] \\
         [--also REPO ...] [--concurrent N]
     python3 tools/decision1_parity.py compare REFERENCE.jsonl NATIVE.jsonl --output parity.json
 
@@ -12,7 +12,10 @@ runtime the packages ship; it is a separate tool process, so the runtime itself
 never imports package code. On a GPU both sides run the built-in table's FLA
 kernel choices, so they run the same kernels. ``native``
 serves the package through ``vllm_srun`` (verification, readiness, the
-scheduler) on one profile; ``--also`` serves more built-in models in the same
+scheduler) and answers every prompt alone, in its released forwards (the golden
+check's path); ``--merged`` asks through the API's request path with the default
+engine arguments instead, where rows of concurrent prompts share forwards and
+consented copies run. ``--also`` serves more built-in models in the same
 process on the same device, loaded first, as one GPU process of the default
 layout does, and the panel still asks ``--model``; ``--concurrent N`` sends N
 prompts at a time, to ``--model`` and to every ``--also`` model at once, so
@@ -44,7 +47,24 @@ from vllm_srun.registry.artifacts import (  # noqa: E402
     canonical_json as canonical,
 )
 
-DEVICE_CLASS = "rocm:gfx942"
+
+def _device_class(device: str) -> str | None:
+    kind, _, index = device.partition(":")
+    if kind == "rocm":
+        return "rocm:gfx942"
+    if kind == "cuda":
+        from vllm_srun.accel.cuda import CUDAAccelerator
+
+        devices = CUDAAccelerator().devices()
+        try:
+            requested = int(index or 0)
+        except ValueError:
+            raise SystemExit(f"invalid CUDA device: {device}") from None
+        target = next((item for item in devices if item.index == requested), None)
+        if target is None or target.arch is None:
+            raise SystemExit(f"cannot determine the GPU architecture for {device}")
+        return f"cuda:{target.arch}"
+    return None
 
 
 def panels(specs: list[str]) -> list[tuple[str, dict[str, Any]]]:
@@ -59,19 +79,41 @@ def panels(specs: list[str]) -> list[tuple[str, dict[str, Any]]]:
     return rows
 
 
+def pin_status(repo: str | None, device: str) -> tuple[bool, str | None]:
+    """Pin FLA autotune choices for ``repo`` on ``device``, or why they did not apply."""
+    if device == "cpu" or repo is None:
+        return False, "cpu or no repo"
+    device_class = _device_class(device)
+    if device_class is None:
+        return False, "no GPU device class"
+    known = builtin.lookup(repo)
+    recorded = known.kernel_choices.get(device_class) if known else None
+    if not recorded:
+        return False, f"no recorded choices for {device_class}"
+    choices = KernelChoices(recorded)
+    reason = choices.install()
+    if reason is not None:
+        return False, reason
+    choices.pin_thread()
+    return True, None
+
+
 def pin(repo: str | None, device: str) -> bool:
     """Run this thread's FLA kernels on the built-in table's choices for a GPU run."""
-    if device == "cpu" or repo is None:
-        return False
-    known = builtin.lookup(repo)
-    recorded = known.kernel_choices.get(DEVICE_CLASS) if known else None
-    if not recorded:
-        return False
-    choices = KernelChoices(recorded)
-    if choices.install() is not None:
-        return False
-    choices.pin_thread()
-    return True
+    pinned, _ = pin_status(repo, device)
+    return pinned
+
+
+def require_fla_pin(pinned: bool, reason: str | None, device: str) -> None:
+    """Abort a GPU run when recorded FLA choices exist but did not install.
+
+    Models with no table for this device (encoders, CPU) proceed unpinned.
+    """
+    if pinned or device == "cpu":
+        return
+    if reason and reason.startswith("no recorded choices"):
+        return
+    raise SystemExit(f"FLA pin required on {device}: {reason}")
 
 
 def write(
@@ -115,21 +157,14 @@ def run_reference(args: argparse.Namespace) -> int:
 
 def run_native(args: argparse.Namespace) -> int:
     from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.errors import RuntimeServiceError
     from vllm_srun.runtime import Runtime
 
-    others = tuple(
-        ModelConfig(model=repo, device=args.device, profile=args.profile)
-        for repo in args.also
-    )
+    others = tuple(ModelConfig(model=repo, device=args.device) for repo in args.also)
     config = ServeConfig(
         models=(
             *others,
-            ModelConfig(
-                model=args.model,
-                revision=args.revision,
-                device=args.device,
-                profile=args.profile,
-            ),
+            ModelConfig(model=args.model, revision=args.revision, device=args.device),
         ),
         cache_dir=args.cache_dir,
         offline=True,
@@ -156,11 +191,18 @@ def run_native(args: argparse.Namespace) -> int:
             "model": model,
             "state": prompt["state"],
             "questions": prompt["questions"],
-            "options": {"return_meta": False, "profile": args.profile},
         }
         started = time.perf_counter()
-        size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
-        status, response = await runtime.call("decisions", body, size)
+        if args.merged:
+            size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+            status, response = await runtime.call("decisions", body, size)
+        else:
+            try:
+                status, response = 200, await asyncio.to_thread(
+                    runtime.lookup(model).answer_alone, "decisions", body
+                )
+            except RuntimeServiceError as exc:
+                status, response = exc.status, exc.body()
         answers = (
             response.get("answers") if status == 200 else {"request_error": status}
         )
@@ -314,7 +356,11 @@ def main() -> int:
     native.add_argument("--model", required=True)
     native.add_argument("--revision")
     native.add_argument("--cache-dir")
-    native.add_argument("--profile", default="exact")
+    native.add_argument(
+        "--merged",
+        action="store_true",
+        help="ask through the API with the default engine arguments, not alone",
+    )
     native.add_argument(
         "--also",
         action="append",

@@ -142,6 +142,7 @@ domains:
       - src/model-runtime/vllm_srun/families/decision1/family.py
       - src/model-runtime/vllm_srun/families/decision1/questions.py
       - src/model-runtime/vllm_srun/families/decision2/family.py
+      - src/model-runtime/vllm_srun/families/decision3/family.py
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
@@ -246,6 +247,7 @@ domains:
       - tools/dev/dsl/**
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
+      - tools/calibration/shadow-dataset/**
       - bench/grounded_fusion/fusioneval/**
       - bench/memory_coldstart/**
       - tools/make/go-tools.mk
@@ -257,6 +259,7 @@ domains:
     paths:
       - tools/calibration/recipe/**
       - tools/calibration/tuning/**
+      - tools/calibration/systemone_auto/**
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-metadata-v1.contract.yaml
       - config/schemas/recipe-probes-v1.schema.json
@@ -405,6 +408,24 @@ domains:
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
+  # The CLI unit suite checks the snippets of these pages, and that their
+  # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py).
+  # Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-docs:
+    owner: vllm-sr-cli
+    documentation_check: true
+    paths:
+      - website/docs/model-runtime/**
+      - website/docs/tutorials/global/model-runtime.md
+      - website/docs/tutorials/signal/learned/decision.md
+      - website/docs/tutorials/algorithm/selection/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/decision.md
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
   model-runtime:
     owner: model-runtime
     paths:
@@ -423,6 +444,8 @@ domains:
       - src/semantic-router/pkg/dsl/**
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
+      # The Dashboard OpenAPI document is generated with the shared schema package.
+      - src/semantic-router/pkg/openapischema/**
       - src/semantic-router/pkg/startupstatus/**
       - src/vllm-sr/cli/sr_bench/**
       - tools/make/dashboard.mk
@@ -433,13 +456,14 @@ domains:
   operator:
     owner: operator
     paths:
+      - .github/workflows/operator*.yml
       - deploy/operator/**
       - deploy/kubernetes/crds/**
       - src/semantic-router/pkg/apis/**
       - tools/codegen/boilerplate.go.txt
       - deploy/helm/semantic-router/crds/**
     checks: [make generate-api-check]
-    verifications: [operator]
+    verifications: [operator.source, operator]
 
   # The release version contract reads these files. The harness tests check
   # the development-cycle contract on the real tree, so a change to any of them
@@ -461,12 +485,33 @@ domains:
 
   helm:
     owner: deployment
-    paths: [deploy/helm/**]
+    paths:
+      - deploy/helm/**
+      # These Grafana deployments share the offline render tests in the Helm gate.
+      - deploy/kubernetes/observability/grafana/**
+      - deploy/kubernetes/observability/README.md
+      - deploy/openshift/observability/grafana/**
+      - deploy/openshift/deploy-to-openshift.sh
+      - deploy/openshift/README.md
     checks: [make helm-lint]
     verify:
       - make helm-ci-validate HELM_REPO_UPDATE=false
       - make helm-safety-validate HELM_REPO_UPDATE=false
     verifications: [core]
+
+  experimental-gateway-examples:
+    owner: deployment
+    paths:
+      - deploy/kubernetes/agentgateway/**
+      - deploy/kubernetes/aibrix/**
+      - deploy/kubernetes/dynamo/**
+      - deploy/kubernetes/istio/**
+      - deploy/kubernetes/llm-d/**
+      - deploy/kubernetes/llmd-base/**
+    # Changed-file YAML/format checks remain; these examples have no live
+    # qualification contract or automatic external-platform deployment.
+    checks: []
+    verifications: [quality]
 
   maintained-recipes:
     owner: router-core
@@ -571,6 +616,49 @@ domains:
     checks: [make test-learning-tools]
     verifications: [learning-tools]
 
+  grounded-fusion-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/grounded_fusion/*
+      - bench/grounded_fusion/testdata/**
+      - tools/make/tooling.mk
+    checks: [make test-grounded-fusion-bench]
+    verifications: [bench-tools]
+
+  hallucination-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/hallucination/**
+      - tools/make/tooling.mk
+    checks: [make test-hallucination-bench]
+    verifications: [bench-tools]
+
+  reasoning-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/reasoning/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-reasoning-bench]
+    verifications: [bench-tools]
+
+  router-flow-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/router_flow/**
+      - tools/make/tooling.mk
+    checks: [make test-router-flow-bench]
+    verifications: [bench-tools]
+
+  agent-crew-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_crew/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-agent-crew]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
@@ -581,6 +669,7 @@ domains:
     owner: training
     paths:
       - bench/redteam/**
+      - src/kv_connector/**
       - src/training/**
       - tools/make/models.mk
       - tools/ci/training-test-requirements.txt
@@ -645,7 +734,34 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, training, learning-tools, harness-tools, onnx-artifacts]
+    verifications: [cli-unit, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
+
+  component-execution:
+    owner: maintainers
+    paths:
+      - .github/workflows/ci.yml
+      - .github/workflows/ci-changes.yml
+      - .github/workflows/test-tools.yml
+      - Makefile
+      - tools/agent/domains.yaml
+      - tools/agent/requirements.txt
+      - tools/docs/requirements.txt
+      - tools/make/agent.mk
+      - tools/make/common.mk
+      - tools/ci/ci_plan.py
+      - tools/ci/ci_policy.py
+      - tools/ci/ci_results.py
+      - tools/ci/classify_pr_changes.py
+      - tools/ci/domain_registry.py
+      - tools/ci/execution_batches.py
+      - tools/ci/execution_targets.py
+      - tools/ci/execution_targets.yaml
+      - tools/ci/run_component_batch.py
+      - tools/ci/verification_catalog.py
+      - tools/ci/verification_catalog.yaml
+      - tools/ci/worker_process.py
+    checks: [make harness-check]
+    verifications: [cli-unit, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
 
   runtime-evidence:
     owner: maintainers
@@ -660,7 +776,7 @@ domains:
       - tools/ci/deployment_test_results.py
       - tools/ci/check_operator_request.py
     checks: [make harness-check]
-    verifications: [operator, e2e.envoy-ai-gateway]
+    verifications: [operator.source, operator, e2e.envoy-ai-gateway]
 
   planner:
     owner: maintainers
@@ -756,25 +872,6 @@ profiles:
       - deploy/helm/semantic-router/values.yaml
       - src/semantic-router/pkg/gateway/**
       - src/semantic-router/cmd/native_gateway*.go
-  istio:
-    display_name: Istio Gateway
-    owner: e2e
-    coverage_role: istio-service-mesh-contracts
-    selection: pr
-    paths:
-      - e2e/profiles/istio/**
-      - e2e/testcases/istio_*.go
-      - deploy/kubernetes/istio/**
-  agentgateway:
-    display_name: Agent Gateway
-    owner: e2e
-    coverage_role: agentgateway-integration
-    selection: pr
-    paths:
-      - e2e/profiles/agentgateway/**
-      - deploy/kubernetes/agentgateway/**
-      - e2e/testcases/full_duplex_routing.go
-      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
   envoy-ai-gateway:
     display_name: Envoy AI Gateway
     owner: e2e
@@ -782,6 +879,7 @@ profiles:
     selection: pr
     default_local: true
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
       - e2e/pkg/**
@@ -848,6 +946,21 @@ profiles:
       - e2e/profiles/pii-remote-backend/**
       - deploy/kubernetes/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+      - e2e/testcases/pii_repeated_value_masking.go
+  masking:
+    display_name: PII Masking
+    owner: e2e
+    coverage_role: pii-masking
+    selection: pr
+    paths:
+      - e2e/profiles/masking/**
+      - deploy/kubernetes/masking/**
+      - e2e/testcases/masking_cross_protocol.go
+      # The router surface this profile exists to protect, so a change to the
+      # masking path cannot land without exercising it.
+      - src/semantic-router/pkg/masking/**
+      - src/semantic-router/pkg/config/masking_plugin.go
+      - src/semantic-router/pkg/extproc/req_filter_masking.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e
@@ -864,10 +977,37 @@ profiles:
     coverage_role: structure-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/structure-routing/**
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  conversation-routing:
+    display_name: Conversation Routing
+    owner: e2e
+    coverage_role: conversation-routing
+    selection: pr
+    paths:
+      - e2e/testcases/signal_routing_helpers.go
+      - e2e/profiles/conversation-routing/**
+      - e2e/testcases/conversation_routing.go
+      - src/semantic-router/pkg/classification/classifier_signal_conversation.go
+  complexity-routing:
+    display_name: Complexity Routing
+    owner: e2e
+    coverage_role: complexity-routing
+    selection: pr
+    paths:
+      - e2e/testcases/signal_routing_helpers.go
+      - e2e/profiles/complexity-routing/**
+      - e2e/testcases/complexity_routing.go
+      - e2e/testcases/testdata/complexity_routing_cases.json
+      - src/semantic-router/pkg/classification/complexity_classifier.go
+      - src/semantic-router/pkg/classification/complexity_rule_scoring.go
+      - src/semantic-router/pkg/classification/complexity_candidate_embeddings.go
+      - src/semantic-router/pkg/classification/complexity_query_embeddings.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity_publish.go
   routing-errors:
     display_name: Routing Error Contracts
     owner: e2e
@@ -885,6 +1025,7 @@ profiles:
     coverage_role: long-context-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/long-context-routing/**
       - e2e/testcases/context_routing.go
       - e2e/testcases/testdata/context_routing_cases.json
@@ -897,6 +1038,7 @@ profiles:
     coverage_role: preference-routing
     selection: pr
     paths:
+      - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/preference-routing/**
       - e2e/testcases/preference_routing.go
       - e2e/testcases/testdata/preference_routing_cases.json
@@ -918,12 +1060,6 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_req_body_external_gateway.go
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/router_build.go
-  aibrix:
-    display_name: AIBrix
-    owner: e2e
-    coverage_role: aibrix-control-plane-and-gateway
-    selection: pr
-    paths: [e2e/profiles/aibrix/**, deploy/kubernetes/aibrix/**]
   dashboard:
     display_name: Dashboard E2E
     owner: e2e
@@ -948,6 +1084,7 @@ profiles:
     runtime: model-runtime
     device: cpu
     resource_class: model
+    batch_policy: exclusive
     selection: pr
     paths:
       - e2e/profiles/vela-omni/**
@@ -981,12 +1118,6 @@ profiles:
     paths:
       - e2e/profiles/remote-embedding/**
       - e2e/testcases/remote_embedding_routing.go
-  llm-d:
-    display_name: LLM-D Gateway
-    owner: e2e
-    coverage_role: llm-d-inference-gateway-health
-    selection: pr
-    paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
   looper:
     display_name: Looping Algorithms
     owner: e2e
@@ -1010,6 +1141,7 @@ profiles:
     coverage_role: production-ha-load-observability
     selection: pr
     paths:
+      - e2e/testcases/failover_during_traffic.go
       - e2e/profiles/production-stack/**
       - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
       - deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
@@ -1019,6 +1151,8 @@ profiles:
     coverage_role: ml-model-selection-contracts
     selection: pr
     paths:
+      - e2e/testcases/testdata/model_selection_cases.json
+      - e2e/testcases/model_selection.go
       - e2e/profiles/ml-model-selection/**
       - src/semantic-router/pkg/modelselection/**
       - src/training/model_selection/ml_model_selection/**
@@ -1042,6 +1176,7 @@ profiles:
     coverage_role: trusted-identity-routing-contracts
     selection: pr
     paths:
+      - e2e/testcases/authz*.go
       - e2e/profiles/authz-rbac/**
       - e2e/config/config.authz-rbac.yaml
       - src/semantic-router/pkg/classification/authz*.go
@@ -1051,6 +1186,7 @@ profiles:
     coverage_role: streaming-request-and-cache
     selection: pr
     paths:
+      - e2e/testcases/streaming_*.go
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/llmprotocol/**
@@ -1096,6 +1232,7 @@ profiles:
     coverage_role: responses-api-memory
     selection: pr
     paths:
+      - e2e/testcases/response_api*.go
       - e2e/profiles/response-api/**
       - e2e/testcases/anthropic_response_api_streaming.go
       - e2e/testcases/prompt_cache_key_affinity.go
@@ -1118,6 +1255,7 @@ profiles:
     coverage_role: responses-api-redis-ttl
     selection: manual
     paths:
+      - e2e/testcases/response_api*.go
       - e2e/profiles/response-api-redis/**
       - deploy/kubernetes/response-api/redis.yaml
   response-api-redis-cluster:
@@ -1126,6 +1264,7 @@ profiles:
     coverage_role: responses-api-redis-cluster-ttl
     selection: manual
     paths:
+      - e2e/testcases/response_api*.go
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
   progress-gate:
@@ -1163,12 +1302,10 @@ profiles:
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
       - dashboard/backend/router/router_replay*.go
-  dynamo:
-    display_name: Dynamo Gateway
-    owner: e2e
-    coverage_role: dynamo-gpu-and-batching
-    selection: manual
-    paths: [e2e/profiles/dynamo/**]
+      - e2e/testcases/topic_continuity_replay.go
+      - src/semantic-router/pkg/topiccontinuity/**
+      - src/semantic-router/pkg/extproc/req_filter_topic_continuity*.go
+      - src/semantic-router/pkg/extproc/request_original_history.go
   vectorstore-registry:
     display_name: Vector Store Registry
     owner: e2e

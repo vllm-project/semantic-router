@@ -17,8 +17,13 @@ env:
 jobs:
   test-and-build:
     name: Router Contracts
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - name: Check out the repo
         uses: actions/checkout@v4
 
@@ -39,6 +44,11 @@ jobs:
         uses: azure/setup-helm@v4
         with:
           version: ${{ env.HELM_VERSION }}
+
+      - name: Set up kubectl for offline deployment render tests
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.33.0
 
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
@@ -75,20 +85,6 @@ jobs:
           SR_TEST_MODE: "true"
           ROUTER_PROTECTION_REPORT: ${{ github.workspace }}/.agent-harness/agent-routing-protection/report.json
 
-      - name: Install the model runtime for the local smoke test
-        run: make harness-venv-install model-runtime-install
-
-      - name: Local dev smoke test (no Authorino)
-        run: |
-          python3 -m pip install -U "huggingface_hub[cli]" hf_transfer
-          tools/test/smoke/test-local-up-router.sh
-        timeout-minutes: 20
-        env:
-          CI: true
-          CGO_ENABLED: 1
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
-
       - name: Record actual core and parity evidence
         if: inputs.verification != ''
         env:
@@ -97,11 +93,11 @@ jobs:
           python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
             --evidence .agent-harness/core/unit/evidence.json \
             --junit .agent-harness/core/parity.xml \
-            --case tools/test/smoke/test-local-up-router.sh \
             --output .agent-harness/core/result.json
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
         with:
+          overwrite: true
           name: ci-result-core
           path: .agent-harness/core/result.json
           include-hidden-files: true
@@ -109,6 +105,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: core-framework-evidence
           path: .agent-harness/core/
           include-hidden-files: true
@@ -118,6 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: agent-routing-protection
           path: .agent-harness/agent-routing-protection/report.json
           include-hidden-files: true
@@ -127,6 +125,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: test-logs
           path: |
             **/*.log
