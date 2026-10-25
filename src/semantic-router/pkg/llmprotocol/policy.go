@@ -45,10 +45,9 @@ const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 // observed, so this vendor changes only how failures are decoded.
 const ResponseVendorSnowflake ResponseVendor = "snowflake"
 
-// ResponseVendorOpenAICompatGateway permits the usage-metering fields that
-// OpenAI-compatible aggregating gateways (one-api/new-api style relays) append
-// to otherwise canonical chat completion responses. True vLLM endpoints emit
-// canonical bodies, so declaring this vendor for them is a no-op.
+// ResponseVendorOpenAICompatGateway permits response extensions and usage-metering
+// aliases from OpenAI-compatible gateways. Extensions are omitted from the
+// protocol-neutral response, including vLLM Responses transfer and per-turn fields.
 const ResponseVendorOpenAICompatGateway ResponseVendor = "openai-compat-gateway"
 
 type Policy struct {

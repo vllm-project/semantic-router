@@ -277,6 +277,42 @@
       }
     },
     {
+      "name": "ec_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "error",
       "outcome": {
         "status": "error",
@@ -405,6 +441,42 @@
       }
     },
     {
+      "name": "input_messages",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "instructions",
       "outcome": {
         "status": "ok",
@@ -437,6 +509,42 @@
             "field": "instructions",
             "action": "dropped"
           },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "kv_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
           {
             "field": "output.status",
             "action": "dropped"
@@ -687,6 +795,42 @@
               "index": 0,
               "message": {
                 "content": "alternate",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "output_messages",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
                 "role": "assistant"
               }
             }
@@ -1581,6 +1725,26 @@
           }
         },
         "diagnostics": [
+          {
+            "field": "usage.input_tokens_details.cached_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.input_tokens_details.input_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.output_tokens_details.output_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.output_tokens_details.tool_output_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.output_tokens_details.tool_output_tokens_per_turn",
+            "action": "dropped"
+          },
           {
             "field": "output.status",
             "action": "dropped"
