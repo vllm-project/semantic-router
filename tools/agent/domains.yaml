@@ -640,6 +640,7 @@ domains:
       - src/vllm-sr/cli/sr_bench/legacy_reasoning*.py
       - src/vllm-sr/cli/sr_bench/legacy-reasoning-requirements.*
       - src/vllm-sr/tests/test_sr_bench_legacy_reasoning*.py
+      - src/vllm-sr/tests/sr_bench_legacy_reasoning_native_checks.py
       - bench/requirements.txt
       - tools/make/tooling.mk
     checks: [make test-reasoning-bench]
