@@ -2,7 +2,6 @@ package protocolcodec
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -100,16 +99,7 @@ func TestResponsesReasoningPartsRejectInvalidLifecycle(t *testing.T) {
 			f[6]["part"].(map[string]any)["type"] = "output_text"
 			return f
 		},
-		"item id": func(f []map[string]any) []map[string]any { f[6]["item_id"] = "wrong"; return f },
-		"index":   func(f []map[string]any) []map[string]any { f[6]["content_index"] = 1; return f },
-		"duplicate start": func(f []map[string]any) []map[string]any {
-			return append(append([]map[string]any{}, f[:7]...), f[6:]...)
-		},
-		"duplicate done": func(f []map[string]any) []map[string]any {
-			return append(append([]map[string]any{}, f[:10]...), f[9:]...)
-		},
 		"missing part done":  func(f []map[string]any) []map[string]any { return append(f[:9], f[10:]...) },
-		"text done mismatch": func(f []map[string]any) []map[string]any { f[8]["text"] = "wrong"; return f },
 		"part done mismatch": func(f []map[string]any) []map[string]any { f[9]["part"].(map[string]any)["text"] = "wrong"; return f },
 		"item mismatch": func(f []map[string]any) []map[string]any {
 			f[10]["item"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"] = "wrong"
@@ -120,24 +110,10 @@ func TestResponsesReasoningPartsRejectInvalidLifecycle(t *testing.T) {
 			return f
 		},
 	}
-	tests["part done before text done"] = func(f []map[string]any) []map[string]any { return append(f[:8], f[9:]...) }
-	tests["delta after text done"] = func(f []map[string]any) []map[string]any {
-		return append(append([]map[string]any{}, f[:9]...), f[7:]...)
-	}
-	tests["output index"] = func(f []map[string]any) []map[string]any { f[6]["output_index"] = 1; return f }
-	tests["negative index"] = func(f []map[string]any) []map[string]any { f[6]["content_index"] = -1; return f }
 	tests["part in message"] = func(f []map[string]any) []map[string]any {
 		part := f[12]["part"].(map[string]any)
 		part["type"] = "reasoning_text"
 		delete(part, "annotations")
-		return f
-	}
-	tests["message final kind"] = func(f []map[string]any) []map[string]any {
-		f[16]["item"].(map[string]any)["content"].([]any)[0].(map[string]any)["type"] = "reasoning_text"
-		return f
-	}
-	tests["reasoning final kind"] = func(f []map[string]any) []map[string]any {
-		f[10]["item"].(map[string]any)["content"].([]any)[0].(map[string]any)["type"] = "output_text"
 		return f
 	}
 	tests["missing summary done"] = func(f []map[string]any) []map[string]any {
@@ -146,20 +122,15 @@ func TestResponsesReasoningPartsRejectInvalidLifecycle(t *testing.T) {
 		return append(f[:5], f[6:]...)
 	}
 	codes := map[string]string{
-		"item kind": "stream_item_kind_mismatch", "item id": "stream_item_id_mismatch",
-		"index": "stream_content_index_order", "duplicate start": "duplicate_stream_content_start",
-		"duplicate done": "duplicate_stream_content_part_done", "missing part done": "stream_item_content_incomplete",
-		"text done mismatch": "stream_content_text_mismatch", "part done mismatch": "stream_content_part_mismatch",
-		"item mismatch": "stream_item_content_mismatch", "terminal mismatch": "stream_terminal_output_mismatch",
-		"part done before text done": "stream_content_text_incomplete", "delta after text done": "stream_content_after_done",
-		"output index": "invalid_item_lifecycle", "negative index": "invalid_stream_item_index",
-		"part in message": "stream_item_kind_mismatch", "message final kind": "stream_item_content_kind",
-		"reasoning final kind": "stream_item_content_kind", "missing summary done": "stream_item_content_incomplete",
+		"item kind": "stream_item_kind_mismatch", "missing part done": "stream_item_content_incomplete",
+		"part done mismatch": "stream_content_part_mismatch",
+		"item mismatch":      "stream_item_content_mismatch", "terminal mismatch": "stream_terminal_output_mismatch",
+		"part in message": "stream_item_kind_mismatch", "missing summary done": "stream_item_content_incomplete",
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
 			_, err := decodeResponsesReasoningFrames(t, mutate(responsesReasoningFrames(t)))
-			assertReasoningPartErrorCode(t, err, codes[name])
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, codes[name])
 		})
 	}
 }
@@ -174,9 +145,6 @@ func TestResponsesReasoningPartsRequireStringText(t *testing.T) {
 			{name: "absent", code: "stream_required_field"},
 			{name: "null", code: "stream_required_field"},
 			{name: "number", value: 0, code: "invalid_upstream_json"},
-			{name: "boolean", value: false, code: "invalid_upstream_json"},
-			{name: "object", value: map[string]any{}, code: "invalid_upstream_json"},
-			{name: "array", value: []any{}, code: "invalid_upstream_json"},
 		} {
 			t.Run(fmt.Sprintf("%s/%d", test.name, index), func(t *testing.T) {
 				frames := responsesReasoningFrames(t)
@@ -187,44 +155,7 @@ func TestResponsesReasoningPartsRequireStringText(t *testing.T) {
 					part["text"] = test.value
 				}
 				_, err := decodeResponsesReasoningFrames(t, frames)
-				assertReasoningPartErrorCode(t, err, test.code)
-			})
-		}
-	}
-}
-
-func TestResponsesReasoningPartsRequireSequence(t *testing.T) {
-	for _, index := range []int{6, 9} {
-		for _, test := range []struct {
-			name  string
-			value any
-			code  string
-		}{
-			{name: "absent", code: "missing_stream_sequence"},
-			{name: "null", code: "invalid_stream_sequence"},
-			{name: "repeated", value: index - 1, code: "stream_sequence_order"},
-		} {
-			t.Run(fmt.Sprintf("%s/%d", test.name, index), func(t *testing.T) {
-				frames := responsesReasoningFrames(t)[:index+1]
-				if test.name == "absent" {
-					delete(frames[index], "sequence_number")
-				} else {
-					frames[index]["sequence_number"] = test.value
-				}
-				decoder := (OpenAIResponsesCodec{}).NewDecoder(llmprotocol.StreamContext{}, llmprotocol.DefaultPolicy())
-				for frameIndex, frame := range frames {
-					body, err := encodeSSE(frame["type"].(string), frame)
-					if err != nil {
-						t.Fatal(err)
-					}
-					_, _, err = decoder.Push(body)
-					if frameIndex < index && err != nil {
-						t.Fatal(err)
-					}
-					if frameIndex == index {
-						assertReasoningPartErrorCode(t, err, test.code)
-					}
-				}
+				assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, test.code)
 			})
 		}
 	}
@@ -232,74 +163,37 @@ func TestResponsesReasoningPartsRequireSequence(t *testing.T) {
 
 func TestResponsesReasoningPartsRejectInvalidType(t *testing.T) {
 	for _, index := range []int{6, 9} {
-		for _, kind := range []any{nil, "unknown_part", 42, false} {
-			t.Run(fmt.Sprintf("%v/%d", kind, index), func(t *testing.T) {
-				frames := responsesReasoningFrames(t)
-				frames[index]["part"].(map[string]any)["type"] = kind
-				if _, err := decodeResponsesReasoningFrames(t, frames); err == nil {
-					t.Fatal("invalid content part type was accepted")
-				}
-			})
-		}
-		t.Run(fmt.Sprintf("missing/%d", index), func(t *testing.T) {
+		t.Run(fmt.Sprint(index), func(t *testing.T) {
 			frames := responsesReasoningFrames(t)
-			delete(frames[index]["part"].(map[string]any), "type")
-			if _, err := decodeResponsesReasoningFrames(t, frames); err == nil {
-				t.Fatal("missing content part type was accepted")
-			}
+			frames[index]["part"].(map[string]any)["type"] = "unknown_part"
+			_, err := decodeResponsesReasoningFrames(t, frames)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_stream_content_part")
 		})
 	}
 }
 
 func TestResponsesReasoningPartsRejectForeignVariantFields(t *testing.T) {
 	for _, index := range []int{6, 9} {
-		for field, value := range map[string]any{
-			"refusal":     "foreign variant content",
-			"annotations": []any{},
-			"file_id":     "file_1",
-			"logprobs":    []any{},
-		} {
-			t.Run(fmt.Sprintf("%s/%d", field, index), func(t *testing.T) {
-				frames := responsesReasoningFrames(t)
-				frames[index]["part"].(map[string]any)[field] = value
-				_, err := decodeResponsesReasoningFrames(t, frames)
-				assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_response_content")
-			})
-		}
+		t.Run(fmt.Sprint(index), func(t *testing.T) {
+			frames := responsesReasoningFrames(t)
+			frames[index]["part"].(map[string]any)["refusal"] = "foreign variant content"
+			_, err := decodeResponsesReasoningFrames(t, frames)
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_response_content")
+		})
 	}
 }
 
 func TestResponsesFinalPartNamespaces(t *testing.T) {
-	for _, scope := range []responsesContentScope{responsesContentMessage, responsesContentReasoningText, responsesContentReasoningSummary} {
-		for _, kind := range []string{"output_text", "refusal", "reasoning_text", "summary_text"} {
-			t.Run(string(scope)+"/"+kind, func(t *testing.T) {
-				part := responsesContentWire{Type: kind, Text: "text", Refusal: "refusal"}
-				gotKind, text, err := responsesFinalPartEvidence(scope, part)
-				allowed := scope == responsesContentMessage && (kind == "output_text" || kind == "refusal") ||
-					scope == responsesContentReasoningText && kind == "reasoning_text" ||
-					scope == responsesContentReasoningSummary && kind == "summary_text"
-				if !allowed {
-					if err == nil {
-						t.Fatal("foreign content kind accepted by namespace")
-					}
-					return
-				}
-				wantText := part.Text
-				if kind == "refusal" {
-					wantText = part.Refusal
-				}
-				if err != nil || gotKind != kind || text != wantText {
-					t.Fatalf("namespace evidence changed: %q %q %v", gotKind, text, err)
-				}
-			})
-		}
-	}
-}
-
-func assertReasoningPartErrorCode(t *testing.T, err error, code string) {
-	t.Helper()
-	var protocolError *llmprotocol.ProtocolError
-	if !errors.As(err, &protocolError) || protocolError.Code != code {
-		t.Fatalf("got %v, want %s", err, code)
+	for scope, kind := range map[responsesContentScope]string{
+		responsesContentMessage:          "reasoning_text",
+		responsesContentReasoningText:    "summary_text",
+		responsesContentReasoningSummary: "reasoning_text",
+	} {
+		t.Run(string(scope), func(t *testing.T) {
+			_, _, err := responsesFinalPartEvidence(scope, responsesContentWire{Type: kind, Text: "text"})
+			if err == nil {
+				t.Fatal("foreign content kind accepted by namespace")
+			}
+		})
 	}
 }

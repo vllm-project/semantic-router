@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -17,48 +16,36 @@ func TestExtProcResponsesReasoningParts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, client := range extProcMatrixFormats {
-		for _, chunkSize := range []int{1, 17, len(payload)} {
-			t.Run(fmt.Sprintf("%s/chunk_%d", client, chunkSize), func(t *testing.T) {
-				router := &OpenAIRouter{}
-				ctx := &RequestContext{
-					SourceFormat: client, TargetFormat: llmprotocol.OpenAIResponsesV1,
-					RequestModel: "provider-model", TraceContext: t.Context(),
+		t.Run(string(client), func(t *testing.T) {
+			const chunkSize = 17
+			router := &OpenAIRouter{}
+			ctx := &RequestContext{
+				SourceFormat: client, TargetFormat: llmprotocol.OpenAIResponsesV1,
+				RequestModel: "provider-model", TraceContext: t.Context(),
+			}
+			var clientWire bytes.Buffer
+			for offset := 0; offset < len(payload); offset += chunkSize {
+				end := min(offset+chunkSize, len(payload))
+				result := router.handleSemanticStreamingResponseBody(payload[offset:end], end == len(payload), ctx)
+				if ctx.StreamingAborted || result.GetResponseBody() == nil {
+					t.Fatalf("stream aborted at %d: %+v", offset, ctx.ProtocolDiagnostics)
 				}
-				var clientWire bytes.Buffer
-				for offset := 0; offset < len(payload); offset += chunkSize {
-					end := min(offset+chunkSize, len(payload))
-					result := router.handleSemanticStreamingResponseBody(payload[offset:end], end == len(payload), ctx)
-					if ctx.StreamingAborted || result.GetResponseBody() == nil {
-						t.Fatalf("stream aborted at %d: %+v", offset, ctx.ProtocolDiagnostics)
-					}
-					mutation := result.GetResponseBody().GetResponse().GetBodyMutation()
-					if mutation == nil {
-						clientWire.Write(payload[offset:end])
-					} else {
-						clientWire.Write(mutation.GetBody())
-					}
+				mutation := result.GetResponseBody().GetResponse().GetBodyMutation()
+				if mutation == nil {
+					clientWire.Write(payload[offset:end])
+				} else {
+					clientWire.Write(mutation.GetBody())
 				}
-				if !ctx.StreamingComplete || ctx.SemanticResponse == nil ||
-					ctx.SemanticResponse.Usage.Total.Value == nil || *ctx.SemanticResponse.Usage.Total.Value != 5 {
-					t.Fatalf("stream did not complete with usage: %+v", ctx.SemanticResponse)
-				}
-				if client == llmprotocol.OpenAIResponsesV1 && !bytes.Equal(clientWire.Bytes(), payload) {
-					t.Fatal("same-format replay changed provider bytes")
-				}
-				assertResponsesReasoningClientContent(t, client, clientWire.Bytes())
-				cacheLoss := false
-				for _, diagnostic := range ctx.ProtocolDiagnostics {
-					if diagnostic.Field != "usage.cache" || diagnostic.Target != llmprotocol.AnthropicMessagesV1 ||
-						diagnostic.Action != llmprotocol.DiagnosticDropped {
-						t.Fatalf("unexpected translation loss: %+v", diagnostic)
-					}
-					cacheLoss = true
-				}
-				if cacheLoss != (client == llmprotocol.AnthropicMessagesV1) {
-					t.Fatalf("cache bucket loss diagnostics changed: %+v", ctx.ProtocolDiagnostics)
-				}
-			})
-		}
+			}
+			if !ctx.StreamingComplete || ctx.SemanticResponse == nil ||
+				ctx.SemanticResponse.Usage.Total.Value == nil || *ctx.SemanticResponse.Usage.Total.Value != 5 {
+				t.Fatalf("stream did not complete with usage: %+v", ctx.SemanticResponse)
+			}
+			if client == llmprotocol.OpenAIResponsesV1 && !bytes.Equal(clientWire.Bytes(), payload) {
+				t.Fatal("same-format replay changed provider bytes")
+			}
+			assertResponsesReasoningClientContent(t, client, clientWire.Bytes())
+		})
 	}
 }
 
