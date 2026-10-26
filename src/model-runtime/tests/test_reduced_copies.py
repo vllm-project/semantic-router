@@ -73,14 +73,16 @@ def test_the_probe_says_whether_a_packed_linear_gives_a_row_the_same_result_in_a
     runnable("float32-packed")
     torch.manual_seed(0)
     # a narrow product and ModernBERT's wide-K down-projection, which oneDNN
-    # 3.7 splits differently from 127 rows at some thread counts
+    # 3.7 splits differently from 81 rows at some thread counts
     for features in ((64, 96), (1152, 768)):
         linear = PackedLinear(nn.Linear(*features))
         rows = onednn.probe_rows(features[0], torch.Generator().manual_seed(0))
         with torch.inference_mode():
-            alone = torch.cat([linear(rows[i : i + 1]) for i in range(rows.shape[0])])
+            pairs = torch.cat(
+                [linear(rows[i : i + 2]) for i in range(0, rows.shape[0], 2)]
+            )
             same = all(
-                torch.equal(linear(rows[:count]), alone[:count])
+                torch.equal(linear(rows[:count]), pairs[:count])
                 for count in onednn.PROBE_ROWS
             )
             assert onednn.invariant([linear]) == same
@@ -88,10 +90,10 @@ def test_the_probe_says_whether_a_packed_linear_gives_a_row_the_same_result_in_a
 
 
 class _Drifting(PackedLinear):
-    """A packed linear whose rows move with the batch size, like a drifting kernel."""
+    """A packed linear whose rows move once a batch exceeds the 2-row reference."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return super().forward(x) + (x.shape[0] > 1) * 1e-6
+        return super().forward(x) + (x.shape[0] > 2) * 1e-6
 
 
 def test_the_probe_fails_a_product_whose_rows_move_with_the_batch():

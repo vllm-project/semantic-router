@@ -7,15 +7,17 @@ Whether a row's result is the same alone or inside a batch depends on the
 oneDNN build, the product shape and the thread count, so ``invariant`` measures
 it on the model's own layers at load instead of assuming it. On the EPYC the
 kernel was first measured on (oneDNN 3.7, the pinned torch 2.10) every batch
-size agreed; on a Xeon Gold 6530 with the same build the wide-K
-down-projections did not once a batch held 127 rows or more (1152-to-768 at
-12 and 64 threads, 3072-to-768 at 4 to 16 threads, every count under AVX2),
+size agreed; on a Xeon Gold 6530 and a Zen 4 Ryzen with the same build the
+wide-K down-projections did not once a batch held 81 rows or more (1152-to-768
+at 12 and 64 threads, 3072-to-768 at 4 to 16 threads, every count under AVX2),
 while MKL's ``F.linear`` differs below 32 rows; with oneDNN 3.10 (torch 2.11)
-no shape was invariant from two rows on, at any thread count. The same ops
-called directly on a GB10's Grace cores (aarch64 wheels of torch 2.10 and
-2.11; ``available`` does not admit that machine yet, #5437 widens it) agreed
-at every count from 1 to 20. The property is one of the build, the host and
-the thread count, which is why it is probed rather than assumed.
+on that Xeon every shape differs between 2-row and 17-row batches at any
+thread count, and a Raptor Lake host on torch 2.14 differs only between a
+single row and any batch. The same ops called directly on a GB10's Grace
+cores (aarch64 wheels of torch 2.10 and 2.11; ``available`` does not admit
+that machine yet, #5437 widens it) agreed at every count from 1 to 20. The
+property is one of the build, the host and the thread count, which is why it
+is probed rather than assumed.
 """
 
 from __future__ import annotations
@@ -28,10 +30,12 @@ from torch import nn
 
 PACKED = "float32-packed"
 
-# Row counts a packed product is probed at: the batch sizes the families' own
-# probes use, the 127-to-129 band where oneDNN 3.7 changes its split on wide
-# products, and larger batches; nothing new appeared between 512 and 8,192 rows.
-PROBE_ROWS = (2, 3, 17, 64, 127, 128, 129, 208, 512)
+# Row counts a packed product is probed at, each against 2-row products: the
+# batch sizes the families' own probes use, 17 where oneDNN 3.10 first splits
+# differently, 96 inside the band from 81 rows where oneDNN 3.7 changes its
+# split on wide products (the band's end moves with the thread count), 127 to
+# 129, and larger batches; nothing new appeared between 512 and 8,192 rows.
+PROBE_ROWS = (3, 8, 17, 64, 96, 127, 129, 208, 512)
 
 
 def available() -> bool:
@@ -78,10 +82,16 @@ def probe_rows(in_features: int, generator: torch.Generator) -> torch.Tensor:
 
 
 def agrees(layer: PackedLinear, rows: torch.Tensor) -> bool:
-    """Whether each probe batch of ``rows`` gives every row its alone result."""
+    """Whether each probe batch of ``rows`` gives every row its 2-row-product result.
+
+    A packed row never runs alone: an encoder sequence carries at least its
+    two special tokens, so the smallest product a backbone row sees has two
+    rows, and that is the reference. Single-row products (a pooled head over
+    one request) are the families' whole-forward probes' concern.
+    """
     with torch.inference_mode():
-        alone = torch.cat([layer(rows[i : i + 1]) for i in range(rows.shape[0])])
-        return all(torch.equal(layer(rows[:n]), alone[:n]) for n in PROBE_ROWS)
+        pairs = torch.cat([layer(rows[i : i + 2]) for i in range(0, rows.shape[0], 2)])
+        return all(torch.equal(layer(rows[:n]), pairs[:n]) for n in PROBE_ROWS)
 
 
 def invariant(layers: Iterable[PackedLinear]) -> bool:
