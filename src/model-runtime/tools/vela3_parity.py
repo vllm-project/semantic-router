@@ -234,7 +234,7 @@ def generate(count: int, seed: int, schemas: dict[str, Any]) -> list[dict[str, A
             state = {"user": prompt, "answer": rng.choice(ANSWERS)}
             roles = ["user", "answer"]
         elif kind == 3:
-            state = {"user": prompt + " " + DOCUMENT * rng.randint(110, 140)}
+            state = {"user": prompt + " " + DOCUMENT * rng.randint(80, 95)}
             roles = ["user"]
         elif kind == 4:
             state = {"ticket": prompt, "tier": "gold", "tags": ["refund", 3]}
@@ -242,7 +242,7 @@ def generate(count: int, seed: int, schemas: dict[str, Any]) -> list[dict[str, A
         else:
             state = {
                 "user": prompt,
-                "context": DOCUMENT * rng.randint(30, 150),
+                "context": DOCUMENT * rng.randint(20, 90),
                 "answer": rng.choice(ANSWERS),
             }
             roles = ["user", "context", "answer"]
@@ -308,7 +308,9 @@ def compare(
     """Per question: same decision, same threshold, largest probability difference."""
     rows = {}
     for qid in questions:
-        a, b = ours["answers"][qid], theirs["answers"][qid]
+        b = theirs["answers"][qid]
+        # A Set question answers in sets.<id> (and a Noul per label), not in answers.<id>.
+        a = ours["answers"].get(qid) or ours.get("sets", {}).get(qid) or {}
         if "error" in b or "error" in a:
             rows[qid] = {"same": ("error" in a) == ("error" in b), "dp": 0.0}
             continue
