@@ -236,9 +236,10 @@ schema, streaming, tools, or error translation.
   stream with an integer HTTP status as its `code`, as vLLM does, streamed
   clients receive the provider's message. Responses and Anthropic Messages
   clients get the Router's error frame, with the status as a string `code` for
-  Responses and the mapped error type for Messages. Chat clients get either the
-  Router's error frame with a string `code` or the provider's error event as
-  sent, depending on how the stream is split into body chunks.
+  Responses and the mapped error type for Messages. Chat clients get the stream
+  as the Router passes it up to the error event, then the Router's error frame
+  with a string `code` and no `[DONE]`, however the stream is split into body
+  chunks, as long as each frame is within the Router's SSE frame limit.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
@@ -266,6 +267,11 @@ The Router handles them as follows:
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
+
+In Responses output, `usage.input_tokens_details.cache_write_tokens` is omitted
+when the backend does not report a cache-write count. Reported zero and positive
+counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
+rejects, without treating unknown usage as a measured zero.
 
 Codex can also request reasoning summaries. The Router forwards
 `reasoning.summary` to a Responses backend. A Chat Completions or Messages

@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 recipe_conformance = importlib.import_module("recipe_conformance")
 recipe_coverage = importlib.import_module("recipe_conformance_coverage")
+recipe_sources = importlib.import_module("recipe_conformance_sources")
 recipe_metadata_schema = importlib.import_module("recipe_metadata_schema")
 FULL_COVERAGE_PERCENT = 100.0
 
@@ -63,11 +64,10 @@ class RecipeConformanceTest(unittest.TestCase):
             },
         )
         self.assertEqual(len(mom.decisions), 16)
-        self.assertEqual(mom.variants, 315)
-        self.assertEqual(
-            mom.coverage["signals"]["by_family"]["classifier"]["asserted"],
-            ["classifier:content-risk"],
-        )
+        self.assertEqual(mom.variants, 347)
+        self.assertNotIn("classifier", mom.coverage["signals"]["by_family"])
+        self.assertEqual(len(mom.probe_shard_sizes), 16)
+        self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
         self.assertEqual(set(mom.algorithms), {"multi_factor", "fusion", "workflows"})
         self.assertTrue(mom.coverage["passed"])
 
@@ -626,6 +626,128 @@ class RecipeConformanceTest(unittest.TestCase):
             self.assertEqual(report["summary"]["passed_recipes"], 1)
             self.assertEqual(report["summary"]["missing_recipes"], 1)
             self.assertFalse(report["summary"]["passed"])
+
+    def test_probe_shards_spread_long_reads_and_keep_manifest_order(self) -> None:
+        costs = [("a", 1), ("b", 17), ("c", 1), ("d", 17), ("e", 1), ("f", 1)]
+
+        shards = recipe_sources.partition_probes(costs, 2)
+
+        flat = [probe for shard in shards for probe in shard]
+        self.assertEqual(sorted(flat), ["a", "b", "c", "d", "e", "f"])
+        self.assertEqual([("b" in shard) + ("d" in shard) for shard in shards], [1, 1])
+        order = [probe_id for probe_id, _cost in costs]
+        for shard in shards:
+            self.assertEqual(shard, sorted(shard, key=order.index))
+        self.assertEqual(recipe_sources.probe_cost(10_000_000), 17)
+
+    def test_probe_shard_settings_are_validated(self) -> None:
+        self.assertEqual(recipe_sources.probe_shard_count({}), 1)
+        self.assertEqual(
+            recipe_sources.probe_shard_count({"evaluation": {"shards": 4}}), 4
+        )
+        for value in (0, 17, True, "4"):
+            with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
+                recipe_sources.probe_shard_count({"evaluation": {"shards": value}})
+        self.assertEqual(recipe_sources.parse_probe_shard("2/3"), (2, 3))
+        for value in ("3/3", "2", "-1/3", "a/b"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                recipe_sources.parse_probe_shard(value)
+
+    def test_probe_shard_reports_merge_only_when_every_shard_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            manifest = root / "probes.yaml"
+            manifest.write_text(
+                yaml.safe_dump(
+                    {
+                        "schema_version": "v1",
+                        "name": "bundle",
+                        "routing_assets": {"yaml": "config.yaml", "dsl": "recipe.dsl"},
+                        "evaluation": {"concurrency": 1, "shards": 2},
+                        "coverage": {
+                            "min_signal_assertion_percent": 0,
+                            "min_projection_assertion_percent": 0,
+                            "min_algorithm_assertion_percent": 0,
+                            "min_plugin_assertion_percent": 0,
+                            "required_request_shapes": [],
+                            "min_tag_counts": {},
+                            "min_tag_pass_rate": {"tools": 100.0},
+                        },
+                        "decisions": [
+                            {
+                                "id": "fast",
+                                "expected_decision": "fast",
+                                "variants": [
+                                    {"id": name, "query": name, "tags": ["tools"]}
+                                    for name in ("one", "two", "three")
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def shard_report(index: int, ids: list[str]) -> None:
+                results = [
+                    {
+                        "id": f"fast:{probe_id}",
+                        "variant_id": probe_id,
+                        "decision_id": "fast",
+                        "expected_decision": "fast",
+                        "actual_decision": "fast",
+                        "model": "vllm-sr/bundle",
+                        "matched": True,
+                        "deployment_matched": True,
+                        "policy_matched": True,
+                        "tags": ["tools"],
+                        "latency_ms": 10.0,
+                    }
+                    for probe_id in ids
+                ]
+                path = root / "report" / "bundle" / "shards" / str(index)
+                path.mkdir(parents=True)
+                (path / "eval-report.json").write_text(
+                    json.dumps(
+                        {
+                            "inventory": {
+                                "name": "bundle",
+                                "probes": str(manifest),
+                                "probe_shard_sizes": [2, 1],
+                            },
+                            "evaluation": {
+                                "router_url": "http://127.0.0.1:8080",
+                                "evaluation_scope": "deployment",
+                                "performance": {"wall_time_seconds": 1.5},
+                                "execution": {
+                                    "expected_entrypoints": ["vllm-sr/bundle"]
+                                },
+                                "results": results,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            shard_report(1, ["two"])
+            self.assertEqual(recipe_conformance.merge_probe_shards(root / "report"), [])
+            self.assertFalse((root / "report/bundle/eval-report.json").exists())
+
+            shard_report(0, ["three", "one"])
+            self.assertEqual(
+                recipe_conformance.merge_probe_shards(root / "report"), ["bundle"]
+            )
+            merged = json.loads(
+                (root / "report/bundle/eval-report.json").read_text(encoding="utf-8")
+            )["evaluation"]
+            self.assertEqual(
+                [result["id"] for result in merged["results"]],
+                ["fast:one", "fast:two", "fast:three"],
+            )
+            self.assertEqual((merged["total"], merged["probe_shards"]), (3, 2))
+            self.assertTrue(merged["execution"]["complete"])
+            self.assertTrue(merged["passed"])
+            self.assertEqual(merged["performance"]["wall_time_seconds"], 3.0)
 
 
 if __name__ == "__main__":
