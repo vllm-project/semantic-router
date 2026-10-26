@@ -12,9 +12,15 @@ from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
     iter_routing_profiles,
 )
+from cli.config_migration_looper import LOOPER_ENDPOINT_PATH
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
+from cli.model_runtime_retired import (
+    ENGINE_ARGUMENTS,
+    removed_deployment_profiles,
+    retired_model_fields,
+)
 from cli.models import UserConfig
 from cli.utils import get_logger
 
@@ -164,6 +170,25 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "adaptation candidate_set override."
         )
 
+    profiles = removed_deployment_profiles(data)
+    if profiles:
+        raise ConfigParseError(
+            f"{', '.join(profiles)}: profile was removed; batching is on by default "
+            "and set by the deployment's engine arguments "
+            f"({', '.join(ENGINE_ARGUMENTS)}). Use "
+            f"`vllm-sr config migrate --config {config_path}`."
+        )
+
+    retired_fields = retired_model_fields(data)
+    if retired_fields:
+        raise ConfigParseError(
+            "Removed model execution fields are no longer supported: "
+            f"{', '.join(retired_fields)}. Local models are served by the built-in "
+            "model runtime (provider: model_runtime), which detects the package "
+            "format and owns numerics, and the NLI explainer is retired. Use "
+            f"`vllm-sr config migrate --config {config_path}`."
+        )
+
 
 def _deferred_context_limits(config: UserConfig) -> list[tuple[str, str]]:
     """Return (path, value) for every context band limit that references the
@@ -183,6 +208,21 @@ def _deferred_context_limits(config: UserConfig) -> list[tuple[str, str]]:
                         (f"{prefix}.signals.context[{rule.name}].{field_name}", value)
                     )
     return deferred
+
+
+def _warn_retired_looper_endpoint(data: Dict[str, Any], config_path: str) -> None:
+    global_section = data.get("global")
+    integrations = (
+        global_section.get("integrations") if isinstance(global_section, dict) else None
+    )
+    looper = integrations.get("looper") if isinstance(integrations, dict) else None
+    if isinstance(looper, dict) and "endpoint" in looper:
+        log.warning(
+            f"{LOOPER_ENDPOINT_PATH} is deprecated and ignored: the Router makes "
+            "Looper calls in process, through each model's "
+            "providers.models[].backend_refs. Remove it, or run "
+            f"`vllm-sr config migrate --config {config_path}`"
+        )
 
 
 def _warn_deferred_context_limits(config: UserConfig) -> None:
@@ -226,7 +266,18 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
     if not data:
         raise ConfigParseError("Configuration file is empty")
 
+    return parse_user_config_data(data, config_path, log_summary=log_summary)
+
+
+def parse_user_config_data(
+    data: Dict[str, Any], config_path: str, *, log_summary: bool = True
+) -> UserConfig:
+    """Apply the parse_user_config checks to an already loaded document.
+
+    ``config_path`` names the document in error messages only.
+    """
     _reject_invalid_config_surfaces(data, config_path)
+    _warn_retired_looper_endpoint(data, config_path)
 
     # Setup is product control-plane metadata, not part of the canonical Router
     # schema. Validate the envelope explicitly, without stripping it from the

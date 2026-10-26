@@ -17,7 +17,7 @@ func TestFinalizationCleanupFailureRetainsRetryableJournal(t *testing.T) {
 	}
 	transaction.State = "committing"
 	transaction.CommitConfigDigest = "sha256:" + strings.Repeat("b", 64)
-	if writeErr := writeJSONAtomically(store.transactionPath(), transaction, 0o600); writeErr != nil {
+	if writeErr := writeJSONAtomically(store.transactionPath(), transaction); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 	transactionDir := filepath.Join(store.root, "transactions", transaction.ID)
@@ -109,7 +109,7 @@ func TestUnpublishedBaselineObjectDoesNotReplaceCurrentPointer(t *testing.T) {
 	}
 	unpublished := []byte("version: v0.3\n# interrupted refresh\n")
 	objectPath := store.sourceBaselineObjectPath(digestBytes(unpublished))
-	if err := writeFileAtomically(objectPath, unpublished, 0o600); err != nil {
+	if err := writeFileAtomically(objectPath, unpublished); err != nil {
 		t.Fatal(err)
 	}
 	got, err := store.SourceBaseline()

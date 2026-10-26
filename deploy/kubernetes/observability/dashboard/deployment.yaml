@@ -75,8 +75,6 @@ spec:
                   fieldPath: metadata.namespace
             - name: ML_PIPELINE_ENABLED
               value: "false"
-            - name: OPENCLAW_ENABLED
-              value: "false"
           ports:
             - name: http
               containerPort: 8700

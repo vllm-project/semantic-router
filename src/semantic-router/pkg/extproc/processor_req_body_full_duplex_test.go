@@ -19,7 +19,7 @@ import (
 )
 
 func TestFullDuplex_NonEOSChunkDefersResponse(t *testing.T) {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	ctx := &RequestContext{
 		Headers:               make(map[string]string),
 		FullDuplexRequestBody: true,
@@ -33,7 +33,7 @@ func TestFullDuplex_NonEOSChunkDefersResponse(t *testing.T) {
 }
 
 func TestFullDuplex_ProtocolConfigDefersBodyResponse(t *testing.T) {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	ctx := &RequestContext{Headers: make(map[string]string)}
 	stream := NewMockStream(nil)
 	req := &ext_proc.ProcessingRequest{
@@ -50,7 +50,7 @@ func TestFullDuplex_ProtocolConfigDefersBodyResponse(t *testing.T) {
 	assert.Empty(t, stream.Responses)
 }
 
-func TestFullDuplex_DisabledAccumulationPassesChunkThrough(t *testing.T) {
+func TestFullDuplex_DisabledAccumulationFailsClosed(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	ctx := &RequestContext{FullDuplexRequestBody: true}
 	chunk := []byte(`{"model":"gpt-4"}`)
@@ -59,10 +59,12 @@ func TestFullDuplex_DisabledAccumulationPassesChunkThrough(t *testing.T) {
 	}, ctx)
 
 	require.NoError(t, err)
-	streamed := response.GetRequestBody().GetResponse().GetBodyMutation().GetStreamedResponse()
-	require.NotNil(t, streamed)
-	assert.Equal(t, chunk, streamed.GetBody())
-	assert.True(t, streamed.GetEndOfStream())
+	immediate := response.GetImmediateResponse()
+	require.NotNil(t, immediate, "full-duplex body without streamed_body must fail closed, not relay")
+	if immediate.Status == nil || immediate.Status.Code != typev3.StatusCode_ServiceUnavailable {
+		t.Fatalf("expected 503 immediate response, got %v", immediate.Status)
+	}
+	assert.Contains(t, string(immediate.Body), "streamed_body")
 }
 
 func TestFullDuplex_FinalResponseUsesStreamedMutation(t *testing.T) {
@@ -305,7 +307,7 @@ func TestFullDuplex_RequestsWithoutBodyRoutingReplyAtOnce(t *testing.T) {
 		request   *ext_proc.ProcessingRequest
 		immediate bool
 	}{
-		{name: "headers end the stream", router: fullDuplexRoutingRouter(), request: fullDuplexHeadersRequest(true)},
+		{name: "headers end the stream", router: fullDuplexRoutingRouter(), immediate: true, request: fullDuplexHeadersRequest(true)},
 		{
 			name: "header-stage immediate response", router: fullDuplexRoutingRouter(), immediate: true,
 			request: headersRequest(http_ext.ProcessingMode_FULL_DUPLEX_STREAMED, "GET", "/v1/models", false),
@@ -335,8 +337,6 @@ func TestFullDuplex_RequestsWithoutBodyRoutingReplyAtOnce(t *testing.T) {
 }
 
 func TestFullDuplex_PassthroughTrailersFollowTheBody(t *testing.T) {
-	passthrough := fullDuplexRoutingRouter()
-	passthrough.Config.StreamedBodyMode = false
 	skipping := newRouterWithSkipProcessingGate(true)
 	skipping.Config.StreamedBodyMode = true
 	tests := []struct {
@@ -344,7 +344,6 @@ func TestFullDuplex_PassthroughTrailersFollowTheBody(t *testing.T) {
 		router  *OpenAIRouter
 		headers *ext_proc.ProcessingRequest
 	}{
-		{name: "without body accumulation", router: passthrough, headers: fullDuplexHeadersRequest(false)},
 		{name: "skip processing", router: skipping, headers: fullDuplexHeadersRequest(false,
 			&core.HeaderValue{Key: headers.VSRSkipProcessing, RawValue: []byte("true")})},
 	}

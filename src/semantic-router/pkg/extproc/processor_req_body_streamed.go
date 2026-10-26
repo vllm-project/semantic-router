@@ -8,7 +8,9 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -30,8 +32,8 @@ import (
 //     the limit (HTTP 413).
 //   - Deadline: if configured, rejects requests that take too long to
 //     accumulate (HTTP 408).
-//   - GC: the "eat chunk" response is pooled so intermediate chunks produce
-//     zero allocations on the hot path.
+//   - GC: the "eat chunk" response is shared so intermediate chunks produce
+//     zero allocations unless benchmark binding needs a mutable copy.
 type StreamedBodyHandler struct {
 	router *OpenAIRouter
 	ctx    *RequestContext
@@ -42,7 +44,25 @@ type StreamedBodyHandler struct {
 	deadline time.Time // zero value = no deadline
 
 	endsAtTrailers bool // full-duplex request trailers, not a body chunk, ended the body
+
+	// Arrival measurement only; never consulted by the guards or the pipeline.
+	firstChunkAt time.Time
+	chunkCount   int
 }
+
+// StreamedBodyStats describes how a STREAMED or FULL_DUPLEX_STREAMED request
+// body arrived. It carries sizes and durations only, never body content.
+type StreamedBodyStats struct {
+	Present  bool          // set by the streamed handler at end of stream
+	Observed bool          // metrics already recorded for this request
+	Bytes    int           // accumulated body bytes at end of stream
+	Chunks   int           // body messages received, including the EOS message
+	Arrival  time.Duration // first body chunk to end of stream
+}
+
+// streamedBodyNow is the arrival clock, replaceable in tests. The guard
+// deadline keeps using time.Now so tests cannot move request timeouts.
+var streamedBodyNow = time.Now
 
 var streamedHandlerPool = sync.Pool{
 	New: func() interface{} {
@@ -52,8 +72,8 @@ var streamedHandlerPool = sync.Pool{
 
 // Shared immutable "eat chunk" response. Because the response only contains
 // CONTINUE + empty body (no per-request data), a single instance is safe to
-// return from every non-EOS chunk across all goroutines. This eliminates ~5
-// protobuf allocations per chunk that would otherwise become immediate garbage.
+// return from non-EOS chunks that need no per-request mutations. This avoids
+// ~5 protobuf allocations per chunk that would become immediate garbage.
 var sharedContinueEmptyBody = &ext_proc.ProcessingResponse{
 	Response: &ext_proc.ProcessingResponse_RequestBody{
 		RequestBody: &ext_proc.BodyResponse{
@@ -74,6 +94,8 @@ func newStreamedBodyHandler(router *OpenAIRouter, ctx *RequestContext) *Streamed
 	h.router = router
 	h.ctx = ctx
 	h.buf.Reset()
+	h.firstChunkAt = time.Time{}
+	h.chunkCount = 0
 
 	h.maxBytes = 0
 	h.deadline = time.Time{}
@@ -92,6 +114,8 @@ func (h *StreamedBodyHandler) Release() {
 	h.router = nil
 	h.ctx = nil
 	h.buf.Reset()
+	h.firstChunkAt = time.Time{}
+	h.chunkCount = 0
 	streamedHandlerPool.Put(h)
 }
 
@@ -100,6 +124,10 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 	chunk := body.GetBody()
 	eos := body.GetEndOfStream()
 
+	if h.chunkCount == 0 {
+		h.firstChunkAt = streamedBodyNow()
+	}
+	h.chunkCount++
 	h.buf.Write(chunk)
 
 	if rejection := h.checkGuards(); rejection != nil {
@@ -116,6 +144,9 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingResponse {
 	if h.ctx != nil && h.ctx.FullDuplexRequestBody {
 		return nil
+	}
+	if headerValueCI(h.ctx, headers.SRBenchExpectedConfigHash) != "" {
+		return proto.Clone(sharedContinueEmptyBody).(*ext_proc.ProcessingResponse)
 	}
 	return sharedContinueEmptyBody
 }
@@ -158,6 +189,18 @@ func (h *StreamedBodyHandler) finishAtTrailers() (*ext_proc.ProcessingResponse, 
 // request-body pipeline. The ingress Codec is the only semantic parser.
 func (h *StreamedBodyHandler) handleAccumulatedBody() (*ext_proc.ProcessingResponse, error) {
 	h.ctx.ProcessingStartTime = time.Now()
+	// A BUFFERED data plane delivers the whole body in one message even when
+	// streamed_body is enabled, so there is no arrival to measure. Without a
+	// protocol_config the mode is unknown and the arrival is still recorded.
+	// Full-duplex trailers can end a request that never sent a body chunk.
+	if !h.ctx.BufferedRequestBody && h.chunkCount > 0 {
+		h.ctx.StreamedBodyStats = StreamedBodyStats{
+			Present: true,
+			Bytes:   h.buf.Len(),
+			Chunks:  h.chunkCount,
+			Arrival: streamedBodyNow().Sub(h.firstChunkAt),
+		}
+	}
 	body := bytes.Clone(h.buf.Bytes())
 
 	v := &ext_proc.ProcessingRequest_RequestBody{

@@ -196,7 +196,7 @@ func validateAnthropicMessageDeltaStop(wire anthropicEventWire) error {
 		return invalidProviderResponse("invalid_anthropic_stop_reason", "Anthropic stop reason is not recognized")
 	}
 	if wire.Delta.StopReason != nil && *wire.Delta.StopReason == "stop_sequence" &&
-		(wire.Delta.StopSequence == nil || strings.TrimSpace(*wire.Delta.StopSequence) == "") {
+		(wire.Delta.StopSequence == nil || *wire.Delta.StopSequence == "") {
 		return invalidProviderResponse("anthropic_stop_sequence_required", "Anthropic stop_sequence reason requires the matched sequence")
 	}
 	if wire.Delta.StopSequence != nil &&

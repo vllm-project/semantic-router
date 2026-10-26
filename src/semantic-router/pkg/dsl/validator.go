@@ -246,6 +246,23 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 
 // ---------- Level 2: Reference Checks ----------
 
+// routeAnswersWithFastResponse reports whether a route replies with the
+// fast_response plugin, inline or through a template: it calls no model, so
+// it needs no MODEL.
+func (v *Validator) routeAnswersWithFastResponse(route *RouteDecl) bool {
+	for _, ref := range route.Plugins {
+		if ref.Name == config.DecisionPluginFastResponse {
+			return true
+		}
+		for _, template := range v.prog.Plugins {
+			if template.Name == ref.Name && template.PluginType == config.DecisionPluginFastResponse {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (v *Validator) checkReferences() {
 	for _, route := range v.prog.Routes {
 		v.checkRouteReferences(route)
@@ -272,6 +289,9 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 	}
 
 	if !routeHasModelCandidates(route) {
+		if v.routeAnswersWithFastResponse(route) {
+			return
+		}
 		v.addDiag(DiagWarning, route.Pos,
 			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
 			nil,
@@ -340,6 +360,21 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 			)
 		}
 	}
+}
+
+func boolExprSetsOnError(expr BoolExpr) bool {
+	switch e := expr.(type) {
+	case *BoolAnd:
+		return boolExprSetsOnError(e.Left) || boolExprSetsOnError(e.Right)
+	case *BoolOr:
+		return boolExprSetsOnError(e.Left) || boolExprSetsOnError(e.Right)
+	case *BoolNot:
+		return boolExprSetsOnError(e.Expr)
+	case *SignalRefExpr:
+		onError, _ := getStringField(e.Fields, "on_error")
+		return onError != ""
+	}
+	return false
 }
 
 func signalReferenceDefined(names map[string]bool, signalType, name string) bool {
@@ -551,6 +586,9 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 			fmt.Sprintf("%s: on_unknown must be %s, got %q", context, config.UnknownPolicyChoices(), r.OnUnknown),
 			nil,
 		)
+	}
+	if r.OnUnknown != "" && boolExprSetsOnError(r.When) {
+		v.addDiag(DiagConstraint, r.Pos, fmt.Sprintf("%s: %s", context, config.OnUnknownOnErrorConflictMessage), nil)
 	}
 
 	v.checkRouteAction(r, context)

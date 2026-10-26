@@ -2,12 +2,10 @@ package classification
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -46,8 +44,8 @@ const (
 	hallucinationAnswerOverlapRunes = 64
 )
 
-func hallucinationAnswerChunks(answer string) []string {
-	return securitySignalChunks(answer, hallucinationAnswerChunkBudget, hallucinationAnswerOverlapRunes)
+func hallucinationAnswerChunks(answer string) []signalChunkSpan {
+	return securitySignalChunkSpans(answer, hallucinationAnswerChunkBudget, hallucinationAnswerOverlapRunes)
 }
 
 func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chunkConfidence float32) float32 {
@@ -61,25 +59,14 @@ func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chu
 }
 
 type HallucinationDetector struct {
-	config         *config.HallucinationModelConfig
-	nliConfig      *config.NLIModelConfig
-	models         *classifierModelRuntime
-	spec           config.ResolvedModelBinding
-	nliSpec        config.ResolvedModelBinding
-	handle         *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
-	nliHandle      *binding.Resolved[tasks.TextPairRequest, tasks.LabelDistribution]
-	initialized    bool
-	nliInitialized bool
-	gate           admission.Admissioner
-	explainerGate  admission.Admissioner
-	mu             sync.RWMutex
-}
-
-func (d *HallucinationDetector) SetAdmissioners(detector, explainer admission.Admissioner) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.gate = detector
-	d.explainerGate = explainer
+	config      *config.HallucinationModelConfig
+	models      *classifierModelRuntime
+	spec        config.ResolvedModelBinding
+	specErr     error
+	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	judgment    *decisionJudgment
+	initialized bool
+	mu          sync.RWMutex
 }
 
 func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*classifierModelRuntime) (*HallucinationDetector, error) {
@@ -87,11 +74,11 @@ func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*c
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
 	runtime := consumerModelRuntime(models)
-	spec := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
-	if spec.Deployment.Artifact == "" {
+	if _, bound := runtime.plan.Lookup(runtime.recipe, "hallucination_detector"); !bound && strings.TrimSpace(cfg.ModelID) == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-	return &HallucinationDetector{config: cfg, models: runtime, spec: spec}, nil
+	spec, err := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+	return &HallucinationDetector{config: cfg, models: runtime, spec: spec, specErr: err}, nil
 }
 
 func (d *HallucinationDetector) Initialize() error {
@@ -99,6 +86,27 @@ func (d *HallucinationDetector) Initialize() error {
 	defer d.mu.Unlock()
 	if d.initialized {
 		return nil
+	}
+	judgment, err := newDecisionJudgment(d.models, "hallucination_detector", "hallucination", nil)
+	if err != nil {
+		return err
+	}
+	if judgment != nil {
+		explicit, bound := d.models.plan.Lookup(d.models.recipe, "hallucination_detector")
+		useVerdict := !judgment.card.Answers("span") || (bound && explicit.Binding.Contract == config.DecisionTaskContract)
+		if useVerdict {
+			if explicitSpanBinding(d.models, "hallucination_detector") {
+				return fmt.Errorf("%w: hallucination token_spans.v1 binding requires native span capability", binding.ErrCapability)
+			}
+			if d.config.MinSpanLength > 1 || d.config.MinSpanConfidence > 0 {
+				return fmt.Errorf("%w: hallucination span filters require native span capability", binding.ErrCapability)
+			}
+			d.judgment, d.initialized = judgment, true
+			return nil
+		}
+	}
+	if d.specErr != nil {
+		return fmt.Errorf("hallucination detector: %w", d.specErr)
 	}
 	handle, err := d.models.runtime.Grounded(context.Background(), d.spec, d.hallucinationThreshold())
 	if err != nil {
@@ -122,21 +130,18 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 	if contextText == "" {
 		return merged, fmt.Errorf("context is required for hallucination detection")
 	}
-	chunks := []string{answer}
-	// The published pair adapter owns its complete answer budget. Splitting it
-	// here would change the evidence and the artifact's measured task.
-	if d.spec.Binding.Adapter != "vela_halu" {
+	chunks := []signalChunkSpan{{Text: answer}}
+	// The published pair adapter and a decision model's ready-made halu
+	// question own their complete answer budget. Splitting it here would
+	// change the evidence and the artifact's measured task.
+	if d.spec.Binding.Adapter != "vela_halu" && d.handle.Capability().Preset == "" && d.handle.Capability().Question == "" {
 		chunks = hallucinationAnswerChunks(answer)
 	}
-	searchStart := 0
 	for _, chunk := range chunks {
-		start := strings.Index(answer[searchStart:], chunk)
-		if start < 0 {
-			return merged, fmt.Errorf("answer window is not a substring of the original answer")
-		}
-		start += searchStart
-		searchStart = start + 1
-		result, err := d.handle.Call(ctx, string(d.spec.Recipe), tasks.GroundedTextRequest{Context: contextText, Question: question, Answer: chunk})
+		// The chunker knows where each chunk starts. Searching the answer for
+		// its text instead finds an earlier copy when the answer repeats itself.
+		start := chunk.StartByte
+		result, err := d.handle.Call(ctx, string(d.spec.Recipe), tasks.GroundedTextRequest{Context: contextText, Question: question, Answer: chunk.Text})
 		if err != nil {
 			return merged, err
 		}
@@ -174,6 +179,9 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 func (d *HallucinationDetector) Detect(ctx context.Context, contextText, question, answer string) (*HallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+	if d.judgment != nil {
+		return d.detectJudgment(ctx, contextText, question, answer)
+	}
 	spans, err := d.detectSpans(ctx, contextText, question, answer)
 	if err != nil {
 		return nil, err
@@ -222,13 +230,8 @@ func (d *HallucinationDetector) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.initialized = false
-	d.nliInitialized = false
-	var errs []error
-	if d.handle != nil {
-		errs = append(errs, d.handle.Close())
+	if d.handle == nil {
+		return nil
 	}
-	if d.nliHandle != nil {
-		errs = append(errs, d.nliHandle.Close())
-	}
-	return errors.Join(errs...)
+	return d.handle.Close()
 }

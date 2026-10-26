@@ -64,7 +64,7 @@ func runRouteActionCase(
 
 	// Must use the auto-routing model name: a concrete backend model name is
 	// a passthrough request that bypasses recipe signals and decisions.
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", prompt, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", prompt, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}

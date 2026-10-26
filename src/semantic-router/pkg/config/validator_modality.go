@@ -13,10 +13,15 @@ func validateGlobalModalityContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	if cfg.ModalityDetector.Enabled {
-		if err := cfg.ModalityDetector.Validate(); err != nil {
-			return fmt.Errorf("modality_detector: %w", err)
-		}
+	if !cfg.ModalityDetector.Enabled {
+		return nil
+	}
+	validate := cfg.ModalityDetector.Validate
+	if cfg.ModelBindings["modality_detector"].Deployment != "" || cfg.GlobalModelBindings["modality_detector"].Deployment != "" {
+		validate = cfg.ModalityDetector.ValidateBound
+	}
+	if err := validate(); err != nil {
+		return fmt.Errorf("modality_detector: %w", err)
 	}
 	return nil
 }

@@ -29,8 +29,6 @@ func TestBuildRouterDoesNotLoadEmbeddingForIdleOrExactOnlyCache(t *testing.T) {
 			cfg.SemanticCache.Enabled = true
 			cfg.SemanticCache.EmbeddingModel = "mmbert"
 			cfg.MmBertModelPath = "/not-installed/unused-cache-embedding"
-			cfg.SemanticCache.PolarityGuard = &config.PolarityGuardConfig{Mode: "nli"}
-			cfg.HallucinationMitigation.NLIModel.ModelID = "/not-installed/unused-cache-nli"
 			cfg.Decisions = []config.Decision{{Name: "route"}}
 			if mode == "exact" {
 				cfg.Decisions[0].Plugins = []config.DecisionPlugin{{Type: "response_cache", Configuration: config.MustStructuredPayload(config.ResponseCachePluginConfig{Enabled: true, Mode: "exact"})}}
@@ -40,7 +38,7 @@ func TestBuildRouterDoesNotLoadEmbeddingForIdleOrExactOnlyCache(t *testing.T) {
 			router := components.buildRouter()
 			t.Cleanup(func() { require.NoError(t, router.Close()) })
 			require.False(t, components.embeddings.Ready())
-			require.Empty(t, components.modelRuntime.PreparedBindings())
+			require.Empty(t, components.serving.PreparedBindings())
 			require.Equal(t, mode == "exact", components.semanticCache.IsEnabled())
 			require.Empty(t, components.semanticCacheIdentity)
 		})
@@ -87,7 +85,7 @@ func TestBuildRouterOwnsGlobalEmbeddingAPIWithoutRoutingDemand(t *testing.T) {
 	vector, err := provider.Embed(context.Background(), "hello")
 	require.NoError(t, err)
 	require.Equal(t, []float32{1, 0}, vector)
-	bindings := components.modelRuntime.PreparedBindings()
+	bindings := components.serving.PreparedBindings()
 	require.Len(t, bindings, 1)
 	require.Equal(t, "api.embedding", bindings[0].Identity.Name)
 }

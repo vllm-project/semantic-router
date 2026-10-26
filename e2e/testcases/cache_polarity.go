@@ -15,12 +15,13 @@ import (
 )
 
 // The polarity case pins the #2751 contract at the only place E2E can see it:
-// with global.stores.response_cache.polarity_guard.mode set to an NLI mode, a
-// query that clears the similarity threshold but contradicts the cached one
-// must not be served from the cache, while a genuine paraphrase still hits.
+// the response cache's lexical polarity guard always runs, so a query that
+// clears the similarity threshold but flips the cached one's polarity (a
+// negation cue or an antonym pair) must not be served from the cache, while a
+// genuine paraphrase still hits.
 func init() {
 	pkgtestcases.Register("semantic-cache-polarity", pkgtestcases.TestCase{
-		Description: "Semantic cache rejects opposite-meaning queries via the NLI polarity guard",
+		Description: "Semantic cache rejects opposite-meaning queries via the lexical polarity guard",
 		Tags:        []string{"kubernetes", "semantic-cache", "polarity"},
 		Fn:          testCachePolarity,
 	})
@@ -32,7 +33,7 @@ func init() {
 // These requests use the explicit cache feature recipe, so every question
 // reaches the same response_cache policy independently of domain classification.
 // The original text pairs must still clear the unchanged embedding threshold,
-// and the production NLI guard must distinguish contradictions from paraphrases.
+// and the lexical guard must distinguish polarity flips from paraphrases.
 type cachePolarityCase struct {
 	Description      string `json:"description"`
 	OriginalQuestion string `json:"original_question"`
@@ -54,7 +55,7 @@ func loadCachePolarityCases(path string) ([]cachePolarityCase, error) {
 
 func testCachePolarity(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing semantic cache NLI polarity guard")
+		fmt.Println("[Test] Testing semantic cache polarity guard")
 	}
 
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
@@ -176,7 +177,7 @@ func probeCachePolarity(ctx context.Context, primeCase CacheTestCase, question, 
 // assertPolarityContradictionRejected returns a failure message unless the
 // contradiction missed *because of the guard*: a miss whose reported similarity
 // is at or above the profile threshold is the only observable proof that the
-// NLI tier, not the threshold, produced it.
+// guard, not the threshold, produced it.
 func assertPolarityContradictionRejected(tc cachePolarityCase, r CacheResult) string {
 	switch {
 	case r.Error != "":

@@ -1,5 +1,3 @@
-//go:build !riscv64
-
 package cache
 
 import (
@@ -35,7 +33,7 @@ type ValkeyCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // ValkeyCacheOptions contains configuration parameters for Valkey cache initialization
@@ -210,6 +208,8 @@ func (c *ValkeyCache) initializeIndex() error {
 func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
+
+func (c *ValkeyCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
 
 func (c *ValkeyCache) embeddingDimension() int {
 	if c == nil || c.config == nil {

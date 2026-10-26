@@ -317,7 +317,7 @@ function RouterPipeline({
         <ThemedImage sources={logoSources} alt="vLLM Semantic Router" />
         <div>
           <span>
-            <Translate id="homepage.integration.pipeline.eyebrow">System Level Intelligence</Translate>
+            <Translate id="homepage.integration.pipeline.eyebrow">Decision layer</Translate>
           </span>
           <strong>
             {activeQuery.modelId}
@@ -450,7 +450,7 @@ function ModelColumn({
         </div>
 
         <p className={styles.heterogeneousCaption}>
-          <Translate id="homepage.integration.heterogeneousModels">Heterogeneous models</Translate>
+          <Translate id="homepage.integration.heterogeneousModels">Models on configured backends</Translate>
         </p>
       </div>
     </div>
@@ -706,10 +706,10 @@ export default function IntegrationArchitecture(): JSX.Element {
               <Translate id="homepage.integration.eyebrow">How it integrates</Translate>
             </SectionLabel>
             <h2 id="integration-architecture-title" className={shared.sectionTitle}>
-              <Translate id="homepage.integration.title">Route queries to the right model</Translate>
+              <Translate id="homepage.integration.title">One API. Many models.</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.integration.extproc.summary">Resolve each request-facing model ID to an isolated recipe, then route within that recipe's model pool.</Translate>
+              <Translate id="homepage.integration.extproc.summary">Connect your harness once. Choose models and backends through policy.</Translate>
             </p>
           </header>
         </ScrollReveal>
@@ -755,7 +755,7 @@ export default function IntegrationArchitecture(): JSX.Element {
                 layout={layout}
               />
               <QueryColumn
-                title={translate({ id: 'homepage.integration.incoming', message: 'Entrypoint requests' })}
+                title={translate({ id: 'homepage.integration.incoming', message: 'Agent harness requests' })}
                 activeQueryIndex={activeQueryIndex}
                 onSelect={handleQuerySelect}
                 onPause={() => {
@@ -768,7 +768,7 @@ export default function IntegrationArchitecture(): JSX.Element {
                 onStageRef={handleStageRowRef}
               />
               <ModelColumn
-                title={translate({ id: 'homepage.integration.models', message: 'Model pools' })}
+                title={translate({ id: 'homepage.integration.models', message: 'Models & backends' })}
                 activeModelId={activeModel.id}
                 onRowRef={handleModelRowRef}
               />
@@ -777,11 +777,11 @@ export default function IntegrationArchitecture(): JSX.Element {
             <div className={styles.footer}>
               <span className={styles.compatPill}>
                 <Translate id="homepage.integration.extproc.compat">
-                  OpenAI-compatible request and response surface
+                  OpenAI-compatible API
                 </Translate>
               </span>
-              <Link className={styles.docsLink} to="/docs/installation">
-                <Translate id="homepage.integration.viewDocs">View integration guide</Translate>
+              <Link className={styles.docsLink} to="/docs/tutorials/global/entrypoints-and-recipes">
+                <Translate id="homepage.integration.viewDocs">Set your routing policy</Translate>
                 {' '}
                 →
               </Link>

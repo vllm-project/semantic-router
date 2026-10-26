@@ -5,17 +5,21 @@ set -euo pipefail
 SR_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 cd "${SR_ROOT}"
 
-export LD_LIBRARY_PATH="${SR_ROOT}/candle-binding/target/release:${SR_ROOT}/onnx-binding/target/release:${SR_ROOT}/ml-binding/target/release:${SR_ROOT}/nlp-binding/target/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+# The router starts its classifiers in the model runtime (make model-runtime-install).
+export VLLM_SRUN_COMMAND="${VLLM_SRUN_COMMAND:-${SR_ROOT}/.venv-agent/bin/vllm-srun}"
 
 ROUTER_CONFIG=${ROUTER_CONFIG:-"e2e/config/config.e2e.yaml"}
 MOCK_PYTHON=${MOCK_PYTHON:-"python3"}
 MOCK_PORT=8000
 ENVOY_PORT=8801
+ROUTER_API_PORT=8080
 WAIT_STARTUP_SECS=${WAIT_STARTUP_SECS:-900}
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/local-up-smoke.XXXXXX")
 
 MOCK_PID=""
 HARNESS_PID=""
+SMOKE_PASSED=0
+SMOKE_REPORT=${LOCAL_DEV_SMOKE_REPORT_PATH:-}
 
 log() { echo "[local-up-smoke] $*"; }
 
@@ -40,7 +44,39 @@ cleanup() {
     kill "${MOCK_PID}" 2>/dev/null || true
   fi
 }
-trap cleanup EXIT INT TERM
+finish() {
+  status=$?
+  trap - EXIT INT TERM
+  cleanup
+  if [[ -n "${SMOKE_REPORT}" ]]; then
+    python3 - "${SMOKE_REPORT}" "${status}" "${SMOKE_PASSED}" <<'PYREPORT'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+case = "tools/test/smoke/test-local-up-router.sh"
+passed = sys.argv[2:] == ["0", "1"]
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps({
+    "expected_cases": [case],
+    "cases": [{"id": case, "status": "passed" if passed else "failed"}],
+}) + "\n")
+PYREPORT
+  fi
+  exit "${status}"
+}
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+# Never reuse a receipt left by an interrupted previous invocation.
+if [[ -n "${SMOKE_REPORT}" ]]; then
+  rm -f -- "${SMOKE_REPORT}"
+fi
+
+runtime_bin=${VLLM_SRUN_COMMAND%% *}
+command -v "${runtime_bin}" >/dev/null 2>&1 ||
+  fail "model runtime command ${runtime_bin} not found; run make harness-venv-install model-runtime-install or set VLLM_SRUN_COMMAND"
 
 log "Setting up provider mocker backend venv..."
 "${MOCK_PYTHON}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "provider-mocker requires Python 3.11+; set MOCK_PYTHON")'
@@ -79,6 +115,16 @@ until grep -q "The local semantic router is running" "${WORK_DIR}/harness.log" 2
 done
 log "Harness is up."
 
+# /health answers once the router process listens; /ready only after every
+# model the config needs is loaded, which on a fresh host includes downloads.
+until curl -sf "http://127.0.0.1:${ROUTER_API_PORT}/ready" >/dev/null 2>&1; do
+  kill -0 "${HARNESS_PID}" 2>/dev/null || fail "harness exited before the router became ready"
+  [[ ${SECONDS} -ge ${deadline} ]] &&
+    fail "router not ready after ${WAIT_STARTUP_SECS}s; startup status: $(curl -s "http://127.0.0.1:${ROUTER_API_PORT}/startup-status" | head -c 2000)"
+  sleep 5
+done
+log "Router is ready."
+
 log "Sending /v1/chat/completions through Envoy (:${ENVOY_PORT})..."
 status=""
 routed=""
@@ -100,4 +146,5 @@ done
 [[ "${routed}" == "yes" ]] || fail "Envoy access log never showed selected_model=Model-A via vllm_backend_cluster; requests returned 200 but the router (ext_proc) did not process them"
 log "Got HTTP 200; response: $(head -c 200 "${WORK_DIR}/response.json")"
 
+SMOKE_PASSED=1
 log "PASS: request reached the mock backend through Envoy and was processed by the router."

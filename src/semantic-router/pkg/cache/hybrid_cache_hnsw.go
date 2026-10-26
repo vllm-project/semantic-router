@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -8,13 +8,6 @@ import "math/rand/v2"
 type searchResult struct {
 	index      int
 	similarity float32
-}
-
-// dotProduct calculates the dot product between two vectors.
-// Uses SIMD instructions (AVX2/AVX-512) when available for performance.
-// Falls back to scalar implementation on non-x86 platforms.
-func dotProduct(a, b []float32) float32 {
-	return dotProductSIMD(a, b)
 }
 
 // hybridHNSWAdapter adapts the HNSW index to work with [][]float32 instead of []CacheEntry.
@@ -231,7 +224,7 @@ func (h *HybridCache) searchKNNHybridWithThreshold(query []float32, k int, ef in
 		if idx < 0 || idx >= len(h.embeddings) {
 			continue
 		}
-		similarity := dotProductSIMD(query, h.embeddings[idx])
+		similarity := dotProduct(query, h.embeddings[idx])
 		results = append(results, searchResult{index: idx, similarity: similarity})
 		if similarity >= threshold {
 			return results
@@ -246,7 +239,7 @@ func (h *HybridCache) searchKNNHybridWithThreshold(query []float32, k int, ef in
 
 // searchLayerHybridWithEarlyStop searches a layer and stops when finding a match above threshold.
 func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, layer int, entryPoints []int, threshold float32) []int {
-	return h.searchLayerHybridInternal(query, ef, layer, entryPoints, dotProductSIMD, &threshold)
+	return h.searchLayerHybridInternal(query, ef, layer, entryPoints, dotProduct, &threshold)
 }
 
 func (h *HybridCache) seedHybridSearch(

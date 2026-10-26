@@ -5,7 +5,7 @@
 `svm` uses a trained linear or RBF support-vector classifier to map request
 features to a candidate model.
 
-**Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-svm`).
+**Implementation**: runs in the router itself, in Go.
 
 ## Key Advantages
 
@@ -97,7 +97,7 @@ global:
 
 ## Training
 
-See [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md) for the training pipeline. SVM models are trained on labeled query-to-model assignment data using Linfa's SVM implementation.
+See [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md) for the training pipeline. SVM models are trained on labeled query-to-model assignment data with scikit-learn's SVC.
 
 Training examples and labels can contain sensitive request data; govern them
 and the derived artifact accordingly. See a complete example:

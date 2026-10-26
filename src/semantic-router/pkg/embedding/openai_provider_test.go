@@ -214,7 +214,7 @@ func TestOpenAICompatibleProviderResponseLimit(t *testing.T) {
 					Model:            "embedding-model",
 					MaxResponseBytes: tt.maxResponseBytes,
 				},
-			}, ProviderOptions{})
+			})
 			if err != nil {
 				t.Fatalf("NewProvider() error = %v", err)
 			}
@@ -248,6 +248,17 @@ func TestNewOpenAICompatibleProviderValidatesConfig(t *testing.T) {
 		if _, err := NewOpenAICompatibleProvider(cfg); err == nil {
 			t.Fatalf("NewOpenAICompatibleProvider(%+v) returned nil error", cfg)
 		}
+	}
+}
+
+func TestOpenAICompatibleProviderHonorsFractionalTimeout(t *testing.T) {
+	provider := newTestOpenAIProvider(t, OpenAICompatibleConfig{
+		BaseURL:        "http://localhost:8000",
+		Model:          "embedding-model",
+		TimeoutSeconds: 0.8,
+	})
+	if provider.timeout != 800*time.Millisecond {
+		t.Fatalf("timeout = %v, want 800ms", provider.timeout)
 	}
 }
 

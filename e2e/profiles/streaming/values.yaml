@@ -147,12 +147,12 @@ config:
             - other
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.6
+          threshold: 0.75
           include_history: false
           description: Standard jailbreak detection for streaming tests
       pii:
         - name: pii_deny_all
-          threshold: 0.4
+          threshold: 0.01
           include_history: false
           description: Block all PII
     modelCards:

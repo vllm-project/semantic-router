@@ -121,7 +121,7 @@ func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
 	}
 }
 
-func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.T) {
+func TestPreferenceClassifier_ExplicitContrastiveKeepsEmbeddingPolicy(t *testing.T) {
 	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		switch text {
 		case "Writes code":
@@ -135,9 +135,9 @@ func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.
 
 	rules := []config.PreferenceRule{{Name: "code_generation", Description: "Writes code"}}
 
-	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, nil, provider)
+	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, &config.PreferenceModelConfig{UseContrastive: prefBoolPtr(true)}, provider)
 	if err != nil {
-		t.Fatalf("failed to create default contrastive preference classifier: %v", err)
+		t.Fatalf("failed to create explicit contrastive preference classifier: %v", err)
 	}
 
 	result, err := classifier.Classify(`[{"role":"user","content":"please write code"}]`)

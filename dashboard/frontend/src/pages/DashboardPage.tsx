@@ -5,15 +5,14 @@ import ViewModal from '../components/ViewModal'
 import ProductLoadingState from '../components/ProductLoadingState'
 import ProductIcon from '../components/ProductIcon'
 import {
-  getLoadedModelCount,
   getRouterModelConsumers,
   getModelStatusSummary,
-  getTotalKnownModelCount,
   type RouterModelInfo,
   type SystemStatus,
 } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
 import DashboardRoutingProfiles from './DashboardRoutingProfiles'
+import DashboardRouterIntelligence from './DashboardRouterIntelligence'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
   categorizeDecisions,
@@ -24,11 +23,15 @@ import {
   getAllDecisions,
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
+import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { useInstanceDeployment } from './useInstanceDeployment'
+import { describeServingMode } from './dashboardServingMode'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
+  const instance = useInstanceDeployment()
 
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -39,19 +42,11 @@ const DashboardPage: React.FC = () => {
   const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
 
   const fetchStatus = useCallback(async () => {
-    const statusRes = await fetch('/api/status')
-    if (statusRes.ok) {
-      setStatus(await statusRes.json())
-    }
+    setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const configResult = await fetch('/api/router/config/all')
-    if (configResult.ok) {
-      setConfig(await configResult.json())
-      setLastUpdated(new Date())
-      setError(null)
-    }
+    setConfig(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config'))
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
@@ -60,19 +55,18 @@ const DashboardPage: React.FC = () => {
   const fetchAll = useCallback(
     async (manual = false) => {
       if (manual) setRefreshing(true)
-      try {
-        await Promise.all([
-          configRequest.run({ allowHidden: true }),
-          statusRequest.run({ allowHidden: true }),
-        ])
+      const failure = await settleDashboardRequests([
+        configRequest.run({ allowHidden: true }),
+        statusRequest.run({ allowHidden: true }),
+      ])
+      if (failure) {
+        setError(failure)
+      } else {
         setLastUpdated(new Date())
         setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
       }
+      setLoading(false)
+      setRefreshing(false)
     },
     [configRequest, statusRequest],
   )
@@ -83,18 +77,9 @@ const DashboardPage: React.FC = () => {
         // Ignore transient status polling errors.
       })
     }
-    const pollConfig = () => {
-      void configRequest.run().catch((pollError) => {
-        setError(
-          pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config',
-        )
-      })
-    }
-    const onVisibilityChange = () => {
-      if (!document.hidden) {
-        pollStatus()
-        pollConfig()
-      }
+    // Full refreshes settle config and status together before touching "Updated".
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void fetchAll()
     }
     const onConfigDeployed = () => {
       void fetchAll()
@@ -102,16 +87,16 @@ const DashboardPage: React.FC = () => {
 
     void fetchAll()
     const statusInterval = window.setInterval(pollStatus, 10000)
-    const configInterval = window.setInterval(pollConfig, 30000)
+    const refreshInterval = window.setInterval(refreshWhenVisible, 30000)
     window.addEventListener('config-deployed', onConfigDeployed)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
       window.clearInterval(statusInterval)
-      window.clearInterval(configInterval)
+      window.clearInterval(refreshInterval)
       window.removeEventListener('config-deployed', onConfigDeployed)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [configRequest, fetchAll, statusRequest])
+  }, [fetchAll, statusRequest])
 
   const signalStats = useMemo(
     () => (config ? countSignals(config) : { total: 0, byType: {} }),
@@ -127,8 +112,11 @@ const DashboardPage: React.FC = () => {
   )
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
-  const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
-  const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
+  const servingMode = describeServingMode(
+    instance.status?.observed_mode === 'unknown'
+      ? status?.serving_mode
+      : (instance.status?.observed_mode ?? status?.serving_mode),
+  )
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -167,6 +155,10 @@ const DashboardPage: React.FC = () => {
             <p className={styles.subtitle}>
               Design, connect, and understand every Mixture-of-Models.
             </p>
+            <div className={styles.servingMode} data-testid="dashboard-serving-mode">
+              <span className={styles.servingModeBadge}>{servingMode.label}</span>
+              <span>{servingMode.description}</span>
+            </div>
           </div>
         </div>
         <div className={styles.headerActions}>
@@ -431,27 +423,13 @@ const DashboardPage: React.FC = () => {
         />
       ) : null}
 
-      <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div>
-            <h2 className={styles.cardTitle}>Router Intelligence</h2>
-            {knownModels > 0 && (
-              <span className={styles.cardSubtitle}>
-                {loadedModels}/{knownModels} runtimes ready
-              </span>
-            )}
-          </div>
-          <button type="button" className={styles.cardAction} onClick={() => navigate('/status')}>
-            Status &rsaquo;
-          </button>
-        </div>
-        <RouterModelInventory
-          mode="preview"
-          modelsInfo={status?.models}
-          emptyMessage="Learned routing models will appear here when the router loads them."
-          onSelectModel={setSelectedRuntimeModel}
-        />
-      </div>
+      <DashboardRouterIntelligence
+        config={config}
+        modelsInfo={status?.models}
+        onConfigure={() => navigate('/decision-model')}
+        onOpenStatus={() => navigate('/status')}
+        onSelectModel={setSelectedRuntimeModel}
+      />
 
       {selectedRuntimeModel && (
         <ViewModal

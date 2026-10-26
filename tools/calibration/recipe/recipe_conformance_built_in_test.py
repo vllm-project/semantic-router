@@ -19,7 +19,7 @@ conformance = importlib.import_module("recipe_conformance")
 runtime = importlib.import_module("recipe_conformance_runtime")
 sources = importlib.import_module("recipe_conformance_sources")
 http = importlib.import_module("router_calibration_http")
-EXPECTED_BUILTIN_PROBES = 315
+EXPECTED_BUILTIN_PROBES = 347
 
 
 class BuiltInRecipeConformanceTest(unittest.TestCase):
@@ -45,11 +45,11 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
 
     def test_real_cli_composition_covers_every_entrypoint_and_authored_probe(self):
         bound = runtime.bind_runtime_entrypoints(self.config, self.probes)
-        runtime.verify_composed_policy(self.authored, self.config)
+        runtime.verify_composed_policy(self.authored, self.config, self.manifest)
         conformance.validate_probe_references(
             self.recipe / "probes.yaml", self.config, self.manifest, bound
         )
-        self.assertEqual(len(bound), 315)
+        self.assertEqual(len(bound), 347)
         self.assertEqual(
             {probe.model for probe in bound},
             {
@@ -87,7 +87,67 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         changed = copy.deepcopy(self.config)
         changed["recipes"][0]["routing"]["decisions"][0]["priority"] += 1
         with self.assertRaisesRegex(ValueError, "changed authored routing policy"):
-            runtime.verify_composed_policy(self.authored, changed)
+            runtime.verify_composed_policy(self.authored, changed, self.manifest)
+
+    def test_composed_preview_uses_declared_probe_budget(self):
+        parser = importlib.import_module("cli.parser")
+        parsed = parser.parse_user_config(str(self.config_path), log_summary=False)
+        public = parsed.model_dump(by_alias=True)
+        preview = public["global"]["services"]["api"]["routing_preview"]
+        self.assertEqual(
+            preview["request_timeout_seconds"],
+            self.manifest["evaluation"]["request_timeout_seconds"],
+        )
+        self.assertNotIn(
+            "max_concurrency",
+            self.config["global"]["services"]["api"]["routing_preview"],
+        )
+
+    def test_explicit_preview_and_neighboring_policy_remain_authoritative(self):
+        authored = copy.deepcopy(self.authored)
+        authored["global"].setdefault("services", {})["api"] = {
+            "routing_preview": {"request_timeout_seconds": 100, "max_concurrency": 3}
+        }
+        authored["global"].setdefault("model_catalog", {})["signal_timeout_ms"] = 500
+        fixture = runtime.with_runtime_preview_budget(
+            {"global": runtime._builtin_runtime_global(authored)}, self.manifest
+        )
+        composed = copy.deepcopy(self.config)
+        composed["global"] = fixture["global"]
+        runtime.verify_composed_policy(authored, composed, self.manifest)
+        self.assertEqual(
+            composed["global"]["services"]["api"], authored["global"]["services"]["api"]
+        )
+        self.assertEqual(
+            composed["global"]["model_catalog"], authored["global"]["model_catalog"]
+        )
+        for path in (
+            ("services", "api", "routing_preview", "request_timeout_seconds"),
+            ("services", "api", "routing_preview", "max_concurrency"),
+            ("model_catalog", "signal_timeout_ms"),
+        ):
+            with self.subTest(path=path):
+                changed = copy.deepcopy(composed)
+                target = changed["global"]
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] += 1
+                with self.assertRaisesRegex(
+                    ValueError, "changed authored global policy"
+                ):
+                    runtime.verify_composed_policy(authored, changed, self.manifest)
+
+    def test_injected_preview_budget_is_not_a_broad_service_override(self):
+        for field, value in (("request_timeout_seconds", 301), ("max_concurrency", 32)):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(self.config)
+                changed["global"]["services"]["api"]["routing_preview"][field] = value
+                with self.assertRaisesRegex(
+                    ValueError, "changed authored global policy"
+                ):
+                    runtime.verify_composed_policy(
+                        self.authored, changed, self.manifest
+                    )
 
     def test_authored_global_learning_loss_or_change_is_rejected(self):
         for path, replacement in (
@@ -109,11 +169,12 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "changed authored global policy"
                 ):
-                    runtime.verify_composed_policy(self.authored, changed)
+                    runtime.verify_composed_policy(
+                        self.authored, changed, self.manifest
+                    )
 
     def test_global_overrides_are_limited_to_fixture_deployment_fields(self):
         authored = copy.deepcopy(self.authored)
-        authored["global"]["router"]["auto_model_names"] = ["MoM"]
         authored["global"].setdefault("services", {})["management_api"] = {
             "bind_address": "127.0.0.1",
             "auth": {"mode": "disabled"},
@@ -121,14 +182,13 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         }
         composed = copy.deepcopy(self.config)
         composed["global"]["services"]["management_api"]["port"] = 9080
-        runtime.verify_composed_policy(authored, composed)
-        self.assertEqual(authored["global"]["router"]["auto_model_names"], ["MoM"])
+        runtime.verify_composed_policy(authored, composed, self.manifest)
 
         # The fixture owns bind/auth, but cannot discard another authored field
         # merely because it shares the management_api parent mapping.
         del composed["global"]["services"]["management_api"]["port"]
         with self.assertRaisesRegex(ValueError, "changed authored global policy"):
-            runtime.verify_composed_policy(authored, composed)
+            runtime.verify_composed_policy(authored, composed, self.manifest)
 
     def test_composed_management_listener_is_reachable_in_split_runtime(self):
         parser = importlib.import_module("cli.parser")
@@ -191,23 +251,29 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             self.assertEqual(len({row["shard"] for row in matrix}), len(matrix))
             built_in = [row for row in matrix if row["source"] == "built-in-latest"]
             self.assertEqual(
-                built_in,
+                [{**row, "variants": 0} for row in built_in],
                 [
                     {
                         "source": "built-in-latest",
-                        "shard": "built-in-latest-0",
+                        "shard": f"built-in-latest-mom-v1-{index}",
                         "recipes": "mom-v1",
-                        "variants": 315,
+                        "probe_shard": f"{index}/16",
+                        "variants": 0,
                         "recipes_root": "config/recipes/built-in/latest",
                         "report_dir": "built-in/latest",
                     }
+                    for index in range(16)
                 ],
             )
+            self.assertEqual(sum(row["variants"] for row in built_in), 347)
+            hardware = {"decision-balance", "vela-amd"}
             self.assertTrue(
-                all("vela-amd" not in row["recipes"].split(",") for row in matrix)
+                all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
-            self.assertEqual(receipt["excluded"][0]["recipe"], "vela-amd")
+            self.assertEqual(
+                {excluded["recipe"] for excluded in receipt["excluded"]}, hardware
+            )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "built-in/latest").mkdir(parents=True)
@@ -242,23 +308,33 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 for recipe in item.recipes
             }
 
-            self.assertEqual(len(matrix), len(expected))
             self.assertEqual(
                 {(row["source"], row["recipes"]) for row in matrix},
                 set(expected),
             )
-            for row in matrix:
+            whole = [row for row in matrix if not row["probe_shard"]]
+            self.assertEqual(len(whole), len(expected) - 1)
+            for row in whole:
                 key = (row["source"], row["recipes"])
                 self.assertEqual(row["shard"], f"{row['source']}-{row['recipes']}")
                 self.assertEqual(
                     (row["recipes_root"], row["report_dir"], row["variants"]),
                     expected[key],
                 )
+            sharded = [row for row in matrix if row["probe_shard"]]
+            self.assertEqual(
+                [row["shard"] for row in sharded],
+                [f"built-in-latest-mom-v1-{index}" for index in range(16)],
+            )
+            self.assertEqual(
+                sum(row["variants"] for row in sharded),
+                expected[("built-in-latest", "mom-v1")][2],
+            )
             self.assertIn(("built-in-latest", "mom-v1"), expected)
             self.assertNotIn(("standalone", "vela-amd"), expected)
 
     def test_eval_rejects_zero_or_partial_probe_execution(self):
-        for count in (0, 314, 315):
+        for count in (0, 346, 347):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 probes = runtime.bind_runtime_entrypoints(self.config, self.probes)
                 evaluation = {
@@ -308,11 +384,11 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 )
 
     def test_consolidation_fails_missing_partial_or_empty_results(self):
-        for count in (None, 0, 314, 315):
+        for count in (None, 0, 346, 347):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "inventory.json").write_text(
-                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 315}]})
+                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 347}]})
                 )
                 if count is not None:
                     (root / "mom-v1").mkdir()

@@ -24,7 +24,6 @@ from cli.container_services import (
     container_status,
     container_status_strict,
     container_stop_container,
-    load_openclaw_registry,
 )
 from cli.container_start import container_start_vllm_sr
 from cli.container_support_services import (
@@ -59,5 +58,4 @@ __all__ = [
     "container_stop_container",
     "get_container_image",
     "get_container_runtime",
-    "load_openclaw_registry",
 ]

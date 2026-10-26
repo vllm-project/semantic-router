@@ -125,6 +125,34 @@ def test_failed_first_start_retains_receipt_and_cannot_repeat(tmp_path, monkeypa
     launch.assert_called_once()
 
 
+def test_readiness_failure_names_observed_version_mismatch(tmp_path, monkeypatch):
+    response = Mock(status_code=200)
+    response.json.return_value = {"version": "sr-bench-0.9-rc1"}
+    monkeypatch.setattr(client_module.requests, "get", Mock(return_value=response))
+    monkeypatch.setattr(client_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(client_module.subprocess, "Popen", Mock())
+    with pytest.raises(ValueError) as readiness_failure:
+        Client(store=tmp_path).ensure()
+    message = str(readiness_failure.value)
+    assert "service reports version sr-bench-0.9-rc1" in message
+    assert f"expected {VERSION}" in message
+
+
+def test_readiness_failure_without_reported_version_keeps_original_message(
+    tmp_path, monkeypatch
+):
+    response = Mock(status_code=200)
+    response.json.return_value = {"status": "ready"}
+    monkeypatch.setattr(client_module.requests, "get", Mock(return_value=response))
+    monkeypatch.setattr(client_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(client_module.subprocess, "Popen", Mock())
+    with pytest.raises(ValueError) as readiness_failure:
+        Client(store=tmp_path).ensure()
+    message = str(readiness_failure.value)
+    assert "version" not in message
+    assert message == "sr-bench service did not become ready; inspect service.log"
+
+
 def capture_client(monkeypatch):
     captured = {}
 
@@ -275,6 +303,25 @@ def test_submission_transport_failure_is_never_retried(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="requests are never retried"):
         client.request("POST", "/runs", {"manifest": {}})
     request.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        Mock(side_effect=ValueError("Expecting value: line 1 column 1 (char 0)")),
+        Mock(return_value=["not", "an", "object"]),
+    ],
+)
+def test_unexpected_service_response_body_is_reported_as_value_error(
+    tmp_path, monkeypatch, body
+):
+    client = Client(store=tmp_path)
+    monkeypatch.setattr(client, "ensure", lambda: None)
+    response = Mock(status_code=200)
+    response.json = body
+    monkeypatch.setattr(client_module.requests, "request", Mock(return_value=response))
+    with pytest.raises(ValueError, match="Service returned"):
+        client.request("GET", "/runs")
 
 
 def test_cli_compare_exposes_subject_and_total_spend_from_local_service(

@@ -40,14 +40,6 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 			want: `{"qwen3_model_path":"models/qwen3-embedding","use_cpu":true}`,
 		},
 		{
-			name: "gemma model configuration",
-			config: EmbeddingModelsConfig{
-				GemmaModelPath: "models/gemma-embedding",
-				UseCPU:         true,
-			},
-			want: `{"gemma_model_path":"models/gemma-embedding","use_cpu":true}`,
-		},
-		{
 			name: "mmbert model configuration",
 			config: EmbeddingModelsConfig{
 				MmBertModelPath: "models/mmbert-embedding",
@@ -64,11 +56,10 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 			name: "all models configured",
 			config: EmbeddingModelsConfig{
 				Qwen3ModelPath:  "models/qwen3-embedding",
-				GemmaModelPath:  "models/gemma-embedding",
 				MmBertModelPath: "models/mmbert-embedding",
 				UseCPU:          true,
 			},
-			want: `{"qwen3_model_path":"models/qwen3-embedding","gemma_model_path":"models/gemma-embedding","mmbert_model_path":"models/mmbert-embedding","use_cpu":true}`,
+			want: `{"qwen3_model_path":"models/qwen3-embedding","mmbert_model_path":"models/mmbert-embedding","use_cpu":true}`,
 		},
 		{
 			name: "remote endpoint configuration",

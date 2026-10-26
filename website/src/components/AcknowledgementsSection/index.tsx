@@ -25,7 +25,7 @@ const AcknowledgementsSection: React.FC = () => {
       <div className="site-shell-container">
         <div className={styles.header}>
           <SectionLabel>
-            <Translate id="acknowledgements.label">Ecosystem</Translate>
+            <Translate id="acknowledgements.label">Open-source foundations</Translate>
           </SectionLabel>
           <h2 className={styles.title}>
             <Translate id="acknowledgements.title">Built with open source</Translate>
@@ -54,6 +54,7 @@ const AcknowledgementsSection: React.FC = () => {
                     src={project.logo}
                     alt={project.name}
                     className={styles.projectLogo}
+                    loading="lazy"
                   />
                 </div>
                 <span className={styles.projectMeta}>

@@ -201,7 +201,7 @@ func sendHallucinationChatCompletion(
 		// concrete model name bypasses every signal, decision and plugin by
 		// design (processor_req_body.go), so asking for one here would leave
 		// nothing to detect with.
-		"model":  "MoM",
+		"model":  "vllm-sr/auto",
 		"stream": stream,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": testCase.Question},
