@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 开放智能指数
 sidebar_label: 智能指数
 description: Model Arena 排名和路由质量证据背后的版本化评测层级。

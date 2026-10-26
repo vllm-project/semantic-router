@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -391,6 +392,9 @@ extraVolumeMounts:
   - name: workspace-models
     mountPath: /app/models
 `, cluster.WorkspaceModelsNodeMountPath)
+	if hfEndpoint := strings.TrimSpace(os.Getenv("HF_ENDPOINT")); hfEndpoint != "" {
+		content += "extraEnv:\n  - name: HF_ENDPOINT\n    value: " + strconv.Quote(hfEndpoint) + "\n"
+	}
 
 	if _, err := tmpFile.WriteString(content); err != nil {
 		_ = tmpFile.Close()

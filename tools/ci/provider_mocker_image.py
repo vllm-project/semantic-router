@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from http import HTTPStatus
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -23,7 +24,11 @@ SHA = re.compile(r"[0-9a-f]{40}")
 
 
 class PublicationUnavailableError(ValueError):
-    """The requested input version has not been published yet."""
+    """The requested publication could not be accessed or qualified."""
+
+
+class PublicationMissingError(PublicationUnavailableError):
+    """The registry has no publication for these exact build inputs."""
 
 
 def is_build_input(path: str) -> bool:
@@ -130,9 +135,13 @@ def resolve_published(record: dict, client: RegistryClient | None = None) -> dic
         client = client or RegistryClient()
         manifest, digest = client.document("manifests", tag)
     except HTTPError as error:
-        if error.code in {401, 403, 404}:
+        if error.code == HTTPStatus.NOT_FOUND:
+            raise PublicationMissingError(
+                f"Qualified provider-mocker {tag} is unavailable; build the exact inputs locally"
+            ) from error
+        if error.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
             raise PublicationUnavailableError(
-                f"Qualified provider-mocker {tag} is unavailable; complete its main publication first"
+                f"Cannot access qualified provider-mocker {tag}"
             ) from error
         raise
     images = []

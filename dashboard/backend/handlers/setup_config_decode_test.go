@@ -44,6 +44,10 @@ func TestSetupRejectsUnknownFieldsBeforeActivationPersistence(t *testing.T) {
 }
 
 func TestSetupRemoteImportRejectsUnknownFieldsBeforeTypedTransport(t *testing.T) {
+	// The fixture server is on loopback; declare it the way an operator would
+	// declare a real internal target (#1388).
+	allowLoopbackForTest(t)
+
 	root := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, root)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

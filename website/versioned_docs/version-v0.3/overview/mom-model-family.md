@@ -25,7 +25,7 @@ All MoM models are:
 #### Domain/Intent Classifier
 
 - **Model ID**: `models/mmbert32k-intent-classifier-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-intent-classifier-merged`
+- **HuggingFace**: `vllm-sr/mmbert32k-intent-classifier-merged`
 - **Purpose**: Classify user queries into 14 MMLU categories (math, science, history, etc.)
 - **Architecture**: mmBERT-32K merged classifier (307M)
 - **Use Case**: Route queries to domain-specific models or experts
@@ -33,7 +33,7 @@ All MoM models are:
 #### PII Detector
 
 - **Model ID**: `models/mmbert32k-pii-detector-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-pii-detector-merged`
+- **HuggingFace**: `vllm-sr/mmbert32k-pii-detector-merged`
 - **Purpose**: Detect 17 PII entity types across 35 BIO labels
 - **Architecture**: mmBERT-32K merged token classifier (307M)
 - **Use Case**: Privacy protection, compliance, data masking
@@ -41,7 +41,7 @@ All MoM models are:
 #### Jailbreak Detector
 
 - **Model ID**: `models/mmbert32k-jailbreak-detector-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-jailbreak-detector-merged`
+- **HuggingFace**: `vllm-sr/mmbert32k-jailbreak-detector-merged`
 - **Purpose**: Detect prompt injection and jailbreak attempts
 - **Architecture**: mmBERT-32K merged classifier (307M)
 - **Use Case**: Content safety, prompt security
@@ -49,7 +49,7 @@ All MoM models are:
 #### Feedback Detector
 
 - **Model ID**: `models/mmbert32k-feedback-detector-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-feedback-detector-merged`
+- **HuggingFace**: `vllm-sr/mmbert32k-feedback-detector-merged`
 - **Purpose**: Classify user feedback into 4 types (satisfied, need clarification, wrong answer, want different)
 - **Architecture**: mmBERT-32K merged classifier (307M)
 - **Use Case**: Adaptive routing, conversation improvement
@@ -77,7 +77,7 @@ All MoM models are:
 #### Embedding Ultra (Default)
 
 - **Model ID**: `models/mom-embedding-ultra`
-- **HuggingFace**: `llm-semantic-router/mmbert-embed-32k-2d-matryoshka`
+- **HuggingFace**: `vllm-sr/mmbert-embed-32k-2d-matryoshka`
 - **Purpose**: Long-context multilingual semantic similarity with 2D Matryoshka support
 - **Architecture**: mmBERT 2D Matryoshka (307M parameters)
 - **Embedding Dimension**: 768 (supports lower dimensions via Matryoshka)
@@ -88,7 +88,7 @@ All MoM models are:
 #### Halugate Sentinel
 
 - **Model ID**: `models/mom-halugate-sentinel`
-- **HuggingFace**: `LLM-Semantic-Router/halugate-sentinel`
+- **HuggingFace**: `vllm-sr/halugate-sentinel`
 - **Purpose**: First-stage hallucination screening
 - **Architecture**: BERT-base (110M)
 - **Use Case**: Fast hallucination detection, pre-filtering

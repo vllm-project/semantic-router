@@ -182,13 +182,20 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		if err == nil && result != nil {
 			componentScores["experience"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
+		} else if err != nil {
+			logging.Warnf("[Hybrid] experience selector failed: %v", err)
 		}
 	}
 
 	// Get RouterDC scores
 	if h.routerDCSelector != nil && h.config.RouterDCWeight > 0 {
 		result, err := h.routerDCSelector.Select(ctx, selCtx)
-		if err == nil && result != nil {
+		if err != nil {
+			if requestErr := ctx.Err(); requestErr != nil {
+				return nil, requestErr
+			}
+			logging.Warnf("[Hybrid] router_dc selector failed: %v", err)
+		} else if result != nil {
 			componentScores["router_dc"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
 		}
@@ -200,6 +207,8 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		if err == nil && result != nil {
 			componentScores["automix"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
+		} else if err != nil {
+			logging.Warnf("[Hybrid] automix selector failed: %v", err)
 		}
 	}
 
@@ -215,7 +224,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 
 	// Apply cost adjustment
 	if h.config.CostWeight > 0 {
-		h.applyCostAdjustment(combinedScores, selCtx.CostWeight)
+		h.applyCostAdjustment(combinedScores)
 	}
 
 	h.applyCacheAffinity(combinedScores, selCtx)
@@ -371,8 +380,8 @@ func (h *HybridSelector) combineScores(components map[string]CandidateScores, ca
 }
 
 // applyCostAdjustment applies cost-based score adjustment
-func (h *HybridSelector) applyCostAdjustment(scores CandidateScores, costWeight float64) {
-	if len(h.modelCosts) == 0 || costWeight <= 0 {
+func (h *HybridSelector) applyCostAdjustment(scores CandidateScores) {
+	if len(h.modelCosts) == 0 || h.config.CostWeight <= 0 {
 		return
 	}
 	minCost, maxCost := math.MaxFloat64, 0.0
@@ -386,7 +395,7 @@ func (h *HybridSelector) applyCostAdjustment(scores CandidateScores, costWeight 
 	}
 	for i, row := range scores {
 		if cost, ok := h.modelCosts[row.Candidate.Model]; ok {
-			bonus := (1 - (cost-minCost)/(maxCost-minCost)) * costWeight * h.config.CostWeight
+			bonus := (1 - (cost-minCost)/(maxCost-minCost)) * h.config.CostWeight
 			scores[i].Score *= 1 + bonus
 		}
 	}

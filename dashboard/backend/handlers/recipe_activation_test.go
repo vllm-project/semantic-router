@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 )
 
@@ -248,6 +249,170 @@ func TestRecipeActivatorRequiresConfirmedPlanForListenerAndStorageRecreation(t *
 	}
 }
 
+func TestRecipeActivatorRevocationDuringPlanningLeavesNoActivationWrites(t *testing.T) {
+	store, summary, configPath := importedActivationFixture(t, "accuracy")
+	beforeConfig := mustReadFile(t, configPath)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var allowed atomic.Bool
+	allowed.Store(true)
+	var revalidations atomic.Int32
+	activator := NewRecipeActivator(RecipeActivatorOptions{
+		Store:      store,
+		ConfigPath: configPath,
+		ConfigDir:  filepath.Dir(configPath),
+		Topology:   testTopologyForHotSwitch(),
+		RealizeConfig: func(raw []byte, _ string) ([]byte, error) {
+			close(entered)
+			<-release
+			return raw, nil
+		},
+		ApplyRuntime: func(path, _ string) (string, error) {
+			t.Error("revoked activation applied runtime")
+			return path, nil
+		},
+		VerifyRuntime: func(context.Context, string) error { return nil },
+		VerifyEnvoy:   func(context.Context) error { return nil },
+	})
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx := auth.WithPermissionRevalidator(parent, func(ctx context.Context) error {
+		revalidations.Add(1)
+		if ctx.Err() != nil {
+			return errors.New("activation check used the canceled request context")
+		}
+		if !allowed.Load() {
+			return auth.ErrPermissionDenied
+		}
+		return nil
+	})
+	finished := make(chan error, 1)
+	go func() {
+		_, err := activator.Activate(ctx, activationRequest(summary))
+		finished <- err
+	}()
+	waitActivationPlanningBarrier(t, entered, release)
+	allowed.Store(false)
+	cancel()
+	close(release)
+	assertActivationPermissionRevoked(t, <-finished)
+	if revalidations.Load() != 2 {
+		t.Fatalf("live revalidations = %d, want one before recovery and one after planning", revalidations.Load())
+	}
+	if _, err := os.Stat(filepath.Join(store.Root(), "source-baseline.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("revoked activation wrote the source baseline: %v", err)
+	}
+	assertNoActivationJournal(t, store)
+	assertActivationNone(t, store)
+	if !bytes.Equal(beforeConfig, mustReadFile(t, configPath)) {
+		t.Fatal("revoked activation changed runtime config")
+	}
+}
+
+func TestRecipeActivatorRevocationDuringPlanningLeavesNoDeactivationWrites(t *testing.T) {
+	store, summary, configPath := importedActivationFixture(t, "accuracy")
+	activeActivator := NewRecipeActivator(RecipeActivatorOptions{
+		Store:         store,
+		ConfigPath:    configPath,
+		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
+		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
+		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
+		VerifyRuntime: func(context.Context, string) error { return nil },
+		VerifyEnvoy:   func(context.Context) error { return nil },
+	})
+	mustActivateRecipe(t, activeActivator, summary)
+	beforeConfig := mustReadFile(t, configPath)
+	beforeBaseline := mustReadFile(t, filepath.Join(store.Root(), "source-baseline.json"))
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var allowed atomic.Bool
+	allowed.Store(true)
+	var revalidations atomic.Int32
+	activator := NewRecipeActivator(RecipeActivatorOptions{
+		Store:      store,
+		ConfigPath: configPath,
+		ConfigDir:  filepath.Dir(configPath),
+		Topology: &blockingActivationInventory{
+			runtimeTopologySource: testTopologyForHotSwitch(),
+			entered:               entered,
+			release:               release,
+		},
+		ApplyRuntime: func(path, _ string) (string, error) {
+			t.Error("revoked deactivation applied runtime")
+			return path, nil
+		},
+		VerifyRuntime: func(context.Context, string) error { return nil },
+		VerifyEnvoy:   func(context.Context) error { return nil },
+	})
+	ctx := auth.WithPermissionRevalidator(context.Background(), func(context.Context) error {
+		revalidations.Add(1)
+		if !allowed.Load() {
+			return auth.ErrPermissionDenied
+		}
+		return nil
+	})
+	finished := make(chan error, 1)
+	go func() {
+		_, err := activator.Deactivate(ctx)
+		finished <- err
+	}()
+	waitActivationPlanningBarrier(t, entered, release)
+	allowed.Store(false)
+	close(release)
+	assertActivationPermissionRevoked(t, <-finished)
+	if revalidations.Load() != 2 {
+		t.Fatalf("live revalidations = %d, want one before recovery and one before the journal write", revalidations.Load())
+	}
+	assertNoActivationJournal(t, store)
+	if _, state, err := store.ActivationStatus(); err != nil || state != recipe.ActivationActive {
+		t.Fatalf("revoked deactivation state = %q, %v", state, err)
+	}
+	if !bytes.Equal(beforeBaseline, mustReadFile(t, filepath.Join(store.Root(), "source-baseline.json"))) {
+		t.Fatal("revoked deactivation changed source baseline")
+	}
+	if !bytes.Equal(beforeConfig, mustReadFile(t, configPath)) {
+		t.Fatal("revoked deactivation changed runtime config")
+	}
+}
+
+type blockingActivationInventory struct {
+	runtimeTopologySource
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingActivationInventory) Inventory(ctx context.Context) (runtimeTopologyInventory, error) {
+	close(b.entered)
+	<-b.release
+	return b.runtimeTopologySource.Inventory(ctx)
+}
+
+func waitActivationPlanningBarrier(t *testing.T, entered, release chan struct{}) {
+	t.Helper()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("activation planning did not reach the revocation barrier")
+	}
+}
+
+func assertActivationPermissionRevoked(t *testing.T, err error) {
+	t.Helper()
+	packageErr, ok := recipe.AsPackageError(err)
+	if !ok || packageErr.Code != "permission_revoked" || packageErr.Status != http.StatusForbidden {
+		t.Fatalf("activation after revocation = %#v", err)
+	}
+}
+
+func assertNoActivationJournal(t *testing.T, store *recipe.Store) {
+	t.Helper()
+	if _, _, err := store.Transaction(); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("activation journal exists: %v", err)
+	}
+}
+
 func TestRecipeActivatorRejectsManagementAPIAuthBeforeJournal(t *testing.T) {
 	for _, bearerSide := range []string{"current", "target"} {
 		t.Run(bearerSide, func(t *testing.T) {
@@ -258,6 +423,7 @@ func TestRecipeActivatorRejectsManagementAPIAuthBeforeJournal(t *testing.T) {
 
 func assertManagementAuthRejectedBeforeJournal(t *testing.T, bearerSide string) {
 	t.Helper()
+	t.Setenv(recipe.ManagementCredentialEnv, testManagementCredential)
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
 	if bearerSide == "current" {
 		mustWriteActivationConfig(t, configPath, withManagementBearer(mustReadFile(t, configPath)))
@@ -642,6 +808,23 @@ func TestRouterActivationVerifierPollsPendingUntilExactActiveHash(t *testing.T) 
 	}
 }
 
+func TestRouterActivationVerifierReturnsARefusalThatOnlyNeedsARestart(t *testing.T) {
+	expected := strings.Repeat("d", 64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"generated_runtime_hash":"` + expected + `","active_runtime_hash":"old","activation_status":"rejected",` +
+			`"activation":{"document_hash":"sha256:` + expected + `","status":"rejected","reasons":[` +
+			`{"code":"restart_required","path":"listeners[0].port","message":"listener http changed its port"}]}}`))
+	}))
+	defer server.Close()
+	verify := newRouterActivationVerifier(server.URL, server.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	restart, ok := asRestartNeeded(verify(ctx, "sha256:"+expected))
+	if !ok || restart.detail != "listener http changed its port" {
+		t.Fatalf("verify() = %#v, want the Router's restart_required reason", restart)
+	}
+}
+
 func TestRouterActivationVerifierStopsOnContextDeadline(t *testing.T) {
 	expected := strings.Repeat("c", 64)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -715,12 +898,7 @@ func activationRequest(summary recipe.PackageSummary) recipe.ActivateRequest {
 }
 
 func testTopologyForHotSwitch() *fakeRuntimeTopology {
-	return &fakeRuntimeTopology{inventory: runtimeTopologyInventory{
-		ContainerRunning: map[string]bool{
-			managedContainerNameForService("router"): true,
-			managedContainerNameForService("envoy"):  true,
-		},
-	}}
+	return &fakeRuntimeTopology{}
 }
 
 func withManagementBearer(config []byte) []byte {

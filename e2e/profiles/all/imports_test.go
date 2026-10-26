@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -45,6 +46,24 @@ func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
 	}
 }
 
+func TestRoutingErrorsRetainBothTransportsAndBaselineFallback(t *testing.T) {
+	for name, required := range map[string][]string{
+		"routing-errors":   {"routing-error-codes", "chat-completions-request"},
+		"standalone":       {"routing-error-codes", "standalone-chat-completions"},
+		"envoy-ai-gateway": {"unknown-model-error-codes", "decision-fallback-behavior"},
+	} {
+		profile, err := framework.NewProfileByName(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, testcase := range required {
+			if !slices.Contains(profile.GetTestCases(), testcase) {
+				t.Fatalf("%s lost its %s contract", name, testcase)
+			}
+		}
+	}
+}
+
 func TestExternalGatewayResponsesProfileCoversStateContract(t *testing.T) {
 	profile, err := framework.NewProfileByName("external-gateway-responses")
 	if err != nil {
@@ -67,10 +86,13 @@ func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
 			"protocol-codec-chat-backend-streaming-matrix",
 			"protocol-codec-responses-backend-buffered-matrix",
 			"protocol-codec-responses-backend-streaming-matrix",
+			"protocol-codec-chat-backend-agent-client-replay",
+			"protocol-codec-responses-backend-agent-client-replay",
 		},
 		"provider-protocols": {
 			"protocol-codec-anthropic-backend-buffered-matrix",
 			"protocol-codec-anthropic-backend-streaming-matrix",
+			"protocol-codec-anthropic-backend-agent-client-replay",
 		},
 	}
 

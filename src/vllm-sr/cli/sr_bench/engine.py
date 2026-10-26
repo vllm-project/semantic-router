@@ -5,8 +5,10 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import socket
 import threading
 import time
+from contextlib import contextmanager, suppress
 from http import HTTPStatus
 
 import requests
@@ -15,14 +17,14 @@ from cli.routing_preview import build_preview_request, case_request_fields
 
 from .activity import CallActivity
 from .adapters import get_adapter
-from .contracts import digest, plan, planned_cells
+from .contracts import SESSION_AWARE, digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
 from .native_output import capacity as native_capacity
 from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
 from .report import BUCKETS, make_report
 from .store import TERMINAL, now
-from .transport import CallFailure, chat, effective_request
+from .transport import CallFailure, chat, effective_request, request_phase
 
 
 class ReviewedPlanChangedError(ValueError):
@@ -56,6 +58,11 @@ class Context:
             self.store.root / "runs" / run_id / digest([case["id"], target["id"]])[:24]
         )
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.session_id: str | None = (
+            f"{run_id}-{digest([case['id'], target['id']])[:24]}"
+            if target.get("session_mode") == SESSION_AWARE
+            else None
+        )
 
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
@@ -77,6 +84,7 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
+        session_id: str | None = self.session_id if role == "subject" else None
         if role == "subject" and not any(
             call["role"] == "subject" for call in self.calls
         ):
@@ -144,22 +152,28 @@ class Context:
         activity = CallActivity(
             lambda value: self.store.update_call_activity(call_id, value)
         )
+        call_data = {
+            "model": selected["model"],
+            "activity": activity.snapshot(),
+            "request": {
+                "messages": messages,
+                "sampling": self.manifest["sampling"],
+                "request_params": selected.get("request_params", {}),
+                "effective_body": request_body,
+                "extra_body": extra_body,
+            },
+        }
+        if session_id is not None:
+            call_data["session_id"] = session_id
+        if role == "subject":
+            call_data["phase"] = request_phase(messages)
+            call_data["phase_source"] = "request"
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
             self.target["id"],
             role,
-            {
-                "model": selected["model"],
-                "activity": activity.snapshot(),
-                "request": {
-                    "messages": messages,
-                    "sampling": self.manifest["sampling"],
-                    "request_params": selected.get("request_params", {}),
-                    "effective_body": request_body,
-                    "extra_body": extra_body,
-                },
-            },
+            call_data,
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
@@ -173,6 +187,7 @@ class Context:
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
+                session_id=session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -247,14 +262,30 @@ class Engine:
                 for cancel in self.cancels.values():
                     cancel.set()
 
+    @contextmanager
+    def admit_replay(self, owner, request_key):
+        """Hold shutdown admission and the store lock while materializing a replay.
+
+        An existing idempotency key can be reconciled after shutdown. New keys
+        and requests without a key cannot create a run once admission closes.
+        """
+        with self._admission, self.store.lock:
+            if not (request_key and self.store.request(owner, request_key)):
+                self._reject_when_closing()
+            yield
+
+    def _reject_when_closing(self):
+        """A new run is not admitted once shutdown closed admission."""
+        if self._closed:
+            raise EngineClosedError("Evaluation service is shutting down")
+
     def _admit(self, frozen, owner, request_key):
         """Under the admission lock, reconcile an existing run or allow creation."""
         if request_key and (existing := self.store.request(owner, request_key)):
             if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
                 raise ValueError("idempotency key is already bound to a different plan")
             return existing
-        if self._closed:
-            raise EngineClosedError("Evaluation service is shutting down")
+        self._reject_when_closing()
         return None
 
     def start(
@@ -371,18 +402,40 @@ class Engine:
                         "preview_context": manifest["preview_context"],
                     }
                 )
+                if ctx.cancelled():
+                    raise CallFailure("Run cancelled or wall-time budget exhausted")
                 response = requests.post(
                     url,
                     json=payload,
                     headers=headers,
+                    stream=True,
                     timeout=min(
                         manifest["limits"]["total_timeout_s"],
                         manifest["limits"]["idle_timeout_s"],
+                        max(0.1, ctx.deadline - time.monotonic()),
                     ),
                 )
-                if response.status_code >= HTTPStatus.BAD_REQUEST:
-                    raise ValueError(f"Preview HTTP {response.status_code}")
-                routing = response.json()
+                stop = threading.Event()
+
+                def watch():
+                    while not stop.wait(0.1):
+                        if ctx.cancelled():
+                            with suppress(AttributeError, OSError):
+                                response.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+                            return
+
+                watcher = threading.Thread(target=watch, daemon=True)
+                watcher.start()
+                try:
+                    if response.status_code >= HTTPStatus.BAD_REQUEST:
+                        raise ValueError(f"Preview HTTP {response.status_code}")
+                    routing = response.json()
+                    if ctx.cancelled():
+                        raise CallFailure("Run cancelled or wall-time budget exhausted")
+                finally:
+                    stop.set()
+                    response.close()
+                    watcher.join()
                 if (
                     target.get("config_hash")
                     and routing.get("config_hash") != target["config_hash"]

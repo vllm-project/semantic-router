@@ -64,11 +64,10 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 	t.Cleanup(func() { _ = server.service.Close() })
 
 	watchCtx, watcherDone := server.lifecycle.startWatcher(context.Background())
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		t.Fatal(err)
+	watcher := &fsnotify.Watcher{
+		Events: make(chan fsnotify.Event),
+		Errors: make(chan error),
 	}
-	t.Cleanup(func() { _ = watcher.Close() })
 	reloadStarted := make(chan struct{})
 	releaseReloadCh := make(chan struct{})
 	var releaseReloadOnce sync.Once

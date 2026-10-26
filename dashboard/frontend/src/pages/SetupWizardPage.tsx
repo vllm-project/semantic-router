@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useReadonly } from "../contexts/ReadonlyContext";
+import { useCapabilities, useCapability } from "../contexts/CapabilitiesContext";
+import { isCapabilityUsable } from "../contexts/dashboardCapabilities";
 import { useSetup } from "../contexts/SetupContext";
 import { markOnboardingPending } from "../utils/onboarding";
 import {
@@ -28,6 +30,7 @@ import {
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
+  switchSetupModelProvider,
   type ImportedSetupConfig,
   type ModelDraft,
   type PresetCatalogState,
@@ -41,18 +44,35 @@ import {
   type SetupStep,
   type SetupValidationState,
 } from "./setupWizardSupport";
-import {
-  getSetupProviderOption,
-  type ProviderKind,
-} from "./setupWizardProviderCatalog";
+import { type ProviderKind } from "./setupWizardProviderCatalog";
 import styles from "./SetupWizardPage.module.css";
+import { SetupDecisionModelSection } from "./SetupWizardDecisionModel";
+import {
+  configuredDecisionModel,
+  withDecisionModel,
+  type DecisionModelName,
+} from "./decisionModelSupport";
 
 const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate();
   const { setupState, refreshSetupState } = useSetup();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
+  const { isLoading: capabilitiesLoading, error: capabilitiesError } = useCapabilities();
+  const setupCapability = useCapability("setup");
+  const activationBlockedReason = capabilitiesLoading
+    ? "Checking setup activation access…"
+    : capabilitiesError ??
+      (!setupCapability
+        ? "Setup activation access was not reported."
+        : isCapabilityUsable(setupCapability)
+          ? null
+          : setupCapability.remediation || "Setup activation is not available.");
+  const activationNotice =
+    setupCapability?.state === "degraded" ? setupCapability.remediation : null;
 
   const [currentStep, setCurrentStep] = useState<SetupStep>(0);
+  const [decisionModelChoice, setDecisionModelChoice] =
+    useState<DecisionModelName | null>(null);
   const [models, setModels] = useState<ModelDraft[]>([createModelDraft(1)]);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
   const [routingMode, setRoutingMode] = useState<SetupRoutingMode>("scratch");
@@ -195,12 +215,19 @@ const SetupWizardPage: React.FC = () => {
       : routingMode === "remote"
         ? "From remote"
         : "From scratch";
-  const draftConfig =
+  const routeConfig =
     routingMode === "preset"
       ? (presetImportedConfig?.config ?? null)
       : routingMode === "remote"
         ? (importedRemoteConfig?.config ?? null)
         : scratchConfig;
+  // A route keeps the decision model it names until one is chosen here.
+  const draftConfig =
+    routeConfig && decisionModelChoice
+      ? withDecisionModel(routeConfig, decisionModelChoice)
+      : routeConfig;
+  const selectedDecisionModel =
+    decisionModelChoice ?? configuredDecisionModel(routeConfig);
   const generatedCounts =
     routingMode === "preset"
       ? (presetImportedConfig?.counts ?? createSetupConfigCounts())
@@ -287,16 +314,7 @@ const SetupWizardPage: React.FC = () => {
         }
 
         if (field === "providerKind") {
-          const nextProvider = value as ProviderKind;
-          const nextBaseUrl =
-            getSetupProviderOption(nextProvider).initialBaseUrl;
-          return {
-            ...model,
-            providerKind: nextProvider,
-            baseUrl: model.baseUrl.trim()
-              ? model.baseUrl
-              : nextBaseUrl,
-          };
+          return switchSetupModelProvider(model, value as ProviderKind);
         }
 
         return { ...model, [field]: value };
@@ -594,7 +612,11 @@ const SetupWizardPage: React.FC = () => {
 
     try {
       const payload = validatedConfig ?? draftConfig;
-      await activateSetupConfig(payload);
+      const response = await activateSetupConfig(payload);
+      if (response.status === "persisted") {
+        setActivationState("persisted");
+        return;
+      }
       markOnboardingPending();
       await refreshSetupState();
       navigate("/dashboard", { replace: true });
@@ -678,6 +700,12 @@ const SetupWizardPage: React.FC = () => {
               onRetryPresets={() => void loadPresets()}
             />
           )}
+          {currentStep === 1 && (
+            <SetupDecisionModelSection
+              value={selectedDecisionModel}
+              onChange={setDecisionModelChoice}
+            />
+          )}
           {currentStep === 2 && (
             <ReviewActivatePanel
               currentRouteLabel={currentRouteLabel}
@@ -693,6 +721,8 @@ const SetupWizardPage: React.FC = () => {
               previewSource={previewSource}
               readonlyLoading={readonlyLoading}
               isReadonly={isReadonly}
+              activationBlockedReason={activationBlockedReason}
+              activationNotice={activationNotice}
               onValidateAgain={() => void handleValidateAgain()}
             />
           )}
@@ -727,11 +757,15 @@ const SetupWizardPage: React.FC = () => {
                     validationState !== "valid" ||
                     !validatedCounts.canActivate ||
                     activationState === "activating" ||
-                    (!readonlyLoading && isReadonly)
+                    activationState === "persisted" ||
+                    (!readonlyLoading && isReadonly) ||
+                    activationBlockedReason !== null
                   }
                 >
                   {activationState === "activating"
                     ? "Activating…"
+                    : activationState === "persisted"
+                      ? "Saved; rollout required"
                     : "Activate"}
                 </button>
               )}

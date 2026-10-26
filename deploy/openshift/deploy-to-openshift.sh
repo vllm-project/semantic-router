@@ -54,6 +54,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "By default, deploys CPU-only provider-mocker backends."
             echo "Set PROVIDER_MOCKER_IMAGE to a qualified registry image digest."
+            echo "Set GF_LIVE_ALLOWED_ORIGINS to comma-separated trusted external Dashboard origins."
+            echo "Unset preserves the Grafana manifest value; empty keeps Grafana's default origin checks."
             echo "Use --classifier-gpu to run the Router classifier on GPU independently."
             exit 0
             ;;
@@ -136,6 +138,14 @@ for i in {1..30}; do
     break
 done
 success "Namespace ready"
+
+# ServiceAccount and the Role letting the router/dashboard patch their own
+# ConfigMap through the Kubernetes API instead of the read-only mounted
+# file (issue #3688). Needed before the deployments below reference it.
+log "Creating ServiceAccount and RBAC for config writes..."
+apply_with_namespace "$SCRIPT_DIR/serviceaccount.yaml"
+apply_with_namespace "$SCRIPT_DIR/rbac.yaml"
+success "ServiceAccount and RBAC ready"
 
 # KServe mode: deploy LLMInferenceService and semantic-router
 if [[ "$USE_KSERVE" == "true" ]]; then
@@ -359,7 +369,7 @@ done
 
 # Generate dynamic config with actual ClusterIPs
 log "Generating dynamic configuration with ClusterIPs..."
-TEMP_CONFIG="/tmp/config-openshift-dynamic.yaml"
+TEMP_CONFIG=$(mktemp "${TMPDIR:-/tmp}/config-openshift.XXXXXX")
 
 sed -e "s/DYNAMIC_MODEL_A_IP/$MODEL_A_IP/g" \
     -e "s/DYNAMIC_MODEL_B_IP/$MODEL_B_IP/g" \
@@ -520,7 +530,7 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
 
     # Generate Grafana deployment with dynamic route URL
     log "Generating Grafana deployment with dynamic route URL..."
-    TEMP_GRAFANA_DEPLOYMENT="/tmp/grafana-deployment-dynamic.yaml"
+    TEMP_GRAFANA_DEPLOYMENT=$(mktemp "${TMPDIR:-/tmp}/grafana-deployment.XXXXXX")
     sed -e "s|DYNAMIC_GRAFANA_ROUTE_URL|$GRAFANA_ROUTE_URL|g" \
         -e "s/${DEFAULT_NAMESPACE}/${NAMESPACE}/g" \
         "$SCRIPT_DIR/observability/grafana/deployment.yaml" > "$TEMP_GRAFANA_DEPLOYMENT"
@@ -529,6 +539,15 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     if ! grep -q "$GRAFANA_ROUTE_URL" "$TEMP_GRAFANA_DEPLOYMENT"; then
         error "Grafana route URL substitution failed!"
         exit 1
+    fi
+
+    # Use the CLI's YAML serializer rather than interpolating user input with sed.
+    # An explicit empty value clears an override; unset preserves a patched manifest.
+    if [[ "${GF_LIVE_ALLOWED_ORIGINS+x}" == "x" ]]; then
+        oc set env --local -f "$TEMP_GRAFANA_DEPLOYMENT" --containers=grafana \
+            "GF_LIVE_ALLOWED_ORIGINS=$GF_LIVE_ALLOWED_ORIGINS" -o yaml \
+            > "${TEMP_GRAFANA_DEPLOYMENT}.env"
+        mv "${TEMP_GRAFANA_DEPLOYMENT}.env" "$TEMP_GRAFANA_DEPLOYMENT"
     fi
 
     # Apply Grafana deployment with dynamic URL

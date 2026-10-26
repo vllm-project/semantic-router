@@ -22,6 +22,7 @@ const (
 const (
 	PermUsersManage    = "users.manage"
 	PermUsersView      = "users.view"
+	PermSessionRead    = "session.read"
 	PermConfigRead     = "config.read"
 	PermConfigWrite    = "config.write"
 	PermConfigDeploy   = "config.deploy"
@@ -30,20 +31,19 @@ const (
 	PermEvalRun        = "evaluation.run"
 	PermTopologyRead   = "topology.read"
 	PermLogsRead       = "logs.read"
-	PermOpenClawRead   = "openclaw.read"
-	PermOpenClaw       = "openclaw.manage"
 	PermMcpRead        = "mcp.read"
 	PermMcpManage      = "mcp.manage"
 	PermToolsUse       = "tools.use"
 	PermMlPipeline     = "mlpipeline.manage"
 	PermFeedbackSubmit = "feedback.submit"
 	PermReplayRead     = "replay.read"
+	PermInferenceRun   = "inference.run"
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleWrite: {PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleRead:  {PermSessionRead, PermConfigRead, PermEvalRead, PermTopologyRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
@@ -56,11 +56,16 @@ var legacyRoleAliases = map[string]string{
 }
 
 var AllPermissions = []string{
-	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
-	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
-	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
-	PermFeedbackSubmit, PermReplayRead,
+	PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy,
+	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead,
+	PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
+	PermFeedbackSubmit, PermReplayRead, PermInferenceRun,
 }
+
+// ErrInvalidRole is returned by normalizeRole when the supplied role string is
+// not a recognized role. It is a sentinel so callers can distinguish a
+// client-supplied bad role from a store error.
+var ErrInvalidRole = fmt.Errorf("role must be one of %s, %s, %s", RoleAdmin, RoleWrite, RoleRead)
 
 func normalizeRole(raw string) (string, error) {
 	role := strings.ToLower(strings.TrimSpace(raw))
@@ -75,7 +80,7 @@ func normalizeRole(raw string) (string, error) {
 	case RoleAdmin, RoleWrite, RoleRead:
 		return role, nil
 	default:
-		return "", fmt.Errorf("role must be one of %s, %s, %s", RoleAdmin, RoleWrite, RoleRead)
+		return "", ErrInvalidRole
 	}
 }
 

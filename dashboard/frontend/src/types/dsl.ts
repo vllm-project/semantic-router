@@ -74,6 +74,8 @@ export interface ASTProjectionPartitionDecl {
 export interface ASTProjectionScoreInput {
   signalType: string
   signalName: string
+  kb?: string
+  metric?: string
   weight: number
   valueSource?: string
   match?: number
@@ -113,6 +115,7 @@ export interface ASTModelRef {
   model: string
   reasoning?: boolean
   effort?: string
+  mode?: string
   lora?: string
   paramSize?: string
   weight?: number
@@ -184,7 +187,6 @@ export interface ASTRecipeDecl {
 
 export interface ASTProgram {
   candidateRequirements?: { capabilities?: 'declared'; context?: 'known_limits' }
-  dataPolicy?: { replay?: boolean }
   modelBindings?: Record<string, Record<string, string>>
   strategy?: string
   entrypoints?: ASTEntrypointDecl[]
@@ -266,27 +268,6 @@ export interface ConfigVersion {
 // ---------- Editor State ----------
 
 export type EditorMode = 'dsl' | 'visual'
-
-export interface EditorState {
-  /** Current DSL source text in the editor */
-  dslSource: string
-  /** Compiled YAML output */
-  yamlOutput: string
-  /** Compiled CRD output */
-  crdOutput: string
-  /** Current diagnostics from validation */
-  diagnostics: Diagnostic[]
-  /** Whether WASM runtime is loaded and ready */
-  wasmReady: boolean
-  /** Loading state for async operations */
-  loading: boolean
-  /** Current active editor mode */
-  mode: EditorMode
-  /** Whether there are unsaved changes */
-  dirty: boolean
-  /** Last successful compile timestamp */
-  lastCompileAt: number | null
-}
 
 // ---------- WASM Bridge Interface ----------
 

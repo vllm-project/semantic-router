@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -25,9 +26,10 @@ const (
 
 func init() {
 	pkgtestcases.Register("response-api-restart-recovery", pkgtestcases.TestCase{
-		Description: "Response API data stored in Redis survives a semantic-router pod restart",
-		Tags:        []string{"response-api", "functional", "redis", "restart"},
-		Fn:          testResponseAPIRestartRecovery,
+		Description:         "Response API data stored in Redis survives a semantic-router pod restart",
+		Tags:                []string{"response-api", "functional", "redis", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testResponseAPIRestartRecovery,
 	})
 }
 
@@ -200,7 +202,7 @@ func verifyResponseAfterRestart(ctx context.Context, client *kubernetes.Clientse
 }
 
 func extendRedisKeyTTL(ctx context.Context, client *kubernetes.Clientset, responseID string, ttlSeconds int, opts pkgtestcases.TestCaseOptions) error {
-	podName, useCluster, found, err := getRedisPod(ctx, client)
+	podName, useCluster, found, err := getResponseAPIRedisPod(ctx, client, opts.Profile)
 	if err != nil {
 		return err
 	}

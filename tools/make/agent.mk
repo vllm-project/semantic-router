@@ -25,6 +25,7 @@ AGENT_PRIMARY_WORKTREE ?= $(if $(filter %/.git,$(AGENT_GIT_COMMON_DIR)),$(patsub
 AGENT_WORKTREE_VENV ?= $(CURDIR)/.venv-agent
 AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
+AGENT_BOOTSTRAP_PYTHON ?= python3
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
 AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
@@ -74,9 +75,10 @@ harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain 
 	fi
 
 harness-venv-install: ## Install the repository check dependencies
-	@if [ ! -x "$(AGENT_PYTHON)" ]; then \
+	@if ! "$(AGENT_PYTHON)" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then \
+		"$(AGENT_BOOTSTRAP_PYTHON)" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else "Error: %s needs Python 3.10 or newer, but %s is Python %d.%d.%d at %s. Set AGENT_BOOTSTRAP_PYTHON to a newer interpreter, for example AGENT_BOOTSTRAP_PYTHON=python3.12." % (tuple(sys.argv[1:]) + sys.version_info[:3] + (sys.executable,)))' "$(AGENT_VENV)" "$(AGENT_BOOTSTRAP_PYTHON)" || exit 1; \
 		echo "Creating $(AGENT_VENV)..."; \
-		python3 -m venv "$(AGENT_VENV)"; \
+		"$(AGENT_BOOTSTRAP_PYTHON)" -m venv --clear "$(AGENT_VENV)"; \
 	fi
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
 		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
@@ -116,23 +118,23 @@ harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdow
 		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
 
+# golangci-lint cannot type-check a standard library newer than the Go that
+# built it, so rebuild it after a Go release upgrade such as 1.26 to 1.27.
 harness-go-bootstrap: ## Install Go lint tooling only when Go changed
 	@if command -v go >/dev/null 2>&1; then \
 		GOLANGCI_BIN="$$(go env GOPATH)/bin/golangci-lint"; \
-		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) "; then \
+		GO_MINOR='s/.*go1\.\([0-9][0-9]*\).*/\1/p'; \
+		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) " || \
+			[ "$$(go version "$$GOLANGCI_BIN" | sed -n "$$GO_MINOR")" -lt "$$(go env GOVERSION | sed -n "$$GO_MINOR")" ]; then \
 			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION); \
 		fi; \
 	fi
-
-harness-rust-bootstrap: ## Install Rust lint tooling only when Rust changed
-	@if command -v rustup >/dev/null 2>&1; then rustup component add clippy >/dev/null 2>&1 || true; fi
 
 test-and-build-local: ## Reproduce the CI Test And Build job locally
 	@$(LOG_TARGET)
 	@set -e; \
 	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true; $(MAKE) stop-qdrant >/dev/null 2>&1 || true' EXIT; \
 	$(MAKE) check-go-mod-tidy; \
-	$(MAKE) rust-ci; \
 	python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt; \
 	$(MAKE) test-model-selection-parity; \
 	$(MAKE) helm-ci-validate HELM_NAMESPACE=test-namespace; \
@@ -141,10 +143,10 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	$(MAKE) start-qdrant; \
 	$(MAKE) start-redis; \
 	$(MAKE) start-valkey; \
-	CI=true CGO_ENABLED=1 $(NATIVE_ENV) MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
+	CI=true CGO_ENABLED=1 MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
 
 .PHONY: impact check verify ci-full harness-check harness-venv-install harness-bootstrap \
-	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap harness-rust-bootstrap \
+	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap \
 	test-and-build-local
 
 agent-skill-sync: ## Regenerate the public install skill from its repository source

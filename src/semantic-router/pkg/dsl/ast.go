@@ -329,7 +329,6 @@ type ArrayVal struct {
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
 	CandidateRequirements *config.CandidateRequirements
-	DataPolicy            *config.RoutingDataPolicy
 	ModelBindings         map[string]config.ModelBinding
 	Strategy              string
 	Entrypoints           []*EntrypointDecl
@@ -346,6 +345,7 @@ type Program struct {
 
 // EntrypointDecl is the DSL form of one request-facing recipe binding.
 type EntrypointDecl struct {
+	API        string
 	ModelNames []string
 	Recipe     string
 	Pos        Position

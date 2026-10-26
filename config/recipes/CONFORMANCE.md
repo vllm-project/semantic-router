@@ -58,7 +58,7 @@ authoring mechanics here and release operations in the maintainer guide.
 3. Set `schema_version: v1`, matching `name`, and correct `routing_assets` in
    `probes.yaml`.
 4. Add at least one probe for every decision and every request-facing model
-   entrypoint. Default recipes use `global.router.auto_model_names`; named
+   entrypoint. Default recipes use explicit `entrypoints` or the built-in `vllm-sr/auto`; named
    recipes set `model` and `expected_recipe`.
 5. Declare `expected_algorithm` for every decision and `expected_plugins` when
    the decision configures plugins. A model-free `fast_response` decision has no
@@ -209,7 +209,7 @@ recipe to its catalog entrypoint and supplies explicit Preview-only backend
 fixtures, including capabilities, context limits, pricing, and synthetic
 benchmark records for model selection. It preserves every authored decision,
 signal, projection, algorithm, plugin, and probe. The current MoM bundle runs
-all five entrypoints and all 315 authored probes; counts are checked against the
+all five entrypoints and all 347 authored probes; counts are checked against the
 discovered inventory rather than used to select a smaller sample. These fixtures
 do not measure backend LLM quality or call external providers.
 
@@ -220,6 +220,17 @@ startup, readiness, and evaluation requests. Shared downloaded models live in
 the ignored `models/` cache. Use `VLLM_SR_PORT_OFFSET` to separate host ports when
 running concurrent stacks. Missing reports, zero probes, and incomplete probe
 execution fail the selected CPU gate.
+
+A recipe whose probes take too long for one CPU job sets `evaluation.shards` in
+`probes.yaml`. The planner then emits one live job per probe shard, named
+`<source>-<recipe>-<index>`, and splits the probes by estimated read cost: a
+decision question reads at most the model's first 16,384 tokens, so longer
+inputs weigh the same. Run one shard with
+`RECIPE_CONFORMANCE_PROBE_SHARD=<index>/<count>`; it writes its report under
+`<recipe>/shards/<index>/`. The report step merges a recipe's shards into its
+`eval-report.json` only when every shard reported, then applies the tag policy
+and the execution check to the whole manifest. MoM V1 uses 16 shards because
+its decision model reads long inputs slowly on a CPU.
 
 ### Policy and deployment scope
 
@@ -271,7 +282,9 @@ contains exact live results and T3 receipts.
 
 Static checks always include every maintained recipe. Live CPU planning derives
 hardware requirements from explicit `global.model_catalog.deployments.*.device`
-values. Recipes with non-CPU devices stay in the inventory and are listed with
+values and from a `global.model_catalog.system.decision_model` that runs on a
+GPU only (`Vela-2.0-4B`, `Vela-2.0-9B`), listed as `gpu`. Recipes with non-CPU
+devices stay in the inventory and are listed with
 their required devices in `cpu-eligibility.json` and the consolidated report;
 they do not count as CPU runtime passes. The CPU runner rejects an incompatible
 explicit selection before stopping or starting any containers. It never rewrites

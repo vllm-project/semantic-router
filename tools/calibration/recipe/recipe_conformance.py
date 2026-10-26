@@ -16,6 +16,7 @@ from recipe_conformance_coverage import (
     configured_signal_names,
     evaluate_live_tag_policy,
     summarize_catalog_coverage,
+    tag_categories,
 )
 from recipe_conformance_report import (
     build_consolidated_report,
@@ -28,11 +29,16 @@ from recipe_conformance_runtime import (
     management_auth_bindings,
     prepare_builtin_runtime,
     verify_composed_policy,
+    with_runtime_preview_budget,
 )
 from recipe_conformance_sources import (
     discover_recipe_sources,
     discover_source_inventories,
     matrix_payload,
+    parse_probe_shard,
+    partition_probes,
+    probe_cost,
+    probe_shard_count,
     render_source_rows,
     source_matrix_payload,
 )
@@ -40,11 +46,20 @@ from recipe_metadata_schema import (
     load_recipe_metadata_document,
     validate_recipe_metadata_schema,
 )
-from router_calibration_evaluation import EVALUATION_SCOPES
+from router_calibration_evaluation import (
+    EVALUATION_SCOPES,
+    materialize_probe_messages,
+    materialize_probe_text,
+    message_text_bytes,
+)
 from router_calibration_manifest import Probe, load_probe_manifest
 from router_calibration_report import render_markdown_summary
 from router_calibration_signal_values import signal_value_reference
-from router_calibration_support import evaluate_probes, write_json
+from router_calibration_support import (
+    evaluate_probes,
+    summarize_evaluation,
+    write_json,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_RECIPE_ROOT = REPO_ROOT / "config" / "recipes"
@@ -66,8 +81,7 @@ REQUIRED_MODEL_CARD_HEADINGS = (
 )
 RUNTIME_RECIPE_DIRECTORIES = frozenset({".vllm-sr"})
 RECIPE_CATALOG_DIRECTORIES = frozenset({"built-in"})
-DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto", "auto")
-DEFAULT_AUTO_MODEL_NAME = "MoM"
+DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto",)
 
 
 @dataclass(frozen=True)
@@ -104,6 +118,7 @@ class RecipeInventory:
     fallback_decisions: tuple[str, ...]
     coverage: dict[str, Any]
     required_devices: tuple[str, ...] = ()
+    probe_shard_sizes: tuple[int, ...] = ()
 
 
 @dataclass
@@ -211,28 +226,23 @@ def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def config_auto_entrypoints(config: dict[str, Any]) -> tuple[str, ...]:
-    global_config = _mapping(config.get("global"))
-    if not global_config:
-        return ()
     if config.get("recipes") and not any(
         key in config for key in ("providers", "routing", "entrypoints")
     ):
-        # Portable bundles may carry global defaults without declaring a
-        # runtime. Their entrypoints are supplied when recipes are composed.
         return ()
-    router = _mapping(global_config.get("router"))
-    if "auto_model_names" in router:
-        raw_names = _sequence(router.get("auto_model_names"))
-    else:
-        configured = str(
-            router.get("auto_model_name") or DEFAULT_AUTO_MODEL_NAME
-        ).strip()
-        raw_names = [*DEFAULT_AUTO_ENTRYPOINTS, configured]
+    mappings = [
+        entry
+        for entry in _sequence(config.get("entrypoints"))
+        if _mapping(entry).get("recipe") == "default"
+    ]
+    if not mappings:
+        return DEFAULT_AUTO_ENTRYPOINTS
     return tuple(
         dict.fromkeys(
-            normalized
-            for raw_name in raw_names
-            if (normalized := str(raw_name).strip())
+            str(name).strip()
+            for entry in mappings
+            for name in _sequence(_mapping(entry).get("model_names"))
+            if str(name).strip()
         )
     )
 
@@ -445,7 +455,14 @@ def _assert_probe_coverage(context: ProbeReferenceContext) -> None:
             f"{context.path}: decisions without probes: "
             + ", ".join(f"{recipe}:{name}" for recipe, name in missing_decisions)
         )
-    missing_entrypoints = sorted(set(context.entrypoints) - context.covered_entrypoints)
+    # The built-in default name remains discoverable in a named-only runtime,
+    # but an empty profile has no authored decision for a conformance probe.
+    # Coverage applies to entrypoints of the recipe policies under evaluation.
+    policy_recipes = {recipe for recipe, _ in context.decisions}
+    policy_entrypoints = {
+        name for name, recipe in context.entrypoints.items() if recipe in policy_recipes
+    }
+    missing_entrypoints = sorted(policy_entrypoints - context.covered_entrypoints)
     if missing_entrypoints:
         raise ValueError(
             f"{context.path}: entrypoints without probes: "
@@ -572,6 +589,28 @@ def build_recipe_inventory(path: Path) -> RecipeInventory:
         fallback_decisions=tuple(sorted(fallback_decisions)),
         coverage=coverage,
         required_devices=configured_accelerators(config),
+        probe_shard_sizes=_probe_shard_sizes(probes, probe_shard_count(manifest)),
+    )
+
+
+def _probe_shard_sizes(probes: list[Probe], shard_count: int) -> tuple[int, ...]:
+    if shard_count == 1:
+        return ()
+    return tuple(len(shard) for shard in shard_probes(probes, shard_count))
+
+
+def probe_text_bytes(probe: Probe) -> int:
+    if probe.query is not None:
+        return len(materialize_probe_text(probe).encode("utf-8"))
+    return sum(
+        message_text_bytes(message) for message in materialize_probe_messages(probe)
+    )
+
+
+def shard_probes(probes: list[Probe], shard_count: int) -> list[list[str]]:
+    return partition_probes(
+        [(probe.probe_id, probe_cost(probe_text_bytes(probe))) for probe in probes],
+        shard_count,
     )
 
 
@@ -733,13 +772,17 @@ def command_prepare_runtime(args: argparse.Namespace) -> int:
     recipe_path = args.recipes_root / args.recipe
     build_recipe_inventory(recipe_path)
     authored = load_yaml_mapping(recipe_path / "config.yaml")
+    manifest, _probes = load_probe_manifest(recipe_path / "probes.yaml")
     if not any(key in authored for key in ("providers", "routing", "entrypoints")):
-        composed = prepare_builtin_runtime(recipe_path, args.config, REPO_ROOT)
-        verify_composed_policy(authored, composed)
+        composed = prepare_builtin_runtime(
+            recipe_path, args.config, REPO_ROOT, manifest
+        )
+        verify_composed_policy(authored, composed, manifest)
     else:
+        prepared = with_runtime_preview_budget(authored, manifest)
         args.config.parent.mkdir(parents=True, exist_ok=True)
         with args.config.open("x", encoding="utf-8") as output:
-            output.write((recipe_path / "config.yaml").read_text(encoding="utf-8"))
+            yaml.safe_dump(prepared, output, sort_keys=False)
     return 0
 
 
@@ -762,20 +805,88 @@ def command_eval(args: argparse.Namespace) -> int:
         config = load_yaml_mapping(runtime_config)
         probes = bind_runtime_entrypoints(config, probes)
         validate_probe_references(recipe_path / "probes.yaml", config, manifest, probes)
+    output_dir = args.output_dir / args.recipe
+    selected = None
+    if getattr(args, "probe_shard", None):
+        index, count = parse_probe_shard(args.probe_shard)
+        if count != max(1, len(inventory.probe_shard_sizes)):
+            raise ValueError(
+                f"{args.recipe} splits its probes over "
+                f"{max(1, len(inventory.probe_shard_sizes))} shards, not {count}"
+            )
+        selected = shard_probes(probes, count)[index]
+        output_dir = output_dir / "shards" / str(index)
     evaluation = evaluate_probes(
-        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+        args.router_url,
+        probes,
+        manifest,
+        selected_probe_ids=selected,
+        scope=getattr(args, "scope", "deployment"),
     )
-    tag_acceptance = evaluate_live_tag_policy(
-        evaluation, _mapping(manifest.get("coverage"))
+    executed = [
+        probe for probe in probes if selected is None or probe.probe_id in set(selected)
+    ]
+    tag_acceptance = finalize_evaluation(
+        evaluation,
+        manifest,
+        [probe.probe_id for probe in executed],
+        sorted({probe.model for probe in executed if probe.model}),
+        partial=selected is not None,
     )
+    write_recipe_report(
+        output_dir, asdict(inventory), manifest, evaluation, tag_acceptance
+    )
+    print(
+        json.dumps(
+            {
+                "recipe": args.recipe,
+                "probe_shard": getattr(args, "probe_shard", None),
+                "evaluation_scope": evaluation.get("evaluation_scope", "deployment"),
+                "scopes": evaluation.get("scopes", {}),
+                "matched": evaluation["matched"],
+                "total": evaluation["total"],
+                "passed": evaluation["passed"],
+                "report": str(output_dir),
+            },
+            indent=2,
+        )
+    )
+    return 0 if evaluation["passed"] else 1
+
+
+def finalize_evaluation(
+    evaluation: dict[str, Any],
+    manifest: dict[str, Any],
+    expected_ids: list[str],
+    expected_entrypoints: list[str],
+    *,
+    partial: bool,
+) -> dict[str, Any]:
+    """Apply tag acceptance and execution completeness; a probe shard judges only its own tags."""
+    policy = _mapping(manifest.get("coverage"))
+    if partial:
+        present = {
+            category
+            for result in evaluation["results"]
+            for category in result_tag_categories(result)
+        }
+        policy = {
+            **policy,
+            "min_tag_pass_rate": {
+                category: minimum
+                for category, minimum in _mapping(
+                    policy.get("min_tag_pass_rate")
+                ).items()
+                if category in present
+            },
+        }
+    tag_acceptance = evaluate_live_tag_policy(evaluation, policy)
     evaluation["coverage_acceptance"] = tag_acceptance
     evaluation["passed"] = bool(evaluation["passed"]) and tag_acceptance["passed"]
-    expected_ids = [probe.probe_id for probe in probes]
     executed_ids = [result["id"] for result in evaluation["results"]]
     execution_complete = bool(expected_ids) and sorted(executed_ids) == sorted(
         expected_ids
     )
-    expected_entrypoints = sorted({probe.model for probe in probes if probe.model})
     executed_entrypoints = sorted(
         {result["model"] for result in evaluation["results"] if result.get("model")}
     )
@@ -792,42 +903,96 @@ def command_eval(args: argparse.Namespace) -> int:
             {**result, "matched": bool(result.get(f"{scope}_matched"))}
             for result in evaluation["results"]
         ]
-        scoped_tags = evaluate_live_tag_policy(
-            {"results": scoped_results}, _mapping(manifest.get("coverage"))
-        )
+        scoped_tags = evaluate_live_tag_policy({"results": scoped_results}, policy)
         summary["coverage_acceptance"] = scoped_tags
         summary["passed"] = bool(summary["passed"]) and scoped_tags["passed"]
-    report = {"inventory": asdict(inventory), "evaluation": evaluation}
-    output_dir = args.output_dir / args.recipe
+    return tag_acceptance
+
+
+def result_tag_categories(result: dict[str, Any]) -> set[str]:
+    categories = tag_categories(tuple(result.get("tags", [])))
+    if result.get("messages"):
+        categories.add("multi_turn")
+    if result.get("tools"):
+        categories.add("tools")
+    return categories
+
+
+def write_recipe_report(
+    output_dir: Path,
+    inventory: dict[str, Any],
+    manifest: dict[str, Any],
+    evaluation: dict[str, Any],
+    tag_acceptance: dict[str, Any],
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    write_json(output_dir / "eval-report.json", report)
-    summary = render_markdown_summary(
-        manifest,
-        evaluation,
-        evaluation,
-        None,
-        None,
+    write_json(
+        output_dir / "eval-report.json",
+        {"inventory": inventory, "evaluation": evaluation},
     )
+    summary = render_markdown_summary(manifest, evaluation, evaluation, None, None)
     summary = summary.rstrip() + "\n\n" + render_tag_acceptance_markdown(tag_acceptance)
     (output_dir / "summary.md").write_text(summary, encoding="utf-8")
-    print(
-        json.dumps(
-            {
-                "recipe": args.recipe,
-                "evaluation_scope": evaluation.get("evaluation_scope", "deployment"),
-                "scopes": evaluation.get("scopes", {}),
-                "matched": evaluation["matched"],
-                "total": evaluation["total"],
-                "passed": evaluation["passed"],
-                "report": str(output_dir),
-            },
-            indent=2,
+
+
+def merge_probe_shards(report_root: Path) -> list[str]:
+    """Merge each recipe's complete set of probe-shard reports into its eval report."""
+    merged = []
+    for shards_dir in sorted(report_root.glob("*/shards")):
+        paths = {
+            path.parent.name: path for path in shards_dir.glob("*/eval-report.json")
+        }
+        reports = [
+            json.loads(path.read_text(encoding="utf-8")) for path in paths.values()
+        ]
+        if not reports:
+            continue
+        inventory = reports[0]["inventory"]
+        count = len(inventory.get("probe_shard_sizes") or ())
+        if sorted(paths) != sorted(str(index) for index in range(count)):
+            # A missing shard leaves the recipe unreported, so the report fails.
+            continue
+        manifest, probes = load_probe_manifest(REPO_ROOT / inventory["probes"])
+        order = {probe.probe_id: index for index, probe in enumerate(probes)}
+        results = sorted(
+            (
+                result
+                for report in reports
+                for result in report["evaluation"]["results"]
+            ),
+            key=lambda result: order.get(result["id"], len(order)),
         )
-    )
-    return 0 if evaluation["passed"] else 1
+        first = reports[0]["evaluation"]
+        evaluation = summarize_evaluation(
+            results,
+            manifest,
+            first["router_url"],
+            scope=first.get("evaluation_scope", "deployment"),
+            wall_time_seconds=sum(
+                float(report["evaluation"]["performance"]["wall_time_seconds"])
+                for report in reports
+            ),
+        )
+        evaluation["probe_shards"] = count
+        entrypoints = sorted(
+            {
+                model
+                for report in reports
+                for model in report["evaluation"]["execution"]["expected_entrypoints"]
+            }
+        )
+        tag_acceptance = finalize_evaluation(
+            evaluation, manifest, list(order), entrypoints, partial=False
+        )
+        write_recipe_report(
+            shards_dir.parent, inventory, manifest, evaluation, tag_acceptance
+        )
+        merged.append(shards_dir.parent.name)
+    return merged
 
 
 def command_report(args: argparse.Namespace) -> int:
+    merge_probe_shards(args.output_dir)
     payload = build_consolidated_report(args.output_dir)
     write_json(args.output_dir / "conformance-report.json", payload)
     (args.output_dir / "conformance-report.md").write_text(
@@ -879,7 +1044,11 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--github-output", type=Path)
     plan.set_defaults(func=command_plan)
     plan_all = subparsers.add_parser("plan-all")
-    plan_all.add_argument("--shards", type=int, default=3)
+    plan_all.add_argument(
+        "--shards",
+        type=int,
+        help="group recipes per source into this many shards instead of one job per recipe",
+    )
     plan_all.add_argument("--github-output", type=Path)
     plan_all.set_defaults(func=command_plan_all)
     sources = subparsers.add_parser("sources")
@@ -901,6 +1070,10 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--recipe", required=True)
     evaluate.add_argument("--router-url", required=True)
     evaluate.add_argument("--runtime-config", type=Path)
+    evaluate.add_argument(
+        "--probe-shard",
+        help="evaluate only shard INDEX/COUNT of a manifest that sets evaluation.shards",
+    )
     evaluate.add_argument(
         "--scope",
         choices=EVALUATION_SCOPES,

@@ -26,19 +26,23 @@ package metadata beside the component you are changing.
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
-The build installs the editable `vllm-sr` CLI and creates local Router,
-Dashboard, and Envoy images. `--image-pull-policy never` ensures the
-run uses those local images.
+The build installs the editable `vllm-sr` CLI, builds Router and Dashboard
+images tagged `latest`, and ensures the official Envoy image is available.
+Set `VLLM_SR_IMAGE` explicitly because an editable CLI installation with a
+stable package version defaults to that release's image tag. The CLI derives
+the official Dashboard image with the same tag; `--image-pull-policy never`
+prevents pulling missing images.
 
 Useful lifecycle commands:
 
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy -f
+vllm-sr logs envoy -f  # --gateway extproc only
 vllm-sr dashboard
 vllm-sr stop
 ```
@@ -46,9 +50,15 @@ vllm-sr stop
 For ROCm-specific work:
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
-vllm-sr serve --image-pull-policy never --platform amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
+
+If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
+pass the actual built images to `serve` through `VLLM_SR_IMAGE` and, when needed,
+`VLLM_SR_DASHBOARD_IMAGE`. The build's completion message prints a startup
+command with the selected images.
 
 ## Select the right tests
 
@@ -62,20 +72,17 @@ make check CHANGED_FILES="path/one path/two"
 Common targeted suites include:
 
 ```bash
-# Router and native bindings
+# Router
 make test-semantic-router
-make test-binding
 
-# Classifiers
-make test-category-classifier
-make test-pii-classifier
-make test-jailbreak-classifier
+# Model runtime (tiny fixtures, CPU)
+make model-runtime-test
+
+# Published models through the model runtime
+make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# Fleet simulator
-make vllm-sr-sim-test
 ```
 
 Select integration or E2E explicitly when a change is visible through startup,
@@ -145,7 +152,8 @@ offset.
 
 - Inspect component logs with `vllm-sr logs <service>` before relying on
   container names.
-- Set `RUST_LOG=debug` for native-library diagnostics.
+- Inspect worker readiness and failure reasons through the model-runtime status
+  and logs; see [runtime troubleshooting](../model-runtime/troubleshooting.md).
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
 - Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.

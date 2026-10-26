@@ -49,8 +49,9 @@ class TestManagedBenchmarkIntegration(ServeSessionMixin, CLITestBase):
     def _start_setup(self):
         process = self._start_serve_background(env=self.environment)
         try:
-            self._wait_for_serve_success(process)
+            self._wait_for_setup_mode(process)
         finally:
+            # Serve stops waiting to start the Router; the stack stays in setup.
             self._stop_serve_process(process)
         self.assertEqual(
             self._explicit_container_status(self.ROUTER_CONTAINER_NAME), "created"
@@ -136,7 +137,7 @@ class TestManagedBenchmarkIntegration(ServeSessionMixin, CLITestBase):
                 {
                     "id": "missing-credential-fixture",
                     "kind": "mom",
-                    "model": "auto",
+                    "model": "vllm-sr/auto",
                     "base_url": "http://127.0.0.1:1/v1",
                     "preview_url": "http://127.0.0.1:1/api/v1/routing/preview",
                     "preview_api_key_env": "SR_BENCH_LIFECYCLE_MISSING_TOKEN",

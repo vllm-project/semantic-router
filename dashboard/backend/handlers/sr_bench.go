@@ -93,6 +93,9 @@ func (h *SRBenchHandler) forward(w http.ResponseWriter, r *http.Request, actor d
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("X-SR-Bench-Actor-ID", actor.UserID)
 	request.Header.Set("X-SR-Bench-Actor-Role", actor.Role)
+	if r.Method != http.MethodGet && dashboardauth.RejectRevokedMutation(w, r) {
+		return
+	}
 	response, err := h.client.Do(request)
 	if err != nil {
 		writeSRBenchError(w, http.StatusBadGateway, "sr-bench service is unavailable; saved runs remain owned by the service")

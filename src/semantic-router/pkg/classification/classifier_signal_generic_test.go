@@ -364,3 +364,91 @@ func TestGenericClassifierSignalsRespectCancellation(t *testing.T) {
 		t.Fatalf("signal errors = %v", results.SignalErrors)
 	}
 }
+
+func TestGenericClassifierSignalPublishesPortableObservation(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name: "risk", Type: "llm", Labels: []string{"SAFE", "RISKY"},
+			}}},
+		}},
+		genericClassifiers: map[string]labelClassifier{
+			"risk": fakeLabelClassifier{result: labelClassification{
+				Scores:     map[string]float64{"SAFE": 0.1, "RISKY": 0.9},
+				Thresholds: map[string]float64{"SAFE": 0.8, "RISKY": 0.8},
+				Rationale:  "policy result",
+			}},
+		},
+	}
+	results := &SignalResults{
+		SignalConfidences: map[string]float64{}, SignalValues: map[string]float64{},
+		SignalErrors: map[string]string{}, Metrics: &SignalMetricsCollection{},
+	}
+
+	classifier.evaluateGenericClassifierSignals(
+		results, &sync.Mutex{}, "delete production",
+		map[string]bool{"classifier:risk": true}, context.Background(),
+	)
+
+	if len(results.Observations) != 1 {
+		t.Fatalf("observations = %+v", results.Observations)
+	}
+	observation := results.Observations[0]
+	if observation.Version != "v1" || observation.SignalType != config.SignalTypeClassifier || observation.Name != "risk" {
+		t.Fatalf("observation identity = %+v", observation)
+	}
+	if observation.Availability != "available" || observation.ErrorCode != "" {
+		t.Fatalf("observation availability = %+v", observation)
+	}
+	if observation.Provenance.Evaluator != config.SignalTypeClassifier || observation.Provenance.Backend != "llm" {
+		t.Fatalf("observation provenance = %+v", observation.Provenance)
+	}
+	if observation.PayloadType != config.RemoteClassifierContractLabelDistribution || observation.Payload == nil {
+		t.Fatalf("observation payload contract = %+v", observation)
+	}
+	if got := observation.Payload.Scores["RISKY"]; got != 0.9 {
+		t.Fatalf("RISKY score = %v, want 0.9", got)
+	}
+	if got := observation.Payload.Thresholds["RISKY"]; got != 0.8 {
+		t.Fatalf("RISKY threshold = %v, want 0.8", got)
+	}
+	if len(observation.Payload.MatchedLabels) != 1 || observation.Payload.MatchedLabels[0] != "RISKY" {
+		t.Fatalf("matched labels = %v", observation.Payload.MatchedLabels)
+	}
+	if observation.Payload.Rationale != "policy result" {
+		t.Fatalf("rationale = %q", observation.Payload.Rationale)
+	}
+}
+
+func TestGenericClassifierSignalFailurePublishesUnavailableObservation(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name: "risk", Type: "llm", Labels: []string{"SAFE", "RISKY"},
+			}}},
+		}},
+		genericClassifiers: map[string]labelClassifier{
+			"risk": fakeLabelClassifier{err: errors.New("sensitive upstream detail")},
+		},
+	}
+	results := &SignalResults{
+		SignalConfidences: map[string]float64{}, SignalValues: map[string]float64{},
+		SignalErrors: map[string]string{}, Metrics: &SignalMetricsCollection{},
+	}
+
+	classifier.evaluateGenericClassifierSignals(
+		results, &sync.Mutex{}, "route me",
+		map[string]bool{"classifier:risk": true}, context.Background(),
+	)
+
+	if len(results.Observations) != 1 {
+		t.Fatalf("observations = %+v", results.Observations)
+	}
+	observation := results.Observations[0]
+	if observation.Availability != "unavailable" || observation.ErrorCode != genericClassifierErrorCode {
+		t.Fatalf("unavailable observation = %+v", observation)
+	}
+	if observation.Payload != nil {
+		t.Fatalf("failed observation published payload %+v", observation.Payload)
+	}
+}

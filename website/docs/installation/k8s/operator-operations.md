@@ -22,6 +22,10 @@ Use `metadata.generation`, `status.observedGeneration`, status conditions, and
 ready replicas together. A running controller does not mean the latest custom
 resource generation has been applied successfully.
 
+Each condition refreshed by reconciliation records the custom-resource generation
+in its own `observedGeneration`. This identifies the generation reported by that
+condition; check the Deployment rollout and ready replicas separately.
+
 Inspect the owned workload when reconciliation stalls:
 
 ```bash
@@ -30,6 +34,13 @@ kubectl get deployment,pod,service,configmap,pvc \
 kubectl logs -n semantic-router-operator-system \
   deployment/semantic-router-operator-controller-manager
 ```
+
+Enabled startup and readiness probes use HTTP `/ready` in standalone mode and
+gRPC health on port `50051` in plaintext `extproc` mode. The gRPC check waits
+for an active serving configuration; extproc liveness remains a TCP check. When
+`spec.args` enables `--secure`, the Operator retains TCP probes because the
+supported Kubernetes probe API cannot check TLS gRPC listeners. Those TCP
+checks confirm connectivity only, not serving readiness.
 
 ## Update safely
 
@@ -97,12 +108,13 @@ kubectl describe inferenceservice <name> -n <backend-namespace>
 ### Gateway mode has no route
 
 The Operator does not create an `HTTPRoute`. For ordinary Gateway HTTP
-forwarding, omit `spec.gateway.existingRef`, retain the Envoy sidecar, and
-route `/v1` to the Router Service's `envoy-http` port **8801**. Check that the
+forwarding, omit `spec.gateway.existingRef` and route `/v1` directly to the
+standalone Router Service's `http-8801` port **8801**. No Envoy sidecar is
+created. Check that the
 Gateway allows routes from the Router namespace and that the route reports
 `Accepted=True` and `ResolvedRefs=True`.
 
-If `spec.gateway.existingRef` is set, the sidecar is omitted. Verify your
+If `spec.gateway.existingRef` is set, the Router serves ExtProc instead. Verify your
 Gateway-specific ExtProc policy targets the Router Service's gRPC port
 (default **50051**) and its model routes target the real backend Services.
 The Router `api` port (default **8080**) is a management endpoint and cannot

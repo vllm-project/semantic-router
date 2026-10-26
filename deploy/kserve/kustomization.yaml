@@ -6,6 +6,7 @@ kind: Kustomization
 
 resources:
   - serviceaccount.yaml
+  - rbac.yaml
   - pvc.yaml
   - configmap-router-config.yaml
   - configmap-envoy-config.yaml

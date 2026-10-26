@@ -81,7 +81,7 @@ func TestMemoryEmbeddingIdentityFailureDoesNotAdoptLegacyData(t *testing.T) {
 	if got != nil || !errors.Is(err, boom) {
 		t.Fatalf("missing model fell through to untagged memory: %v, %v", got, err)
 	}
-	cfg.Memory.EmbeddingModel = "bert"
+	cfg.Memory.EmbeddingModel = "qwen3"
 	got, err = memoryConfigForIdentity(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		t.Fatal("unsupported identity provider was initialized")
 		return embedding.ContentIdentity{}, nil

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 // ========================
@@ -186,16 +187,13 @@ func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*Op
 	log.Printf("[OpenWeb:Direct] Starting fetch: %s", redactURLForLog(targetURL))
 	startTime := time.Now()
 
-	client := &http.Client{
-		Timeout: timeout,
-		// Don't follow too many redirects
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
+	// Every destination is revalidated at dial time and on each redirect, so a
+	// hostname that resolves inward cannot be reached from here.
+	policy := outboundPolicy(timeout)
+	if _, err := policy.ValidateURL(targetURL); err != nil {
+		return nil, err
 	}
+	client := policy.NewClient()
 
 	req, err := http.NewRequest("GET", targetURL, nil)
 	if err != nil {
@@ -221,8 +219,9 @@ func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*Op
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
+	// Read response body under a hard ceiling; an unbounded read here would let
+	// one request exhaust dashboard memory.
+	body, err := safefetch.ReadBounded(resp.Body, openWebMaxResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}

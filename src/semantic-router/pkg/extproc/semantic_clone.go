@@ -32,6 +32,9 @@ func cloneSemanticRequestForReplay(request *llmprotocol.Request) (*llmprotocol.R
 	if request.ChatTemplateKwargs == nil {
 		cloned.ChatTemplateKwargs = nil
 	}
+	if request.ContextManagement == nil {
+		cloned.ContextManagement = nil
+	}
 	for i := range request.Tools {
 		if request.Tools[i].InputSchema == nil {
 			cloned.Tools[i].InputSchema = nil

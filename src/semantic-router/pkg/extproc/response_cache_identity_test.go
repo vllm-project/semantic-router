@@ -36,7 +36,7 @@ func TestResponseCacheBindsActualLocalEmbeddingAfterInitialization(t *testing.T)
 
 func TestResponseCacheDoesNotInventIdentityForOtherProviders(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	for _, model := range []string{"bert", "gemma", "qwen3"} {
+	for _, model := range []string{"gemma", "qwen3"} {
 		backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingModel: model})
 		identity, err := responseCacheEmbeddingIdentity(cfg, backend, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 			t.Fatal("unsupported provider was initialized for identity")

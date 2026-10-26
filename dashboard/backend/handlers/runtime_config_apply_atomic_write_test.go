@@ -5,6 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakeclientset "k8s.io/client-go/kubernetes/fake"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 func TestWriteConfigAtomicallySucceeds(t *testing.T) {
@@ -75,5 +81,136 @@ func TestWriteConfigAtomicallyTempWriteFailureCleansUp(t *testing.T) {
 
 	if err := writeConfigAtomically(configPath, []byte("routing: {}\n")); err == nil {
 		t.Fatal("expected writeConfigAtomically to fail when the temp file cannot be created")
+	}
+}
+
+// TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared covers issue
+// #3688: on a Kubernetes deployment that has declared a ConfigMap write
+// target, writeConfigAtomically must write there via the Kubernetes API
+// instead of attempting the local file, which is a read-only ConfigMap mount
+// on every shipped manifest.
+func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	original := []byte("routing: {original: true}\n")
+	if err := os.WriteFile(configPath, original, 0o400); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv(configwriter.ConfigMapNameEnv, "semantic-router-config")
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "vllm-semantic-router-system", Name: "semantic-router-config"},
+		Data:       map[string]string{"config.yaml": string(original)},
+	}
+	clientset := fakeclientset.NewSimpleClientset(cm)
+	restore := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(clientset))
+	defer restore()
+
+	if err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n")); err != nil {
+		t.Fatalf("writeConfigAtomically: %v", err)
+	}
+
+	if mounted, err := os.ReadFile(configPath); err != nil || string(mounted) != string(original) {
+		t.Fatalf("mounted config changed despite a ConfigMap-only write: %q, err=%v", mounted, err)
+	}
+
+	updated, err := clientset.CoreV1().ConfigMaps("vllm-semantic-router-system").Get(t.Context(), "semantic-router-config", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get ConfigMap: %v", err)
+	}
+	if updated.Data["config.yaml"] != "routing: {new: true}\n" {
+		t.Fatalf("ConfigMap config.yaml = %q, want the new document", updated.Data["config.yaml"])
+	}
+	if err := writeConfigAtomically(configPath, []byte("routing: {second: true}\n")); !errors.Is(err, errConfigRolloutRequired) {
+		t.Fatalf("stale Pod accepted a second write: %v", err)
+	}
+}
+
+// TestWriteConfigAtomicallyRefusesControllerOwnedConfigMap covers the other
+// half of the fix: an Operator-managed ConfigMap gets regenerated on every
+// reconcile, so writing to it directly would be silently reverted. The
+// caller gets a clear error instead of a write that looks like it worked.
+func TestWriteConfigAtomicallyRefusesControllerOwnedConfigMap(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("routing: {original: true}\n"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv(configwriter.ConfigMapNameEnv, "operator-managed-config")
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, "ns")
+
+	isController := true
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns",
+			Name:      "operator-managed-config",
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "vllm.ai/v1alpha1",
+				Kind:       "SemanticRouter",
+				Name:       "prod",
+				Controller: &isController,
+			}},
+		},
+		Data: map[string]string{"config.yaml": "routing: {original: true}\n"},
+	}
+	clientset := fakeclientset.NewSimpleClientset(cm)
+	restore := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(clientset))
+	defer restore()
+
+	err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n"))
+	if !errors.Is(err, configwriter.ErrConfigMapControllerOwned) {
+		t.Fatalf("writeConfigAtomically error = %v, want ErrConfigMapControllerOwned", err)
+	}
+}
+
+// TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget pins the
+// default: a deployment that has not set the ConfigMap env vars (every local
+// CLI, VM, and plain Docker deployment today) keeps writing the local file
+// exactly as before, with no Kubernetes client involved at all.
+func TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+
+	if err := writeConfigAtomically(configPath, []byte("routing: {}\n")); err != nil {
+		t.Fatalf("writeConfigAtomically: %v", err)
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read configPath: %v", err)
+	}
+	if string(got) != "routing: {}\n" {
+		t.Fatalf("configPath content = %q, want the written document", got)
+	}
+}
+
+// stubInClusterConfigMapWriter forces resolvedConfigMapWriter's lazy init to
+// return writer on its next call and restores the package's real singleton
+// state afterward. Needed because that init caches its result process-wide:
+// without a reset here, whichever test exercises the Kubernetes path first
+// would permanently pin every later test in this package to its writer.
+func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWriter) func() {
+	t.Helper()
+	configMapWriterMu.Lock()
+	origFactory := newInClusterConfigMapWriter
+	origResult := configMapWriterResult
+	origErr := configMapWriterErr
+	origResolved := configMapWriterResolved
+
+	newInClusterConfigMapWriter = func() (*configwriter.ConfigMapWriter, error) { return writer, nil }
+	configMapWriterResult = nil
+	configMapWriterErr = nil
+	configMapWriterResolved = false
+	configMapWriterMu.Unlock()
+
+	return func() {
+		configMapWriterMu.Lock()
+		newInClusterConfigMapWriter = origFactory
+		configMapWriterResult = origResult
+		configMapWriterErr = origErr
+		configMapWriterResolved = origResolved
+		configMapWriterMu.Unlock()
 	}
 }

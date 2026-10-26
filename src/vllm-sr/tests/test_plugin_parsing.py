@@ -70,6 +70,7 @@ class TestPluginTypeValidation:
             PluginType.RESPONSE_JAILBREAK.value,
             PluginType.TOOLS.value,
             PluginType.TOOL_SELECTION.value,
+            PluginType.PROMPT_CACHE.value,
             PluginType.SHADOW_DISPATCH.value,
         ]
 
@@ -172,10 +173,44 @@ class TestRouterReplayPluginConfig:
         """Test router_replay plugin configuration defaults."""
         config = RouterReplayPluginConfig(enabled=True)
         assert config.enabled is True
-        assert config.max_records == 10000  # Default
-        assert config.capture_request_body is True  # Default
-        assert config.capture_response_body is True  # Default
-        assert config.max_body_bytes == 4096  # Default
+        assert config.max_records is None  # Inherits the global capture default
+        assert config.capture_request_body is None
+        assert config.capture_response_body is None
+        assert config.max_body_bytes is None
+        assert config.capture_personal_data is None
+        assert config.max_tool_trace_bytes is None
+        assert config.max_tool_trace_steps is None
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {},
+            {"enabled": False},
+            {"capture_personal_data": False},
+            {"capture_request_body": False, "capture_response_body": False},
+            {"max_tool_trace_bytes": 0, "max_tool_trace_steps": 0},
+            {"max_records": 0, "max_body_bytes": 0},
+        ],
+    )
+    def test_router_replay_serialization_preserves_explicit_overrides(self, overrides):
+        config = RouterReplayPluginConfig.model_validate(overrides)
+        assert config.model_dump(exclude_unset=True) == overrides
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"capture_personal_data": "false"},
+            {"capture_request_body": 0},
+            {"max_tool_trace_bytes": -1},
+            {"max_tool_trace_steps": -1},
+            {"max_records": -1},
+            {"max_body_bytes": -1},
+            {"replay_personal_data": False},
+        ],
+    )
+    def test_router_replay_rejects_invalid_capture_overrides(self, overrides):
+        with pytest.raises(PydanticValidationError):
+            RouterReplayPluginConfig.model_validate(overrides)
 
     def test_router_replay_plugin_in_config(self):
         """Test router_replay plugin in full config."""

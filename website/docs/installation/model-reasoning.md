@@ -37,7 +37,7 @@ providers:
           protocol: http
 ```
 
-In the Dashboard, open **Build → Models → Add Model**, select the Provider, and
+In the Dashboard, open **Build → Routing → Models → Add Model**, select the Provider, and
 choose **Advanced settings → Reasoning family**. The **Built-in Reasoning
 Families** table on the Models page shows the available IDs and their native
 parameters.
@@ -119,6 +119,11 @@ The effort must be listed by the family and allowed by every Provider binding
 for that Model. `reasoning_mode` must agree with `use_reasoning`. Omit an effort
 to use the family default, or set `providers.defaults.reasoning_effort` when
 one valid deployment-wide default should take precedence.
+
+On an `api_format: anthropic` backend, `enabled` thinking needs a
+`budget_tokens` value. When the client sent none, an `enabled` mode reaches the
+backend as `thinking.type: adaptive` with `output_config.effort` set to the
+selected effort.
 
 In the Dashboard decision editor, select the Model first. The UI derives the
 mode and effort choices from its effective family and disables controls that

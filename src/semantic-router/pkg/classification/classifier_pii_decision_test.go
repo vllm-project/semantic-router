@@ -64,6 +64,9 @@ func TestPIIDetectionSurvivesIncompleteScanWithOnUnknownNoMatch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			classifier, _, mockModel := newTestPIIClassifier()
 			classifier.Config.PIIModel.OnError = config.OnErrorBlock
+			// The on_error contract, which a truncated read follows only when
+			// on_unscanned is allow.
+			classifier.Config.PIIModel.OnUnscanned = config.OnErrorAllow
 			threshold := tc.threshold
 			if threshold == 0 {
 				threshold = 0.7

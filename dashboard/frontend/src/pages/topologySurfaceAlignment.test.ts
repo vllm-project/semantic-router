@@ -93,7 +93,9 @@ describe('topology v0.3 surface alignment', () => {
     })
     expect(PLUGIN_ICONS).toMatchObject({
       tool_selection: 'TS',
+      prompt_cache: 'PC',
     })
+    expect(PLUGIN_TYPES).toContain('prompt_cache')
   })
 
   it('initializes topology groups from the generated signal inventory', () => {
@@ -101,5 +103,21 @@ describe('topology v0.3 surface alignment', () => {
 
     expect(Object.keys(groups)).toEqual(SIGNAL_TYPES)
     SIGNAL_TYPES.forEach((signalType) => expect(groups[signalType]).toEqual([]))
+  })
+
+  it('preserves the PII source in topology signal config', () => {
+    const topology = parseConfigToTopology({
+      signals: {
+        pii: [{ name: 'tool-data', threshold: 0.8, source: 'tool_result' }],
+      },
+    })
+
+    expect(topology.signals).toContainEqual(
+      expect.objectContaining({
+        type: 'pii',
+        name: 'tool-data',
+        config: expect.objectContaining({ source: 'tool_result' }),
+      }),
+    )
   })
 })

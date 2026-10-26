@@ -9,8 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/baggage"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func TestPersistenceReservationShutdownAbandonsUnpreparedJobs(t *testing.T) {
@@ -142,39 +140,4 @@ func TestPersistenceReservationAbortReleasesCapacity(t *testing.T) {
 	assert.Zero(t, receipts.count("completed/persisted"))
 	assert.Nil(t, runner.TryReserve(context.Background(), receipts.report))
 	assert.Equal(t, 1, receipts.count("rejected/shutting_down"))
-}
-
-func TestPersistenceRunnerDetachesOnlySpanContext(t *testing.T) {
-	type privateKey struct{}
-	state, err := trace.ParseTraceState("vendor=opaque")
-	require.NoError(t, err)
-	span := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID: trace.TraceID{1}, SpanID: trace.SpanID{2},
-		TraceFlags: trace.FlagsSampled, TraceState: state,
-	})
-	member, err := baggage.NewMember("token", "test-only-value")
-	require.NoError(t, err)
-	bag, err := baggage.New(member)
-	require.NoError(t, err)
-	inbound := trace.ContextWithSpanContext(context.Background(), span)
-	inbound = baggage.ContextWithBaggage(inbound, bag)
-	inbound = context.WithValue(inbound, privateKey{}, "request-owned")
-	inbound, cancel := context.WithCancel(inbound)
-	defer cancel()
-	receipts := newOutcomeRecorder()
-	runner := NewPersistenceRunner(time.Second, 1, 1)
-	reservation := runner.TryReserve(inbound, receipts.report)
-	require.NotNil(t, reservation)
-	cancel()
-	seen := make(chan context.Context, 1)
-	reservation.Start(func(ctx context.Context) (PersistenceOutcome, error) {
-		seen <- ctx
-		return PersistenceOutcome{}, ctx.Err()
-	})
-	jobCtx := <-seen
-	require.NoError(t, runner.RetireAndWait(time.Second))
-	assert.True(t, span.Equal(trace.SpanContextFromContext(jobCtx)))
-	assert.Empty(t, baggage.FromContext(jobCtx).Members())
-	assert.Nil(t, jobCtx.Value(privateKey{}))
-	assert.Equal(t, 1, receipts.count("completed/persisted"))
 }

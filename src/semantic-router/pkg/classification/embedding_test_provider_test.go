@@ -16,6 +16,17 @@ type testEmbeddingProvider struct {
 	image func(context.Context, []byte, int) ([]float32, error)
 }
 
+// These synthetic providers receive and compare the complete test strings.
+func (p *testEmbeddingProvider) FitsInput(ctx context.Context, _ string) (bool, error) {
+	return true, ctx.Err()
+}
+
+type fullInputTestEmbeddingProvider struct{ embedding.Provider }
+
+func (p fullInputTestEmbeddingProvider) FitsInput(ctx context.Context, _ string) (bool, error) {
+	return true, ctx.Err()
+}
+
 func (p *testEmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return p.EmbedWithOptions(ctx, text, embedding.Options{})
 }
@@ -71,7 +82,7 @@ func TestEmbeddingConsumersRequireOwnedProviders(t *testing.T) {
 		"category":   func() ([]float32, error) { return (&KnowledgeBaseClassifier{}).embedText("query") },
 		"preference": func() ([]float32, error) { return (&ContrastivePreferenceClassifier{}).embedText("query") },
 		"jailbreak":  func() ([]float32, error) { return (&ContrastiveJailbreakClassifier{}).embedText("query") },
-		"reask":      func() ([]float32, error) { return (&ReaskClassifier{}).embedText("query") },
+		"reask":      func() ([]float32, error) { return (&ReaskClassifier{}).embedFullText(context.Background(), "query") },
 		"complexity": func() ([]float32, error) {
 			return (&ComplexityClassifier{}).computeCandidateEmbedding(complexityCandidateTask{candidate: "query"})
 		},
