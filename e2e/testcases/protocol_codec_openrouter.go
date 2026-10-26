@@ -2,8 +2,10 @@ package testcases
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"k8s.io/client-go/kubernetes"
@@ -107,5 +109,139 @@ func testProtocolCodecOpenRouterReply(ctx context.Context, client *kubernetes.Cl
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{"matrix_cells": results, "backend_format": "openai.chat.v1"})
 	}
+	if err := testOpenRouterReasoningToolContinuity(ctx, session, provider); err != nil {
+		return err
+	}
 	return nil
+}
+
+// The mock provider refuses a follow-up unless it receives the original blocks
+// and tool call. This tests continuity through dispatch, not just response text.
+func testOpenRouterReasoningToolContinuity(ctx context.Context, session, provider *fixtures.ServiceSession) error {
+	const marker = "__mock_openrouter_reply_reasoning__"
+	for _, streamed := range []bool{false, true} {
+		sessionID := fmt.Sprintf("openrouter-reasoning-%t", streamed)
+		headers := map[string]string{"x-vsr-test-session-id": sessionID}
+		request := map[string]any{"model": chatBackendModel, "messages": []map[string]any{{"role": "user", "content": marker}}, "stream": streamed}
+		body, err := json.Marshal(request)
+		if err != nil {
+			return err
+		}
+		first, err := sendProtocolMatrixRaw(ctx, session, "/v1/chat/completions", body, streamed, headers)
+		if err != nil {
+			return err
+		}
+		if first.StatusCode != http.StatusOK {
+			return fmt.Errorf("OpenRouter reasoning stream=%t returned %d: %s", streamed, first.StatusCode, truncateString(string(first.Body), 500))
+		}
+		assistant, err := openRouterReasoningAssistant(first.Body, streamed)
+		if err != nil {
+			return err
+		}
+		details, ok := assistant["reasoning_details"].([]any)
+		if !ok || len(details) != 3 {
+			return fmt.Errorf("OpenRouter reasoning response lost typed blocks")
+		}
+		request["messages"] = []map[string]any{{"role": "user", "content": marker}, assistant, {"role": "tool", "tool_call_id": "openrouter-call-1", "content": "result"}}
+		body, err = json.Marshal(request)
+		if err != nil {
+			return err
+		}
+		second, err := sendProtocolMatrixRaw(ctx, session, "/v1/chat/completions", body, streamed, headers)
+		if err != nil {
+			return err
+		}
+		if second.StatusCode != http.StatusOK || !strings.Contains(string(second.Body), openRouterReplyAnswer) {
+			return fmt.Errorf("OpenRouter reasoning follow-up stream=%t failed: HTTP %d %s", streamed, second.StatusCode, truncateString(string(second.Body), 500))
+		}
+		observed, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
+		if err != nil {
+			return err
+		}
+		var wire struct {
+			Body struct {
+				Messages []map[string]any `json:"messages"`
+			} `json:"body"`
+		}
+		if err := json.Unmarshal(observed, &wire); err != nil {
+			return err
+		}
+		if len(wire.Body.Messages) != 3 {
+			return fmt.Errorf("OpenRouter follow-up lost conversation messages")
+		}
+		want, _ := json.Marshal(assistant["reasoning_details"])
+		got, _ := json.Marshal(wire.Body.Messages[1]["reasoning_details"])
+		if string(want) != string(got) {
+			return fmt.Errorf("OpenRouter follow-up changed reasoning details: want %s got %s", want, got)
+		}
+		if !reflect.DeepEqual(assistant["tool_calls"], wire.Body.Messages[1]["tool_calls"]) {
+			return fmt.Errorf("OpenRouter follow-up changed the tool call")
+		}
+	}
+	return nil
+}
+
+func openRouterReasoningAssistant(body []byte, streamed bool) (map[string]any, error) {
+	if !streamed {
+		var wire struct {
+			Choices []struct {
+				Message map[string]any `json:"message"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal(body, &wire); err != nil {
+			return nil, err
+		}
+		if len(wire.Choices) != 1 {
+			return nil, fmt.Errorf("OpenRouter reasoning response must contain one choice")
+		}
+		return wire.Choices[0].Message, nil
+	}
+	assistant := map[string]any{"role": "assistant", "content": nil}
+	details := make([]any, 0, 3)
+	calls := make([]any, 0, 1)
+	finished, done := false, false
+	for _, line := range strings.Split(string(body), "\n") {
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			done = true
+			continue
+		}
+		var chunk struct {
+			Error   json.RawMessage `json:"error"`
+			Choices []struct {
+				Delta struct {
+					Details []any            `json:"reasoning_details"`
+					Calls   []map[string]any `json:"tool_calls"`
+				} `json:"delta"`
+				Finish *string `json:"finish_reason"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			return nil, err
+		}
+		if len(chunk.Error) > 0 {
+			return nil, fmt.Errorf("OpenRouter reasoning stream emitted an error: %s", chunk.Error)
+		}
+		for _, choice := range chunk.Choices {
+			details = append(details, choice.Delta.Details...)
+			for _, call := range choice.Delta.Calls {
+				delete(call, "index")
+				calls = append(calls, call)
+			}
+			if choice.Finish != nil {
+				if *choice.Finish != "tool_calls" || finished {
+					return nil, fmt.Errorf("OpenRouter reasoning stream has an invalid terminal")
+				}
+				finished = true
+			}
+		}
+	}
+	if !finished || !done || len(calls) != 1 {
+		return nil, fmt.Errorf("OpenRouter reasoning stream did not complete one tool call")
+	}
+	assistant["reasoning_details"], assistant["tool_calls"] = details, calls
+	return assistant, nil
 }

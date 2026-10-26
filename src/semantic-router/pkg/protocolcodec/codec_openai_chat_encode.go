@@ -157,6 +157,7 @@ func isChatToolCallOnlyMessage(message chatMessageWire) bool {
 		message.Refusal == nil &&
 		message.Reasoning == nil &&
 		message.AlternateReasoning == nil &&
+		len(message.ReasoningDetails) == 0 &&
 		message.Audio == nil &&
 		message.LegacyFunctionCall == nil &&
 		message.ToolCallID == "" &&
@@ -230,6 +231,10 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentRefusal:
 		return appendChatTextField(&state.wire.Refusal, content)
 	case llmprotocol.ContentReasoning:
+		if content.ReasoningDetail != nil {
+			state.wire.ReasoningDetails = append(state.wire.ReasoningDetails, *content.ReasoningDetail)
+			return nil
+		}
 		return appendChatTextField(&state.wire.Reasoning, content)
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)

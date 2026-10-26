@@ -311,6 +311,20 @@ Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
+Chat Completions accepts OpenRouter's `reasoning_details` on assistant messages
+and streaming deltas. Text, summary, and encrypted blocks retain their order,
+IDs, format, index, and signatures when responses are returned or replayed in a
+follow-up Chat request. Send the original blocks back with tool results; do not
+summarize or reorder them. When typed details are present, they take precedence
+over the plain `reasoning` and `reasoning_content` aliases.
+Stream fragments with the same index or ID accumulate in order. Blocks without
+either identifier remain separate; the Router does not infer their identity.
+
+These continuity blocks require the Chat extension. Translation to Responses or
+Messages returns an unsupported `reasoning_continuity` capability error, because
+those codecs cannot preserve the complete OpenRouter block contract. Ordinary
+text reasoning without `reasoning_details` continues to translate across formats.
+
 ## Routing errors
 
 When the Router cannot route a request, it answers the request itself and calls

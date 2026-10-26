@@ -19,6 +19,7 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityFileInput,
 		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools,
 		llmprotocol.CapabilityReasoning,
+		llmprotocol.CapabilityReasoningContinuity,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
@@ -85,14 +86,15 @@ type chatStreamOptionsWire struct {
 }
 
 type chatMessageWire struct {
-	ID                 string               `json:"id,omitempty"`
-	Role               string               `json:"role"`
-	Content            json.RawMessage      `json:"content,omitempty"`
-	Refusal            *string              `json:"refusal,omitempty"`
-	Reasoning          *string              `json:"reasoning_content,omitempty"`
-	AlternateReasoning *string              `json:"reasoning,omitempty"`
-	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
-	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
+	ID                 string                        `json:"id,omitempty"`
+	Role               string                        `json:"role"`
+	Content            json.RawMessage               `json:"content,omitempty"`
+	Refusal            *string                       `json:"refusal,omitempty"`
+	Reasoning          *string                       `json:"reasoning_content,omitempty"`
+	AlternateReasoning *string                       `json:"reasoning,omitempty"`
+	ReasoningDetails   []llmprotocol.ReasoningDetail `json:"reasoning_details,omitempty"`
+	Audio              *chatAudioOutputWire          `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire           `json:"function_call,omitempty"`
 	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
 	// provider_specific_fields on response messages. The content is opaque
 	// provider metadata and is not replayed to the client. Client requests
@@ -394,6 +396,9 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	}
 	message, err := assembleChatMessage(wire, index, role, contents, policy)
 	if err != nil {
+		if len(wire.ReasoningDetails) > 0 {
+			return llmprotocol.Message{}, invalidProviderResponse("invalid_reasoning_detail", "Upstream reasoning message is invalid")
+		}
 		return llmprotocol.Message{}, err
 	}
 	message.Content = dropEmptyTextBesideOtherContent(message.Content)
@@ -425,11 +430,20 @@ func assembleChatMessage(
 ) (llmprotocol.Message, error) {
 	// Reasoning first, the order vLLM's own Messages and Responses output uses.
 	message := llmprotocol.Message{ID: wire.ID, Role: role}
+	if len(wire.ReasoningDetails) > 0 && role != llmprotocol.RoleAssistant {
+		return message, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_detail_role", "reasoning details require an assistant message", nil)
+	}
+	for _, detail := range wire.ReasoningDetails {
+		if err := llmprotocol.ValidateReasoningDetail(detail, policy.Limits); err != nil {
+			return message, err
+		}
+		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentReasoning, ReasoningDetail: &detail})
+	}
 	reasoning := wire.Reasoning
 	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
 	}
-	if reasoning != nil {
+	if reasoning != nil && len(wire.ReasoningDetails) == 0 {
 		message.Content = append(message.Content, llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 		})

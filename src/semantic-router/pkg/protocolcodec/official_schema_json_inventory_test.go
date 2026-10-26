@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type officialNestedInventory struct {
@@ -249,6 +251,7 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"anthropic_messages":      "d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa",
 	}
 	wires := map[string]reflect.Type{
+		"chat_reasoning_detail":           reflect.TypeOf(llmprotocol.ReasoningDetail{}),
 		"chat_message":                    reflect.TypeOf(chatMessageWire{}),
 		"chat_content":                    reflect.TypeOf(chatContentWire{}),
 		"chat_tool":                       reflect.TypeOf(chatToolWire{}),

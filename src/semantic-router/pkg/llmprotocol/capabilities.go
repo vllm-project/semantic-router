@@ -58,6 +58,7 @@ const (
 	// a JSON Schema function tool cannot represent.
 	CapabilityCustomTools
 	CapabilityTextVerbosity
+	CapabilityReasoningContinuity
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -145,6 +146,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityImageGeneration, "image_generation"},
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
+		{CapabilityReasoningContinuity, "reasoning_continuity"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -328,6 +330,9 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 // has no approximation in another public wire format.
 func RequiredEventCapabilities(event Event) CapabilitySet {
 	var required CapabilitySet
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		required.bits |= CapabilityReasoningContinuity
+	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
 	}
@@ -356,6 +361,9 @@ func capabilityForRequestContent(content Content) Capability {
 	case ContentToolResult:
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
+		if content.ReasoningDetail != nil {
+			return CapabilityReasoning | CapabilityReasoningContinuity | cache
+		}
 		return reasoningContentCapabilities(content.Signature) | cache
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration | cache
@@ -375,6 +383,9 @@ func capabilityForResponseContent(content Content) Capability {
 	case ContentToolResult:
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
+		if content.ReasoningDetail != nil {
+			return CapabilityReasoning | CapabilityReasoningContinuity
+		}
 		return reasoningContentCapabilities(content.Signature)
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration
@@ -445,7 +456,8 @@ func isCustomToolCall(content Content) bool {
 
 func ParseCapabilities(names []string) (CapabilitySet, error) {
 	lookup := map[string]Capability{
-		"text": CapabilityText, "chat": CapabilityText, "image_input": CapabilityImageInput,
+		"reasoning_continuity": CapabilityReasoningContinuity,
+		"text":                 CapabilityText, "chat": CapabilityText, "image_input": CapabilityImageInput,
 		"image_output": CapabilityImageOutput, "audio_input": CapabilityAudioInput,
 		"audio_output": CapabilityAudioOutput, "video_input": CapabilityVideoInput,
 		"video_output": CapabilityVideoOutput, "file_input": CapabilityFileInput,

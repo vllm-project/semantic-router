@@ -1,0 +1,76 @@
+{
+  "response": {
+    "id": "r1",
+    "model": "m",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "answer",
+          "reasoning_details": [
+            {
+              "type": "reasoning.summary",
+              "summary": "Plan",
+              "id": null,
+              "format": "openai-responses-v1",
+              "index": 0
+            },
+            {
+              "type": "reasoning.text",
+              "text": "Think",
+              "signature": "sig",
+              "id": "r1",
+              "format": "anthropic-claude-v1",
+              "index": 1
+            },
+            {
+              "type": "reasoning.encrypted",
+              "data": "opaque-data",
+              "id": "r2",
+              "format": "openai-responses-v1",
+              "index": 2
+            }
+          ]
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "chunk": {
+    "id": "r1",
+    "model": "m",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "reasoning_details": [
+            {
+              "type": "reasoning.summary",
+              "summary": "Plan",
+              "id": null,
+              "format": "openai-responses-v1",
+              "index": 0
+            },
+            {
+              "type": "reasoning.text",
+              "text": "Think",
+              "signature": "sig",
+              "id": "r1",
+              "format": "anthropic-claude-v1",
+              "index": 1
+            },
+            {
+              "type": "reasoning.encrypted",
+              "data": "opaque-data",
+              "id": "r2",
+              "format": "openai-responses-v1",
+              "index": 2
+            }
+          ]
+        },
+        "finish_reason": null
+      }
+    ]
+  }
+}

@@ -8,6 +8,52 @@ from .chat_wire import build_chat_usage
 
 MARKER = "__mock_openrouter_reply__"
 ANSWER = "OpenRouter fixture answer"
+REASONING_MARKER = "__mock_openrouter_reply_reasoning__"
+REASONING_DETAILS = [
+    {
+        "type": "reasoning.summary",
+        "summary": "Look up the result",
+        "id": None,
+        "format": "openai-responses-v1",
+        "index": 0,
+    },
+    {
+        "type": "reasoning.text",
+        "text": "Use the lookup tool",
+        "signature": "fixture-signature",
+        "id": "reasoning-1",
+        "format": "anthropic-claude-v1",
+        "index": 1,
+    },
+    {
+        "type": "reasoning.encrypted",
+        "data": "opaque-continuity-fixture",
+        "id": "reasoning-2",
+        "format": "openai-responses-v1",
+        "index": 2,
+    },
+]
+TOOL_CALL = {
+    "id": "openrouter-call-1",
+    "type": "function",
+    "function": {"name": "lookup", "arguments": "{}"},
+}
+
+
+def reasoning_turn(req: ChatRequest) -> bool:
+    return any(
+        isinstance(message.content, str) and REASONING_MARKER in message.content
+        for message in req.messages
+    )
+
+
+def reasoning_follow_up_valid(req: ChatRequest) -> bool:
+    return any(
+        message.role == "assistant"
+        and getattr(message, "reasoning_details", None) == REASONING_DETAILS
+        and message.tool_calls == [TOOL_CALL]
+        for message in req.messages
+    )
 
 
 def _usage(req: ChatRequest) -> dict:
@@ -29,7 +75,7 @@ def _usage(req: ChatRequest) -> dict:
 
 
 def buffered_reply(req: ChatRequest, created_ts: int) -> dict:
-    return {
+    reply = {
         "id": "gen-mock-openrouter-1",
         "object": "chat.completion",
         "created": created_ts,
@@ -45,6 +91,20 @@ def buffered_reply(req: ChatRequest, created_ts: int) -> dict:
         ],
         "usage": _usage(req),
     }
+    if reasoning_turn(req) and not any(
+        message.role == "tool" for message in req.messages
+    ):
+        reply["choices"][0].update(
+            message={
+                "role": "assistant",
+                "content": None,
+                "reasoning_details": REASONING_DETAILS,
+                "tool_calls": [TOOL_CALL],
+            },
+            finish_reason="tool_calls",
+            native_finish_reason="tool_calls",
+        )
+    return reply
 
 
 def streamed_reply(req: ChatRequest, created_ts: int) -> Iterator[str]:
@@ -55,6 +115,43 @@ def streamed_reply(req: ChatRequest, created_ts: int) -> Iterator[str]:
         "model": req.model,
         "provider": "OpenRouter fixture upstream",
     }
+    if reasoning_turn(req) and not any(
+        message.role == "tool" for message in req.messages
+    ):
+        for detail in REASONING_DETAILS:
+            yield "data: " + json.dumps(
+                {
+                    **base,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"reasoning_details": [detail]},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            ) + "\n\n"
+        yield "data: " + json.dumps(
+            {
+                **base,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"tool_calls": [{"index": 0, **TOOL_CALL}]},
+                        "finish_reason": None,
+                    }
+                ],
+            }
+        ) + "\n\n"
+        yield "data: " + json.dumps(
+            {
+                **base,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}],
+                "usage": _usage(req),
+            }
+        ) + "\n\n"
+        yield "data: [DONE]\n\n"
+        return
     for delta, finish, usage in (
         ({"content": ANSWER}, None, None),
         ({}, "stop", None),
