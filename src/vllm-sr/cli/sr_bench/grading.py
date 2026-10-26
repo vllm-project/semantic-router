@@ -12,10 +12,13 @@ from .agent_task_kernel import score_answer
 MCQ_GRADER_VERSION = "sr-bench-mcq-final-v2"
 FINAL_GRADER_VERSION = "sr-bench-final-v2"
 ARC_MAX_COLOR = 9
-ResultKind: TypeAlias = Literal["binary", "weighted-rubric-v1", "token-coverage-v1"]
+ResultKind: TypeAlias = Literal[
+    "binary", "weighted-rubric-v1", "token-coverage-v1", "cache-observation-v1"
+]
 BINARY_RESULT: ResultKind = "binary"
 WEIGHTED_RUBRIC_RESULT: ResultKind = "weighted-rubric-v1"
 TOKEN_COVERAGE_RESULT: ResultKind = "token-coverage-v1"
+CACHE_OBSERVATION_RESULT: ResultKind = "cache-observation-v1"
 
 
 def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
@@ -27,6 +30,7 @@ def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
         BINARY_RESULT,
         WEIGHTED_RUBRIC_RESULT,
         TOKEN_COVERAGE_RESULT,
+        CACHE_OBSERVATION_RESULT,
     }:
         raise ValueError("Unknown frozen result kind")
     return kind
@@ -44,6 +48,9 @@ def require_binary_results(manifest: dict[str, Any], operation: str) -> None:
 
 
 def validate_result(kind: ResultKind, result: object) -> None:
+    if kind == CACHE_OBSERVATION_RESULT:
+        _validate_cache_observation(result)
+        return
     if kind == BINARY_RESULT:
         if (
             not isinstance(result, dict)
@@ -140,6 +147,29 @@ def _validate_token_coverage(result: object) -> None:
         or coverage.get("full_credit") is not (score == 1.0)
     ):
         raise ValueError("Token coverage differs from native rounded substring credit")
+
+
+def _validate_cache_observation(result: object) -> None:
+    if not isinstance(result, dict) or any(
+        key not in result or result[key] is not None
+        for key in ("answer", "correct", "score")
+    ):
+        raise ValueError("Cache observations must not claim an answer or quality score")
+    details = result.get("details")
+    observation = (
+        details.get("cache_observation") if isinstance(details, dict) else None
+    )
+    if (
+        not isinstance(observation, dict)
+        or observation.get("version") != CACHE_OBSERVATION_RESULT
+        or type(observation.get("planned_repeats")) is not int
+        or observation["planned_repeats"] < 1
+        or type(observation.get("completed_repeats")) is not int
+        or observation["completed_repeats"] != observation["planned_repeats"]
+    ):
+        raise ValueError(
+            "Cache observation result requires a completed repeat sequence"
+        )
 
 
 _STRICT_ANSWER = re.compile(r"(?:ANSWER\s*:\s*)?\(?([A-J])\)?[.]?", re.IGNORECASE)

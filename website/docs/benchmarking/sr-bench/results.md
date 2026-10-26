@@ -113,6 +113,71 @@ tuned-on cases by stable ID and input fingerprint. A different seed or a
 `holdout` split label does not establish independence. Retests remain useful,
 but report their exposure separately from unseen validation.
 
+## Cache-observation diagnostics
+
+`cache-token-probe-v1` declares `cache-observation-v1`. A completed result means the
+repeat sequence finished through the bounded transport. It has null answer,
+correctness and score fields; it is counted as `observed`, not `scored`.
+Threshold failure is separate from execution failure.
+
+The `cache_observation` block contains the frozen `native_probes`, configured
+target identity and every planned repeat. Each repeat links its call ID, session,
+HTTP `response_status`, transport status, output completion, observed model and
+config acknowledgement. Undispatched repeats have no invented response or token
+values. Requested models and session IDs sent are distinct from Router response
+evidence.
+
+Call receipts retain a `provider-cache-observation-v1` observation with the
+selected source, present fields, qualification and usage-event index. Full call
+detail and bounded SSE files retain the raw evidence. The diagnostic recognizes
+the two nested cached-token paths and the verified DeepSeek hit alias.
+[DeepSeek's schema](https://api-docs.deepseek.com/api/create-chat-completion/)
+defines that alias as the nested cached count and requires hit plus miss tokens
+to equal prompt tokens. Duplicate fields must agree, and each count is used once.
+The root `usage.cached_tokens` field remains unqualified legacy evidence.
+
+Malformed, conflicting, incomplete and unqualified observations carry distinct
+reasons. Earlier malformed/conflicting/unqualified events remain in `event_issues`
+even if a later event supplies valid values. Repeated SSE usage snapshots are not
+added together. A later event without cache fields does not erase the last
+cache-bearing snapshot.
+
+The full-cohort `cached_prompt_ratio` is available only when every planned repeat
+completed and has qualified, complete usage. Its denominator includes fresh input,
+cached input and cache-write tokens. Missing observations make that ratio null;
+the report does not substitute the successful or reported-field subset. Generic
+`cache_read_ratio` and billing retain their existing contracts and are separate
+from this probe's response-facing observations. Final-response cache fields do
+not establish cache reporting for hidden MoM child calls.
+
+The frozen native thresholds produce pass/fail/incomplete predicates under
+`validation`. Rates use the native four-decimal rounding and the cache ratio uses
+six decimals. Zero-valued numeric thresholds are disabled, with
+`enabled: false`; that does not turn an unknown measurement into zero. The default
+minimum reporting state is `missing`, so the default gate only requires request
+success. A success-only predicate can pass without any qualified cache evidence.
+Cache-dependent predicates remain incomplete when they need malformed,
+conflicting, unqualified or incomplete usage.
+
+`success_rate` counts HTTP successes over all planned repeats. While outcomes are
+missing it is an observed lower bound. Strict sequence completion also requires
+complete output. The normal run command can therefore finish successfully even
+when a configured observation threshold fails. Gate the report explicitly:
+
+```bash
+vllm-sr benchmark report RUN_ID > report.json
+jq -e '.status == "completed" and
+  ([.benchmarks[] | select(.result_kind == "cache-observation-v1")] |
+   length > 0 and all(.[]; .cache_observation.validation.status == "pass"))' report.json
+```
+
+Cache and mixed cohorts have no combined quality, Wilson interval or published
+sr-bench score. Binary-only comparison, replay, regrade and training export reject
+them. Latency, URL differences and a stable session ID do not prove cache reuse,
+model equivalence or savings. Local HTTP fixtures establish observation behavior;
+real runtime/model qualification, downstream compatibility and owner review still
+gate removal of the retained probe.
+
 ## Scripted agent-task diagnostics
 
 `agent-task-chat-v1` declares `token-coverage-v1`. A task's credit is the native

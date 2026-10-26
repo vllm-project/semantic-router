@@ -8,6 +8,7 @@ from collections import Counter
 from collections.abc import Collection
 from datetime import datetime
 from fractions import Fraction
+from http import HTTPStatus
 from itertools import pairwise
 from statistics import fmean, mean
 from typing import Any
@@ -18,6 +19,7 @@ from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
 from .grading import (
     BINARY_RESULT,
+    CACHE_OBSERVATION_RESULT,
     TOKEN_COVERAGE_RESULT,
     WEIGHTED_RUBRIC_RESULT,
     ResultKind,
@@ -27,7 +29,7 @@ from .grading import (
 )
 from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
-from .transport import TOOL_LOOP_PHASE
+from .transport import CACHE_REPORTING_STATES, TOOL_LOOP_PHASE
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 COMPARABLE_STATUSES = frozenset({"completed", "failed"})
@@ -267,9 +269,13 @@ def metric(
     non_binary = any(kind != BINARY_RESULT for kind in result_kinds.values())
     completed = [r for r in results if r["status"] == "completed"]
     scored: list[dict[str, Any]] = []
+    observed: list[dict[str, Any]] = []
     for row in completed:
         kind = result_kinds.get(row.get("benchmark", ""), BINARY_RESULT)
-        if kind != BINARY_RESULT:
+        if kind == CACHE_OBSERVATION_RESULT:
+            validate_result(kind=kind, result=row)
+            observed.append(row)
+        elif kind != BINARY_RESULT:
             validate_result(kind=kind, result=row)
             scored.append(row)
         elif isinstance(row.get("correct"), bool):
@@ -320,7 +326,7 @@ def metric(
             if non_binary
             else "all_planned_cases; failures and unanswered count as incorrect"
         ),
-        "complete": len(completed) == total and len(scored) == total,
+        "complete": len(completed) == total and len(scored) + len(observed) == total,
         "output_diagnostics": output_diagnostics(results, subject, total),
         "accuracy_ci95": None if non_binary else wilson(correct, total),
         "cost_usd": sum_cost(subject) if cost_complete else None,
@@ -382,6 +388,8 @@ def metric(
         )
         result["continuity"]["switched_accuracy"] = None
         result["continuity"]["unswitched_accuracy"] = None
+    if CACHE_OBSERVATION_RESULT in result_kinds.values():
+        result["observed"] = len(observed)
     return result
 
 
@@ -555,6 +563,267 @@ def _scripted_task_evidence(
     }
 
 
+def _cache_probe_validation(
+    *,
+    metrics: dict[str, Any],
+    thresholds: dict[str, Any],
+    http_complete: bool,
+    cache_problems: bool,
+) -> dict[str, Any]:
+    predicates: dict[str, Any] = {}
+    for name, field in (
+        ("min_success_rate", "success_rate"),
+        ("min_cached_token_reporting", "cached_token_reporting"),
+        ("min_cached_token_field_rate", "cached_token_field_rate"),
+        ("min_cached_prompt_ratio", "cached_prompt_ratio"),
+    ):
+        required = thresholds[name]
+        actual = metrics[field]
+        reporting = name == "min_cached_token_reporting"
+        enabled = required != "missing" if reporting else bool(required)
+        reason: str | None = None
+        if not enabled:
+            status, reason = "pass", "threshold_disabled"
+        elif name == "min_success_rate" and not http_complete:
+            status, reason = "incomplete", "http_outcomes_incomplete"
+        elif name != "min_success_rate" and (
+            not metrics["execution_complete"] or cache_problems
+        ):
+            status, reason = "incomplete", "cache_evidence_incomplete"
+        elif actual is None:
+            status, reason = "incomplete", "required_observation_missing"
+        else:
+            sufficient = (
+                CACHE_REPORTING_STATES.index(actual)
+                >= CACHE_REPORTING_STATES.index(required)
+                if reporting
+                else actual >= required
+            )
+            status = "pass" if sufficient else "fail"
+            if not sufficient:
+                reason = "below_threshold"
+        predicates[name] = {
+            "enabled": enabled,
+            "required": required,
+            "actual": actual,
+            "status": status,
+            "reason": reason,
+        }
+    statuses = {predicate["status"] for predicate in predicates.values()}
+    return {
+        "status": (
+            "fail"
+            if "fail" in statuses
+            else (
+                "incomplete"
+                if "incomplete" in statuses or not metrics["execution_complete"]
+                else "pass"
+            )
+        ),
+        "predicates": predicates,
+    }
+
+
+def cache_observation_report(
+    *,
+    cases: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+    thresholds: dict[str, Any],
+    target: dict[str, Any],
+) -> dict[str, Any]:
+    by_case: dict[str, list[dict[str, Any]]] = {}
+    for call in calls:
+        if call["role"] == "subject":
+            by_case.setdefault(call["case_id"], []).append(call)
+    result_by_case = {row["case_id"]: row for row in results}
+    repeats: list[dict[str, Any]] = []
+    specs: list[dict[str, Any]] = []
+    complete_results = True
+    for case in cases:
+        spec = case["metadata"]["cache_probe"]
+        specs.append({"case_id": case["id"], **spec})
+        requests = by_case.get(case["id"], [])
+        if len(requests) > spec["repeats"]:
+            raise ValueError("Cache probe receipts exceed the frozen repeat count")
+        result = result_by_case.get(case["id"], {})
+        if result.get("status") == "completed":
+            validate_result(kind=CACHE_OBSERVATION_RESULT, result=result)
+            if (
+                result["details"]["cache_observation"]["planned_repeats"]
+                != spec["repeats"]
+            ):
+                raise ValueError(
+                    "Cache probe result differs from its frozen repeat count"
+                )
+        else:
+            complete_results = False
+        for index in range(spec["repeats"]):
+            call = requests[index] if index < len(requests) else {}
+            repeats.append(
+                {
+                    "case_id": case["id"],
+                    "repeat_index": index,
+                    "call_id": call.get("id"),
+                    "status": call.get("status", "undispatched"),
+                    "response_status": call.get("response_status"),
+                    "output_complete": call.get("output_complete"),
+                    "finish_reason": call.get("finish_reason"),
+                    "latency_s": call.get("latency_s"),
+                    "error": call.get("error"),
+                    "session_id": call.get("session_id"),
+                    "selected_model": _observed_model(call),
+                    "config_hash": call.get("config_hash"),
+                    "router_phase": (
+                        call.get("phase")
+                        if call.get("phase_source") == "router"
+                        else None
+                    ),
+                    "phase_source": call.get("phase_source"),
+                    "provider_cache_observation": call.get(
+                        "provider_cache_observation"
+                    ),
+                }
+            )
+    completed = [
+        row
+        for row in repeats
+        if row["status"] == "completed" and row["output_complete"] is True
+    ]
+    execution_complete = (
+        bool(repeats) and complete_results and len(completed) == len(repeats)
+    )
+    successes = [
+        row
+        for row in repeats
+        if type(row["response_status"]) is int
+        and HTTPStatus.OK <= row["response_status"] < HTTPStatus.MULTIPLE_CHOICES
+    ]
+    observations = [
+        row["provider_cache_observation"]
+        for row in completed
+        if isinstance(row["provider_cache_observation"], dict)
+    ]
+    receipts = [
+        row["provider_cache_observation"]
+        for row in repeats
+        if isinstance(row["provider_cache_observation"], dict)
+    ]
+    cache_problems = len(observations) != len(completed) or any(
+        row["qualification"] not in {"qualified", "missing"} or row.get("event_issues")
+        for row in observations
+    )
+    states = [
+        row["state"] for row in observations if row["state"] in CACHE_REPORTING_STATES
+    ]
+    usage_complete = (
+        execution_complete
+        and not cache_problems
+        and len(observations) == len(repeats)
+        and all(
+            row["qualification"] == "qualified" and isinstance(row.get("usage"), dict)
+            for row in observations
+        )
+    )
+    tokens = (
+        {key: sum(row["usage"][key] for row in observations) for key in BUCKETS}
+        if usage_complete
+        else None
+    )
+    prompt = (
+        sum(tokens[key] for key in BUCKETS if key != "output_tokens")
+        if tokens is not None
+        else None
+    )
+    field_count = sum(row["field_present"] is True for row in observations)
+    latencies = [
+        row["latency_s"] * 1000 for row in completed if row["latency_s"] is not None
+    ]
+    metrics: dict[str, Any] = {
+        "version": CACHE_OBSERVATION_RESULT,
+        "denominator": "all_planned_repeats; incomplete or unqualified cohorts have no cache ratio",
+        "target": {
+            "id": target["id"],
+            "kind": target["kind"],
+            "base_url": target["base_url"],
+            "requested_model": target["model"],
+            "session_mode": target.get("session_mode", STATELESS),
+            "expected_config_hash": target.get("config_hash"),
+            "expected_response_model": target.get("expected_response_model"),
+        },
+        "native_probes": specs,
+        "planned_repeats": len(repeats),
+        "attempted_repeats": sum(row["call_id"] is not None for row in repeats),
+        "completed_repeats": len(completed),
+        "failed_repeats": sum(row["status"] == "failed" for row in repeats),
+        "cancelled_repeats": sum(
+            row["status"] in {"cancelled", "interrupted"} for row in repeats
+        ),
+        "undispatched_repeats": sum(row["status"] == "undispatched" for row in repeats),
+        "execution_complete": execution_complete,
+        "http_status_counts": dict(
+            Counter(
+                str(row["response_status"])
+                for row in repeats
+                if row["response_status"] is not None
+            )
+        ),
+        "pending_repeats": sum(row["status"] in {"sent", "running"} for row in repeats),
+        "unknown_repeats": sum(row["status"] == "sent_unknown" for row in repeats),
+        "transport_status_counts": dict(Counter(row["status"] for row in repeats)),
+        "successes": len(successes),
+        "success_rate": round(len(successes) / len(repeats), 4) if repeats else None,
+        "success_rate_basis": "all_planned_repeats; an observed lower bound while HTTP outcomes are missing",
+        "cached_token_reporting": (
+            max(states, key=CACHE_REPORTING_STATES.index) if states else None
+        ),
+        "cache_reporting_counts": dict(
+            Counter(row["state"] or row["qualification"] for row in observations)
+        ),
+        "cached_token_field_present": field_count,
+        "cached_token_field_rate": (
+            round(field_count / len(successes), 4)
+            if execution_complete and successes
+            else None
+        ),
+        "cached_token_source_counts": dict(
+            Counter(row["source"] for row in observations if row["source"])
+        ),
+        "evidence_reason_counts": dict(
+            Counter(reason for row in receipts for reason in row["reasons"])
+        ),
+        "evidence_qualification_counts": dict(
+            Counter(row["qualification"] for row in receipts)
+        ),
+        "prompt_tokens": prompt,
+        "completion_tokens": tokens["output_tokens"] if tokens is not None else None,
+        "cached_tokens": tokens["cached_input_tokens"] if tokens is not None else None,
+        "cached_prompt_ratio": (
+            round(tokens["cached_input_tokens"] / prompt, 6) if prompt else None
+        ),
+        "latency_ms": {
+            "mean": round(fmean(latencies), 3) if latencies else None,
+            **{
+                name: round(value, 3) if value is not None else None
+                for name, value in (
+                    ("p50", percentile(latencies, 0.5)),
+                    ("p95", percentile(latencies, 0.95)),
+                    ("max", max(latencies, default=None)),
+                )
+            },
+        },
+        "repeats": repeats,
+    }
+    metrics["validation"] = _cache_probe_validation(
+        metrics=metrics,
+        thresholds=thresholds,
+        http_complete=bool(repeats)
+        and all(row["response_status"] is not None for row in repeats),
+        cache_problems=cache_problems,
+    )
+    return metrics
+
+
 def make_report(store, run_id):
     run = store.get(run_id)
     manifest = run["manifest"]
@@ -644,6 +913,21 @@ def make_report(store, run_id):
                 )
                 if len(kinds) == 1:
                     metrics[-1]["token_coverage"] = benchmarks[-1]["token_coverage"]
+            if (
+                kinds[benchmark] == CACHE_OBSERVATION_RESULT
+                and manifest["mode"] != "preview"
+            ):
+                benchmarks[-1]["cache_observation"] = cache_observation_report(
+                    cases=[c for c in manifest["cases"] if c["id"] in ids],
+                    results=rows,
+                    calls=tcalls,
+                    thresholds=manifest["benchmark_options"][benchmark]["thresholds"],
+                    target=target,
+                )
+                if len(kinds) == 1:
+                    metrics[-1]["cache_observation"] = benchmarks[-1][
+                        "cache_observation"
+                    ]
     selected_ids = {cell["case_id"] for cell in cells}
     present = {c["benchmark"] for c in manifest["cases"] if c["id"] in selected_ids}
     weights = manifest["benchmark_weights"]
@@ -670,18 +954,22 @@ def make_report(store, run_id):
         )
         item["score_scope"] = (
             (
-                "token-coverage diagnostic; no combined accuracy"
-                if any("token_coverage" in row for row in rows)
+                "cache-observation diagnostic; no answer-quality score"
+                if any("cache_observation" in row for row in rows)
                 else (
-                    "weighted-rubric diagnostic; no combined accuracy"
-                    if any("weighted_rubric" in row for row in rows)
+                    "token-coverage diagnostic; no combined accuracy"
+                    if any("token_coverage" in row for row in rows)
                     else (
-                        "full sr-bench 1.0"
-                        if target_full_suite
+                        "weighted-rubric diagnostic; no combined accuracy"
+                        if any("weighted_rubric" in row for row in rows)
                         else (
-                            "extension diagnostic; normalized adapter weights"
-                            if extension_subset
-                            else "selected benchmark subset; renormalized fixed weights"
+                            "full sr-bench 1.0"
+                            if target_full_suite
+                            else (
+                                "extension diagnostic; normalized adapter weights"
+                                if extension_subset
+                                else "selected benchmark subset; renormalized fixed weights"
+                            )
                         )
                     )
                 )
@@ -764,6 +1052,14 @@ def make_report(store, run_id):
     if any("weighted_rubric" in benchmark for benchmark in benchmarks):
         limitations.append(
             "Weighted rubric diagnostics retain signed totals and penalties. Missing or failed grades are not zero; aggregate quality requires every planned grade. Binary accuracy, Wilson intervals and a combined sr-bench score do not describe these cohorts."
+        )
+    if any("cache_observation" in benchmark for benchmark in benchmarks):
+        limitations.append(
+            "Cache probes observe response fields, not answer quality or cache efficiency. "
+            "Their complete-cohort ratios are separate from generic reported-subset cache metrics "
+            "and existing billing. Unverified legacy aliases cannot qualify cache-dependent thresholds. "
+            "Streaming and strict stopping differ from the retained buffered probe; "
+            "target URLs, session IDs and latency alone do not prove model equivalence or cache reuse."
         )
     if manifest["mode"] == "replay":
         limitations.append(
