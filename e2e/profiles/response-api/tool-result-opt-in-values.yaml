@@ -1,6 +1,8 @@
 # A second Router in this profile, standalone, in front of the same provider
 # simulator. It accepts the tool-result failure loss, which the profile's main
-# Router keeps rejecting for protocol-codec-*-backend-tool-lifecycle.
+# Router keeps rejecting for protocol-codec-*-backend-tool-lifecycle, and sends
+# system messages inside the conversation as user text, which the main Router
+# forwards in place for protocol-codec-anthropic-per-message-effort.
 configOverride:
   version: v0.3
   listeners:
@@ -41,6 +43,7 @@ configOverride:
     router:
       allow_lossy_translation:
         - tool_result.is_error
+        - messages[].role
 resources:
   limits:
     cpu: "1"

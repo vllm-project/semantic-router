@@ -122,6 +122,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-responses-custom-tool-loop",
 		"protocol-codec-responses-backend-tool-lifecycle",
 		"protocol-codec-tool-result-error-opt-in",
+		"protocol-codec-anthropic-system-messages-opt-in",
 		"protocol-codec-anthropic-cache-tool-loop-responses",
 		"protocol-codec-anthropic-adaptive-responses",
 		"protocol-codec-anthropic-per-message-effort",

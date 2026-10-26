@@ -10,9 +10,10 @@ import "fmt"
 // working directory), so the text joins the user message right before it, or
 // becomes a user message of its own after a tool result or an assistant turn.
 // Earlier turns are never rewritten, which keeps the conversation's cached
-// prefix. The caller must report the returned diagnostic. A message that also
-// sets per-message effort keeps an empty system turn, so that control is still
-// reported as dropped by the encoder.
+// prefix. The caller applies it only when the operator lists
+// LossyFieldSystemMessageRole and must report the returned diagnostic. A
+// message that also sets per-message effort keeps an empty system turn, so
+// that control is still reported as dropped by the encoder.
 func ProjectAnthropicSystemMessages(request Request, target WireFormat) (Request, Diagnostics) {
 	if request.Trusted.SourceFormat != AnthropicMessagesV1 ||
 		(target != OpenAIChatV1 && target != OpenAIResponsesV1) {
@@ -46,7 +47,7 @@ func ProjectAnthropicSystemMessages(request Request, target WireFormat) (Request
 	return projected, Diagnostics{{
 		Source: AnthropicMessagesV1,
 		Target: target,
-		Field:  "messages[].role",
+		Field:  LossyFieldSystemMessageRole,
 		Action: DiagnosticApproximated,
 		Reason: fmt.Sprintf("%d system messages sent as user text in place", count),
 	}}
