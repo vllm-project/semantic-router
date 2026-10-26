@@ -420,6 +420,24 @@ def publish(
             )
         else:
             client.write(f"repos/{repo}/check-runs", payload)
+        # Retire any superseded placeholder a stale event left on this head:
+        # once this run speaks for the current revision, the placeholder's
+        # job is done, and leaving it in_progress would outrank a standing
+        # verdict in the check suite. Its identity stays; only the state
+        # mirrors what this run just published.
+        for item in checks:
+            if (
+                item.get("external_id") == f"{PREFIX}{pull['number']}:superseded"
+                and item.get("status") == "in_progress"
+            ):
+                retire = {"status": payload["status"], "output": payload["output"]}
+                if "conclusion" in payload:
+                    retire["conclusion"] = payload["conclusion"]
+                client.write(
+                    f"repos/{repo}/check-runs/{item['id']}",
+                    retire,
+                    method="PATCH",
+                )
     if result["comment"]:
         if owned:
             comment = max(owned, key=lambda item: item["id"])
@@ -471,6 +489,19 @@ def publish_superseded_pending(
     fresh = client.request(f"repos/{repo}/pulls/{pull['number']}")
     if fresh.get("state") != "open" or fresh["head"]["sha"] != head_sha:
         return {"ignored": "superseded while preparing status"}
+    # The publisher for the current revision runs in its own workflow run
+    # (ci-status.yml serializes per run id, so the two overlap), and it may
+    # have landed its verdict while this stale event was in flight. Re-read
+    # the gates immediately before writing: the head-only recheck above
+    # cannot protect against concurrent check writes, and a pending posted
+    # over a standing success would block a green PR from merging.
+    gates = pages(
+        client,
+        f"repos/{repo}/commits/{head_sha}/check-runs?check_name=PR%20Gate&filter=all",
+        "check_runs",
+    )
+    if any(item.get("name") == CHECK for item in gates):
+        return {"ignored": "PR Gate already present on the current head"}
     client.write(f"repos/{repo}/check-runs", payload)
     return result
 

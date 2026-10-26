@@ -69,6 +69,7 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
+        self.midflight_verdict, self.check_reads = False, 0
         self.refresh_report()
 
     def refresh_report(self):
@@ -117,6 +118,20 @@ class Client:
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
         if path.startswith("commits/") and "/check-runs?" in path:
+            self.check_reads += 1
+            if self.midflight_verdict and self.check_reads >= 2:
+                # The publisher for the current revision lands its verdict
+                # between this stale event's first read and its final write.
+                self.checks.append(
+                    {
+                        "id": 88,
+                        "name": "PR Gate",
+                        "app": {"id": APP_ID},
+                        "external_id": f"{PREFIX}3:101:1",
+                        "status": "completed",
+                        "conclusion": "success",
+                    }
+                )
             return {"check_runs": copy.deepcopy(self.checks)}
         if path.startswith("actions/runs/101/attempts/"):
             return {"jobs": copy.deepcopy(self.jobs)}
@@ -405,6 +420,59 @@ class PRStatusTests(unittest.TestCase):
             result, {"ignored": "PR Gate already present on the current head"}
         )
         self.assertEqual(client.writes, [])
+
+    def test_superseded_pending_skips_a_verdict_that_lands_midflight(self):
+        # The two publishers overlap (ci-status.yml serializes per run id):
+        # this stale event reads no gate, the current-revision publisher
+        # then publishes success, and the stale event's head-only recheck
+        # still passes. The pre-write gate re-read must refuse the write -
+        # a pending over a standing success blocks a green PR from merging.
+        client = Client()
+        client.pull["head"]["sha"] = HEAD2
+        client.midflight_verdict = True
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(
+            result, {"ignored": "PR Gate already present on the current head"}
+        )
+        self.assertEqual(client.writes, [])
+        self.assertEqual([item["conclusion"] for item in client.checks], ["success"])
+
+    def test_superseded_placeholder_is_retired_by_the_current_publisher(self):
+        # Once the publisher for the current revision speaks, the pending
+        # placeholder a stale event left behind must mirror its verdict
+        # instead of outranking it in the check suite.
+        client = Client()
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        client.checks = [
+            {
+                "id": 7,
+                "name": "PR Gate",
+                "app": {"id": APP_ID},
+                "external_id": f"{PREFIX}3:superseded",
+                "status": "in_progress",
+            }
+        ]
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        retired = next(
+            item for item in client.writes if item[0].endswith("/check-runs/7")
+        )
+        endpoint, payload, kwargs = retired
+        self.assertEqual(endpoint, f"repos/{REPO}/check-runs/7")
+        self.assertEqual(kwargs, {"method": "PATCH"})
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["conclusion"], "success")
+        self.assertNotIn("external_id", payload)
+        self.assertNotIn("head_sha", payload)
+        placeholder = next(item for item in client.checks if item["id"] == 7)
+        self.assertEqual(placeholder["status"], "completed")
+        self.assertEqual(placeholder["conclusion"], "success")
+        self.assertEqual(placeholder["external_id"], f"{PREFIX}3:superseded")
 
     def test_verdict_for_the_current_revision_is_unchanged(self):
         client = Client()
