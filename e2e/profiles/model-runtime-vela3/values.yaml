@@ -97,7 +97,7 @@ config:
           operator: AND
           on_unknown: no_match
           conditions:
-            - {type: decision, name: order_numbers}
+            - {type: decision, name: order_numbers, label: order number}
         modelRefs:
           - model: general-expert
             use_reasoning: false

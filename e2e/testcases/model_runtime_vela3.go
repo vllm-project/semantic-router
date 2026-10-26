@@ -120,17 +120,13 @@ func checkModelRuntimeVela3Case(
 	if err != nil {
 		return "", err
 	}
-	var want []string
-	for name, signal := range signals {
-		if answer, ok := answered.Answers[name]; ok && answer.Noul != nil && *answer.Noul >= signal.gte {
-			want = append(want, name)
-		}
-	}
+	want := vela3Matches(signals, answered)
 	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
 	var got []string
-	for name := range signals {
-		if matched[name] {
-			got = append(got, name)
+	for item := range matched {
+		name, _, _ := strings.Cut(item, ":")
+		if _, ours := signals[name]; ours {
+			got = append(got, item)
 		}
 	}
 	sort.Strings(want)
@@ -139,6 +135,31 @@ func checkModelRuntimeVela3Case(
 		return "", fmt.Errorf("the Router matched decision signals %v, vela3-fast's own answers match %v", got, want)
 	}
 	return fmt.Sprintf("%s, decision signals %v", decision, got), nil
+}
+
+// vela3Matches is what the Router lists for vela3-fast's answers
+// (classification.applyDecisionAnswer): a Noul signal's name when its answer
+// meets the predicate, and "signal:label" for each span label one of whose
+// spans meets it.
+func vela3Matches(signals map[string]mrVela3Signal, answered modelruntime.DecisionsResponse) []string {
+	var want []string
+	for name, signal := range signals {
+		if signal.question.Type == "span" {
+			for _, label := range signal.question.Labels {
+				for _, span := range answered.Spans[name] {
+					if span.Label == label.Key && span.Probability >= signal.gte {
+						want = append(want, name+":"+label.Key)
+						break
+					}
+				}
+			}
+			continue
+		}
+		if answer, ok := answered.Answers[name]; ok && answer.Noul != nil && *answer.Noul >= signal.gte {
+			want = append(want, name)
+		}
+	}
+	return want
 }
 
 // vela3DecisionSignals reads the profile's decision signals as the Router
