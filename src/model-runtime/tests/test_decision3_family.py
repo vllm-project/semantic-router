@@ -617,6 +617,8 @@ def test_every_model_records_goldens_and_kernel_choices(model):
     if model.repo_id == "vllm-sr/d3-edge":
         expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
         devices.add("cuda:sm_89")
+    elif model.repo_id == "vllm-sr/d3-ultra":
+        expected.add("rocm:gfx942")
     assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {

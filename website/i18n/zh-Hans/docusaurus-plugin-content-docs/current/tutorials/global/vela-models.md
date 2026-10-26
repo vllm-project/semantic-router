@@ -1,3 +1,7 @@
+---
+is_mtpe: false
+---
+
 # Vela Router 模型 {#vela-router-models}
 
 ## 概览 {#overview}
