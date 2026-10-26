@@ -28,6 +28,15 @@ backbone and each adapter network were checked separately on padded batches of
 mixed lengths: their hidden states are bit-identical to the package's
 `DecisionEncoder` and `build_adapter` networks.
 
+## The E2E profile's requests
+
+`vela3-parity-profile.jsonl` holds the requests the Router sends for the five
+prompts of the `model-runtime-vela3` E2E profile, captured from the Router's
+own signal evaluation of that profile's config: one call per prompt with the
+prompt guard Choice, the `pii` preset, the `account_access` Noul and the
+`order_numbers` span question. Run with `--requests`, all 5 requests and 20
+questions are identical to the package (max |dp| 0).
+
 The golden request (decisions, router questions on the shared and task
 adapters, both span presets and an entity span) is recorded on CPU in
 `registry/golden_answers_vela3.json`; a second load matches all eight answers.
