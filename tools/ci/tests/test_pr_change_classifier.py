@@ -442,6 +442,25 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(domain["checks"], ["make test-agent-task-bench"])
         self.assertEqual(domain["verify"], ["make test-agent-task-bench"])
 
+    def test_cache_probe_migration_keeps_native_and_cli_checks(self) -> None:
+        for path in (
+            "bench/cache_token_probe.py",
+            "bench/test_cache_token_probe.py",
+            "src/vllm-sr/cli/sr_bench/cache_probe.py",
+            "src/vllm-sr/tests/test_sr_bench_cache_probe.py",
+            "src/vllm-sr/tests/test_sr_bench_cache_usage.py",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("cache-probe-bench", result.domains)
+                self.assertIn("bench-tools", result.selected_jobs)
+                if path.startswith("src/"):
+                    self.assertIn("cli-unit", result.selected_jobs)
+        domain = load_domain_registry()["domains"]["cache-probe-bench"]
+        self.assertEqual(domain["owner"], "evaluation-quality")
+        self.assertEqual(domain["checks"], ["make test-cache-probe-bench"])
+        self.assertEqual(domain["verify"], ["make test-cache-probe-bench"])
+
     def test_shared_component_execution_selects_every_component_consumer(self):
         components = {
             identity

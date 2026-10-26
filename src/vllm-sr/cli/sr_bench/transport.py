@@ -11,6 +11,7 @@ import time
 from collections.abc import Mapping
 from contextlib import suppress
 from http import HTTPStatus
+from typing import Any
 
 import requests
 
@@ -26,6 +27,16 @@ PROVIDER_STATE_PHASE = "provider_state"
 UNKNOWN_PHASE = "unknown"
 SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
 SESSION_ID_HEADER = "x-session-id"
+CACHE_OBSERVATION_VERSION: str = "provider-cache-observation-v1"
+CACHE_REPORTING_STATES: tuple[str, ...] = ("missing", "reported_zero", "positive")
+# Native precedence: https://github.com/vllm-project/semantic-router/blob/a6d23eaff862a9d24dc10ccb778ad0618a839ef7/bench/cache_token_probe.py#L26-L37
+CACHE_READ_PATHS: tuple[tuple[str, ...], ...] = (
+    ("prompt_tokens_details", "cached_tokens"),
+    ("input_tokens_details", "cached_tokens"),
+    ("cached_tokens",),
+    ("prompt_cache_hit_tokens",),
+)
+CACHE_WRITE_CONFLICT: str = "Conflicting cache-write token usage"
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -121,7 +132,7 @@ def normalize_usage(raw):
         if value is not None
     ]
     if any(value != writes[0] for value in writes):
-        raise CallFailure("Conflicting cache-write token usage")
+        raise CallFailure(CACHE_WRITE_CONFLICT)
     written = writes[0] if writes else 0
     if total is None or output is None:
         return None
@@ -137,6 +148,133 @@ def normalize_usage(raw):
         "cache_write_tokens": written,
         "output_tokens": output,
     }
+
+
+def observe_cache_usage(raw: object) -> dict[str, Any]:
+    observation: dict[str, Any] = {
+        "version": CACHE_OBSERVATION_VERSION,
+        "scope": "response_usage",
+        "field_present": False,
+        "source": None,
+        "sources": [],
+        "values": {},
+        "qualification": "missing",
+        "state": "missing",
+        "cached_tokens": None,
+        "usage": None,
+        "reasons": [],
+    }
+    if raw is None:
+        return {**observation, "reasons": ["usage_missing"]}
+    if not isinstance(raw, dict):
+        return {
+            **observation,
+            "qualification": "malformed",
+            "state": None,
+            "reasons": ["invalid_usage_object"],
+        }
+    fields: dict[str, Any] = {}
+    malformed_details = False
+    for path in CACHE_READ_PATHS:
+        value: Any = raw
+        for part in path:
+            if not isinstance(value, dict):
+                malformed_details |= value is not None
+                value = None
+                break
+            value = value.get(part)
+        if value is not None:
+            fields["usage." + ".".join(path)] = value
+    observation.update(
+        field_present=bool(fields),
+        sources=list(fields),
+        values={
+            source: value if type(value) is int else None
+            for source, value in fields.items()
+        },
+    )
+    total = raw.get("prompt_tokens", raw.get("input_tokens"))
+    output = raw.get("completion_tokens", raw.get("output_tokens"))
+    missed = raw.get("prompt_cache_miss_tokens")
+    if any(
+        value is not None and (type(value) is not int or value < 0)
+        for value in (total, output, missed)
+    ):
+        return {
+            **observation,
+            "qualification": "malformed",
+            "state": None,
+            "reasons": ["invalid_reported_token_count"],
+        }
+    if malformed_details or any(
+        type(value) is not int or value < 0 for value in fields.values()
+    ):
+        return {
+            **observation,
+            "qualification": "malformed",
+            "state": None,
+            "reasons": ["invalid_cache_field"],
+        }
+    if not fields:
+        return {**observation, "reasons": ["cache_field_missing"]}
+    if len(set(fields.values())) != 1:
+        return {
+            **observation,
+            "qualification": "conflicting",
+            "state": None,
+            "reasons": ["cache_read_aliases_disagree"],
+        }
+    verified = {
+        source: value
+        for source, value in fields.items()
+        if source != "usage.cached_tokens"
+    }
+    if not verified:
+        return {
+            **observation,
+            "qualification": "unqualified",
+            "state": None,
+            "reasons": ["unverified_legacy_cache_field"],
+        }
+    source, cached = next(iter(verified.items()))
+    if total is not None and cached > total:
+        return {
+            **observation,
+            "qualification": "malformed",
+            "state": None,
+            "reasons": ["cache_read_exceeds_prompt"],
+        }
+    if total is not None and missed is not None and cached + missed != total:
+        return {
+            **observation,
+            "qualification": "conflicting",
+            "state": None,
+            "reasons": ["cache_hit_miss_total_disagree"],
+        }
+    # DeepSeek's hit field duplicates the nested count; this projection is not billing.
+    # https://api-docs.deepseek.com/api/create-chat-completion/
+    details = raw.get("prompt_tokens_details") or raw.get("input_tokens_details") or {}
+    projection = {**raw, "prompt_tokens_details": {**details, "cached_tokens": cached}}
+    try:
+        normalized = normalize_usage(projection)
+    except CallFailure as exc:
+        return {
+            **observation,
+            "qualification": (
+                "conflicting" if str(exc) == CACHE_WRITE_CONFLICT else "malformed"
+            ),
+            "state": None,
+            "reasons": [str(exc)],
+        }
+    observation.update(
+        source=source,
+        qualification="qualified" if normalized is not None else "incomplete",
+        state="positive" if cached else "reported_zero",
+        cached_tokens=cached,
+        usage=normalized,
+        reasons=[] if normalized is not None else ["incomplete_usage"],
+    )
+    return observation
 
 
 def cost_for(usage, model, prices):
@@ -341,6 +479,9 @@ def chat(
     cache_read_usage: dict[str, int] | None = None
     cache_read_reported: bool | None = None
     cache_write_reported: bool | None = None
+    cache_observation = observe_cache_usage(raw=None)
+    cache_observation_issues: dict[str, int] = {}
+    usage_event_index = 0
     observed_session_phase = request_phase(messages)
     observed_phase_source = "request"
     done = False
@@ -366,6 +507,11 @@ def chat(
             "ttft_s": ttft,
             "finish_reason": finish,
             "raw_usage": raw_usage,
+            "response_status": response.status_code if response is not None else None,
+            "provider_cache_observation": {
+                **cache_observation,
+                "event_issues": cache_observation_issues,
+            },
             "cache_read_usage": cache_read_usage,
             "tool_calls": list(tool_calls.values()),
             "phase": observed_session_phase,
@@ -444,6 +590,7 @@ def chat(
             nonlocal content, reasoning, usage, model, finish, ttft, raw_usage, done
             nonlocal provider_model_observed
             nonlocal cache_read_usage, cache_read_reported, cache_write_reported
+            nonlocal cache_observation, usage_event_index
             data = "\n".join(x[5:].lstrip() for x in lines if x.startswith("data:"))
             if not data:
                 return
@@ -459,6 +606,23 @@ def chat(
                 if isinstance(obj["model"], str) and obj["model"]:
                     provider_model_observed = True
             model = obj.get("model") or model
+            if "usage" in obj:
+                observed = observe_cache_usage(raw=obj["usage"])
+                qualification = observed["qualification"]
+                if qualification in {"malformed", "conflicting", "unqualified"}:
+                    cache_observation_issues[qualification] = (
+                        cache_observation_issues.get(qualification, 0) + 1
+                    )
+                if (
+                    observed["field_present"]
+                    or observed["qualification"] in {"malformed", "conflicting"}
+                    or not cache_observation["field_present"]
+                ):
+                    cache_observation = {
+                        **observed,
+                        "usage_event_index": usage_event_index,
+                    }
+                usage_event_index += 1
             if obj.get("usage"):
                 raw_usage = obj["usage"]
                 usage = normalize_usage(raw_usage)
