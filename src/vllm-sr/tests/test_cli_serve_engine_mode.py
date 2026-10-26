@@ -75,13 +75,15 @@ def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
     )
 
 
-def test_d3_turbo_serves_at_its_built_in_release_without_the_hub(monkeypatch):
+@pytest.mark.parametrize("model", ["vllm-sr/d3-turbo", "vllm-sr/d3-ultra"])
+def test_a_state_once_d3_serves_at_its_built_in_release_without_the_hub(
+    monkeypatch, model
+):
     def no_hub(*args, **kwargs):
         raise AssertionError("a built-in model resolves without the Hub")
 
     monkeypatch.setattr(HfApi, "model_info", no_hub)
     document = {"version": "v0.3", "setup": {"mode": True}}
-    model = "vllm-sr/d3-turbo"
     apply_instance_options(
         document, engine=True, model_options=options(model), platform="rocm"
     )
