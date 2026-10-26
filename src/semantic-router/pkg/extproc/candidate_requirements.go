@@ -73,10 +73,15 @@ func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRe
 
 // callerCapabilities returns the capabilities an accepted agentic facts
 // envelope requires for this request. It is empty when the contract is
-// disabled, no envelope arrived, or the envelope was rejected.
+// disabled, no envelope arrived, or the envelope was rejected. A hop never
+// reads the envelope; it serves the set its client request accepted, which
+// the Router carried in process.
 func callerCapabilities(ctx *RequestContext) llmprotocol.CapabilitySet {
 	if ctx == nil {
 		return llmprotocol.CapabilitySet{}
+	}
+	if ctx.Hop != nil {
+		return ctx.Hop.CallerCapabilities
 	}
 	return ctx.AgenticFacts.Accepted.Capabilities()
 }

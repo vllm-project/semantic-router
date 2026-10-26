@@ -51,6 +51,8 @@ func validateLooperStageCandidate(base *Request, body []byte, model string, logp
 		return fmt.Errorf("%w: looper model %q stage cannot be represented by its Chat codec", selection.ErrNoEligibleCandidates, model)
 	}
 	demand := selection.DemandForRequest(&request)
+	// The stage body does not carry the caller's requirements; join them here.
+	demand.ModelCapabilities = demand.ModelCapabilities.Union(base.CallerCapabilities)
 	if err := selection.ValidateCandidateRequirements(base.CandidateRequirements, model, params, demand); err != nil {
 		return err
 	}
@@ -79,4 +81,13 @@ func capLooperStageOutput(base *Request, request *openai.ChatCompletionNewParams
 		}
 	}
 	return nil
+}
+
+// callerCapabilities returns the accepted caller capabilities a stage carries
+// to its hop. A call without a request scope carries none.
+func callerCapabilities(base *Request) llmprotocol.CapabilitySet {
+	if base == nil {
+		return llmprotocol.CapabilitySet{}
+	}
+	return base.CallerCapabilities
 }

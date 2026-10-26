@@ -81,7 +81,11 @@ func (r *OpenAIRouter) executeLooperGraph(
 	looper.RequestValue.Put(in.Values, req)
 	outcome, err := graph.Run(ctx, program, in, graph.Options{
 		Caller: hops,
-		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},
+		Hop: routing.Hop{
+			Decision:           decision.Name,
+			Recipe:             string(req.RecipeName),
+			CallerCapabilities: req.CallerCapabilities,
+		},
 	})
 	if err != nil {
 		logLooperCallBudgetExhaustion(err, outcome, decision, reqCtx)

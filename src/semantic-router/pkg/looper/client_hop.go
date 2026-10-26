@@ -54,7 +54,8 @@ func (c *Client) callModelAsHop(
 			Iteration: options.Iteration,
 			// A Looper's calls never fell back across models; the
 			// algorithm owns its candidates.
-			Fallback: fallback.Disabled(),
+			Fallback:           fallback.Disabled(),
+			CallerCapabilities: callerCapabilities(options.candidateRequest),
 		},
 		Model:   target.Name,
 		Request: routing.Request{Header: hopRequestHeader(header, len(body)), Body: body},

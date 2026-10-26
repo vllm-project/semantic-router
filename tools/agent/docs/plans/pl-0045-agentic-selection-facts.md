@@ -310,6 +310,16 @@ must be confirmed with maintainers before the PR that depends on it merges.
   otherwise hide a broken seam; passing an empty set at any one of them fails
   exactly that test. Eval is excluded, recorded under `CONFIRM-06`.
 
+  Looper algorithms make further model calls after selection, including to
+  helpers configured outside `modelRefs`. The validated set travels with them
+  in process: `looper.Request.CallerCapabilities` for the stage check before
+  each call, and `routing.Hop.CallerCapabilities` for the dispatch recheck on
+  the internal hop, which never reads the envelope again. Both join it to the
+  stage's own demand, so a text-only ReMoM `synthesis_model` is rejected for a
+  caller that requires `tools` (maintainer review on #4849). The rejected call
+  follows the algorithm's existing failure handling, so ReMoM `on_error: skip`
+  falls back to the previous round's capable answer.
+
   The validator accepts only canonical capability names, recorded under
   `CONFIRM-10`.
 

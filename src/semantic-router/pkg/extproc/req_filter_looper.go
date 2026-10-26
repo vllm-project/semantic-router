@@ -241,6 +241,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 				looperReq := &looper.Request{
 					OriginalRequest:       openAIRequest,
 					CandidateRequirements: r.candidateRequirements(reqCtx).Clone(),
+					CallerCapabilities:    callerCapabilities(reqCtx),
 					PermittedModels:       looperPermittedModels(modelRefs, decision.Algorithm),
 					Grounding:             r.groundingForRecipe(reqCtx.Routing.RecipeName()),
 					BaseContextTokens:     reqCtx.VSRContextTokenCount,

@@ -119,6 +119,15 @@ so every model the recipe can route to must declare them. Without this opt-in,
 
 A route action's destination is checked the same way. If it lacks a required
 capability, a capable model from the decision's `modelRefs` serves the request.
+
+Algorithms that call several models (Confidence, Fusion, Ratings, ReMoM and
+Workflows) check every call the same way. This includes the helper models their
+config names outside `modelRefs`, such as a ReMoM `synthesis_model`, a Fusion
+judge, or a Workflows planner or final model. A helper that lacks a required
+capability is rejected before it receives the request. The algorithm then
+handles the failure as it handles any failed call: for example, ReMoM with
+`on_error: fail` fails the request, and with the default `on_error: skip` it
+returns the previous round's answer, which a capable worker produced.
 When no model qualifies, the request fails with `503` and the code
 `no_eligible_model`. The response names no model and no capability.
 
