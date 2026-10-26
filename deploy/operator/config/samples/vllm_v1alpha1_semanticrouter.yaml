@@ -152,8 +152,8 @@ spec:
     # Prompt guard / jailbreak detection
     prompt_guard:
       enabled: true
-      model_id: "models/Vela-2.0-0.3B"
-      threshold: "0.75"
+      model_id: "models/vela3-fast"
+      threshold: "0.88"
       use_cpu: true
 
     # Domain and PII classifiers use the Vela 2.0 0.3B defaults.

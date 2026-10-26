@@ -8,7 +8,7 @@ import {
 
 describe('default decision deployment', () => {
   it('resolves the resource reference without interpreting the deployment name', () => {
-    expect(configuredDecisionModel({})).toBe('Vela-2.0-0.3B')
+    expect(configuredDecisionModel({})).toBe('vela3-fast')
     const config = {
       global: {
         model_catalog: {

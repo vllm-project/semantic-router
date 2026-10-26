@@ -36,7 +36,7 @@ describe('Vela defaults and explicit legacy models', () => {
     const defaults = systemModelCard()
     expect(defaults.summary[0]).toEqual({
       label: 'Decision Model',
-      value: 'Vela-2.0-0.3B (default)',
+      value: 'vela3-fast (default)',
     })
     expect(defaults.editData.decision_model).toEqual({ deployment: 'primary' })
   })

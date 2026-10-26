@@ -1,7 +1,7 @@
 import { DECISION_RUNTIME_CATALOG, DECISION_RUNTIME_CAPABILITIES } from './decisionRuntimeCatalog'
 
 export type DecisionModelName = string
-export const DEFAULT_DECISION_MODEL = 'Vela-2.0-0.3B'
+export const DEFAULT_DECISION_MODEL = 'vela3-fast'
 export interface DecisionModelOption {
   name: string
   artifact: string
@@ -21,38 +21,44 @@ const DECISION_FAMILY_LABELS: Record<string, string> = {
 }
 const velaSizes = ['0.3B', '0.8B', '4B', '9B'] as const
 export const DECISION_MODEL_OPTIONS: readonly DecisionModelOption[] = [
-  ...velaSizes.map(
-    (size): DecisionModelOption => ({
-      name: `Vela-2.0-${size}`,
-      artifact: `vllm-sr/Vela-2.0-${size}`,
-      label: `Vela 2.0 ${size}`,
-      family: 'Vela 2.0',
-      provider: 'vllm-sr',
-      hardware:
-        size === '0.3B' ? 'CPU or GPU' : size === '0.8B' ? 'GPU recommended' : 'GPU required',
-      summary: 'Typed decisions with classification, scoring, label sets and precise spans.',
-      questionTypes: ['choice', 'score', 'noul', 'span', 'set'],
-    }),
-  ),
-  ...DECISION_RUNTIME_CATALOG.map(
-    (entry): DecisionModelOption => ({
-      name: entry.name,
-      artifact: entry.id,
-      label:
-        entry.family === 'decision3'
-          ? `Decision 3.0 ${entry.name}`
-          : entry.name.replace('Decision-', 'Decision ').replace(/-/g, ' '),
-      family: DECISION_FAMILY_LABELS[entry.family] ?? 'Decision 2.0',
-      provider: entry.provider,
-      hardware: `${entry.minMemoryGiB} GiB minimum memory`,
-      summary:
-        entry.family === 'decision3'
-          ? 'General judgment questions over text, images and videos for classification, scoring and routing decisions.'
-          : 'General judgment questions for classification, scoring and routing decisions.',
-      questionTypes: DECISION_RUNTIME_CAPABILITIES,
-      revision: entry.revision,
-    }),
-  ),
+  {
+    name: 'vela3-fast',
+    artifact: 'vllm-sr/vela3-fast',
+    label: 'Vela 3.0 fast',
+    family: 'Vela 3.0',
+    provider: 'vllm-sr',
+    hardware: 'CPU or GPU',
+    summary:
+      'Typed decisions, the built-in routing signals on trained adapters, and precise spans.',
+    questionTypes: ['choice', 'noul', 'span'],
+  },
+  ...velaSizes.map((size): DecisionModelOption => ({
+    name: `Vela-2.0-${size}`,
+    artifact: `vllm-sr/Vela-2.0-${size}`,
+    label: `Vela 2.0 ${size}`,
+    family: 'Vela 2.0',
+    provider: 'vllm-sr',
+    hardware: size === '0.3B' ? 'CPU or GPU' : size === '0.8B' ? 'GPU recommended' : 'GPU required',
+    summary: 'Typed decisions with classification, scoring, label sets and precise spans.',
+    questionTypes: ['choice', 'score', 'noul', 'span', 'set'],
+  })),
+  ...DECISION_RUNTIME_CATALOG.map((entry): DecisionModelOption => ({
+    name: entry.name,
+    artifact: entry.id,
+    label:
+      entry.family === 'decision3'
+        ? `Decision 3.0 ${entry.name}`
+        : entry.name.replace('Decision-', 'Decision ').replace(/-/g, ' '),
+    family: DECISION_FAMILY_LABELS[entry.family] ?? 'Decision 2.0',
+    provider: entry.provider,
+    hardware: `${entry.minMemoryGiB} GiB minimum memory`,
+    summary:
+      entry.family === 'decision3'
+        ? 'General judgment questions over text, images and videos for classification, scoring and routing decisions.'
+        : 'General judgment questions for classification, scoring and routing decisions.',
+    questionTypes: DECISION_RUNTIME_CAPABILITIES,
+    revision: entry.revision,
+  })),
 ]
 export const DECISION_MODELS = DECISION_MODEL_OPTIONS.map((option) => option.name)
 export const DECISION_MODEL_HINT =
