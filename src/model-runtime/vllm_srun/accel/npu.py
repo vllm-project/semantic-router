@@ -8,7 +8,7 @@ from typing import Any
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from . import npu_fused
+from . import npu_fla, npu_fused
 from .kernels import Kernel, KernelSet, reference_kernels
 
 # Errors after which the process's NPU context stays unusable (the gpu.py precedent).
@@ -74,6 +74,21 @@ class NPUAccelerator(Accelerator):
         if device.arch in npu_fused.MEASURED_EXACT:
             for name, fn in npu_fused.available_wrappers().items():
                 kernels.register(Kernel(name, fn, "torch-npu-fused", exact=True))
+        # The fla-npu Ascend C chunk: approximate (1-2 bf16 ulp, two equally
+        # correct rounding paths), registered only where measured and selected
+        # only under the family's approximate consent -- the released BF16
+        # decision packages keep exact kernels (the record's label-diff).
+        if device.arch in npu_fla.MEASURED:
+            wrapper = npu_fla.available_wrapper()
+            if wrapper is not None:
+                kernels.register(
+                    Kernel(
+                        "chunk_gated_delta_rule",
+                        npu_fla.chunk_gated_delta_rule,
+                        "fla-npu-ascendc",
+                        exact=False,
+                    )
+                )
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
