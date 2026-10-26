@@ -4,6 +4,7 @@ import math
 from collections import Counter
 from typing import TYPE_CHECKING, Any
 
+from .contracts import STATELESS
 from .legacy_reasoning_modes import FIELD, PROTOCOL
 from .transport import normalize_usage
 
@@ -125,6 +126,7 @@ def make_condition_report(
                         calls=category_calls,
                         total=len(category_ids),
                         planned_case_ids=category_ids,
+                        session_mode=target.get("session_mode", STATELESS),
                     ),
                     **_resources(category_calls, len(category_ids)),
                 }
@@ -151,6 +153,7 @@ def make_condition_report(
                         calls=selected_calls,
                         total=len(ids),
                         planned_case_ids=ids,
+                        session_mode=target.get("session_mode", STATELESS),
                     ),
                     **_resources(selected_calls, len(ids)),
                 },

@@ -76,6 +76,9 @@ class ConditionTarget(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.requests.append(body)
+        self.server.request_headers.append(
+            {key.lower(): value for key, value in self.headers.items()}
+        )
         if self.server.fail:
             self.send_error(HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -149,6 +152,7 @@ class ConditionTarget(BaseHTTPRequestHandler):
 def target() -> Any:
     server = ThreadingHTTPServer(("127.0.0.1", 0), ConditionTarget)
     server.requests = []
+    server.request_headers = []
     server.answer = "Answer: A"
     server.fail = False
     server.truncated = False
@@ -593,6 +597,41 @@ def test_validation_uses_actual_frozen_template_kwargs(
     with pytest.raises(ValueError, match="non-reasoning"):
         plan(altered)
     assert not target.requests
+
+
+@pytest.mark.parametrize("session_mode", [None, "session_aware"])
+def test_condition_and_category_reports_preserve_the_wire_session_mode(
+    session_mode: str | None, bundle: Path, target: Any, tmp_path: Path
+) -> None:
+    source = template(target, ("NR",))
+    if session_mode is not None:
+        source["targets"][0]["session_mode"] = session_mode
+    compiled = export_manifest(
+        manifest=source,
+        dataset="mmlu",
+        source_bundle=bundle,
+        samples_per_category=2,
+    )
+    store = Store(tmp_path)
+    run = _run(compiled, store)
+    assert run["status"] == "completed"
+    calls = store.calls(run["id"])
+    assert len(calls) == len(target.request_headers) == 2
+    for call, headers in zip(calls, target.request_headers, strict=True):
+        if session_mode == "session_aware":
+            assert call["session_id"]
+            assert headers["x-session-id"] == call["session_id"]
+        else:
+            assert "session_id" not in call
+            assert "x-session-id" not in headers
+    report = make_report(store, run["id"])
+    condition = report[FIELD]["conditions"][0]
+    for metric in (
+        report["summary"]["targets"][0],
+        condition["summary"],
+        condition["categories"][0],
+    ):
+        assert metric["continuity"]["session_mode"] == (session_mode or "stateless")
 
 
 def test_endpoint_token_ratio_is_not_router_child_usage(
