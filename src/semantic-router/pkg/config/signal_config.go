@@ -204,11 +204,14 @@ type ModalityRule struct {
 }
 
 type JailbreakRule struct {
-	Name              string   `yaml:"name"`
-	Method            string   `yaml:"method,omitempty"`
-	Threshold         float32  `yaml:"threshold"`
-	IncludeHistory    bool     `yaml:"include_history,omitempty"`
-	Description       string   `yaml:"description,omitempty"`
+	Name           string  `yaml:"name"`
+	Method         string  `yaml:"method,omitempty"`
+	Threshold      float32 `yaml:"threshold"`
+	IncludeHistory bool    `yaml:"include_history,omitempty"`
+	Description    string  `yaml:"description,omitempty"`
+	// JailbreakPatterns contains normalized literal substrings that trigger an
+	// explicit jailbreak block. Matching is case-insensitive and ignores
+	// differences in whitespace; matches may occur anywhere in a message.
 	JailbreakPatterns []string `yaml:"jailbreak_patterns,omitempty"`
 	BenignPatterns    []string `yaml:"benign_patterns,omitempty"`
 	// Direction is the stage the rule observes: "request" (the default) scores
