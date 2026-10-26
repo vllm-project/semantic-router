@@ -87,9 +87,10 @@ def additive_masks(
         masks[SLIDING] = full.tril(window).triu(-window) & padding
     minimum = torch.finfo(dtype).min
     return {
-        kind: torch.where(mask, 0.0, minimum).to(dtype).unsqueeze(1).expand(
-            rows, 1, width, width
-        )
+        kind: torch.where(mask, 0.0, minimum)
+        .to(dtype)
+        .unsqueeze(1)
+        .expand(rows, 1, width, width)
         for kind, mask in masks.items()
     }
 
@@ -162,7 +163,9 @@ class UltraBertAttention(nn.Module):
         hidden = config["hidden_size"]
         heads = config["num_attention_heads"]
         if config.get("num_key_value_heads", heads) != heads:
-            raise ValueError("UltraBERT attention has as many key / value heads as query heads")
+            raise ValueError(
+                "UltraBERT attention has as many key / value heads as query heads"
+            )
         self.head_dim = config.get("head_dim") or hidden // heads
         self.scaling = self.head_dim**-0.5
         bias = bool(config.get("attention_bias", False))
@@ -181,39 +184,39 @@ class UltraBertAttention(nn.Module):
         kernels: KernelSet,
     ) -> torch.Tensor:
         """``rotary`` holds each grid width's cos / sin per theta."""
-        projected = (
-            self.q_proj(hidden_states),
-            self.k_proj(hidden_states),
-            self.v_proj(hidden_states),
-        )
+        query = self.q_proj(hidden_states)
+        key = self.k_proj(hidden_states)
+        value = self.v_proj(hidden_states)
         if len(layout.groups) == 1:
-            group = layout.groups[0]
-            out = group.to_tokens(
+            grids = [(layout.groups[0], query, key, value)]
+        else:
+            sizes = list(layout.sizes)
+            grids = list(
+                zip(
+                    layout.groups,
+                    torch.split(query, sizes),
+                    torch.split(key, sizes),
+                    torch.split(value, sizes),
+                    strict=True,
+                )
+            )
+        parts = [
+            group.to_tokens(
                 self.attend(
-                    *(group.to_rows(x) for x in projected),
+                    group.to_rows(q),
+                    group.to_rows(k),
+                    group.to_rows(v),
                     rotary[group.width][theta],
                     kind,
                     group,
                     kernels,
                 )
             )
-        else:
-            splits = [torch.split(x, list(layout.sizes)) for x in projected]
-            out = torch.cat(
-                [
-                    group.to_tokens(
-                        self.attend(
-                            *(group.to_rows(x[index]) for x in splits),
-                            rotary[group.width][theta],
-                            kind,
-                            group,
-                            kernels,
-                        )
-                    )
-                    for index, group in enumerate(layout.groups)
-                ]
-            )
-        result: torch.Tensor = self.o_proj(out)
+            for group, q, k, v in grids
+        ]
+        result: torch.Tensor = self.o_proj(
+            parts[0] if len(parts) == 1 else torch.cat(parts)
+        )
         return result
 
     def attend(
@@ -235,9 +238,7 @@ class UltraBertAttention(nn.Module):
         value = value.view(shape).transpose(1, 2)
         blocks = group.band if kind == SLIDING else None
         if blocks is not None:
-            output = banded_attention(
-                kernels, query, key, value, blocks, self.scaling
-            )
+            output = banded_attention(kernels, query, key, value, blocks, self.scaling)
         else:
             output = kernels("sdpa")(
                 query,
@@ -248,7 +249,9 @@ class UltraBertAttention(nn.Module):
                 is_causal=False,
                 enable_gqa=False,
             )
-        return output.transpose(1, 2).contiguous().reshape(batch, width, -1).contiguous()
+        return (
+            output.transpose(1, 2).contiguous().reshape(batch, width, -1).contiguous()
+        )
 
 
 class UltraBertMLP(nn.Module):
@@ -257,7 +260,9 @@ class UltraBertMLP(nn.Module):
     def __init__(self, config: dict[str, Any]):
         super().__init__()
         if config.get("hidden_act", "silu") != "silu":
-            raise ValueError(f"unsupported UltraBERT activation {config['hidden_act']!r}")
+            raise ValueError(
+                f"unsupported UltraBERT activation {config['hidden_act']!r}"
+            )
         hidden, intermediate = config["hidden_size"], config["intermediate_size"]
         bias = bool(config.get("mlp_bias", False))
         self.gate_proj = nn.Linear(hidden, intermediate, bias=bias)
