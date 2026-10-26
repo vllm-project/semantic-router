@@ -316,7 +316,7 @@ exclusive CPUs. Every container in that pod must have equal, nonzero CPU and
 memory requests and limits for Guaranteed QoS; account for enabled sidecars.
 For example, these Helm values give the router an integer request:
 
-```yaml
+```yaml title="values.yaml"
 resources:
   requests:
     cpu: "4"
