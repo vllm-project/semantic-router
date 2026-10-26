@@ -330,10 +330,24 @@ def compare(
             )
         elif kind == "set":
             mine = ours["sets"][qid]
-            same = mine["selected"] == b["selected"]
+            # The package's router path applies its own set threshold and
+            # ignores the question's; the family applies the question's, as
+            # System One does. Select from the package's probabilities at the
+            # threshold the family applied.
+            threshold = ours["thresholds"][qid]
+            selected = [k for k, v in b["probabilities"].items() if v > threshold]
+            same = mine["selected"] == selected
             dp = max(
                 abs(mine["probabilities"][k] - v) for k, v in b["probabilities"].items()
             )
+            if abs(threshold - b["threshold"]) >= 1e-12:
+                rows[qid] = {
+                    "same": same,
+                    "dp": dp,
+                    "type": kind,
+                    "own_threshold": True,
+                }
+                continue
         elif kind == "noul":
             same, dp = True, abs(a["noul"] - b["noul"])
         else:
