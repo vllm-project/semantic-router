@@ -41,6 +41,10 @@ const JailbreakClassificationErrorType = "classification_error"
 // evidence, and no configured label may resolve to it.
 const JailbreakUnscannedType = "unscanned"
 
+// JailbreakExplicitPatternType identifies an explicit hard-block pattern match
+// when no contrastive score independently crosses the configured threshold.
+const JailbreakExplicitPatternType = "explicit_pattern"
+
 const jailbreakEvaluationFailedCode = "jailbreak_evaluation_failed"
 
 func (c *Classifier) collectJailbreakClassifierContentPieces(current, history []string) []string {
@@ -182,6 +186,15 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 	if threshold <= 0 {
 		threshold = 0.10
 	}
+
+	// An explicit pattern is an independent hard-block policy. If the
+	// contrastive score does not cross the threshold, record the policy match
+	// without inventing a contrastive confidence score.
+	if analysisResult.ExplicitMatch && analysisResult.MaxScore < threshold {
+		c.recordExplicitJailbreakRuleMatch(rule, start, results, mu)
+		return
+	}
+
 	if analysisResult.MaxScore < threshold {
 		// Nothing scored above the threshold. If some message could not be
 		// embedded at all it was never checked, so under on_error: block the
@@ -199,6 +212,25 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 
 	logging.Debugf("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
 		rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
+}
+
+// recordExplicitJailbreakRuleMatch records a configured hard-block pattern
+// match without claiming that a contrastive score crossed the threshold.
+func (c *Classifier) recordExplicitJailbreakRuleMatch(rule config.JailbreakRule, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+	results.JailbreakDetected = true
+
+	// Preserve existing model evidence if another rule already produced a score.
+	// Otherwise identify this as an explicit policy match, with no score available.
+	if !results.JailbreakScoreAvailable {
+		results.JailbreakType = JailbreakExplicitPatternType
+	}
 }
 
 // recordJailbreakRuleMatch records one matched jailbreak rule into results.
