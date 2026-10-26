@@ -115,6 +115,7 @@ func appendResponsesCacheCreationOmission(diagnostics *llmprotocol.Diagnostics, 
 			"usage.cache_creation", "Responses does not support prompt cache write retention tiers")
 	}
 }
+
 func appendAnthropicPartialCacheOmission(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source llmprotocol.WireFormat, usage llmprotocol.Usage) {
 	readKnown, writeKnown := usage.InputCacheRead.Value != nil, usage.InputCacheWrite.Value != nil
 	if readKnown != writeKnown {
