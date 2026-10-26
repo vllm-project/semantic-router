@@ -41,12 +41,12 @@ identity.
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` identifies the
-[official open weights](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)
+[official open weights](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)
 under the MiniMax Community License. The MiniMax API and an experimental vLLM
 mapping share that card. Both mappings currently declare Chat Completions.
 
 The card records the checkpoint's 1,048,576-token context window from its
-[pinned configuration](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/76faee1b4ac0f412e547781172e94548a6526a88/config.json).
+[pinned configuration](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/262ae6830934f3512211081b8a3f16425b93a239/config.json).
 The MiniMax API mapping separately records its 1,000,000-token service limit.
 
 ```yaml
@@ -100,8 +100,9 @@ and disables video; match your served window and capabilities with canonical
 card overrides as described below. The mapping is experimental and does not
 certify a particular deployment.
 
-Five published benchmark records are attributed to the pinned official model
-card. Their reasoning effort is `unspecified`; they are vendor claims, not
+Five published benchmark records are attributed to the
+[pinned official model card](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md).
+Their reasoning effort is `unspecified`; they are vendor claims, not
 vLLM-SR reproductions. Terminal-Bench 4.0 remains separate from 2.1, and the
 selectable effort levels have no complete Intelligence 1.0 evidence.
 

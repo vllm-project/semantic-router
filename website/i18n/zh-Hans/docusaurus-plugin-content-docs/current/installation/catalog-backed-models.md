@@ -37,9 +37,9 @@ routing: {}
 
 ## MiniMax M3.1 Flash
 
-`minimax/minimax-m3.1-flash` 对应采用 MiniMax Community License 的[官方公开权重](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)。MiniMax API 与实验性的 vLLM 映射共用该模型卡，两条映射目前均声明支持 Chat Completions。
+`minimax/minimax-m3.1-flash` 对应采用 MiniMax Community License 的[官方公开权重](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)。MiniMax API 与实验性的 vLLM 映射共用该模型卡，两条映射目前均声明支持 Chat Completions。
 
-模型卡根据[固定版本的权重配置](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/76faee1b4ac0f412e547781172e94548a6526a88/config.json)记录 1,048,576 tokens 上下文窗口；MiniMax API 映射单独记录该服务的 1,000,000 tokens 限制。
+模型卡根据[固定版本的权重配置](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/262ae6830934f3512211081b8a3f16425b93a239/config.json)记录 1,048,576 tokens 上下文窗口；MiniMax API 映射单独记录该服务的 1,000,000 tokens 限制。
 
 ```yaml
 version: v0.3
@@ -76,7 +76,7 @@ routing:
 
 该映射解析到 `MiniMaxAI/MiniMax-M3.1-Flash`，将 effort 放入 `chat_template_kwargs`。请使用 [vLLM 配方](https://recipes.vllm.ai/MiniMaxAI/MiniMax-M3.1-Flash)：本次核对的版本要求 vLLM 0.33.0 nightly、专用 `minimax-m31-flash` 镜像、`--block-size 128` 和 `minimax_m3` reasoning/tool parser，普通稳定版 pip 安装不足以部署。Hopper 示例将上下文限制为 262,144 并关闭 video；应在 canonical 模型卡 override 中声明实际提供的窗口和能力。映射为实验性，不代表任何具体部署已通过验证。
 
-五条已发布评测记录来自固定版本的官方模型卡，推理档位为 `unspecified`，属于厂商声明而非 vLLM-SR 复测。Terminal-Bench 4.0 与 2.1 分开记录，各可选 effort 档位尚无完整 Intelligence 1.0 证据。
+五条已发布评测记录来自[固定版本的官方模型卡](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md)，推理档位为 `unspecified`，属于厂商声明而非 vLLM-SR 复测。Terminal-Bench 4.0 与 2.1 分开记录，各可选 effort 档位尚无完整 Intelligence 1.0 证据。
 
 ## 在需要时提供部署名称
 

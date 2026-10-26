@@ -5,17 +5,17 @@
   reasoning_effort: unspecified
   subject:
     variant: MiniMax-M3.1-Flash
-    revision: 76faee1b4ac0f412e547781172e94548a6526a88
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
     source_kind: official_model_card
     tasks: 600
   metrics:
     score: 0.628
   status: available
-  observed_at: 2026-10-23
+  observed_at: 2026-10-27
   evidence:
     provenance: vendor_claimed
     verification: claimed
-    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: minimax/minimax-m3.1-flash-model-card-deep-swe@1.0.0
   model: minimax/minimax-m3.1-flash
@@ -24,7 +24,7 @@
   reasoning_effort: unspecified
   subject:
     variant: MiniMax-M3.1-Flash
-    revision: 76faee1b4ac0f412e547781172e94548a6526a88
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
     source_kind: official_model_card
     agent: mini-SWE-agent
     agent_version: 2.4.5
@@ -32,11 +32,11 @@
   metrics:
     resolved: 0.737
   status: available
-  observed_at: 2026-10-23
+  observed_at: 2026-10-27
   evidence:
     provenance: vendor_claimed
     verification: claimed
-    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0
   model: minimax/minimax-m3.1-flash
@@ -45,18 +45,18 @@
   reasoning_effort: unspecified
   subject:
     variant: MiniMax-M3.1-Flash
-    revision: 76faee1b4ac0f412e547781172e94548a6526a88
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
     source_kind: official_model_card
     questions: 2158
     tools: false
   metrics:
     accuracy: 0.434
   status: available
-  observed_at: 2026-10-23
+  observed_at: 2026-10-27
   evidence:
     provenance: vendor_claimed
     verification: claimed
-    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: minimax/minimax-m3.1-flash-model-card-terminal-bench@4.0.0
   model: minimax/minimax-m3.1-flash
@@ -65,18 +65,18 @@
   reasoning_effort: unspecified
   subject:
     variant: MiniMax-M3.1-Flash
-    revision: 76faee1b4ac0f412e547781172e94548a6526a88
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
     source_kind: official_model_card
     agent: Codex
     agent_version: 0.149.1
   metrics:
     resolved: 0.381
   status: available
-  observed_at: 2026-10-23
+  observed_at: 2026-10-27
   evidence:
     provenance: vendor_claimed
     verification: claimed
-    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: minimax/minimax-m3.1-flash-model-card-cybergym@1.0.0
   model: minimax/minimax-m3.1-flash
@@ -85,7 +85,7 @@
   reasoning_effort: unspecified
   subject:
     variant: MiniMax-M3.1-Flash
-    revision: 76faee1b4ac0f412e547781172e94548a6526a88
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
     source_kind: official_model_card
     agent: Claude Code
     agent_version: 2.1.263
@@ -93,11 +93,11 @@
   metrics:
     success_rate: 0.822
   status: available
-  observed_at: 2026-10-23
+  observed_at: 2026-10-27
   evidence:
     provenance: vendor_claimed
     verification: claimed
-    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: independent/minimax-m3-aa-briefcase@1.0.0
   model: minimax/minimax-m3

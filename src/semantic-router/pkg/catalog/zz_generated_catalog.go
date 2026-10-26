@@ -17331,7 +17331,7 @@ const builtInCatalogJSON = `{
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
-        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
         "verification": "claimed"
       },
       "id": "minimax/minimax-m3.1-flash-model-card-automation-bench@1.0.0",
@@ -17339,11 +17339,11 @@ const builtInCatalogJSON = `{
         "score": 0.628
       },
       "model": "minimax/minimax-m3.1-flash",
-      "observed_at": "2026-10-23",
+      "observed_at": "2026-10-27",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
-        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
         "source_kind": "official_model_card",
         "tasks": 600,
         "variant": "MiniMax-M3.1-Flash"
@@ -17355,7 +17355,7 @@ const builtInCatalogJSON = `{
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
-        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
         "verification": "claimed"
       },
       "id": "minimax/minimax-m3.1-flash-model-card-deep-swe@1.0.0",
@@ -17363,14 +17363,14 @@ const builtInCatalogJSON = `{
         "resolved": 0.737
       },
       "model": "minimax/minimax-m3.1-flash",
-      "observed_at": "2026-10-23",
+      "observed_at": "2026-10-27",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
         "agent": "mini-SWE-agent",
         "agent_version": "2.4.5",
         "context_window": "512K",
-        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
         "source_kind": "official_model_card",
         "variant": "MiniMax-M3.1-Flash"
       }
@@ -17381,7 +17381,7 @@ const builtInCatalogJSON = `{
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
-        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
         "verification": "claimed"
       },
       "id": "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0",
@@ -17389,12 +17389,12 @@ const builtInCatalogJSON = `{
         "accuracy": 0.434
       },
       "model": "minimax/minimax-m3.1-flash",
-      "observed_at": "2026-10-23",
+      "observed_at": "2026-10-27",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
         "questions": 2158,
-        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
         "source_kind": "official_model_card",
         "tools": false,
         "variant": "MiniMax-M3.1-Flash"
@@ -17406,7 +17406,7 @@ const builtInCatalogJSON = `{
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
-        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
         "verification": "claimed"
       },
       "id": "minimax/minimax-m3.1-flash-model-card-terminal-bench@4.0.0",
@@ -17414,13 +17414,13 @@ const builtInCatalogJSON = `{
         "resolved": 0.381
       },
       "model": "minimax/minimax-m3.1-flash",
-      "observed_at": "2026-10-23",
+      "observed_at": "2026-10-27",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
         "agent": "Codex",
         "agent_version": "0.149.1",
-        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
         "source_kind": "official_model_card",
         "variant": "MiniMax-M3.1-Flash"
       }
@@ -17431,7 +17431,7 @@ const builtInCatalogJSON = `{
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
-        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
         "verification": "claimed"
       },
       "id": "minimax/minimax-m3.1-flash-model-card-cybergym@1.0.0",
@@ -17439,14 +17439,14 @@ const builtInCatalogJSON = `{
         "success_rate": 0.822
       },
       "model": "minimax/minimax-m3.1-flash",
-      "observed_at": "2026-10-23",
+      "observed_at": "2026-10-27",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
         "agent": "Claude Code",
         "agent_version": "2.1.263",
         "context_window": "1M",
-        "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
         "source_kind": "official_model_card",
         "variant": "MiniMax-M3.1-Flash"
       }
@@ -100906,7 +100906,7 @@ const builtInCatalogJSON = `{
       "publisher": "MiniMax",
       "reasoning_family": "minimax-m3.1-flash",
       "released_at": "2026-10-19",
-      "revision": "76faee1b4ac0f412e547781172e94548a6526a88",
+      "revision": "262ae6830934f3512211081b8a3f16425b93a239",
       "tags": [
         "open_weights",
         "multimodal",
@@ -100915,9 +100915,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "MiniMax",
-        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/76faee1b4ac0f412e547781172e94548a6526a88/README.md",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
         "status": "claimed",
-        "verified_at": "2026-10-23"
+        "verified_at": "2026-10-27"
       }
     },
     {
