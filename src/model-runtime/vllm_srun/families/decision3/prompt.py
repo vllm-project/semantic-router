@@ -10,6 +10,12 @@ a template. The tokenizer is the package's ``tokenizer.json`` built the way
 Transformers 5.17 builds ``Qwen2Tokenizer``: the Qwen2 pre-tokenizer pattern
 replaces the package's own, and every special token of
 ``tokenizer_config.json`` is added; the released runtime tokenized with it.
+
+A package with ``prompt_layout`` ``header-v1`` reads a text-only request with
+its question list in front of the state (``header_block``): every valid
+question of the request, in request order and numbered, Choice and Score
+questions with their option texts. A request with images or videos keeps the
+d3 layout.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ SYSTEM_PROMPT = (
 )
 NOUL_DESCRIPTIONS = ("No / false", "Yes / true")
 DEFAULT_INSTRUCTIONS = "Choose the best matching option."
+HEADER_TITLE = "Questions in this request:"
 IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
 VIDEO_PLACEHOLDER = "<|vision_start|><|video_pad|><|vision_end|>"
 IMAGE_TOKEN = "<|image_pad|>"
@@ -66,11 +73,26 @@ def option_texts(kind: str, criteria: Any) -> list[str]:
     ]
 
 
+def header_block(questions: Sequence[tuple[Any, Sequence[str] | None]]) -> str:
+    """The ``header-v1`` question list of a request, from each valid question's instructions and its option texts
+    (None for a Noul question, which lists none), ending with the blank line before ``State:``.
+    """
+    lines = [HEADER_TITLE]
+    for number, (instructions, options) in enumerate(questions, 1):
+        lines.append(f"{number}. {describe(instructions or DEFAULT_INSTRUCTIONS)}")
+        lines += [f"   - {text}" for text in options or ()]
+    return "\n".join(lines) + "\n\n"
+
+
 def user_prompt(
-    state: Any, instructions: Any, options: Sequence[str], codes: Sequence[str]
+    state: Any,
+    instructions: Any,
+    options: Sequence[str],
+    codes: Sequence[str],
+    header: str = "",
 ) -> str:
     lines = [
-        "State:",
+        f"{header}State:",
         describe(state) if state not in (None, "") else "(empty)",
         "",
         "Question:",
@@ -92,9 +114,9 @@ def render(user: str, images: int = 0, videos: int = 0) -> str:
     )
 
 
-def state_block(state: Any, images: int = 0, videos: int = 0) -> str:
-    """``render`` up to ``Question:``: the system turn, the user turn's media placeholders, the state and the
-    blank line after it.
+def state_block(state: Any, images: int = 0, videos: int = 0, header: str = "") -> str:
+    """``render`` up to ``Question:``: the system turn, the user turn's media placeholders, the ``header``
+    (``header_block``, text-only requests of a ``header-v1`` package), the state and the blank line after it.
 
     The Qwen2 pre-tokenizer always splits before ``Question``, so the tokens of
     this text followed by those of ``question_block`` are the tokens of the
@@ -107,7 +129,7 @@ def state_block(state: Any, images: int = 0, videos: int = 0) -> str:
     return (
         f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n"
         f"<|im_start|>user\n{IMAGE_PLACEHOLDER * images}{VIDEO_PLACEHOLDER * videos}"
-        f"State:\n{shown}\n\n"
+        f"{header}State:\n{shown}\n\n"
     )
 
 

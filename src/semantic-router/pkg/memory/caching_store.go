@@ -172,9 +172,7 @@ func (c *CachingStore) replaceCurrentGroup(ctx context.Context, versions []memor
 // ForgetByScope implements Store; delegates then invalidates cache for the scope's user.
 func (c *CachingStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
 	err := c.store.ForgetByScope(ctx, scope)
-	if err == nil {
-		c.invalidate(ctx, scope.UserID)
-	}
+	c.invalidate(ctx, scope.UserID)
 	return err
 }
 
