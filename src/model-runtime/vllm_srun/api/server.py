@@ -17,7 +17,7 @@ log = logging.getLogger("vllm_srun")
 
 
 def prepare_socket(path: str) -> None:
-    """Create the socket's directory (0700 when new) and remove a stale socket file."""
+    """Create the socket's directory and remove a socket only when it is stale."""
     socket_path = Path(path)
     parent = socket_path.parent
     if not parent.exists():
@@ -25,6 +25,16 @@ def prepare_socket(path: str) -> None:
     if socket_path.exists() or socket_path.is_symlink():
         if not stat.S_ISSOCK(socket_path.lstat().st_mode):
             raise FileExistsError(f"{path} exists and is not a socket")
+        # A second server must not unlink the address of one that is still
+        # listening. A refused connection identifies a stale socket inode.
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            try:
+                probe.connect(path)
+            except ConnectionRefusedError:
+                pass
+            else:
+                raise FileExistsError(f"{path} is already in use")
         socket_path.unlink()
 
 
