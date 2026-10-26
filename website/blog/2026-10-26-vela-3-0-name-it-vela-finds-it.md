@@ -303,7 +303,7 @@ Bold: at least 0.5 point above every other model listed for that benchmark. In b
 
 ### Unsupported claims and evidence
 
-- **Hallucination spans.** On the 10,698-answer LettuceDetect v2 test set, vela3-fast flags unsupported answers at 0.889 example-F1 and vela3-turbo at 0.900. LettuceDetect v2 on mmBERT-base scores 0.869 (reported). On RAGTruth, vela3-flash scores 0.800, above LettuceDetect-large v1 (0.792, reported).
+- **Hallucination spans.** On the 10,698-answer LettuceDetect v2 test set ([Kovács et al., GroundLM 2026 at EMNLP 2026](https://aclanthology.org/2026.groundlm-1.44/)), vela3-fast flags unsupported answers at 0.889 example-F1 and vela3-turbo at 0.900. LettuceDetect v2 on mmBERT-base scores 0.869 (reported). On RAGTruth, vela3-flash scores 0.800, above LettuceDetect-large v1 (0.792, reported).
 - **Evidence.** vela3-mini finds the evidence sentences on QASPER zero-shot at 45.3 word-F1; Vela 2.0 4B scores 31.5 in the same harness. vela3-fast scores 46.5 on ACL-Verbatim, where the benchmark's train split is in its training data (in-domain).
 
 ### Router signals
