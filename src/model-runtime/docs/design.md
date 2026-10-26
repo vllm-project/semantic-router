@@ -966,6 +966,23 @@ differ only by rounding ([record](records/state-once.md)). A question costs its
 block and its share of the state, so `usage.input_tokens` counts the state once
 and each question's block.
 
+**Prompt layout and temperature per request.** Two optional
+`decision_config.json` fields, both covered by the identity, change how a
+package reads a request. `prompt_layout` `header-v1` puts a text-only
+request's question list in front of `State:`: every valid question in request
+order, numbered, Choice and Score questions with their option texts
+(`prompt.header_block`). The list is part of the state block, so a state-once
+request still encodes it once and branches every question from it; requests
+with images, videos, assets or Box and track questions keep the d3 layout.
+`temperature_by_questions` gives the temperature of a request from its number
+of Choice, Noul and Score questions (the questions it renders, or, for a
+request with assets or Box and track questions, every question of those
+types). Each item carries its request's temperature, so a forward that merges
+requests divides each row by its own, one scalar division per temperature as a
+request's own forward divides; Box and track readouts keep the package
+temperature. A package without the fields answers as before
+([record](records/d3-ultra.md)).
+
 ## 9. Scheduler and planner
 
 ```text
