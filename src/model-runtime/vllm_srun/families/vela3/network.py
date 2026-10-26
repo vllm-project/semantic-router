@@ -19,7 +19,6 @@ them). A head with no word projections answers no span question.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -85,8 +84,15 @@ def batches(items: list[Vela3Item]) -> list[list[int]]:
     return groups
 
 
-def _head(hidden: int, projection: int, tensors: dict[str, torch.Tensor]) -> MarkerHead:
-    spans = "w_t.weight" in tensors
+SPAN_TENSORS = ("w_t.", "w_e.", "log_tau_span")
+
+
+def _head(
+    hidden: int, projection: int, tensors: dict[str, torch.Tensor], spans: bool
+) -> MarkerHead:
+    """A marker head from its tensors; without ``spans``, any word projections among them are left out."""
+    if not spans:
+        tensors = {k: v for k, v in tensors.items() if not k.startswith(SPAN_TENSORS)}
     head = MarkerHead(hidden, projection, "both", spans=spans)
     head.load_state_dict({k: v.float() for k, v in tensors.items()}, strict=True)
     return head.float().eval()
@@ -102,17 +108,14 @@ class Networks:
         device = engine_model.device
         base = read_tensors([package.root / BACKBONE_FILE], HEAD_PREFIXES)
         self.heads: dict[str | None, MarkerHead] = {
-            None: _head(hidden, projection, base).to(device)
+            None: _head(hidden, projection, base, spans=False).to(device)
         }
         for name, adapter in package.adapters.items():
             own = read_tensors([package.root / adapter.file], HEAD_PREFIXES)
-            merged = {**base, **own}
-            if "w_t.weight" not in own:
-                merged = {
-                    k: v for k, v in merged.items() if not k.startswith(("w_t", "w_e"))
-                }
-                merged.pop("log_tau_span", None)
-            self.heads[name] = _head(hidden, projection, merged).to(device)
+            # An adapter's file holds the readout tensors it trained; the rest are the backbone's.
+            self.heads[name] = _head(
+                hidden, projection, {**base, **own}, spans="w_t.weight" in own
+            ).to(device)
         self.engine_model = engine_model
         self.pad = int(config["pad_token_id"])
 
@@ -159,11 +162,3 @@ class Networks:
             option_logits.float().cpu().numpy(),
             span_logits.float().cpu().numpy(),
         )
-
-
-def adapter_files(package: Vela3Package) -> dict[str, tuple[Path, int, float]]:
-    """Every adapter's file, LoRA rank and alpha, by adapter (engine branch) name."""
-    return {
-        name: (package.root / adapter.file, adapter.rank, adapter.alpha)
-        for name, adapter in package.adapters.items()
-    }

@@ -13,7 +13,7 @@ type DecisionModelBinding struct {
 
 const (
 	DefaultDecisionDeployment = "primary"
-	DefaultDecisionModel      = "vela3-fast"
+	DefaultDecisionModel      = DecisionModelVela3Fast
 	DecisionModelVela3Fast    = "vela3-fast"
 	DecisionModelVela2_03B    = "Vela-2.0-0.3B"
 	DecisionModelVela2_08B    = "Vela-2.0-0.8B"
