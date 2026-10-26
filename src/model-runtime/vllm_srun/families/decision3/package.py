@@ -2,13 +2,19 @@
 
 A package is a Transformers ``Qwen3_5Model`` checkpoint (the text model and,
 for image inputs, its vision tower), a 255-way answer-code readout
-(``readout.safetensors``), ``decision_config.json`` (prompt family, answer
-codes, attention mode, temperature, input limit), the tokenizer, chat template
-and image processor settings, a card, and bundled Python that this runtime
-never imports. ``MODEL_MANIFEST.json`` lists the SHA-256 and size of every
-file, the parameter counts and the identity of the scored checkpoint. The
-checks reproduce the released runtime's ``verify_package`` and the package
+(``readout.safetensors``), ``decision_config.json`` (prompt family and layout,
+answer codes, attention mode, temperature, input limit), the tokenizer, chat
+template and image processor settings, a card, and bundled Python that this
+runtime never imports. ``MODEL_MANIFEST.json`` lists the SHA-256 and size of
+every file, the parameter counts and the identity of the scored checkpoint.
+The checks reproduce the released runtime's ``verify_package`` and the package
 builder's ``model_identity``; only the files the family loads are read.
+
+Two optional fields change how a request is read, and the identity covers
+them: ``prompt_layout`` ``header-v1`` puts a text-only request's question list
+in front of its state (``prompt.header_block``), and
+``temperature_by_questions`` sets a request's temperature from its number of
+questions (``temperature_table``).
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -35,13 +42,23 @@ MANIFEST_SCHEMA = "d3-package-manifest/1"
 FORMAT_ID = "d3-code-readout-v1"
 FORMAT_VERSION = 1
 PROMPTS = ("d3",)
-ATTENTION_MODES = ("causal", "noncausal_full_attention")
+NONCAUSAL = "noncausal_full_attention"
+# Layouts in which no state token attends to a question: a request's state block is
+# encoded once and each question branches from it (the native engine's ``branch``).
+# ``prefix_bidir``: the state attends within itself, both ways; a question block attends
+# to the state and within itself, both ways. ``prefix_causal``: the same with a
+# causal state. ``causal``: every token attends to itself and the tokens before it.
+STATE_ONCE_MODES = ("causal", "prefix_bidir", "prefix_causal")
+ATTENTION_MODES = (NONCAUSAL, *STATE_ONCE_MODES)
 READOUT_DTYPES = ("float32", "bfloat16")
 MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
 COLOUR_CHANNELS = 3
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
-# decision_config.json fields that change answers; the identity covers them.
+# ``header-v1``: a text-only request lists its questions in front of the state; absent, the d3 layout.
+HEADER_V1 = "header-v1"
+PROMPT_LAYOUTS = (HEADER_V1,)
+# decision_config.json fields that change answers; the identity covers the ones a package declares.
 INFERENCE_FIELDS = (
     "format_version",
     "format_id",
@@ -55,6 +72,8 @@ INFERENCE_FIELDS = (
     "pooling",
     "max_length",
     "readout_dtype",
+    "prompt_layout",
+    "temperature_by_questions",
 )
 # Files besides the weights that the identity covers.
 IDENTITY_FILES = (
@@ -218,7 +237,68 @@ def check_decision_config(config: Any) -> dict[str, Any]:
         raise PackageError(
             f"max_length must be null or an integer >= {MIN_INPUT_TOKENS}"
         )
+    validated = config.get("validated_length")
+    if validated is not None and (
+        type(validated) is not int or validated < MIN_INPUT_TOKENS
+    ):
+        raise PackageError(
+            f"validated_length must be null or an integer >= {MIN_INPUT_TOKENS}"
+        )
+    layout = config.get("prompt_layout")
+    if layout is not None and layout not in PROMPT_LAYOUTS:
+        raise PackageError(f"unknown prompt layout {layout!r}")
+    temperature_table(config)
     return config
+
+
+def temperature_table(
+    config: dict[str, Any],
+) -> tuple[tuple[int, ...], tuple[float, ...]] | None:
+    """``temperature_by_questions`` as (bounds, temperatures), None when absent.
+
+    ``{"max_questions": [n_1, ..., n_k], "temperature": [t_1, ..., t_k, t_rest]}``:
+    strictly increasing positive counts and one more finite, positive
+    temperature than counts. A request with n questions takes the ``t_i`` of the
+    first ``n <= n_i``, else ``t_rest`` (``temperature_for``).
+    """
+    value = config.get("temperature_by_questions")
+    if value is None:
+        return None
+    bounds = value.get("max_questions") if isinstance(value, dict) else None
+    temperatures = value.get("temperature") if isinstance(value, dict) else None
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"max_questions", "temperature"}
+        or not isinstance(bounds, list)
+        or not isinstance(temperatures, list)
+        or len(temperatures) != len(bounds) + 1
+        or any(type(bound) is not int or bound < 1 for bound in bounds)
+        or any(low >= high for low, high in pairwise(bounds))
+        or any(
+            type(t) not in (int, float) or not math.isfinite(t) or t <= 0
+            for t in temperatures
+        )
+    ):
+        raise PackageError(
+            "temperature_by_questions needs strictly increasing positive max_questions "
+            "and one more finite, positive temperature than max_questions"
+        )
+    return tuple(bounds), tuple(float(t) for t in temperatures)
+
+
+def temperature_for(
+    table: tuple[tuple[int, ...], tuple[float, ...]], questions: int
+) -> float:
+    """The temperature of a request with ``questions`` questions under ``temperature_table``."""
+    bounds, temperatures = table
+    return next(
+        (
+            t
+            for bound, t in zip(bounds, temperatures, strict=False)
+            if questions <= bound
+        ),
+        temperatures[-1],
+    )
 
 
 def check_config(config: Any) -> dict[str, Any]:

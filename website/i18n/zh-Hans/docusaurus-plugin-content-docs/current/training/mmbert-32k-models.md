@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 训练 Vela Embedding 和 Reranker
 sidebar_label: Embedding 和 Reranking
 translation:
