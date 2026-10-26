@@ -221,11 +221,24 @@ schema, streaming, tools, or error translation.
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
-  Responses requests. The default strict policy rejects this translation with
-  `lossy_translation`; a false or absent flag remains supported. Anthropic
-  backends preserve the flag. Codec callers explicitly using
-  `LossyAllowWithDiagnostic` may omit the flag with a `tool_result.is_error`
-  diagnostic; the tool-result content is not rewritten.
+  Responses requests. By default the Router rejects this translation with
+  `lossy_translation`, while a false or absent flag remains supported and
+  Anthropic backends preserve the flag. Coding agents such as Claude Code mark
+  every failed tool call this way and do not retry the rejected request, so a
+  run against an OpenAI-format backend ends at its first failing command. To
+  serve them, list the field in `global.router.allow_lossy_translation`:
+
+  ```yaml
+  global:
+    router:
+      allow_lossy_translation: [tool_result.is_error]
+  ```
+
+  The Router then omits the flag, leaves the tool-result content unchanged,
+  and reports the loss as `approximated` with field `tool_result.is_error` in
+  `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
+  accepts only `tool_result.is_error`, and every other lossy translation still
+  fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

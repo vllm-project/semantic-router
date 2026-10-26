@@ -1264,6 +1264,15 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "allow_lossy_translation": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "tool_result.is_error"
+            ]
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
