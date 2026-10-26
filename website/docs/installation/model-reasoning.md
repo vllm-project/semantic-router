@@ -121,6 +121,11 @@ for that Model. `reasoning_mode` must agree with `use_reasoning`. Omit an effort
 to use the family default, or set `providers.defaults.reasoning_effort` when
 one valid deployment-wide default should take precedence.
 
+On an `api_format: anthropic` backend, `enabled` thinking needs a
+`budget_tokens` value. When the client sent none, an `enabled` mode reaches the
+backend as `thinking.type: adaptive` with `output_config.effort` set to the
+selected effort.
+
 `max_completion_tokens` is an optional per-model completion ceiling. When set,
 provider dispatch takes the strictest (minimum) of the client request, the
 decision `request_params.max_tokens_limit` plugin, this ModelRef value, any
