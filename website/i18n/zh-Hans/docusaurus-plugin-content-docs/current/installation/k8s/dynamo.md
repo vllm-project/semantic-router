@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 与 NVIDIA Dynamo 集成
 sidebar_label: NVIDIA Dynamo
 description: 将 Semantic Router 放在 Kubernetes 上由 Dynamo 管理的推理集群前面。
