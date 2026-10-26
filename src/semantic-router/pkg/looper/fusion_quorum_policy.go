@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -174,7 +173,7 @@ func (l *FusionLooper) callFusionFallback(
 	// never hit. A named fallback override would need its own config surface.
 	resp, err := l.callFusionModel(
 		ctx, req, fallbackReq, cfg, target,
-		llmprotocol.TrustedStageFinal, false, iteration, config.FusionModelOverride{},
+		true, false, iteration, config.FusionModelOverride{},
 	)
 	if err != nil {
 		return resp, err

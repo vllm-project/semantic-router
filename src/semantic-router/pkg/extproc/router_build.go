@@ -57,6 +57,7 @@ type routerComponents struct {
 	recipeModelSelectors        map[config.RecipeName]*selection.Registry
 	lookupTable                 lookuptable.LookupTable
 	memoryStore                 memory.Store
+	memoryStatus                routerruntime.MemoryStatus
 	memoryExtractor             *memory.MemoryExtractor
 	memoryPersistence           *memory.PersistenceRunner
 	protocolCodecs              *protocolcodec.Registry
@@ -309,7 +310,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	components.memoryStore, components.memoryExtractor, components.memoryStatus, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
@@ -516,6 +517,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:             components.replayRecorders,
 		ShadowDispatcher:            components.shadowDispatcher,
 		MemoryStore:                 components.memoryStore,
+		MemoryStatus:                components.memoryStatus,
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,
 		ProtocolCodecs:              components.protocolCodecs,

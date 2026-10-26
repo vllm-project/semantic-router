@@ -176,7 +176,7 @@ func TestLooperCandidateStageOutputOverridesAndPolicyCap(t *testing.T) {
 			var err error
 			if stage == "fusion" {
 				l := newFusionLooper(&config.LooperConfig{}, borrowClient(client))
-				_, err = l.callFusionModel(context.Background(), base, base.OriginalRequest, fusionExecutionConfig{MaxCompletionTokens: 48}, "final", llmprotocol.TrustedStageAdvisor, false, 1, config.FusionModelOverride{})
+				_, err = l.callFusionModel(context.Background(), base, base.OriginalRequest, fusionExecutionConfig{MaxCompletionTokens: 48}, "final", false, false, 1, config.FusionModelOverride{})
 			} else {
 				l := newWorkflowsLooper(&config.LooperConfig{}, borrowClient(client))
 				_, err = l.callWorkflowModel(context.Background(), base.OriginalRequest, workflowsExecutionConfig{PlannerModel: "planner", PlannerMaxCompletionTokens: 64, MaxCompletionTokens: 48}, stage, llmprotocol.TrustedStageAdvisor, false, 1, base)

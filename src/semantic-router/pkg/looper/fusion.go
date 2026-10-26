@@ -247,15 +247,13 @@ func (l *FusionLooper) callFusionModel(
 	stageReq *openai.ChatCompletionNewParams,
 	cfg fusionExecutionConfig,
 	modelName string,
-	stage llmprotocol.TrustedStage,
+	allowTools bool,
 	streaming bool,
 	iteration int,
 	override config.FusionModelOverride,
 ) (*ModelResponse, error) {
 	callReq := cloneRequest(stageReq)
-	// Fusion returns only a final-serving call's tool use, so every other
-	// stage runs without the client's tools.
-	if stage != llmprotocol.TrustedStageFinal {
+	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
 	}
 	if override.Temperature != nil {
@@ -279,7 +277,9 @@ func (l *FusionLooper) callFusionModel(
 			DecisionName: req.DecisionName,
 			Iteration:    iteration,
 			Mode:         responseMode(streaming),
-			Stage:        stage,
+			// Panel and analysis calls drop tools above. Only synthesis and the
+			// quorum fallback keep them, and both produce the final answer.
+			ToolStage: llmprotocol.TrustedStageFinal,
 		},
 	)
 }
@@ -314,7 +314,7 @@ func (l *FusionLooper) runFusionAnalysis(
 		prompt = prompt + "\n\n" + notes
 	}
 	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, req, analysisReq, cfg, cfg.Model, llmprotocol.TrustedStageAdvisor, false, callOrdinal, config.FusionModelOverride{})
+	resp, err := l.callFusionModel(ctx, req, analysisReq, cfg, cfg.Model, false, false, callOrdinal, config.FusionModelOverride{})
 	if err != nil {
 		logging.ComponentWarnEvent("looper", "fusion_analysis_failed", map[string]interface{}{
 			"judge_model": cfg.Model,
@@ -351,7 +351,7 @@ func (l *FusionLooper) runFusionFinal(
 		prompt = prompt + "\n\n" + notes
 	}
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, req, finalReq, cfg, cfg.Model, llmprotocol.TrustedStageFinal, false, callOrdinal, config.FusionModelOverride{})
+	resp, err := l.callFusionModel(ctx, req, finalReq, cfg, cfg.Model, true, false, callOrdinal, config.FusionModelOverride{})
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}

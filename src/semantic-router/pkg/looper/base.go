@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -126,8 +125,6 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 				DecisionName: req.DecisionName,
 				Iteration:    iteration,
 				Mode:         responseMode(req.IsStreaming),
-				// The first answer is returned to the client as it is.
-				Stage: llmprotocol.TrustedStageFinal,
 			},
 		)
 		if err != nil {

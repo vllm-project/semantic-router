@@ -47,7 +47,7 @@ upgrade instructions are separate from this `main` quickstart.
 | Every host | Linux, macOS or WSL2; Docker (Linux can use Podman instead); Python 3.10 or newer; about 5 GB of free disk for the images, plus 1–1.5 GB for each built-in model your routes use |
 | CPU | Nothing else. The `vllm-sr` image runs every built-in model on the CPU; plan about 1.3 GB of memory for each 307M task model your routes use |
 | AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform rocm`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
-| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda` (works, not yet validated) |
+| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda`. CUDA is validated (H200, A100, Tesla T4 records). Fused kernels without bit-exact evidence stay off the exact profile |
 
 On macOS the Docker target runs on the CPU only; see
 [Gateway Modes](gateway-modes#macos).
@@ -160,6 +160,43 @@ Dashboard answers "Restart required: run `vllm-sr serve` to apply."; the next
 `vllm-sr serve --gateway extproc` puts an Envoy container in front of the
 Router, as releases before standalone mode did.
 [Gateway Modes](gateway-modes) explains when you need it.
+
+## What the installer leaves behind
+
+`install.sh` writes these paths (defaults - `--install-root` and `--bin-dir`
+move them):
+
+- `~/.local/share/vllm-sr/venv/`: the CLI's virtual environment.
+- `~/.local/share/vllm-sr/runtime.env`: the container runtime chosen at
+  install time. `vllm-sr` reads it when it selects the runtime;
+  `CONTAINER_RUNTIME` overrides it for one run, and a runtime missing from
+  `PATH` falls back to auto-detection with a warning. Delete the file to
+  return to auto-detection.
+- `~/.local/share/vllm-sr/first-run.log`: kept only when the first
+  `vllm-sr serve` waits for setup or fails.
+- `~/.local/bin/vllm-sr`: the launcher, which pins `VLLM_SR_INSTALL_ROOT`.
+- A completion line in your shell rc file: `vllm-sr completion install`
+  appends an eval line to `~/.bashrc` or `~/.zshrc`, or writes
+  `~/.config/fish/completions/vllm-sr.fish` on fish. Once the launcher is
+  gone, every new bash or zsh shell reports the missing command, so
+  remove the line - or the fish completions file - too.
+  [Shell Completion](shell-completion) has the details.
+
+Run `vllm-sr stop` while the CLI is still installed: it removes the stack's
+containers and networks. Then delete the paths above.
+
+Deleting those paths removes the install, but leaves in place:
+
+- system packages the installer added when missing: Python and its venv
+  support; in serve mode, Homebrew `docker` and `colima` on macOS, or the
+  Docker package, its enabled service and your `docker` group membership on
+  Linux;
+- the images `vllm-sr serve` pulled, and the Redis and Postgres data volumes
+  the stack wrote;
+- the state the first `vllm-sr serve` wrote in the directory it ran from:
+  `config.yaml`, `.vllm-sr/` (Dashboard data, recipe store, logs) and
+  `models/`. The installer starts that first serve from the directory the
+  installer ran in, falling back to `$HOME` when it is not writable.
 
 ## Next
 

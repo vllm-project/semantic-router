@@ -2,10 +2,15 @@ package extproc
 
 import (
 	"fmt"
+	"slices"
+	"sync"
 	"time"
+
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -13,8 +18,7 @@ import (
 // trustedFactsRequestStage is the Looper role attributed to request-body tool
 // selection. The request path proposes tool candidates before relevance or
 // learned ranking; final-stage binding is a separate seam and stays denied
-// unless the decision's stage_roles authorize it. Looper calls are gated per
-// hop at the stage each call names (see looperHopStage).
+// unless the decision's stage_roles authorize it.
 const trustedFactsRequestStage = llmprotocol.TrustedStageCandidate
 
 // trustedFactsNow is the clock for availability freshness; tests override it.
@@ -73,7 +77,8 @@ func trustedFactsAllowedStages(roles []string) []llmprotocol.TrustedStage {
 // enforces the outcome on the request tool set. It returns true when the
 // caller must stop: deny strips all tools and narrow keeps only explicitly
 // policy-filtered tools with no retrieval expansion, so neither outcome can
-// widen privileges. Allow and observe leave the request untouched.
+// widen privileges. Both apply the decision's mode none first. Allow and
+// observe leave the request untouched.
 func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, stage llmprotocol.TrustedStage) bool {
 	if !toolsCfg.TrustedFactsEnabled() {
 		return false
@@ -84,30 +89,23 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	}
 	outcome := llmprotocol.EvaluateTrustedFacts(facts)
 	r.recordTrustedFactsOutcome(ctx, toolsCfg, facts, outcome)
-	switch outcome {
-	case llmprotocol.TrustedDeny, llmprotocol.TrustedNarrow:
-		restrictToolsForTrustedOutcome(request, ctx, toolsCfg, outcome)
-		return true
-	default:
+	if outcome != llmprotocol.TrustedDeny && outcome != llmprotocol.TrustedNarrow {
 		return false
 	}
-}
-
-// restrictToolsForTrustedOutcome enforces deny or narrow on top of the
-// decision's configured tools policy, never in place of it. The gate returns
-// before ordinary mode handling, so mode none strips here exactly what it
-// strips when the gate allows: missing or stale availability evidence cannot
-// keep tools the operator disabled. Deny then drops every remaining tool,
-// including the Responses hosted image_generation tool that lives outside
-// Request.Tools; its forced tool_choice falls to the no-tools cleanup. Narrow
-// keeps only explicitly policy-filtered tools with no retrieval expansion.
-func restrictToolsForTrustedOutcome(request *llmprotocol.Request, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, outcome llmprotocol.TrustedOutcome) {
+	// Returning here skips ordinary mode handling, so mode none is applied
+	// first with the same strip it uses there. Deny and narrow then restrict
+	// the configured policy further and never keep tools it removes.
 	modeNone := toolsCfg.EffectiveMode() == config.ToolsPluginModeNone
 	if modeNone {
-		stripToolsForModeNone(request, ctx, toolsCfg)
+		if changed, _ := stripSemanticToolPolicy(request, toolsCfg.StripToolHistory); changed {
+			request.Generation++
+		}
 	}
 	switch {
 	case outcome == llmprotocol.TrustedDeny:
+		// Responses hosted image_generation lives outside Request.Tools, so
+		// deny clears it too; its forced tool_choice then falls to the
+		// no-tools cleanup below.
 		if len(request.Tools) > 0 || request.ImageGeneration != nil {
 			request.Tools = nil
 			request.ImageGeneration = nil
@@ -121,7 +119,57 @@ func restrictToolsForTrustedOutcome(request *llmprotocol.Request, ctx *RequestCo
 		request.Tools = filtered
 	}
 	clearSemanticToolChoiceWhenNoTools(request)
+	// A forced choice naming a tool narrowing removed would fail protocol
+	// validation, so it is cleared; a choice whose tool survived is kept.
+	if request.ToolChoice.Mode == llmprotocol.ToolChoiceNamed &&
+		!slices.ContainsFunc(request.Tools, func(t llmprotocol.Tool) bool { return t.Name == request.ToolChoice.Name }) {
+		request.ToolChoice = llmprotocol.ToolChoice{}
+		request.Generation++
+	}
 	_ = commitToolSelection(request, ctx)
+	return true
+}
+
+// looperToolStageGate judges each tool-bearing Looper model attempt at its own
+// trusted-facts stage, so a policy that authorizes only final never sends tools
+// on a candidate or verifier call, and one that authorizes candidate does not
+// widen the final stage. An attempt that names no stage matches no role, so an
+// authoritative policy denies it rather than guessing. Each stage's outcome is
+// evaluated and recorded once, then reused by concurrent attempts. It returns
+// nil when the decision does not opt in.
+func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decision *config.Decision, reqCtx *RequestContext) looper.ToolStageGate {
+	if request == nil || decision == nil {
+		return nil
+	}
+	toolsCfg := decision.GetToolsConfig()
+	if !toolsCfg.TrustedFactsEnabled() {
+		return nil
+	}
+	base, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg.TrustedFacts.FreshnessSeconds), "")
+	if !ok || base.Enforcement == llmprotocol.TrustedDisabled {
+		return nil
+	}
+	var mu sync.Mutex
+	outcomes := make(map[llmprotocol.TrustedStage]llmprotocol.TrustedOutcome, 4)
+	return func(stage llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+		mu.Lock()
+		outcome, seen := outcomes[stage]
+		if !seen {
+			facts := base
+			facts.Stage = stage
+			outcome = llmprotocol.EvaluateTrustedFacts(facts)
+			outcomes[stage] = outcome
+			r.recordTrustedFactsOutcome(reqCtx, toolsCfg, facts, outcome)
+		}
+		mu.Unlock()
+		switch outcome {
+		case llmprotocol.TrustedDeny:
+			return looper.WithoutToolUse(req)
+		case llmprotocol.TrustedNarrow:
+			return looper.NarrowToolUse(req, toolsCfg.AllowTools, toolsCfg.BlockTools)
+		}
+		return req
+	}
 }
 
 // trustedFactsToolsAvailable reports bounded runtime availability evidence:

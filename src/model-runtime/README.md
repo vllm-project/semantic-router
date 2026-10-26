@@ -30,12 +30,12 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers (a superset of System One), plus Set and Span where a model declares them |
+| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers, plus Box, Set and Span where a model declares them, and `images`, `assets` and `videos` for models that read them (Decision 3.0). `/v1/systemone` accepts System One requests as the official SDKs send them (assets, multipart and compressed bodies, the long-context header) and answers a request with a failed question as a whole; the differences from System One are listed in the [reference](../../website/docs/model-runtime/reference.md#system-one-compatibility) |
 | `POST /v1/classify` | Fixed heads: label distributions, label scores and token spans over texts, pairs or grounded answers |
 | `POST /v1/embeddings` | OpenAI-compatible embeddings with dimensions and layer exits |
 | `POST /v1/rerank` | Pair scores of documents against a query |
 | `POST /v1/bundle` | Several surface requests, for one or more models, in one call |
-| `GET /v1/models` | Identity, surfaces, heads, limits, placement, profiles, plugins and golden-check status per model |
+| `GET /v1/models` | Identity, surfaces, heads, limits, placement, engine arguments, numerics, plugins and golden-check status per model |
 | `GET /health`, `GET /health/live` | Readiness (gated on golden answers) and liveness |
 | `GET /metrics` | Prometheus metrics |
 
@@ -73,7 +73,10 @@ digests before load, and code shipped inside packages is never executed.
 
 ## Plugins
 
-Families, engines, accelerators and profiles are entry-point plugins.
+Families, engines and accelerators are entry-point plugins; batching is the
+runtime's own, set by the engine arguments (`--max-num-seqs`,
+`--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`,
+`--enable-shared-context`).
 [`examples/third_party_plugin`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/examples/third_party_plugin)
 is a complete out-of-tree family and engine to start from.
 

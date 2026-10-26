@@ -52,10 +52,26 @@ vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-id
 The `vllm-sr-rocm` image is a 6.5 GB download on first use. `rocm:N` picks
 another GPU of the host in canonical YAML; `--device-ids N` selects a host GPU at startup.
 
-The CLI starts the persistent frontend, Dashboard and a managed model worker.
-The first start downloads the model into the instance model cache. Later starts
-reuse it. Startup waits for readiness; use `vllm-sr status` to inspect the stack
-and `vllm-sr stop` to stop it.
+Decision 3.0 models also answer questions about images and videos. On an AMD
+Instinct MI325X, start one with
+`vllm-sr serve vllm-sr/d3-lite --engine --platform rocm`, and send images and
+videos as described in [Router and Engine modes](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images-and-videos).
+`vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm` starts d3-turbo, which
+reads each input once for all of its questions and also finds things in images
+and videos ([Box and track questions](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#find-things-in-images-and-videos)).
+`vllm-sr serve vllm-sr/d3-ultra --engine --platform rocm` starts d3-ultra, which
+answers the same questions and reads a text request's question list in front of
+its state.
+
+In Engine mode the CLI starts only the persistent frontend and a managed model
+worker: one Router container. `--dashboard` adds the Dashboard, `--observability`
+adds Jaeger, Prometheus and Grafana, and `--no-minimal` starts the whole stack.
+Without `--config`, and with no `config.yaml` in the working directory, Engine
+mode keeps each model's configuration, state and download in
+`~/.local/state/vllm-sr/engine/<model>`. The first start downloads the model;
+later starts reuse it. Startup prints a short summary ending in a `Ready:` line with
+the System One URL (`--verbose` prints every detail); use `vllm-sr status` to
+inspect the stack and `vllm-sr stop` to stop it.
 
 The initial Engine configuration publishes the selected model on the default
 listener. An existing config keeps its explicit `listeners[].systemone.models`
@@ -94,7 +110,7 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 {
   "model": "vllm-sr/Decision-2.0-Kai-0.6B",
   "answers": {
-    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.106},
+    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.256},
     "reasoning": {"type": "noul", "noul": 0.519}
   },
   "usage": {"input_tokens": 168, "output_tokens": 0}
@@ -102,12 +118,19 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 ```
 
 Add `"options": {"return_meta": true}` to the request to also get `meta`: the
-revision, profile and device that answered and how long it took. On 16 CPU
+revision, precision (`dtype`) and device that answered, whether batching can
+move its answers (`numerics`), and how long it took. On 16 CPU
 cores this request takes about 0.2 seconds in the recorded worker benchmark.
-`POST /v1/decisions` is an alias of `/v1/systemone`; both use the same explicit
-public model ID. Native discovery uses `/v1/systemone/models`, while `/v1/models`
-remains Chat discovery. The worker's classify, embeddings, rerank and bundle
-APIs are separate; see the [task guides](./guides/classify.md).
+`POST /v1/decisions` takes the same requests as `/v1/systemone` and the same
+explicit public model ID; it answers a failed question in place, where
+`/v1/systemone` answers the request as a whole, as System One does. Native
+discovery uses `/v1/systemone/models`; `/v1/models` remains Chat discovery, and
+in Engine mode it also lists the System One models as `models: [{name,
+description, release_date}]`. The worker's classify, embeddings, rerank and
+bundle APIs are separate; see the [task guides](./guides/classify.md).
+Compressed bodies, multipart image uploads, assets, Box, track and long
+context are in
+[System One compatibility](./reference.md#system-one-compatibility).
 
 ## 4. Use it from the router
 
@@ -181,8 +204,8 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml --replace-active-config
 ```
 
-`--replace-active-config` applies the file you just wrote over the saved Engine
-configuration. Later restarts can omit it to retain Dashboard edits. The
+`--replace-active-config` applies the file you just wrote over any configuration
+saved for this directory. Later restarts can omit it to retain Dashboard edits. The
 `primary` deployment answers both the routing question and direct System One
 requests; the listener explicitly publishes its native model name.
 

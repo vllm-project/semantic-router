@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -115,7 +116,13 @@ func (s *Service) RotateInvitation(ctx context.Context, id string, actors ...Aut
 
 func (s *Service) InvitationInfo(ctx context.Context, token string) (*Invitation, error) {
 	item, _, err := s.store.GetInvitationByDigest(ctx, invitationTokenDigest(token))
-	if err != nil || item.Status != InvitationPending || item.ExpiresAt <= nowUnix() {
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrInvitationUnavailable
+	}
+	if err != nil {
+		return nil, err
+	}
+	if item.Status != InvitationPending || item.ExpiresAt <= nowUnix() {
 		return nil, ErrInvitationUnavailable
 	}
 	return item, nil

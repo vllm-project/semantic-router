@@ -78,6 +78,13 @@ class ListenerSystemOne(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     models: List[str] = Field(min_length=1)
+    max_deadline_ms: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="The longest this listener waits for a model it calls "
+        "directly, however long a request's options.deadline_ms asks for. "
+        "Omitted, 600000 (10 minutes).",
+    )
 
     @field_validator("models")
     @classmethod
@@ -134,6 +141,8 @@ class KeywordSignal(BaseModel):
     operator: str
     keywords: List[str]
     case_sensitive: bool = False
+    # Also match prior user messages; False keeps current-turn-only matching.
+    include_history: bool = False
 
 
 class EmbeddingSignal(BaseModel):
@@ -496,12 +505,18 @@ class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
     name: str
+    source: Optional[Literal["tool_result"]] = None
     # Omitted, the rule takes every span the PII model reports; a Vela 2.0
     # model reports only spans above its size's calibrated threshold.
     threshold: Optional[float] = None
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
     description: Optional[str] = None
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def normalize_source(cls, value: object) -> object:
+        return None if value == "" else value
 
 
 class ModalityRule(BaseModel):
@@ -628,6 +643,108 @@ class ActionRule(BaseModel):
     description: Optional[str] = None
 
 
+class TopicContinuityThresholds(BaseModel):
+    """Continuation and change score bounds; the gap is the unknown band."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    continuation: Optional[float] = None
+    change: Optional[float] = None
+
+
+class TopicContinuityLimits(BaseModel):
+    """Bounds on the history one topic-continuity rule reads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_prior_turns: Optional[int] = None
+    max_turn_bytes: Optional[int] = None
+    max_input_bytes: Optional[int] = None
+
+
+TOPIC_CONTINUITY_DEFAULT_PRIOR_TURNS = 8
+TOPIC_CONTINUITY_DEFAULT_TURN_BYTES = 16384
+TOPIC_CONTINUITY_MIN_PRIOR_TURNS = 1
+TOPIC_CONTINUITY_MAX_PRIOR_TURNS = 32
+TOPIC_CONTINUITY_MIN_TURN_BYTES = 256
+TOPIC_CONTINUITY_MAX_TURN_BYTES = 65536
+TOPIC_CONTINUITY_MIN_INPUT_BYTES = 1024
+TOPIC_CONTINUITY_MAX_INPUT_BYTES = 1 << 20
+TOPIC_CONTINUITY_MAX_RULES = 8
+
+
+class TopicContinuityRule(BaseModel):
+    """Context-policy evidence: does the live turn depend on retained history.
+
+    Not decision-referenceable. Validation mirrors the Router: defaults are
+    applied first and the effective values are checked.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    include_assistant: Optional[bool] = None
+    thresholds: Optional[TopicContinuityThresholds] = None
+    limits: Optional[TopicContinuityLimits] = None
+
+    @model_validator(mode="after")
+    def validate_effective_values(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError(
+                "topic_continuity signal name must be nonempty and trimmed"
+            )
+        thresholds = self.thresholds or TopicContinuityThresholds()
+        continuation = (
+            0.35 if thresholds.continuation is None else thresholds.continuation
+        )
+        change = 0.08 if thresholds.change is None else thresholds.change
+        if not (0 <= change < continuation < 1):
+            raise ValueError(
+                "topic_continuity thresholds must satisfy 0 <= change < continuation < 1"
+            )
+        limits = self.limits or TopicContinuityLimits()
+        turns = limits.max_prior_turns or TOPIC_CONTINUITY_DEFAULT_PRIOR_TURNS
+        turn_bytes = limits.max_turn_bytes or TOPIC_CONTINUITY_DEFAULT_TURN_BYTES
+        if (
+            not TOPIC_CONTINUITY_MIN_PRIOR_TURNS
+            <= turns
+            <= TOPIC_CONTINUITY_MAX_PRIOR_TURNS
+        ):
+            raise ValueError(
+                "topic_continuity limits.max_prior_turns must be in [1, 32]"
+            )
+        if (
+            not TOPIC_CONTINUITY_MIN_TURN_BYTES
+            <= turn_bytes
+            <= TOPIC_CONTINUITY_MAX_TURN_BYTES
+        ):
+            raise ValueError(
+                "topic_continuity limits.max_turn_bytes must be in [256, 65536]"
+            )
+        input_bytes = limits.max_input_bytes
+        if not input_bytes:
+            input_bytes = (turns + 1) * turn_bytes
+            if input_bytes > TOPIC_CONTINUITY_MAX_INPUT_BYTES:
+                raise ValueError(
+                    "topic_continuity derived limits.max_input_bytes exceeds 1048576; "
+                    "set an explicit limits.max_input_bytes"
+                )
+        if (
+            not TOPIC_CONTINUITY_MIN_INPUT_BYTES
+            <= input_bytes
+            <= TOPIC_CONTINUITY_MAX_INPUT_BYTES
+        ):
+            raise ValueError(
+                "topic_continuity limits.max_input_bytes must be in [1024, 1048576]"
+            )
+        if input_bytes < turn_bytes:
+            raise ValueError(
+                "topic_continuity limits.max_input_bytes must be at least limits.max_turn_bytes"
+            )
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -724,9 +841,12 @@ class Signals(BaseModel):
     input_modality: Optional[List[InputModalityRule]] = []
     actions: Optional[List[ActionRule]] = []
     decision: Optional[List[DecisionSignalRule]] = []
+    topic_continuity: Optional[List[TopicContinuityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
+        if len(self.topic_continuity or []) > TOPIC_CONTINUITY_MAX_RULES:
+            raise ValueError("topic_continuity allows at most 8 rules per recipe")
         for family in type(self).model_fields:
             seen: set[str] = set()
             for signal in getattr(self, family) or []:
@@ -745,6 +865,8 @@ class Signals(BaseModel):
 
 class Condition(BaseModel):
     """Routing condition node (leaf or composite boolean expression)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Optional[str] = None
     name: Optional[str] = None
@@ -820,9 +942,12 @@ class Rules(BaseModel):
     Formats 2 and 3 are auto-normalised to composite form.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
     on_unknown: Optional[UnknownPolicy] = None
+    on_error: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -832,17 +957,35 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {
-                key: data[key]
-                for key in ("type", "name", "label", "predicate", "on_error")
-                if key in data
-            }
+            leaf = {key: value for key, value in data.items() if key != "on_unknown"}
             leaf.setdefault("name", "")
             rules = {"operator": "AND", "conditions": [leaf]}
             if "on_unknown" in data:
                 rules["on_unknown"] = data["on_unknown"]
             return rules
         return data
+
+    @model_validator(mode="after")
+    def validate_on_unknown_conflict(self):
+        if self.on_unknown is not None and (
+            self.on_error or _any_condition_sets_on_error(self.conditions)
+        ):
+            raise ValueError(
+                "condition on_error has no effect when rules.on_unknown is set; "
+                "remove one of them"
+            )
+        if self.on_error:
+            raise ValueError("on_error only applies to leaf conditions")
+        return self
+
+
+def _any_condition_sets_on_error(conditions: Optional[List["Condition"]]) -> bool:
+    for condition in conditions or []:
+        if condition.on_error is not None:
+            return True
+        if _any_condition_sets_on_error(condition.conditions):
+            return True
+    return False
 
 
 PluginType = Enum(
@@ -2052,6 +2195,9 @@ class ModelPricing(BaseModel):
     prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    cache_write_1h_per_1m: Optional[float] = Field(
+        default=None, ge=0, allow_inf_nan=False
+    )
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
@@ -2551,6 +2697,11 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # Opts a vLLM-type backend in to the OpenAI-compatible gateway response
+    # contract: the backend is a relay that injects its own usage metering
+    # fields, so the router decoder tolerates them. Mirrors the Go
+    # CanonicalBackendRef field of the same name.
+    openai_compat_gateway: bool = False
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

@@ -48,6 +48,9 @@ func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	if v, ok := getIntField(s.Fields, "ngram_arity"); ok {
 		rule.NgramArity = v
 	}
+	if v, ok := getBoolField(s.Fields, "include_history"); ok {
+		rule.IncludeHistory = v
+	}
 	c.config.KeywordRules = append(c.config.KeywordRules, rule)
 }
 
@@ -240,6 +243,26 @@ func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
 	c.config.InputModalityRules = append(c.config.InputModalityRules, rule)
 }
 
+func (c *Compiler) compileTopicContinuitySignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode topic_continuity signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.TopicContinuityRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode topic_continuity signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateTopicContinuityRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.TopicContinuityRules = append(c.config.TopicContinuityRules, rule)
+}
+
 func (c *Compiler) compileDecisionModelSignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name
@@ -286,6 +309,9 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule.PrototypeScoring = prototypeScoring
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
+		// Presence is recorded as it is for YAML, so a written `threshold: 0`
+		// next to a boundary pair is refused on this path too.
+		rule.ThresholdSet = true
 	}
 	rule.HardAbove = complexityBoundaryField(s.Fields, "hard_above")
 	rule.EasyBelow = complexityBoundaryField(s.Fields, "easy_below")
@@ -383,6 +409,9 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	}
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
+	}
+	if v, ok := getStringField(s.Fields, "source"); ok {
+		rule.Source = v
 	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v

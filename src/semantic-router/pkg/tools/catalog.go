@@ -121,7 +121,8 @@ func (db *ToolsDatabase) appendEntries(entries []ToolEntry) error {
 	sort.Slice(db.entries, func(i, j int) bool {
 		return db.entries[i].Tool.Function.Name < db.entries[j].Tool.Function.Name
 	})
-	// Only a published batch is availability evidence; a rejected one returns above.
+	// Only a published batch counts as availability evidence; a rejected one
+	// returns above and leaves loadedAt unchanged.
 	db.loadedAt = time.Now()
 	return nil
 }

@@ -24,8 +24,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // FusionPanelAttemptState classifies one panel model's terminal outcome.
@@ -252,7 +250,7 @@ func (l *FusionLooper) startFusionPanelWorkers(
 			// Past the semaphore with the panel still live, so this worker is about
 			// to call a backend and takes the next call ordinal.
 			iteration := int(dispatchOrdinal.Add(1))
-			resp, err := l.callFusionModel(panelCtx, req, req.OriginalRequest, cfg, modelName, llmprotocol.TrustedStageCandidate, false, iteration, cfg.AnalysisOverrides[modelName])
+			resp, err := l.callFusionModel(panelCtx, req, req.OriginalRequest, cfg, modelName, false, false, iteration, cfg.AnalysisOverrides[modelName])
 			results <- fusionPanelResult{
 				index: index, model: modelName, resp: resp, err: err,
 				completedAt: time.Now(), dispatched: true,

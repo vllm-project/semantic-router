@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 type responsesResponseWire struct {
 	ID                string              `json:"id"`
 	Object            string              `json:"object,omitempty"`
-	CreatedAt         int64               `json:"created_at"`
+	CreatedAt         float64             `json:"created_at"`
 	Model             string              `json:"model"`
 	Status            string              `json:"status,omitempty"`
 	Output            json.RawMessage     `json:"output"`
@@ -59,7 +60,7 @@ type responsesResponseWire struct {
 
 func newResponsesResponseWire(id, model, status string, createdAt int64, previousResponseID string) responsesResponseWire {
 	return responsesResponseWire{
-		ID: id, Object: "response", CreatedAt: createdAt, Model: model, Status: status,
+		ID: id, Object: "response", CreatedAt: float64(createdAt), Model: model, Status: status,
 		Output:             json.RawMessage(`[]`),
 		Metadata:           map[string]string{},
 		Instructions:       json.RawMessage(`null`),
@@ -83,7 +84,7 @@ type responsesUsageWire struct {
 
 type responsesInputUsageDetails struct {
 	CachedTokens        *int64 `json:"cached_tokens"`
-	CacheWriteTokens    *int64 `json:"cache_write_tokens"`
+	CacheWriteTokens    *int64 `json:"cache_write_tokens,omitempty"`
 	CreatedCacheTokens  *int64 `json:"created_cache_tokens,omitempty"`
 	CacheCreationTokens *int64 `json:"cache_creation_tokens,omitempty"`
 }
@@ -184,7 +185,8 @@ func decodeResponsesResponseResource(
 ) (llmprotocol.Response, error) {
 	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
 	if wire.CreatedAt > 0 {
-		response.CreatedAt = time.Unix(wire.CreatedAt, 0).UTC()
+		seconds, fraction := math.Modf(wire.CreatedAt)
+		response.CreatedAt = time.Unix(int64(seconds), int64(math.Round(fraction*float64(time.Second)))).UTC()
 	}
 	if wire.Error != nil {
 		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Code), Code: wire.Error.Code, Message: wire.Error.Message}
@@ -419,6 +421,7 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 			return nil, diagnostics, err
 		}
 	}
+	appendResponsesCacheCreationOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	wire, err := encodeResponsesSuccessResource(response, envelope)
 	if err != nil {
 		return nil, diagnostics, err

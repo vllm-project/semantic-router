@@ -69,7 +69,7 @@ func (l *WorkflowsLooper) callWorkflowAgentAfterTool(
 	if err != nil {
 		return nil, nil, err
 	}
-	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, workflowPhaseStage(workflowToolPhase(state)), true, state.Iteration+1, req)
+	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, llmprotocol.TrustedStageCandidate, true, state.Iteration+1, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow tool resume failed for model %q: %w", state.Model, err)
 	}

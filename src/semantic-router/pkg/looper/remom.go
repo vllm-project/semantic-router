@@ -14,7 +14,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -94,7 +93,6 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	messages *openai.ChatCompletionNewParams,
 	cfg *config.ReMoMAlgorithmConfig,
 	sem chan struct{},
-	stage llmprotocol.TrustedStage,
 ) remomParallelResult {
 	modelName := mc.Model
 	if mc.LoRAName != "" {
@@ -127,7 +125,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		req,
 		msgCopy,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
-		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1, Stage: stage},
+		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1},
 	)
 	elapsed := time.Since(startTime)
 
@@ -484,12 +482,10 @@ func (l *ReMoMLooper) executeReMoMRound(
 ) (remomRoundExecution, error) {
 	var execution remomRoundExecution
 	modelCalls := l.distributeCallsToModels(cfg, numCalls, req.ModelRefs)
-	stage := llmprotocol.TrustedStageCandidate
 	if isFinalRound {
 		modelCalls = remomFinalRoundModelCalls(cfg, modelCalls, req.ModelRefs)
-		stage = llmprotocol.TrustedStageFinal
 	}
-	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages, stage)
+	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages)
 	execution.attemptedResponses = responses
 	if err != nil {
 		if cfg.OnError == "fail" {
@@ -566,7 +562,6 @@ func (l *ReMoMLooper) executeParallelCalls(
 	cfg *config.ReMoMAlgorithmConfig,
 	modelCalls []ModelCall,
 	messages *openai.ChatCompletionNewParams,
-	stage llmprotocol.TrustedStage,
 ) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
 	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
@@ -583,7 +578,7 @@ func (l *ReMoMLooper) executeParallelCalls(
 
 	for i, call := range modelCalls {
 		go func(idx int, mc ModelCall) {
-			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, sem, stage)
+			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, sem)
 		}(i, call)
 	}
 

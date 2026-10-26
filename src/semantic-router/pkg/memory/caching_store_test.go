@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,6 +127,26 @@ func TestCachingStore_Retrieve_EmptyResultsCached(t *testing.T) {
 	assert.Len(t, r2, len(r1), "cached result should match first result length")
 }
 
+func TestCachingStore_Retrieve_RevalidatesCachedProjectScope(t *testing.T) {
+	opts := RetrieveOptions{
+		Query:     "project facts",
+		UserID:    "alice",
+		ProjectID: "default",
+		Limit:     5,
+	}
+	wrapped, cache := newInvalidationFixture(t, &ctxIgnoringStore{})
+	cache.Set(context.Background(), opts, []*RetrieveResult{
+		{Memory: &Memory{ID: "unscoped", UserID: "alice"}, Score: 0.9},
+		{Memory: &Memory{ID: "named", UserID: "alice", ProjectID: "default"}, Score: 0.8},
+		{Memory: &Memory{ID: "other", UserID: "alice", ProjectID: "other"}, Score: 0.7},
+	})
+
+	results, err := wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "named", results[0].Memory.ID)
+}
+
 // TestCachingStore_Store_InvalidatesCache verifies that after Store, a subsequent Retrieve for that user misses cache.
 // StorageIntegration: redis
 func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
@@ -164,13 +185,18 @@ func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
 	require.NoError(t, wrapped.Store(context.Background(), mem2))
 	_, hit = redisCache.Get(context.Background(), opts)
 	require.False(t, hit, "storing a memory must invalidate the user's cached retrieval")
-	// Next Retrieve must refill Redis with the still-matching coffee memory.
+	// During the write hold a retrieval reads the backend but does not refill Redis.
 	r3, err := wrapped.Retrieve(context.Background(), opts)
 	require.NoError(t, err)
 	require.Len(t, r3, 1)
 	assert.Equal(t, mem.ID, r3[0].Memory.ID)
 	_, hit = redisCache.Get(context.Background(), opts)
-	assert.True(t, hit, "retrieval after invalidation must refill Redis")
+	assert.False(t, hit, "retrieval during the write hold must not refill Redis")
+	require.NoError(t, redisCache.client.Del(context.Background(), redisCache.holdKey("u1")).Err())
+	_, err = wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	_, hit = redisCache.Get(context.Background(), opts)
+	assert.True(t, hit, "retrieval after the hold must refill Redis")
 }
 
 // TestCachingStore_ForgetByScope_InvalidatesCache verifies that ForgetByScope invalidates cache for that user.
@@ -375,9 +401,6 @@ func TestCachingStoreKeepsCacheWhenWriteFails(t *testing.T) {
 		"Store":  func(c *CachingStore, ctx context.Context) error { return c.Store(ctx, mem) },
 		"Update": func(c *CachingStore, ctx context.Context) error { return c.Update(ctx, mem.ID, mem) },
 		"Forget": func(c *CachingStore, ctx context.Context) error { return c.Forget(ctx, mem.ID) },
-		"ForgetByScope": func(c *CachingStore, ctx context.Context) error {
-			return c.ForgetByScope(ctx, MemoryScope{UserID: userID})
-		},
 	}
 
 	for name, write := range writes {
@@ -394,6 +417,183 @@ func TestCachingStoreKeepsCacheWhenWriteFails(t *testing.T) {
 	}
 }
 
+// cacheRefillRaceStore snapshots the first retrieval result before blocking it,
+// so a write can commit and invalidate the user's cache before that old result
+// is allowed to return to CachingStore.Retrieve.
+type cacheRefillRaceStore struct {
+	mu               sync.Mutex
+	result           []*RetrieveResult
+	firstRead        bool
+	readCaptured     chan struct{}
+	releaseFirstRead chan struct{}
+	releaseOnce      sync.Once
+	writeErr         error
+}
+
+func newCacheRefillRaceStore(initial *Memory) *cacheRefillRaceStore {
+	return &cacheRefillRaceStore{
+		result:           retrieveResultFor(initial),
+		readCaptured:     make(chan struct{}),
+		releaseFirstRead: make(chan struct{}),
+	}
+}
+
+func retrieveResultFor(mem *Memory) []*RetrieveResult {
+	if mem == nil {
+		return nil
+	}
+	return []*RetrieveResult{{Memory: mem, Score: 0.9}}
+}
+
+func (s *cacheRefillRaceStore) release() {
+	s.releaseOnce.Do(func() { close(s.releaseFirstRead) })
+}
+
+func (s *cacheRefillRaceStore) replaceResult(mem *Memory) {
+	s.mu.Lock()
+	s.result = retrieveResultFor(mem)
+	s.mu.Unlock()
+}
+
+func (s *cacheRefillRaceStore) Store(_ context.Context, mem *Memory) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(mem)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) Update(_ context.Context, _ string, mem *Memory) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(mem)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) Get(context.Context, string) (*Memory, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.result) == 0 || s.result[0] == nil || s.result[0].Memory == nil {
+		return nil, errors.New("memory not found")
+	}
+	return s.result[0].Memory, nil
+}
+
+func (s *cacheRefillRaceStore) Forget(context.Context, string) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(nil)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) ForgetByScope(context.Context, MemoryScope) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(nil)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) Retrieve(context.Context, RetrieveOptions) ([]*RetrieveResult, error) {
+	s.mu.Lock()
+	result := append([]*RetrieveResult(nil), s.result...)
+	block := !s.firstRead
+	s.firstRead = true
+	s.mu.Unlock()
+	if block {
+		close(s.readCaptured)
+		<-s.releaseFirstRead
+	}
+	return result, nil
+}
+
+func (s *cacheRefillRaceStore) List(context.Context, ListOptions) (*ListResult, error) {
+	return &ListResult{}, nil
+}
+
+func (s *cacheRefillRaceStore) IsEnabled() bool { return true }
+
+func (s *cacheRefillRaceStore) CheckConnection(context.Context) error { return nil }
+
+func (s *cacheRefillRaceStore) Close() error { return nil }
+
+var _ Store = (*cacheRefillRaceStore)(nil)
+
+func TestCachingStoreRejectsStaleRefillAfterCommittedWrite(t *testing.T) {
+	const userID = "u-stale-refill"
+	oldMemory := &Memory{ID: "old", UserID: userID, Content: "old result"}
+	newMemory := &Memory{ID: "new", UserID: userID, Content: "new result"}
+
+	writes := map[string]struct {
+		apply  func(*CachingStore) error
+		latest string
+	}{
+		"Store":  {apply: func(c *CachingStore) error { return c.Store(context.Background(), newMemory) }, latest: "new"},
+		"Update": {apply: func(c *CachingStore) error { return c.Update(context.Background(), oldMemory.ID, newMemory) }, latest: "new"},
+		"Forget": {apply: func(c *CachingStore) error { return c.Forget(context.Background(), oldMemory.ID) }},
+		"ForgetByScope": {apply: func(c *CachingStore) error {
+			return c.ForgetByScope(context.Background(), MemoryScope{UserID: userID})
+		}},
+	}
+
+	for name, scenario := range writes {
+		t.Run(name, func(t *testing.T) {
+			backing := newCacheRefillRaceStore(oldMemory)
+			wrapped, cache := newInvalidationFixture(t, backing)
+			defer backing.release()
+
+			opts := RetrieveOptions{Query: "query", UserID: userID, Limit: 5, Threshold: 0.5}
+			otherUserOpts := opts
+			otherUserOpts.UserID = "u-other-stale-refill"
+			cache.Set(context.Background(), otherUserOpts, retrieveResultFor(&Memory{
+				ID: "other-user", UserID: otherUserOpts.UserID, Content: "other user's result",
+			}))
+
+			firstRetrieve := make(chan []*RetrieveResult, 1)
+			firstErr := make(chan error, 1)
+			go func() {
+				results, err := wrapped.Retrieve(context.Background(), opts)
+				firstRetrieve <- results
+				firstErr <- err
+			}()
+
+			select {
+			case <-backing.readCaptured:
+			case <-time.After(time.Second):
+				t.Fatal("first retrieval did not capture the old backing-store result")
+			}
+
+			require.NoError(t, scenario.apply(wrapped), "write must commit before stale retrieval is released")
+			backing.release()
+			var staleResults []*RetrieveResult
+			select {
+			case staleResults = <-firstRetrieve:
+			case <-time.After(time.Second):
+				t.Fatal("first retrieval did not finish after release")
+			}
+			require.NoError(t, <-firstErr)
+			require.Len(t, staleResults, 1)
+			assert.Equal(t, "old", staleResults[0].Memory.ID, "blocked retrieval must return the old snapshot after the write")
+
+			latest, err := wrapped.Retrieve(context.Background(), opts)
+			require.NoError(t, err)
+			if scenario.latest == "" {
+				assert.Empty(t, latest, "a successful deletion must not expose the stale refill")
+			} else {
+				require.Len(t, latest, 1)
+				assert.Equal(t, scenario.latest, latest[0].Memory.ID, "successful write must not expose the stale refill")
+			}
+
+			other, hit := cache.Get(context.Background(), otherUserOpts)
+			require.True(t, hit, "invalidating one user must preserve another user's cache")
+			require.Len(t, other, 1)
+			assert.Equal(t, "other-user", other[0].Memory.ID)
+		})
+	}
+}
+
 func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
 	mr := miniredis.RunT(t)
 	cache, err := NewRedisCache(context.Background(), &RedisCacheConfig{Address: mr.Addr()})
@@ -406,7 +606,7 @@ func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
 	entered, release := make(chan struct{}, 1), make(chan struct{})
 	defer close(release)
 	mr.Server().SetPreHook(func(_ *server.Peer, cmd string, _ ...string) bool {
-		if strings.EqualFold(cmd, "SMEMBERS") {
+		if strings.EqualFold(cmd, "EVAL") || strings.EqualFold(cmd, "EVALSHA") {
 			select {
 			case entered <- struct{}{}:
 			default:
@@ -431,4 +631,93 @@ func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
 	case <-time.After(cacheInvalidateTimeout + 500*time.Millisecond):
 		t.Fatal("Redis I/O outlived the invalidation budget")
 	}
+}
+
+type partialScopedDeleteStore struct {
+	*ctxIgnoringStore
+	results   []*RetrieveResult
+	deleteErr error
+}
+
+func (s *partialScopedDeleteStore) Retrieve(
+	_ context.Context,
+	_ RetrieveOptions,
+) ([]*RetrieveResult, error) {
+	return append([]*RetrieveResult(nil), s.results...), nil
+}
+
+func (s *partialScopedDeleteStore) ForgetByScope(
+	_ context.Context,
+	_ MemoryScope,
+) error {
+	remaining := make([]*RetrieveResult, 0, len(s.results))
+	for _, result := range s.results {
+		if result.Memory.ID != "m1" {
+			remaining = append(remaining, result)
+		}
+	}
+	s.results = remaining
+	return s.deleteErr
+}
+
+func TestCachingStore_ForgetByScope_PartialFailureInvalidatesCache(t *testing.T) {
+	const userID = "u-partial-delete"
+
+	deleteErr := errors.New("failed to delete one memory")
+	backing := &partialScopedDeleteStore{
+		ctxIgnoringStore: &ctxIgnoringStore{},
+		results: []*RetrieveResult{
+			{
+				Memory: &Memory{
+					ID:      "m1",
+					UserID:  userID,
+					Content: "first memory",
+				},
+				Score: 0.9,
+			},
+			{
+				Memory: &Memory{
+					ID:      "m2",
+					UserID:  userID,
+					Content: "second memory",
+				},
+				Score: 0.8,
+			},
+		},
+		deleteErr: deleteErr,
+	}
+
+	wrapped, cache := newInvalidationFixture(t, backing)
+
+	opts := RetrieveOptions{
+		Query:  "memory",
+		UserID: userID,
+		Limit:  5,
+	}
+
+	// Prime the cache with both memories.
+	before, err := wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	require.Len(t, before, 2)
+
+	cached, hit := cache.Get(context.Background(), opts)
+	require.True(t, hit)
+	require.Len(t, cached, 2)
+
+	// The backend deletes m1 but fails to delete the remaining memory.
+	err = wrapped.ForgetByScope(
+		context.Background(),
+		MemoryScope{UserID: userID},
+	)
+	require.ErrorIs(t, err, deleteErr)
+
+	// The cached result must be invalidated despite the returned error.
+	_, hit = cache.Get(context.Background(), opts)
+	require.False(t, hit, "partial deletion must invalidate cached results")
+
+	// A subsequent retrieval must read the backend's current state.
+	after, err := wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	require.Len(t, after, 1)
+	assert.Equal(t, "m2", after[0].Memory.ID)
 }

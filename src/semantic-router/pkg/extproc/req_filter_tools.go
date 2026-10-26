@@ -95,7 +95,14 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 ) (bool, error) {
 	switch toolsCfg.EffectiveMode() {
 	case config.ToolsPluginModeNone:
-		stripToolsForModeNone(request, ctx, toolsCfg)
+		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
+		changed, removed := stripSemanticToolPolicy(request, toolsCfg.StripToolHistory)
+		if changed {
+			request.Generation++
+		}
+		if removed > 0 {
+			logging.Infof("[ToolsPlugin] Decision %q stripped %d prior tool-history messages", ctx.VSRSelectedDecision.Name, removed)
+		}
 		if err := commitToolSelection(request, ctx); err != nil {
 			return false, err
 		}

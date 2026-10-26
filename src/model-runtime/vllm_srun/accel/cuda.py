@@ -1,8 +1,8 @@
-"""CUDA accelerator. Implemented and unit-tested; not validated on NVIDIA hardware.
+"""CUDA accelerator. Validated on NVIDIA GPUs (``docs/records/cuda-*.md``).
 
 With Triton on an Ampere or newer GPU it adds the ROCm build's fused
-element-wise kernels (``triton_gfx942``) as approximate kernels, so only
-``max_speed`` selects them. Their RMSNorm sums follow ATen's ROCm reduction
+element-wise kernels (``triton_gfx942``) as approximate kernels, which run
+only for a family that consents to them. Their RMSNorm sums follow ATen's ROCm reduction
 order, not CUDA's, so they differ from the eager ops by rounding
 (``docs/records/cuda-fused-approximate.md``).
 """
@@ -23,7 +23,7 @@ MIN_FUSED_CAPABILITY = 80
 
 class CUDAAccelerator(GPUAccelerator):
     name = "cuda"
-    validated = False
+    validated = True
     auto_priority = 1
     platform_attribute = "cuda"
 

@@ -96,7 +96,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 			Iteration:        iteration,
 			Mode:             responseMode(streaming),
 			Logprobs:         logprobsConfig,
-			Stage:            toolStage,
+			ToolStage:        toolStage,
 		},
 	)
 	if err != nil && attempt != nil {

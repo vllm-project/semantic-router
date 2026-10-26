@@ -38,7 +38,7 @@ type ToolsDatabase struct {
 	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3")
 	targetDim           int    // Target dimension for embeddings
 	provider            embedding.Provider
-	// loadedAt is when a catalog batch last published successfully; zero until then.
+	// loadedAt is when a catalog batch was last published; zero until then.
 	loadedAt time.Time
 }
 
@@ -68,9 +68,9 @@ func (db *ToolsDatabase) IsEnabled() bool {
 	return db.enabled
 }
 
-// LoadedAt returns when a catalog batch last published successfully, or the
-// zero time when none has. Callers use it as bounded runtime availability
-// evidence: an enabled flag alone says nothing about a load.
+// LoadedAt returns when a catalog batch was last published, or the zero time
+// when none has been. Callers use it as bounded runtime availability evidence:
+// an enabled flag alone says nothing about a load.
 func (db *ToolsDatabase) LoadedAt() time.Time {
 	db.mu.RLock()
 	defer db.mu.RUnlock()

@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
   source_commit: "2e7e0775e88b0fc9426daf7c4fa0fe6e0ec20654"
   source_file: "docs/model-runtime/quickstart.md"
-  outdated: false
+  outdated: true
 ---
 
 # 快速开始
@@ -32,7 +33,7 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 构建，所以答案就是模型发布时的答案（见[选择模型](./choose-a-model.md#hardware)）。
 
 不加 `--engine`（简写 `-e`）的每次启动都使用 Router 模式，包括已保存的 Engine
-配置。MODEL 只修改默认判断模型的 artifact，保留已有副本位置和 profile；全新配置
+配置。MODEL 只修改默认判断模型的 artifact，保留已有副本位置和引擎参数；全新配置
 默认使用 Vela 2.0 0.3B。`--platform auto` 检查实际部署目标，可显式选择 `cpu`、`cuda`
 或 `rocm`；`--device-ids` 使用 Docker 主机 GPU 编号并遵守已有可见设备掩码。
 
@@ -93,7 +94,7 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 }
 ```
 
-在请求中加上 `"options": {"return_meta": true}` 可查看作答 revision、profile、设备和耗时。
+在请求中加上 `"options": {"return_meta": true}` 可查看作答的 revision、精度（`dtype`）和设备，批处理能否改变它的答案（`numerics`），以及耗时。
 记录的 worker benchmark 在 16 个 CPU 核上约需 0.2 秒。`POST /v1/decisions` 是
 `/v1/systemone` 的别名，都要求明确的公开模型 ID。原生模型发现使用
 `/v1/systemone/models`，`/v1/models` 仍属于 Chat。classify、embeddings、rerank
