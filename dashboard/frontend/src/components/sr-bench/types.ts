@@ -165,14 +165,16 @@ export interface Catalog {
 
 export interface TargetMetrics {
   id: string
+  result_kind?: string
   total?: number
   completed?: number
   failed?: number
   scored?: number
+  observed?: number
   pending?: number
   complete?: boolean
   cost_complete?: boolean
-  correct?: number
+  correct?: number | null
   accuracy?: number | null
   cost_usd?: number | null
   evaluation_cost_usd?: number | null

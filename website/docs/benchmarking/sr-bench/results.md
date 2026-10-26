@@ -172,7 +172,9 @@ jq -e '.status == "completed" and
 ```
 
 Cache and mixed cohorts have no combined quality, Wilson interval or published
-sr-bench score. Binary-only comparison, replay, regrade and training export reject
+sr-bench score. Dashboard labels their accuracy as **Not applicable**, independently
+of execution status; observed cases do not become scored cases. Binary-only
+comparison, replay, regrade and training export reject
 them. Latency, URL differences and a stable session ID do not prove cache reuse,
 model equivalence or savings. Local HTTP fixtures establish observation behavior;
 real runtime/model qualification, downstream compatibility and owner review still
