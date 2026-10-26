@@ -24,7 +24,36 @@ import torch
 from ..families.decision3 import package as pkg
 from .fixtures import qwen3_5_config, save
 
-VARIANTS = ("vision", "text", "pruned")
+# ``prefix_bidir``, ``prefix_causal`` and ``causal`` read images and declare that state-once layout. The
+# ``validated`` variant reads images and declares a validated length below its maximum, so a question longer than
+# it needs long context. ``turbo`` has d3-turbo's card: ``prefix_bidir``, the validated length, and the
+# ``systemone`` block of its decision_config (Box and track, question and criteria images, the video forms' clip
+# limit and a Box-confidence map). ``ultra`` has d3-ultra's card: turbo's, with the ``header-v1`` prompt layout
+# and d3-ultra's temperature per request size.
+VARIANTS = (
+    "vision",
+    "text",
+    "pruned",
+    "validated",
+    "turbo",
+    "ultra",
+    *pkg.STATE_ONCE_MODES,
+)
+VALIDATED_LENGTH = 512
+# Long enough for the System One SDK suites' requests without the long-context header, as d3-turbo's 32,768 is.
+TURBO_VALIDATED_LENGTH, TURBO_MAX_LENGTH = 4096, 32768
+TURBO_SYSTEMONE = {
+    "question_types": ["box", "track"],
+    "image_placements": ["state", "instructions", "criteria"],
+    "track_rates": [1, 2],
+    "box_video_max_seconds": 60,
+    "box_calibration": [[0.0, 0.0], [0.5, 0.4], [1.0, 1.0]],
+}
+ULTRA_TEMPERATURE = 1.0
+ULTRA_TEMPERATURES = {
+    "max_questions": [1, 4, 16],
+    "temperature": [1.046, 1.0, 1.0, 1.0],
+}
 # A pruned backbone keeps an irregular subset of its layers, as d3-edge does; full_attention_interval no
 # longer describes them, so the layers must follow layer_types.
 PRUNED_LAYERS = (
@@ -34,6 +63,15 @@ PRUNED_LAYERS = (
     "linear_attention",
     "full_attention",
 )
+# A state-once package attends fully mid-stack, every fourth layer as the backbone does, so its layout shapes
+# what the later layers read; its readout is small enough that answers are not saturated.
+STATE_ONCE_LAYERS = (
+    *(["linear_attention"] * 3),
+    "full_attention",
+    *(["linear_attention"] * 3),
+    "full_attention",
+)
+STATE_ONCE_READOUT_SCALE = 0.05
 SPECIALS = (
     "<|endoftext|>",
     "<|im_start|>",
@@ -224,13 +262,30 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
-    """The fixture command's writer: a package that reads images (``vision``), text only (``text``) or images
-    with a pruned backbone (``pruned``)."""
+def write_fixture(
+    output: str | Path,
+    variant: str | None,
+    seed: int,
+    validated: bool = False,
+    overrides: dict[str, Any] | None = None,
+) -> Path:
+    """The fixture command's writer: a package that reads images (``vision``), text only (``text``), images
+    with a pruned backbone (``pruned``), images with a validated length below its maximum (``validated``),
+    images under a state-once layout (``prefix_bidir``, ``prefix_causal``, ``causal``), d3-turbo's card on
+    ``prefix_bidir`` (``turbo``) or d3-ultra's (``ultra``). ``validated`` gives any variant the validated length;
+    ``overrides`` sets fields of its decision_config (None removes one).
+    """
     from ..engines.native import models
 
     variant = variant or VARIANTS[0]
     vision = variant != "text"
+    ultra = variant == "ultra"
+    turbo = variant == "turbo" or ultra
+    attention = (
+        "prefix_bidir"
+        if turbo
+        else variant if variant in pkg.STATE_ONCE_MODES else pkg.NONCAUSAL
+    )
     root = Path(output)
     root.mkdir(parents=True, exist_ok=False)
     ids, codes = write_tokenizer(root)
@@ -240,6 +295,11 @@ def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
         text |= {
             "layer_types": list(PRUNED_LAYERS),
             "num_hidden_layers": len(PRUNED_LAYERS),
+        }
+    if attention != pkg.NONCAUSAL:
+        text |= {
+            "layer_types": list(STATE_ONCE_LAYERS),
+            "num_hidden_layers": len(STATE_ONCE_LAYERS),
         }
     tensors = random_tensors(
         models.build("qwen3_5_text", text), "language_model.", seed
@@ -269,8 +329,9 @@ def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
         )
     save(tensors, root / "model.safetensors")
     torch.manual_seed(seed + 2)
+    scale = 0.5 if attention == pkg.NONCAUSAL else STATE_ONCE_READOUT_SCALE
     save(
-        {"weight": torch.randn(pkg.MAX_OPTIONS, text["hidden_size"]) * 0.5},
+        {"weight": torch.randn(pkg.MAX_OPTIONS, text["hidden_size"]) * scale},
         root / "readout.safetensors",
     )
     (root / "config.json").write_text(
@@ -294,11 +355,25 @@ def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
         "codes": codes,
         "token_ids": [backend.token_to_id(code) for code in codes],
         "temperature": 0.75,
-        "attention_mode": "noncausal_full_attention",
+        "attention_mode": attention,
         "pooling": "last",
-        "max_length": 4096,
+        "max_length": TURBO_MAX_LENGTH if turbo else 4096,
         "readout_dtype": "float32",
     }
+    if variant == "validated" or validated:
+        decision["validated_length"] = VALIDATED_LENGTH
+    if turbo:
+        decision["validated_length"] = TURBO_VALIDATED_LENGTH
+        decision["systemone"] = TURBO_SYSTEMONE
+    if ultra:
+        decision["temperature"] = ULTRA_TEMPERATURE
+        decision["temperature_by_questions"] = ULTRA_TEMPERATURES
+        decision["prompt_layout"] = pkg.HEADER_V1
+    for key, value in (overrides or {}).items():
+        if value is None:
+            decision.pop(key, None)
+        else:
+            decision[key] = value
     (root / "decision_config.json").write_text(
         json.dumps(decision, indent=2) + "\n", encoding="utf-8"
     )
@@ -335,7 +410,9 @@ def write_manifest(root: Path, counts: dict[str, int]) -> None:
         "identity": {
             "model_sha256": pkg.model_identity(identity_files, decision),
             "files_sha256": identity_files,
-            "decision": {key: decision[key] for key in pkg.INFERENCE_FIELDS},
+            "decision": {
+                key: decision[key] for key in pkg.INFERENCE_FIELDS if key in decision
+            },
         },
         "parameters": {
             **counts,
@@ -397,6 +474,10 @@ def quantize_int4(
     )
 
 
+# The calibrated input global scale of an NVFP4 fixture: FP8 x FP4 range over an activation amax of 32.
+NVFP4_INPUT_GLOBAL = 448.0 * 6.0 / 32.0
+
+
 def write_quantized_fixture(
     source: Path,
     output: Path,
@@ -405,8 +486,10 @@ def write_quantized_fixture(
     symmetric: bool = True,
     dequantized: bool = False,
 ) -> Path:
-    """``source`` with its projections in compressed-tensors int4 (W4A16) or FP8 (``scheme="float8"``,
-    FP8_DYNAMIC), or (``dequantized``) a BF16 package holding exactly the weights the quantized one holds.
+    """``source`` with its projections in compressed-tensors int4 (W4A16), FP8 (``scheme="float8"``,
+    FP8_DYNAMIC) or NVFP4 (``scheme="nvfp4"``), or (``dequantized``) a BF16 package holding exactly the
+    weights the quantized one holds. NVFP4 activations get a calibrated global scale of
+    ``NVFP4_INPUT_GLOBAL`` (blocks up to 32 in magnitude quantize without saturating).
     """
     import shutil
 
@@ -427,6 +510,22 @@ def write_quantized_fixture(
         layer = name.removesuffix(".weight")
         if not (name.endswith(".weight") and holds(layer)):
             tensors[name] = tensor
+            continue
+        if scheme == "nvfp4":
+            from ..accel import nvfp4
+
+            global_ = nvfp4.global_scale(tensor)
+            packed, scale = nvfp4.quantize(tensor, global_)
+            if dequantized:
+                weight = nvfp4.dequantize(packed, scale, global_)
+                tensors[name] = weight.to(torch.bfloat16)
+            else:
+                tensors[f"{layer}.weight_packed"] = packed
+                tensors[f"{layer}.weight_scale"] = scale
+                tensors[f"{layer}.weight_global_scale"] = global_
+                tensors[f"{layer}.input_global_scale"] = torch.tensor(
+                    [NVFP4_INPUT_GLOBAL]
+                )
             continue
         if scheme == "float8":
             scale = (tensor.float().abs().amax(1, keepdim=True) / 448).clamp(min=1e-12)
@@ -481,13 +580,29 @@ def write_quantized_fixture(
                 "dynamic": True,
             },
         }
+        fp4 = {
+            "num_bits": 4,
+            "type": "float",
+            "symmetric": True,
+            "strategy": "tensor_group",
+            "group_size": 16,
+            "scale_dtype": "torch.float8_e4m3fn",
+            "block_structure": None,
+            "actorder": None,
+        }
+        nvfp4_args = {
+            "weights": {**fp4, "dynamic": False},
+            "input_activations": {**fp4, "dynamic": "local"},
+        }
+        formats = {"float8": "float-quantized", "nvfp4": "nvfp4-pack-quantized"}
+        args = {"float8": float8, "nvfp4": nvfp4_args}
         config["quantization_config"] = {
             "quant_method": "compressed-tensors",
-            "format": "float-quantized" if scheme == "float8" else "pack-quantized",
+            "format": formats.get(scheme, "pack-quantized"),
             "config_groups": {
                 "group_0": {
                     "targets": list(INT4_TARGETS),
-                    **(float8 if scheme == "float8" else int4),
+                    **args.get(scheme, int4),
                     "output_activations": None,
                 }
             },

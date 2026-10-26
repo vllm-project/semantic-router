@@ -1,4 +1,4 @@
-"""Decision 3.0 packages with compressed-tensors int4 (W4A16) and FP8 (W8A8) weights: loading, numerics, refusals."""
+"""Decision 3.0 packages with compressed-tensors int4 (W4A16), FP8 (W8A8) and NVFP4 weights: loading, numerics, refusals."""
 
 import asyncio
 import json
@@ -146,11 +146,7 @@ def test_other_weight_schemes_are_refused(change):
         parse(config(**change))
 
 
-def test_nvfp4_and_quantized_activations_are_refused():
-    nvfp4 = config()
-    nvfp4["quantization_config"]["format"] = "nvfp4-pack-quantized"
-    with pytest.raises(PackageError, match="nvfp4"):
-        parse(nvfp4)
+def test_quantized_int4_activations_are_refused():
     w4a8 = config()
     w4a8["quantization_config"]["config_groups"]["group_0"]["input_activations"] = {
         "num_bits": 8
@@ -245,3 +241,263 @@ def test_graphs_skip_adas_per_row_fp8_product_before_pytorch_2_12(
     layer.ada, layer.unscaled_product = ada, unscaled
     monkeypatch.setattr(quantized, "ROWWISE_CAPTURE_SAFE", safe)
     assert quantized.capture_safe(nn.Sequential(layer)) is captured
+
+
+FP4 = {
+    "num_bits": 4,
+    "type": "float",
+    "symmetric": True,
+    "strategy": "tensor_group",
+    "group_size": 16,
+    "scale_dtype": "torch.float8_e4m3fn",
+    "block_structure": None,
+    "actorder": None,
+}
+
+
+def nvfp4_config(weights=None, inputs=None):
+    """What compressed-tensors' NVFP4 scheme exports, with ``weights`` / ``inputs`` changes."""
+    return {
+        "quantization_config": {
+            "quant_method": "compressed-tensors",
+            "format": "nvfp4-pack-quantized",
+            "config_groups": {
+                "group_0": {
+                    "targets": ["Linear"],
+                    "weights": FP4 | {"dynamic": False} | (weights or {}),
+                    "input_activations": FP4 | {"dynamic": "local"} | (inputs or {}),
+                    "output_activations": None,
+                }
+            },
+        }
+    }
+
+
+def test_nvfp4_weights_parse():
+    weights = parse(nvfp4_config())
+    assert (weights.scheme, weights.group_size) == ("nvfp4", 16)
+
+
+@pytest.mark.parametrize(
+    ("weights", "inputs"),
+    [
+        ({"group_size": 32}, None),  # MXFP4-like groups
+        ({"strategy": "group"}, None),
+        ({"scale_dtype": "torch.uint8"}, None),  # E8M0 scales
+        ({"dynamic": True}, None),
+        ({"symmetric": False}, None),
+        (None, {"dynamic": False}),  # static activation block scales
+        (None, {"num_bits": 8}),
+        (None, {"group_size": 32}),
+    ],
+)
+def test_other_fp4_schemes_are_refused(weights, inputs):
+    with pytest.raises(PackageError, match="only NVFP4"):
+        parse(nvfp4_config(weights, inputs))
+
+
+def test_nvfp4_weights_without_quantized_activations_are_refused():
+    config = nvfp4_config()
+    config["quantization_config"]["config_groups"]["group_0"][
+        "input_activations"
+    ] = None
+    with pytest.raises(PackageError, match="only NVFP4"):
+        parse(config)
+
+
+def test_an_nvfp4_package_counts_the_parameters_of_its_weights(
+    tmp_path, d3_text_package
+):
+    from vllm_srun.families.decision3 import package as pkg
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    names = ("model.safetensors",)
+    assert (
+        pkg.tensor_groups(packed, names)[0]
+        == pkg.tensor_groups(d3_text_package, names)[0]
+    )
+
+
+def test_an_nvfp4_package_requires_fp4_tensor_cores_on_every_accelerator(
+    tmp_path, d3_text_package
+):
+    from vllm_srun.families.decision3.family import Decision3Family
+    from vllm_srun.plugins.base import PackageRef, RegistryOptions
+    from vllm_srun.plugins.registry import names
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    family = Decision3Family(RegistryOptions(base_path=None, offline=True))
+    spec = family.describe(family.verify(PackageRef(root=packed)))
+    assert set(spec.requires) == set(names("accelerators"))
+    assert spec.requires["cpu"] == ("lapack", "nvfp4")
+    assert all("nvfp4" in needs for needs in spec.requires.values())
+
+
+def test_an_nvfp4_package_is_refused_on_a_cpu_before_its_weights_load(
+    tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.engines.native import engine
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+
+    def never(*args, **kwargs):
+        raise AssertionError("weights loaded")
+
+    monkeypatch.setattr(engine, "load_backbone", never)
+    with pytest.raises(Exception, match="NVFP4 packages need FP4 tensor cores"):
+        start_runtime(packed)
+
+
+def test_shared_nvfp4_quantization_holds_one_slice_of_a_long_input(monkeypatch):
+    import weakref
+
+    from vllm_srun.engines.native import quantized
+
+    monkeypatch.setattr(quantized, "NVFP4_ROWS", 4)  # 13 rows: four slices
+    alive, calls = [], []
+
+    def fp4_layer(out_features, seed):
+        weight = torch.randn(
+            out_features, 32, generator=torch.Generator().manual_seed(seed)
+        )
+        layer = quantized.NVFP4Linear(nn.Linear(32, out_features, bias=False))
+        layer.merged, layer.input_global = None, 2.0
+
+        def quantize(rows, global_scale):
+            # stands in for the FP4 copy; an earlier slice's copy must be gone by now
+            assert not [ref for ref in alive if ref() is not None]
+            codes = rows.float() * global_scale
+            alive.append(weakref.ref(codes))
+            calls.append(rows.shape[0])
+            return codes, torch.tensor(global_scale)
+
+        layer.quantize = quantize
+        layer._product = lambda codes, scale: (codes / scale) @ weight.T
+        return layer
+
+    gate, up = fp4_layer(16, 1), fp4_layer(32, 2)
+    plain = nn.Linear(32, 4, bias=False)
+    x = torch.randn(1, 13, 32)
+    alone = [gate(x), up(x), plain(x)]
+    alive.clear()
+    calls.clear()
+    shared = quantized.project(x, gate, up, plain)
+    assert calls == [4, 4, 4, 1]  # one quantization per slice for both layers
+    assert all(got.equal(want) for got, want in zip(shared, alone, strict=True))
+
+
+def unprepared_siblings(shapes, bias=False):
+    """gate / up NVFP4 layers on the CPU with one input and one weight global scale, as ``prepare`` leaves them."""
+    from vllm_srun.engines.native.quantized import NVFP4Linear
+
+    mlp = nn.Module()
+    for name, (rows, columns) in zip(("gate_proj", "up_proj"), shapes, strict=True):
+        layer = NVFP4Linear(nn.Linear(columns, rows, bias=bias))
+        layer.weight_global_scale.fill_(1.0)
+        layer.merged, layer.input_global = None, 2.0
+        setattr(mlp, name, layer)
+    return mlp
+
+
+@pytest.mark.parametrize(
+    "apart",
+    [
+        "input global scale",
+        "weight global scale",
+        "rows not whole 128-row scale tiles",
+        "input width",
+        "bias",
+    ],
+)
+def test_nvfp4_siblings_stay_apart_unless_one_product_gives_their_outputs(apart):
+    from vllm_srun.engines.native import quantized
+
+    control = unprepared_siblings([(256, 64), (256, 64)])
+    assert quantized._mergeable([control.gate_proj, control.up_proj])
+    shapes = [(256, 64), (256, 64)]
+    if apart == "rows not whole 128-row scale tiles":
+        shapes[1] = (144, 64)
+    if apart == "input width":
+        shapes[1] = (256, 96)
+    mlp = unprepared_siblings(shapes, bias=apart == "bias")
+    if apart == "input global scale":
+        mlp.up_proj.input_global = 4.0
+    if apart == "weight global scale":
+        mlp.up_proj.weight_global_scale.fill_(2.0)
+    assert quantized.merge_siblings(mlp) == 0
+    assert mlp.gate_proj.merged is None and mlp.up_proj.merged is None
+
+
+@pytest.fixture
+def flashinfer_on_12x(monkeypatch):
+    """``flashinfer_nvfp4.load`` on a compute capability 12.0 GPU, with ``modules`` standing in for FlashInfer's."""
+    import importlib
+    import types
+
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    monkeypatch.setattr(
+        torch.cuda, "get_device_capability", lambda device=None: (12, 0)
+    )
+    monkeypatch.setattr(torch.version, "cuda", "12.8")
+    monkeypatch.delenv(flashinfer_nvfp4.ARCH_LIST, raising=False)
+    modules: dict[str, object] = {
+        "flashinfer": types.SimpleNamespace(mm_fp4="mm_fp4"),
+        "flashinfer.tllm_utils": types.SimpleNamespace(
+            get_trtllm_utils_module=lambda: None
+        ),
+    }
+    real = importlib.import_module
+
+    def import_module(name, *args):
+        if name in modules:
+            module = modules[name]
+            if isinstance(module, Exception):
+                raise module
+            return module
+        return real(name, *args)
+
+    monkeypatch.setattr(importlib, "import_module", import_module)
+    return modules
+
+
+def test_flashinfer_runs_nvfp4_products_on_compute_capability_12_only(
+    flashinfer_on_12x, monkeypatch
+):
+    import os
+
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    device = torch.device("cuda", 0)
+    assert flashinfer_nvfp4.load(device) == ("mm_fp4", None)
+    # PyTorch's CUDA 12.8 would make FlashInfer refuse 12.x: the family target is named for it
+    assert os.environ[flashinfer_nvfp4.ARCH_LIST] == "12.0f"
+    monkeypatch.setattr(
+        torch.cuda, "get_device_capability", lambda device=None: (10, 0)
+    )
+    product, reason = flashinfer_nvfp4.load(device)
+    assert product is None and "12.x, not 10.0" in reason
+
+
+def test_flashinfer_is_refused_where_it_is_missing_or_cannot_tune(flashinfer_on_12x):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    device = torch.device("cuda", 0)
+
+    def no_compiler():
+        raise FileNotFoundError("ninja")
+
+    flashinfer_on_12x["flashinfer.tllm_utils"].get_trtllm_utils_module = no_compiler
+    product, reason = flashinfer_nvfp4.load(device)
+    assert product is None and "cannot tune" in reason and "ninja" in reason
+    flashinfer_on_12x["flashinfer"] = ModuleNotFoundError(
+        "No module named 'flashinfer'"
+    )
+    product, reason = flashinfer_nvfp4.load(device)
+    assert product is None and "not installed" in reason

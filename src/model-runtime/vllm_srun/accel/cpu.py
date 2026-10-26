@@ -19,7 +19,7 @@ import platform
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, TypeVar
 
 import torch
 
@@ -34,6 +34,7 @@ from .kernels import (
 )
 
 _LOCK = threading.Lock()
+T = TypeVar("T")
 _EXECUTOR: ThreadPoolExecutor | None = None
 
 
@@ -92,6 +93,13 @@ def device_thread() -> ThreadPoolExecutor:
                 max_workers=1, thread_name_prefix="vllm-sr-cpu"
             )
         return _EXECUTOR
+
+
+def on_device_thread(work: Callable[[], T]) -> T:
+    """``work`` on the CPU device thread, inline when already on it."""
+    if threading.current_thread().name.startswith("vllm-sr-cpu"):
+        return work()
+    return device_thread().submit(work).result()
 
 
 class CPUAccelerator(Accelerator):
@@ -169,9 +177,9 @@ class CPUAccelerator(Accelerator):
                 "model's CPU kernels need; serve it with a PyTorch that has LAPACK "
                 "(the router's CPU image) or on a GPU device"
             )
+        if capability == "nvfp4":
+            return f"{device.label}: NVFP4 packages need FP4 tensor cores (a Blackwell GPU)"
         return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
-        if threading.current_thread().name.startswith("vllm-sr-cpu"):
-            return work()
-        return device_thread().submit(work).result()
+        return on_device_thread(work)

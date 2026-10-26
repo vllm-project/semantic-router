@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useReadonly } from "../contexts/ReadonlyContext";
+import { useCapabilities, useCapability } from "../contexts/CapabilitiesContext";
+import { isCapabilityUsable } from "../contexts/dashboardCapabilities";
 import { useSetup } from "../contexts/SetupContext";
 import { markOnboardingPending } from "../utils/onboarding";
 import {
@@ -55,6 +57,18 @@ const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate();
   const { setupState, refreshSetupState } = useSetup();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
+  const { isLoading: capabilitiesLoading, error: capabilitiesError } = useCapabilities();
+  const setupCapability = useCapability("setup");
+  const activationBlockedReason = capabilitiesLoading
+    ? "Checking setup activation access…"
+    : capabilitiesError ??
+      (!setupCapability
+        ? "Setup activation access was not reported."
+        : isCapabilityUsable(setupCapability)
+          ? null
+          : setupCapability.remediation || "Setup activation is not available.");
+  const activationNotice =
+    setupCapability?.state === "degraded" ? setupCapability.remediation : null;
 
   const [currentStep, setCurrentStep] = useState<SetupStep>(0);
   const [decisionModelChoice, setDecisionModelChoice] =
@@ -707,6 +721,8 @@ const SetupWizardPage: React.FC = () => {
               previewSource={previewSource}
               readonlyLoading={readonlyLoading}
               isReadonly={isReadonly}
+              activationBlockedReason={activationBlockedReason}
+              activationNotice={activationNotice}
               onValidateAgain={() => void handleValidateAgain()}
             />
           )}
@@ -742,7 +758,8 @@ const SetupWizardPage: React.FC = () => {
                     !validatedCounts.canActivate ||
                     activationState === "activating" ||
                     activationState === "persisted" ||
-                    (!readonlyLoading && isReadonly)
+                    (!readonlyLoading && isReadonly) ||
+                    activationBlockedReason !== null
                   }
                 >
                   {activationState === "activating"
