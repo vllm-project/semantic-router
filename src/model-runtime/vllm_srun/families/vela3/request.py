@@ -191,7 +191,13 @@ class Reader:
         if question.get("criteria") is None and not question.get(
             "labels" if kind == "set" else "choices"
         ):
-            given = {**question, "criteria": dict(schema.options)}
+            # The trained options; an undescribed one stays null (rendered as its name alone).
+            given = {
+                **question,
+                "criteria": {
+                    name: (text or None) for name, text in schema.options.items()
+                },
+            }
         if kind == "set":
             unknown = set(given) - SET_FIELDS - FAMILY_FIELDS
             if unknown:
