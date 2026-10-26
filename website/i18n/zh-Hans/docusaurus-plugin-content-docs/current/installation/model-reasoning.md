@@ -5,7 +5,7 @@ description: 继承、复用或定义模型推理契约，并从路由决策中�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/model-reasoning.md"
-  outdated: false
+  outdated: true
 ---
 
 # 模型推理
