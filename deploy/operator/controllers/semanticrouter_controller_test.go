@@ -25,6 +25,8 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -259,6 +261,80 @@ func TestGeneratePVC(t *testing.T) {
 			}
 			if !tt.wantErr && pvc == nil {
 				t.Error("generatePVC() returned nil PVC")
+			}
+		})
+	}
+}
+
+func TestReconcilePVCResizesExistingClaim(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	enabled := true
+	storageClassName := "standard"
+	tests := []struct {
+		name        string
+		desiredSize string
+		wantSize    string
+		wantErr     bool
+	}{
+		{name: "expands existing claim", desiredSize: "30Gi", wantSize: "30Gi"},
+		{name: "keeps matching claim", desiredSize: "15Gi", wantSize: "15Gi"},
+		{name: "rejects shrinking claim", desiredSize: "10Gi", wantSize: "15Gi", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sr := &vllmv1alpha1.SemanticRouter{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-router", Namespace: "default"},
+				Spec: vllmv1alpha1.SemanticRouterSpec{
+					Persistence: vllmv1alpha1.PersistenceSpec{
+						Enabled:          &enabled,
+						StorageClassName: storageClassName,
+						Size:             tt.desiredSize,
+						AccessMode:       corev1.ReadWriteOnce,
+					},
+				},
+			}
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-router-models",
+					Namespace:   "default",
+					Labels:      map[string]string{"keep": "label"},
+					Annotations: map[string]string{"keep": "annotation"},
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					StorageClassName: &storageClassName,
+					VolumeName:       "test-volume",
+					Resources: corev1.VolumeResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("15Gi")},
+					},
+				},
+			}
+			storageClass := &storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: storageClassName}}
+			cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, pvc, storageClass).Build()
+			r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+			err := r.reconcilePVC(context.Background(), sr)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("reconcilePVC() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			got := &corev1.PersistentVolumeClaim{}
+			if err := cl.Get(context.Background(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, got); err != nil {
+				t.Fatalf("failed to get PVC: %v", err)
+			}
+			gotSize := got.Spec.Resources.Requests[corev1.ResourceStorage]
+			if want := resource.MustParse(tt.wantSize); gotSize.Cmp(want) != 0 {
+				t.Errorf("PVC storage request = %s, want %s", gotSize.String(), want.String())
+			}
+			if got.Spec.VolumeName != "test-volume" {
+				t.Errorf("PVC volume name = %q, want %q", got.Spec.VolumeName, "test-volume")
+			}
+			if got.Labels["keep"] != "label" || got.Annotations["keep"] != "annotation" {
+				t.Errorf("PVC metadata was not preserved: labels=%v annotations=%v", got.Labels, got.Annotations)
 			}
 		})
 	}
