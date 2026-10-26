@@ -201,11 +201,16 @@ type RequestContext struct {
 	// authentication; this field must only ever be populated from the
 	// configured auth gateway header, never from request-body content.
 	AuthenticatedPrincipal string
-	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
+	// AuthenticatedTenant is the trusted gateway-authenticated tenant ID
+	// (from the x-authz-tenant-id header), empty when the request carries
+	// none. A user ID is unique only within its tenant, so state keyed by
+	// AuthenticatedPrincipal must include this too.
+	AuthenticatedTenant string
+	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation

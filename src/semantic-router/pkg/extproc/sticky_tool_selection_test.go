@@ -134,6 +134,28 @@ func TestStickyIsolatesPrincipalsAndRecipes(t *testing.T) {
 	require.Equal(t, "seeded", recipe.receipt.Outcome)
 }
 
+// A user ID is unique only within its tenant. With one session allowed per
+// identity, the same user ID in another tenant must not take the first
+// tenant's slot, while a second session in the same tenant does.
+func TestStickyTenantsKeepSeparateSessionQuotas(t *testing.T) {
+	h := newStickyHarness(t, "openai.chat.v1", stickyAddDecision(t, &config.StickyToolSelectionConfig{MaxTools: intPtr(3)}),
+		&config.ToolSessionStoreConfig{MaxSessionsByIdentity: intPtr(1)})
+	tenantA := stickyTurn{query: stickyTestQueries["weather"], tenant: "tenant-a", session: "tenant-a:session-1"}
+	require.Equal(t, "seeded", h.run(tenantA).receipt.Outcome)
+	tenantB := h.run(stickyTurn{query: stickyTestQueries["email"], tenant: "tenant-b", session: "tenant-b:session-1"})
+	require.Equal(t, "seeded", tenantB.receipt.Outcome)
+
+	tenantA.query = stickyTestQueries["calendar"]
+	resumed := h.run(tenantA)
+	require.Equal(t, []string{"weather", "calendar"}, resumed.tools, "another tenant's session must not evict this one")
+	require.Equal(t, "updated", resumed.receipt.Outcome)
+
+	h.run(stickyTurn{query: stickyTestQueries["email"], tenant: "tenant-a", session: "tenant-a:session-2"})
+	evicted := h.run(tenantA)
+	require.Equal(t, []string{"calendar"}, evicted.tools, "a second session in the same tenant takes the only slot")
+	require.Equal(t, "seeded", evicted.receipt.Outcome)
+}
+
 // Without a trusted identity, sticky selection never touches the store and
 // emits the ordinary current selection.
 func TestStickyUntrustedIdentityPerformsNoStoreOperations(t *testing.T) {

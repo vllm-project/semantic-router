@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("sticky-tool-selection", pkgtestcases.TestCase{
-		Description: "Session-scoped sticky tool selection keeps an ordered, bounded, principal-isolated tool set across turns",
+		Description: "Session-scoped sticky tool selection keeps an ordered, bounded, tenant- and principal-isolated tool set across turns",
 		Tags:        []string{"kubernetes", "plugin", "tool-selection"},
 		Fn:          testStickyToolSelectionE2E,
 	})
@@ -30,6 +30,7 @@ type stickyE2ETurn struct {
 	name      string
 	prompt    string
 	principal string
+	tenant    string
 	want      []string
 }
 
@@ -44,14 +45,16 @@ func stickyE2ETools() []fixtures.ChatTool {
 
 // The decision keeps the single most relevant offered tool per turn. A
 // trusted session retains its earlier tool in order and adds the new one; the
-// same session value under another principal starts fresh, and a request
-// without an authenticated principal uses ordinary stateless selection.
+// same session value under the same user ID in another tenant, or under
+// another principal, starts fresh, and a request without an authenticated
+// principal uses ordinary stateless selection.
 func stickyE2ETurns() []stickyE2ETurn {
 	weather := stickyToolSelectionMarker + " Will it rain in Seattle this weekend?"
 	math := stickyToolSelectionMarker + " Calculate 17 times 23 for me."
 	return []stickyE2ETurn{
 		{name: "first_turn_seeds_session", prompt: weather, principal: "sticky-user-a", want: []string{"get_weather"}},
 		{name: "second_turn_keeps_prefix_and_grows", prompt: math, principal: "sticky-user-a", want: []string{"get_weather", "calculate"}},
+		{name: "same_user_in_other_tenant_is_isolated", prompt: math, principal: "sticky-user-a", tenant: "sticky-tenant-b", want: []string{"calculate"}},
 		{name: "other_principal_is_isolated", prompt: math, principal: "sticky-user-b", want: []string{"calculate"}},
 		{name: "unauthenticated_request_is_stateless", prompt: math, want: []string{"calculate"}},
 	}
@@ -92,6 +95,7 @@ func testStickyToolSelectionE2E(ctx context.Context, client *kubernetes.Clientse
 			"turns":                      len(turns),
 			"provider_boundary_verified": true,
 			"principal_isolation":        true,
+			"tenant_isolation":           true,
 		})
 	}
 	return nil
@@ -112,6 +116,9 @@ func runStickyE2ETurn(
 	}
 	if turn.principal != "" {
 		headers["x-authz-user-id"] = turn.principal
+	}
+	if turn.tenant != "" {
+		headers["x-authz-tenant-id"] = turn.tenant
 	}
 	request := fixtures.ChatCompletionsRequest{
 		Model:      "e2e-plugins",

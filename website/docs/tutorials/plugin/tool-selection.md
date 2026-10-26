@@ -123,8 +123,13 @@ tool, at both config admission and router construction:
 request with an authenticated principal and a session from the `x-session-id`
 header or a Responses API conversation, under an entrypoint recipe, when its
 trusted facts allow tool use for both stages and the target protocol can carry
-tools. State is partitioned by recipe, principal, and session; a session value
-from another principal never shares state. Everything else, and a request
+tools. The principal comes from the `x-authz-user-id` header and its tenant
+from `x-authz-tenant-id`, both set by the authenticating gateway; requests
+without a tenant header share one tenant of their own. State is partitioned by
+recipe, tenant, principal, and session, and
+`global.stores.tool_sessions.max_sessions_per_identity` counts each tenant's
+principal separately, so a session value from another principal or tenant
+never shares state or quota. Everything else, and a request
 whose `tool_choice` is not `auto` or that has no text to rank against, uses
 ordinary selection without reading or writing state.
 

@@ -239,6 +239,7 @@ type stickyTurn struct {
 	called     []string // prior assistant tool calls in history
 	toolChoice string   // "" means auto
 	principal  string
+	tenant     string
 	session    string
 	provenance SessionProvenance
 	recipe     string
@@ -284,6 +285,7 @@ func (h *stickyHarness) dispatch(turn stickyTurn) (stickyTurnResult, error) {
 	decision := h.decision
 	ctx.VSRSelectedDecision = &decision
 	ctx.AuthenticatedPrincipal = turn.principal
+	ctx.AuthenticatedTenant = turn.tenant
 	ctx.SessionID = turn.session
 	ctx.SessionProvenance = turn.provenance
 	response, err := h.router.handleModelRouting(request, h.model, decision.Name, entropy.ReasoningDecision{}, h.model, ctx)
