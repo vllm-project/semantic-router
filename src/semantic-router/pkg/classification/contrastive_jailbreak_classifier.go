@@ -249,7 +249,38 @@ func contrastiveCosineSimilarity(a, b []float32) float32 {
 }
 
 func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
-	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
+	vector, err := embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
+	if err != nil {
+		return nil, err
+	}
+	if err := validateContrastiveEmbedding(c.provider, vector); err != nil {
+		return nil, err
+	}
+	return vector, nil
+}
+
+// validateContrastiveEmbedding rejects vectors that cannot produce a
+// meaningful contrastive score. The empty and non-finite checks mirror the
+// validation the model runtime applies to embedding results. The dimension
+// check uses the provider's declared dimension, applying the same
+// "declared dimension > 0" guard as the OpenAI-compatible provider's own
+// response validation; an undeclared dimension (0) means unknown and is not
+// enforced here. An invalid vector must surface as an error so knowledge-base
+// preload fails instead of storing it, and an invalid request embedding is
+// counted as a failed message rather than scored.
+func validateContrastiveEmbedding(provider embedding.Provider, vector []float32) error {
+	if len(vector) == 0 {
+		return fmt.Errorf("embedding vector is empty")
+	}
+	for _, value := range vector {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return fmt.Errorf("embedding vector is not finite")
+		}
+	}
+	if dimension := provider.Dimension(); dimension > 0 && len(vector) != dimension {
+		return fmt.Errorf("embedding dimension mismatch: got %d, want %d", len(vector), dimension)
+	}
+	return nil
 }
 
 // preloadKBEmbeddings concurrently computes embeddings for jailbreak and benign
