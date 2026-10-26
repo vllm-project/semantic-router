@@ -99,9 +99,9 @@ The native first-ten CoT eligibility rule remains visible as an explicit skip.
 
 ### Compare a model's reasoning modes
 
-`reasoning-mode-eval` sends the same dataset samples with reasoning disabled
-and enabled. It reports accuracy, token use, response time, and time per output
-token.
+`reasoning-mode-eval` sends the same dataset samples with the model-specific
+standard and reasoning settings. It reports accuracy, token use, response time,
+and time per output token.
 
 ```bash
 reasoning-mode-eval \
