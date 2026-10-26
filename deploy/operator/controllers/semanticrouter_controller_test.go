@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -188,6 +190,57 @@ func TestReconcileSemanticRouter(t *testing.T) {
 	if !found {
 		t.Error("finalizer was not added")
 	}
+}
+
+func TestReconcileReturnsStatusUpdateError(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-router", Namespace: "default"},
+		Status: vllmv1alpha1.SemanticRouterStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   typeProgressingSemanticRouter,
+					Status: metav1.ConditionTrue,
+					Reason: "Reconciling",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).WithStatusSubresource(sr).Build()
+	wantErr := errors.New("status API unavailable")
+	r := &SemanticRouterReconciler{
+		Client: statusPatchFailingClient{Client: fakeClient, err: wantErr},
+		Scheme: s,
+	}
+	r.isOpenShift = new(bool)
+	r.isOpenShiftOnce.Do(func() {})
+
+	req := reconcile.Request{NamespacedName: types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}}
+	if _, err := r.Reconcile(context.Background(), req); !errors.Is(err, wantErr) {
+		t.Fatalf("Reconcile() error = %v, want %v", err, wantErr)
+	}
+}
+
+type statusPatchFailingClient struct {
+	client.Client
+	err error
+}
+
+func (c statusPatchFailingClient) Status() client.SubResourceWriter {
+	return statusPatchFailingWriter{SubResourceWriter: c.Client.Status(), err: c.err}
+}
+
+type statusPatchFailingWriter struct {
+	client.SubResourceWriter
+	err error
+}
+
+func (w statusPatchFailingWriter) Patch(context.Context, client.Object, client.Patch, ...client.SubResourcePatchOption) error {
+	return w.err
 }
 
 func TestGeneratePVC(t *testing.T) {
