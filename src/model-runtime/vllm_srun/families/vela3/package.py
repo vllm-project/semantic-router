@@ -156,7 +156,7 @@ def adapter_metadata(path: Path) -> tuple[int, float]:
     """An adapter file's LoRA rank and alpha, from its safetensors header (no tensor is read)."""
     from safetensors import safe_open
 
-    with safe_open(str(path), framework="pt") as handle:  # type: ignore[no-untyped-call]
+    with safe_open(str(path), framework="pt") as handle:
         metadata = handle.metadata() or {}
     try:
         return int(metadata["lora_rank"]), float(metadata["lora_alpha"])

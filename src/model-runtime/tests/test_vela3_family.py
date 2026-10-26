@@ -9,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.engines.native.engine import NativeEngine

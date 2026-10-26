@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from vllm_srun.accel.kernels import reference_kernels
 from vllm_srun.engines.native import models
 from vllm_srun.engines.native.adapters import load_adapter_network, module_name

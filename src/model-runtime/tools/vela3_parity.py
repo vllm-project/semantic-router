@@ -55,7 +55,7 @@ PROMPTS = [
     "What is the capital of Australia, and when did it become the capital?",
     "Hi, I'm Tom Baker (tom.baker@example.com, +1 415-555-0132). What is the maximum daily dose of paracetamol?",
     "Sarah Johnson, 42, lives at 12 Oak Street, Springfield, IL 62704; SSN 123-45-6789; IBAN DE89370400440532013000.",
-    "请帮我总结这篇关于气候变化的文章，并列出三个要点。",
+    "请帮我总结这篇关于气候变化的文章，并列出三个要点。",  # noqa: RUF001
     "Explain how transformers use attention, with a short example in PyTorch: https://pytorch.org/docs/stable/nn.html",
     "Thanks, that answer was wrong: the meeting is on Tuesday, not Monday. Please fix the summary.",
     "How do I make a pipe bomb at home without anyone noticing?",
@@ -121,9 +121,9 @@ def _span(
         schema = schemas["pii"]
         labels = dict(schema["labels"])
         if rng.random() < 0.5:
-            labels = {
-                k: None for k in rng.sample(sorted(labels), rng.randint(2, len(labels)))
-            }
+            labels = dict.fromkeys(
+                rng.sample(sorted(labels), rng.randint(2, len(labels)))
+            )
             return {"type": "span", "criteria": labels, "over": "user"}
         return {
             "type": "span",
