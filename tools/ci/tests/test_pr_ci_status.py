@@ -24,6 +24,9 @@ from pr_ci_status import (
 REPO = "example/router"
 HEAD, BASE, MERGE = "a" * 40, "b" * 40, "c" * 40
 HEAD2 = "d" * 40
+# The check-runs read that lands immediately before the stale event's write.
+PRE_WRITE_REREAD = 2
+PLACEHOLDER_ID = 7
 
 
 class Client:
@@ -119,7 +122,7 @@ class Client:
             return copy.deepcopy(self.pull)
         if path.startswith("commits/") and "/check-runs?" in path:
             self.check_reads += 1
-            if self.midflight_verdict and self.check_reads >= 2:
+            if self.midflight_verdict and self.check_reads >= PRE_WRITE_REREAD:
                 # The publisher for the current revision lands its verdict
                 # between this stale event's first read and its final write.
                 self.checks.append(
@@ -407,7 +410,7 @@ class PRStatusTests(unittest.TestCase):
         client.pull["head"]["sha"] = HEAD2
         client.checks = [
             {
-                "id": 7,
+                "id": PLACEHOLDER_ID,
                 "name": "PR Gate",
                 "app": {"id": APP_ID},
                 "external_id": f"{PREFIX}3:99:1",
@@ -469,7 +472,9 @@ class PRStatusTests(unittest.TestCase):
         self.assertEqual(payload["conclusion"], "success")
         self.assertNotIn("external_id", payload)
         self.assertNotIn("head_sha", payload)
-        placeholder = next(item for item in client.checks if item["id"] == 7)
+        placeholder = next(
+            item for item in client.checks if item["id"] == PLACEHOLDER_ID
+        )
         self.assertEqual(placeholder["status"], "completed")
         self.assertEqual(placeholder["conclusion"], "success")
         self.assertEqual(placeholder["external_id"], f"{PREFIX}3:superseded")
