@@ -42,10 +42,10 @@ spec:
   resources:
     requests:
       cpu: 2000m
-      memory: 4Gi
+      memory: 8Gi
     limits:
       cpu: 4000m
-      memory: 8Gi
+      memory: 12Gi
 
   # Semantic router configuration
   config:
@@ -149,7 +149,7 @@ spec:
     # Prompt guard
     prompt_guard:
       enabled: true
-      threshold: "0.75"
+      threshold: "0.88"
 
     # Tools configuration
     tools:

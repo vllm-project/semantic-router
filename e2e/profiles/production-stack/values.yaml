@@ -351,7 +351,7 @@ config:
         enabled: false
 resources:
   limits:
-    memory: "10Gi"
+    memory: "12Gi"
     cpu: "4"
   requests:
     memory: "5Gi"

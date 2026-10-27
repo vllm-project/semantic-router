@@ -129,10 +129,10 @@ spec:
   resources:
     requests:
       cpu: 2000m
-      memory: 4Gi
+      memory: 8Gi
     limits:
       cpu: 4000m
-      memory: 8Gi
+      memory: 12Gi
 
   # ====================
   # Semantic Router Configuration

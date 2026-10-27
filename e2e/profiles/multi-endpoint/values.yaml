@@ -309,7 +309,7 @@ config:
 resources:
   limits:
     cpu: 2000m
-    memory: 8Gi
+    memory: 12Gi
   requests:
     cpu: 500m
     memory: 2Gi

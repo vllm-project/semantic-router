@@ -271,8 +271,8 @@ the locked chart dependencies.
 | readinessProbe.periodSeconds | int | `30` | Period seconds |
 | readinessProbe.timeoutSeconds | int | `10` | Timeout seconds |
 | replicaCount | int | `1` | Number of replicas for the deployment |
-| resources.limits | object | `{"cpu":"2","memory":"7Gi"}` | Resource limits |
-| resources.requests | object | `{"cpu":"1","memory":"3Gi"}` | Resource requests |
+| resources.limits | object | `{"cpu":"2","memory":"12Gi"}` | Resource limits |
+| resources.requests | object | `{"cpu":"1","memory":"8Gi"}` | Resource requests |
 | response-api-redis.architecture | string | `"standalone"` |  |
 | response-api-redis.auth.enabled | bool | `false` |  |
 | safetyGuards.rejectMultiReplicaLocalLearningState | bool | `true` | Reject multi-replica router deployments when config enables Router Learning request-time local state. Disable only when accepting replica-local learning divergence or using sticky routing. |

@@ -114,8 +114,9 @@ models. On a CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 
 (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and 9B
 are the most accurate.
 
-Vela 3.0 `vllm-sr/vela3-fast` (a 380M UltraBERT encoder, 0.4B with its
-adapters) answers `choice` and `noul` questions on its decision backbone, the
+Vela 3.0 `vllm-sr/vela3-fast` (a 380M UltraBERT encoder, 0.4B with the adapter
+a question runs on; its ten adapters carry their own top layers and heads, so
+the deployment loads 1.5B parameters) answers `choice` and `noul` questions on its decision backbone, the
 router's built-in questions on trained adapters, and `span` questions on span
 adapters routed by label set and wording (personal data, unsupported claims,
 evidence, relations, entities), with the `pii` and `halu` presets. A `set`
@@ -142,6 +143,9 @@ routing stages can make additional calls.
   other questions share the router adapter. PII and hallucination use the
   span-set adapter, so their spans keep exact character offsets.
 - **Precision:** FP32 on every device, as the package was evaluated.
+- **Memory:** the deployment holds about 7 GB once loaded. Give the Router
+  12 GiB, the Helm chart's default limit; less can be killed for memory while
+  the model loads.
 - **Input:** ordinary routing judgments may truncate to one 8,192-token window.
   Prompt guard, safety, PII and hallucination require complete input;
   window scans extend coverage up to the scan budget. Incomplete coverage
