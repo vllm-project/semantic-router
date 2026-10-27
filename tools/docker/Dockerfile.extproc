@@ -65,7 +65,7 @@ ENV PIP_NO_CACHE_DIR=1 \
 # with the C compiler and Python's headers when the kernel first runs, so GPU
 # images carry gcc and libc6-dev, and the build checks both are usable.
 FROM python-base AS torch-cpu
-ARG TORCH_CPU=torch==2.10.0
+ARG TORCH_CPU=torch==2.14.1
 RUN pip install --index-url https://download.pytorch.org/whl/cpu "$TORCH_CPU" && \
     python -c "import torch"
 
