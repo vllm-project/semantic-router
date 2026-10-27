@@ -1,51 +1,79 @@
 package llmprotocol
 
 import (
-	"encoding/json"
 	"fmt"
 	"unicode/utf8"
 )
 
-// OptionalString preserves absent, null and string values in continuity blocks.
-// Presence matters when a stream updates metadata without a text delta.
+// ReasoningDetailType names one variant of a typed reasoning continuity block.
+type ReasoningDetailType string
+
+const (
+	ReasoningDetailText      ReasoningDetailType = "text"
+	ReasoningDetailSummary   ReasoningDetailType = "summary"
+	ReasoningDetailEncrypted ReasoningDetailType = "encrypted"
+	// ReasoningDetailServerToolCall records a provider-hosted tool invocation
+	// so that a later turn can rehydrate it.
+	ReasoningDetailServerToolCall ReasoningDetailType = "server_tool_call"
+)
+
+// OptionalString distinguishes an absent value, an explicit null, and a
+// string. Continuity blocks return to the provider exactly as received, and a
+// stream can update metadata without a text fragment.
 type OptionalString struct {
 	Value   string
 	Present bool
 	Null    bool
 }
 
-func (value OptionalString) IsZero() bool { return !value.Present }
-func (value OptionalString) MarshalJSON() ([]byte, error) {
-	if value.Null || !value.Present {
-		return []byte("null"), nil
-	}
-	return json.Marshal(value.Value)
-}
+// Set reports whether the value is a string rather than absent or null.
+func (value OptionalString) Set() bool { return value.Present && !value.Null }
 
-func (value *OptionalString) UnmarshalJSON(body []byte) error {
-	var decoded *string
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		return err
-	}
-	*value = OptionalString{Present: true, Null: decoded == nil}
-	if decoded != nil {
-		value.Value = *decoded
-	}
-	return nil
-}
-
-// ReasoningDetail preserves OpenRouter's closed, typed reasoning union. Unlike
-// plain reasoning text these blocks may carry signed or encrypted continuation
-// state that cannot be summarized or forwarded to an arbitrary model dialect.
+// ReasoningDetail is a typed reasoning continuity block. Unlike plain
+// reasoning text it may carry signed or encrypted state that the provider needs
+// back unchanged to continue a tool loop, so it is never summarized into
+// display text or forwarded to a format that cannot carry it.
 type ReasoningDetail struct {
-	Type      string         `json:"type"`
-	ID        OptionalString `json:"id,omitzero"`
-	Format    OptionalString `json:"format,omitzero"`
-	Index     *int64         `json:"index,omitempty"`
-	Text      OptionalString `json:"text,omitzero"`
-	Summary   OptionalString `json:"summary,omitzero"`
-	Data      OptionalString `json:"data,omitzero"`
-	Signature OptionalString `json:"signature,omitzero"`
+	Type       ReasoningDetailType
+	ID         OptionalString
+	Format     OptionalString
+	Index      *int64
+	Text       OptionalString
+	Signature  OptionalString
+	Summary    OptionalString
+	Data       OptionalString
+	ToolName   OptionalString
+	ToolCallID OptionalString
+	Arguments  OptionalString
+	Result     OptionalString
+}
+
+type reasoningDetailRule uint8
+
+const (
+	reasoningFieldForbidden reasoningDetailRule = iota
+	reasoningFieldOptional
+	reasoningFieldRequired
+)
+
+// reasoningDetailVariants closes the union. Each rule applies to the field at
+// the same position in payloadFields; identity fields are shared by all
+// variants.
+var reasoningDetailVariants = map[ReasoningDetailType][8]reasoningDetailRule{
+	// Text, Signature, Summary, Data, ToolName, ToolCallID, Arguments, Result
+	ReasoningDetailText:      {reasoningFieldOptional, reasoningFieldOptional},
+	ReasoningDetailSummary:   {2: reasoningFieldRequired},
+	ReasoningDetailEncrypted: {3: reasoningFieldRequired},
+	ReasoningDetailServerToolCall: {
+		4: reasoningFieldRequired, 5: reasoningFieldOptional, 6: reasoningFieldRequired, 7: reasoningFieldRequired,
+	},
+}
+
+func (detail *ReasoningDetail) payloadFields() [8]*OptionalString {
+	return [8]*OptionalString{
+		&detail.Text, &detail.Signature, &detail.Summary, &detail.Data,
+		&detail.ToolName, &detail.ToolCallID, &detail.Arguments, &detail.Result,
+	}
 }
 
 // ValidateReasoningDetail checks the closed variant and bounded payload.
@@ -53,41 +81,31 @@ func ValidateReasoningDetail(detail ReasoningDetail, limits Limits) error {
 	invalid := func(message string) error {
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_detail", message, nil)
 	}
-	switch detail.Type {
-	case "reasoning.text":
-		if detail.Summary.Present || detail.Data.Present {
-			return invalid("text reasoning contains fields from another variant")
-		}
-	case "reasoning.summary":
-		if !detail.Summary.Present || detail.Summary.Null {
-			return invalid("reasoning summary requires a string summary")
-		}
-		if detail.Text.Present || detail.Data.Present || detail.Signature.Present {
-			return invalid("reasoning summary contains fields from another variant")
-		}
-	case "reasoning.encrypted":
-		if !detail.Data.Present || detail.Data.Null {
-			return invalid("encrypted reasoning requires a string payload")
-		}
-		if detail.Text.Present || detail.Summary.Present || detail.Signature.Present {
-			return invalid("encrypted reasoning contains fields from another variant")
-		}
-	default:
+	rules, known := reasoningDetailVariants[detail.Type]
+	if !known {
 		return invalid("reasoning detail type is unsupported")
+	}
+	payload := detail.payloadFields()
+	for position, value := range payload {
+		switch {
+		case rules[position] == reasoningFieldForbidden && value.Present:
+			return invalid("reasoning detail contains a field from another variant")
+		case rules[position] == reasoningFieldRequired && !value.Set():
+			return invalid("reasoning detail is missing a required string")
+		}
 	}
 	if detail.Index != nil && *detail.Index < 0 {
 		return invalid("reasoning detail index must be nonnegative")
 	}
-	for _, value := range []OptionalString{detail.ID, detail.Format, detail.Text, detail.Summary, detail.Data, detail.Signature} {
-		if !utf8.ValidString(value.Value) || (!value.Present || value.Null) && value.Value != "" {
+	for _, value := range append(payload[:], &detail.ID, &detail.Format) {
+		if !utf8.ValidString(value.Value) || !value.Set() && value.Value != "" {
 			return invalid("reasoning detail has an invalid optional string")
 		}
 	}
-	if limits.IdentifierBytes > 0 && len(detail.ID.Value) > limits.IdentifierBytes {
-		return invalid("reasoning detail ID exceeds the configured limit")
-	}
-	if limits.IdentifierBytes > 0 && len(detail.Format.Value) > limits.IdentifierBytes {
-		return invalid("reasoning detail format exceeds the configured limit")
+	for _, identifier := range []string{detail.ID.Value, detail.Format.Value, detail.ToolName.Value, detail.ToolCallID.Value} {
+		if limits.IdentifierBytes > 0 && len(identifier) > limits.IdentifierBytes {
+			return invalid("reasoning detail identifier exceeds the configured limit")
+		}
 	}
 	if limits.TextBytes > 0 && detail.PayloadBytes() > limits.TextBytes {
 		return invalid("reasoning detail payload exceeds the configured limit")
@@ -95,28 +113,37 @@ func ValidateReasoningDetail(detail ReasoningDetail, limits Limits) error {
 	return nil
 }
 
-// PayloadBytes includes opaque data and signatures as well as display text.
+// PayloadBytes includes opaque data, signatures, and server tool records as
+// well as display text.
 func (detail ReasoningDetail) PayloadBytes() int {
-	return len(detail.Text.Value) + len(detail.Summary.Value) + len(detail.Data.Value) + len(detail.Signature.Value)
+	total := 0
+	for _, value := range detail.payloadFields() {
+		total += len(value.Value)
+	}
+	return total
 }
 
-// MergeReasoningDetail combines deltas of one block without changing its
-// identity. Text, opaque data, and signature fragments append in wire order.
+// MergeReasoningDetail combines fragments of one block without changing its
+// identity. Payload fragments append in wire order.
 func MergeReasoningDetail(current, delta ReasoningDetail) (ReasoningDetail, error) {
 	if current.Type != delta.Type {
 		return current, fmt.Errorf("reasoning detail changed type")
 	}
-	if delta.ID.Present {
-		if current.ID.Present && !current.ID.Null && current.ID != delta.ID {
-			return current, fmt.Errorf("reasoning detail changed ID")
-		}
-		current.ID = delta.ID
+	identities := [][2]*OptionalString{
+		{&current.ID, &delta.ID},
+		{&current.Format, &delta.Format},
+		{&current.ToolName, &delta.ToolName},
+		{&current.ToolCallID, &delta.ToolCallID},
 	}
-	if delta.Format.Present {
-		if current.Format.Present && !current.Format.Null && current.Format != delta.Format {
-			return current, fmt.Errorf("reasoning detail changed format")
+	for _, pair := range identities {
+		// A later null carries no identity, so it cannot unset an earlier one.
+		if !pair[1].Present || pair[1].Null && pair[0].Set() {
+			continue
 		}
-		current.Format = delta.Format
+		if pair[0].Set() && *pair[0] != *pair[1] {
+			return current, fmt.Errorf("reasoning detail changed identity")
+		}
+		*pair[0] = *pair[1]
 	}
 	if delta.Index != nil {
 		if current.Index != nil && *current.Index != *delta.Index {
@@ -124,11 +151,19 @@ func MergeReasoningDetail(current, delta ReasoningDetail) (ReasoningDetail, erro
 		}
 		current.Index = delta.Index
 	}
-	for _, pair := range [][2]*OptionalString{{&current.Text, &delta.Text}, {&current.Summary, &delta.Summary}, {&current.Data, &delta.Data}, {&current.Signature, &delta.Signature}} {
+	payload := [][2]*OptionalString{
+		{&current.Text, &delta.Text},
+		{&current.Signature, &delta.Signature},
+		{&current.Summary, &delta.Summary},
+		{&current.Data, &delta.Data},
+		{&current.Arguments, &delta.Arguments},
+		{&current.Result, &delta.Result},
+	}
+	for _, pair := range payload {
 		if !pair[1].Present {
 			continue
 		}
-		if !pair[0].Present || pair[0].Null {
+		if !pair[0].Set() {
 			*pair[0] = *pair[1]
 		} else if !pair[1].Null {
 			pair[0].Value += pair[1].Value

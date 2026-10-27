@@ -86,15 +86,15 @@ type chatStreamOptionsWire struct {
 }
 
 type chatMessageWire struct {
-	ID                 string                        `json:"id,omitempty"`
-	Role               string                        `json:"role"`
-	Content            json.RawMessage               `json:"content,omitempty"`
-	Refusal            *string                       `json:"refusal,omitempty"`
-	Reasoning          *string                       `json:"reasoning_content,omitempty"`
-	AlternateReasoning *string                       `json:"reasoning,omitempty"`
-	ReasoningDetails   []llmprotocol.ReasoningDetail `json:"reasoning_details,omitempty"`
-	Audio              *chatAudioOutputWire          `json:"audio,omitempty"`
-	LegacyFunctionCall *chatLegacyCallWire           `json:"function_call,omitempty"`
+	ID                 string                    `json:"id,omitempty"`
+	Role               string                    `json:"role"`
+	Content            json.RawMessage           `json:"content,omitempty"`
+	Refusal            *string                   `json:"refusal,omitempty"`
+	Reasoning          *string                   `json:"reasoning_content,omitempty"`
+	AlternateReasoning *string                   `json:"reasoning,omitempty"`
+	ReasoningDetails   []chatReasoningDetailWire `json:"reasoning_details,omitempty"`
+	Audio              *chatAudioOutputWire      `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire       `json:"function_call,omitempty"`
 	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
 	// provider_specific_fields on response messages. The content is opaque
 	// provider metadata and is not replayed to the client. Client requests
@@ -376,7 +376,13 @@ func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotoco
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	return assembleChatMessage(wire, index, role, contents, policy)
+	details, err := decodeChatReasoningDetails(wire.ReasoningDetails, role, policy.Limits)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	// Returned history carries the same text in both forms. The typed blocks
+	// are what the provider needs back, so the alias is not forwarded twice.
+	return assembleChatMessage(wire, index, role, details, len(details) == 0, contents, policy)
 }
 
 func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
@@ -394,11 +400,14 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	message, err := assembleChatMessage(wire, index, role, contents, policy)
+	details, err := decodeChatReasoningDetails(wire.ReasoningDetails, role, policy.Limits)
 	if err != nil {
-		if len(wire.ReasoningDetails) > 0 {
-			return llmprotocol.Message{}, invalidProviderResponse("invalid_reasoning_detail", "Upstream reasoning message is invalid")
-		}
+		return llmprotocol.Message{}, invalidProviderResponse("invalid_reasoning_detail", "Upstream reasoning detail is invalid")
+	}
+	// Clients render the plain reasoning text, and a format that cannot carry
+	// the typed blocks still translates it, so a reply keeps both.
+	message, err := assembleChatMessage(wire, index, role, details, true, contents, policy)
+	if err != nil {
 		return llmprotocol.Message{}, err
 	}
 	message.Content = dropEmptyTextBesideOtherContent(message.Content)
@@ -425,25 +434,18 @@ func assembleChatMessage(
 	wire chatMessageWire,
 	index int,
 	role llmprotocol.Role,
+	details []llmprotocol.Content,
+	keepReasoningText bool,
 	contents []llmprotocol.Content,
 	policy llmprotocol.Policy,
 ) (llmprotocol.Message, error) {
 	// Reasoning first, the order vLLM's own Messages and Responses output uses.
-	message := llmprotocol.Message{ID: wire.ID, Role: role}
-	if len(wire.ReasoningDetails) > 0 && role != llmprotocol.RoleAssistant {
-		return message, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_detail_role", "reasoning details require an assistant message", nil)
-	}
-	for _, detail := range wire.ReasoningDetails {
-		if err := llmprotocol.ValidateReasoningDetail(detail, policy.Limits); err != nil {
-			return message, err
-		}
-		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentReasoning, ReasoningDetail: &detail})
-	}
+	message := llmprotocol.Message{ID: wire.ID, Role: role, Content: details}
 	reasoning := wire.Reasoning
 	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
 	}
-	if reasoning != nil && len(wire.ReasoningDetails) == 0 {
+	if reasoning != nil && keepReasoningText {
 		message.Content = append(message.Content, llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 		})

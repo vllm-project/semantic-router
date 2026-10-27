@@ -312,18 +312,26 @@ crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
 Chat Completions accepts OpenRouter's `reasoning_details` on assistant messages
-and streaming deltas. Text, summary, and encrypted blocks retain their order,
-IDs, format, index, and signatures when responses are returned or replayed in a
-follow-up Chat request. Send the original blocks back with tool results; do not
-summarize or reorder them. When typed details are present, they take precedence
-over the plain `reasoning` and `reasoning_content` aliases.
-Stream fragments with the same index or ID accumulate in order. Blocks without
-either identifier remain separate; the Router does not infer their identity.
+and streaming deltas. Text, summary, encrypted, and server tool call blocks keep
+their order, IDs, format, index, and signatures when responses are returned or
+replayed in a follow-up Chat request. Send the original blocks back with tool
+results; do not summarize or reorder them. A reply also keeps the plain
+reasoning text as `reasoning_content`. In a follow-up request the blocks take
+precedence, and the Router does not forward the `reasoning` or
+`reasoning_content` text a second time.
+Stream fragments accumulate in order when they share a type and an index or ID.
+A fragment of another type under the same index starts a new block, as Gemini
+models do for the encrypted signature of a tool call. Blocks without either
+identifier remain separate; the Router does not infer their identity.
 
-These continuity blocks require the Chat extension. Translation to Responses or
-Messages returns an unsupported `reasoning_continuity` capability error, because
-those codecs cannot preserve the complete OpenRouter block contract. Ordinary
-text reasoning without `reasoning_details` continues to translate across formats.
+Only Chat Completions carries these blocks. A Responses or Messages client of a
+Chat backend still gets the reply: the Router drops the blocks, keeps the
+reasoning text, and reports `dropped;...;reasoning_details` in
+`x-vsr-protocol-warnings` for buffered replies, or in the protocol diagnostics
+of a stream. A request whose history contains the blocks cannot be sent to a
+Responses or Messages backend and fails with `unsupported_capability`.
+Candidate selection does not avoid those backends unless
+`candidate_requirements.capabilities` is `declared`.
 
 ## Routing errors
 

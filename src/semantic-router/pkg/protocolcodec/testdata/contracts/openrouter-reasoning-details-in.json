@@ -30,8 +30,19 @@
               "id": "r2",
               "format": "openai-responses-v1",
               "index": 2
+            },
+            {
+              "type": "reasoning.server_tool_call",
+              "tool_name": "openrouter:web_search",
+              "arguments": "{\"query\":\"weather\"}",
+              "result": "{\"status\":\"ok\"}",
+              "tool_call_id": "call_server_1",
+              "id": null,
+              "format": "unknown",
+              "index": 3
             }
-          ]
+          ],
+          "reasoning": "Think"
         },
         "finish_reason": "stop"
       }
@@ -66,6 +77,16 @@
               "id": "r2",
               "format": "openai-responses-v1",
               "index": 2
+            },
+            {
+              "type": "reasoning.server_tool_call",
+              "tool_name": "openrouter:web_search",
+              "arguments": "{\"query\":\"weather\"}",
+              "result": "{\"status\":\"ok\"}",
+              "tool_call_id": "call_server_1",
+              "id": null,
+              "format": "unknown",
+              "index": 3
             }
           ]
         },

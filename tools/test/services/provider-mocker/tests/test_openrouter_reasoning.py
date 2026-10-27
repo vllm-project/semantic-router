@@ -7,6 +7,8 @@ from provider_mocker.openrouter_fixture import (
     ANSWER,
     REASONING_DETAILS,
     REASONING_MARKER,
+    REASONING_TEXT,
+    STREAMED_DETAILS,
     TOOL_CALL,
 )
 from provider_mocker.settings import Settings
@@ -26,17 +28,17 @@ async def test_openrouter_tool_turn_requires_original_reasoning_blocks(streamed)
         first = await client.post("/v1/chat/completions", json=request)
         assert first.status_code == 200
         if streamed:
-            assert '"reasoning_details"' in first.text
+            assert first.text.count('"reasoning_details"') == 3
             assert '"finish_reason": "tool_calls"' in first.text
         else:
-            assert (
-                first.json()["choices"][0]["message"]["reasoning_details"]
-                == REASONING_DETAILS
-            )
+            message = first.json()["choices"][0]["message"]
+            assert message["reasoning_details"] == REASONING_DETAILS
+            assert message["reasoning"] == REASONING_TEXT
+        details = STREAMED_DETAILS if streamed else REASONING_DETAILS
         assistant = {
             "role": "assistant",
             "content": None,
-            "reasoning_details": REASONING_DETAILS,
+            "reasoning_details": details,
             "tool_calls": [TOOL_CALL],
         }
         request["messages"] += [
@@ -46,6 +48,6 @@ async def test_openrouter_tool_turn_requires_original_reasoning_blocks(streamed)
         second = await client.post("/v1/chat/completions", json=request)
         assert second.status_code == 200
         assert ANSWER in second.text
-        assistant["reasoning_details"] = list(reversed(REASONING_DETAILS))
+        assistant["reasoning_details"] = list(reversed(details))
         rejected = await client.post("/v1/chat/completions", json=request)
         assert rejected.status_code == 400

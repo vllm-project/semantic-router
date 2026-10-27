@@ -456,8 +456,7 @@ func isCustomToolCall(content Content) bool {
 
 func ParseCapabilities(names []string) (CapabilitySet, error) {
 	lookup := map[string]Capability{
-		"reasoning_continuity": CapabilityReasoningContinuity,
-		"text":                 CapabilityText, "chat": CapabilityText, "image_input": CapabilityImageInput,
+		"text": CapabilityText, "chat": CapabilityText, "image_input": CapabilityImageInput,
 		"image_output": CapabilityImageOutput, "audio_input": CapabilityAudioInput,
 		"audio_output": CapabilityAudioOutput, "video_input": CapabilityVideoInput,
 		"video_output": CapabilityVideoOutput, "file_input": CapabilityFileInput,
@@ -491,6 +490,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"image_generation":      CapabilityImageGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
+		"reasoning_continuity":  CapabilityReasoningContinuity,
 	}
 	var set CapabilitySet
 	for _, name := range names {

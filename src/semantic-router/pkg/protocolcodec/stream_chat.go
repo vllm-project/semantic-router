@@ -112,16 +112,16 @@ type chatChunkChoiceWire struct {
 }
 
 type chatChunkDeltaWire struct {
-	Role               string                        `json:"role,omitempty"`
-	Content            *string                       `json:"content,omitempty"`
-	Reasoning          *string                       `json:"reasoning_content,omitempty"`
-	AlternateReasoning *string                       `json:"reasoning,omitempty"`
-	ReasoningDetails   []llmprotocol.ReasoningDetail `json:"reasoning_details,omitempty"`
-	Refusal            *string                       `json:"refusal,omitempty"`
-	Audio              *chatAudioOutputWire          `json:"audio,omitempty"`
-	LegacyFunctionCall *chatLegacyCallWire           `json:"function_call,omitempty"`
-	ToolCalls          []chatChunkToolCallWire       `json:"tool_calls,omitempty"`
-	Annotations        []chatAnnotationWire          `json:"annotations,omitempty"`
+	Role               string                    `json:"role,omitempty"`
+	Content            *string                   `json:"content,omitempty"`
+	Reasoning          *string                   `json:"reasoning_content,omitempty"`
+	AlternateReasoning *string                   `json:"reasoning,omitempty"`
+	ReasoningDetails   []chatReasoningDetailWire `json:"reasoning_details,omitempty"`
+	Refusal            *string                   `json:"refusal,omitempty"`
+	Audio              *chatAudioOutputWire      `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire       `json:"function_call,omitempty"`
+	ToolCalls          []chatChunkToolCallWire   `json:"tool_calls,omitempty"`
+	Annotations        []chatAnnotationWire      `json:"annotations,omitempty"`
 }
 
 type chatChunkToolCallWire struct {
@@ -620,13 +620,17 @@ func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire)
 	return []llmprotocol.Event{event}, err
 }
 
+// OpenRouter sends the plain reasoning text beside the typed blocks in each
+// delta. Both are kept, as in a buffered reply: clients render the text, and
+// the provider needs the blocks back.
 func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
-	if len(choice.Delta.ReasoningDetails) > 0 {
-		return decoder.decodeReasoningDetails(choice)
+	events, err := decoder.decodeReasoningDetails(choice)
+	if err != nil {
+		return nil, err
 	}
 	reasoning := chatDeltaReasoning(choice)
 	if reasoning == nil {
-		return nil, nil
+		return events, nil
 	}
 	decoder.lastWasReasoning = true
 	content := llmprotocol.Content{
@@ -637,7 +641,7 @@ func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWir
 		ContentIndex: decoder.chatContentIndex(choice.Index, llmprotocol.ContentReasoning),
 		Delta:        *reasoning, Content: &content,
 	})
-	return []llmprotocol.Event{event}, err
+	return append(events, event), err
 }
 
 func (decoder *chatStreamDecoder) decodeRefusalDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
@@ -880,7 +884,7 @@ func (encoder *chatStreamEncoder) applyChatReasoningDelta(
 	choice *chatChunkChoiceWire,
 ) (llmprotocol.Diagnostics, bool, error) {
 	if event.Content != nil && event.Content.ReasoningDetail != nil {
-		choice.Delta.ReasoningDetails = []llmprotocol.ReasoningDetail{*event.Content.ReasoningDetail}
+		choice.Delta.ReasoningDetails = []chatReasoningDetailWire{encodeChatReasoningDetail(*event.Content.ReasoningDetail)}
 		return nil, true, nil
 	}
 	diagnostics, err := encoder.reasoningDiagnostics(event)

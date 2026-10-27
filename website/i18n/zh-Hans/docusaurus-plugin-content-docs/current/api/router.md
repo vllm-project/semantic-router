@@ -144,16 +144,20 @@ deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从�
 GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-protocol-warnings` 中说明。
 
 Chat Completions 支持 assistant 消息及流式 delta 中的 OpenRouter
-`reasoning_details`。文本、摘要和加密推理块在响应及下一轮 Chat 请求中保留
-原顺序、ID、格式、索引和签名。工具调用返回结果时应回传原始块，不要摘要或重排。
-当类型化详情存在时，中间表示优先采用它们，避免重复处理 `reasoning` 或
-`reasoning_content` 中的文本。
-带相同索引或 ID 的流式片段按顺序累积；同时缺少这两个标识的块保持独立，
-Router 不推断它们是否属于同一块。
+`reasoning_details`。文本、摘要、加密和服务端工具调用块在响应及下一轮 Chat
+请求中保留原顺序、ID、格式、索引和签名。工具调用返回结果时应回传原始块，
+不要摘要或重排。响应同时以 `reasoning_content` 保留普通推理文本。在下一轮请求中
+类型化块优先，Router 不会把 `reasoning` 或 `reasoning_content` 中的文本再转发一次。
+类型相同且索引或 ID 相同的流式片段按顺序累积；同一索引下出现另一种类型的片段时
+会开始一个新块，例如 Gemini 模型为工具调用发送的加密签名。同时缺少索引和 ID 的块
+保持独立，Router 不推断它们是否属于同一块。
 
-这些连续性数据需要 Chat 扩展。Responses 和 Messages 编解码器尚不能完整保留
-OpenRouter 推理块，因此跨协议转换会返回 `reasoning_continuity` 能力不支持错误。
-不带 `reasoning_details` 的普通文本推理仍支持跨协议转换。
+只有 Chat Completions 能承载这些块。Responses 或 Messages 客户端使用 Chat 后端时
+仍会得到响应：Router 丢弃这些块、保留推理文本，并在缓冲响应的
+`x-vsr-protocol-warnings` 或流式响应的协议诊断中报告
+`dropped;...;reasoning_details`。历史中带有这些块的请求无法发送到 Responses 或
+Messages 后端，会返回 `unsupported_capability`。除非
+`candidate_requirements.capabilities` 设为 `declared`，候选选择不会主动避开这些后端。
 
 ## 路由错误 {#routing-errors}
 

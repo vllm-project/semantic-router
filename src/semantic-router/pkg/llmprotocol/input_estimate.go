@@ -39,8 +39,9 @@ func EstimateInput(request *Request) InputEstimate {
 				estimate.TextBytes = SaturatingTokenSum(estimate.TextBytes, len(content.Text))
 				if detail := content.ReasoningDetail; detail != nil {
 					estimate.TextBytes = SaturatingTokenSum(estimate.TextBytes, len(detail.Text.Value), len(detail.Summary.Value))
-					estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(detail.Data.Value), len(detail.Signature.Value))
-					estimate.HasNonText = estimate.HasNonText || detail.Data.Present || detail.Signature.Present
+					estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(detail.Data.Value), len(detail.Signature.Value),
+						len(detail.ToolName.Value), len(detail.ToolCallID.Value), len(detail.Arguments.Value), len(detail.Result.Value))
+					estimate.HasNonText = estimate.HasNonText || detail.PayloadBytes() > len(detail.Text.Value)+len(detail.Summary.Value)
 				}
 			case ContentImage:
 				estimate.HasNonText = true

@@ -232,7 +232,7 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 		return appendChatTextField(&state.wire.Refusal, content)
 	case llmprotocol.ContentReasoning:
 		if content.ReasoningDetail != nil {
-			state.wire.ReasoningDetails = append(state.wire.ReasoningDetails, *content.ReasoningDetail)
+			state.wire.ReasoningDetails = append(state.wire.ReasoningDetails, encodeChatReasoningDetail(*content.ReasoningDetail))
 			return nil
 		}
 		return appendChatTextField(&state.wire.Reasoning, content)

@@ -637,9 +637,7 @@ func validateContent(content Content, blocks *int, limits Limits, depth int) err
 		return NewError(ErrorInvalidRequest, "tool_result_depth", "nested tool result depth exceeded", nil)
 	}
 	if content.ReasoningDetail != nil {
-		copy := content
-		copy.ReasoningDetail = nil
-		if content.Kind != ContentReasoning || content.Text != "" || content.Signature != "" || content.Reasoning != "" || hasNonTextFields(copy) || len(content.Citations) != 0 || content.Cache != nil {
+		if content.Kind != ContentReasoning || content.Text != "" || content.Signature != "" || content.Reasoning != "" || hasNonTextFields(content) || len(content.Citations) != 0 || content.Cache != nil {
 			return NewError(ErrorInvalidRequest, "invalid_reasoning_detail", "continuity block contains unrelated content fields", nil)
 		}
 		return ValidateReasoningDetail(*content.ReasoningDetail, limits)
