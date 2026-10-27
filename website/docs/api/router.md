@@ -339,8 +339,11 @@ A request whose history contains the blocks cannot be sent to a Responses or
 Messages backend and fails with `unsupported_capability`. Candidate selection
 does not avoid those backends unless `candidate_requirements.capabilities` is
 `declared`. Looper decisions and context compression recovery build their
-internal calls in a form that cannot carry the blocks, so they fail instead of
-sending a request without them.
+internal calls in a form that cannot carry the blocks, so the Router refuses
+those calls rather than send them without the blocks. A Looper decision returns
+400. A refused recovery follows the plugin's `failure_mode`: `fail_closed`
+returns 502, and `fail_open`, the default, returns the original reply without
+its retrieval calls.
 
 ## Routing errors
 

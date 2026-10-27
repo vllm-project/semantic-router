@@ -163,7 +163,9 @@ Router 自行生成的 Chat 流（例如缓存重放）使用 `reasoning_content
 历史中带有这些块的请求无法发送到 Responses 或 Messages 后端，会返回
 `unsupported_capability`。除非 `candidate_requirements.capabilities` 设为
 `declared`，候选选择不会主动避开这些后端。Looper 决策和上下文压缩恢复构造内部
-调用时无法承载这些块，因此会直接失败，而不是发送缺少这些块的请求。
+调用时无法承载这些块，因此 Router 会拒绝执行这类内部调用，而不是在缺少这些块的
+情况下发出。Looper 决策返回 400。被拒绝的上下文恢复按插件的 `failure_mode` 处理：
+`fail_closed` 返回 502，默认的 `fail_open` 返回去掉检索调用的原始响应。
 
 ## 路由错误 {#routing-errors}
 
