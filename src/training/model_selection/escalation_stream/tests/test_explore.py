@@ -20,7 +20,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.training.model_selection.escalation_stream.explore import (  # noqa: E402
     ALWAYS,
-    NEVER,
     apply_threshold,
     evaluate,
     fit_threshold,
