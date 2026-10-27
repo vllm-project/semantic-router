@@ -35,8 +35,8 @@ plugins:
   - type: request_params
     configuration:
       blocked_params:
-        - logprobs
-        - top_logprobs
+        - temperature
+        - top_p
       max_tokens_limit: 500
       max_n: 1
 ```
@@ -45,7 +45,7 @@ plugins:
 
 ```dsl
 PLUGIN request_params {
-  blocked_params: ["logprobs", "top_logprobs"]
+  blocked_params: ["temperature", "top_p"]
   max_tokens_limit: 500
   max_n: 1
 }
