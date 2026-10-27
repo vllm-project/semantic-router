@@ -1006,6 +1006,10 @@ question), and `run` batches each call as the released runtime does, by
 length under its token budget; calls never share a forward. The padded
 layout passes the modeling code's additive float masks, so the forwards are
 bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+On a GPU, rows of 4,096 tokens or more skip those `[rows, 1, width, width]`
+masks: global layers read a key mask (none without padding) and local layers
+attend in 128-query blocks over their ±128 keys, so memory grows with the
+width rather than its square.
 The span and router layout, word units and span decoder are the Vela 2.0
 family's, which the package copies verbatim.
 
