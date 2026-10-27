@@ -22,6 +22,9 @@ from ..plugins.base import DeviceInfo
 
 SOURCE = "flash-attn-3"
 HEAD_DIM = 256
+# ``sm_{major}{minor}`` keeps the minor version in the last digit (``sm_90``, ``sm_100``).
+_ARCH_MINOR_DIGITS = 1
+HOPPER_MAJOR = 9
 DTYPES = (torch.bfloat16, torch.float16)
 # Positional arguments of ``flash_attn_varlen_func``, in order.
 _VARLEN_ARGS = (
@@ -44,9 +47,9 @@ def capability_major(arch: str | None) -> int | None:
     with a one-digit minor (``sm_90`` is 9.0, ``sm_100`` is 10.0).
     """
     text = (arch or "").removeprefix("sm_")
-    if len(text) < 2 or not text.isdigit():
+    if len(text) <= _ARCH_MINOR_DIGITS or not text.isdigit():
         return None
-    return int(text[:-1])
+    return int(text[:-_ARCH_MINOR_DIGITS])
 
 
 def load() -> Varlen | None:
@@ -67,7 +70,7 @@ def unavailable(device: DeviceInfo) -> str | None:
     if device.accelerator != "cuda":
         return f"{device.label} is not a CUDA device"
     major = capability_major(device.arch)
-    if major != 9:
+    if major != HOPPER_MAJOR:
         shown = device.arch or "unknown"
         return (
             f"{device.label} is {shown}; FlashAttention-3 runs on Hopper "

@@ -199,7 +199,7 @@ def test_flash_attention_3_refuses_to_load_off_hopper(tmp_path):
         encoder=True,
     )
     accelerator = CPUAccelerator()
-    with pytest.raises(RuntimeError, match="flash_attention_3: .*not a CUDA device"):
+    with pytest.raises(RuntimeError, match=r"flash_attention_3: .*not a CUDA device"):
         NativeEngine().load(
             spec,
             accelerator,
