@@ -29,6 +29,9 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 				"messages[].output_config.effort", "Responses cannot apply Anthropic per-message effort")
 		}
 	}
+	if hasParticipantNames(request) {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Responses has no participant names")
+	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
 			"context_management", "Responses cannot apply Anthropic context edits"); err != nil {
