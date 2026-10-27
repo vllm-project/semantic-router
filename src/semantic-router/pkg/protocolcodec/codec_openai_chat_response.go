@@ -16,6 +16,12 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if err := validateChatResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	// The execution-field check keeps its strict-priority slot ahead of the
+	// fingerprint validation, matching the decode-time rejection it replaced.
+	responsePassthrough, err := captureChatResponsePassthrough(body, policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
 	if err := validateChatExecutionMetadata(wire.SystemFingerprint); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -52,6 +58,9 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
 	envelope.ResponseReencodeRequired = needsReencode
+	if len(responsePassthrough) > 0 {
+		envelope.ResponsePassthrough = responsePassthrough
+	}
 	return response, envelope, diagnostics, nil
 }
 
@@ -218,7 +227,7 @@ func decodeChatChoices(wire chatResponseWire, response *llmprotocol.Response, po
 }
 
 func decodeChatChoiceItem(choice chatChoiceWire, responseID string, policy llmprotocol.Policy) (llmprotocol.OutputItem, error) {
-	if err := validateChatChoiceExtensions(choice); err != nil {
+	if err := validateChatChoiceExtensions(choice, policy); err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
 	message, err := decodeChatResponseMessage(choice.Message, choice.Index, policy)
@@ -308,6 +317,15 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 	wire.Choices = choices
 	wire.Usage = encodeChatUsage(response.Usage)
 	body, err := marshalWire(wire)
+	if err != nil {
+		return nil, diagnostics, err
+	}
+	if len(envelope.ResponsePassthrough) > 0 {
+		// A re-rendered response (provider decorations, response-id rewrite)
+		// still owes the same-format client its preserved top-level fields.
+		// Encoder-produced fields win, mirroring the request merge.
+		body, err = mergeChatPassthrough(body, envelope.ResponsePassthrough)
+	}
 	return body, diagnostics, err
 }
 

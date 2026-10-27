@@ -9,16 +9,20 @@ import (
 )
 
 type streamState struct {
-	context               llmprotocol.StreamContext
-	policy                llmprotocol.Policy
-	providerID            string
-	providerModel         string
-	sequence              uint64
-	events                int
-	wireFrames            int
-	wireBytes             int
-	terminal              bool
-	started               bool
+	context       llmprotocol.StreamContext
+	policy        llmprotocol.Policy
+	providerID    string
+	providerModel string
+	sequence      uint64
+	events        int
+	wireFrames    int
+	wireBytes     int
+	terminal      bool
+	started       bool
+	// sawOpaqueOutput marks a stream whose output was delivered through
+	// forwarded provider frames; its completion must not fail the
+	// no-neutral-output gate.
+	sawOpaqueOutput       bool
 	usage                 llmprotocol.Usage
 	stop                  llmprotocol.StopReason
 	items                 map[int]bool
@@ -184,7 +188,15 @@ func (state *streamState) prepareLifecycleEvent(event llmprotocol.Event) (llmpro
 	if event.Type == llmprotocol.EventResponseStarted {
 		return state.prepareStartEvent(event)
 	}
-	if event.Type != llmprotocol.EventProviderOpaque && event.Type != llmprotocol.EventResponseFailed && !state.started {
+	if event.Type == llmprotocol.EventProviderOpaque {
+		// A forwarded provider frame proves by itself that the stream started
+		// and delivered output, so the encoder-side copy of this state must
+		// not fail the stream's completion gates later.
+		state.started = true
+		state.sawOpaqueOutput = true
+		return event, nil
+	}
+	if event.Type != llmprotocol.EventResponseFailed && !state.started {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_start_missing", "upstream stream emitted output before response start", nil)
 	}
 	return event, nil

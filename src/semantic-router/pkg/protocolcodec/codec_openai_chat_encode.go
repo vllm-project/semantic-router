@@ -56,7 +56,30 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		return nil, diagnostics, encodeErr
 	}
 	body, encodeErr := marshalWire(wire)
+	if encodeErr != nil {
+		return nil, diagnostics, encodeErr
+	}
+	if len(envelope.RequestPassthrough) > 0 {
+		body, encodeErr = mergeChatPassthrough(body, envelope.RequestPassthrough)
+	}
 	return body, diagnostics, encodeErr
+}
+
+// mergeChatPassthrough restores top-level fields the neutral contract does not
+// model. Fields the encoder produced win, so model selection and every other
+// semantic mutation are never overwritten by the original request.
+func mergeChatPassthrough(body []byte, passthrough map[string]json.RawMessage) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return nil, err
+	}
+	for name, raw := range passthrough {
+		if _, exists := fields[name]; exists {
+			continue
+		}
+		fields[name] = raw
+	}
+	return json.Marshal(fields)
 }
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
@@ -116,7 +139,9 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 
 func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) error {
 	for _, instruction := range request.Instructions {
-		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content})
+		encoded, err := encodeChatMessage(llmprotocol.Message{
+			Role: instruction.Role, Content: instruction.Content, Unknown: instruction.Unknown,
+		})
 		if err != nil {
 			return err
 		}
@@ -196,7 +221,7 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 	if err != nil {
 		return chatMessageWire{}, err
 	}
-	wire := chatMessageWire{ID: message.ID, Role: role}
+	wire := chatMessageWire{ID: message.ID, Role: role, Unknown: message.Unknown}
 	state := chatMessageEncodingState{wire: &wire, parts: make([]chatContentWire, 0, len(message.Content))}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {

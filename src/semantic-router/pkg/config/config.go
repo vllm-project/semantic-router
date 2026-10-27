@@ -259,13 +259,21 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
-	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
-	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	RouterEnabled          *bool `yaml:"router_enabled,omitempty"`
+	ListBackendModels      bool  `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache        bool  `yaml:"clear_route_cache"`
+	StreamedBodyMode       bool  `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes   int64 `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec int   `yaml:"streamed_body_timeout_sec,omitempty"`
+	// PreserveUnknownChatFields keeps OpenAI Chat fields the neutral
+	// contract does not model, in both directions: unknown request fields
+	// (top-level and per-message) travel to a same-format backend and
+	// survive router mutations, and provider response fields (streamed
+	// logprobs, audio, execution fields, vendor extensions) travel back to
+	// a same-format client. Unset keeps the default behavior of rejecting
+	// such requests at ingress and such responses after decode.
+	PreserveUnknownChatFields bool                 `yaml:"preserve_unknown_chat_fields,omitempty"`
+	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

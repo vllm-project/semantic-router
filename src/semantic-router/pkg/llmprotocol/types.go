@@ -114,11 +114,20 @@ type Message struct {
 	Role            Role
 	Content         []Content
 	ReasoningEffort string // Anthropic per-message output_config.effort.
+	// Unknown preserves wire fields this message carried that the neutral
+	// contract does not model. It travels with the message so router
+	// mutations that reorder, inject, or drop messages keep each captured
+	// field on its original message. Same-format encoding merges it back;
+	// it is never translated across formats.
+	Unknown map[string]json.RawMessage `json:"-"`
 }
 
 type InstructionBlock struct {
 	Role    Role
 	Content []Content
+	// Unknown has the same per-message passthrough contract as
+	// Message.Unknown.
+	Unknown map[string]json.RawMessage `json:"-"`
 }
 
 type ToolCall struct {
