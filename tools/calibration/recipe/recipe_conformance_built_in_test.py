@@ -273,7 +273,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 if recipe.required_devices
             }
             self.assertEqual(sum(row["variants"] for row in built_in), 347)
-            hardware = {"decision-balance", "vela-amd"}
+            self.assertIn("gb10", hardware)
             self.assertTrue(
                 all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )
