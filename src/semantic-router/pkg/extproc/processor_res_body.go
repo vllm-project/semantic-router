@@ -45,10 +45,10 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		if contextRecoveryFailClosed(ctx) {
 			return r.createErrorResponse(502, "Context recovery followup failed"), nil
 		}
-		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
+	responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 
 	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency), nil
 }
