@@ -1,4 +1,4 @@
-"""The fla-npu chunk slot with the wrapper faked: unit-tested without fla_npu or a device."""
+﻿"""The fla-npu chunk slot with the wrapper faked: unit-tested without fla_npu or a device."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def fake_wrapper(monkeypatch):
     package.flash_gated_delta_rule = module  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "fla_npu", package)
     monkeypatch.setitem(sys.modules, "fla_npu.flash_gated_delta_rule", module)
-    monkeypatch.setattr(npu_fla, "_wrapper", False)
+    monkeypatch.setattr(npu_fla, "_CACHE", {})
     return fake_flash_gated_delta_rule
 
 
@@ -77,7 +77,7 @@ def test_chunk_stays_reference_on_unmeasured_socs(fake_wrapper):
 def test_chunk_stays_reference_without_the_wrapper(monkeypatch):
     """An install without fla-npu leaves the reference kernel in the slot."""
     monkeypatch.delenv("FLA_NPU_EXAMPLES", raising=False)
-    monkeypatch.setattr(npu_fla, "_wrapper", False)
+    monkeypatch.setattr(npu_fla, "_CACHE", {})
     accelerator = NPUAccelerator()
     kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch="Ascend950DT"))
     assert kernels.select("chunk_gated_delta_rule").source == "torch-reference"
@@ -92,7 +92,7 @@ def test_wrapper_loaded_from_the_examples_directory(monkeypatch):
     module.flash_gated_delta_rule = fake_flash_gated_delta_rule
     monkeypatch.setitem(sys.modules, "flash_gated_delta_rule", module)
     monkeypatch.setenv("FLA_NPU_EXAMPLES", "/fake/examples")
-    monkeypatch.setattr(npu_fla, "_wrapper", False)
+    monkeypatch.setattr(npu_fla, "_CACHE", {})
     wrapper = npu_fla._load_wrapper()
     assert wrapper is fake_flash_gated_delta_rule
 
@@ -102,7 +102,7 @@ def test_wrapper_loader_without_any_install(monkeypatch):
     monkeypatch.delenv("FLA_NPU_EXAMPLES", raising=False)
     monkeypatch.delitem(sys.modules, "fla_npu", raising=False)
     monkeypatch.delitem(sys.modules, "flash_gated_delta_rule", raising=False)
-    monkeypatch.setattr(npu_fla, "_wrapper", False)
+    monkeypatch.setattr(npu_fla, "_CACHE", {})
     assert npu_fla._load_wrapper() is None
 
 
@@ -132,7 +132,7 @@ def test_wrapper_guards_non_bf16_inputs(fake_wrapper, monkeypatch):
         calls.append(args)
         return fake_flash_gated_delta_rule(*args, **kw)
 
-    monkeypatch.setattr(npu_fla, "_wrapper", counting_wrapper)
+    monkeypatch.setattr(npu_fla, "_CACHE", {"wrapper": counting_wrapper})
     torch.manual_seed(0)
     batch, time, heads, dim = 1, 96, 32, 128
     query = torch.randn(batch, time, heads, dim, dtype=torch.float32)

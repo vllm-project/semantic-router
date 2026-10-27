@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -35,7 +36,7 @@ from .kernels import chunk_gated_delta_rule_ref
 # rocm.py precedent of exact/approximate only where measured.
 MEASURED = frozenset({"Ascend950DT"})
 
-_wrapper: Callable[..., Any] | None | bool = False
+_CACHE: dict[str, Callable[..., Any] | None] = {}
 
 
 def _load_wrapper() -> Callable[..., Any] | None:
@@ -62,13 +63,12 @@ def _load_wrapper() -> Callable[..., Any] | None:
 
 def available_wrapper() -> Callable[..., Any] | None:
     """The fla-npu chunk wrapper this install provides, loaded once, else ``None``."""
-    global _wrapper
-    if _wrapper is False:
+    if "wrapper" not in _CACHE:
         try:
-            _wrapper = _load_wrapper()
+            _CACHE["wrapper"] = _load_wrapper()
         except Exception:
-            _wrapper = None
-    return _wrapper
+            _CACHE["wrapper"] = None
+    return _CACHE["wrapper"]
 
 
 def chunk_gated_delta_rule(
