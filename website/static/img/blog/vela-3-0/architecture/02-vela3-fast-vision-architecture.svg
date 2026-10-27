@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1560" viewBox="0 0 1640 1560" role="img"><title>vela3-fast-vision: model architecture</title><desc>Three UltraVBERT backbone files on the vision side, each with its own task head, plus the frozen text encoder with the text adapters. Each question runs on one network. Read bottom to top.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="250" y="58.0" font-size="25" text-anchor="middle" class="">Image + text decisions</text>
+<text x="250" y="88.0" font-size="22" text-anchor="middle" class="">Choice · Noul</text>
+<g data-box="75.0 130 350 80">
+<rect x="75.0" y="130" width="350" height="80" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="250" y="164.60999999999999" font-size="22" text-anchor="middle" class="">Mean of each option&#x27;s tokens</text>
+<text x="250" y="190.35" font-size="22" text-anchor="middle" class="">→ head → softmax</text>
+</g>
+<g data-box="75.0 260 350 80">
+<rect x="75.0" y="260" width="350" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="250" y="294.61" font-size="22" text-anchor="middle" class="">Head: Linear · GELU</text>
+<text x="250" y="320.35" font-size="22" text-anchor="middle" class="">· LayerNorm · Linear → 1</text>
+</g>
+<g data-box="75.0 390 350 80">
+<rect x="75.0" y="390" width="350" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="250" y="424.61" font-size="22" text-anchor="middle" class="">Decision-trained backbone</text>
+<text x="250" y="450.35" font-size="22" text-anchor="middle" class="">backbone_h2 · head only</text>
+</g>
+<path d="M250,129 L250,100" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M250,259 L250,211" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M250,389 L250,341" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="640" y="58.0" font-size="25" text-anchor="middle" class="">Region pointing</text>
+<text x="640" y="88.0" font-size="22" text-anchor="middle" class="">box + point</text>
+<g data-box="465.0 130 350 80">
+<rect x="465.0" y="130" width="350" height="80" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="640" y="164.60999999999999" font-size="22" text-anchor="middle" class="">One logit per image token</text>
+<text x="640" y="190.35" font-size="22" text-anchor="middle" class="">64 × 64 px cells</text>
+</g>
+<g data-box="465.0 260 350 80">
+<rect x="465.0" y="260" width="350" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="640" y="294.61" font-size="22" text-anchor="middle" class="">Head: Linear · GELU</text>
+<text x="640" y="320.35" font-size="22" text-anchor="middle" class="">· LayerNorm · Linear → 1</text>
+</g>
+<g data-box="465.0 390 350 80">
+<rect x="465.0" y="390" width="350" height="80" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="640" y="424.61" font-size="22" text-anchor="middle" class="">Decision-trained backbone</text>
+<text x="640" y="450.35" font-size="22" text-anchor="middle" class="">backbone_v2 + LoRA r64</text>
+</g>
+<path d="M640,129 L640,100" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M640,259 L640,211" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M640,389 L640,341" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1030" y="58.0" font-size="25" text-anchor="middle" class="">Image hallucination spans</text>
+<text x="1030" y="88.0" font-size="22" text-anchor="middle" class="">· OCR check</text>
+<g data-box="855.0 130 350 80">
+<rect x="855.0" y="130" width="350" height="80" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1030" y="164.60999999999999" font-size="22" text-anchor="middle" class="">One logit per answer word</text>
+<text x="1030" y="190.35" font-size="22" text-anchor="middle" class="">first sub-token</text>
+</g>
+<g data-box="855.0 260 350 80">
+<rect x="855.0" y="260" width="350" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1030" y="294.61" font-size="22" text-anchor="middle" class="">Head: Linear · GELU</text>
+<text x="1030" y="320.35" font-size="22" text-anchor="middle" class="">· LayerNorm · Linear → 1</text>
+</g>
+<g data-box="855.0 390 350 80">
+<rect x="855.0" y="390" width="350" height="80" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1030" y="424.61" font-size="22" text-anchor="middle" class="">Original UltraVBERT</text>
+<text x="1030" y="450.35" font-size="22" text-anchor="middle" class="">model + LoRA r64</text>
+</g>
+<path d="M1030,129 L1030,100" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1030,259 L1030,211" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1030,389 L1030,341" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="60" y="520" width="1160" height="690" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<text x="640.0" y="556.0" font-size="25" text-anchor="middle" class="serif">UltraVBERT topology of each backbone file (weights differ per file)</text>
+<g data-box="240.0 590 800 120">
+<rect x="240.0" y="590" width="800" height="120" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="640" y="631.74" font-size="22" text-anchor="middle" class="">UltraBERT-150M text encoder, bidirectional</text>
+<text x="640" y="657.48" font-size="22" text-anchor="middle" class="">24 layers · hidden 768 · SwiGLU 768 → 1,024 → 768</text>
+<text x="640" y="683.22" font-size="22" text-anchor="middle" class="">6 heads × 128 · local |i − j| ≤ 128 · every third layer global</text>
+</g>
+<g data-box="140.0 850 380 80">
+<rect x="140.0" y="850" width="380" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="884.61" font-size="22" text-anchor="middle" class="">Image tokens</text>
+<text x="330" y="910.35" font-size="22" text-anchor="middle" class="">320 per image at 1024 px</text>
+</g>
+<g data-box="760.0 850 380 80">
+<rect x="760.0" y="850" width="380" height="80" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="950" y="884.61" font-size="22" text-anchor="middle" class="">Text tokens</text>
+<text x="950" y="910.35" font-size="22" text-anchor="middle" class="">question, options, state</text>
+</g>
+<path d="M330,849 L330,760 L560,760 L560,711" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M950,849 L950,760 L720,760 L720,711" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="140.0 980 380 80">
+<rect x="140.0" y="980" width="380" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="1014.61" font-size="22" text-anchor="middle" class="">Pixel shuffle ×4</text>
+<text x="330" y="1040.35" font-size="22" text-anchor="middle" class="">+ connector (LayerNorm)</text>
+</g>
+<g data-box="140.0 1105 380 80">
+<rect x="140.0" y="1105" width="380" height="80" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="1139.6100000000001" font-size="22" text-anchor="middle" class="">SigLIP2-B/16 vision encoder</text>
+<text x="330" y="1165.3500000000001" font-size="22" text-anchor="middle" class="">12 layers · hidden 768 · 12 heads</text>
+</g>
+<path d="M330,979 L330,931" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M330,1104 L330,1061" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="330" y="1240.0" font-size="22" text-anchor="middle" class="">2 × 2 tiles of 512 px</text>
+<text x="330" y="1265.74" font-size="22" text-anchor="middle" class="">+ one global view</text>
+<path d="M330,1218 L330,1186" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="950" y="1240.0" font-size="22" text-anchor="middle" class="">state up to</text>
+<text x="950" y="1265.74" font-size="22" text-anchor="middle" class="">1,024 tokens (decisions)</text>
+<path d="M950,1218 L950,931" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M250,520 L250,471" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M640,520 L640,471" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1030,520 L1030,471" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="1260" y="120" width="340" height="1090" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="156.0" font-size="25" text-anchor="middle" class="serif">Text side (frozen)</text>
+<g data-box="1285.0 230 290 80">
+<rect x="1285.0" y="230" width="290" height="80" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1430" y="264.61" font-size="22" text-anchor="middle" class="">Router answers</text>
+<text x="1430" y="290.35" font-size="22" text-anchor="middle" class="">· text spans · NER</text>
+</g>
+<g data-box="1285.0 380 290 80">
+<rect x="1285.0" y="380" width="290" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1430" y="414.61" font-size="22" text-anchor="middle" class="">vela3-fast runtime</text>
+<text x="1430" y="440.35" font-size="22" text-anchor="middle" class="">heads per adapter</text>
+</g>
+<g data-box="1285.0 530 290 150">
+<rect x="1285.0" y="530" width="290" height="150" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1430" y="575.285" font-size="21" text-anchor="middle" class="">Text adapters</text>
+<text x="1430" y="599.855" font-size="21" text-anchor="middle" class="">router (r64) · span (r64)</text>
+<text x="1430" y="624.425" font-size="21" text-anchor="middle" class="">NER (r128) · domain</text>
+<text x="1430" y="648.995" font-size="21" text-anchor="middle" class="">· feedback</text>
+</g>
+<g data-box="1285.0 770 290 110">
+<rect x="1285.0" y="770" width="290" height="110" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="1430" y="807.5699999999999" font-size="21" text-anchor="middle" class="">Original UltraVBERT</text>
+<text x="1430" y="832.14" font-size="21" text-anchor="middle" class="">text encoder</text>
+<text x="1430" y="856.7099999999999" font-size="21" text-anchor="middle" class="">UltraBERT-150M, frozen</text>
+</g>
+<path d="M1430,229 L1430,178" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,379 L1430,311" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,529 L1430,461" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,769 L1430,681" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1430" y="960.0" font-size="22" text-anchor="middle" class="">Non-router text</text>
+<text x="1430" y="985.74" font-size="22" text-anchor="middle" class="">decisions go to the</text>
+<text x="1430" y="1011.48" font-size="22" text-anchor="middle" class="">decision-trained</text>
+<text x="1430" y="1037.22" font-size="22" text-anchor="middle" class="">backbone (left)</text>
+<text x="820" y="1300.0" font-size="25" text-anchor="middle" class="">Request: state, questions, optional images (decisions up to 3; spans and boxes 1)</text>
+<path d="M1300,1300 L1430,1300 L1430,1211" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="820" y="1400.0" font-size="31" text-anchor="middle" class="serif">vela3-fast-vision (0.3B)</text>
+<text x="820" y="1440.0" font-size="21" text-anchor="middle" class="">Each question is answered by one network: decision, box or span backbone, or the text side.</text>
+<text x="820" y="1472.0" font-size="21" text-anchor="middle" class="">The decision head has no LoRA: the whole decision-trained backbone is its network.</text>
+</svg>
