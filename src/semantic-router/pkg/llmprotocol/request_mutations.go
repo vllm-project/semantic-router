@@ -1,6 +1,9 @@
 package llmprotocol
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // DefaultOutputTokens supplies policy only when the caller has no effective
 // output bound. Model capacity metadata is never a provider default.
@@ -42,11 +45,64 @@ func CapCandidateCount(request *Request, limit *int) bool {
 	return true
 }
 
+// ValidateBlockableRequestField verifies that field names an optional request
+// parameter that BlockRequestField can remove from a neutral Request. It returns
+// an error for empty names, required semantic fields ("model", "messages"), and
+// unrecognized parameters.
+//
+//nolint:cyclop,funlen // Validation is an exhaustive mapping of the public request-parameter vocabulary.
+func ValidateBlockableRequestField(field string) error {
+	switch strings.TrimSpace(field) {
+	case "":
+		return fmt.Errorf("empty parameter name cannot be blocked")
+	case "model", "messages":
+		return fmt.Errorf("required semantic field %q cannot be blocked", field)
+	case "frequency_penalty",
+		"presence_penalty",
+		"max_tokens", "max_completion_tokens", "max_output_tokens",
+		"n", "candidate_count",
+		"response_format", "output_format",
+		"seed",
+		"stop",
+		"temperature",
+		"top_p",
+		"min_p",
+		"repetition_penalty",
+		"cache_salt",
+		"prompt_cache_key",
+		"top_k",
+		"tools",
+		"tool_choice",
+		"parallel_tool_calls",
+		"reasoning_effort",
+		"reasoning_budget_tokens",
+		"reasoning.summary",
+		"reasoning.display",
+		"metadata",
+		"store",
+		"auto_store",
+		"stream",
+		"stream_options",
+		"verbosity", "text.verbosity",
+		"user",
+		"truncation",
+		"previous_response_id",
+		"conversation":
+		return nil
+	default:
+		return fmt.Errorf("parameter %q cannot be blocked", field)
+	}
+}
+
 // BlockRequestField removes a named optional field from the neutral request.
 //
 //nolint:cyclop,funlen // Blocking is an exhaustive mapping of the public request-parameter vocabulary.
 func BlockRequestField(request *Request, field string) (bool, error) {
-	switch field {
+	trimmed := strings.TrimSpace(field)
+	if request == nil {
+		return false, nil
+	}
+	switch trimmed {
 	case "":
 		return false, nil
 	case "model", "messages":
@@ -127,6 +183,14 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		changed := request.ReasoningBudgetTokens != nil
 		request.ReasoningBudgetTokens = nil
 		return changed, nil
+	case "reasoning.summary":
+		changed := request.ReasoningSummary != ""
+		request.ReasoningSummary = ""
+		return changed, nil
+	case "reasoning.display":
+		changed := request.ReasoningDisplay != ""
+		request.ReasoningDisplay = ""
+		return changed, nil
 	case "metadata":
 		changed := len(request.Metadata) > 0
 		request.Metadata = nil
@@ -135,9 +199,37 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		changed := request.Store != nil
 		request.Store = nil
 		return changed, nil
+	case "auto_store":
+		changed := request.AutoStore != nil
+		request.AutoStore = nil
+		return changed, nil
 	case "stream":
 		changed := request.Stream
 		request.Stream = false
+		return changed, nil
+	case "stream_options":
+		changed := request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil
+		request.StreamOptions = StreamOptions{}
+		return changed, nil
+	case "verbosity", "text.verbosity":
+		changed := request.TextVerbosity != ""
+		request.TextVerbosity = ""
+		return changed, nil
+	case "user":
+		changed := request.EndUserID != ""
+		request.EndUserID = ""
+		return changed, nil
+	case "truncation":
+		changed := request.Truncation != ""
+		request.Truncation = ""
+		return changed, nil
+	case "previous_response_id":
+		changed := request.PreviousResponseID != ""
+		request.PreviousResponseID = ""
+		return changed, nil
+	case "conversation":
+		changed := request.ConversationID != ""
+		request.ConversationID = ""
 		return changed, nil
 	default:
 		// Unknown client fields never enter neutral IR; codecs already enforce
