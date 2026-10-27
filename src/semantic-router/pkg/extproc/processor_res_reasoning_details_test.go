@@ -1,12 +1,19 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 func TestOpenRouterReasoningDetailsSurviveRouterResponseAndDispatch(t *testing.T) {
@@ -75,4 +82,77 @@ func TestOpenRouterReasoningDetailsDegradeForMessagesClient(t *testing.T) {
 	require.Contains(t, reply, `"thinking":"thought"`)
 	require.NotContains(t, reply, "opaque")
 	require.Contains(t, protocolDiagnosticsHeader(result.GetResponseBody().GetResponse().GetHeaderMutation()), ";reasoning_details")
+}
+
+func reasoningContinuityHistory(t *testing.T) llmprotocol.Request {
+	t.Helper()
+	body := []byte(`{"model":"model","messages":[{"role":"user","content":"hello"},{"role":"assistant","reasoning_details":[{"type":"reasoning.encrypted","data":"c2ln","id":"call-1","index":0}],"tool_calls":[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}"}}]},{"role":"tool","tool_call_id":"call-1","content":"result"}]}`)
+	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
+	require.NoError(t, err)
+	return request
+}
+
+// Internal Looper calls are built from openai-go parameters, which drop the
+// blocks, so a tool turn that carries them fails before any call is built.
+func TestLooperRefusesReasoningContinuityHistory(t *testing.T) {
+	request := reasoningContinuityHistory(t)
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	decision := &config.Decision{Name: "panel", ModelRefs: []config.ModelRef{{Model: "model"}}, Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmReMoM}}
+	built, rejected := router.buildLooperRequest(&request, decision, &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, TraceContext: t.Context()})
+	require.Nil(t, built)
+	require.EqualValues(t, 400, rejected.GetImmediateResponse().GetStatus().GetCode())
+}
+
+// The recovery followup keeps only the retrieval calls and is sent through a
+// Looper client, so it must fail without sending a request that lacks the blocks.
+func TestContextRecoveryRefusesReasoningContinuity(t *testing.T) {
+	for name, test := range map[string]struct {
+		history bool
+		message string
+	}{
+		"history":   {history: true, message: `"content":null`},
+		"this_turn": {message: `"content":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"c2ln","id":"retrieve-1","index":0}]`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				writer.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+			decision := &config.Decision{
+				Name: "recoverable",
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginContextCompression,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true, "recovery": map[string]interface{}{"enabled": true, "store": "redis"},
+					}),
+				}},
+			}
+			router := &OpenAIRouter{
+				Config:              &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}},
+				CompressionRecovery: &recoveryStoreStub{},
+			}
+			semantic := testNeutralRequest("model", "question")
+			if test.history {
+				history := reasoningContinuityHistory(t)
+				semantic = &history
+			}
+			ctx := &RequestContext{
+				RequestID: "request-1", RequestModel: "model", VSRSelectedModel: "model",
+				VSRSelectedDecisionName: decision.Name, VSRSelectedDecision: decision,
+				ContextCompressionRecoveryKeys: []string{"key-1"},
+				Headers:                        map[string]string{"x-authz-user-id": "user-1"},
+				SourceFormat:                   llmprotocol.OpenAIChatV1, SemanticRequest: semantic,
+			}
+			scope := router.contextCompressionScope(ctx)
+			router.CompressionRecovery.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
+				scope + ":key-1": {Key: "key-1", Scope: scope, Content: "full original context"},
+			}
+			response := []byte(`{"id":"initial","object":"chat.completion","created":1,"model":"model","usage":{"prompt_tokens":10,"completion_tokens":3,"total_tokens":13},"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant",` + test.message + `,"tool_calls":[{"id":"retrieve-1","type":"function","function":{"name":"vsr_context_retrieve","arguments":"{\"key\":\"key-1\"}"}}]}}]}`)
+			_, err := router.handleContextRecoveryFollowup(context.Background(), response, ctx)
+			require.ErrorContains(t, err, "reasoning continuity")
+			require.Zero(t, calls.Load(), "no followup may be sent without the blocks")
+		})
+	}
 }

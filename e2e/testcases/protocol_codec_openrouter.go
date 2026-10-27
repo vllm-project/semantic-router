@@ -200,6 +200,8 @@ func testOpenRouterReasoningForMessagesClient(ctx context.Context, session *fixt
 		if !strings.Contains(body, "Use the lookup tool.") || strings.Contains(body, openRouterOpaqueData) || strings.Contains(body, "reasoning_details") {
 			return fmt.Errorf("a Messages client of OpenRouter reasoning stream=%t did not degrade to the reasoning text: %s", streamed, truncateString(body, 600))
 		}
+		// A stream has sent its headers before the drop is known, so only a
+		// buffered reply can report it in x-vsr-protocol-warnings.
 		if !streamed && !hasProtocolFieldDiagnostic(result.Headers.Get("x-vsr-protocol-warnings"), "dropped", "reasoning_details") {
 			return fmt.Errorf("a Messages client dropped continuity blocks without a diagnostic: %q", result.Headers.Get("x-vsr-protocol-warnings"))
 		}
@@ -259,10 +261,13 @@ func openRouterReasoningAssistant(body []byte, streamed bool) (map[string]any, s
 			return nil, "", fmt.Errorf("OpenRouter reasoning stream emitted an error: %s", chunk.Error)
 		}
 		for _, choice := range chunk.Choices {
-			for _, text := range []*string{choice.Delta.Reasoning, choice.Delta.ReasoningContent} {
-				if text != nil {
-					reasoning.WriteString(*text)
-				}
+			// A same-format Chat stream passes the provider's deltas through, so
+			// the text keeps OpenRouter's field name.
+			if choice.Delta.ReasoningContent != nil {
+				return nil, "", fmt.Errorf("a Chat stream renamed the provider's reasoning field")
+			}
+			if choice.Delta.Reasoning != nil {
+				reasoning.WriteString(*choice.Delta.Reasoning)
 			}
 			for _, fragment := range choice.Delta.Details {
 				details = appendReasoningFragment(details, fragment)

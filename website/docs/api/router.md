@@ -315,8 +315,11 @@ Chat Completions accepts OpenRouter's `reasoning_details` on assistant messages
 and streaming deltas. Text, summary, encrypted, and server tool call blocks keep
 their order, IDs, format, index, and signatures when responses are returned or
 replayed in a follow-up Chat request. Send the original blocks back with tool
-results; do not summarize or reorder them. A reply also keeps the plain
-reasoning text as `reasoning_content`. In a follow-up request the blocks take
+results; do not summarize or reorder them. A buffered reply carries the plain
+reasoning text as `reasoning_content`. A same-format Chat stream passes the
+provider's deltas through and keeps its field name, which for OpenRouter is
+usually `reasoning`; a Chat stream that the Router renders itself, such as a
+cache replay, uses `reasoning_content`. In a follow-up request the blocks take
 precedence, and the Router does not forward the `reasoning` or
 `reasoning_content` text a second time.
 Stream fragments accumulate in order when they share a type and an index or ID.
@@ -325,13 +328,19 @@ models do for the encrypted signature of a tool call. Blocks without either
 identifier remain separate; the Router does not infer their identity.
 
 Only Chat Completions carries these blocks. A Responses or Messages client of a
-Chat backend still gets the reply: the Router drops the blocks, keeps the
-reasoning text, and reports `dropped;...;reasoning_details` in
-`x-vsr-protocol-warnings` for buffered replies, or in the protocol diagnostics
-of a stream. A request whose history contains the blocks cannot be sent to a
-Responses or Messages backend and fails with `unsupported_capability`.
-Candidate selection does not avoid those backends unless
-`candidate_requirements.capabilities` is `declared`.
+Chat backend still gets the reply: the Router drops the blocks and keeps the
+reasoning text. A buffered reply reports the drop in `x-vsr-protocol-warnings`
+as `dropped;...;reasoning_details`. A stream has already sent its headers when
+the drop is found, so the drop is recorded only in the
+`llm_translation_lossy_total` metric and a `translation_lossy` debug log event;
+the stream carries no warning.
+
+A request whose history contains the blocks cannot be sent to a Responses or
+Messages backend and fails with `unsupported_capability`. Candidate selection
+does not avoid those backends unless `candidate_requirements.capabilities` is
+`declared`. Looper decisions and context compression recovery build their
+internal calls in a form that cannot carry the blocks, so they fail instead of
+sending a request without them.
 
 ## Routing errors
 
