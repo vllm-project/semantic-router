@@ -63,7 +63,7 @@ func TestLongMatchedStopSequenceReachesClient(t *testing.T) {
 				SourceFormat: client, TargetFormat: llmprotocol.OpenAIChatV1,
 				RequestModel: "public-model", TraceContext: t.Context(),
 			}
-			response := (&OpenAIRouter{}).handleNonStreamingResponseBody(body, ctx, 0)
+			response := (&OpenAIRouter{}).handleNonStreamingResponseBody(body, ctx, 0, false)
 			if response.GetImmediateResponse() != nil || response.GetResponseBody() == nil {
 				t.Fatalf("%s client: the reply was replaced with an error: %+v", client, response.GetImmediateResponse())
 			}
