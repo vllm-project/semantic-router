@@ -23,7 +23,7 @@ func TestPrimaryOutputDigestIsTakenBeforeABodyWarning(t *testing.T) {
 	recorder := startResponseStageReplay(t, router, ctx)
 	ctx.TargetFormat = llmprotocol.OpenAIChatV1
 
-	router.handleNonStreamingResponseBody(upstreamAnswerBody(hallucinationAnswer), ctx, 0)
+	router.handleNonStreamingResponseBody(upstreamAnswerBody(hallucinationAnswer), ctx, 0, false)
 
 	// Without this the test would pass on a response nothing rewrote.
 	delivered := semanticResponseText(*ctx.SemanticResponse)
