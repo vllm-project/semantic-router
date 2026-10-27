@@ -357,3 +357,25 @@ func TestChatReasoningDetailsDirectEncodersRejectLossyTranslation(t *testing.T) 
 		require.ErrorContains(t, err, "reasoning_continuity")
 	}
 }
+
+// The decoder drops the text alias beside the blocks, so the source bytes are
+// not kept for a same-format replay that would forward the text again.
+func TestChatReasoningDetailsDroppedAliasIsNotReplayed(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.SourcePreservation = llmprotocol.SourceBoundedSameFormat
+	for name, test := range map[string]struct {
+		message  string
+		replayed bool
+	}{
+		"details_only":       {`{"role":"assistant","reasoning_details":[{"type":"reasoning.text","text":"t","index":0}]}`, true},
+		"details_and_alias":  {`{"role":"assistant","reasoning_content":"t","reasoning_details":[{"type":"reasoning.text","text":"t","index":0}]}`, false},
+		"details_and_legacy": {`{"role":"assistant","reasoning":"t","reasoning_details":[{"type":"reasoning.text","text":"t","index":0}]}`, false},
+		"alias_only":         {`{"role":"assistant","reasoning_content":"t"}`, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, envelope, _, err := OpenAIChatCodec{}.DecodeRequest([]byte(`{"model":"m","messages":[{"role":"user","content":"hi"},`+test.message+`]}`), policy)
+			require.NoError(t, err)
+			require.Equal(t, test.replayed, len(envelope.Request) > 0)
+		})
+	}
+}

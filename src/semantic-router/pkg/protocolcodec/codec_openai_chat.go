@@ -212,7 +212,22 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeChatRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
+	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
+	// Decoding drops the text alias beside typed reasoning blocks, so the source
+	// bytes no longer describe the request and must not be replayed upstream.
+	if chatMessagesDropReasoningAlias(wire.Messages) {
+		envelope.Request = nil
+	}
+	return request, envelope, nil, nil
+}
+
+func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
+	for _, message := range messages {
+		if len(message.ReasoningDetails) > 0 && (message.Reasoning != nil || message.AlternateReasoning != nil) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateChatRequestWire(wire chatRequestWire) error {

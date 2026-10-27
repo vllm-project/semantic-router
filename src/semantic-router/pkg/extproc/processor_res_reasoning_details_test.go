@@ -156,3 +156,34 @@ func TestContextRecoveryRefusesReasoningContinuity(t *testing.T) {
 		})
 	}
 }
+
+// Chat-to-Chat requests replay the client bytes when nothing changed them, so a
+// follow-up that returns the text alias beside the blocks must be re-encoded.
+func TestOpenRouterReasoningFollowUpForwardsOnlyTheBlocks(t *testing.T) {
+	details := `[{"type":"reasoning.text","text":"thought","signature":"sig","index":0},{"type":"reasoning.encrypted","data":"c2ln","id":"call-1","index":0}]`
+	toolCalls := `[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}"}}]`
+	for _, alias := range []string{"reasoning_content", "reasoning"} {
+		t.Run(alias, func(t *testing.T) {
+			followUp := []byte(`{"model":"public","messages":[{"role":"user","content":"lookup"},{"role":"assistant","` + alias + `":"thought","reasoning_details":` + details + `,"tool_calls":` + toolCalls + `},{"role":"tool","tool_call_id":"call-1","content":"result"}]}`)
+			router := &OpenAIRouter{}
+			ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: llmprotocol.OpenAIChatV1, TraceContext: t.Context()}
+			_, immediate := router.prepareProtocolRequest(followUp, ctx)
+			require.Nil(t, immediate)
+			upstream, err := router.encodeDispatchRequest(ctx)
+			require.NoError(t, err)
+			var wire struct {
+				Messages []map[string]json.RawMessage `json:"messages"`
+			}
+			require.NoError(t, json.Unmarshal(upstream, &wire))
+			require.JSONEq(t, details, string(wire.Messages[1]["reasoning_details"]))
+			require.JSONEq(t, toolCalls, string(wire.Messages[1]["tool_calls"]))
+			require.NotContains(t, wire.Messages[1], "reasoning")
+			require.NotContains(t, wire.Messages[1], "reasoning_content")
+		})
+	}
+	plain := []byte(`{"model":"public","messages":[{"role":"user","content":"lookup"}]}`)
+	ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: llmprotocol.OpenAIChatV1, TraceContext: t.Context()}
+	_, immediate := (&OpenAIRouter{}).prepareProtocolRequest(plain, ctx)
+	require.Nil(t, immediate)
+	require.NotEmpty(t, ctx.ProtocolEnvelope.Request, "a request without dropped text keeps its replay")
+}
