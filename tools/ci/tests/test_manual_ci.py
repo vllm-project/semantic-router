@@ -90,6 +90,7 @@ class FakeGitHub:
             "conclusion": "success",
         }
         self.trusted_ancestor = TRUSTED
+        self.merge_ancestor = BASE
         self.artifacts = []
         self.comments = []
         self.additional_comments = {}
@@ -125,6 +126,9 @@ class FakeGitHub:
         if endpoint.endswith("/actions/workflows/manual-ci.yml"):
             return {"id": 10}
         if "/compare/" in endpoint:
+            base = endpoint.split("/compare/")[1].split("...")[0]
+            if base == BASE:
+                return {"merge_base_commit": {"sha": self.merge_ancestor}}
             return {"merge_base_commit": {"sha": self.trusted_ancestor}}
         if "/attempts/1/jobs?" in endpoint:
             return {"jobs": [self.authorize_job]}
@@ -495,9 +499,21 @@ class ManualCITests(unittest.TestCase):
             self.resolve(), {"authorized": True, "scopes": [], "full": True}
         )
 
-    def test_advanced_main_requires_a_regenerated_merge_before_authorization(self):
+    def test_advanced_main_authorizes_and_reruns_clean_merge_revision(self):
+        self.github.base_ref["object"]["sha"] = "e" * 40
+        record = self.authorize()
+        self.assertEqual(record["base_sha"], BASE)
+        self.github.add_authorization(record)
+        self.assertEqual(
+            self.resolve(), {"authorized": True, "scopes": ["affected"], "full": False}
+        )
+        manual_ci.rerun(self.github, record)
+        self.assertEqual(self.github.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+
+    def test_unrelated_merge_base_cannot_authorize(self):
         record = self.authorize()
         self.github.base_ref["object"]["sha"] = "e" * 40
+        self.github.merge_ancestor = "f" * 40
         for operation in (
             self.authorize,
             self.resolve,
