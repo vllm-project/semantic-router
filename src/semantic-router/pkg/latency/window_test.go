@@ -62,12 +62,18 @@ func TestPercentilesReadTheLastObservations(t *testing.T) {
 	}
 	last := append([]float64(nil), history[len(history)-MaxTTFTHistorySize:]...)
 	sort.Float64s(last)
+	// Inlining can change fused multiply-add rounding during interpolation.
+	// These observations are in [0.05, 1.05), so 1e-12 admits only tiny absolute
+	// error. Keep the window's contents exact in TestWindowMatchesSortedSlidingWindow.
+	closePercentile := func(got, want float64) bool {
+		return math.Abs(got-want) <= 1e-12
+	}
 	for _, percentile := range []int{1, 10, 20, 50, 80, 95, 100} {
 		want, _ := percentileFromSorted(last, float64(percentile)/100)
-		if got, ok := GetTTFTPercentile("m-window", percentile); !ok || got != want {
+		if got, ok := GetTTFTPercentile("m-window", percentile); !ok || !closePercentile(got, want) {
 			t.Errorf("TTFT p%d = %v, %v; want %v", percentile, got, ok, want)
 		}
-		if got, ok := GetTPOTPercentile("m-window", percentile); !ok || got != want {
+		if got, ok := GetTPOTPercentile("m-window", percentile); !ok || !closePercentile(got, want) {
 			t.Errorf("TPOT p%d = %v, %v; want %v", percentile, got, ok, want)
 		}
 	}
@@ -78,7 +84,7 @@ func TestPercentilesReadTheLastObservations(t *testing.T) {
 	for _, c := range []struct {
 		got, pct float64
 	}{{snap.warm, 0.20}, {snap.ref, 0.50}, {snap.cold, 0.80}} {
-		if want, _ := percentileFromSorted(last, c.pct); c.got != want {
+		if want, _ := percentileFromSorted(last, c.pct); !closePercentile(c.got, want) {
 			t.Errorf("snapshot p%v = %v, want %v", c.pct*100, c.got, want)
 		}
 	}

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: TruthLens：实时幻觉缓解
 description: 提出网关级框架，用于检测和缓解无依据的模型响应。
 created: 2025-12-02

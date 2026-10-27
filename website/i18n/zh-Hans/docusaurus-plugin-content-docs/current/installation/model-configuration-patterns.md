@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型配置模式
 description: 在编写 YAML 之前，比较受支持的目录、自定义、推理、provider 和副本组合。
 translation:
