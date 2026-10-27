@@ -46,6 +46,43 @@ func (rt *routerLearningRuntime) freezeEvidenceSnapshot(
 	return snap
 }
 
+func freezePreviewEvidenceSnapshot(
+	preview *routerLearningPreviewSnapshot,
+	decision string,
+	tier int,
+	models []string,
+	cohort string,
+) routerLearningEvidenceSnapshot {
+	takenAt := time.Now().UTC()
+	var experience map[routerLearningExperienceKey]routerLearningModelExperience
+	if preview != nil {
+		if !preview.CapturedAt.IsZero() {
+			takenAt = preview.CapturedAt
+		}
+		experience = preview.Experience
+	}
+	snap := routerLearningEvidenceSnapshot{
+		takenAt:  takenAt,
+		decision: strings.TrimSpace(decision),
+		tier:     tier,
+		cohort:   strings.TrimSpace(cohort),
+		byKey:    map[routerLearningExperienceKey]routerLearningModelExperience{},
+	}
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		for _, key := range snapshotExperienceKeys(snap.decision, snap.tier, snap.cohort, model) {
+			if exp, ok := experience[key]; ok {
+				snap.byKey[key] = exp
+			}
+		}
+	}
+	snap.identity = snapshotIdentity(snap.takenAt)
+	return snap
+}
+
 func snapshotExperienceKeys(decision string, tier int, cohort string, model string) []routerLearningExperienceKey {
 	keys := make([]routerLearningExperienceKey, 0, 4)
 	if cohort != "" {

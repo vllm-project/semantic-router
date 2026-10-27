@@ -615,6 +615,45 @@ func TestReplaySuccessEstimatesJSONDistinguishesCalibratedZeros(t *testing.T) {
 	}
 }
 
+func TestSuccessEstimatePreviewReadsFrozenExperience(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	preview, err := router.newLearningPreview(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.learningPreview = preview
+	if _, _, _, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx); learningErr != nil {
+		t.Fatal(learningErr)
+	} else if applied {
+		t.Fatal("preview observe changed the selected model")
+	}
+	if router.routerLearningRuntime != nil {
+		t.Fatal("preview initialized mutable learning runtime")
+	}
+	if got := observeEstimateByModel(t, ctx, "cheap"); got.Status != successEstimateInsufficient {
+		t.Fatalf("expected seed-only preview estimate, got %#v", got)
+	}
+
+	router, ctx, selCtx, baseResult = successEstimateObserveFixture()
+	preview, err = router.newLearningPreview(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.learningPreview = preview
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive", 2, "frontier", routerLearningOutcomeFailed, 4,
+	)
+	if _, _, _, applied, learningErr := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx); learningErr != nil {
+		t.Fatal(learningErr)
+	} else if applied {
+		t.Fatal("preview observe changed the selected model")
+	}
+	got := observeEstimateByModel(t, ctx, "frontier")
+	if got.Status != successEstimateUnsupported || got.SampleCount != 10 {
+		t.Fatalf("preview estimate followed live experience, got %#v", got)
+	}
+}
+
 func observeEstimateByModel(t *testing.T, ctx *RequestContext, model string) successEstimate {
 	t.Helper()
 	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)

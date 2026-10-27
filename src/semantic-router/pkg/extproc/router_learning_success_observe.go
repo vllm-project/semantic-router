@@ -26,12 +26,7 @@ func (r *OpenAIRouter) attachSuccessEstimateObserveDiagnostics(
 		return
 	}
 
-	snap := r.routerLearningRuntimeState().freezeEvidenceSnapshot(
-		selectionDecisionStateKey(selCtx),
-		decisionTier(input.ctx),
-		models,
-		"",
-	)
+	snap := r.successEstimateEvidenceSnapshot(input, selCtx, models)
 	estimates := estimateCandidateSuccess(snap, models, successEstimateObserveConfig(snap, cfg))
 
 	diag := decision.policy.Details.Adaptation
@@ -47,6 +42,22 @@ func (r *OpenAIRouter) attachSuccessEstimateObserveDiagnostics(
 	}
 	diag.snapshotIdentity = snap.identity
 	diag.successEstimates = estimates
+}
+
+// successEstimateEvidenceSnapshot reads the request's frozen preview when
+// one exists. Preview must not call routerLearningRuntimeState, which creates
+// the live runtime.
+func (r *OpenAIRouter) successEstimateEvidenceSnapshot(
+	input routerLearningInput,
+	selCtx *selection.SelectionContext,
+	models []string,
+) routerLearningEvidenceSnapshot {
+	decision := selectionDecisionStateKey(selCtx)
+	tier := decisionTier(input.ctx)
+	if input.ctx != nil && input.ctx.learningPreview != nil {
+		return freezePreviewEvidenceSnapshot(input.ctx.learningPreview, decision, tier, models, "")
+	}
+	return r.routerLearningRuntimeState().freezeEvidenceSnapshot(decision, tier, models, "")
 }
 
 func successEstimateCandidateNames(refs []config.ModelRef) []string {
