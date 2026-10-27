@@ -56,7 +56,9 @@ class EngineArgs:
     only). ``dtype`` is the precision the backbone computes in; ``auto`` is
     the one the model was published in. ``enable_shared_context`` runs the
     shared state of a multi-question request once; None leaves it to the
-    model's family.
+    model's family. ``flash_attention_3`` runs state-once branched attention
+    with FlashAttention-3 on Hopper. It is off unless set: one near-tie changed
+    on Decision 3.0, so it is not a family's approximate-kernel consent.
     """
 
     max_num_seqs: int | None = None
@@ -64,6 +66,7 @@ class EngineArgs:
     batch_window_ms: float = DEFAULT_BATCH_WINDOW_MS
     dtype: str = "auto"
     enable_shared_context: bool | None = None
+    flash_attention_3: bool = False
 
     def __post_init__(self) -> None:
         if self.max_num_seqs is not None:
@@ -96,6 +99,8 @@ class EngineArgs:
             self.enable_shared_context, bool
         ):
             raise ValueError("enable_shared_context must be a boolean")
+        if not isinstance(self.flash_attention_3, bool):
+            raise ValueError("flash_attention_3 must be a boolean")
 
     def describe(self, shared_context: bool) -> dict[str, Any]:
         """The arguments as ``/v1/models`` reports them, with shared context resolved."""
@@ -105,6 +110,7 @@ class EngineArgs:
             "batch_window_ms": float(self.batch_window_ms),
             "dtype": self.dtype,
             "enable_shared_context": shared_context,
+            "flash_attention_3": self.flash_attention_3,
         }
 
 
@@ -142,6 +148,7 @@ class ModelConfig:
     batch_window_ms: float | None = None
     dtype: str | None = None
     enable_shared_context: bool | None = None
+    flash_attention_3: bool | None = None
 
     def engine_args(self, defaults: EngineArgs) -> EngineArgs:
         """This model's engine arguments: its own where it sets them, else ``defaults``."""

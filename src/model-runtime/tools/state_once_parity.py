@@ -2,7 +2,8 @@
 
     python3 tools/state_once_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl]
         [--attention-mode prefix_bidir|prefix_causal|causal] [--device rocm:0] [--limit N]
-        [--answers ANSWERS.jsonl]
+        [--answers ANSWERS.jsonl] [--flash-attention-3] [--long-states] [--baseline]
+        [--no-graphs] [--peak-memory]
 
 The package is verified and loaded through the decision3 family and the native engine; no package code runs.
 ``--attention-mode`` first writes a copy of a Decision 3.0 package that declares that layout next to it
@@ -19,6 +20,13 @@ batching the per-row path itself. ``--answers`` writes every question's probabil
 runs a state's per-row questions in consecutive groups of at most N padded tokens (rows times the group's longest
 row), one forward per group, so that a large model in FP32 fits one GPU on many questions over a long state; each
 question is still its own row under the same mask.
+
+``--flash-attention-3`` sets the engine argument of that name (Hopper, off by default).
+``--long-states`` adds the many-question ticket grown to about 30,000 and 60,000
+tokens, with 1 and 16 questions. ``--baseline`` answers the same questions again
+with the argument off and reports agreement, including per answer type, against
+the 99% bar a family would need to consent. ``--no-graphs`` loads with CUDA
+graphs off. ``--peak-memory`` records each branched forward's peak CUDA allocation.
 
 ``--golden`` checks the state split against a reference: a golden fixture holds, per question of the same
 requests, the token IDs and the state length the reference implementation's own split gives (a header line, then one
@@ -39,6 +47,8 @@ import statistics
 import sys
 from pathlib import Path
 from typing import Any
+
+import torch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -140,9 +150,20 @@ def ieee_triton() -> None:
     chunk_fwd.SOLVE_TRIL_DOT_PRECISION = tl.constexpr("ieee")
 
 
-def load(package: Path, device_name: str, dtype: str = "auto") -> StateOnceModel:
+def load(
+    package: Path,
+    device_name: str,
+    dtype: str = "auto",
+    *,
+    flash_attention_3: bool = False,
+    graphs: bool = True,
+) -> StateOnceModel:
     """The package's model through the family and the native engine; ``dtype`` ``float32`` holds every
-    weight in FP32 with exact kernels only (the reference precision)."""
+    weight in FP32 with exact kernels only (the reference precision).
+
+    ``flash_attention_3`` is the engine argument of that name. It does not turn on
+    the family's other approximate kernels.
+    """
     family = Decision3Family(RegistryOptions(offline=True))
     verified = family.verify(PackageRef(root=package))
     spec = dtypes.apply(family.describe(verified), dtype, True)
@@ -151,12 +172,59 @@ def load(package: Path, device_name: str, dtype: str = "auto") -> StateOnceModel
     devices = accelerator.devices()
     device = devices[int(index or 0)] if kind != "cpu" else devices[0]
     engine_model = NativeEngine().load(
-        spec, accelerator, device, EngineOptions(exact_kernels_only=dtype != "auto")
+        spec,
+        accelerator,
+        device,
+        EngineOptions(
+            exact_kernels_only=dtype != "auto",
+            flash_attention_3=flash_attention_3,
+            graphs=graphs,
+        ),
     )
     model = family.load(verified, spec, engine_model)
     if not isinstance(model, StateOnceModel):
         raise SystemExit(f"{package} does not declare a state-once attention mode")
     return model
+
+
+# States the acceptance record asks for, in tokens of the state text, and the question counts measured with them.
+LONG_STATE_TOKENS = (30_000, 60_000)
+LONG_STATE_QUESTIONS = (1, 16)
+LONG_STATE_PIECE = (
+    " The customer is still waiting for the replacement blender and a refund."
+)
+
+
+def text_of_tokens(encode, tokens: int, seed: str, piece: str) -> str:
+    """Grow ``seed`` by repeating ``piece`` until ``encode`` reports at least ``tokens`` ids."""
+    text = seed
+    piece_tokens = max(len(encode(piece)), 1)
+    while True:
+        have = len(encode(text))
+        if have >= tokens:
+            return text
+        text += piece * max(1, (tokens - have) // piece_tokens)
+
+
+def long_requests(model: Any) -> list[dict[str, Any]]:
+    """The many-question ticket at about 30K and 60K tokens, with 1 and 16 questions."""
+
+    def encode(text: str) -> list[int]:
+        encoded = model.tokenizer.encode(text, add_special_tokens=False)
+        return list(getattr(encoded, "ids", encoded))
+
+    requests = []
+    for tokens in LONG_STATE_TOKENS:
+        state = text_of_tokens(encode, tokens, many_questions.TICKET, LONG_STATE_PIECE)
+        for count in LONG_STATE_QUESTIONS:
+            requests.append(
+                {
+                    "id": f"long-{tokens}-{count}",
+                    "state": state,
+                    "questions": many_questions.questions(count),
+                }
+            )
+    return requests
 
 
 def default_requests() -> list[dict[str, Any]]:
@@ -311,6 +379,31 @@ def main() -> int:
         action="store_true",
         help="with --golden: plan the requests and check the split, without forwards",
     )
+    parser.add_argument(
+        "--flash-attention-3",
+        action="store_true",
+        help="opt into FlashAttention-3 for state-once branched attention (Hopper only)",
+    )
+    parser.add_argument(
+        "--long-states",
+        action="store_true",
+        help="also run the many-question ticket at about 30,000 and 60,000 tokens, with 1 and 16 questions",
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="answer again with FlashAttention-3 off and report agreement against that run",
+    )
+    parser.add_argument(
+        "--no-graphs",
+        action="store_true",
+        help="load the model with CUDA graphs off",
+    )
+    parser.add_argument(
+        "--peak-memory",
+        action="store_true",
+        help="record each branched forward's peak CUDA allocation",
+    )
     args = parser.parse_args()
     package = args.package
     if args.attention_mode:
@@ -320,8 +413,17 @@ def main() -> int:
         package = target
     if args.dtype == "float32":
         ieee_triton()
-    model = load(package, args.device, args.dtype)
+    graphs = not args.no_graphs
+    model = load(
+        package,
+        args.device,
+        args.dtype,
+        flash_attention_3=args.flash_attention_3,
+        graphs=graphs,
+    )
     requests = read_requests(args.requests) if args.requests else default_requests()
+    if args.long_states:
+        requests = [*requests, *long_requests(model)]
     requests = requests[: args.limit] if args.limit else requests
     index, count = (int(part) for part in args.shard.split("/"))
     requests = requests[index::count]
@@ -338,6 +440,14 @@ def main() -> int:
     out = args.answers.open("w", encoding="utf-8") if args.answers else None
     skipped = 0
     refused: list[dict[str, Any]] = []
+    saved: list[tuple[Any, list[Any], list[Any], dict[str, Any]]] = []
+    peaks: list[dict[str, Any]] = []
+    kernel_set = getattr(model.engine_model, "kernels", None)
+    branch_attention = (
+        kernel_set.describe().get("branch_attention")
+        if kernel_set is not None
+        else None
+    )
     for request in requests:
         try:
             if request.get("images") or request.get("videos"):
@@ -363,13 +473,25 @@ def main() -> int:
         skipped += len(plan.errors)
         if not items or args.boundary_only:
             continue
+        if args.peak_memory and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+        branched = model.run(items)
+        if args.peak_memory and torch.cuda.is_available():
+            peaks.append(
+                {
+                    "id": request.get("id"),
+                    "max_allocated_bytes": torch.cuda.max_memory_allocated(),
+                }
+            )
         answers: dict[str, list[Any]] = {
-            "branched": model.run(items),
+            "branched": branched,
             "rows": run_rows(model, items, args.row_tokens),
         }
         if args.floor:
             answers["alone"] = [model.run_rows([item])[0] for item in items]
         expected = request.get("expected") or {}
+        if args.baseline:
+            saved.append((request.get("id"), items, list(branched), expected))
         for index, item in enumerate(items):
             for name, pair in pairs.items():
                 left, right = name.split("/")
@@ -386,6 +508,29 @@ def main() -> int:
                 out.write(json.dumps(record) + "\n")
     if out is not None:
         out.close()
+    baseline = None
+    if args.baseline and saved:
+        model.engine_model.close()
+        model = load(
+            package,
+            args.device,
+            args.dtype,
+            flash_attention_3=False,
+            graphs=graphs,
+        )
+        baseline = Pair()
+        for request_id, saved_items, primary_answers, saved_expected in saved:
+            exact_answers = model.run(saved_items)
+            for saved_item, primary, exact in zip(
+                saved_items, primary_answers, exact_answers, strict=True
+            ):
+                baseline.add(
+                    request_id,
+                    saved_item,
+                    primary,
+                    exact,
+                    saved_expected.get(saved_item.question_id),
+                )
     decision = json.loads(
         (package / "decision_config.json").read_text(encoding="utf-8")
     )
@@ -394,6 +539,10 @@ def main() -> int:
         "attention_mode": decision["attention_mode"],
         "device": args.device,
         "dtype": args.dtype,
+        "flash_attention_3": args.flash_attention_3,
+        "graphs": graphs,
+        "branch_attention": branch_attention,
+        "peak_memory": peaks or None,
         "row_tokens": args.row_tokens,
         "requests": len(requests),
         "questions_refused": skipped,
@@ -405,6 +554,7 @@ def main() -> int:
             for name, pair in pairs.items()
             if name != "branched/rows"
         },
+        "baseline": baseline.report() if baseline is not None else None,
     }
     args.output.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
     summary = {key: value for key, value in report.items() if key != "changed"}
@@ -412,6 +562,10 @@ def main() -> int:
         name: {k: v for k, v in floor.items() if k != "changed"}
         for name, floor in report["floor"].items()
     }
+    if summary.get("baseline"):
+        summary["baseline"] = {
+            key: value for key, value in summary["baseline"].items() if key != "changed"
+        }
     print(json.dumps(summary))
     return 0
 
@@ -455,6 +609,8 @@ class Pair:
     def __init__(self) -> None:
         self.gaps: list[float] = []
         self.changed: list[dict[str, Any]] = []
+        # Per answer type: (absolute probability gap, whether the decision changed).
+        self.by_type: dict[str, list[tuple[float, bool]]] = {}
         self.gold = {
             "questions": 0,
             "left": 0,
@@ -471,10 +627,14 @@ class Pair:
         right: list[float],
         expected: Any,
     ) -> None:
-        self.gaps.append(max(abs(a - b) for a, b in zip(left, right, strict=True)))
-        if max(range(len(left)), key=left.__getitem__) != max(
+        gap = max(abs(a - b) for a, b in zip(left, right, strict=True))
+        self.gaps.append(gap)
+        changed = max(range(len(left)), key=left.__getitem__) != max(
             range(len(right)), key=right.__getitem__
-        ):
+        )
+        task = getattr(item, "task_type", "") or "unknown"
+        self.by_type.setdefault(task, []).append((gap, changed))
+        if changed:
             self.changed.append(
                 {"id": request, "question": item.question_id, "margin": margin(right)}
             )
@@ -503,7 +663,24 @@ class Pair:
                 "mcnemar_p": mcnemar(self.gold["only_left"], self.gold["only_right"]),
             },
             "changed": self.changed,
+            "by_type": {
+                task: _type_agreement(rows)
+                for task, rows in sorted(self.by_type.items())
+            },
         }
+
+
+def _type_agreement(rows: list[tuple[float, bool]]) -> dict[str, Any]:
+    """Per-answer-type agreement against the 99% bar ``DtypePolicy`` sets for consent."""
+    gaps = [gap for gap, _ in rows]
+    changed = sum(flag for _, flag in rows)
+    return {
+        "questions": len(rows),
+        "decisions_changed": changed,
+        "agreement": 1 - changed / len(rows) if rows else None,
+        "max_abs_dp": max(gaps) if gaps else None,
+        "mean_abs_dp": statistics.fmean(gaps) if gaps else None,
+    }
 
 
 if __name__ == "__main__":

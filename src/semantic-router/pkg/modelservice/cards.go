@@ -47,6 +47,7 @@ type EngineArgs struct {
 	BatchWindowMS       float64
 	Dtype               string
 	EnableSharedContext bool
+	FlashAttention3     bool
 }
 
 // HeadCard is one classify head: its kind (sequence, scores or token), label
@@ -135,7 +136,7 @@ func decodeCard(card api.ModelCard) ModelCard {
 	if args := card.EngineArgs; args != nil {
 		decoded.EngineArgs = EngineArgs{
 			MaxNumSeqs: args.MaxNumSeqs, MaxNumBatchedTokens: args.MaxNumBatchedTokens, BatchWindowMS: args.BatchWindowMs,
-			Dtype: string(args.Dtype), EnableSharedContext: args.EnableSharedContext,
+			Dtype: string(args.Dtype), EnableSharedContext: args.EnableSharedContext, FlashAttention3: args.FlashAttention3,
 		}
 	}
 	if card.Limits != nil {

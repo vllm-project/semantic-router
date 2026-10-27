@@ -1490,7 +1490,8 @@ MODEL overrides the configured default judgment deployment's artifact.
 Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
 0.3B). Only explicit model, placement and engine options override saved
 settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
-and --enable-shared-context set the deployment's engine arguments.
+and --enable-shared-context, and --flash-attention-3, set the deployment's
+engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
 
 | Parameter | Description |
@@ -1530,6 +1531,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--batch-window-ms FLOAT RANGE` | How long the model runtime waits after the first request to collect more (runtime default 2.0).  [0&lt;=x&lt;=1000] |
 | `--dtype CHOICE` | Precision the model computes in; auto (the runtime default) is the one it was published in. Choices: auto, float32, bfloat16, float16. |
 | `--enable-shared-context / --no-enable-shared-context` | Compute the shared state of a multi-question decision request once (runtime default: on where the model family's records show no accuracy loss, Decision 2.0). |
+| `--flash-attention-3 / --no-flash-attention-3` | Run state-once branched attention with FlashAttention-3 on Hopper (runtime default: off; needs flash_attn_interface and compute capability 9.x). |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}

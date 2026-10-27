@@ -47,6 +47,7 @@ SERVE_OPTION_GROUPS = (
             "batch_window_ms",
             "dtype",
             "enable_shared_context",
+            "flash_attention_3",
         ),
     ),
     OptionGroup(

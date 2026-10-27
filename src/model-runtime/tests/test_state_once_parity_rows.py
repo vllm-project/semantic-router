@@ -73,6 +73,16 @@ def test_no_budget_is_one_call_per_request():
     assert model.calls == [[f"q{i}" for i in range(6)]]
 
 
+def test_long_state_text_reaches_the_token_count():
+    tool = load_tool()
+    encode = str.split
+    text = tool.text_of_tokens(encode, 30, "ticket", " word")
+    assert len(encode(text)) >= 30
+    assert text.startswith("ticket")
+    again = tool.text_of_tokens(encode, 1, "ticket", " word")
+    assert again == "ticket"
+
+
 def test_grouped_answers_keep_the_items_order():
     tool = load_tool()
     model = Rows()

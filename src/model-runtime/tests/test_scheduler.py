@@ -231,6 +231,7 @@ def test_the_cpu_row_cap_never_binds_at_the_cpu_token_budget():
         ({"batch_window_ms": -1.0}, "batch_window_ms must be between 0 and 1000"),
         ({"dtype": "fp16"}, "dtype must be one of auto, float32, bfloat16, float16"),
         ({"enable_shared_context": "yes"}, "enable_shared_context must be a boolean"),
+        ({"flash_attention_3": "yes"}, "flash_attention_3 must be a boolean"),
     ],
 )
 def test_engine_arguments_are_checked(values, message):

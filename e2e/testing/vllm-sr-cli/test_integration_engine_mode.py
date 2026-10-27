@@ -448,6 +448,7 @@ class TestEngineModeEngineArgs(EngineStack):
                 "batch_window_ms": 0.5,
                 "dtype": "auto",
                 "enable_shared_context": True,
+                "flash_attention_3": False,
             },
         )
         self.assertEqual(primary["numerics"], "approximate")

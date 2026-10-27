@@ -25,7 +25,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 | `--platform` | `auto` | Execution backend: `auto`, `cpu`, `cuda` or `rocm`. Automatic detection inspects the container host or the selected Kubernetes cluster. |
 | `--data-parallel-size`, `-dp` | existing placement, or one worker | Number of independent managed replicas of the default deployment. Writes the canonical `replicas` list. |
 | `--device-ids` | existing placement, or available GPUs | Docker host GPU indices. With `-dp N`, supply one ID to share that GPU or N IDs to use one per replica. This does not change GPU visibility. |
-| `--max-num-seqs`, `--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`, `--enable-shared-context` | configured value, or the runtime default | The default deployment's [engine arguments](./engine-args.md), independent of replica count and placement. |
+| `--max-num-seqs`, `--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`, `--enable-shared-context`, `--flash-attention-3` | configured value, or the runtime default | The default deployment's [engine arguments](./engine-args.md), independent of replica count and placement. |
 | `--revision` | configured pin, built-in release pin, or repository default | Optional advanced branch, tag or full commit. Resolved once before startup into the immutable commit stored in the active deployment and shared by all replicas. |
 | `--image` | platform image | Use a specific local or published frontend image. |
 | `--image-pull-policy` | `always` | `always`, `ifnotpresent` or `never`. |
@@ -81,6 +81,7 @@ a frontend attaches to, or for direct runtime development:
 | `--batch-window-ms` | `2.0` | How long the scheduler waits after the first request to collect more, when `--max-num-seqs` is above 1. |
 | `--dtype` | `auto` | `auto` (the precision the model was published in), `float32`, `bfloat16` or `float16` (GPUs only). |
 | `--enable-shared-context`, `--no-enable-shared-context` | the family's | Compute the shared state of a multi-question decision request once. On by default for Decision 2.0 only. |
+| `--flash-attention-3`, `--no-flash-attention-3` | off | Run state-once branched attention with FlashAttention-3 on Hopper. Off unless set. |
 | `--max-request-bytes` | `8388608` | Largest request body. |
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
 | `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
@@ -117,8 +118,8 @@ Each entry takes `model` (required), `revision`, `name`, `device`, `engine`,
 `family`, `memory_budget_gib`, `options` (family options; a Vela 2.0 model
 takes `max_scan_tokens`, its [scan budget](#long-inputs)) and the
 [engine arguments](./engine-args.md) `max_num_seqs`,
-`max_num_batched_tokens`, `batch_window_ms`, `dtype` and
-`enable_shared_context`; an entry that leaves one out takes the process's
+`max_num_batched_tokens`, `batch_window_ms`, `dtype`,
+`enable_shared_context` and `flash_attention_3`; an entry that leaves one out takes the process's
 command-line value. The router writes this file for the processes it manages.
 
 ## HTTP API
@@ -649,7 +650,7 @@ In summary:
 | `provider: model_runtime` | deployment | The model runs in the model runtime. |
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
 | `device` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
-| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. |
+| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `flash_attention_3` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. |
 | `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). That includes the default decision model, a deployment published for direct System One inference, and the deployment of a local System One alias, whether or not a listener publishes the alias. A routed System One entrypoint is not one deployment. A task binding that is none of these keeps a task-model limit. |
 | `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
 | `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |

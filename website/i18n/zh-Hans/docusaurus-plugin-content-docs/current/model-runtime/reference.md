@@ -25,7 +25,7 @@ is_mtpe: true
 | `--device` | `auto` | `auto`，或镜像跑得动的：`cpu`、`--platform amd` 时的 `rocm[:N]`、`--platform nvidia` 时的 `cuda[:N]`，或镜像里装了插件时的插件加速器。 |
 | `--host` | `127.0.0.1` | runtime 端口发布在哪个宿主地址。 |
 | `--port` | `8100` | runtime 发布在哪个宿主端口。 |
-| `--max-num-seqs`、`--max-num-batched-tokens`、`--batch-window-ms`、`--dtype`、`--enable-shared-context` | 已配置的值，或 runtime 默认值 | 默认部署的[引擎参数](./engine-args.md)，与副本数和放置位置无关。 |
+| `--max-num-seqs`、`--max-num-batched-tokens`、`--batch-window-ms`、`--dtype`、`--enable-shared-context`、`--flash-attention-3` | 已配置的值，或 runtime 默认值 | 默认部署的[引擎参数](./engine-args.md)，与副本数和放置位置无关。 |
 | `--image` | 平台对应的镜像 | 换一个镜像，比如装了插件的。 |
 | `--image-pull-policy` | `always` | `always`、`ifnotpresent` 或 `never`。 |
 | `--container-runtime` | 自动探测 | `docker` 或 `podman`。 |
@@ -56,6 +56,7 @@ is_mtpe: true
 | `--batch-window-ms` | `2.0` | `--max-num-seqs` 大于 1 时，第一个请求到达后调度器再等多久收集更多请求。 |
 | `--dtype` | `auto` | `auto`（模型发布时的精度）、`float32`、`bfloat16` 或 `float16`（仅 GPU）。 |
 | `--enable-shared-context`、`--no-enable-shared-context` | 由模型家族决定 | 多问题决策请求的共享状态只算一次。只有 Decision 2.0 默认开启。 |
+| `--flash-attention-3`、`--no-flash-attention-3` | 关闭 | 在 Hopper 上用 FlashAttention-3 跑 state-once 分支注意力。不设置就保持关闭。 |
 | `--max-request-bytes` | `8388608` | 请求体上限。 |
 | `--max-bundle-tasks` | `64` | 一个 `/v1/bundle` 请求最多带多少任务。 |
 | `--load-attempts` | `5` | 一个模型加载几次之后就算 `failed`；包损坏或自检失败不重试。 |
@@ -85,7 +86,7 @@ models:
     enable_shared_context: false
 ```
 
-每条目收 `model`（必填）、`revision`、`name`、`device`、`engine`、`family`、`memory_budget_gib`、`options`（家族选项；Vela 2.0 模型还收 `max_scan_tokens`，即它的[扫描预算](#long-inputs)），以及[引擎参数](./engine-args.md) `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype` 和 `enable_shared_context`；条目没写的取进程命令行上的值。router 为它托管的进程写这个文件。
+每条目收 `model`（必填）、`revision`、`name`、`device`、`engine`、`family`、`memory_budget_gib`、`options`（家族选项；Vela 2.0 模型还收 `max_scan_tokens`，即它的[扫描预算](#long-inputs)），以及[引擎参数](./engine-args.md) `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` 和 `flash_attention_3`；条目没写的取进程命令行上的值。router 为它托管的进程写这个文件。
 
 ## HTTP API {#http-api}
 
@@ -325,7 +326,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | `provider: model_runtime` | 部署 | 模型跑在模型 runtime 里。 |
 | `artifact`、`revision` | 部署 | Hub 仓库和 commit，或本地绝对路径。 |
 | `device` | 部署 | 见[让 router 来跑模型](./deploy.md#describe-a-deployment)。 |
-| `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 部署 | 部署的[引擎参数](./engine-args.md)；没设的保持 runtime 默认值。 |
+| `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`flash_attention_3` | 部署 | 部署的[引擎参数](./engine-args.md)；没设的保持 runtime 默认值。 |
 | `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。这也包括默认决策模型、直接发布给 System One 的部署，以及本地 System One 别名的部署，不论监听器是否发布该别名。路由的 System One 入口不是一个部署。不属于这些情况的任务绑定仍保留任务模型的输入上限。 |
 | `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：路由信号走 `on_error`，安全信号按未扫描处理。 |
 | `on_unscanned` | `modules.prompt_guard`、`modules.classifier.pii` | `block`（默认）：模型没整读的内容，规则匹配为 `unscanned`。`allow`：跟随 `on_error`。 |

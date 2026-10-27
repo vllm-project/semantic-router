@@ -240,6 +240,7 @@ def test_a_models_own_engine_arguments_reach_its_batcher_and_scheduler(qwen3_pac
             "batch_window_ms": 0.0,
             "dtype": "auto",
             "enable_shared_context": True,
+            "flash_attention_3": False,
         }
     finally:
         runtime.stop()

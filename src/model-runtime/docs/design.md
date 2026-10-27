@@ -325,7 +325,10 @@ devices, capabilities, a kernel registry with pure-torch references, autocast
 and synchronisation. Every accelerated kernel registers the reference it must
 reproduce and whether it is bit-exact; a kernel that is not bit-exact runs
 only for a family that consents to approximate kernels
-(`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
+(`DtypePolicy.approximate_kernels`), at `--dtype auto`. FlashAttention-3 is the
+exception: it is not bit-exact, and it runs only when the `flash_attention_3`
+engine argument is set, which does not consent to the device's other approximate
+kernels (`docs/records/cuda-flash-attention-3.md`). `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
 `Accelerator.golden_reference(device)` names an optional hardware-qualified
@@ -351,6 +354,7 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
 | `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
 | `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0, and state-once Decision 3.0 packages, whose requests always branch from their state: there it only decides whether whole requests share forwards) |
+| `flash_attention_3` | off | State-once branched attention uses FlashAttention-3 on Hopper (compute capability 9.x) when `flash_attn_interface` is installed. Off unless set: one near tie changed on BF16 Decision 3.0, so it is not that family's approximate-kernel consent. Other devices refuse to load. FP32 calls stay on the reference |
 
 Limits left unset take the device's memory class (`scheduler/calibration.py`:
 32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
@@ -397,7 +401,9 @@ oneDNN-packed FP32 copy on x86 CPUs (Decision 1.0 Kai, Lex and Route, Vela
 (`engines/native/reduced.py`) were measured and refused. Approximate kernels
 follow the same rule per question type (`DtypePolicy.approximate_kernels`):
 Decision 2.0 consents to CUDA's approximate fused kernels, and Vela 2.0 does
-not, because they change 7% of its span answers. Another `--dtype` holds every
+not, because they change 7% of its span answers. FlashAttention-3 is not one of
+those kernels. `flash_attention_3` selects it alone, off by default
+(`docs/records/cuda-flash-attention-3.md`). Another `--dtype` holds every
 backbone weight in that dtype and runs the reference kernels without copies;
 the golden references apply only to `auto`, so its golden status is
 `unverified` (`dtypes.py`). Each family records the accuracy (label
