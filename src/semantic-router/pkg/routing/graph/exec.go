@@ -140,6 +140,11 @@ func Run(ctx context.Context, program *Program, in Input, opts Options) (*Outcom
 	spanCtx, span := tracing.StartSpan(runCtx, "graph.run",
 		trace.WithAttributes(attribute.String(attrProgram, program.Name)))
 	err := program.Steps.Run(spanCtx, x, st)
+	if err == nil {
+		// A step may skip the branch that exhausted a run-wide ceiling.
+		// The cancelled run must never report its partial response as success.
+		err = context.Cause(runCtx)
+	}
 	if err == nil && st.Response == nil {
 		err = ErrNoResponse
 	}
