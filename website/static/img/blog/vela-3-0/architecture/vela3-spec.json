@@ -1,0 +1,334 @@
+{
+ "note": "static config / header inspection; no weights loaded",
+ "revisions": {
+  "vela3-fast": "68a57a3779cac946370d640a388d6ada60940dab",
+  "vela3-fast-vision": "e2b12d698f471a7e7d41c71cb2fbda7012b83f6f",
+  "vela3-lite": "3e4f02e4134dd4c16e098561118c652081ace741",
+  "vela3-mini": "f1c73f5d1b63b4decc4883d8afa78df7c1d1fdaa",
+  "vela3-flash": "0e0452e01a0c1a3b818e224d3af2671b105ea9a2",
+  "vela3-turbo": "39af842a9cdae46c8feb79b3b52d3ac6b78979e8"
+ },
+ "vela3-fast": {
+  "hidden": 1024,
+  "layers": 24,
+  "ffn": 3072,
+  "heads": 8,
+  "kv_heads": 8,
+  "head_dim": 128,
+  "vocab": 49160,
+  "vocab_base": 49152,
+  "markers": 8,
+  "proj_dim": 256,
+  "max_len": 32768,
+  "window": 128,
+  "global_layers": [
+   3,
+   6,
+   9,
+   12,
+   15,
+   18,
+   21,
+   24
+  ],
+  "rope_local": 10000,
+  "rope_global": 2560000,
+  "adapters": {
+   "span": [
+    4,
+    64,
+    128
+   ],
+   "span_sets": [
+    4,
+    64,
+    128
+   ],
+   "evidence": [
+    4,
+    64,
+    128
+   ],
+   "ner": [
+    4,
+    128,
+    256
+   ],
+   "relation": [
+    4,
+    128,
+    256
+   ],
+   "router": [
+    8,
+    64,
+    128
+   ],
+   "factcheck": [
+    8,
+    64,
+    128
+   ],
+   "feedback_df": [
+    8,
+    64,
+    128
+   ],
+   "domain": [
+    12,
+    64,
+    128
+   ]
+  }
+ },
+ "vela3-fast-vision": {
+  "text": {
+   "hidden": 768,
+   "layers": 24,
+   "ffn": 1024,
+   "heads": 6,
+   "head_dim": 128,
+   "window": 128,
+   "max_pos": 32768
+  },
+  "vision": {
+   "layers": 12,
+   "hidden": 768,
+   "heads": 12,
+   "patch": 16,
+   "tile": 512,
+   "edge": 1024,
+   "tokens_1024": 320,
+   "pixel_shuffle": 4
+  },
+  "decision_state_tokens": 1024,
+  "tasks": {
+   "span": {
+    "backbone": "raw",
+    "r": 64
+   },
+   "decision": {
+    "backbone": "decision-h2",
+    "r": 0
+   },
+   "box": {
+    "backbone": "decision-v2",
+    "r": 64
+   },
+   "ocr": {
+    "backbone": "raw",
+    "r": 64
+   }
+  }
+ },
+ "vela3-lite": {
+  "size": "0.8B",
+  "base": "d3-lite",
+  "base_rev": "9c10703193afc7c7d28c88201c0364bfbbf58320",
+  "hidden": 1024,
+  "layers": 24,
+  "ffn": 3584,
+  "q_heads": 8,
+  "kv_heads": 2,
+  "head_dim": 256,
+  "lin_k": 16,
+  "lin_v": 16,
+  "lin_dim": 128,
+  "vocab": 248320,
+  "vision_depth": 12,
+  "vision_hidden": 768,
+  "adapters": [
+   {
+    "name": "Decision LoRA (router ids)",
+    "r": 8,
+    "first": 0
+   },
+   {
+    "name": "Domain / feedback LoRA",
+    "r": 8,
+    "first": 0
+   },
+   {
+    "name": "Fact-check LoRA",
+    "r": 8,
+    "first": 0
+   },
+   {
+    "name": "Hazard LoRA",
+    "r": 8,
+    "first": 0
+   },
+   {
+    "name": "Span LoRA",
+    "r": 16,
+    "first": 12
+   },
+   {
+    "name": "NER LoRA",
+    "r": 32,
+    "first": 6
+   },
+   {
+    "name": "Relation LoRA",
+    "r": 16,
+    "first": 12
+   },
+   {
+    "name": "Image-halu LoRA",
+    "r": 16,
+    "first": 12
+   }
+  ],
+  "definitions": "names"
+ },
+ "vela3-mini": {
+  "size": "4B",
+  "base": "d3-mini",
+  "base_rev": "566da0ea398e27184472add700499245ed09af35",
+  "hidden": 2560,
+  "layers": 32,
+  "ffn": 9216,
+  "q_heads": 16,
+  "kv_heads": 4,
+  "head_dim": 256,
+  "lin_k": 16,
+  "lin_v": 32,
+  "lin_dim": 128,
+  "vocab": 248320,
+  "vision_depth": 24,
+  "vision_hidden": 1024,
+  "adapters": [
+   {
+    "name": "Decision LoRA (router ids)",
+    "r": 16,
+    "first": 0
+   },
+   {
+    "name": "Domain / feedback LoRA",
+    "r": 16,
+    "first": 0
+   },
+   {
+    "name": "Opt-in decision LoRA",
+    "r": 16,
+    "first": 0
+   },
+   {
+    "name": "Span LoRA",
+    "r": 32,
+    "first": 16
+   },
+   {
+    "name": "NER LoRA",
+    "r": 64,
+    "first": 8
+   },
+   {
+    "name": "Relation LoRA",
+    "r": 32,
+    "first": 16
+   },
+   {
+    "name": "Image-halu LoRA",
+    "r": 32,
+    "first": 16
+   }
+  ],
+  "definitions": "base"
+ },
+ "vela3-flash": {
+  "size": "9B",
+  "base": "d3-flash",
+  "base_rev": "8b35c853b90e777595ec36bacae820fe08ea077a",
+  "hidden": 4096,
+  "layers": 32,
+  "ffn": 12288,
+  "q_heads": 16,
+  "kv_heads": 4,
+  "head_dim": 256,
+  "lin_k": 16,
+  "lin_v": 32,
+  "lin_dim": 128,
+  "vocab": 248320,
+  "vision_depth": 27,
+  "vision_hidden": 1152,
+  "adapters": [
+   {
+    "name": "Decision LoRA (router ids)",
+    "r": 24,
+    "first": 0
+   },
+   {
+    "name": "Domain / feedback LoRA",
+    "r": 24,
+    "first": 0
+   },
+   {
+    "name": "Span LoRA",
+    "r": 48,
+    "first": 16
+   },
+   {
+    "name": "NER LoRA",
+    "r": 96,
+    "first": 8
+   },
+   {
+    "name": "Relation LoRA",
+    "r": 48,
+    "first": 16
+   },
+   {
+    "name": "Image-halu LoRA",
+    "r": 48,
+    "first": 16
+   }
+  ],
+  "definitions": "grafted_head"
+ },
+ "vela3-turbo": {
+  "size": "27B",
+  "base": "d3-turbo",
+  "base_rev": "da17b5d0c860f7e5be6e2afebe67228b4bd24d0c",
+  "hidden": 5120,
+  "layers": 64,
+  "ffn": 17408,
+  "q_heads": 24,
+  "kv_heads": 4,
+  "head_dim": 256,
+  "lin_k": 16,
+  "lin_v": 48,
+  "lin_dim": 128,
+  "vocab": 248320,
+  "vision_depth": 27,
+  "vision_hidden": 1152,
+  "adapters": [
+   {
+    "name": "Decision LoRA (router ids)",
+    "r": 32,
+    "first": 0
+   },
+   {
+    "name": "Domain / feedback LoRA",
+    "r": 32,
+    "first": 0
+   },
+   {
+    "name": "Span LoRA",
+    "r": 64,
+    "first": 32
+   },
+   {
+    "name": "NER LoRA",
+    "r": 128,
+    "first": 16
+   },
+   {
+    "name": "Relation LoRA",
+    "r": 64,
+    "first": 32
+   }
+  ],
+  "definitions": "names"
+ }
+}
