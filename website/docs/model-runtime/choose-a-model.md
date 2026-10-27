@@ -93,6 +93,15 @@ question reads up to 32,768 tokens by default and up to 262,144 with
 `options.long_context`, on one AMD Instinct MI325X. Start it with
 `vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm`.
 
+`vllm-sr/d3-ultra` (27B) also reads a request's input once and answers the
+same question types as d3-turbo. A text-only request reads its list of
+questions in front of its state, so every question sees what else is asked; a
+request with images or videos reads as d3-turbo's does
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-ultra.md)). A one-question request
+answers at the temperature the package sets for it. Each question reads up to
+131,072 tokens by default, on one AMD Instinct MI325X. Start it with
+`vllm-sr serve vllm-sr/d3-ultra --engine --platform rocm`.
+
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
