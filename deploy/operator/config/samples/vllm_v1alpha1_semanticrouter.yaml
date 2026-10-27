@@ -33,7 +33,7 @@ spec:
       memory: "12Gi"
       cpu: "2"
     requests:
-      memory: "8Gi"
+      memory: "3Gi"
       cpu: "1"
 
   # Persistence configuration

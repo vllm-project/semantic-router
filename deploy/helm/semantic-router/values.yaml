@@ -139,7 +139,7 @@ resources:
     cpu: "2"
   # -- Resource requests
   requests:
-    memory: "8Gi"
+    memory: "3Gi"
     cpu: "1"
 # Models are now automatically downloaded by the router at startup
 # The router uses its built-in Go-based modeldownload package to download
