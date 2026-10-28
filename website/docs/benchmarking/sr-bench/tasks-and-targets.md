@@ -80,6 +80,78 @@ are hashed. `--limit` creates a labeled custom subset in either mode. Never edit
 a prepared file in place. New questions, selection rules or source bytes create
 a new identity.
 
+## Legacy MMLU-Pro diagnostic
+
+`legacy-mmlu-pro` runs the plain prompt and answer extraction from the
+[bench reasoning suite](https://github.com/vllm-project/semantic-router/blob/a00f4b219357fbc77410748f3e4dbdc0a8e59e28/bench/reasoning/router_reason_bench_multi_dataset.py)
+through sr-bench's normal request ledger and limits. It is a separate diagnostic,
+not the published `mmlu-pro` adapter. Its report has `sr_bench_score: null`;
+the published benchmarks and weights are unchanged.
+
+Install `vllm-sr[bench]` on this host, then prepare the pinned MMLU-Pro source:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark legacy-mmlu-pro --profile smoke > legacy-mmlu-dataset.json
+```
+
+Extension preparation currently requires `--local`. It does not use the
+shared-worker automatic download flow. The prepared dataset can be run by the
+local benchmark service like any other frozen dataset.
+
+For a backend already serving `served-model-name` at
+`http://127.0.0.1:8000/v1`, write the run manifest from the prepared dataset:
+
+```python
+import json
+from pathlib import Path
+
+dataset = json.loads(Path("legacy-mmlu-dataset.json").read_text())
+manifest = {
+    "version": "sr-bench-1.0",
+    "name": "Legacy MMLU plain comparison",
+    "mode": "live",
+    "profile": dataset["profile"],
+    "seed": dataset["seed"],
+    "dataset": dataset,
+    "targets": [{
+        "id": "direct",
+        "kind": "single",
+        "base_url": "http://127.0.0.1:8000/v1",
+        "model": "served-model-name",
+    }],
+    "cost_policy": "capability_only",
+    "limits": {"concurrency": 1, "max_output_tokens": 4096},
+    "sampling": {"temperature": 0, "max_tokens": 4096},
+}
+Path("legacy-mmlu-run.json").write_text(json.dumps(manifest, indent=2))
+```
+
+Set the actual endpoint and model identity before running. This example permits
+unknown prices and cannot establish cost savings.
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench plan \
+  --manifest legacy-mmlu-run.json --output legacy-mmlu-frozen.json
+vllm-sr benchmark --store ./data/sr-bench run \
+  --manifest legacy-mmlu-frozen.json
+vllm-sr benchmark --store ./data/sr-bench report RUN_ID \
+  --output legacy-mmlu-report.json
+```
+
+Preparation uses sr-bench's existing MMLU profile sizes and deterministic
+selection, not bench's per-category sampler. To compare runners, freeze the
+same source question IDs, option order and reference answers. Use `--source-path`
+and `--revision` for a saved native MMLU record file; `--limit` labels a smaller
+comparison as a custom subset.
+
+The diagnostic preserves the legacy extractor's precedence, including guesses
+from prose that the published grader rejects. It still grades only the visible
+final channel. Reasoning-only responses do not become answers, and truncated
+responses remain output failures. The legacy non-streaming/reasoning-content
+fallback, explicit-CoT and reasoning-mode comparisons are outside this
+diagnostic's parity claim. The old package, aliases and runners remain available.
+
 ## Reserve named evaluation history
 
 For repeated evaluations, prepare native sources with `--source-partition` to
@@ -256,6 +328,109 @@ visible: for example, `Answer: AB` against an index reference raises the native
 `make test-sr-bench-legacy-reasoning` exercises all configurations on synthetic
 records through a real local HTTP server and isolated workers. This fixture
 coverage is not model-quality or full native-corpus qualification.
+
+## Legacy reasoning conditions
+
+The local condition compiler uses one native selection for every requested
+condition, including MMLU-Pro. It uses the same pinned `legacy-reasoning`
+environment and local source-bundle format described above. It does not download
+datasets or call a model during export.
+
+Create a run template with a target profile for each condition:
+
+```json
+{
+  "version": "sr-bench-1.0",
+  "profile": "smoke",
+  "cost_policy": "capability_only",
+  "targets": [
+    {
+      "id": "standard",
+      "kind": "single",
+      "model": "Qwen/Qwen3-0.6B",
+      "base_url": "http://127.0.0.1:8000/v1"
+    },
+    {
+      "id": "reasoning",
+      "kind": "single",
+      "model": "Qwen/Qwen3-0.6B",
+      "base_url": "http://127.0.0.1:8000/v1"
+    },
+    {
+      "id": "explicit",
+      "kind": "single",
+      "model": "Qwen/Qwen3-0.6B",
+      "base_url": "http://127.0.0.1:8000/v1"
+    }
+  ],
+  "legacy_reasoning_conditions": {
+    "version": 1,
+    "conditions": [
+      {"target_id": "standard", "mode": "standard"},
+      {"target_id": "reasoning", "mode": "reasoning"},
+      {"target_id": "explicit", "mode": "XC"}
+    ]
+  }
+}
+```
+
+Use `api_key_env` when a target needs credentials. Every target must have one
+condition; aliases cannot duplicate a mode on the same endpoint/model. Keep
+non-reasoning request settings equal within that group.
+
+```bash
+python -m cli.sr_bench.legacy_reasoning_modes \
+  --dataset mmlu-pro --source-bundle sources.json \
+  --manifest condition-template.json --output condition-run.json \
+  --seed 42 --samples-per-category 1
+vllm-sr benchmark plan --manifest condition-run.json
+vllm-sr benchmark run --manifest condition-run.json
+```
+
+The compiler accepts the 18 native names and preserves their aliases. It uses
+native category filtering and sampling once, rather than independently preparing
+each condition. MMLU-Pro's existing dataset preparation command retains its
+separate stratified sampler. Use `smoke` or `quick`; these selections do not
+establish a holdout. Exported files are private and refuse overwrite.
+
+| Condition | Prompt | Frozen reasoning control |
+| --- | --- | --- |
+| `NR` or `standard` | Existing plain case | Native helper's false setting |
+| `NR_REASONING` or `reasoning` | Identical plain case | Native helper's true setting |
+| `AR` | Existing plain case | Explicit supported control in the target's `request_params` |
+| `Router_NR` | Existing plain case | No client override; requires a `mom` target |
+| `XC` | Native explicit-CoT formatter | No reasoning override |
+
+The native helper selects Qwen3's `enable_thinking`, DeepSeek's `thinking`, or
+GPT-OSS's nested `reasoning_effort` from the requested model name. GPT-OSS's
+false/true pair is low/high effort, not proof that reasoning is disabled/enabled.
+Unknown native toggles and the legacy OpenAI `reasoning: bool` shape fail
+explicitly. An AR profile may use a supported top-level `reasoning_effort` or
+native `chat_template_kwargs` control. Controls belong in target profiles, not
+shared `sampling`; conflicting or incorrectly typed controls are rejected.
+No adapter overrides frozen generation parameters during execution.
+
+XC runs only when at least one of the first ten selected questions has nonblank
+CoT content. Otherwise the frozen contract retains the skipped condition and
+reason, without scheduling calls for it. An XC-only request with no eligible
+questions fails rather than creating an empty run. Once eligible, XC covers
+the whole selection, including questions without CoT. Some native formatters
+include the supplied explanation; others request steps without including it.
+Plain requests never receive the reference explanation.
+
+The native multi-mode runner's XC path sends no toggle even though its nearby
+comment suggests false. This compiler preserves the actual request. Its explicit
+condition list is a new opt-in contract; it does not repair the native runner's
+unused `exec_modes` or CLI `ar_extra_body` options.
+
+Plain adapters retain `bench-reasoning-plain-v1` and
+`bench-mmlu-pro-plain-v1`. Explicit-CoT uses separate
+`legacy-<configuration>-explicit-cot` adapters with
+`bench-reasoning-explicit-cot-v1`. The frozen selection records source content
+digests, native order, per-case hashes, eligibility and target bindings.
+`execution_cells` prevents a target from receiving another condition's prompt.
+The [condition report](./results.md#reasoning-condition-measurements) reads the
+same saved request and result evidence.
 
 ## Register targets
 

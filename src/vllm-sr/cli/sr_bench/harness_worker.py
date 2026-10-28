@@ -528,6 +528,12 @@ def _main(request):
         )
 
         result = execute(request=request)
+    elif benchmark.startswith("legacy-") and benchmark.endswith("-explicit-cot"):
+        from .legacy_reasoning_worker import (  # noqa: PLC0415 - optional harness
+            execute_explicit_cot,
+        )
+
+        result = execute_explicit_cot(request=request)
     else:
         raise ValueError("Unsupported harness")
     Path(sys.argv[2]).write_text(json.dumps(result, indent=2) + "\n")

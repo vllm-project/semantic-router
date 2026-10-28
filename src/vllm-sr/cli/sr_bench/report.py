@@ -16,6 +16,8 @@ from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
+from .legacy_reasoning_mode_report import make_condition_report
+from .legacy_reasoning_modes import FIELD as REASONING_CONDITIONS
 from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
@@ -610,6 +612,19 @@ def make_report(store, run_id):
         },
         "benchmarks": benchmarks,
         "limitations": limitations,
+        **(
+            {
+                REASONING_CONDITIONS: make_condition_report(
+                    store=store,
+                    run_id=run_id,
+                    manifest=manifest,
+                    results=results,
+                    calls=calls,
+                )
+            }
+            if REASONING_CONDITIONS in manifest
+            else {}
+        ),
         "provenance": {
             "accounting_correction": accounting,
             "runner": runner,
@@ -723,6 +738,10 @@ class ComparisonValidator:
     """Shared protocol and explicit terminal outcomes for discovery and submit."""
 
     def __init__(self, store, baseline):
+        if REASONING_CONDITIONS in baseline["manifest"]:
+            raise ValueError(
+                "Use the condition report for reasoning condition matrices"
+            )
         self.store = store
         self.baseline = baseline
         bm = baseline["manifest"]
@@ -778,6 +797,10 @@ class ComparisonValidator:
         return by_target
 
     def validate(self, candidate):
+        if REASONING_CONDITIONS in candidate["manifest"]:
+            raise ValueError(
+                "Use the condition report for reasoning condition matrices"
+            )
         if self.baseline["id"] == candidate["id"]:
             raise ValueError("Choose two distinct runs for comparison")
         _comparison_protocol(self.baseline["manifest"], candidate["manifest"])
