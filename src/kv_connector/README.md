@@ -47,7 +47,9 @@ Chat and Completion transfer results through `x-vsr-kv-transfer-status` and
 
 Both requests pass the same `namespace`, `cache_id`, and `mapper_id` in JSON
 `kv_transfer_params`. The target prompt must extend the source's exact token
-prefix. The two vLLM servers share the snapshot directory on one host.
+prefix. The two vLLM servers share the snapshot directory. The reference
+transport uses local files; cross-node validation mounts that directory over
+private NFS. It does not implement NIXL or RDMA transfer.
 
 With `global.integrations.kv_transfer.enabled: true`, the router installs the
 coordinator from the configured backends and directional mapper pairs. Source
@@ -59,6 +61,10 @@ Transfer is enabled for non-streaming requests with an authenticated principal
 and a trusted sticky session. Set each transfer backend's `backend_name` to the
 resolved endpoint name: a provider model named `source` with backend reference
 `source-backend` resolves to `source_source-backend`.
+
+Streaming router requests complete normally without a transfer hint. Direct
+vLLM streaming requests can carry a hint; completed reuse is observable through
+worker metrics, without the non-streaming HTTP outcome headers.
 
 Router outcomes use `llm_kv_transfer_outcomes_total{status,reason}`. vLLM worker
 metrics record load outcomes, successfully loaded tokens, fetched bytes, fetch

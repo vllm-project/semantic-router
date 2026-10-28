@@ -78,9 +78,9 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	_, hadHint := wire["kv_transfer_params"]
 	delete(wire, "kv_transfer_params")
 	var hint *kvtransfer.Hint
+	// The tenant-scoped registry owns source identity, not shared last-model telemetry.
 	if !ctx.LooperRequest && !ctx.ExpectStreamingResponse && ctx.AuthenticatedPrincipal != "" && ctx.SessionID != "" &&
-		(ctx.SessionProvenance == SessionProvenanceHeader || ctx.SessionProvenance == SessionProvenanceResponseAPI) &&
-		ctx.PreviousModel != "" && ctx.PreviousModel != ctx.RequestModel {
+		(ctx.SessionProvenance == SessionProvenanceHeader || ctx.SessionProvenance == SessionProvenanceResponseAPI) {
 		hint, _ = r.KVHandoff.PlanDispatch(selectionRequestContext(ctx), KVDispatch{
 			Principal: ctx.AuthenticatedPrincipal, SessionID: routingSessionStateKey(ctx),
 			SessionProvenance: string(ctx.SessionProvenance), PreviousModel: ctx.PreviousModel,

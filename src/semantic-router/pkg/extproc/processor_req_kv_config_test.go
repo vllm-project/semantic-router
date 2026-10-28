@@ -59,6 +59,25 @@ func TestKVConfiguredSourcePublicationAndTargetHandoff(t *testing.T) {
 	if hint != nil {
 		t.Fatal("another tenant reused the source")
 	}
+	ctx.RequestModel = "target-alias"
+	ctx.primaryBackendName = "target-backend"
+	for _, previous := range []string{"", "unrelated", "target-alias"} {
+		ctx.PreviousModel = previous
+		encoded, encodeErr := router.encodeKVHandoff([]byte(`{"model":"target"}`), llmprotocol.OpenAIChatV1, ctx)
+		if encodeErr != nil {
+			t.Fatal(encodeErr)
+		}
+		if decodeErr := json.Unmarshal(encoded, &wire); decodeErr != nil {
+			t.Fatal(decodeErr)
+		}
+		var transfer map[string]string
+		if decodeErr := json.Unmarshal(wire["kv_transfer_params"], &transfer); decodeErr != nil {
+			t.Fatal(decodeErr)
+		}
+		if transfer["cache_id"] != record.CacheID {
+			t.Fatal("shared last-model telemetry suppressed the tenant's approved source")
+		}
+	}
 	for _, backend := range []config.KVTransferBackend{
 		{ModelAlias: "source-alias", BackendName: "source-backend", Identity: source, CanExport: false},
 		{ModelAlias: "source-alias", BackendName: "source-backend", Identity: target, CanExport: true},

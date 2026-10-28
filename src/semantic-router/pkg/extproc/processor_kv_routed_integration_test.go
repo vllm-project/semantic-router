@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -46,6 +47,7 @@ func testKVRoutedSourceAndTarget(t *testing.T, expectedStatus string) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-only-secret")
 	sourceURL, targetURL := os.Getenv("KV_TEST_SOURCE_URL"), os.Getenv("KV_TEST_TARGET_URL")
 	var sourceHint, targetHint map[string]string
+	var hintMu sync.Mutex
 	live := sourceURL != "" && targetURL != ""
 	if (sourceURL == "") != (targetURL == "") || (os.Getenv("KV_TEST_MAPPER_ID") != "" && !live) || live && os.Getenv("KV_TEST_MAPPER_ID") == "" {
 		t.Fatal("live validation requires both server URLs and the mapper ID")
@@ -54,12 +56,15 @@ func testKVRoutedSourceAndTarget(t *testing.T, expectedStatus string) {
 		backend := func(hint *map[string]string) *httptest.Server {
 			return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var body struct {
-					KV map[string]string `json:"kv_transfer_params"`
+					KV     map[string]string `json:"kv_transfer_params"`
+					Stream bool              `json:"stream"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					t.Error(err)
 				}
+				hintMu.Lock()
 				*hint = body.KV
+				hintMu.Unlock()
 				if body.KV["mapper_id"] != "" && expectedStatus != "" {
 					w.Header().Set("x-vsr-kv-transfer-status", expectedStatus)
 					reason := "loaded"
@@ -67,6 +72,11 @@ func testKVRoutedSourceAndTarget(t *testing.T, expectedStatus string) {
 						reason = "snapshot_missing"
 					}
 					w.Header().Set("x-vsr-kv-transfer-reason", reason)
+				}
+				if body.Stream {
+					w.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprint(w, "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+					return
 				}
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprint(w, `{"id":"test","object":"chat.completion","created":1,"model":"test","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":1,"total_tokens":21}}`)
@@ -137,13 +147,13 @@ routing:
 		text = strings.Repeat("Hello ", 128)
 	}
 	messages := []map[string]any{{"role": "user", "content": text}}
-	call := func(principal string, history []map[string]any) (http.Header, map[string]any) {
+	call := func(principal, session string, history []map[string]any) (http.Header, map[string]any) {
 		t.Helper()
 		data, _ := json.Marshal(map[string]any{"model": "vllm-sr/auto", "messages": history, "max_tokens": 1, "temperature": 0})
 		req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/chat/completions", strings.NewReader(string(data)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("x-authz-user-id", principal)
-		req.Header.Set("x-session-id", "routed-test")
+		req.Header.Set("x-session-id", session)
 		resp, requestErr := server.Client().Do(req)
 		if requestErr != nil {
 			t.Fatal(requestErr)
@@ -160,7 +170,7 @@ routing:
 		t.Logf("principal=%s transfer=%s response=%s", principal, resp.Header.Get("x-vsr-kv-transfer-status"), body)
 		return resp.Header, wire
 	}
-	_, response := call("tenant-a", messages)
+	_, response := call("tenant-a", "routed-test", messages)
 	record, err := registry.Lookup(context.Background(), cache.UserScopeNamespace("tenant-a"), sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, "routed-test"))
 	if err != nil || record == nil || record.CacheID == "" {
 		t.Fatalf("source publication: %v, %v", record, err)
@@ -170,21 +180,94 @@ routing:
 		assistant = ""
 	}
 	messages = append(messages, map[string]any{"role": "assistant", "content": assistant}, map[string]any{"role": "user", "content": "Please provide an advanced answer."})
-	result, targetResponse := call("tenant-a", messages)
+	result, targetResponse := call("tenant-a", "routed-test", messages)
 	if result.Get("x-vsr-kv-transfer-status") != expectedStatus {
 		t.Fatalf("target outcome: got %v, want %q", result, expectedStatus)
 	}
-	if !live && (sourceHint["mapper_id"] != "" || targetHint["cache_id"] != record.CacheID || targetHint["mapper_id"] != mapper) {
-		t.Fatalf("wrong hints: %v / %v", sourceHint, targetHint)
+	hintMu.Lock()
+	sourceObserved, targetObserved := sourceHint, targetHint
+	hintMu.Unlock()
+	if !live && (sourceObserved["mapper_id"] != "" || targetObserved["cache_id"] != record.CacheID || targetObserved["mapper_id"] != mapper) {
+		t.Fatalf("wrong hints: %v / %v", sourceObserved, targetObserved)
 	}
-	result, coldResponse := call("tenant-b", messages)
+	result, coldResponse := call("tenant-b", "routed-test", messages)
 	if result.Get("x-vsr-kv-transfer-status") != "" {
 		t.Fatal("another tenant attempted reuse")
 	}
-	if !live && len(targetHint) != 0 {
+	hintMu.Lock()
+	targetObserved = targetHint
+	hintMu.Unlock()
+	if !live && len(targetObserved) != 0 {
 		t.Fatal("another tenant received a transfer hint")
 	}
 	if expectedStatus != "applied" && !reflect.DeepEqual(targetResponse["choices"], coldResponse["choices"]) {
 		t.Fatal("stock or fallback output differed from normal prefill")
 	}
+
+	// Streaming stays on normal prefill; the native API rejects caller hints.
+	call("tenant-a", "stream-routing", messages[:1])
+	streamRequest := map[string]any{
+		"model": "vllm-sr/auto", "messages": messages, "max_tokens": 8, "temperature": 0, "stream": true,
+	}
+	for _, forged := range []bool{true, false} {
+		if forged {
+			streamRequest["kv_transfer_params"] = map[string]string{"namespace": "forged", "cache_id": "forged", "mapper_id": mapper}
+		} else {
+			delete(streamRequest, "kv_transfer_params")
+		}
+		streamData, _ := json.Marshal(streamRequest)
+		streamReq, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/chat/completions", strings.NewReader(string(streamData)))
+		streamReq.Header.Set("Content-Type", "application/json")
+		streamReq.Header.Set("x-authz-user-id", "tenant-a")
+		streamReq.Header.Set("x-session-id", "stream-routing")
+		stream, streamErr := server.Client().Do(streamReq)
+		if streamErr != nil {
+			t.Fatal(streamErr)
+		}
+		streamBody, readErr := io.ReadAll(stream.Body)
+		_ = stream.Body.Close()
+		if forged {
+			if readErr != nil || stream.StatusCode != http.StatusBadRequest {
+				t.Fatalf("caller hint was not rejected: %v, HTTP %d, %s", readErr, stream.StatusCode, streamBody)
+			}
+			continue
+		}
+		if readErr != nil || stream.StatusCode != http.StatusOK || !strings.Contains(string(streamBody), "data: [DONE]") {
+			t.Fatalf("stream failed: %v, HTTP %d, %s", readErr, stream.StatusCode, streamBody)
+		}
+		if stream.Header.Get("x-vsr-kv-transfer-status") != "" || strings.Contains(string(streamBody), "vsr_kv_transfer") {
+			t.Fatal("streaming request exposed a transfer outcome")
+		}
+	}
+	hintMu.Lock()
+	targetObserved = targetHint
+	hintMu.Unlock()
+	if !live && len(targetObserved) != 0 {
+		t.Fatal("streaming request sent a caller transfer hint")
+	}
+
+	var calls sync.WaitGroup
+	for i := range 4 {
+		calls.Add(1)
+		go func() {
+			defer calls.Done()
+			principal := fmt.Sprintf("parallel-tenant-%d", i)
+			_, sourceResponse := call(principal, "parallel-routing", messages[:1])
+			parallelRecord, lookupErr := registry.Lookup(context.Background(), cache.UserScopeNamespace(principal), sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, "parallel-routing"))
+			if lookupErr != nil || parallelRecord == nil || parallelRecord.CacheID == "" {
+				t.Errorf("parallel source publication: %v, %v", parallelRecord, lookupErr)
+				return
+			}
+			content := sourceResponse["choices"].([]any)[0].(map[string]any)["message"].(map[string]any)["content"]
+			if content == nil {
+				content = ""
+			}
+			history := []map[string]any{messages[0], {"role": "assistant", "content": content}, messages[2]}
+			parallelResult, _ := call(principal, "parallel-routing", history)
+			if parallelResult.Get("x-vsr-kv-transfer-status") != expectedStatus {
+				t.Errorf("parallel target outcome: %v", parallelResult)
+			}
+		}()
+	}
+	calls.Wait()
 }
