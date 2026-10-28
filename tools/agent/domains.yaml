@@ -942,6 +942,14 @@ profiles:
     paths:
       - e2e/profiles/model-runtime-real/**
       - e2e/testcases/model_runtime_real.go
+  model-runtime-vela3:
+    display_name: Model Runtime vela3-fast
+    owner: e2e
+    coverage_role: model-runtime-vela3-fast-default-on-cpu
+    selection: manual
+    paths:
+      - e2e/profiles/model-runtime-vela3/**
+      - e2e/testcases/model_runtime_vela3.go
   pii-remote-backend:
     display_name: Remote PII Classifier
     owner: e2e
