@@ -306,6 +306,31 @@ or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
 
+### Protocol Translation Policy
+
+`global.router.protocol.lossy_features` selects what request translation does
+when a wire feature cannot survive the trip to the target format. The default
+`reject` fails the request with 400, so a lossless guarantee is never silently
+weakened. `allow_with_diagnostic` keeps the payload unchanged, records one
+`tool_result.is_error`-style approximation in the request's protocol
+diagnostics, and lets the request proceed.
+
+Anthropic-native agents need the permissive mode on OpenAI-compatible
+backends: `tool_result.is_error` has no OpenAI representation, and every real
+agent loop produces failed tool calls. Without the opt-in, any agentic
+Anthropic client fails on its first tool error.
+
+```yaml
+global:
+  router:
+    protocol:
+      lossy_features: allow_with_diagnostic  # default: reject
+```
+
+The value is router-wide. Deployments that must keep the strict contract for
+some clients should run a dedicated Router (or listener stack) with the
+permissive knob instead of mixing both audiences on one process.
+
 ### Router Replay
 
 ```yaml

@@ -208,7 +208,14 @@ func memoryHistoryForExtractor(
 	if len(history) == 0 {
 		return nil, nil
 	}
-	engine, err := protocolEngineFor(codecs)
+	registry := codecs
+	if registry == nil {
+		registry = protocolcodec.NewBuiltinRegistry()
+	}
+	// Memory history encoding is router-internal and keeps the strict default
+	// translation policy; only the client-facing ingress honors the configured
+	// lossy policy.
+	engine, err := protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
 	if err != nil {
 		return nil, err
 	}

@@ -2067,6 +2067,13 @@ global:
       enabled: true
       max_bytes: 1048576
       timeout_sec: 15
+    protocol:
+      # lossy_features: reject | allow_with_diagnostic. The default rejects a
+      # request whose wire feature cannot survive translation to the target
+      # format; allow_with_diagnostic keeps the payload and records an
+      # approximation. Anthropic-native agents on OpenAI-compatible backends
+      # need the permissive value (tool_result.is_error is unrepresentable).
+      lossy_features: reject
     skip_processing:
       enabled: false
     model_selection:

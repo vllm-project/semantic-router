@@ -32,6 +32,16 @@ type CanonicalRouterGlobal struct {
 	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
 	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
 	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	Protocol          CanonicalProtocolGlobal  `yaml:"protocol"`
+}
+
+// CanonicalProtocolGlobal controls the ingress protocol translation contract.
+type CanonicalProtocolGlobal struct {
+	// LossyFeatures selects what request translation does when a wire feature
+	// cannot survive the trip to the target format. Empty and "reject" (the
+	// default) fail the request; "allow_with_diagnostic" keeps the payload
+	// unchanged and records the approximation in protocol diagnostics.
+	LossyFeatures string `yaml:"lossy_features,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -289,6 +299,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
 	cfg.Fallback = router.Fallback.Clone()
+	cfg.ProtocolLossyFeatures = strings.TrimSpace(router.Protocol.LossyFeatures)
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

@@ -26,6 +26,7 @@ var (
 		validateEmbeddingModelContracts,
 		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
+		validateProtocolTranslationPolicy,
 		validateCategoryModelBackendContracts,
 		validateComplexityModelBackendContracts,
 		validatePIIModelBackendContracts,

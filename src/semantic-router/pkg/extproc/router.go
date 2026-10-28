@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -100,6 +101,10 @@ type OpenAIRouter struct {
 	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
+	// protocolPolicy is the ingress translation policy derived from
+	// global.router.protocol. Zero value is corrected to DefaultPolicy at
+	// build time; directly assembled test routers keep the strict default.
+	protocolPolicy llmprotocol.Policy
 	// hopCaller, when set, sends Looper hops instead of the configuration
 	// snapshot's upstream set.
 	hopCaller graph.Caller

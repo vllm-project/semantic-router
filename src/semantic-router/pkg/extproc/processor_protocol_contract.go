@@ -9,6 +9,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -93,16 +94,36 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	return protocolEngineFor(r.ProtocolCodecs)
+	return protocolcodec.NewEngine(r.protocolRegistry(), r.protocolPolicyOrDefault())
 }
 
-// protocolEngineFor serves callers that hold only the registry, such as
-// detached work that must not capture the router.
-func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
-	if registry == nil {
-		registry = protocolcodec.NewBuiltinRegistry()
+// protocolRegistry falls back to the built-in registry for directly assembled
+// test routers that never populated ProtocolCodecs.
+func (r *OpenAIRouter) protocolRegistry() *protocolcodec.Registry {
+	if r.ProtocolCodecs == nil {
+		return protocolcodec.NewBuiltinRegistry()
 	}
-	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+	return r.ProtocolCodecs
+}
+
+// protocolPolicyOrDefault corrects the zero policy of directly assembled test
+// routers to the strict default. Built routers always carry a full policy.
+func (r *OpenAIRouter) protocolPolicyOrDefault() llmprotocol.Policy {
+	if r.protocolPolicy.Limits.BodyBytes == 0 {
+		return llmprotocol.DefaultPolicy()
+	}
+	return r.protocolPolicy
+}
+
+// routerProtocolPolicy derives the ingress translation policy from
+// global.router.protocol. Config validation rejects unknown values, so no
+// error path is needed here.
+func routerProtocolPolicy(cfg *config.RouterConfig) llmprotocol.Policy {
+	policy := llmprotocol.DefaultPolicy()
+	if cfg != nil && cfg.ProtocolLossyFeatures == config.ProtocolLossyAllowWithDiagnostic {
+		policy.LossyFeatures = llmprotocol.LossyAllowWithDiagnostic
+	}
+	return policy
 }
 
 // protocolEngineForVendor creates an engine with the specified response vendor policy.
@@ -110,13 +131,9 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	registry := r.ProtocolCodecs
-	if registry == nil {
-		registry = protocolcodec.NewBuiltinRegistry()
-	}
-	policy := llmprotocol.DefaultPolicy()
+	policy := r.protocolPolicyOrDefault()
 	policy.ResponseVendor = vendor
-	return protocolcodec.NewEngine(registry, policy)
+	return protocolcodec.NewEngine(r.protocolRegistry(), policy)
 }
 
 // protocolEngineForBackend permits extensions only for live provider responses.

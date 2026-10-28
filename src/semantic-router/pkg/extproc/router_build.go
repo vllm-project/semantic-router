@@ -548,6 +548,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,
 		ProtocolCodecs:              components.protocolCodecs,
+		protocolPolicy:              routerProtocolPolicy(components.cfg),
 		CredentialResolver:          components.credentialResolver,
 		RateLimiter:                 components.rateLimiter,
 		lookupTableCancel:           components.lookupTableCancel,

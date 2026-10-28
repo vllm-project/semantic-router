@@ -1062,6 +1062,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CanonicalProtocolGlobal": {
+      "properties": {
+        "lossy_features": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalProviderDefaults": {
       "properties": {
         "model": {
@@ -1264,6 +1273,9 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "protocol": {
+          "$ref": "#/$defs/CanonicalProtocolGlobal"
         }
       },
       "additionalProperties": false,

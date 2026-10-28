@@ -5,11 +5,30 @@ import (
 	"strings"
 )
 
+// Public values of global.router.protocol.lossy_features.
+const (
+	ProtocolLossyReject              = "reject"
+	ProtocolLossyAllowWithDiagnostic = "allow_with_diagnostic"
+)
+
 func validateRoutingStrategy(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
 	return cfg.Strategy.Validate()
+}
+
+func validateProtocolTranslationPolicy(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	switch cfg.ProtocolLossyFeatures {
+	case "", ProtocolLossyReject, ProtocolLossyAllowWithDiagnostic:
+		return nil
+	default:
+		return fmt.Errorf("global.router.protocol.lossy_features must be %q or %q, got %q",
+			ProtocolLossyReject, ProtocolLossyAllowWithDiagnostic, cfg.ProtocolLossyFeatures)
+	}
 }
 
 // prompt_guard backend validation lives in validator_prompt_guard.go.

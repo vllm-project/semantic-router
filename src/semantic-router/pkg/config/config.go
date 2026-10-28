@@ -120,6 +120,10 @@ type RouterConfig struct {
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
+	// ProtocolLossyFeatures layers global.router.protocol.lossy_features.
+	// Empty keeps the default strict translation contract.
+	ProtocolLossyFeatures string `yaml:"-" json:"-"`
+
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
 	ConfigBaseDir  string                `yaml:"-"`
