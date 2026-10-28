@@ -45,6 +45,11 @@ const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 // observed, so this vendor changes only how failures are decoded.
 const ResponseVendorSnowflake ResponseVendor = "snowflake"
 
+// ResponseVendorOpenRouter permits OpenRouter's transport-error envelope: the
+// canonical OpenAI error object without a type, plus a provider metadata object
+// and a top-level user_id. It changes only how failures are decoded.
+const ResponseVendorOpenRouter ResponseVendor = "openrouter"
+
 // ResponseVendorOpenAICompatGateway permits the usage-metering fields that
 // OpenAI-compatible aggregating gateways (one-api/new-api style relays) append
 // to otherwise canonical chat completion responses. True vLLM endpoints emit

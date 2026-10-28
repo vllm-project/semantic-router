@@ -115,3 +115,14 @@ func TestResolveResponseVendorGrantsNoAllowanceByDefault(t *testing.T) {
 		})
 	}
 }
+
+// OpenRouter is resolved by provider id only, and the resolution must not
+// disturb the profile's reasoning transport.
+func TestResolveResponseVendorOpenRouter(t *testing.T) {
+	profile := &config.ProviderProfile{Type: "openrouter", BaseURL: "https://openrouter.ai/api/v1"}
+	before := resolveProviderReasoningTransport(profile)
+
+	assert.Equal(t, llmprotocol.ResponseVendorOpenRouter, resolveResponseVendor(profile))
+
+	assert.Equal(t, before, resolveProviderReasoningTransport(profile))
+}

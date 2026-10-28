@@ -26,6 +26,12 @@ const cloudflareWorkersAIProviderType = "cloudflare-workers-ai"
 // selector.
 const snowflakeCortexProviderType = "snowflake-cortex"
 
+// openRouterProviderType is the catalog provider id for OpenRouter. Like the
+// other failure-envelope vendors it is selected by provider id only: a profile
+// that points an openai-type provider at OpenRouter's host keeps the strict
+// canonical contract.
+const openRouterProviderType = "openrouter"
+
 // azureOpenAIHostSuffixes cover a profile pointed at an Azure endpoint without
 // declaring the Azure provider type. Azure resources are per-tenant subdomains,
 // so these are matched by suffix rather than exact host.
@@ -58,6 +64,9 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	}
 	if strings.EqualFold(strings.TrimSpace(profile.Type), snowflakeCortexProviderType) {
 		return llmprotocol.ResponseVendorSnowflake
+	}
+	if strings.EqualFold(strings.TrimSpace(profile.Type), openRouterProviderType) {
+		return llmprotocol.ResponseVendorOpenRouter
 	}
 	// A vLLM-type profile pointed at an OpenAI-compatible gateway tolerates
 	// the gateway's injected usage metering fields — but only when the
