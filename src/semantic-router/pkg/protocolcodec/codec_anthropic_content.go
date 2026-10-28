@@ -474,6 +474,9 @@ func anthropicRequestDiagnostics(request llmprotocol.Request, policy llmprotocol
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Messages cannot request a reasoning summary")
 	}
+	if hasParticipantNames(request) {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Messages has no participant names")
+	}
 	if err := appendAnthropicContentDiagnostics(&diagnostics, request, policy); err != nil {
 		return diagnostics, err
 	}
