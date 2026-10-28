@@ -198,12 +198,13 @@ questions to it.
 
 ## Which decision model
 
-The Router defaults to Vela 2.0 0.3B. For custom questions, Decision 2.0
+The Router defaults to Vela 3.0 vela3-fast. For custom questions, Decision 2.0
 Kai-0.6B also runs on a CPU; its larger sizes target more demanding questions
 on a GPU. Decision 1.0 models answer the same
-questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
-questions for PII and unsupported claims, and its 0.3B answers the router's
-[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, batching
+questions. Vela 2.0 also answers `set` and `span` questions; vela3-fast answers
+`span` questions and `set` questions on its trained router texts. Both have
+ready-made questions for PII and unsupported claims, and vela3-fast answers the router's
+[built-in signals](model-runtime/choose-a-model.md#built-in-signals) by default, batching
 compatible questions within a routing stage. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 
