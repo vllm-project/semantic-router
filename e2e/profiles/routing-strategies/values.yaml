@@ -403,12 +403,12 @@ config:
             - engineering
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.75
+          threshold: 0.88
           include_history: false
           description: Standard jailbreak detection for routing-strategies tests
       pii:
         - name: pii_deny_all
-          threshold: 0.01
+          threshold: 0.18
           include_history: false
           description: Block all PII
     modelCards:

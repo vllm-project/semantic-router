@@ -136,6 +136,15 @@
       ]
     },
     {
+      "id": "vllm-sr/d3-ultra",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
       "id": "vllm-sr/d3-flash",
       "family": "decision3",
       "question_types": [
@@ -221,6 +230,15 @@
         "noul",
         "score",
         "set",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3-fast",
+      "family": "vela3",
+      "question_types": [
+        "choice",
+        "noul",
         "span"
       ]
     }
