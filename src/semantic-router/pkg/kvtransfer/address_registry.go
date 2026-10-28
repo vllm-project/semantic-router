@@ -16,12 +16,16 @@ const (
 
 // AddressRecord is the Redis/Valkey payload for kv_addr:{namespace}:{session_id}.
 type AddressRecord struct {
-	SessionID string    `json:"session_id"`
-	SourcePod string    `json:"source_pod"`
-	Model     string    `json:"model"`
-	Namespace string    `json:"namespace"`
-	TurnCount int       `json:"turn_count"`
-	UpdatedAt time.Time `json:"updated_at"`
+	BackendName string         `json:"backend_name,omitempty"`
+	CacheID     string         `json:"cache_id,omitempty"`
+	Identity    *ModelIdentity `json:"identity,omitempty"`
+	ExpiresAt   time.Time      `json:"expires_at,omitempty"`
+	SessionID   string         `json:"session_id"`
+	SourcePod   string         `json:"source_pod"`
+	Model       string         `json:"model"`
+	Namespace   string         `json:"namespace"`
+	TurnCount   int            `json:"turn_count"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 // AddressRegistry stores the last known KV-cache location for a routed session.

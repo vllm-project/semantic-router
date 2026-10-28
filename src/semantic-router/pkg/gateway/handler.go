@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -240,9 +241,14 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 	if resp.Local != nil {
 		return verbatim(resp), closeBody, nil
 	}
+	responseHeaders := resp.Header.Clone()
+	responseHeaders.Del(headers.VSRUpstreamHost)
+	if resp.Endpoint.Host != "" {
+		responseHeaders.Set(headers.VSRUpstreamHost, resp.Endpoint.Address())
+	}
 	out, err := serving.Engine.Respond(ctx, plan, &routing.UpstreamResponse{
 		Status: resp.StatusCode,
-		Header: routingHeader(resp.Header),
+		Header: routingHeader(responseHeaders),
 		Body:   responseBody(plan.Call, resp),
 	})
 	if err != nil {
