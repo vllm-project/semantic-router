@@ -253,6 +253,64 @@ formats by three backend formats by buffered or streaming mode. See the
 [implemented codec design](../proposals/multi-protocol-adaptor) for the full
 verification and extension contract.
 
+## Agent harness support
+
+Protection holds related requests only when the configured identity headers
+are present. A derived session fingerprint is telemetry and does not hold a
+model. The levels below are the only granularity names used for harness
+support. Each row is one exact version whose capture the agent-client replay
+checks. A version range is not a support claim.
+
+<!-- BEGIN HARNESS SUPPORT TABLE -->
+
+| Level | Held unit | Identity required | Configuration |
+| --- | --- | --- | --- |
+| R0 | Each request is routed independently | None | Protection off, or the required header is absent |
+| R1 | One conversation | Session and conversation headers | `scope: conversation` |
+| R2 | One run, subagents included | Session header | `scope: session` |
+| R3 | Each agent of a run separately | Session and agent headers | `scope: session` with `identity.headers.agent` |
+
+| Client | Version | Status | Paths | Identity headers | Level | Limits |
+| --- | --- | --- | --- | --- | --- | --- |
+| Claude Code | 2.1.281 | verified | `/v1/messages` | None | R0 | This capture has no session or agent header, so it does not evidence a protection hold. |
+| Copilot CLI | 1.0.88 | verified | `/v1/chat/completions`, `/v1/messages` | None | R0 | The capture has no identity header. |
+
+<!-- END HARNESS SUPPORT TABLE -->
+
+Codex CLI protocol fields are described below. Codex is not in this table
+until a capture records its identity headers.
+
+### Verify a harness version
+
+CI replays captures. It does not run a harness. To add a version:
+
+1. Point the client at a loopback recorder that answers with a tool call and
+   then a final message. No provider key is needed. When the claimed level
+   depends on a subagent, record one subagent request in the same run. A live
+   Terminal-Bench or Harbor trial can accompany the capture as `live_lane`
+   evidence; the capture itself is what CI replays.
+2. Sanitize the capture. Keep the request shape, and replace identity header
+   values with `placeholder-*` tokens. Record each header name and the
+   requests that carry it (`turn-0`, `turn-1`, or `subagent`) in the capture's
+   `identity` field.
+3. Add an exact version to
+   `e2e/testcases/testdata/agent_clients/harness-support.yaml` with
+   `status: verified`, `last_verified`, the capture files, and the replay
+   cases. Give each identity header a `role` of `session`, `conversation`, or
+   `agent`. Do not write a range. Set `level` only as high as the recorded
+   headers and the router's protection config can hold. R3 also requires
+   `identity.headers.agent` in that config.
+4. Render the new row between the markers above. The harness support check
+   fails when the table, the manifest, the captures, or the replay cases
+   disagree.
+
+When a version breaks, keep the last verified row. Add the broken version with
+`status: broken` and `known_broken_since` set to the day the capture or live
+run failed. Do not replace the verified version with a range.
+
+Protocol bugs found while recording are filed separately. This table does not
+choose the default protection level for a coding-agent entrypoint.
+
 ## Codex CLI
 
 Codex CLI uses the Responses endpoint and sends several compatibility fields.
