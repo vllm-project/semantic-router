@@ -19,6 +19,7 @@ from .qwen3_5 import Qwen3_5Backbone
 from .qwen3_5_vision import Qwen3_5VisionBackbone
 from .siglip import SiglipVisionBackbone
 from .tree import Tree
+from .ultrabert import UltraBertBackbone
 from .whisper import WhisperEncoderBackbone
 
 ARCHITECTURES: dict[str, type[nn.Module]] = {
@@ -29,6 +30,7 @@ ARCHITECTURES: dict[str, type[nn.Module]] = {
     Qwen3_5Backbone.model_type: Qwen3_5Backbone,
     Qwen3_5VisionBackbone.model_type: Qwen3_5VisionBackbone,
     SiglipVisionBackbone.model_type: SiglipVisionBackbone,
+    UltraBertBackbone.model_type: UltraBertBackbone,
     WhisperEncoderBackbone.model_type: WhisperEncoderBackbone,
 }
 
