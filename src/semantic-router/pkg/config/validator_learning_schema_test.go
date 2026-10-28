@@ -39,6 +39,76 @@ global:
 	}
 }
 
+func TestParseYAMLBytesAcceptsAgentIdentityHeader(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: cheap
+  models:
+    - name: cheap
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+routing:
+  modelCards:
+    - name: cheap
+global:
+  router:
+    learning:
+      enabled: true
+      protection:
+        identity:
+          headers:
+            session: session-id
+            agent: thread-id
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.RouterLearning.Protection.HeaderName("agent"); got != "thread-id" {
+		t.Fatalf("agent header = %q", got)
+	}
+	if got := cfg.RouterLearning.Protection.HeaderName("session"); got != "session-id" {
+		t.Fatalf("session header = %q", got)
+	}
+}
+
+func TestParseYAMLBytesRejectsEmptyAgentIdentityHeader(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: cheap
+  models:
+    - name: cheap
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+routing:
+  modelCards:
+    - name: cheap
+global:
+  router:
+    learning:
+      protection:
+        identity:
+          headers:
+            agent: " "
+`))
+	if err == nil || !strings.Contains(err.Error(), "identity.headers.agent cannot be empty") {
+		t.Fatalf("expected empty agent header to be rejected, got %v", err)
+	}
+}
+
 func TestParseYAMLBytesRejectsUnknownProtectionIdentityHeader(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
 version: v0.3

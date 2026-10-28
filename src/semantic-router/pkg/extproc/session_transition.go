@@ -71,7 +71,7 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	// Populate PreviousModel for Chat Completions from the in-memory last-model
 	// store, recorded at response time of the previous turn in this session.
 	// (Response API derives PreviousModel from the conversation chain above.)
-	if model, ok := sessiontelemetry.GetLastModel(routingSessionStateKey(ctx)); ok {
+	if model, ok := sessiontelemetry.GetLastModel(modelObservationKey(ctx)); ok {
 		ctx.PreviousModel = model
 	}
 	populateLastSessionObservation(ctx)
@@ -90,7 +90,7 @@ func populatePinnedSessionFromHeaders(ctx *RequestContext) {
 		ctx.SessionID = sid
 		ctx.SessionProvenance = SessionProvenanceHeader
 	}
-	if ctx.SessionID == "" {
+	if ctx.SessionID == "" && ctx.threadObservationKey == "" {
 		return
 	}
 	populateLastSessionObservation(ctx)
@@ -98,7 +98,7 @@ func populatePinnedSessionFromHeaders(ctx *RequestContext) {
 
 func populateLastSessionObservation(ctx *RequestContext) {
 	now := time.Now()
-	stateSessionID := routingSessionStateKey(ctx)
+	stateSessionID := modelObservationKey(ctx)
 	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(stateSessionID, now); ok {
 		if ctx.PreviousModel == "" {
 			ctx.PreviousModel = snapshot.CurrentModel

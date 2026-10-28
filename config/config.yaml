@@ -2125,6 +2125,7 @@ global:
           headers:
             session: x-session-id
             conversation: x-conversation-id
+            agent: x-agent-id
         tuning:
           idle_timeout_seconds: 300
           min_turns_before_switch: 1

@@ -57,6 +57,14 @@ global:
 This enables protection independently of online model-choice adaptation. Both
 components otherwise default to enabled when the master switch is enabled.
 
+`identity.headers.agent` is optional and has no default header name. When a
+request carries that header and the configured session header, Replay stores
+the agent value as `agent_id` next to the shared `session_id`. Previous-model
+and idle-time observations for that request stay on the session and agent
+together, so a child thread does not resume the root thread's model. A request
+that omits the header keeps the existing session key. The agent header does
+not change protection's hold key or which candidates protection can select.
+
 ## Scopes
 
 | Scope | What is protected | What can re-route |
