@@ -1,12 +1,11 @@
 """Same-host vLLM KV transfer using a trusted shared snapshot directory.
 
-The router's HTTP headers still need an adapter before routed reuse is enabled.
+The response middleware exposes completed transfer outcomes as HTTP headers.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import math
 import re
 import time
@@ -21,15 +20,21 @@ from vllm.distributed.kv_transfer.kv_connector.v1.base import (
     KVConnectorMetadata,
     KVConnectorRole,
 )
+from vllm.logger import init_logger
 
 from src.kv_connector.handoff import apply_handoff
 from src.kv_connector.paged_cache import extract_prefix
 from src.kv_connector.runtime import MapperArtifact
-from src.kv_connector.snapshot import LocalSnapshotStore, SourceSnapshot
+from src.kv_connector.snapshot import (
+    LocalSnapshotStore,
+    SnapshotExpiredError,
+    SourceSnapshot,
+)
+from src.kv_connector.vllm_metrics import MapperPromMetrics, MapperStats
 from src.training.kv_mapper.artifact import CompatibilitySpec, Manifest
 from src.training.kv_mapper.mapper_id import require_weight_commit
 
-logger = logging.getLogger(__name__)
+logger = init_logger(__name__)
 _HF_REPO_PARTS = 2
 _LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
 
@@ -180,8 +185,11 @@ class KVMapperConnector(KVConnectorBase_V1):
         self._ready_loads: dict[str, tuple[str, str, str, tuple[int, ...], int]] = {}
         self._pending_loads: dict[str, tuple[str, str, str, tuple[int, ...], int]] = {}
         self._attempted: set[str] = set()
+        self._outcomes: dict[str, dict[str, Any]] = {}
+        self._load_blocks: dict[str, tuple[int, ...]] = {}
         self._invalid_blocks: set[int] = set()
         self._captured: dict[str, dict[int, tuple[torch.Tensor, torch.Tensor]]] = {}
+        self._stats = MapperStats()
         self._target_caches: dict[int, torch.Tensor] = {}
         self.artifact: MapperArtifact | None = None
         self._source_identity: tuple[str, str] | None = None
@@ -217,6 +225,15 @@ class KVMapperConnector(KVConnectorBase_V1):
             logger.warning(
                 "Mapper cache reuse requires consumer prefix caching to be "
                 "disabled; set --no-enable-prefix-caching"
+            )
+            return
+
+        if getattr(
+            getattr(vllm_config, "scheduler_config", None), "async_scheduling", False
+        ):
+            logger.warning(
+                "Mapper cache reuse requires synchronous scheduling for safe "
+                "load-failure recomputation; set --no-async-scheduling"
             )
             return
 
@@ -273,6 +290,19 @@ class KVMapperConnector(KVConnectorBase_V1):
     def get_num_new_matched_tokens(
         self, request: Any, num_computed_tokens: int
     ) -> tuple[int, bool]:
+        hint = _hint(getattr(request, "kv_transfer_params", None))
+        if (
+            self._consumer
+            and request is not None
+            and hint
+            and hint[2]
+            and request.request_id not in self._outcomes
+        ):
+            self._outcomes[request.request_id] = {
+                "status": "unsupported",
+                "reason": "connector_unavailable",
+                "tokens_saved": 0,
+            }
         if not (
             self._consumer
             and self.artifact
@@ -289,8 +319,13 @@ class KVMapperConnector(KVConnectorBase_V1):
         if request.request_id in self._attempted:
             return 0, False
         self._attempted.add(request.request_id)
-        hint = _hint(getattr(request, "kv_transfer_params", None))
-        if hint is None or hint[2] != self.artifact.manifest.mapper_id:
+        if hint is None or not hint[2]:
+            return 0, False
+        self._outcomes[request.request_id].update(
+            status="fallback_reprefill", reason="snapshot_unavailable"
+        )
+        if hint[2] != self.artifact.manifest.mapper_id:
+            self._outcomes[request.request_id]["reason"] = "unknown_mapper"
             return 0, False
         prompt = getattr(request, "prompt_token_ids", None)
         if not prompt or getattr(request, "mm_features", None):
@@ -318,8 +353,15 @@ class KVMapperConnector(KVConnectorBase_V1):
                 or len(snapshot.layers) < required_source_layers
                 or snapshot.rope_theta != self._source_rope_theta
             ):
+                self._outcomes[request.request_id]["reason"] = "prefix_incompatible"
                 return 0, False
         except (OSError, KeyError, TypeError, ValueError, SafetensorError) as exc:
+            reason = "snapshot_invalid"
+            if isinstance(exc, FileNotFoundError):
+                reason = "snapshot_missing"
+            elif isinstance(exc, SnapshotExpiredError):
+                reason = "snapshot_expired"
+            self._outcomes[request.request_id]["reason"] = reason
             logger.info("No eligible source KV snapshot: %s", exc)
             return 0, False
         self._ready_loads[request.request_id] = (
@@ -347,22 +389,26 @@ class KVMapperConnector(KVConnectorBase_V1):
                 hint = _new_request_hint(new_req)
                 prompt = new_req.prompt_token_ids
                 scheduled = scheduler_output.num_scheduled_tokens.get(new_req.req_id, 0)
+                count = (
+                    min(len(prompt or []), scheduled)
+                    // self._block_size
+                    * self._block_size
+                )
                 if (
                     hint
                     and prompt
                     and not new_req.mm_features
                     and not new_req.lora_request
                     and new_req.num_computed_tokens == 0
-                    and len(prompt) % self._block_size == 0
-                    and scheduled >= len(prompt)
+                    and count > 0
                 ):
                     metadata.saves.append(
                         SaveJob(
                             new_req.req_id,
                             hint[0],
                             hint[1],
-                            tuple(prompt),
-                            tuple(new_req.block_ids[0]),
+                            tuple(prompt[:count]),
+                            tuple(new_req.block_ids[0][: count // self._block_size]),
                         )
                     )
         if self._consumer:
@@ -371,6 +417,12 @@ class KVMapperConnector(KVConnectorBase_V1):
                 if candidate is None:
                     continue
                 namespace, cache_id, mapper_id, prompt, count = candidate
+                self._load_blocks[new_req.req_id] = tuple(
+                    new_req.block_ids[0][: count // self._block_size]
+                )
+                self._outcomes[new_req.req_id].update(
+                    status="applied", reason="loaded", tokens_saved=count
+                )
                 metadata.loads.append(
                     LoadJob(
                         new_req.req_id,
@@ -391,7 +443,21 @@ class KVMapperConnector(KVConnectorBase_V1):
         self._attempted.discard(request.request_id)
         self._ready_loads.pop(request.request_id, None)
         self._pending_loads.pop(request.request_id, None)
-        return False, None
+        self._load_blocks.pop(request.request_id, None)
+        outcome = self._outcomes.pop(request.request_id, None)
+        if outcome is not None and not getattr(request, "num_output_tokens", 0):
+            outcome.update(
+                status="unsupported", reason="request_incomplete", tokens_saved=0
+            )
+        return False, {"vsr_kv_transfer": outcome} if outcome else None
+
+    def update_connector_output(self, connector_output: Any) -> None:
+        invalid = getattr(connector_output, "invalid_block_ids", None) or set()
+        for request_id, block_ids in self._load_blocks.items():
+            if invalid.intersection(block_ids):
+                self._outcomes[request_id].update(
+                    status="fallback_reprefill", reason="load_failed", tokens_saved=0
+                )
 
     def start_load_kv(self, forward_context: Any, **kwargs: Any) -> None:
         del forward_context, kwargs
@@ -402,6 +468,14 @@ class KVMapperConnector(KVConnectorBase_V1):
         assert self.artifact is not None and self.store is not None
         compat = self.artifact.manifest.compatibility
         for job in metadata.loads:
+            started = time.perf_counter()
+            stats = {
+                "status": "fallback_reprefill",
+                "tokens": 0,
+                "bytes": 0,
+                "fetch_seconds": 0.0,
+                "map_seconds": 0.0,
+            }
             try:
                 snapshot = self.store.load(
                     job.namespace,
@@ -413,6 +487,13 @@ class KVMapperConnector(KVConnectorBase_V1):
                     raise ValueError("source snapshot changed after scheduler lookup")
                 if snapshot.rope_theta != self._source_rope_theta:
                     raise ValueError("source RoPE theta changed after scheduler lookup")
+                stats["fetch_seconds"] = time.perf_counter() - started
+                stats["bytes"] = sum(
+                    t.numel() * t.element_size()
+                    for pair in snapshot.layers.values()
+                    for t in pair
+                )
+                map_started = time.perf_counter()
                 matched = apply_handoff(
                     self.artifact,
                     snapshot,
@@ -426,10 +507,37 @@ class KVMapperConnector(KVConnectorBase_V1):
                     target_rope_theta=self._target_rope_theta,
                     cache_layout="lbnhc",
                 )
+                device = next(iter(self._target_caches.values())).device
+                if device.type == "cuda":
+                    torch.cuda.synchronize(device)
+                stats.update(
+                    status="applied",
+                    tokens=matched,
+                    map_seconds=time.perf_counter() - map_started,
+                )
                 logger.info("Applied mapper KV prefix: %d tokens", matched)
             except Exception:
                 logger.exception("Mapper KV load failed; vLLM must recompute")
                 self._invalid_blocks.update(job.block_ids)
+                if not stats["fetch_seconds"]:
+                    stats["fetch_seconds"] = time.perf_counter() - started
+            self._stats.data.setdefault("loads", []).append(stats)
+
+    def get_kv_connector_stats(self):
+        stats, self._stats = self._stats, MapperStats()
+        return stats if not stats.is_empty() else None
+
+    @classmethod
+    def build_kv_connector_stats(cls, data=None):
+        return MapperStats(data or {})
+
+    @classmethod
+    def build_prom_metrics(
+        cls, vllm_config, metric_types, labelnames, per_engine_labelvalues
+    ):
+        return MapperPromMetrics(
+            vllm_config, metric_types, labelnames, per_engine_labelvalues
+        )
 
     def get_block_ids_with_load_errors(self) -> set[int]:
         invalid = self._invalid_blocks

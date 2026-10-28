@@ -31,16 +31,39 @@ full-head artifact. The producer records its RoPE theta in each snapshot, and
 the consumer checks it against `source_rope_theta`. Both models use unscaled
 Qwen3 RoPE.
 
-The consumer runs with `VLLM_USE_V2_MODEL_RUNNER=0` and
-`--no-enable-prefix-caching`. Mapped KV is approximate and is used only for
+The consumer runs with `VLLM_USE_V2_MODEL_RUNNER=0`,
+`--no-async-scheduling`, and `--no-enable-prefix-caching`. Synchronous scheduling
+supports recomputation after a worker rejects a cache load. Mapped KV is
+approximate and is used only for
 the request carrying the approved transfer hint. Ordinary prefix caching is
 disabled on the consumer. The connector permits mapped reuse only when the
 consumer configuration explicitly sets `enable_prefix_caching=False`.
 The producer can keep prefix caching enabled.
 
+Load `src.kv_connector.http_adapter.KVTransferResponseMiddleware` with vLLM's
+`--middleware` option on the consumer. It exposes completed non-streaming
+Chat and Completion transfer results through `x-vsr-kv-transfer-status` and
+`x-vsr-kv-transfer-reason`, removing the internal result from the JSON body.
+
 Both requests pass the same `namespace`, `cache_id`, and `mapper_id` in JSON
 `kv_transfer_params`. The target prompt must extend the source's exact token
 prefix. The two vLLM servers share the snapshot directory on one host.
+
+With `global.integrations.kv_transfer.enabled: true`, the router installs the
+coordinator from the configured backends and directional mapper pairs. Source
+requests receive a tenant namespace and a fresh cache ID. The response address
+registry records that ID and the pinned source identity for five minutes.
+Configure its Redis store through `global.stores.semantic_cache`. Approved
+model switches send the source cache ID and mapper ID to the consumer.
+Transfer is enabled for non-streaming requests with an authenticated principal
+and a trusted sticky session. Set each transfer backend's `backend_name` to the
+resolved endpoint name: a provider model named `source` with backend reference
+`source-backend` resolves to `source_source-backend`.
+
+Router outcomes use `llm_kv_transfer_outcomes_total{status,reason}`. vLLM worker
+metrics record load outcomes, successfully loaded tokens, fetched bytes, fetch
+duration, and completed map/load duration under `vllm:kv_mapper_*`. Metric labels
+contain no tenant or cache IDs.
 
 Run the synthetic artifact and conversion checks from the repository root:
 
@@ -55,6 +78,41 @@ CI's `test_*.py` discovery:
 ```bash
 PYTHONPATH=. python3 -m unittest src.kv_connector.tests.vllm_connector_integration src.kv_connector.tests.vllm_live_connector_integration
 ```
+
+Run the router handoff check from `src/semantic-router` against two running
+vLLM servers configured as above. Use the artifact's exact manifest mapper ID:
+
+```bash
+KV_TEST_SOURCE_URL=http://127.0.0.1:8000 \
+KV_TEST_TARGET_URL=http://127.0.0.1:8001 \
+KV_TEST_MAPPER_ID='<manifest mapper_id>' \
+go test ./pkg/extproc -run TestKVRoutedSourceAndTarget -count=1 -v
+```
+
+Without these environment variables, the test uses local HTTP fixture backends
+and an in-memory Redis protocol server to check publication, dispatch, and
+tenant isolation.
+
+For the stock-backend compatibility check, run the target without the connector
+and middleware and add `KV_TEST_STOCK_BACKEND=true` to the same command. The
+router still sends an eligible hint; the stock target completes normally and
+returns no transfer status.
+
+Check real export, reuse, and cold recomputation on the server host:
+
+```bash
+PYTHONPATH=. python3 -m src.kv_connector.live_probe \
+  --artifact /path/to/mapper-artifact \
+  --snapshot-root /path/to/shared-snapshots \
+  --source-url http://127.0.0.1:8000 \
+  --target-url http://127.0.0.1:8001 \
+  --output /path/to/live-correctness.json
+```
+
+This checks a synthetic 128-token prefix and missing, expired, wrong-mapper,
+cross-tenant, and malformed snapshots. Each fallback completion must match the
+cold greedy completion. The malformed case exercises worker load recovery;
+use a dedicated validation deployment for this probe.
 
 On a two-GPU CUDA host, exercise the published mapper geometry and cache write
 path with an explicit artifact directory:

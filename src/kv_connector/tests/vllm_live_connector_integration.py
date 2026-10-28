@@ -134,8 +134,13 @@ class LiveConnectorTests(unittest.TestCase):
                 scheduled_new_reqs=[source_new],
                 num_scheduled_tokens={"source-request": 4},
             )
+            source_new.prompt_token_ids = [1, 2, 3, 4, 5]
+            source_output.num_scheduled_tokens["source-request"] = 5
             source_meta = source.build_connector_meta(source_output)
             self.assertEqual(len(source_meta.saves), 1)
+            self.assertEqual(source_meta.saves[0].token_ids, (1, 2, 3, 4))
+            source_new.prompt_token_ids = [1, 2, 3, 4]
+            source_output.num_scheduled_tokens["source-request"] = 4
             source_worker.bind_connector_metadata(source_meta)
             keys = qwen3_rope(
                 torch.arange(8, dtype=torch.bfloat16).reshape(4, 1, 2) / 10,
@@ -228,6 +233,11 @@ class LiveConnectorTests(unittest.TestCase):
             target_worker.bind_connector_metadata(target_meta)
             target_worker.start_load_kv(None)
             self.assertEqual(target_worker.get_block_ids_with_load_errors(), set())
+            stats = target_worker.get_kv_connector_stats()
+            self.assertEqual(stats.reduce()["mapper_tokens_saved"], 4)
+            self.assertGreater(stats.reduce()["mapper_bytes_fetched"], 0)
+            self.assertGreaterEqual(stats.data["loads"][0]["map_seconds"], 0)
+            self.assertIsNone(target_worker.get_kv_connector_stats())
             actual_key, actual_value = extract_prefix(
                 target_cache, [1, 2], 4, heads=1, head_dim=2, layout="lbnhc"
             )
@@ -235,11 +245,36 @@ class LiveConnectorTests(unittest.TestCase):
             torch.testing.assert_close(actual_value, values)
             target_worker.clear_connector_metadata()
 
+            request.num_output_tokens = 1
+            _, applied = target.request_finished(request, [])
+            self.assertEqual(applied["vsr_kv_transfer"]["status"], "applied")
+            self.assertEqual(applied["vsr_kv_transfer"]["tokens_saved"], 4)
+            self.assertEqual(target.request_finished(request, []), (False, None))
+            failed_request = SimpleNamespace(
+                **{**request.__dict__, "request_id": "failed-target"}
+            )
+            self.assertEqual(
+                target.get_num_new_matched_tokens(failed_request, 0), (4, False)
+            )
+            target.update_state_after_alloc(failed_request, None, 4)
+            failed_meta = target.build_connector_meta(
+                SimpleNamespace(
+                    scheduled_new_reqs=[
+                        SimpleNamespace(req_id="failed-target", block_ids=([1, 2],))
+                    ]
+                )
+            )
+            target_worker.clear_connector_metadata()
+            target_worker.bind_connector_metadata(failed_meta)
             snapshot_file = next(snapshots.glob("*.safetensors"))
             snapshot_file.unlink()
-            target_worker.bind_connector_metadata(target_meta)
             target_worker.start_load_kv(None)
-            self.assertEqual(target_worker.get_block_ids_with_load_errors(), {1, 2})
+            invalid = target_worker.get_block_ids_with_load_errors()
+            self.assertEqual(invalid, {1, 2})
+            target.update_connector_output(SimpleNamespace(invalid_block_ids=invalid))
+            _, failed = target.request_finished(failed_request, [])
+            self.assertEqual(failed["vsr_kv_transfer"]["status"], "fallback_reprefill")
+            self.assertEqual(failed["vsr_kv_transfer"]["tokens_saved"], 0)
             self.assertEqual(target_worker.get_block_ids_with_load_errors(), set())
 
             snapshot_file.write_bytes(b"corrupt")
