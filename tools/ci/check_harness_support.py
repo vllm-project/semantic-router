@@ -19,6 +19,7 @@ PROTECTION_CONFIG_PATH = Path("src/semantic-router/pkg/config/learning_config.go
 
 BEGIN_MARKER = "<!-- BEGIN HARNESS SUPPORT TABLE -->"
 END_MARKER = "<!-- END HARNESS SUPPORT TABLE -->"
+HARNESS_TABLE_COUNT = 2
 
 LEVEL_ORDER = ("R0", "R1", "R2", "R3")
 LEVEL_HEADER = ("Level", "Held unit", "Identity required", "Configuration")
@@ -110,7 +111,7 @@ def validate_manifest(repo_root: Path, manifest: object) -> list[str]:
     errors = validate_levels(manifest.get("levels"))
     clients = manifest.get("clients")
     if not isinstance(clients, list) or not clients:
-        return errors + ["harness support manifest must list clients"]
+        return [*errors, "harness support manifest must list clients"]
 
     capture_dir = repo_root / CAPTURE_DIR
     replay_text = read_text(repo_root / REPLAY_PATH)
@@ -194,7 +195,7 @@ def validate_client(
     if not isinstance(display_name, str) or not display_name.strip():
         errors.append(f"{client_id}: display_name must be text")
     if not isinstance(versions, list) or not versions:
-        return errors + [f"{client_id}: versions must be a non-empty list"], []
+        return [*errors, f"{client_id}: versions must be a non-empty list"], []
 
     names: list[str] = []
     statuses: list[str] = []
@@ -387,11 +388,15 @@ def validate_level_requests(
         session_on = set(by_role["session"]["on"])
         if not set(LOOP_REQUESTS) <= session_on:
             errors.append(f"{label}: session header must be sent on turn-0 and turn-1")
-    if level == "R1" and "conversation" in by_role and "session" in by_role:
-        if list(by_role["conversation"]["on"]) != list(by_role["session"]["on"]):
-            errors.append(
-                f"{label}: session and conversation headers must be sent on the same requests"
-            )
+    if (
+        level == "R1"
+        and "conversation" in by_role
+        and "session" in by_role
+        and list(by_role["conversation"]["on"]) != list(by_role["session"]["on"])
+    ):
+        errors.append(
+            f"{label}: session and conversation headers must be sent on the same requests"
+        )
     if level == "R3" and "agent" in by_role and "session" in by_role:
         agent_on = set(by_role["agent"]["on"])
         session_on = set(by_role["session"]["on"])
@@ -491,7 +496,7 @@ def validate_capture(
     recorded = payload.get("identity")
     headers = recorded.get("headers") if isinstance(recorded, dict) else None
     if not isinstance(headers, list):
-        return errors + [f"{label}: {name} identity.headers must be a list"]
+        return [*errors, f"{label}: {name} identity.headers must be a list"]
     if len(headers) != len(identity):
         errors.append(f"{label}: {name} identity headers do not match the manifest")
         return errors
@@ -576,12 +581,14 @@ def parse_tables(section: str) -> tuple[list[list[str]], list[list[str]], list[s
         current.append(cells)
     if current:
         tables.append(current)
-    if len(tables) != 2:
+    if len(tables) != HARNESS_TABLE_COUNT:
         return (
             [],
             [],
-            errors
-            + ["harness support section must contain a level table and a client table"],
+            [
+                *errors,
+                "harness support section must contain a level table and a client table",
+            ],
         )
     level_rows, level_errors = table_rows(tables[0], LEVEL_HEADER, "level")
     client_rows, client_errors = table_rows(tables[1], CLIENT_HEADER, "client")
