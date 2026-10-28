@@ -33,7 +33,9 @@ clients:
           - /v1/messages
         identity: []
         level: R0
-        limits: This capture has no session or agent header, so it does not evidence a protection hold.
+        limits: >-
+          This capture has no session or agent header, so it does not
+          evidence a protection hold.
         evidence:
           captures:
             - claude-code-2.1.281-messages-tool-loop.json
