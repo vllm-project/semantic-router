@@ -623,6 +623,20 @@ func appendProviderFieldOmission(
 	}}, policy.Limits.Diagnostics)
 }
 
+func hasParticipantNames(request llmprotocol.Request) bool {
+	for _, instruction := range request.Instructions {
+		if instruction.Name != "" {
+			return true
+		}
+	}
+	for _, message := range request.Messages {
+		if message.Name != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func appendProviderFieldOmissions(
 	diagnostics *llmprotocol.Diagnostics,
 	policy llmprotocol.Policy,
