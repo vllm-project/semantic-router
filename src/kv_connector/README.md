@@ -40,6 +40,15 @@ disabled on the consumer. The connector permits mapped reuse only when the
 consumer configuration explicitly sets `enable_prefix_caching=False`.
 The producer can keep prefix caching enabled.
 
+The mapper retains the validated float32 weights in CPU memory and caches one
+copy on each device used for mapping. The published top-k-8 artifact uses about
+4 GiB for each copy. Reserve GPU headroom with `--gpu-memory-utilization`:
+vLLM's KV cache budget does not include this lazy allocation. Mapping prepares
+source tensors in 2,048-token chunks and keeps the complete mapped prefix on
+the target device until injection. For Qwen3-32B in bf16, that output occupies
+256 KiB per token, in addition to the vLLM cache blocks. The pinned models use
+unscaled RoPE with a native 40,960-token context limit.
+
 Load `src.kv_connector.http_adapter.KVTransferResponseMiddleware` with vLLM's
 `--middleware` option on the consumer. It exposes completed non-streaming
 Chat and Completion transfer results through `x-vsr-kv-transfer-status` and
