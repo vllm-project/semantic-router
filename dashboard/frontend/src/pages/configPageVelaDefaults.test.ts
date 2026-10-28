@@ -61,11 +61,16 @@ describe('Vela defaults and explicit legacy models', () => {
     )
   })
 
-  it('keeps the fallback editor defaults aligned with the Vela 2.0 0.3B defaults', () => {
+  it('leaves module thresholds to the model each module runs', () => {
     // The modules follow the decision model; a per-module line would pin one.
     expect(DEFAULT_SECTIONS.system_models).toEqual({ decision_model: { deployment: 'primary' } })
+    const sections = DEFAULT_SECTIONS as Record<string, Record<string, unknown>>
+    expect(sections.prompt_guard).not.toHaveProperty('threshold')
+    expect(sections.classifier.domain).not.toHaveProperty('threshold')
+    expect(sections.classifier.pii).not.toHaveProperty('threshold')
+    expect(sections.hallucination_mitigation.fact_check).not.toHaveProperty('threshold')
+    expect(sections.feedback_detector).not.toHaveProperty('threshold')
     expect(DEFAULT_SECTIONS.hallucination_mitigation).toMatchObject({
-      fact_check: { threshold: 0.93 },
       detector: {
         threshold: 0.5,
         min_span_length: 1,
@@ -76,8 +81,64 @@ describe('Vela defaults and explicit legacy models', () => {
       multimodal_model_path: 'models/vela-1.0-omni-nano',
       embedding_config: { target_dimension: 0 },
     })
-    expect(DEFAULT_SECTIONS.feedback_detector).toMatchObject({ threshold: 0.37 })
     expect(DEFAULT_SECTIONS.feedback_detector).not.toHaveProperty('max_sequence_length')
+  })
+
+  it('saves an untouched seeded module section without a threshold', () => {
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: {},
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const saved = (key: string) => {
+      const card = cards.find((candidate) => candidate.key === key)!
+      return card.save(card.editData)
+    }
+
+    expect(saved('prompt_guard')).toEqual({
+      model_catalog: {
+        modules: { prompt_guard: { enabled: true, model_ref: 'prompt_guard', use_cpu: true } },
+      },
+    })
+    const classifier = saved('classifier') as {
+      model_catalog: { modules: { classifier: Record<string, object> } }
+    }
+    expect(classifier.model_catalog.modules.classifier.domain).not.toHaveProperty('threshold')
+    expect(classifier.model_catalog.modules.classifier.pii).not.toHaveProperty('threshold')
+    const hallucination = saved('hallucination_mitigation') as {
+      model_catalog: { modules: { hallucination_mitigation: { fact_check: object } } }
+    }
+    expect(
+      hallucination.model_catalog.modules.hallucination_mitigation.fact_check,
+    ).not.toHaveProperty('threshold')
+    expect(saved('feedback_detector')).toEqual({
+      model_catalog: {
+        modules: {
+          feedback_detector: { enabled: true, model_ref: 'feedback_detector', use_cpu: true },
+        },
+      },
+    })
+  })
+
+  it('saves a cleared module threshold as no threshold, not 0', () => {
+    const card = buildRouterSectionCards({
+      config: null,
+      routerConfig: { prompt_guard: { enabled: true, threshold: 0.9 } },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    }).find((candidate) => candidate.key === 'prompt_guard')!
+
+    expect(card.save({ ...card.editData, threshold: '' })).toEqual({
+      model_catalog: { modules: { prompt_guard: { enabled: true } } },
+    })
+    expect(card.save({ ...card.editData, threshold: 0.9 })).toEqual({
+      model_catalog: { modules: { prompt_guard: { enabled: true, threshold: 0.9 } } },
+    })
   })
 
   it('leaves store widths to the embedding model and offers only runtime embedding models', () => {

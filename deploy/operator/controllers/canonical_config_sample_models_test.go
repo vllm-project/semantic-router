@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
 	kubeyaml "sigs.k8s.io/yaml"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
@@ -43,6 +44,64 @@ func TestDefaultOperatorSamplesSelectTheDefaultModel(t *testing.T) {
 				t.Fatalf("PII model = %+v", cfg.PIIModel)
 			}
 		})
+	}
+}
+
+// vela3FastMemoryLimit is the least Router memory limit that holds vela3-fast
+// while it loads; 8Gi is OOM-killed.
+var vela3FastMemoryLimit = resource.MustParse("12Gi")
+
+func TestOperatorSamplesRunTheGuardAtItsModelsOperatingPoint(t *testing.T) {
+	names, err := filepath.Glob(filepath.Join("..", "config", "samples", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guarded := 0
+	for _, path := range names {
+		name := filepath.Base(path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sample vllmv1alpha1.SemanticRouter
+		if err := kubeyaml.Unmarshal(data, &sample); err != nil {
+			t.Fatal(err)
+		}
+		if sample.Kind != "SemanticRouter" {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			canonical := operatorModelConfig(t, data)
+			raw, err := yaml.Marshal(canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := routerconfig.ParseYAMLBytes(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !cfg.PromptGuard.Enabled {
+				return
+			}
+			guarded++
+			want := routerconfig.ModuleThresholdsOf(cfg.PromptGuard.ModelID).PromptGuard
+			if cfg.PromptGuard.Threshold != want {
+				t.Fatalf("guard threshold %v on %s, want its operating point %v",
+					cfg.PromptGuard.Threshold, cfg.PromptGuard.ModelID, want)
+			}
+			if cfg.PromptGuard.ModelID != routerconfig.Vela3SignalModel {
+				return
+			}
+			// No limit leaves the Router uncapped, which also holds the model.
+			limit := sample.Spec.Resources.Limits.Memory()
+			if !limit.IsZero() && limit.Cmp(vela3FastMemoryLimit) < 0 {
+				t.Fatalf("memory limit %s cannot hold vela3-fast; want at least %s",
+					limit, &vela3FastMemoryLimit)
+			}
+		})
+	}
+	if guarded == 0 {
+		t.Fatal("no sample runs the prompt guard")
 	}
 }
 

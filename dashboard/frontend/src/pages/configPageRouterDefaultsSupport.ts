@@ -1097,6 +1097,21 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
 }
 
+// A module threshold left empty is saved as no threshold, so the Router gives
+// the module the operating point of the model it runs.
+function withoutEmptyThreshold(module: Record<string, unknown>): Record<string, unknown> {
+  const threshold = module.threshold
+  if (typeof threshold === 'number' && Number.isFinite(threshold)) {
+    return module
+  }
+  if (typeof threshold === 'string' && threshold.trim() !== '') {
+    return module
+  }
+  const rest = { ...module }
+  delete rest.threshold
+  return rest
+}
+
 function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<ConfigData> {
   if (key === 'embedding_models') {
     return buildNestedPatch(
@@ -1136,17 +1151,23 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
   if (key === 'classifier') {
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
       ...data,
-      domain: asObject(data.domain) || {},
-      pii: asObject(data.pii) || {},
+      domain: withoutEmptyThreshold(asObject(data.domain) || {}),
+      pii: withoutEmptyThreshold(asObject(data.pii) || {}),
       mcp: asObject(data.mcp) || {},
       preference: asObject(data.preference) || {},
     }) as Partial<ConfigData>
+  }
+  if (key === 'prompt_guard' || key === 'feedback_detector') {
+    return buildNestedPatch(
+      CURATED_ROUTER_SECTIONS[key].path,
+      withoutEmptyThreshold(data),
+    ) as Partial<ConfigData>
   }
   if (key === 'hallucination_mitigation') {
     const hallucination: Record<string, unknown> = {
       ...data,
       enabled: Boolean(data.enabled),
-      fact_check: asObject(data.fact_check) || {},
+      fact_check: withoutEmptyThreshold(asObject(data.fact_check) || {}),
       detector: asObject(data.detector) || {},
     }
     delete hallucination.explainer
