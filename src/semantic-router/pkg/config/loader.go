@@ -241,6 +241,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
 		rejectRemovedEntrypointFields,
+		checkRawClientAuth,
 		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
