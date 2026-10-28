@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) {
+func TestBuiltInSignalsDefaultToVela3WithoutChangingInputPolicies(t *testing.T) {
 	cfg := DefaultGlobalConfig()
 	paths := map[string]string{
 		"Domain":    cfg.CategoryModel.ModelID,
@@ -17,8 +17,8 @@ func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) 
 		"Feedback":  cfg.FeedbackDetector.ModelID,
 	}
 	for task, path := range paths {
-		if path != Vela2SignalModel {
-			t.Fatalf("%s default = %s, want %s", task, path, Vela2SignalModel)
+		if path != Vela3SignalModel {
+			t.Fatalf("%s default = %s, want %s", task, path, Vela3SignalModel)
 		}
 	}
 	if spec := GetModelByPath(cfg.MmBertModelPath); cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" || spec == nil || len(spec.Revision) != 40 {
@@ -30,14 +30,14 @@ func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) 
 	if cfg.EmbeddingConfig.FullContext || cfg.EmbeddingConfig.TargetLayer != 22 || cfg.EmbeddingConfig.TargetDimension != 0 {
 		t.Fatal("embedding input/representation defaults changed")
 	}
-	// The 0.3B's thresholds keep the Vela 1.0 specialists' operating points on
-	// the router signal suite's dev split (docs/records/vela2-router-signals.md).
+	// vela3-fast's thresholds keep the Vela 1.0 specialists' operating points on
+	// the router signal suite's dev split (docs/records/vela3-router-signals.md).
 	for name, got := range map[string][2]float32{
-		"Guard":     {cfg.PromptGuard.Threshold, .75},
-		"Domain":    {cfg.CategoryModel.Threshold, .28},
-		"PII":       {cfg.PIIModel.Threshold, .01},
-		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .93},
-		"Feedback":  {cfg.FeedbackDetector.Threshold, .37},
+		"Guard":     {cfg.PromptGuard.Threshold, .88},
+		"Domain":    {cfg.CategoryModel.Threshold, .41},
+		"PII":       {cfg.PIIModel.Threshold, .18},
+		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .9999},
+		"Feedback":  {cfg.FeedbackDetector.Threshold, .47},
 	} {
 		if got[0] != got[1] {
 			t.Fatalf("%s threshold = %v, want the calibrated %v", name, got[0], got[1])
@@ -109,8 +109,8 @@ func TestARemoteGuardKeepsItsPreviousThreshold(t *testing.T) {
 	if got := global.ModelCatalog.Modules.PromptGuard.Threshold; got != .5 {
 		t.Fatalf("a remote Guard keeps 0.5, got %v", got)
 	}
-	if got := global.ModelCatalog.Modules.Classifier.Domain.Threshold; got != .28 {
-		t.Fatalf("the local domain module keeps the 0.3B's 0.28, got %v", got)
+	if got := global.ModelCatalog.Modules.Classifier.Domain.Threshold; got != .41 {
+		t.Fatalf("the local domain module keeps vela3-fast's 0.41, got %v", got)
 	}
 }
 
