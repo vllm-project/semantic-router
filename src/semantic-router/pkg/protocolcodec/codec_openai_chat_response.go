@@ -268,17 +268,26 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 		}
 	}
 	if wire.CompletionTokensDetails != nil {
-		reasoning := wire.CompletionTokensDetails.ReasoningTokens
-		other := wire.CompletionTokens - reasoning
-		if reasoning < 0 || wire.CompletionTokens < reasoning {
-			other = -1
-		}
-		usage.OutputReasoning = authoritative(reasoning)
-		usage.OutputOther = llmprotocol.TokenCount{
-			Value: llmprotocol.Int64(other), Provenance: llmprotocol.UsageDerived,
-		}
+		usage.OutputReasoning, usage.OutputOther = splitOutputUsage(
+			wire.CompletionTokens, wire.CompletionTokensDetails.ReasoningTokens, llmprotocol.UsageDerived)
 	}
 	return usage, nil
+}
+
+// splitOutputUsage splits an output total into reasoning and other tokens. A
+// reasoning count above the total is an upstream accounting inconsistency, not
+// a reason to reject the response, so the breakdown stays unknown and only the
+// total is kept. A negative count still fails validation.
+func splitOutputUsage(total, reasoning int64, otherProvenance llmprotocol.UsageProvenance) (llmprotocol.TokenCount, llmprotocol.TokenCount) {
+	if reasoning < 0 {
+		return authoritative(reasoning), unknownCount()
+	}
+	if reasoning > total {
+		return unknownCount(), unknownCount()
+	}
+	return authoritative(reasoning), llmprotocol.TokenCount{
+		Value: llmprotocol.Int64(total - reasoning), Provenance: otherProvenance,
+	}
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
