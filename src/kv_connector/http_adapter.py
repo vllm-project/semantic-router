@@ -27,7 +27,11 @@ class KVTransferResponseMiddleware:
         async def capture(message):
             nonlocal start, size
             if message["type"] == "http.response.start":
-                if (b"content-type", b"application/json") in message["headers"]:
+                if any(
+                    key.lower() == b"content-type"
+                    and value.split(b";", 1)[0].strip().lower() == b"application/json"
+                    for key, value in message["headers"]
+                ):
                     start = message
                     return
             elif message["type"] == "http.response.body" and start is not None:

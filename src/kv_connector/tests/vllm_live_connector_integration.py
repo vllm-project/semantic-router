@@ -139,6 +139,13 @@ class LiveConnectorTests(unittest.TestCase):
             source_meta = source.build_connector_meta(source_output)
             self.assertEqual(len(source_meta.saves), 1)
             self.assertEqual(source_meta.saves[0].token_ids, (1, 2, 3, 4))
+            source_new.num_computed_tokens = 4
+            source_output.num_scheduled_tokens["source-request"] = 1
+            cached_source_meta = source.build_connector_meta(source_output)
+            with self.subTest("source prefix cache"):
+                self.assertEqual(len(cached_source_meta.saves), 1)
+                self.assertEqual(cached_source_meta.saves[0], source_meta.saves[0])
+            source_new.num_computed_tokens = 0
             source_new.prompt_token_ids = [1, 2, 3, 4]
             source_output.num_scheduled_tokens["source-request"] = 4
             source_worker.bind_connector_metadata(source_meta)
@@ -180,6 +187,7 @@ class LiveConnectorTests(unittest.TestCase):
                 lora_request=None,
             )
             self.assertEqual(target.get_num_new_matched_tokens(request, 0), (4, False))
+            self.assertEqual(target.get_num_new_matched_tokens(request, 0), (4, False))
 
             for cache_config in (
                 SimpleNamespace(block_size=2, enable_prefix_caching=True),
@@ -219,6 +227,7 @@ class LiveConnectorTests(unittest.TestCase):
                 wrong_theta.get_num_new_matched_tokens(request, 0), (0, False)
             )
             target.update_state_after_alloc(request, None, 4)
+            self.assertEqual(target.get_num_new_matched_tokens(request, 0), (0, False))
             target_new = SimpleNamespace(req_id="target-request", block_ids=([1, 2],))
             target_output = SimpleNamespace(scheduled_new_reqs=[target_new])
             target_meta = target.build_connector_meta(target_output)

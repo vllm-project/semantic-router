@@ -56,6 +56,15 @@ class HTTPAdapterTests(unittest.IsolatedAsyncioTestCase):
                 headers = await self.run_response(body, rewritten=True)
                 self.assertEqual(headers[b"x-vsr-kv-transfer-status"], status.encode())
 
+    async def test_json_charset_reports_completed_outcome(self):
+        body = json.dumps(
+            {"kv_transfer_params": {"vsr_kv_transfer": {"status": "applied"}}}
+        ).encode()
+        headers = await self.run_response(
+            body, b"application/json; charset=utf-8", rewritten=True
+        )
+        self.assertEqual(headers[b"x-vsr-kv-transfer-status"], b"applied")
+
     async def test_plain_streaming_invalid_and_large_responses_are_preserved(self):
         for body, content_type in (
             (b'{"choices": []}', b"application/json"),

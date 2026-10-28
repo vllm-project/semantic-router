@@ -318,7 +318,6 @@ class KVMapperConnector(KVConnectorBase_V1):
             return 0, False
         if request.request_id in self._attempted:
             return 0, False
-        self._attempted.add(request.request_id)
         if hint is None or not hint[2]:
             return 0, False
         self._outcomes[request.request_id].update(
@@ -380,6 +379,7 @@ class KVMapperConnector(KVConnectorBase_V1):
         del blocks
         candidate = self._ready_loads.pop(request.request_id, None)
         if candidate is not None and num_external_tokens == candidate[4]:
+            self._attempted.add(request.request_id)
             self._pending_loads[request.request_id] = candidate
 
     def build_connector_meta(self, scheduler_output: Any) -> MapperMetadata:
@@ -390,7 +390,7 @@ class KVMapperConnector(KVConnectorBase_V1):
                 prompt = new_req.prompt_token_ids
                 scheduled = scheduler_output.num_scheduled_tokens.get(new_req.req_id, 0)
                 count = (
-                    min(len(prompt or []), scheduled)
+                    min(len(prompt or []), new_req.num_computed_tokens + scheduled)
                     // self._block_size
                     * self._block_size
                 )
@@ -399,7 +399,6 @@ class KVMapperConnector(KVConnectorBase_V1):
                     and prompt
                     and not new_req.mm_features
                     and not new_req.lora_request
-                    and new_req.num_computed_tokens == 0
                     and count > 0
                 ):
                     metadata.saves.append(
