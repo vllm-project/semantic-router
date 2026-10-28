@@ -52,7 +52,7 @@ func TestPolicyMuxHeadHTTP(t *testing.T) {
 			mux.HandlePolicyFunc(ProtectedRoute("/api/users", PermUsersManage, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet), serve)
 			mux.HandlePolicyFunc(PublicRoute("/submit", http.MethodPost), serve)
 			mux.Seal()
-			var handler http.Handler = unavailableWithRoutePolicy(mux)(mux)
+			handler := unavailableWithRoutePolicy(mux)(mux)
 			if configured {
 				handler = AuthenticateRequest(svc, mux)(mux)
 			}
