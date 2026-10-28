@@ -182,6 +182,7 @@ func applyReplayProtectionDecision(out *routerreplay.LearningProtectionDiagnosti
 }
 
 func applyReplayProtectionScores(out *routerreplay.LearningProtectionDiagnostics, trace *selection.SessionPolicyTrace) {
+	out.CandidateModels = cloneLearningStringSlice(trace.CandidateModels)
 	out.BaseScores = cloneLearningScores(trace.BaseScores)
 	out.FinalScores = cloneLearningScores(trace.FinalScores)
 	out.CandidateTraces = replayCandidateTraces(trace.CandidateTraces)

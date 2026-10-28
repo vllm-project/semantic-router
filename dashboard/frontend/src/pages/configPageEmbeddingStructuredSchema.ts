@@ -13,10 +13,10 @@ export const EMBEDDING_MODELS_STRUCTURED_FIELDS: Record<string, RouterStructured
       'Layer, dimension, preload, and soft-matching controls shared by embedding consumers.',
     schema: object('Embedding Optimization', {
       preload_embeddings: boolean('Preload Embeddings'),
-      target_dimension: number('Target Dimension', { min: 1 }),
+      target_dimension: number('Target Dimension (0 = full model)', { min: 0 }),
       target_layer: number('Target Layer', { min: 0 }),
       enable_soft_matching: boolean('Enable Soft Matching'),
-      top_k: number('Top K', { min: 1 }),
+      top_k: number('Top K (0 = no limit)', { min: 0 }),
       min_score_threshold: number('Min Score Threshold', { min: 0, max: 1, step: 0.01 }),
     }),
   },

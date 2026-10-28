@@ -5,7 +5,7 @@ import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type {
   BackendRefEntry,
   LoRAAdapter,
-  ModelEvaluationConfig,
+  EvaluationRecordConfig,
   ModelPricing,
   ProviderReliability,
 } from './configPageSupport'
@@ -63,7 +63,8 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
   },
 ]
 
-interface EditableModelEvaluation {
+interface EditableEvaluationRecord {
+  model?: string
   benchmark?: string
   benchmark_profile?: string
   reasoning_effort?: string
@@ -73,7 +74,14 @@ interface EditableModelEvaluation {
   metadata?: Record<string, string>
 }
 
-const evaluationFields: ObjectEditorField<EditableModelEvaluation>[] = [
+const evaluationFields: ObjectEditorField<EditableEvaluationRecord>[] = [
+  {
+    key: 'model',
+    label: 'Model Card',
+    placeholder: 'organization/model-id',
+    required: true,
+    fullWidth: true,
+  },
   {
     key: 'benchmark',
     label: 'Benchmark',
@@ -155,6 +163,14 @@ const pricingFields: ObjectEditorField<ModelPricing>[] = [
     placeholder: '0.625',
   },
   {
+    key: 'cache_write_1h_per_1m',
+    label: 'Cache write (1h) / 1M',
+    type: 'number',
+    min: 0,
+    step: 0.0001,
+    placeholder: '1.25',
+  },
+  {
     key: 'completion_per_1m',
     label: 'Completion / 1M',
     type: 'number',
@@ -222,6 +238,31 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     max: 100,
     step: 1,
     placeholder: '50',
+  },
+  { key: 'connect_timeout', label: 'Connect timeout', placeholder: '10s' },
+  { key: 'total_timeout', label: 'Total timeout', placeholder: 'listener timeout' },
+  { key: 'idle_timeout', label: 'Stream idle timeout', placeholder: 'listener timeout' },
+  { key: 'per_try_timeout', label: 'Per-try timeout', placeholder: 'none' },
+  { key: 'first_byte_timeout', label: 'First-byte timeout (standalone mode)', placeholder: 'none' },
+  { key: 'retry_back_off_base', label: 'Retry back-off base', placeholder: '25ms' },
+  { key: 'retry_back_off_max', label: 'Retry back-off max', placeholder: '250ms' },
+  { key: 'retry_after_max', label: 'Honor Retry-After up to', placeholder: 'off' },
+  {
+    key: 'retry_budget_percent',
+    label: 'Retry budget percent',
+    type: 'number',
+    min: 0,
+    max: 100,
+    step: 1,
+    placeholder: 'off',
+  },
+  {
+    key: 'retry_budget_min_concurrency',
+    label: 'Retry budget minimum',
+    type: 'number',
+    min: 0,
+    step: 1,
+    placeholder: '3',
   },
 ]
 
@@ -447,19 +488,20 @@ export function ModelBackendRefsEditor({
   )
 }
 
-export function ModelEvaluationsEditor({
+export function EvaluationRecordsEditor({
   value,
   onChange,
   disabled,
   readOnly,
 }: StructuredModelFieldProps) {
-  const evaluations: EditableModelEvaluation[] = Array.isArray(value)
+  const evaluations: EditableEvaluationRecord[] = Array.isArray(value)
     ? value
         .filter(
-          (entry): entry is ModelEvaluationConfig =>
+          (entry): entry is EvaluationRecordConfig =>
             Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry),
         )
         .map((entry) => ({
+          model: entry.model,
           benchmark: entry.benchmark,
           benchmark_profile: entry.benchmark_profile,
           reasoning_effort: entry.reasoning_effort,
@@ -484,10 +526,13 @@ export function ModelEvaluationsEditor({
       value={evaluations}
       onChange={(nextValue) => onChange?.(nextValue)}
       fields={evaluationFields}
-      createItem={() => ({ benchmark: '', metrics: {} })}
-      addLabel="Add evaluation"
-      emptyLabel="No operator evaluations configured. Built-in evidence is supplied by the catalog."
-      itemLabel={(item, index) => item.benchmark?.trim() || `Evaluation ${index + 1}`}
+      createItem={() => ({ model: '', benchmark: '', metrics: {} })}
+      addLabel="Add record"
+      emptyLabel="No operator evaluation records configured. Built-in evidence is supplied by the catalog."
+      itemLabel={(item, index) =>
+        [item.model?.trim(), item.benchmark?.trim()].filter(Boolean).join(' · ') ||
+        `Record ${index + 1}`
+      }
       itemDescription={(item) =>
         item.metrics && Object.keys(item.metrics).length > 0
           ? `${Object.keys(item.metrics).length} metric${Object.keys(item.metrics).length === 1 ? '' : 's'}`
@@ -495,6 +540,7 @@ export function ModelEvaluationsEditor({
       }
       validateItem={(item) => {
         const errors: string[] = []
+        if (!item.model?.trim()) errors.push('Model Card is required.')
         if (!item.benchmark?.trim()) errors.push('Benchmark is required.')
         if (!item.metrics || Object.keys(item.metrics).length === 0) {
           errors.push('At least one metric is required.')

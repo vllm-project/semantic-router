@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// handleListMemories handles GET /v1/memory
+// handleListMemories handles GET /api/v1/storage/memories
 // Lists memories for a user with optional filtering.
 // Returns up to `limit` most recent memories sorted by created_at descending.
 //
@@ -19,10 +19,13 @@ import (
 // Query parameters:
 //   - type: filter by memory type (semantic, procedural, episodic)
 //   - limit: max results (default 20, max 100)
+//   - offset: rows to skip (default 0). Pages are best-effort under concurrent writes.
 func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *http.Request) {
-	if !s.requireMemoryStore(w) {
+	store, release, ok := s.acquireMemoryStore(w)
+	if !ok {
 		return
 	}
+	defer release()
 
 	userID, ok := s.extractUserID(w, r)
 	if !ok {
@@ -45,8 +48,14 @@ func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *h
 	}
 	opts.Limit = limit
 
+	offset, ok := s.parseMemoryListOffset(w, r.URL.Query().Get("offset"))
+	if !ok {
+		return
+	}
+	opts.Offset = offset
+
 	ctx := r.Context()
-	result, err := s.currentMemoryStore().List(ctx, opts)
+	result, err := store.List(ctx, opts)
 	if err != nil {
 		logging.Errorf("[MemoryAPI] List failed for user_id=%s: %v", userID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "LIST_FAILED",
@@ -64,18 +73,21 @@ func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *h
 		Memories: memories,
 		Total:    result.Total,
 		Limit:    result.Limit,
+		Offset:   result.Offset,
 	}
 
 	logging.Debugf("[MemoryAPI] Listed %d/%d memories for user_id=%s", len(memories), result.Total, userID)
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-// handleGetMemory handles GET /v1/memory/{id}
+// handleGetMemory handles GET /api/v1/storage/memories/{id}
 // Retrieves a specific memory by ID, enforcing ownership via authenticated user identity.
 func (s *ClassificationAPIServer) handleGetMemory(w http.ResponseWriter, r *http.Request) {
-	if !s.requireMemoryStore(w) {
+	store, release, ok := s.acquireMemoryStore(w)
+	if !ok {
 		return
 	}
+	defer release()
 
 	memoryID, ok := s.extractMemoryID(w, r)
 	if !ok {
@@ -88,7 +100,7 @@ func (s *ClassificationAPIServer) handleGetMemory(w http.ResponseWriter, r *http
 	}
 
 	ctx := r.Context()
-	mem, err := s.currentMemoryStore().Get(ctx, memoryID)
+	mem, err := store.Get(ctx, memoryID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND",
@@ -112,12 +124,14 @@ func (s *ClassificationAPIServer) handleGetMemory(w http.ResponseWriter, r *http
 	s.writeJSONResponse(w, http.StatusOK, memoryToResponse(mem))
 }
 
-// handleDeleteMemory handles DELETE /v1/memory/{id}
+// handleDeleteMemory handles DELETE /api/v1/storage/memories/{id}
 // Deletes a specific memory by ID, enforcing ownership via authenticated user identity.
 func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {
-	if !s.requireMemoryStore(w) {
+	store, release, ok := s.acquireMemoryStore(w)
+	if !ok {
 		return
 	}
+	defer release()
 
 	memoryID, ok := s.extractMemoryID(w, r)
 	if !ok {
@@ -132,7 +146,7 @@ func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *h
 	ctx := r.Context()
 
 	// Verify ownership before deleting
-	mem, err := s.currentMemoryStore().Get(ctx, memoryID)
+	mem, err := store.Get(ctx, memoryID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND",
@@ -151,7 +165,7 @@ func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := s.currentMemoryStore().Forget(ctx, memoryID); err != nil {
+	if err := store.Forget(ctx, memoryID); err != nil {
 		// Handle TOCTOU: if another request deleted this memory between Get and Forget,
 		// treat it as a successful idempotent delete rather than a 500.
 		if strings.Contains(err.Error(), "not found") {
@@ -171,12 +185,14 @@ func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *h
 	})
 }
 
-// handleDeleteMemoriesByScope handles DELETE /v1/memory[?type=semantic]
+// handleDeleteMemoriesByScope handles DELETE /api/v1/storage/memories[?type=semantic]
 // Deletes all memories for the authenticated user, optionally filtered by type.
 func (s *ClassificationAPIServer) handleDeleteMemoriesByScope(w http.ResponseWriter, r *http.Request) {
-	if !s.requireMemoryStore(w) {
+	store, release, ok := s.acquireMemoryStore(w)
+	if !ok {
 		return
 	}
+	defer release()
 
 	userID, ok := s.extractUserID(w, r)
 	if !ok {
@@ -195,7 +211,7 @@ func (s *ClassificationAPIServer) handleDeleteMemoriesByScope(w http.ResponseWri
 	scope.Types = types
 
 	ctx := r.Context()
-	if err := s.currentMemoryStore().ForgetByScope(ctx, scope); err != nil {
+	if err := store.ForgetByScope(ctx, scope); err != nil {
 		logging.Errorf("[MemoryAPI] DeleteByScope failed for user_id=%s: %v", userID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "DELETE_FAILED",
 			"Failed to delete memories")

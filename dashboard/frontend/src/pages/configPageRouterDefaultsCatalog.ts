@@ -1,4 +1,4 @@
-import type { RouterSystemKey } from './configPageRouterDefaultsSupport'
+import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
   AuthzConfig,
@@ -14,6 +14,7 @@ import type {
   PromptCompressionConfig,
   RateLimitConfig,
   ResponseAPIConfig,
+  RouterLearningConfig,
   RouterCoreConfig,
   RouterReplayConfig,
   SemanticCacheConfig,
@@ -21,46 +22,38 @@ import type {
   VectorStoreConfig,
 } from './configPageSupport'
 
-export const PYTHON_ROUTER_KEYS: RouterSystemKey[] = [
-  'router_core',
-  'response_api',
-  'router_replay',
-  'authz',
-  'ratelimit',
-  'memory',
-  'response_cache',
-  'vector_store',
-  'tools',
-  'prompt_guard',
-  'classifier',
-  'hallucination_mitigation',
-  'feedback_detector',
-  'external_models',
-  'system_models',
-  'embedding_models',
-  'prompt_compression',
-  'modality_detector',
-  'observability',
-  'looper',
-  'clear_route_cache',
-  'model_selection',
-  'api',
-]
-
-export const OPTIONAL_ROUTER_KEYS: RouterSystemKey[] = []
-
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
-    auto_model_name: 'vllm-sr/auto',
-    auto_model_names: ['vllm-sr/auto', 'auto', 'MoM'],
-    include_config_models_in_list: false,
+    list_backend_models: false,
     clear_route_cache: true,
     model_selection: {
       enabled: true,
       method: 'knn',
     },
   } satisfies RouterCoreConfig,
+  learning: {
+    enabled: false,
+    adaptation: {
+      enabled: true,
+      candidate_set: 'decision',
+      strategy: 'routing_sampling',
+    },
+    protection: {
+      enabled: true,
+      scope: 'conversation',
+      identity: {
+        headers: {
+          session: 'x-session-id',
+          conversation: 'x-conversation-id',
+        },
+      },
+      tuning: {},
+    },
+    state_store: {
+      backend: 'local',
+    },
+  } satisfies RouterLearningConfig,
   response_api: {
     enabled: true,
     store_backend: 'memory',
@@ -72,6 +65,13 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     store_backend: 'memory',
     ttl_seconds: 2592000,
     async_writes: false,
+    capture_request_body: true,
+    capture_response_body: true,
+    capture_personal_data: true,
+    max_records: 10000,
+    max_body_bytes: 4096,
+    max_tool_trace_bytes: 0,
+    max_tool_trace_steps: 100,
   } satisfies RouterReplayConfig,
   authz: {
     fail_open: false,
@@ -85,12 +85,13 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     fail_open: false,
     providers: [],
   } satisfies RateLimitConfig,
+  management_api: {},
+  startup_status: {},
   memory: {
     enabled: false,
     auto_store: false,
     milvus: {
       collection: 'agentic_memory',
-      dimension: 384,
     },
     default_retrieval_limit: 5,
     default_similarity_threshold: 0.7,
@@ -108,7 +109,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     file_storage_dir: '/var/lib/vsr/data',
     max_file_size_mb: 50,
     embedding_model: 'mmbert',
-    embedding_dimension: 384,
     ingestion_workers: 2,
     ingestion_drain_timeout_seconds: 25,
     supported_formats: ['.txt', '.md', '.json', '.csv', '.html'],
@@ -122,29 +122,21 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     tools_db_path: 'config/tools_db.json',
     fallback_to_empty: true,
   } satisfies ToolIntegrationConfig,
+  // The module thresholds are left out: the Router gives a module without one
+  // the operating point of the model it runs.
   prompt_guard: {
     enabled: true,
     model_ref: 'prompt_guard',
-    threshold: 0.7,
     use_cpu: true,
-    use_mmbert_32k: true,
-    jailbreak_mapping_path:
-      'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
       model_ref: 'domain_classifier',
-      threshold: 0.5,
       use_cpu: true,
-      use_mmbert_32k: true,
-      category_mapping_path: 'models/mmbert32k-intent-classifier-merged/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
-      threshold: 0.9,
       use_cpu: true,
-      use_mmbert_32k: true,
-      pii_mapping_path: 'models/mmbert32k-pii-detector-merged/pii_type_mapping.json',
     },
     preference: {
       use_contrastive: false,
@@ -154,55 +146,39 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.6,
       use_cpu: true,
-      use_mmbert_32k: true,
     },
     detector: {
       model_ref: 'hallucination_detector',
-      threshold: 0.8,
+      threshold: 0.5,
       use_cpu: true,
-      min_span_length: 2,
-      min_span_confidence: 0.6,
+      min_span_length: 1,
+      min_span_confidence: 0,
       context_window_size: 50,
-      enable_nli_filtering: true,
-      nli_entailment_threshold: 0.75,
-    },
-    explainer: {
-      model_ref: 'hallucination_explainer',
-      threshold: 0.9,
-      use_cpu: true,
     },
   } satisfies CanonicalHallucinationModuleConfig,
   feedback_detector: {
     enabled: true,
     model_ref: 'feedback_detector',
-    threshold: 0.7,
     use_cpu: true,
-    use_mmbert_32k: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
+  complexity: {},
   external_models: [],
+  admission: {},
+  // Every module follows the decision model unless a line binds it.
   system_models: {
-    prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
-    domain_classifier: 'models/mmbert32k-intent-classifier-merged',
-    pii_classifier: 'models/mmbert32k-pii-detector-merged',
-    fact_check_classifier: 'models/mmbert32k-factcheck-classifier-merged',
-    hallucination_detector: 'models/mom-halugate-detector',
-    hallucination_explainer: 'models/mom-halugate-explainer',
-    feedback_detector: 'models/mmbert32k-feedback-detector-merged',
+    decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',
-    gemma_model_path: '',
-    mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-    multimodal_model_path: '',
-    bert_model_path: '',
+    mmbert_model_path: 'models/Vela-1.0-Encoder-307M-Embedding',
+    multimodal_model_path: 'models/vela-1.0-omni-nano',
     use_cpu: true,
     embedding_config: {
-      backend: 'candle',
+      backend: 'model_runtime',
       model_type: 'mmbert',
       preload_embeddings: true,
-      target_dimension: 768,
+      target_dimension: 0,
       target_layer: 22,
       enable_soft_matching: true,
       top_k: 1,
@@ -266,6 +242,12 @@ export const SECTION_META: Record<
     description:
       'Core router behavior, config source, startup cache handling, and model selection strategy.',
   },
+  learning: {
+    title: 'Router Learning',
+    eyebrow: 'Router',
+    description:
+      'Online model-choice adaptation, conversation stability protection, and shared learning state.',
+  },
   response_api: {
     title: 'Response API',
     eyebrow: 'Services',
@@ -276,7 +258,7 @@ export const SECTION_META: Record<
     title: 'Router Replay',
     eyebrow: 'Services',
     description:
-      'Persistence policy for replay records written by replay-enabled decision plugins.',
+      'Shared Replay storage and capture defaults. Each decision can override capture settings through its Replay plugin.',
   },
   authz: {
     title: 'Authorization',
@@ -287,6 +269,16 @@ export const SECTION_META: Record<
     title: 'Rate Limiting',
     eyebrow: 'Services',
     description: 'Per-user, group, and model request throttling rules enforced by the router.',
+  },
+  management_api: {
+    title: 'Management API',
+    eyebrow: 'Services',
+    description: 'Management endpoint access, transport, and runtime controls.',
+  },
+  startup_status: {
+    title: 'Startup Status',
+    eyebrow: 'Services',
+    description: 'Startup readiness and status-reporting behavior exposed by the router.',
   },
   memory: {
     title: 'Agentic Memory',
@@ -324,22 +316,33 @@ export const SECTION_META: Record<
   hallucination_mitigation: {
     title: 'Hallucination Mitigation',
     eyebrow: 'Model Catalog',
-    description: 'Fact-check, detector, and explainer modules used for hallucination review.',
+    description: 'Fact-check and detector modules used for hallucination review.',
   },
   feedback_detector: {
     title: 'Feedback Detector',
     eyebrow: 'Model Catalog',
     description: 'Feedback classification defaults for routing-aware user correction flows.',
   },
+  complexity: {
+    title: 'Complexity Model',
+    eyebrow: 'Model Catalog',
+    description: 'Model-backed request-complexity classification used by routing signals.',
+  },
   external_models: {
     title: 'External Models',
     eyebrow: 'Model Catalog',
     description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
   },
-  system_models: {
-    title: 'System Model Bindings',
+  admission: {
+    title: 'Model Admission',
     eyebrow: 'Model Catalog',
-    description: 'Stable capability-to-model bindings for the router-owned built-in model catalog.',
+    description: 'Named admission policies used to qualify models before routing.',
+  },
+  system_models: {
+    title: 'Decision Model & Bindings',
+    eyebrow: 'Model Catalog',
+    description:
+      'Choose the Vela decision model for built-in signals and decision questions, with optional per-signal model overrides.',
   },
   embedding_models: {
     title: 'Embedding Models',

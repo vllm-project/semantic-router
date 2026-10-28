@@ -23,7 +23,7 @@ const (
 	maxProbesBytes   int64 = 8 << 20
 	maxDSLBytes      int64 = 8 << 20
 	maxREADMEBytes   int64 = 2 << 20
-	// Match Router's /api/v1/eval JSON request limit. Stress probes exercise
+	// Match Router's /api/v1/routing/preview JSON request limit. Stress probes exercise
 	// 524K-token bands and can exceed 2 MiB after JSON materialization.
 	maxRequestBytes           = 10 << 20
 	maxGeneratedTextBytes     = 10 << 20
@@ -508,10 +508,10 @@ func resolveModelLessProbeModels(probes []ProbeDetail, byID map[string]ProbeDeta
 		expectedRecipe := normalizeExpectedRecipe(probe.Expected.Recipe)
 		model := ""
 		var err error
-		if expectedRecipe == "default" && len(projection.autoModels) > 0 {
+		if expectedRecipe == "default" && len(projection.defaultModels) > 0 {
 			// Only model-less default probes participate in offline-compatible
 			// auto-entrypoint round-robin assignment.
-			model = projection.autoModels[defaultProbeIndex%len(projection.autoModels)]
+			model = projection.defaultModels[defaultProbeIndex%len(projection.defaultModels)]
 			defaultProbeIndex++
 		} else {
 			// Named recipes use their first executable entrypoint in Dashboard Run.

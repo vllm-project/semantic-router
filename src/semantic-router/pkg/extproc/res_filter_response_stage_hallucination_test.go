@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -53,15 +55,21 @@ func newHallucinationEndpointServer(t *testing.T, spans []string, fail bool) (*h
 	return server, &calls
 }
 
-// hallucinationSignalConfig points the hallucination detector at server over
-// the endpoint backend.
+// hallucinationSignalConfig binds the hallucination detector of every recipe
+// to server, an http_chat deployment.
 func hallucinationSignalConfig(server *httptest.Server) *config.RouterConfig {
-	cfg := &config.RouterConfig{}
-	cfg.HallucinationMitigation.HallucinationModel = config.HallucinationModelConfig{
-		Backend:  config.HallucinationBackendEndpoint,
-		Endpoint: server.URL + "/v1",
-		ModelID:  "stub-detector",
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		panic(err)
 	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		panic(err)
+	}
+	cfg := &config.RouterConfig{}
+	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "detector", ModelName: "stub-detector", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: parsed.Hostname(), Port: port, Protocol: parsed.Scheme}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"detector": {Provider: "http", ExternalModel: "detector"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"hallucination_detector": {Deployment: "detector", Adapter: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractTokenSpans}}
 	return cfg
 }
 
@@ -136,7 +144,7 @@ func newHallucinationSignalRouter(t *testing.T, server *httptest.Server, action 
 // and the warning the plugin's action produces.
 func runHallucinationStage(t *testing.T, router *OpenAIRouter, ctx *RequestContext, answer string) (warning string) {
 	t.Helper()
-	router.evaluateHallucinationSignal(ctx, answer)
+	router.scoreResponseStageSignals(ctx, answer)
 	if response := router.performHallucinationDetectionText(ctx, answer); response != nil {
 		t.Fatalf("the hallucination plugin does not block, got %+v", response)
 	}
@@ -164,8 +172,8 @@ func TestHallucinationSignalDrivesTheSelectedDecisionPlugin(t *testing.T) {
 	if len(ctx.VSRMatchedHallucination) != 1 || ctx.VSRMatchedHallucination[0] != hallucinationRuleName {
 		t.Fatalf("matched hallucination rules = %v, want [%s]", ctx.VSRMatchedHallucination, hallucinationRuleName)
 	}
-	if got := ctx.VSRSignalConfidences[hallucinationSignalKey]; got != 1 {
-		t.Fatalf("confidence under %s = %v, want the detector's 1", hallucinationSignalKey, got)
+	if _, ok := ctx.VSRSignalConfidences[hallucinationSignalKey]; ok {
+		t.Fatal("categorical endpoint must not invent confidence")
 	}
 	if !ctx.HallucinationDetected || len(ctx.HallucinationSpans) != 1 || ctx.HallucinationSpans[0] != "450 meters" {
 		t.Fatalf("the plugin did not carry the evidence: detected=%v spans=%v", ctx.HallucinationDetected, ctx.HallucinationSpans)
@@ -184,8 +192,8 @@ func TestHallucinationSignalCleanAnswerTakesNoAction(t *testing.T) {
 	if len(ctx.VSRMatchedHallucination) != 0 || len(ctx.VSRSignalErrors) != 0 {
 		t.Fatalf("a clean answer must match nothing and fail nothing, got matched=%v errors=%v", ctx.VSRMatchedHallucination, ctx.VSRSignalErrors)
 	}
-	if _, ok := ctx.VSRSignalConfidences[hallucinationSignalKey]; !ok {
-		t.Fatal("a clean answer is an observation and must record its confidence")
+	if ctx.VSRHallucinationEvidence == nil || ctx.VSRHallucinationEvidence.ScoreAvailable {
+		t.Fatal("a clean endpoint verdict must retain evidence without scores")
 	}
 	if ctx.HallucinationDetected || warning != "" {
 		t.Fatalf("a clean answer is not a detection, got detected=%v warning=%q", ctx.HallucinationDetected, warning)
@@ -324,13 +332,13 @@ func TestHallucinationSignalReadsTheSelectedRecipeRules(t *testing.T) {
 		TraceContext: context.Background(), Headers: map[string]string{},
 		FactCheckNeeded: true, HasToolsForFactCheck: true, ToolResultsContext: hallucinationContext,
 	}
-	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, plain)
+	router.resolveEntrypointForRequest(config.DefaultEntrypointModel, plain)
 	if recipe := plain.Routing.SelectedRecipe(); recipe == nil || recipe.Name != config.DefaultRecipeName {
 		t.Fatalf("auto model resolved %+v, want the default recipe", recipe)
 	}
 	plain.VSRSelectedDecision = &cfg.Recipes[0].Profile.Decisions[0]
 
-	router.evaluateHallucinationSignal(plain, hallucinationAnswer)
+	router.scoreResponseStageSignals(plain, hallucinationAnswer)
 	if len(plain.VSRMatchedHallucination) != 0 || len(plain.VSRSignalConfidences) != 0 || len(plain.VSRSignalErrors) != 0 {
 		t.Fatalf("the default recipe declares no hallucination rule, yet its answer was checked: matched=%v confidences=%v errors=%v",
 			plain.VSRMatchedHallucination, plain.VSRSignalConfidences, plain.VSRSignalErrors)
@@ -355,7 +363,7 @@ func TestHallucinationSignalRecordsReplayOutcome(t *testing.T) {
 		router, ctx := newHallucinationSignalRouter(t, server, "body")
 		recorder := startResponseStageReplay(t, router, ctx)
 
-		router.evaluateHallucinationSignal(ctx, hallucinationAnswer)
+		router.scoreResponseStageSignals(ctx, hallucinationAnswer)
 		router.recordRouterReplayHallucination(ctx)
 
 		outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
@@ -364,8 +372,8 @@ func TestHallucinationSignalRecordsReplayOutcome(t *testing.T) {
 		}
 		assertHallucinationOutcome(t, outcomes[0], "detected", "")
 		metadata := outcomes[0].Metadata
-		if outcomes[0].Score != 1 || metadata["spans"] != "1" || metadata["action"] != "body" || metadata["direction"] != config.SignalDirectionResponse {
-			t.Fatalf("outcome = %+v, want the detector's confidence, the span count, the plugin action and the response direction", outcomes[0])
+		if outcomes[0].Score != 0 || metadata["score_available"] != "false" || metadata["spans"] != "1" || metadata["action"] != "body" || metadata["direction"] != config.SignalDirectionResponse {
+			t.Fatalf("outcome = %+v, want unavailable score metadata, the span count, the plugin action and the response direction", outcomes[0])
 		}
 	})
 
@@ -375,13 +383,13 @@ func TestHallucinationSignalRecordsReplayOutcome(t *testing.T) {
 		recorder := startResponseStageReplay(t, router, ctx)
 
 		ctx.ToolResultsContext = ""
-		router.evaluateHallucinationSignal(ctx, hallucinationAnswer)
+		router.scoreResponseStageSignals(ctx, hallucinationAnswer)
 		router.recordRouterReplayHallucination(ctx)
 
 		other := &RequestContext{TraceContext: context.Background(), Headers: map[string]string{}, VSRSelectedDecision: ctx.VSRSelectedDecision}
 		other.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
 		other.RouterReplayID = ctx.RouterReplayID
-		router.evaluateHallucinationSignal(other, hallucinationAnswer)
+		router.scoreResponseStageSignals(other, hallucinationAnswer)
 		router.recordRouterReplayHallucination(other)
 
 		outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
@@ -400,7 +408,7 @@ func TestHallucinationMatchedHeaderIsWrittenInTheBodyPhase(t *testing.T) {
 	router, ctx := newHallucinationSignalRouter(t, server, "header")
 	ctx.Headers[headers.VSRDebug] = "true"
 
-	router.evaluateHallucinationSignal(ctx, hallucinationAnswer)
+	router.scoreResponseStageSignals(ctx, hallucinationAnswer)
 	response := buildResponseBodyContinueResponse(nil, nil)
 	addResponseStageSignalHeaders(ctx, response)
 

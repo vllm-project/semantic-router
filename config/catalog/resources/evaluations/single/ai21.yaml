@@ -216,7 +216,7 @@
 - id: independent/jamba-reasoning-3b-humanitys-last-exam@1.0.0
   model: ai21/jamba-reasoning-3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Jamba Reasoning 3B
@@ -306,7 +306,7 @@
 - id: independent/jamba-1-7-large-humanitys-last-exam@1.0.0
   model: ai21/jamba-large-1.7
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Jamba 1.7 Large

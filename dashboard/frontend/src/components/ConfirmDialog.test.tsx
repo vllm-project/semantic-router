@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import ConfirmDialog from './ConfirmDialog'
-import EvaluationIssueDetails from './evaluation-plane/EvaluationIssueDetails'
 
 describe('ConfirmDialog', () => {
   it('renders an accessible destructive confirmation', () => {
@@ -86,14 +85,17 @@ describe('ConfirmDialog', () => {
         title: 'Delete run?',
         description: 'This cannot be undone.',
         errorMessage: 'The run could not be deleted. Retry or close this dialog.',
-        errorDetails: createElement(EvaluationIssueDetails, {
-          issues: [{ label: 'Deletion request', message: rawError }],
-        }),
+        errorDetails: createElement(
+          'details',
+          { 'data-technical-details': 'true' },
+          createElement('summary', {}, 'Details'),
+          rawError,
+        ),
         onCancel: () => undefined,
         onConfirm: () => undefined,
       }),
     )
-    const detailsIndex = markup.indexOf('data-evaluation-technical-details="true"')
+    const detailsIndex = markup.indexOf('data-technical-details="true"')
 
     expect(markup.slice(0, detailsIndex)).toContain('The run could not be deleted')
     expect(markup.slice(0, detailsIndex)).not.toContain(rawError)

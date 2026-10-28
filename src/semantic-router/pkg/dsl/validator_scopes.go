@@ -13,6 +13,7 @@ func (v *Validator) checkRoutingScopes() {
 		return
 	}
 	v.checkStrategy(v.prog.Strategy, Position{})
+	v.checkCandidateRequirements(v.prog.CandidateRequirements, Position{})
 
 	recipeNames := map[string]Position{"default": {}}
 	for _, recipe := range v.prog.Recipes {
@@ -39,6 +40,7 @@ func (v *Validator) checkRecipeScope(recipe *RecipeDecl) {
 	child.checkConstraints()
 	child.checkConflicts()
 	child.checkStrategy(scoped.Strategy, recipe.Pos)
+	child.checkCandidateRequirements(scoped.CandidateRequirements, recipe.Pos)
 	for _, diag := range child.diagnostics {
 		diag.Message = fmt.Sprintf("RECIPE %q: %s", recipe.Name, diag.Message)
 		v.diagnostics = append(v.diagnostics, diag)
@@ -46,19 +48,23 @@ func (v *Validator) checkRecipeScope(recipe *RecipeDecl) {
 }
 
 func (v *Validator) checkEntrypointScopes(recipeNames map[string]Position) {
-	seenModels := make(map[string]Position)
+	seenModels := make(map[config.InferenceAPI]map[string]Position)
 	for _, entrypoint := range v.prog.Entrypoints {
 		if _, exists := recipeNames[entrypoint.Recipe]; !exists {
 			v.addDiag(DiagWarning, entrypoint.Pos,
 				fmt.Sprintf("Entrypoint references unknown recipe %q", entrypoint.Recipe), nil)
 		}
+		api := entrypointAPI(entrypoint)
+		if seenModels[api] == nil {
+			seenModels[api] = make(map[string]Position)
+		}
 		for _, modelName := range entrypoint.ModelNames {
-			if first, exists := seenModels[modelName]; exists {
+			if first, exists := seenModels[api][modelName]; exists {
 				v.addDiag(DiagWarning, entrypoint.Pos,
 					fmt.Sprintf("Entrypoint model %q is already mapped at %s", modelName, first), nil)
 				continue
 			}
-			seenModels[modelName] = entrypoint.Pos
+			seenModels[api][modelName] = entrypoint.Pos
 		}
 	}
 }
@@ -68,20 +74,28 @@ func recipeProgramWithSharedModels(parent, recipe *Program) *Program {
 		return &Program{Models: parent.Models}
 	}
 	return &Program{
-		Strategy:             recipe.Strategy,
-		Signals:              recipe.Signals,
-		ProjectionPartitions: recipe.ProjectionPartitions,
-		ProjectionScores:     recipe.ProjectionScores,
-		ProjectionMappings:   recipe.ProjectionMappings,
-		Routes:               recipe.Routes,
-		Models:               parent.Models,
-		Plugins:              recipe.Plugins,
-		TestBlocks:           recipe.TestBlocks,
+		Strategy:              recipe.Strategy,
+		CandidateRequirements: recipe.CandidateRequirements.Clone(),
+		ModelBindings:         cloneModelBindings(recipe.ModelBindings),
+		Signals:               recipe.Signals,
+		ProjectionPartitions:  recipe.ProjectionPartitions,
+		ProjectionScores:      recipe.ProjectionScores,
+		ProjectionMappings:    recipe.ProjectionMappings,
+		Routes:                recipe.Routes,
+		Models:                parent.Models,
+		Plugins:               recipe.Plugins,
+		TestBlocks:            recipe.TestBlocks,
 	}
 }
 
 func (v *Validator) checkStrategy(strategy string, pos Position) {
 	if err := config.RoutingStrategy(strategy).Validate(); err != nil {
+		v.addDiag(DiagConstraint, pos, err.Error(), nil)
+	}
+}
+
+func (v *Validator) checkCandidateRequirements(requirements *config.CandidateRequirements, pos Position) {
+	if err := requirements.Validate(); err != nil {
 		v.addDiag(DiagConstraint, pos, err.Error(), nil)
 	}
 }

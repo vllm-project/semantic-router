@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -43,11 +45,18 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ContextCompressionPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
+	"prompt_cache": compilePromptCachePluginConfig,
+	// masking uses the generic structured path: its configuration is a plain
+	// map, so hand-mapping fields would only add a place to forget one (#3566).
+	"masking": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.MaskingPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
+	},
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
 	},
 	"memory": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileMemoryPluginConfig(fields), true
+		return c.withObjectFields(c.compileMemoryPluginConfig(fields), fields, "reflection")
 	},
 	"rag": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRAGPlugin(fields), true
@@ -60,7 +69,10 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return compilePluginFields(c, fields, cfg)
 	},
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileRouterReplayPluginConfig(fields), true
+		return c.compileRouterReplayPluginConfig(fields)
+	},
+	"shadow_dispatch": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		return c.compileShadowDispatchPluginConfig(fields), true
 	},
 	"fast_response": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileFastResponsePluginConfig(fields), true
@@ -69,11 +81,40 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return c.compileRequestParamsPluginConfig(fields), true
 	},
 	"tool_selection": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileToolSelectionPluginConfig(fields), true
+		return c.withObjectFields(c.compileToolSelectionPluginConfig(fields), fields, "advanced_filtering")
 	},
 	"tools": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileToolsPlugin(fields), true
 	},
+}
+
+func compilePromptCachePluginConfig(
+	c *Compiler,
+	fields map[string]Value,
+) (interface{}, bool) {
+	cfg, err := decodePromptCachePluginFields(fields)
+	if err != nil {
+		c.addError(Position{}, "%v", err)
+		return nil, false
+	}
+	return cfg, true
+}
+
+func decodePromptCachePluginFields(
+	fields map[string]Value,
+) (*config.PromptCachePluginConfig, error) {
+	payload, err := config.NewStructuredPayload(fieldsToMap(fields))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode plugin fields: %w", err)
+	}
+	cfg := &config.PromptCachePluginConfig{}
+	if err := payload.DecodeIntoStrict(cfg); err != nil {
+		return nil, fmt.Errorf("failed to decode plugin fields: %w", err)
+	}
+	if err := config.ValidatePromptCachePluginConfig(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 func (c *Compiler) compileHeaderMutationPluginConfig(fields map[string]Value) config.HeaderMutationPluginConfig {
@@ -135,6 +176,33 @@ func compilePluginFields(
 	return target, true
 }
 
+// withObjectFields keeps nested objects as written, so the payload does not depend on their structs' JSON tags.
+func (c *Compiler) withObjectFields(cfg interface{}, fields map[string]Value, keys ...string) (interface{}, bool) {
+	payload, err := config.NewStructuredPayload(cfg)
+	if err != nil {
+		c.addError(Position{}, "failed to encode plugin fields: %v", err)
+		return nil, false
+	}
+	compiled, err := payload.AsStringMap()
+	if err != nil {
+		c.addError(Position{}, "failed to encode plugin fields: %v", err)
+		return nil, false
+	}
+	for _, key := range keys {
+		value, exists := fields[key]
+		if !exists {
+			continue
+		}
+		object, ok := value.(ObjectValue)
+		if !ok {
+			c.addError(Position{}, "plugin field %q must be an object", key)
+			return nil, false
+		}
+		compiled[key] = fieldsToMap(object.Fields)
+	}
+	return compiled, true
+}
+
 func (c *Compiler) buildPluginConfigValue(pluginType string, fields map[string]Value) (interface{}, bool) {
 	if fn, ok := pluginConfigCompilers[pluginType]; ok {
 		return fn(c, fields)
@@ -162,8 +230,8 @@ func (c *Compiler) compileHallucinationPluginConfig(fields map[string]Value) con
 	if v, ok := getBoolField(fields, "enabled"); ok {
 		cfg.Enabled = v
 	}
-	if v, ok := getBoolField(fields, "use_nli"); ok {
-		cfg.UseNLI = v
+	if _, ok := fields["use_nli"]; ok {
+		c.addError(Position{}, "hallucination plugin: use_nli is retired with the NLI explainer; remove it")
 	}
 	if v, ok := getStringField(fields, "hallucination_action"); ok {
 		cfg.HallucinationAction = v
@@ -191,33 +259,67 @@ func (c *Compiler) compileMemoryPluginConfig(fields map[string]Value) config.Mem
 	if v, ok := getBoolField(fields, "auto_store"); ok {
 		cfg.AutoStore = &v
 	}
+	if v, ok := getBoolField(fields, "hybrid_search"); ok {
+		cfg.HybridSearch = v
+	}
+	if v, ok := getStringField(fields, "hybrid_mode"); ok {
+		cfg.HybridMode = v
+	}
 	return cfg
 }
 
-func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) config.RouterReplayPluginConfig {
-	cfg := config.RouterReplayPluginConfig{}
+func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) config.ShadowDispatchPluginConfig {
+	cfg := config.ShadowDispatchPluginConfig{}
 	if v, ok := getBoolField(fields, "enabled"); ok {
 		cfg.Enabled = v
 	}
-	if v, ok := getIntField(fields, "max_records"); ok {
-		cfg.MaxRecords = v
+	if v, ok := getStringField(fields, "model"); ok {
+		cfg.Model = v
 	}
-	if v, ok := getBoolField(fields, "capture_request_body"); ok {
-		cfg.CaptureRequestBody = v
+	if v, ok := getFloat64Field(fields, "sample_rate"); ok {
+		cfg.SampleRate = &v
+	}
+	if v, ok := getIntField(fields, "max_concurrency"); ok {
+		cfg.MaxConcurrency = v
+	}
+	if v, ok := getIntField(fields, "max_queue_depth"); ok {
+		cfg.MaxQueueDepth = v
+	}
+	if v, ok := getIntField(fields, "timeout_seconds"); ok {
+		cfg.TimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "max_response_bytes"); ok {
+		cfg.MaxResponseBytes = v
+	}
+	if v, ok := getIntField(fields, "max_retries"); ok {
+		cfg.MaxRetries = v
 	}
 	if v, ok := getBoolField(fields, "capture_response_body"); ok {
 		cfg.CaptureResponseBody = v
 	}
-	if v, ok := getIntField(fields, "max_body_bytes"); ok {
-		cfg.MaxBodyBytes = v
+	if v, ok := getIntField(fields, "max_capture_bytes"); ok {
+		cfg.MaxCaptureBytes = v
 	}
-	if v, ok := getIntField(fields, "max_tool_trace_bytes"); ok {
-		cfg.MaxToolTraceBytes = v
+	if v, ok := getBoolField(fields, "tls_skip_verify"); ok {
+		cfg.TLSSkipVerify = v
 	}
-	if v, ok := getIntField(fields, "max_tool_trace_steps"); ok {
-		cfg.MaxToolTraceSteps = v
-	}
+	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
 	return cfg
+}
+
+func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) (interface{}, bool) {
+	// Preserve omission and explicit false/zero overrides. Serializing the
+	// effective capture config here would replace inherited global defaults.
+	raw := fieldsToMap(fields)
+	payload, err := config.NewStructuredPayload(raw)
+	if err == nil {
+		err = payload.DecodeIntoStrict(&config.RouterReplayPluginConfig{})
+	}
+	if err != nil {
+		c.addError(Position{}, "invalid router_replay configuration: %v", err)
+		return nil, false
+	}
+	return raw, true
 }
 
 func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) config.FastResponsePluginConfig {
@@ -230,6 +332,15 @@ func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) conf
 
 func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) config.RequestParamsPluginConfig {
 	cfg := config.RequestParamsPluginConfig{}
+	if value, exists := fields["default_max_tokens"]; exists {
+		if integer, ok := value.(IntValue); ok && integer.V > 0 {
+			cfg.DefaultMaxTokens = config.FixedOutputTokenDefault(integer.V)
+		} else if text, ok := value.(StringValue); ok && text.V == "auto" {
+			cfg.DefaultMaxTokens = &config.OutputTokenDefault{Auto: true}
+		} else {
+			c.addError(Position{}, "request_params.default_max_tokens must be a positive integer or auto")
+		}
+	}
 	if v, ok := getStringArrayField(fields, "blocked_params"); ok {
 		cfg.BlockedParams = v
 	}
@@ -270,6 +381,9 @@ func (c *Compiler) compileToolSelectionPluginConfig(fields map[string]Value) con
 	}
 	if v, ok := getStringField(fields, "strategy"); ok {
 		cfg.Strategy = v
+	}
+	if v, ok := getBoolField(fields, "fallback_to_empty"); ok {
+		cfg.FallbackToEmpty = &v
 	}
 	return cfg
 }

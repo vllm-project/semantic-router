@@ -31,6 +31,10 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	}
 	responseID := "resp_" + ctx.RequestID
 	itemID := "item_" + ctx.RequestID
+	if publicID := responseObjectPublicID(ctx); publicID != "" {
+		responseID = publicID
+		itemID = llmprotocol.StableID(publicID, "0")
+	}
 	usage := authoritativeZeroUsage()
 	response := &llmprotocol.Response{
 		Generation: 1,
@@ -89,11 +93,39 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	registry := r.ProtocolCodecs
+	return protocolEngineFor(r.ProtocolCodecs)
+}
+
+// protocolEngineFor serves callers that hold only the registry, such as
+// detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
 	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+}
+
+// protocolEngineForVendor creates an engine with the specified response vendor policy.
+func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor) (*protocolcodec.Engine, error) {
+	if r == nil {
+		return nil, fmt.Errorf("protocol runtime is unavailable")
+	}
+	registry := r.ProtocolCodecs
+	if registry == nil {
+		registry = protocolcodec.NewBuiltinRegistry()
+	}
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = vendor
+	return protocolcodec.NewEngine(registry, policy)
+}
+
+// protocolEngineForBackend permits extensions only for live provider responses.
+func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
+	var vendor llmprotocol.ResponseVendor
+	if ctx != nil {
+		vendor = ctx.ResponseVendor
+	}
+	return r.protocolEngineForVendor(vendor)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The
@@ -105,24 +137,20 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if ctx.SourceFormat == "" {
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}
+	body = withAzureDeploymentModel(body, ctx.Headers[":path"])
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
-	request, envelope, diagnostics, err := engine.DecodeRequestForMutation(ctx.SourceFormat, body)
+	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {
-		recordIngressProtocolError(ctx, err)
-		var protocolError *llmprotocol.ProtocolError
-		if errors.As(err, &protocolError) {
-			copy := *protocolError
-			ctx.ImmediateProtocolError = &copy
-		}
-		return nil, r.createErrorResponse(400, "invalid inference request")
+		return nil, r.ingressDecodeErrorResponse(ctx, err)
 	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
@@ -141,6 +169,18 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	}
 	populateSessionTransitionFields(ctx)
 	return &request, nil
+}
+
+// ingressDecodeErrorResponse is the single client-facing 400 for a public wire
+// request the ingress codec rejected.
+func (r *OpenAIRouter) ingressDecodeErrorResponse(ctx *RequestContext, err error) *ext_proc.ProcessingResponse {
+	recordIngressProtocolError(ctx, err)
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) {
+		copy := *protocolError
+		ctx.ImmediateProtocolError = &copy
+	}
+	return r.createErrorResponse(400, "invalid inference request")
 }
 
 func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int {
@@ -183,6 +223,15 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
+	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
+		return nil, policyErr
+	}
+	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(
+		dispatchRequest, ctx.backendModelForCandidate(ctx.RequestModel), format,
+	)
+	if err != nil {
+		return nil, err
+	}
 	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
 		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
 		// The Router always asks Chat backends for the final usage chunk so
@@ -199,8 +248,13 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-	return encoded.Body, nil
+	body, err := r.encodeKVHandoff(encoded.Body, format, ctx)
+	if err != nil {
+		return nil, err
+	}
+	return encodeLooperEvidence(body, format, ctx)
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
@@ -221,24 +275,20 @@ func (r *OpenAIRouter) decodeClientResponse(
 	if ctx == nil {
 		return nil, fmt.Errorf("request context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return nil, err
 	}
 	source, target := responseWireFormats(ctx)
-	var mutation protocolcodec.ResponseMutation
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		mutation = func(response *llmprotocol.Response) error {
-			response.ID = responseID
-			return nil
-		}
-	}
+	mutation := clientResponseMutation(ctx, source)
 	decoded, err := engine.TranslateResponse(source, target, body, mutation)
 	if err != nil {
 		return nil, err
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
+	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }
@@ -379,7 +429,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		if immediate.Status == nil {
 			immediate.Status = &typev3.HttpStatus{}
 		}
-		immediate.Status.Code = statusCodeToEnum(500)
+		immediate.Status.Code = typev3.StatusCode_InternalServerError
 		setImmediateContentType(immediate, "application/json")
 		ctx.ImmediateResponseEncoded = true
 	}
@@ -389,7 +439,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 	category, code, message := llmprotocol.ErrorInternal, "request_failed", "request failed"
 	switch status {
-	case 400, 413, 422:
+	case 400, 413, 415, 422:
 		category, code, message = llmprotocol.ErrorInvalidRequest, "invalid_request", "invalid inference request"
 	case 401:
 		category, code, message = llmprotocol.ErrorAuthentication, "authentication_failed", "authentication failed"
@@ -401,9 +451,9 @@ func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 		category, code, message = llmprotocol.ErrorConflict, "request_conflict", "request cannot be completed"
 	case 429:
 		category, code, message = llmprotocol.ErrorRateLimited, "rate_limited", "rate limit exceeded"
-	case 499:
-		category, code, message = llmprotocol.ErrorInternal, "request_canceled", "request canceled"
-	case 502, 503, 504:
+	case 504:
+		category, code, message = llmprotocol.ErrorUpstreamTimeout, "request_timeout", "request timed out"
+	case 502, 503:
 		category, code, message = llmprotocol.ErrorUpstreamUnavailable, "upstream_unavailable", "model service unavailable"
 	}
 	return llmprotocol.NewError(category, code, message, nil)

@@ -10,11 +10,12 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
@@ -62,6 +63,11 @@ var extprocTestModelWeightCandidates = []string{
 
 // CreateTestRouter creates a properly initialized router for testing.
 func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	return createTestRouterWithToolsProvider(cfg, nil)
+}
+
+// The provider is borrowed; its fixture owner must keep it alive until router cleanup.
+func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedding.Provider) (*OpenAIRouter, error) {
 	classifierCfg := cloneRouterConfigForTest(cfg)
 	categoryMapping, err := loadTestCategoryMapping(classifierCfg)
 	if err != nil {
@@ -78,25 +84,26 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	err = initTestBERTModel(classifierCfg)
-	if err != nil {
-		return nil, err
-	}
-
 	semanticCache, err := newTestSemanticCache(classifierCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	toolsDatabase, err := newTestToolsDatabase(classifierCfg)
+	toolsDatabase, err := newTestToolsDatabase(classifierCfg, provider)
 	if err != nil {
+		_ = semanticCache.Close()
 		return nil, err
 	}
 
 	classifier, err := classification.NewClassifier(classifierCfg, categoryMapping, piiMapping, nil)
 	if err != nil {
+		_ = semanticCache.Close()
 		return nil, err
 	}
+
+	fallbackPolicy := fallback.DefaultPolicy()
+	circuitBreaker := fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
+	orchestrator := fallback.NewOrchestrator(fallbackPolicy, circuitBreaker)
 
 	return &OpenAIRouter{
 		Config:               cfg,
@@ -106,6 +113,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    newTestResponseAPIFilter(cfg),
 		CredentialResolver:   newTestCredentialResolver(cfg),
+		FallbackOrchestrator: orchestrator,
 	}, nil
 }
 
@@ -137,13 +145,6 @@ func loadTestPIIMapping(cfg *config.RouterConfig) (*classification.PIIMapping, e
 	return classification.LoadPIIMapping(cfg.PIIMappingPath)
 }
 
-func initTestBERTModel(cfg *config.RouterConfig) error {
-	if err := candle_binding.InitModel(cfg.BertModelPath, cfg.UseCPU); err != nil {
-		return fmt.Errorf("failed to initialize BERT model: %w", err)
-	}
-	return nil
-}
-
 func newTestSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 	return cache.NewCacheBackend(cache.CacheConfig{
 		BackendType:         cache.InMemoryCacheType,
@@ -156,7 +157,7 @@ func newTestSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) 
 	})
 }
 
-func newTestToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error) {
+func newTestToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
 	toolCfg := cfg.Tools
 	toolsSimilarityThreshold := float32(0.2)
 	if toolCfg.SimilarityThreshold != nil {
@@ -168,6 +169,7 @@ func newTestToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error
 		Enabled:             toolCfg.Enabled,
 		ModelType:           cfg.EmbeddingConfig.ModelType,
 		TargetDimension:     cfg.EmbeddingConfig.TargetDimension,
+		Provider:            provider,
 	})
 	if !toolCfg.Enabled || toolCfg.ToolsDBPath == "" {
 		return toolsDatabase, nil

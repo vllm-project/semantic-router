@@ -16,12 +16,13 @@ deployment endpoints and credentials.
 
 ## Implemented contract
 
-The public configuration has seven top-level sections:
+The public configuration has eight top-level sections:
 
 ```yaml
 version:
 listeners:
 providers:
+evaluation:
 routing:
 entrypoints:
 recipes:
@@ -33,6 +34,7 @@ global:
 | `version` | Selects the configuration contract. |
 | `listeners` | Defines request-facing and management listeners. |
 | `providers` | Binds logical model names to provider identifiers and endpoints. |
+| `evaluation` | Optionally defines operator-owned benchmarks, index DAGs, and model-linked records. |
 | `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
 | `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
 | `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
@@ -49,11 +51,17 @@ silently translated at runtime.
 selects a Provider. A physical model in a Router-owned listener configuration
 must declare an explicit backend Provider; metadata-only external-gateway
 configuration and built-in virtual models may remain backendless.
-The local CLI serve path owns Envoy transport and rejects backendless physical
-models; external-gateway metadata-only configurations are deployed through the
-gateway integration rather than converted into a standalone Envoy data plane.
+The local CLI serve path defaults to the standalone frontend and rejects
+backendless physical Chat models. `--gateway extproc` selects Envoy transport.
+Metadata-only external-gateway configurations use their gateway integration;
+native System One models instead reference model-runtime deployments.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
+
+`evaluation` owns optional operator benchmark definitions, index DAGs, and
+measurement records. Each `evaluation.records[].model` references one canonical
+Model Card identity, so reusable scoring semantics and model evidence have one
+top-level owner without being embedded in routing metadata.
 
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with
@@ -74,18 +82,31 @@ Model-free assets can carry the declaration with empty `modelRefs`; a concrete
 Entrypoint binding must satisfy it, and request-time eligibility filters must
 preserve it before selection or multi-model execution begins.
 
+A plugin's configuration surface stays generic even when the plugin only
+targets one provider wire format. `prompt_cache`, for example, is disabled by
+default and declares `on_unsupported: skip|reject` rather than assuming every
+route resolves to an Anthropic-shaped backend; a route with no eligible target
+either leaves the request unchanged or fails with a typed error, per that
+setting.
+
 Structured request controls remain facts at the signal boundary. For example,
 conversation signals expose whether the protocol requires or forbids tool
 execution, projections reconcile those facts with text-derived observations,
 and decisions consume the resulting policy-facing output.
 
+PII rule scope is explicit. An omitted or empty `source` preserves the legacy
+prompt/history behavior; `source: tool_result` selects textual tool-result
+content after protocol decoding. Tool-result scope is opt-in and does not
+implicitly include prompt or history content. Unsupported source values are
+configuration errors rather than silently falling back to another scope.
+
 Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 
 The DSL is an authoring view of routing semantics. It does not own provider
-credentials, listeners, stores, or global runtime services. Import and export must
-preserve the same canonical routing document rather than invent another steady-state
-schema.
+credentials, listeners, evaluation definitions or records, stores, or global
+runtime services. Import and export preserve the same canonical routing
+document rather than inventing another steady-state schema.
 
 Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
 that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
@@ -108,16 +129,26 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
-Built-in category/domain inference keeps its runtime policy in
-`global.model_catalog.modules.classifier.domain`. The local model uses the
-canonical `variant` field; a remote classifier uses the shared `backend` block
-(`protocol`, `contract`, `model`, and `deadline_ms`) and resolves `model` by
-exact external-catalog name. The category consumer currently accepts
-`http_classify` plus `label_distribution.v1`, preserving the full label-score
-distribution. Prompt guard remains on its existing configuration surface until
-its separately scoped migration.
-Connector byte ceilings belong to the connector configuration. External LLM
-classifier entries and the MCP classifier module use `max_response_bytes`.
+Built-in model resources live in `global.model_catalog.deployments`; the default
+judgment deployment is selected by `system.decision_model`. Runtime modules own
+task policy, global bindings supply shared consumer defaults, and a recipe's
+`routing.model_bindings` can select a different resource or contract for its tasks.
+Native `candle`, `ort`, `openvino` execution fields such as `variant` are retired;
+use the [model-runtime migration guide](../model-runtime/migrate.md).
+
+Domain, complexity, safety, PII and other model consumers share this boundary.
+External classifier backends still declare `protocol`, `contract`, `model` and
+`deadline_ms`; `model` is an exact external-catalog name. A consumer accepting
+multiple response contracts requires an explicit contract. Connector byte ceilings
+belong to connector configuration (`max_response_bytes` for external classifiers
+and MCP).
+
+A named recipe does not inherit signals, decisions, strategy or fallback from
+top-level `routing`. Each profile resolves its own built-in defaults. With no
+explicit default-recipe entrypoint, `vllm-sr/auto` resolves to top-level routing;
+an explicit `recipe: default` mapping replaces that name. Replay data retention
+belongs to `global.services.router_replay`, with decision-plugin overrides.
+
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.
 

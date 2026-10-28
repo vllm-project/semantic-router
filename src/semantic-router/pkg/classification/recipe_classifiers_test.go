@@ -1,20 +1,52 @@
 package classification
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+func TestUnreachableNamedRecipeDoesNotPrepareRoutingArtifacts(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "unprovisioned")
+	defaultProfile := config.RoutingProfile{
+		Signals:       config.Signals{ClassifierRules: []config.ClassifierSignalRule{{Name: "risk", Type: config.ClassifierSignalTypeLocal, ModelPath: missing, UseCPU: true, Labels: []string{"safe", "unsafe"}}}},
+		ModelBindings: map[string]config.ModelBinding{"classifier.risk": {Deployment: "dormant", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution}},
+	}
+	cfg := &config.RouterConfig{
+		Recipes:     []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "unmapped", Profile: defaultProfile}, {Name: "active"}},
+		Entrypoints: []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
+	}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: config.ModelRuntimeProvider, Device: "cpu"}}
+	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("unreachable named recipe tried to load routing model: %v", err)
+	}
+	t.Cleanup(func() { _ = classifiers.Close() })
+	unmapped, _ := classifiers.ForRecipe("unmapped")
+	if len(unmapped.genericClassifiers) != 0 {
+		t.Fatal("unreachable routing model was prepared")
+	}
+	if initErr := classifiers.InitializeRuntime(); initErr != nil {
+		t.Fatal(initErr)
+	}
+	if len(cfg.Recipes[1].Profile.Signals.ClassifierRules) != 1 {
+		t.Fatal("preparation mutated the canonical recipe")
+	}
+	invalid := *cfg
+	invalid.ModelBindings = map[string]config.ModelBinding{"classifier.missing": {Deployment: "dormant", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution}}
+	invalid.Recipes = nil
+	if _, invalidErr := BuildRecipeClassifiers(&invalid, nil, nil, nil); invalidErr == nil {
+		t.Fatal("unreachable default bypassed canonical binding validation")
+	}
+}
+
 func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T) {
 	defaultClassifier := &Classifier{}
 	namedClassifier := &Classifier{
-		factCheckClassifier: &FactCheckClassifier{initialized: true},
-		hallucinationDetector: &HallucinationDetector{
-			initialized:    true,
-			nliInitialized: true,
-		},
-		feedbackDetector: &FeedbackDetector{initialized: true},
+		factCheckClassifier:   &FactCheckClassifier{initialized: true},
+		hallucinationDetector: &HallucinationDetector{initialized: true},
+		feedbackDetector:      &FeedbackDetector{initialized: true},
 	}
 	classifiers := &RecipeClassifiers{
 		byRecipe: map[config.RecipeName]*Classifier{
@@ -26,7 +58,6 @@ func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T)
 
 	if classifiers.HasFactCheckClassifier() ||
 		classifiers.HasHallucinationDetector() ||
-		classifiers.HasHallucinationExplainer() ||
 		classifiers.HasFeedbackDetector() {
 		t.Fatal("named-only models must not make default model-less APIs ready")
 	}
@@ -35,9 +66,6 @@ func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T)
 	}
 	if !classifiers.HasAnyHallucinationDetector() {
 		t.Fatal("named-recipe hallucination readiness was not aggregated")
-	}
-	if !classifiers.HasAnyHallucinationExplainer() {
-		t.Fatal("named-recipe hallucination explainer readiness was not aggregated")
 	}
 	if !classifiers.HasAnyFeedbackDetector() {
 		t.Fatal("named-recipe feedback readiness was not aggregated")
@@ -59,7 +87,6 @@ func TestRecipeClassifierReadinessStaysFalseWhenModelsAreUninitialized(t *testin
 
 	if classifiers.HasAnyFactCheckClassifier() ||
 		classifiers.HasAnyHallucinationDetector() ||
-		classifiers.HasAnyHallucinationExplainer() ||
 		classifiers.HasAnyFeedbackDetector() {
 		t.Fatal("uninitialized named-recipe models must not report ready")
 	}
@@ -102,10 +129,9 @@ func TestBuildRecipeClassifiersKeepsUnreachableRecipeValidationButSkipsRuntimeLi
 	}
 }
 
-func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testing.T) {
+func TestBuildRecipeClassifiersKeepsImplicitDefaultEntrypoint(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
+		Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
 	}
 
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
@@ -116,7 +142,7 @@ func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testi
 		classifiers.runtimeOrder[0] != config.DefaultRecipeName {
 		t.Fatalf("default API lifecycle was lost: %v", classifiers.runtimeOrder)
 	}
-	if len(classifiers.routingOrder) != 0 {
-		t.Fatalf("disabled default routing remained reachable: %v", classifiers.routingOrder)
+	if len(classifiers.routingOrder) != 1 || classifiers.routingOrder[0] != config.DefaultRecipeName {
+		t.Fatalf("implicit default routing must remain reachable: %v", classifiers.routingOrder)
 	}
 }

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -27,12 +27,13 @@ type recipeMutationRequest struct {
 }
 
 type managedRecipeRecord struct {
-	Name        string              `json:"name"`
-	Description string              `json:"description,omitempty"`
-	Routing     map[string]any      `json:"routing"`
-	Entrypoints []string            `json:"entrypoints"`
-	Source      managedRecipeSource `json:"source"`
-	Deletable   bool                `json:"deletable"`
+	EntrypointSource routerconfig.EntrypointSource `json:"entrypoint_source"`
+	Name             string                        `json:"name"`
+	Description      string                        `json:"description,omitempty"`
+	Routing          map[string]any                `json:"routing"`
+	Entrypoints      []string                      `json:"entrypoints"`
+	Source           managedRecipeSource           `json:"source"`
+	Deletable        bool                          `json:"deletable"`
 }
 
 type recipeCollectionResponse struct {
@@ -84,7 +85,7 @@ func (s *ClassificationAPIServer) handleGetRecipe(w http.ResponseWriter, r *http
 // live mutation, but does not create a backup or write either config path.
 func (s *ClassificationAPIServer) handleValidateRecipe(w http.ResponseWriter, r *http.Request) {
 	var req recipeMutationRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -108,10 +109,10 @@ func (s *ClassificationAPIServer) handleValidateRecipe(w http.ResponseWriter, r 
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]any{
-		"valid":  true,
-		"name":   name,
-		"action": map[bool]string{true: "create", false: "replace"}[created],
+	s.writeJSONResponse(w, http.StatusOK, recipeValidationResponse{
+		Valid:  true,
+		Name:   name,
+		Action: map[bool]string{true: "create", false: "replace"}[created],
 	})
 }
 
@@ -128,7 +129,7 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 	defer guard.Release()
 
 	var req recipeMutationRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -138,7 +139,7 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 	}
 
 	doc, existingData, ok := s.readManagedConfigDocument(w)
-	if !ok || !checkConfigPrecondition(w, r, existingData, true) {
+	if !ok || !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 	created, err := applyRecipeMutation(doc, name, req)
@@ -163,10 +164,10 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 	paths := resolveConfigPersistencePaths(s.configPath)
 	s.commitRouterConfigDocument(
 		w,
+		r,
 		paths,
 		existingData,
 		yamlBytes,
-		"",
 		statusCode,
 		action,
 		fmt.Sprintf("Recipe %q %s successfully.", name, verb),
@@ -190,7 +191,7 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 	defer guard.Release()
 
 	doc, existingData, ok := s.readManagedConfigDocument(w)
-	if !ok || !checkConfigPrecondition(w, r, existingData, true) {
+	if !ok || !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 	entrypoints := recipeEntrypointNames(doc, name)
@@ -216,10 +217,10 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 	paths := resolveConfigPersistencePaths(s.configPath)
 	s.commitRouterConfigDocument(
 		w,
+		r,
 		paths,
 		existingData,
 		yamlBytes,
-		"",
 		http.StatusOK,
 		"recipe.delete",
 		fmt.Sprintf("Recipe %q deleted successfully.", name),
@@ -246,12 +247,13 @@ func (s *ClassificationAPIServer) readManagedConfigDocument(w http.ResponseWrite
 
 func collectManagedRecipes(doc map[string]any) []managedRecipeRecord {
 	recipes := []managedRecipeRecord{{
-		Name:        string(routerconfig.DefaultRecipeName),
-		Description: "Default routing profile",
-		Routing:     mappingValue(doc["routing"]),
-		Entrypoints: []string{},
-		Source:      managedRecipeSourceDefault,
-		Deletable:   false,
+		Name:             string(routerconfig.DefaultRecipeName),
+		Description:      "Default routing profile",
+		Routing:          mappingValue(doc["routing"]),
+		Entrypoints:      effectiveRecipeEntrypointNames(doc, string(routerconfig.DefaultRecipeName)),
+		EntrypointSource: recipeEntrypointSource(doc, string(routerconfig.DefaultRecipeName)),
+		Source:           managedRecipeSourceDefault,
+		Deletable:        false,
 	}}
 	for _, item := range sequenceValue(doc["recipes"]) {
 		recipe := mappingValue(item)
@@ -260,12 +262,13 @@ func collectManagedRecipes(doc map[string]any) []managedRecipeRecord {
 			continue
 		}
 		recipes = append(recipes, managedRecipeRecord{
-			Name:        name,
-			Description: stringValue(recipe["description"]),
-			Routing:     mappingValue(recipe["routing"]),
-			Entrypoints: recipeEntrypointNames(doc, name),
-			Source:      managedRecipeSourceNamed,
-			Deletable:   true,
+			Name:             name,
+			Description:      stringValue(recipe["description"]),
+			Routing:          mappingValue(recipe["routing"]),
+			Entrypoints:      effectiveRecipeEntrypointNames(doc, name),
+			EntrypointSource: recipeEntrypointSource(doc, name),
+			Source:           managedRecipeSourceNamed,
+			Deletable:        true,
 		})
 	}
 	return recipes
@@ -289,7 +292,7 @@ func applyRecipeMutation(doc map[string]any, name string, req recipeMutationRequ
 			return false, fmt.Errorf("the default recipe has no description field; update its top-level routing block only")
 		}
 		if req.Entrypoints != nil {
-			return false, fmt.Errorf("default recipe aliases are managed by global.router.auto_model_names, not entrypoints")
+			replaceRecipeEntrypoints(doc, name, *req.Entrypoints)
 		}
 		doc["routing"] = cloneYAMLValue(req.Routing)
 		return false, nil
@@ -438,4 +441,19 @@ func (s *ClassificationAPIServer) maybeRedactManagedRecipes(
 		}
 	}
 	return redacted
+}
+
+func recipeEntrypointSource(doc map[string]any, recipeName string) routerconfig.EntrypointSource {
+	if recipeName == string(routerconfig.DefaultRecipeName) && len(recipeEntrypointNames(doc, recipeName)) == 0 {
+		return routerconfig.EntrypointBuiltin
+	}
+	return routerconfig.EntrypointExplicit
+}
+
+func effectiveRecipeEntrypointNames(doc map[string]any, recipeName string) []string {
+	names := recipeEntrypointNames(doc, recipeName)
+	if recipeName == string(routerconfig.DefaultRecipeName) && len(names) == 0 {
+		return []string{routerconfig.DefaultEntrypointModel}
+	}
+	return names
 }

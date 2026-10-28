@@ -7,6 +7,8 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from cli.commands.runtime_paths import cli_user_share_gid
+
 LOG_SPOOL_COMPONENTS = ("router", "envoy", "dashboard")
 LOG_SPOOL_MAX_BYTES = 4 * 1024 * 1024
 LOG_SPOOL_MAX_LINE_BYTES = 64 * 1024
@@ -14,7 +16,7 @@ LOG_SPOOL_READER_DIR = "/var/log/vllm-sr"
 LOG_SPOOL_PRODUCER_FILE = "/var/log/vllm-sr-producer/current.log"
 LOG_SPOOL_ROOT_ENV = "VLLM_SR_LOG_SPOOL_DIR"
 LOG_SPOOL_GID_ENV = "VLLM_SR_LOG_SPOOL_GID"
-LOG_SPOOL_REQUIRED_TOOLS = ("awk", "cat", "mkfifo", "rm", "tail", "wc")
+LOG_SPOOL_REQUIRED_TOOLS = ("awk", "cat", "mkfifo", "mktemp", "rm", "tail", "wc")
 
 
 # The producer wrapper keeps normal container stdout/stderr while retaining a
@@ -47,24 +49,27 @@ if [ ! -f "$spool_file" ] || [ -L "$spool_file" ]; then
     echo "bounded log spool: producer file is unavailable or unsafe" >&2
     exit 73
 fi
-for required_tool in awk cat mkfifo rm tail wc; do
+for required_tool in awk cat mkfifo mktemp rm tail wc; do
     if ! command -v "$required_tool" >/dev/null 2>&1; then
         echo "bounded log spool: required runtime tool is unavailable: $required_tool" >&2
         exit 69
     fi
 done
 
+service_umask=$(umask)
 umask 077
 keep_bytes=$((max_bytes * 3 / 4))
-trim_file=/tmp/vllm-sr-log-spool-trim.$$
-fifo=/tmp/vllm-sr-log-spool.$$.fifo
+# Container restarts reuse PID 1 and may retain files after an untrappable kill.
+work_dir=$(mktemp -d /tmp/vllm-sr-log-spool.XXXXXX)
+trim_file=$work_dir/trim.log
+fifo=$work_dir/output.fifo
 child_pid=
 relay_pid=
 
 cleanup() {
     if [ -n "$relay_pid" ]; then kill "$relay_pid" 2>/dev/null || true; fi
     if [ -n "$child_pid" ]; then kill "$child_pid" 2>/dev/null || true; fi
-    rm -f "$fifo" "$trim_file"
+    rm -rf "$work_dir"
 }
 forward_signal() {
     if [ -n "$child_pid" ]; then kill -TERM "$child_pid" 2>/dev/null || true; fi
@@ -81,10 +86,18 @@ if [ "$current_bytes" -gt "$max_bytes" ]; then
 fi
 
 mkfifo -m 600 "$fifo"
-"$@" > "$fifo" 2>&1 &
+(
+    umask "$service_umask"
+    exec "$@"
+) > "$fifo" 2>&1 &
 child_pid=$!
 
-LC_ALL=C awk \
+# mawk buffers FIFO input even when fflush() flushes each output record.
+awk_interactive=
+case "$(LC_ALL=C awk -W version </dev/null 2>/dev/null)" in
+    mawk\ *) awk_interactive=-Winteractive ;;
+esac
+LC_ALL=C awk ${awk_interactive:+"$awk_interactive"} \
     -v file="$spool_file" \
     -v max_bytes="$max_bytes" \
     -v keep_bytes="$keep_bytes" \
@@ -152,9 +165,7 @@ def prepare_runtime_log_spool(vllm_sr_dir: str, stack_name: str) -> RuntimeLogSp
 
     logs_root = Path(vllm_sr_dir) / "logs"
     root = logs_root / stack_name
-    # GID 0 is deliberately never propagated into a container. A root-run CLI
-    # can assign the dashboard's established nonroot group instead.
-    gid = 65532 if os.getgid() == 0 else os.getgid()
+    gid = cli_user_share_gid()
     _ensure_directory(logs_root, 0o750, gid)
     _ensure_directory(root, 0o750, gid)
 

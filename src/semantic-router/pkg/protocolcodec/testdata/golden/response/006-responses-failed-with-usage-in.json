@@ -12,7 +12,8 @@
     "input_tokens": 4,
     "input_tokens_details": {
       "cached_tokens": 1,
-      "cache_write_tokens": 0
+      "cache_write_tokens": 0,
+      "cache_creation_tokens": 0
     },
     "output_tokens": 2,
     "output_tokens_details": {

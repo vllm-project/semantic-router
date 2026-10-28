@@ -55,6 +55,26 @@
     "message": "问题反馈",
     "description": "Navbar item with label GitHub Issues"
   },
+  "item.label.More": {
+    "message": "更多",
+    "description": "Navbar item with label More"
+  },
+  "item.label.Model Hub": {
+    "message": "模型库",
+    "description": "Navbar item with label Model Hub"
+  },
+  "item.label.Hugging Face": {
+    "message": "Hugging Face",
+    "description": "Navbar item with label Hugging Face"
+  },
+  "item.label.Discussions": {
+    "message": "讨论区",
+    "description": "Navbar item with label Discussions"
+  },
+  "item.label.Dashboard": {
+    "message": "控制台",
+    "description": "Navbar item with label Dashboard"
+  },
   "item.label.GitHub": {
     "message": "GitHub",
     "description": "Navbar item with label GitHub"
@@ -63,9 +83,13 @@
     "message": "模型库",
     "description": "Navbar item with label Models"
   },
-  "item.label.Latest": {
-    "message": "最新版",
-    "description": "Navbar item with label Latest"
+  "item.label.Latest (unreleased)": {
+    "message": "最新版（未发布）",
+    "description": "Navbar item with label Latest (unreleased)"
+  },
+  "item.label.v0.4": {
+    "message": "v0.4",
+    "description": "Navbar item with label v0.4"
   },
   "item.label.v0.3": {
     "message": "v0.3",

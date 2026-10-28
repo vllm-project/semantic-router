@@ -16,8 +16,9 @@ type LayoutRouteMenuItem = {
   label: string
   icon: ProductIconName
   to: string
+  reloadDocument?: boolean
+  target?: '_blank'
   matchMode?: 'exact' | 'prefix'
-  activePathPattern?: RegExp
 }
 
 type LayoutConfigMenuItem = {
@@ -54,6 +55,40 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Playground', icon: 'playground', to: '/playground' },
 ]
 
+const CONFIG_SECTIONS = new Set<LayoutConfigSection>([
+  'models',
+  'signals',
+  'projections',
+  'decisions',
+  'entrypoints-recipes',
+  'global-config',
+  'mcp',
+])
+
+const CONFIG_SECTION_ALIASES: Record<string, LayoutConfigSection> = {
+  global: 'global-config',
+  'router-config': 'global-config',
+  routes: 'decisions',
+  endpoints: 'models',
+  entrypoints: 'entrypoints-recipes',
+  recipes: 'entrypoints-recipes',
+}
+
+export function normalizeConfigSection(section: string): LayoutConfigSection | undefined {
+  const normalized = section.toLowerCase()
+  if (CONFIG_SECTION_ALIASES[normalized]) return CONFIG_SECTION_ALIASES[normalized]
+  return CONFIG_SECTIONS.has(normalized as LayoutConfigSection)
+    ? (normalized as LayoutConfigSection)
+    : undefined
+}
+
+export function getConfigSectionFromPathname(pathname: string): LayoutConfigSection | undefined {
+  if (pathname !== '/config' && !pathname.startsWith('/config/')) return undefined
+
+  const section = pathname.split('/')[2] || 'global-config'
+  return normalizeConfigSection(section)
+}
+
 export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'routing',
@@ -64,7 +99,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Models',
         description: 'Connect models and compose public model endpoints.',
         items: [
-          { kind: 'route', label: 'Model Hub', icon: 'model', to: '/models' },
           { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',
@@ -99,6 +133,42 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
     ],
   },
   {
+    key: 'system-one',
+    label: 'System One',
+    description: 'Manage, test, and monitor the decision models behind routing intelligence.',
+    sections: [
+      {
+        title: 'Decision Models',
+        description: 'Select a decision model, deploy it, and manage its lifecycle.',
+        items: [{ kind: 'route', label: 'Decision Models', icon: 'model', to: '/decision-model' }],
+      },
+      {
+        title: 'Decision Playground',
+        description: 'Explore Choice, Score, Noul, Set, and Span with the System One API.',
+        items: [
+          {
+            kind: 'route',
+            label: 'Decision Playground',
+            icon: 'evaluation',
+            to: '/decision-model/playground',
+          },
+        ],
+      },
+      {
+        title: 'Decision Monitoring',
+        description: 'Follow readiness, traffic, latency, and cache performance.',
+        items: [
+          {
+            kind: 'route',
+            label: 'Decision Monitoring',
+            icon: 'chart',
+            to: '/decision-model/monitoring',
+          },
+        ],
+      },
+    ],
+  },
+  {
     key: 'outcomes',
     label: 'Outcomes',
     description: 'Inspect routing choices, measure quality, and tune model behavior.',
@@ -128,43 +198,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
       },
     ],
   },
-  {
-    key: 'knowledge',
-    label: 'Knowledge Base',
-    description: 'Bring governed context into signal extraction and route policy.',
-    sections: [
-      {
-        title: 'Knowledge Base',
-        description: 'Manage the retrieval inventory used by knowledge signals.',
-        items: [
-          {
-            kind: 'route',
-            label: 'Bases',
-            icon: 'database',
-            to: '/knowledge-bases/bases',
-            activePathPattern: /^\/knowledge-bases\/[^/]+\/map\/?$/,
-          },
-          { kind: 'route', label: 'Groups', icon: 'database', to: '/knowledge-bases/groups' },
-          { kind: 'route', label: 'Labels', icon: 'label', to: '/knowledge-bases/labels' },
-        ],
-      },
-    ],
-  },
-  {
-    key: 'integrations',
-    label: 'Integration',
-    description: 'Connect external capabilities to the routing workspace.',
-    sections: [
-      {
-        title: 'Integrations',
-        description: 'Extend the control plane with tools and agent runtimes.',
-        items: [
-          { kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' },
-          { kind: 'route', label: 'OpenClaw', icon: 'claw', to: '/openclaw' },
-        ],
-      },
-    ],
-  },
 ]
 
 export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
@@ -173,6 +206,11 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
     label: 'Runtime',
     description: 'Check service readiness and diagnose the live routing path.',
     sections: [
+      {
+        title: 'Models',
+        description: 'Explore model capabilities and deployment requirements.',
+        items: [{ kind: 'route', label: 'Model Hub', icon: 'model', to: '/models' }],
+      },
       {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
@@ -217,7 +255,26 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
             icon: 'settings',
             configSection: 'global-config',
           },
+          {
+            kind: 'route',
+            label: 'Schema Reference',
+            icon: 'code',
+            to: '/config/reference',
+          },
+          {
+            kind: 'route',
+            label: 'Router API Docs',
+            icon: 'code',
+            to: '/api/router/docs',
+            reloadDocument: true,
+            target: '_blank',
+          },
         ],
+      },
+      {
+        title: 'Integrations',
+        description: 'Extend the control plane with external tools.',
+        items: [{ kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' }],
       },
       {
         title: 'Access',
@@ -236,10 +293,6 @@ export function isLayoutMenuItemActive(
 ): boolean {
   if (item.kind === 'config') {
     return isConfigPage && configSection === item.configSection
-  }
-
-  if (item.activePathPattern?.test(pathname)) {
-    return true
   }
 
   return item.matchMode === 'prefix' ? pathname.startsWith(item.to) : pathname === item.to

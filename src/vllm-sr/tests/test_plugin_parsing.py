@@ -14,7 +14,7 @@ from cli.models import (
     ToolsPluginConfig,
 )
 from cli.config_migration import migrate_config_data
-from cli.parser import parse_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 
 
@@ -70,6 +70,8 @@ class TestPluginTypeValidation:
             PluginType.RESPONSE_JAILBREAK.value,
             PluginType.TOOLS.value,
             PluginType.TOOL_SELECTION.value,
+            PluginType.PROMPT_CACHE.value,
+            PluginType.SHADOW_DISPATCH.value,
         ]
 
         for plugin_type in valid_types:
@@ -171,10 +173,44 @@ class TestRouterReplayPluginConfig:
         """Test router_replay plugin configuration defaults."""
         config = RouterReplayPluginConfig(enabled=True)
         assert config.enabled is True
-        assert config.max_records == 10000  # Default
-        assert config.capture_request_body is True  # Default
-        assert config.capture_response_body is True  # Default
-        assert config.max_body_bytes == 4096  # Default
+        assert config.max_records is None  # Inherits the global capture default
+        assert config.capture_request_body is None
+        assert config.capture_response_body is None
+        assert config.max_body_bytes is None
+        assert config.capture_personal_data is None
+        assert config.max_tool_trace_bytes is None
+        assert config.max_tool_trace_steps is None
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {},
+            {"enabled": False},
+            {"capture_personal_data": False},
+            {"capture_request_body": False, "capture_response_body": False},
+            {"max_tool_trace_bytes": 0, "max_tool_trace_steps": 0},
+            {"max_records": 0, "max_body_bytes": 0},
+        ],
+    )
+    def test_router_replay_serialization_preserves_explicit_overrides(self, overrides):
+        config = RouterReplayPluginConfig.model_validate(overrides)
+        assert config.model_dump(exclude_unset=True) == overrides
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"capture_personal_data": "false"},
+            {"capture_request_body": 0},
+            {"max_tool_trace_bytes": -1},
+            {"max_tool_trace_steps": -1},
+            {"max_records": -1},
+            {"max_body_bytes": -1},
+            {"replay_personal_data": False},
+        ],
+    )
+    def test_router_replay_rejects_invalid_capture_overrides(self, overrides):
+        with pytest.raises(PydanticValidationError):
+            RouterReplayPluginConfig.model_validate(overrides)
 
     def test_router_replay_plugin_in_config(self):
         """Test router_replay plugin in full config."""
@@ -396,12 +432,11 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            # Check that error mentions router_replay
-            error_messages = [str(e) for e in errors]
-            assert any("router_replay" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc_info:
+                parse_user_config(temp_path)
+            message = str(exc_info.value)
+            assert "configuration.max_records" in message
+            assert "configuration.capture_request_body" in message
         finally:
             os.unlink(temp_path)
 
@@ -450,12 +485,9 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            # Check that the alias normalized to the canonical plugin.
-            error_messages = [str(e) for e in errors]
-            assert any("response_cache" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc_info:
+                parse_user_config(temp_path)
+            assert "configuration.enabled" in str(exc_info.value)
         finally:
             os.unlink(temp_path)
 
@@ -739,10 +771,8 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            error_messages = [str(e) for e in errors]
-            assert any("rag" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc_info:
+                parse_user_config(temp_path)
+            assert "configuration.top_k" in str(exc_info.value)
         finally:
             os.unlink(temp_path)

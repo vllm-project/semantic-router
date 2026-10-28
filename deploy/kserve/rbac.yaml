@@ -1,0 +1,29 @@
+# Scoped to the one ConfigMap that backs the mounted config file, so the
+# config write API can patch it through the Kubernetes API instead of the
+# read-only mount (issue #3688). Neither this role nor anything else here
+# grants general configmaps access.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: semantic-router-config-writer
+  labels:
+    app: semantic-router
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["semantic-router-kserve-config"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: semantic-router-config-writer
+  labels:
+    app: semantic-router
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: semantic-router-config-writer
+subjects:
+  - kind: ServiceAccount
+    name: semantic-router

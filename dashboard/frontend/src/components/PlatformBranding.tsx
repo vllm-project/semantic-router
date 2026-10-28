@@ -12,7 +12,7 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
   const { platform } = useReadonly()
   const [isImageLoaded, setIsImageLoaded] = useState(false)
 
-  const isAmd = platform?.toLowerCase() === 'amd'
+  const isAmd = platform?.toLowerCase() === 'rocm'
   const imageSrc = '/amd-logo.png'
 
   // Preload image when platform is AMD
@@ -33,7 +33,9 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
 
   return (
     <div className={`${styles.container} ${styles[variant]} ${className}`}>
-      <img src={imageSrc} alt="AMD" className={styles.logo} />
+      <a href="https://www.amd.com/" target="_blank" rel="noopener noreferrer">
+        <img src={imageSrc} alt="AMD" className={styles.logo} />
+      </a>
       {variant === 'inline' ? null : <span className={styles.text}>Powered by AMD GPU</span>}
     </div>
   )

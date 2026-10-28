@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -81,8 +81,9 @@ func TestRedisMetricTypeNormalization(t *testing.T) {
 			// NewRedisCache fails on CheckConnection, but normalization happens
 			// before the connection attempt and mutates cfg in place.
 			_, _ = NewRedisCache(RedisCacheOptions{
-				Enabled: true,
-				Config:  cfg,
+				EmbeddingProvider: cacheTestEmbeddingProvider(),
+				Enabled:           true,
+				Config:            cfg,
 			})
 
 			assert.Equal(t, tt.expected, cfg.Index.VectorField.MetricType)

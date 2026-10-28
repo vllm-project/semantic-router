@@ -8,9 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -73,11 +74,11 @@ func testAPIServerRuntimeConfigEndpoints(
 	if err != nil {
 		return err
 	}
-	decisionNames, err := fetchClassifierDecisions(ctx, httpClient, session.URL("/info/classifier"))
+	decisionNames, err := fetchClassifierDecisions(ctx, httpClient, session.URL("/api/v1/inventory/classifier"))
 	if err != nil {
 		return err
 	}
-	modelNames, loadedModels, totalModels, err := fetchModelsInfo(ctx, httpClient, session.URL("/info/models"))
+	modelNames, loadedModels, totalModels, err := fetchModelsInfo(ctx, httpClient, session.URL("/api/v1/inventory/models"))
 	if err != nil {
 		return err
 	}
@@ -117,8 +118,8 @@ func fetchModelIDs(ctx context.Context, httpClient *http.Client, url string) ([]
 	for _, model := range models.Data {
 		modelIDs = append(modelIDs, model.ID)
 	}
-	if !containsString(modelIDs, "MoM") {
-		return nil, fmt.Errorf("expected /v1/models to include MoM, got %v", modelIDs)
+	if !containsString(modelIDs, "vllm-sr/auto") {
+		return nil, fmt.Errorf("expected /v1/models to include vllm-sr/auto, got %v", modelIDs)
 	}
 	return modelIDs, nil
 }
@@ -133,12 +134,12 @@ func fetchClassifierDecisions(
 		return nil, err
 	}
 	if classifierResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected /info/classifier status 200, got %d: %s", classifierResp.StatusCode, string(classifierResp.Body))
+		return nil, fmt.Errorf("expected /api/v1/inventory/classifier status 200, got %d: %s", classifierResp.StatusCode, string(classifierResp.Body))
 	}
 
 	var classifierInfo classifierInfoResponse
 	if err := json.Unmarshal(classifierResp.Body, &classifierInfo); err != nil {
-		return nil, fmt.Errorf("decode /info/classifier response: %w", err)
+		return nil, fmt.Errorf("decode /api/v1/inventory/classifier response: %w", err)
 	}
 	if classifierInfo.Status != "config_loaded" {
 		return nil, fmt.Errorf("expected classifier config to be loaded, got %q", classifierInfo.Status)
@@ -164,15 +165,15 @@ func fetchModelsInfo(
 		return nil, 0, 0, err
 	}
 	if modelsResp.StatusCode != http.StatusOK {
-		return nil, 0, 0, fmt.Errorf("expected /info/models status 200, got %d: %s", modelsResp.StatusCode, string(modelsResp.Body))
+		return nil, 0, 0, fmt.Errorf("expected /api/v1/inventory/models status 200, got %d: %s", modelsResp.StatusCode, string(modelsResp.Body))
 	}
 
 	var modelsInfo modelsInfoResponse
 	if err := json.Unmarshal(modelsResp.Body, &modelsInfo); err != nil {
-		return nil, 0, 0, fmt.Errorf("decode /info/models response: %w", err)
+		return nil, 0, 0, fmt.Errorf("decode /api/v1/inventory/models response: %w", err)
 	}
 	if len(modelsInfo.Models) == 0 {
-		return nil, 0, 0, fmt.Errorf("expected /info/models to include at least one router model")
+		return nil, 0, 0, fmt.Errorf("expected /api/v1/inventory/models to include at least one router model")
 	}
 	if modelsInfo.Summary.TotalModels < len(modelsInfo.Models) {
 		return nil, 0, 0, fmt.Errorf("expected summary total_models >= model entries, got %+v", modelsInfo.Summary)

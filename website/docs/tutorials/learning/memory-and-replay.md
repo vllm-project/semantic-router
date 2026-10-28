@@ -3,8 +3,9 @@
 ## Overview
 
 Router Learning uses in-process online state on the hot path. Router Replay can
-record events when enabled; persistence across restarts requires a durable
-backend. Request routing does not depend on synchronous replay-store reads.
+record events when enabled; persistence across configuration reloads and restarts
+requires a durable backend. Request routing does not depend on synchronous
+replay-store reads.
 
 ## Key Advantages
 
@@ -53,8 +54,10 @@ global:
       store_backend: postgres
 ```
 
-This example uses Postgres for persistence. The default `memory` backend is
-process-local and loses records on restart.
+This example uses Postgres for persistence. The default `memory` backend loses
+records on configuration reload or restart, even when a reload keeps the router
+process running. Use durable storage to keep session traces available in the API
+and Dashboard while tuning recipes.
 
 Learning diagnostics are written into replay records when replay is enabled:
 
@@ -93,7 +96,7 @@ stored in learning diagnostics. Store bounded hashes and source/status fields.
 Submit typed feedback through the replay-linked outcome endpoint:
 
 ```http
-POST /v1/router/outcomes
+POST /api/v1/observability/outcomes
 ```
 
 ```json
@@ -118,7 +121,7 @@ a typed online consumer exists.
 Run the offline loop from replay:
 
 ```bash
-vllm-sr eval recipe-learning \
+vllm-sr optimize recipe-learning \
   --replay-file replay.json \
   --recipe-file config.yaml \
   --output-dir ./router-learning-report

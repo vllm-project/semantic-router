@@ -1,0 +1,15 @@
+请帮我检查下面这个 Go 函数，为什么重试的时候没有返回最后一次的错误？
+
+func retry(attempts int, delay time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		// 每次失败后等待更长时间
+		if err = fn(); err == nil {
+			return nil
+		}
+		time.Sleep(delay * time.Duration(i+1))
+	}
+	return fmt.Errorf("after %d attempts: %w", attempts, err)
+}
+
+我希望调用方可以用 errors.Is 判断原始错误，并且日志里能看到尝试次数。

@@ -52,8 +52,8 @@ strings and are evaluated before decision matching. Rule names and keys must be
 trimmed. Requests accept at most 32 entries, 128-byte keys, and 1024-byte
 values.
 
-Chat Completions, Anthropic Messages, `/api/v1/classify/intent`, and
-`/api/v1/eval` all accept the same top-level string map:
+Chat Completions, Anthropic Messages, `/api/v1/diagnostics/classify/intent`, and
+`/api/v1/routing/preview` all accept the same top-level string map:
 
 ```json
 {

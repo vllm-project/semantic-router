@@ -108,6 +108,12 @@ export const ensureProvidersConfig = (cfg: ConfigData) => {
   return cfg.providers
 }
 
+export const ensureEvaluationConfig = (cfg: ConfigData) => {
+  if (!cfg.evaluation) cfg.evaluation = {}
+  if (!cfg.evaluation.records) cfg.evaluation.records = []
+  return cfg.evaluation
+}
+
 export const ensureProviderDefaultsConfig = (cfg: ConfigData) => {
   const providers = ensureProvidersConfig(cfg)
   if (!providers.defaults) {
@@ -159,9 +165,19 @@ export const routingModelCardReferenceCount = (cfg: ConfigData, name: string): n
   (cfg.providers?.models || []).filter((model) => (model.catalog?.trim() || model.name) === name)
     .length
 
-export const removeRoutingModelCardIfUnreferenced = (cfg: ConfigData, name: string) => {
+export const removeModelCardDataIfUnreferenced = (cfg: ConfigData, name: string) => {
   if (routingModelCardReferenceCount(cfg, name) === 0) {
     removeRoutingModelCard(cfg, name)
+    if (cfg.evaluation?.records) {
+      cfg.evaluation.records = cfg.evaluation.records.filter((record) => record.model !== name)
+      if (
+        cfg.evaluation.records.length === 0 &&
+        !cfg.evaluation.benchmarks?.length &&
+        !cfg.evaluation.indices?.length
+      ) {
+        delete cfg.evaluation
+      }
+    }
   }
 }
 
@@ -346,12 +362,11 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
       cardPatch.tags = cloneUnknown(modelConfig.tags)
     }
     if (typeof modelConfig.quality_score === 'number') {
-      cardPatch.evaluations = [
-        {
-          benchmark: 'vllm-sr/operator-rating@1.0.0',
-          metrics: { score: modelConfig.quality_score },
-        },
-      ]
+      ensureEvaluationConfig(cfg).records!.push({
+        model: modelName,
+        benchmark: 'vllm-sr/operator-rating@1.0.0',
+        metrics: { score: modelConfig.quality_score },
+      })
     }
     if (modelConfig.modality) {
       cardPatch.modality = modelConfig.modality
@@ -412,21 +427,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     assignIfMissing(parent, path[path.length - 1], cloneUnknown(value))
   }
 
-  const placeLegacyBertEmbeddingIfMissing = (value: unknown) => {
-    const legacy = asRecord(value)
-    if (!legacy) {
-      return
-    }
-    const semantic = ensureNestedRecord(globalRoot, ['model_catalog', 'embeddings', 'semantic'])
-    assignIfMissing(semantic, 'bert_model_path', cloneUnknown(legacy.model_id))
-    assignIfMissing(semantic, 'use_cpu', cloneUnknown(legacy.use_cpu))
-
-    if (legacy.threshold !== undefined && legacy.threshold !== null && legacy.threshold !== '') {
-      const embeddingConfig = ensureNestedRecord(semantic, ['embedding_config'])
-      assignIfMissing(embeddingConfig, 'min_score_threshold', cloneUnknown(legacy.threshold))
-    }
-  }
-
   placeBlockIfMissing(['stores', 'response_cache'], cfg.response_cache ?? cfg.semantic_cache)
   placeBlockIfMissing(['stores', 'memory'], cfg.memory)
   placeBlockIfMissing(['services', 'response_api'], cfg.response_api)
@@ -438,7 +438,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
   placeBlockIfMissing(['router', 'clear_route_cache'], cfg.clear_route_cache)
   placeBlockIfMissing(['router', 'model_selection'], cfg.model_selection)
   placeBlockIfMissing(['model_catalog', 'embeddings', 'semantic'], cfg.embedding_models)
-  placeLegacyBertEmbeddingIfMissing((cfg as MutableRecord).bert_model)
   placeBlockIfMissing(['model_catalog', 'external'], cfg.external_models)
   placeBlockIfMissing(['model_catalog', 'modules', 'prompt_guard'], cfg.prompt_guard)
   placeBlockIfMissing(['model_catalog', 'modules', 'classifier'], cfg.classifier)
@@ -490,9 +489,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
           break
         case 'embedding_models':
           placeBlockIfMissing(['model_catalog', 'embeddings', 'semantic'], value)
-          break
-        case 'bert_model':
-          placeLegacyBertEmbeddingIfMissing(value)
           break
         case 'external_models':
           placeBlockIfMissing(['model_catalog', 'external'], value)

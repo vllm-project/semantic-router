@@ -30,7 +30,7 @@ func testDashboardDeployPreview(ctx context.Context, client *kubernetes.Clientse
 	defer stop()
 
 	payload := map[string]string{
-		"yaml": "routing:\n  strategy: priority\n",
+		"yaml": "global:\n  router:\n    strategy: priority\n",
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

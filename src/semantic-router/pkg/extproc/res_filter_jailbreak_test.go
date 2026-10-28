@@ -187,7 +187,8 @@ var _ = Describe("Response Jailbreak Filter", func() {
 			Expect(resp).NotTo(BeNil())
 			Expect(ctx.ResponseJailbreakDetected).To(BeTrue())
 			Expect(ctx.ResponseJailbreakType).To(Equal(classification.JailbreakClassificationErrorType))
-			Expect(ctx.ResponseJailbreakConfidence).To(BeNumerically("~", 1.0, 0.001))
+			Expect(ctx.ResponseJailbreakConfidence).To(BeZero())
+			Expect(ctx.ResponseJailbreakScoreAvailable).To(BeFalse())
 		})
 
 		// A failure is reported through whatever the decision's action asks
@@ -208,6 +209,28 @@ var _ = Describe("Response Jailbreak Filter", func() {
 			Expect(router.responseJailbreakOnClassifyError(ctx, true, "d", 0)).To(BeNil())
 			Expect(ctx.ResponseJailbreakDetected).To(BeTrue())
 			Expect(router.responseJailbreakWarningCode(ctx)).To(BeEmpty())
+		})
+	})
+
+	// A response longer than the guard reads was not verified, so it is
+	// treated as a detection whatever on_error says.
+	Describe("responseJailbreakOnUnscanned", func() {
+		It("blocks when the action is block", func() {
+			ctx := &RequestContext{
+				VSRSelectedDecision: createDecisionWithResponseJailbreak(true, "block"),
+			}
+			Expect(router.responseJailbreakOnUnscanned(ctx, "d", 0)).NotTo(BeNil())
+			Expect(ctx.ResponseJailbreakDetected).To(BeTrue())
+			Expect(ctx.ResponseJailbreakType).To(Equal(classification.JailbreakUnscannedType))
+			Expect(ctx.ResponseJailbreakScoreAvailable).To(BeFalse())
+		})
+
+		It("warns instead of blocking when the action is header", func() {
+			ctx := &RequestContext{
+				VSRSelectedDecision: createDecisionWithResponseJailbreak(true, "header"),
+			}
+			Expect(router.responseJailbreakOnUnscanned(ctx, "d", 0)).To(BeNil())
+			Expect(router.responseJailbreakWarningCode(ctx)).To(Equal(headers.ResponseWarningJailbreak))
 		})
 	})
 

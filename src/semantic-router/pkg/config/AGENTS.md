@@ -1,7 +1,11 @@
 # Router configuration contract
 
-- Steady-state input is canonical `version/listeners/providers/routing/global`.
+- Steady-state input is canonical
+  `version/listeners/providers/evaluation/routing/entrypoints/recipes/global`.
   Legacy layouts belong only in migration tooling.
+- `evaluation` owns operator benchmark definitions, index DAGs, and
+  model-linked records. Model cards own model identity and capabilities, not
+  benchmark measurements.
 - `providers.defaults` owns default model and reasoning-effort selection;
   `providers.models[]` owns aliases, optional catalog references, custom
   reasoning metadata, and concrete backend bindings. The repository catalog

@@ -4,6 +4,7 @@ from typing import Any, List
 from cli.models import (
     UserConfig,
     PluginType,
+    PromptCachePluginConfig,
     ResponseCachePluginConfig,
     FastResponsePluginConfig,
     RequestParamsPluginConfig,
@@ -14,18 +15,26 @@ from cli.models import (
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
+    ShadowDispatchPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
 )
-from cli.terminal import echo, error as terminal_error
+from cli.terminal import (
+    echo,
+    error as terminal_error,
+    hint as terminal_hint,
+    warning as terminal_warning,
+)
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
 from cli.validator_classifier import validate_classifier_contracts
+from cli.validator_safety import validate_safety_contracts
 from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
 )
 from cli.validator_prompt import validate_prompt_dependencies
+from cli.validator_inprocess_models import validate_inprocess_model_backends
 from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
@@ -40,56 +49,24 @@ from cli.validator_workflows import (
 )
 from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
+from cli.validator_native import validate_native_execution
+from cli.validator_reasoning import validate_reasoning_controls
+from cli.validator_model_runtime import (
+    unpinned_hub_deployment_warnings,
+    validate_model_runtime_references,
+)
+from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
 
+_ALGORITHM_SURFACES = routing_surface_catalog()["algorithms"]
 EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
-    "confidence": "confidence",
-    "ratings": "ratings",
-    "remom": "remom",
-    "fusion": "fusion",
-    "workflows": "workflows",
-    "router_dc": "router_dc",
-    "automix": "automix",
-    "hybrid": "hybrid",
-    "latency_aware": "latency_aware",
-    "multi_factor": "multi_factor",
-    "prompt": "prompt",
+    surface["type"]: surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 }
-
-ALGORITHM_CONFIG_BLOCKS = (
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "latency_aware",
-    "multi_factor",
-    "prompt",
-)
-
-
-VALID_ALGORITHM_TYPES = {
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "static",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "knn",
-    "kmeans",
-    "svm",
-    "mlp",
-    "multi_factor",
-    "latency_aware",
-    "prompt",
-}
+ALGORITHM_CONFIG_BLOCKS = tuple(EXPECTED_ALGORITHM_BLOCK_BY_TYPE.values())
+VALID_ALGORITHM_TYPES = {surface["type"] for surface in _ALGORITHM_SURFACES}
 
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
@@ -312,10 +289,12 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
+        PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,
     }
 
     for field_prefix, decision in _all_decisions(config):
@@ -475,15 +454,6 @@ def _workflow_configuration_errors(
 
     errors: List[ValidationError] = []
     mode = workflows_cfg.mode or "static"
-    planner = workflows_cfg.planner
-    planner_model = getattr(planner, "model", None) if planner is not None else None
-    if mode == "dynamic" and not planner_model:
-        errors.append(
-            ValidationError(
-                f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
-            )
-        )
     if mode == "dynamic" and workflows_cfg.roles:
         errors.append(
             ValidationError(
@@ -584,8 +554,13 @@ def validate_user_config(
         log.info("Validating user configuration...")
 
     errors = []
+    if not config.routing_enabled:
+        # Engine mode keeps dormant routing configuration without constructing
+        # its classifiers, algorithms or plugin dependencies.
+        return validate_model_runtime_references(config)
 
     errors.extend(validate_recipe_contracts(config))
+    errors.extend(validate_native_execution(config))
 
     # Validate signal references
     errors.extend(validate_signal_references(config))
@@ -597,7 +572,10 @@ def validate_user_config(
 
     # Validate model references
     errors.extend(validate_model_references(config))
+    errors.extend(validate_reasoning_controls(config))
+    errors.extend(validate_model_runtime_references(config))
     errors.extend(validate_classifier_contracts(config))
+    errors.extend(validate_safety_contracts(config))
 
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))
@@ -605,6 +583,7 @@ def validate_user_config(
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
     errors.extend(validate_prompt_dependencies(config))
+    errors.extend(validate_inprocess_model_backends(config))
 
     # Validate projection score dependency ordering
     errors.extend(validate_projection_score_dependencies(config))
@@ -622,6 +601,19 @@ def validate_user_config(
     return errors
 
 
+def collect_validation_warnings(config: UserConfig) -> List[ValidationError]:
+    """Return findings that leave the configuration valid but likely wrong."""
+    return unpinned_hub_deployment_warnings(config)
+
+
+def print_validation_warnings(warnings: List[ValidationError]):
+    """Print validation warnings, each with its hint."""
+    for validation_warning in warnings:
+        terminal_warning(str(validation_warning))
+        if validation_warning.hint:
+            terminal_hint(validation_warning.hint)
+
+
 def print_validation_errors(errors: List[ValidationError]):
     """
     Print validation errors in a user-friendly format.
@@ -635,3 +627,5 @@ def print_validation_errors(errors: List[ValidationError]):
     terminal_error("Configuration validation failed")
     for i, validation_error in enumerate(errors, 1):
         echo(f"  {i}. {validation_error}", err=True)
+        if validation_error.hint:
+            echo(f"     Hint: {validation_error.hint}", err=True)

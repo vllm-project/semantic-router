@@ -36,21 +36,7 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 			return nil, err
 		}
 	}
-	// Eagerly initialize the OpenVINO embedding model so that
-	// NewEmbeddingClassifier's preload step can use it. Skip if
-	// EMBEDDING_BACKEND_OVERRIDE forces a different backend at runtime.
-	backendOverride := embeddingBackendOverride()
-	if backendOverride == "" {
-		backendOverride = strings.ToLower(strings.TrimSpace(optConfig.Backend))
-	}
-	if backendOverride == "openvino" {
-		modelType := strings.ToLower(strings.TrimSpace(optConfig.ModelType))
-		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil {
-			logging.ComponentWarnEvent("classifier", "openvino_eager_init_failed", map[string]interface{}{
-				"error": err.Error(),
-			})
-		}
-	}
+
 	provider, err := b.embeddingProviderForRules()
 	if err != nil {
 		return nil, err
@@ -62,23 +48,20 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 		})
 		return nil, err
 	}
-	return withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier), nil
+	return withKeywordEmbeddingClassifier(keywordEmbeddingClassifier), nil
 }
 
 func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {
-	if b.cfg == nil || !b.cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return nil, nil
+	if b.cfg == nil {
+		return nil, fmt.Errorf("embedding config is required")
 	}
-	b.providerInitOnce.Do(func() {
-		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{})
-		if b.providerErr != nil {
-			logging.ComponentErrorEvent("classifier", "embedding_provider_create_failed", map[string]interface{}{
-				"backend": b.cfg.EmbeddingModels.EmbeddingBackend(),
-				"error":   b.providerErr.Error(),
-			})
-		}
-	})
-	return b.provider, b.providerErr
+	if err := b.prepareEmbeddingSet(); err != nil {
+		return nil, err
+	}
+	if b.provider == nil {
+		return nil, fmt.Errorf("primary embedding provider was not prepared")
+	}
+	return b.provider, nil
 }
 
 func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error) {
@@ -114,6 +97,16 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 	if len(b.cfg.ReaskRules) == 0 {
 		return nil, nil
 	}
+	if b.cfg.ReaskUsesDecisionTask() {
+		judgment, err := newDecisionJudgment(b.models, "reask", "reask", nil)
+		if err != nil {
+			return nil, err
+		}
+		if judgment == nil {
+			return nil, fmt.Errorf("reask decision.v1 binding requires a prepared decision model")
+		}
+		return withReaskClassifier(&ReaskClassifier{rules: append([]config.ReaskRule(nil), b.cfg.ReaskRules...), judgment: judgment}), nil
+	}
 	provider, err := b.embeddingProviderForRules()
 	if err != nil {
 		return nil, err
@@ -130,26 +123,57 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 	if len(b.cfg.ComplexityRules) == 0 {
 		return nil, nil
 	}
+	// A configured backend produces the score, so the prototype path is
+	// unreachable. Building it anyway is not merely wasted work: preloading
+	// the candidate embeddings requires the local embedding model, so a
+	// remote-only config would fail to start on a host that has no business
+	// carrying one. This is the same conclusion the startup advisory reports.
+	if b.cfg.ComplexityModel.Backend != nil {
+		return nil, nil
+	}
+	judgment, err := prepareDecisionComplexity(b.models, b.cfg.ComplexityRules)
+	if err != nil {
+		return nil, err
+	}
+	if judgment != nil && len(judgment.rules) == len(b.cfg.ComplexityRules) {
+		return withComplexityClassifier(judgment), nil
+	}
+	prototypeRules := b.cfg.ComplexityRules
+	if judgment != nil {
+		prototypeRules = nil
+		for _, rule := range b.cfg.ComplexityRules {
+			if judgment.judgments[rule.Name] == nil {
+				prototypeRules = append(prototypeRules, rule)
+			}
+		}
+	}
 	modelType := b.defaultEmbeddingModelType()
 	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
-		if err := b.initMultiModalIfNeeded("complexity image_candidates"); err != nil {
-			return nil, err
+		if initErr := b.initMultiModalIfNeeded("complexity image_candidates"); initErr != nil {
+			return nil, initErr
 		}
 	}
 	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
-		if err := b.initMultiModalIfNeeded("complexity model_type=multimodal"); err != nil {
-			return nil, err
+		if initErr := b.initMultiModalIfNeeded("complexity model_type=multimodal"); initErr != nil {
+			return nil, initErr
 		}
 	}
 	provider, err := b.embeddingProviderForRules()
 	if err != nil {
 		return nil, err
 	}
+	var multimodal embedding.Provider
+	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
+		multimodal, err = b.embeddingProviderForModel("multimodal", 0, 0)
+		if err != nil {
+			return nil, err
+		}
+	}
 	complexityClassifier, err := NewComplexityClassifier(
-		b.cfg.ComplexityRules,
+		prototypeRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
-		provider,
+		provider, multimodal,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "complexity_classifier_create_failed", map[string]interface{}{
@@ -158,10 +182,24 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 		})
 		return nil, err
 	}
+	if judgment != nil {
+		complexityClassifier.rules = b.cfg.ComplexityRules
+		complexityClassifier.judgments = judgment.judgments
+	}
 	return withComplexityClassifier(complexityClassifier), nil
 }
 
 func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (option, error) {
+	var contrastiveRules []config.JailbreakRule
+	for _, rule := range b.cfg.JailbreakRules {
+		if rule.Method == "contrastive" {
+			contrastiveRules = append(contrastiveRules, rule)
+		}
+	}
+	if len(contrastiveRules) == 0 {
+		return nil, nil
+	}
+
 	contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
 	defaultModelType := b.cfg.EmbeddingConfig.ModelType
 	if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
@@ -172,12 +210,9 @@ func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (
 
 	var mu sync.Mutex
 	var group errgroup.Group
-	group.SetLimit(classifierBuildParallelism(len(b.cfg.JailbreakRules)))
+	group.SetLimit(classifierBuildParallelism(len(contrastiveRules)))
 
-	for _, rule := range b.cfg.JailbreakRules {
-		if rule.Method != "contrastive" {
-			continue
-		}
+	for _, rule := range contrastiveRules {
 		group.Go(func() error {
 			provider, err := b.embeddingProviderForRules()
 			if err != nil {

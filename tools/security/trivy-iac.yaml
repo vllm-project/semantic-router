@@ -8,6 +8,18 @@ misconfigurations:
       - dashboard-production.yaml
     statement: Trust the vllm-project/semantic-router GHCR namespace used by first-party chart resources.
 
+  # Configuration deploys update the ConfigMap that backs the mounted config
+  # file (https://github.com/vllm-project/semantic-router/issues/3688). The
+  # config-writer Role limits that access to one ConfigMap through
+  # resourceNames, which KSV-0049 does not consider.
+  - id: KSV-0049
+    paths:
+      - router-default.yaml
+      - router-production.yaml
+    statement: >-
+      The config-writer Role grants only get, update and patch on the ConfigMap
+      named in resourceNames, which configuration deploys need.
+
   # The Dashboard image has an explicit root bootstrap contract: it prepares
   # writable state mounts and dynamic supplementary groups, then execs the
   # backend as UID/GID 65532 through gosu. These exceptions are isolated to the

@@ -271,7 +271,7 @@
   text-wrap: balance;
 }
 
-.theme-doc-markdown > :is(pre, table, img, figure, .tabs-container, details),
+.theme-doc-markdown > :is(pre, img, figure, .tabs-container, details),
 .theme-doc-markdown > div:has(> table),
 .theme-doc-markdown > div:has(> pre) {
   max-width: none;
@@ -699,6 +699,12 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
     width: auto;
     max-width: none !important;
     padding: 0;
+  }
+
+  /* A document that hides its TOC should reclaim the reserved rail instead of
+   * leaving an empty column beside interactive references. */
+  .site-docs-shell > .row > .col:only-child {
+    grid-column: 1 / -1;
   }
 
   /* Stretch TOC column to row height for sticky positioning. */

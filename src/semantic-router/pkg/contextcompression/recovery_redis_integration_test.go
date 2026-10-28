@@ -7,9 +7,13 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
+// StorageIntegration: redis
 func TestRedisRecoveryStoreRoundTripAndScopeIsolation(t *testing.T) {
+	storagetest.Require(t, "redis")
 	store, ctx := integrationRecoveryStore(t)
 	defer store.Close()
 	entry := RecoveryEntry{
@@ -68,7 +72,7 @@ func integrationRecoveryStore(
 	t.Cleanup(cancel)
 	if err := store.Health(ctx); err != nil {
 		_ = store.Close()
-		t.Skipf("Redis unavailable: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis unavailable: %v", err))
 	}
 	return store, ctx
 }

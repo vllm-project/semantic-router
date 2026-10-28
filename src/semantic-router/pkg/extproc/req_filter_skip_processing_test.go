@@ -117,6 +117,37 @@ func TestHandleRequestHeadersSkipProcessingHeaderIsCaseInsensitive(t *testing.T)
 	}
 }
 
+func TestHandleRequestHeadersSkipProcessingReturnsToDefaultRoute(t *testing.T) {
+	router := newRouterWithSkipProcessingGate(true)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", "true")
+	request.RequestHeaders.Headers.Headers = append(
+		request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: "X-Selected-Model", Value: "test-model"},
+	)
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+	common := response.GetRequestHeaders().GetResponse()
+	if !common.GetClearRouteCache() {
+		t.Fatal("expected selected-route cache to be cleared for skip processing")
+	}
+	if !containsHeaderName(common.GetHeaderMutation().GetRemoveHeaders(), headers.SelectedModel) {
+		t.Fatalf("selected-model header was not removed: %v", common.GetHeaderMutation().GetRemoveHeaders())
+	}
+}
+
+func containsHeaderName(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHandleRequestHeadersSkipProcessingBypassesValidation(t *testing.T) {
 	router := newRouterWithSkipProcessingGate(true)
 	ctx := &RequestContext{Headers: make(map[string]string)}
@@ -251,6 +282,42 @@ func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 	}
 }
 
+func TestHandleResponseHeadersRemovesPrivateUpstreamHostOnSkipAndNormalContinue(t *testing.T) {
+	router := &OpenAIRouter{}
+	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{
+				Headers: []*core.HeaderValue{
+					{Key: ":status", Value: "200"},
+					{Key: headers.VSRUpstreamHost, Value: "10.0.1.7:8000"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range []struct {
+		name string
+		ctx  *RequestContext
+	}{
+		{name: "normal", ctx: &RequestContext{}},
+		{name: "skip", ctx: &RequestContext{SkipProcessing: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response, err := router.handleResponseHeaders(responseHeaders, tc.ctx)
+			if err != nil {
+				t.Fatalf("handleResponseHeaders failed: %v", err)
+			}
+			removed := response.GetResponseHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+			for _, key := range removed {
+				if key == headers.VSRUpstreamHost {
+					return
+				}
+			}
+			t.Fatalf("RemoveHeaders = %v, want %q stripped on %s continue path", removed, headers.VSRUpstreamHost, tc.name)
+		})
+	}
+}
+
 func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
@@ -280,8 +347,23 @@ func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 	if response.GetResponseHeaders().Response.Status != ext_proc.CommonResponse_CONTINUE {
 		t.Fatalf("expected CONTINUE status, got %v", response.GetResponseHeaders().Response.Status)
 	}
-	if response.GetResponseHeaders().Response.HeaderMutation != nil {
-		t.Fatal("expected no header mutation when skipping processing")
+	mutation := response.GetResponseHeaders().Response.HeaderMutation
+	if len(mutation.GetSetHeaders()) != 0 {
+		t.Fatal("expected no router headers to be added when skipping processing")
+	}
+	removed := mutation.GetRemoveHeaders()
+	wantRemoved := map[string]bool{
+		headers.VSRUpstreamHost:             true,
+		headers.VSREffectiveInputTokens:     true,
+		headers.VSREffectiveMaxOutputTokens: true,
+	}
+	if len(removed) != len(wantRemoved) {
+		t.Fatalf("RemoveHeaders = %v, want %v", removed, wantRemoved)
+	}
+	for _, key := range removed {
+		if !wantRemoved[key] {
+			t.Fatalf("unexpected RemoveHeaders entry %q in %v", key, removed)
+		}
 	}
 	if response.ModeOverride != nil {
 		t.Fatal("did not expect mode override when skipping processing on a non-streaming response")

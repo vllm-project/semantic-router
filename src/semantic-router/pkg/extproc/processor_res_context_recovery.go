@@ -192,16 +192,18 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, fmt.Errorf("prepare context recovery followup: %w", err)
 	}
-	client := looper.NewClient(&r.Config.Looper)
-	client.SetDecisionName(requestCtx.VSRSelectedDecisionName)
-	followup, err := client.CallModel(
+	client := r.looperModelClient()
+	followup, err := client.CallModelWithOptions(
 		ctx,
-		openAIRequest,
-		model,
-		false,
-		1,
-		nil,
-		r.Config.GetModelAccessKey(model),
+		*openAIRequest,
+		looper.ModelTarget{
+			Name:      model,
+			AccessKey: r.Config.GetModelAccessKey(model),
+		},
+		looper.CallOptions{
+			DecisionName: requestCtx.VSRSelectedDecisionName,
+			Iteration:    1,
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("context recovery followup failed: %w", err)
@@ -301,6 +303,8 @@ func mergeContextRecoveryUsage(
 		{initial.InputUncached, followup.InputUncached, &result.InputUncached},
 		{initial.InputCacheRead, followup.InputCacheRead, &result.InputCacheRead},
 		{initial.InputCacheWrite, followup.InputCacheWrite, &result.InputCacheWrite},
+		{initial.InputCacheWrite5m, followup.InputCacheWrite5m, &result.InputCacheWrite5m},
+		{initial.InputCacheWrite1h, followup.InputCacheWrite1h, &result.InputCacheWrite1h},
 		{initial.OutputReasoning, followup.OutputReasoning, &result.OutputReasoning},
 		{initial.OutputOther, followup.OutputOther, &result.OutputOther},
 		{initial.InputTotal, followup.InputTotal, &result.InputTotal},

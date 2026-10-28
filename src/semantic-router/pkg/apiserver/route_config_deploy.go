@@ -1,16 +1,16 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +18,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -32,11 +34,21 @@ const configVersionTimestampLayout = "20060102-150405"
 type configVersionSource string
 
 const (
-	configVersionSourceAPI      configVersionSource = "api"
-	configVersionSourceDSL      configVersionSource = "dsl"
-	configVersionSourceRollback configVersionSource = "rollback"
-	configVersionSourceLegacy   configVersionSource = "legacy"
+	configVersionSourceAPI        configVersionSource = "api"
+	configVersionSourceRollback   configVersionSource = "rollback"
+	configVersionSourceStartup    configVersionSource = "startup"
+	configVersionSourceFile       configVersionSource = "file"
+	configVersionSourceKubernetes configVersionSource = "kubernetes"
+	configVersionSourceUnknown    configVersionSource = "unknown"
 )
+
+var knownConfigVersionSources = map[configVersionSource]configVersionSource{
+	configVersionSourceAPI:        configVersionSourceAPI,
+	configVersionSourceRollback:   configVersionSourceRollback,
+	configVersionSourceStartup:    configVersionSourceStartup,
+	configVersionSourceFile:       configVersionSourceFile,
+	configVersionSourceKubernetes: configVersionSourceKubernetes,
+}
 
 // configVersionPattern accepts the timestamp version and its collision suffix.
 // The rollback endpoint interpolates this value into a filesystem path, so the
@@ -48,37 +60,68 @@ var configVersionPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}(?:-[0-9]{3,9})
 type RouterConfigUpdateRequest struct {
 	// YAML is the router config YAML payload.
 	YAML string `json:"yaml"`
-	// DSL is the original DSL source (archived for audit trail).
-	DSL string `json:"dsl,omitempty"`
+}
+
+type routerConfigRollbackRequest struct {
+	// Version names a backup by its timestamp, or a configuration snapshot
+	// version by its number.
+	Version string `json:"version,omitempty"`
+	// ConfigVersion names a configuration snapshot version.
+	ConfigVersion uint64 `json:"config_version,omitempty"`
 }
 
 // RouterConfigUpdateResponse is the JSON response for a router config mutation.
 type RouterConfigUpdateResponse struct {
-	Status        string `json:"status"`
-	Version       string `json:"version"`
-	ETag          string `json:"etag,omitempty"`
-	RuntimeStatus string `json:"runtime_status,omitempty"`
-	RuntimeHash   string `json:"runtime_hash,omitempty"`
-	Message       string `json:"message,omitempty"`
+	Status               string `json:"status"`
+	Version              string `json:"version"`
+	ETag                 string `json:"etag,omitempty"`
+	ActivationStatus     string `json:"activation_status,omitempty"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash,omitempty"`
+	// ConfigVersion is the configuration snapshot version the update
+	// activated (its ACK); it is absent until the update is active.
+	ConfigVersion uint64 `json:"config_version,omitempty"`
+	// RollbackOf is the configuration version a rollback restored.
+	RollbackOf uint64 `json:"rollback_of,omitempty"`
+	Message    string `json:"message,omitempty"`
+	// Activation is the update's attempt; a rejected one (its NACK) carries
+	// structured reasons.
+	Activation *configActivationResponse `json:"activation,omitempty"`
 }
 
 type configHashResponse struct {
-	// Hash remains the source-document hash for backward compatibility.
-	Hash        string `json:"hash"`
-	RuntimeHash string `json:"runtime_hash"`
-	ActiveHash  string `json:"active_hash,omitempty"`
-	Status      string `json:"status"`
+	SourceConfigHash     string `json:"source_config_hash"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash"`
+	ActiveRuntimeHash    string `json:"active_runtime_hash,omitempty"`
+	// ActiveVersion is the version of the configuration snapshot that serves.
+	ActiveVersion    uint64                    `json:"active_version,omitempty"`
+	ActivationStatus string                    `json:"activation_status"`
+	Activation       *configActivationResponse `json:"activation,omitempty"`
+	// LastRejection is the most recent rejected update, if any.
+	LastRejection *configActivationResponse `json:"last_rejection,omitempty"`
 }
 
-// RouterConfigVersionEntry represents a backup version entry.
+// RouterConfigVersionEntry is one entry of the configuration history: a
+// version the Router activated, or a document a mutation replaced.
 type RouterConfigVersionEntry struct {
 	Version   string              `json:"version"`
 	Timestamp string              `json:"timestamp"`
 	Source    configVersionSource `json:"source"`
-	Filename  string              `json:"filename"`
+	// Filename is the recorded document's file; empty when the entry
+	// recorded no document.
+	Filename string `json:"filename"`
+	// ConfigVersion is the configuration snapshot version the entry
+	// activated; absent for a replaced document that never activated as
+	// recorded.
+	ConfigVersion uint64 `json:"config_version,omitempty"`
+	// Hash is the SHA-256 of the recorded document.
+	Hash string `json:"hash,omitempty"`
+	// Active marks the version that serves.
+	Active bool `json:"active,omitempty"`
+	// RollbackOf is the version a rollback entry restored.
+	RollbackOf uint64 `json:"rollback_of,omitempty"`
 }
 
-// handleConfigRollback handles POST /config/router/rollback.
+// handleConfigRollback handles POST /api/v1/config/rollback.
 func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 	if s.configPath == "" {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
@@ -91,56 +134,54 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 	defer guard.Release()
 
-	version, ok := s.parseRollbackVersion(w, r)
+	request, ok := s.parseRollbackVersion(w, r)
 	if !ok {
 		return
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	configDir := configPersistenceBaseDir(paths.sourcePath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-
-	backupData, backupCfg, ok := s.loadRollbackBackup(
-		w,
-		backupFile,
-		version,
-	)
+	target, ok := s.resolveRollbackTarget(w, request, configBackupDir(paths.sourcePath))
 	if !ok {
 		return
 	}
 	existingData, ok := s.loadCompatibleRollbackSource(
 		w,
 		paths.sourcePath,
-		backupCfg,
+		target.config,
 	)
 	if !ok {
 		return
 	}
-	if !checkConfigPrecondition(w, r, existingData, false) {
+	if !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 
-	// Back up current config before rollback.
-	recordConfigBackup(backupDir, nextConfigVersion(backupDir, time.Now()), existingData, configVersionSourceRollback)
-
-	if err := writeConfigAtomically(paths.sourcePath, backupData); err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write config: %v", err))
+	// Keep the current config recoverable before rolling back.
+	_, backupDir, err := s.preserveReplacedDocument(paths.sourcePath, existingData, configVersionSourceRollback)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BACKUP_ERROR", fmt.Sprintf("Failed to back up existing config: %v", err))
 		return
 	}
 
-	if !s.syncRollbackRuntime(w, paths, existingData) {
+	origin := managementOrigin(r, configsnapshot.SourceRollback)
+	origin.RollbackOf = target.version
+	afterAttempt := s.configActivationAttempt()
+	if !s.writeRouterConfigFiles(w, paths, existingData, target.document, origin) {
 		return
 	}
 
 	logging.Infof(
 		"Config rolled back to version %s via API: sourceConfigPath=%s, runtimeConfigPath=%s",
-		version,
+		target.id,
 		paths.sourcePath,
 		paths.runtimePath,
 	)
 
-	s.writeRollbackSuccess(w, version, backupData, paths.runtimePath, backupDir)
+	s.writeRollbackSuccess(w, target, paths.runtimePath, backupDir, afterAttempt)
+}
+
+func backupFilePath(backupDir, version string) string {
+	return filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
 }
 
 func (s *ClassificationAPIServer) loadRollbackBackup(
@@ -171,12 +212,17 @@ func (s *ClassificationAPIServer) loadRollbackBackup(
 	return backupData, backupCfg, true
 }
 
+// loadCompatibleRollbackSource reads the persisted document a rollback
+// replaces and checks that the restored one can replace the serving
+// configuration without a restart. The persisted document may be a rejected
+// change that never served, so it stands in for the serving configuration only
+// in an API without the Router's runtime.
 func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 	w http.ResponseWriter,
 	sourcePath string,
 	backupCfg *config.RouterConfig,
 ) ([]byte, bool) {
-	existingData, err := os.ReadFile(sourcePath)
+	existingData, err := readPersistedSourceConfig(sourcePath)
 	if err != nil && !os.IsNotExist(err) {
 		s.writeErrorResponse(
 			w,
@@ -186,23 +232,22 @@ func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 		)
 		return nil, false
 	}
-	if len(existingData) == 0 {
-		return existingData, true
+	currentCfg := s.servingConfig()
+	if currentCfg == nil {
+		if len(existingData) == 0 {
+			return existingData, true
+		}
+		if currentCfg, err = config.ParseYAMLBytes(existingData); err != nil {
+			s.writeErrorResponse(
+				w,
+				http.StatusInternalServerError,
+				"CURRENT_CONFIG_INVALID",
+				fmt.Sprintf("Current config is invalid: %v", err),
+			)
+			return nil, false
+		}
 	}
-	currentCfg, err := config.ParseYAMLBytes(existingData)
-	if err != nil {
-		s.writeErrorResponse(
-			w,
-			http.StatusInternalServerError,
-			"CURRENT_CONFIG_INVALID",
-			fmt.Sprintf("Current config is invalid: %v", err),
-		)
-		return nil, false
-	}
-	if err := config.ValidateLocalClassifierReload(
-		currentCfg,
-		backupCfg,
-	); err != nil {
+	if err := validateParsedHotReloadCompatibilityInMode(s.gatewayMode, currentCfg, backupCfg); err != nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusConflict,
@@ -216,86 +261,117 @@ func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 
 func (s *ClassificationAPIServer) writeRollbackSuccess(
 	w http.ResponseWriter,
-	version string,
-	backupData []byte,
+	target rollbackTarget,
 	runtimePath string,
 	backupDir string,
+	afterAttempt uint64,
 ) {
+	version, backupData := target.id, target.document
 	etag := configDocumentETag(backupData)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(runtimePath)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(runtimePath, backupData, afterAttempt)
 	statusCode := http.StatusOK
 	status := "success"
 	message := fmt.Sprintf("Rolled back to version %s. Router reload is active.", version)
 	if runtimeStatus == "pending" {
 		statusCode = http.StatusAccepted
 		status = "accepted"
-		message = fmt.Sprintf("Rolled back to version %s on disk; runtime activation is pending. Poll /config/hash until status is active.", version)
+		message = fmt.Sprintf("Rolled back to version %s on disk; runtime activation is pending. Poll /api/v1/config/hash until activation_status is active.", version)
+	} else if runtimeStatus == "persisted" {
+		statusCode = http.StatusAccepted
+		status = "accepted"
+		message = fmt.Sprintf("Rolled back to version %s in the Kubernetes ConfigMap; it takes effect on the router's next restart.", version)
+	} else if runtimeStatus == "failed" {
+		statusCode = http.StatusServiceUnavailable
+		status = "activation_failed"
+		message = "The rollback is persisted, but runtime activation failed. Inspect activation and correct or roll back the persisted configuration."
+	} else if runtimeStatus == "unknown" {
+		message = "The rollback is persisted; runtime activation could not be observed."
 	}
 	w.Header().Set("ETag", etag)
-	configCleanupBackups(backupDir)
+	cleanupConfigBackups(backupDir)
 	s.writeJSONResponse(w, statusCode, RouterConfigUpdateResponse{
-		Status:        status,
-		Version:       version,
-		ETag:          etag,
-		RuntimeStatus: runtimeStatus,
-		RuntimeHash:   runtimeHash,
-		Message:       message,
+		Status:               status,
+		Version:              version,
+		ETag:                 etag,
+		ActivationStatus:     runtimeStatus,
+		GeneratedRuntimeHash: runtimeHash,
+		ConfigVersion:        s.activatedConfigVersion(runtimeStatus, runtimeHash),
+		RollbackOf:           target.version,
+		Message:              message,
+		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
 	})
 }
 
-func (s *ClassificationAPIServer) syncRollbackRuntime(
-	w http.ResponseWriter,
-	paths configPersistencePaths,
-	previousData []byte,
-) bool {
-	if !paths.usesRuntimeOverride() {
-		return true
+// cleanupConfigBackups trims the backups this API keeps on its own; a
+// configuration history trims itself, and then there is no directory to trim.
+func cleanupConfigBackups(backupDir string) {
+	if backupDir != "" {
+		configCleanupBackups(backupDir)
 	}
-	if err := syncRuntimeConfigOrRestore(paths, previousData); err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
-		return false
-	}
-	return true
 }
 
-func (s *ClassificationAPIServer) parseRollbackVersion(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var req struct {
-		Version string `json:"version"`
+// activatedConfigVersion is the snapshot version of an active mutation.
+func (s *ClassificationAPIServer) activatedConfigVersion(runtimeStatus, runtimeHash string) uint64 {
+	if runtimeStatus != "active" {
+		return 0
 	}
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	return s.activeConfigVersion(runtimeHash)
+}
+
+// parseRollbackVersion reads which recorded version a rollback restores: a
+// backup timestamp, or a configuration version as config_version or as a
+// number in version.
+func (s *ClassificationAPIServer) parseRollbackVersion(w http.ResponseWriter, r *http.Request) (routerConfigRollbackRequest, bool) {
+	var req routerConfigRollbackRequest
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
-		return "", false
+		return req, false
 	}
-	if req.Version == "" {
+	switch {
+	case req.Version == "" && req.ConfigVersion == 0:
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "version is required")
-		return "", false
+		return req, false
+	case req.Version != "" && req.ConfigVersion != 0:
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "give either version or config_version, not both")
+		return req, false
+	case snapshotVersionPattern.MatchString(req.Version):
+		req.ConfigVersion, _ = strconv.ParseUint(req.Version, 10, 64)
+		req.Version = ""
+		return req, true
 	}
 	// The value is interpolated into a backup path, so the strict allowlist also
 	// prevents path traversal outside the backup directory.
-	if !configVersionPattern.MatchString(req.Version) {
+	if req.ConfigVersion == 0 && !configVersionPattern.MatchString(req.Version) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
-			"version must match YYYYMMDD-HHMMSS with an optional numeric sequence suffix")
-		return "", false
+			"version must be a configuration version number, or match YYYYMMDD-HHMMSS with an optional numeric sequence suffix")
+		return req, false
 	}
-	return req.Version, true
+	return req, true
 }
 
-// handleConfigVersions handles GET /config/router/versions.
+// handleConfigVersions handles GET /api/v1/config/versions.
 func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ *http.Request) {
 	if s.configPath == "" {
 		s.writeJSONResponse(w, http.StatusOK, []RouterConfigVersionEntry{})
 		return
 	}
+	if lifecycle := s.configLifecycle(); lifecycle != nil {
+		s.writeJSONResponse(w, http.StatusOK, s.historyVersionEntries(lifecycle.History()))
+		return
+	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	configDir := configPersistenceBaseDir(paths.sourcePath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
+	backupDir := configBackupDir(paths.sourcePath)
 
 	versions := []RouterConfigVersionEntry{}
 
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
-		s.writeJSONResponse(w, http.StatusOK, versions)
+		if os.IsNotExist(err) {
+			s.writeJSONResponse(w, http.StatusOK, versions)
+			return
+		}
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BACKUP_READ_ERROR", fmt.Sprintf("Failed to read config backups: %v", err))
 		return
 	}
 
@@ -352,7 +428,7 @@ func nextConfigVersion(backupDir string, now time.Time) string {
 	}
 }
 
-// handleConfigGet handles GET /config/router and returns the current router config as JSON.
+// handleConfigGet handles GET /api/v1/config and returns the current router config as JSON.
 // Access requires config.read; plaintext secrets require secret_view (otherwise redacted).
 func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	if s.configPath == "" {
@@ -361,12 +437,13 @@ func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, r *http
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	data, err := os.ReadFile(paths.sourcePath)
+	data, err := readPersistedSourceConfig(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read config: %v", err))
 		return
 	}
 	w.Header().Set("ETag", configDocumentETag(data))
+	s.setActiveConfigHeaders(w)
 
 	var cfgMap interface{}
 	if err := yaml.Unmarshal(data, &cfgMap); err != nil {
@@ -415,36 +492,67 @@ func configVersionSourcePath(backupDir, version string) string {
 	return filepath.Join(backupDir, fmt.Sprintf("config.%s.source", version))
 }
 
-func writeConfigVersionSource(backupDir, version string, source configVersionSource) {
-	if err := os.WriteFile(configVersionSourcePath(backupDir, version), []byte(source+"\n"), 0o644); err != nil {
-		logging.Warnf("Failed to write config backup source metadata: %v", err)
-	}
+func writeConfigVersionSource(backupDir, version string, source configVersionSource) error {
+	return writePrivateConfigArtifact(configVersionSourcePath(backupDir, version), []byte(source+"\n"))
 }
 
-func recordConfigBackup(backupDir, version string, data []byte, source configVersionSource) {
+func recordConfigBackup(backupDir, version string, data []byte, source configVersionSource) error {
 	if len(data) == 0 {
-		return
+		return nil
+	}
+	if err := ensurePrivateConfigBackupDir(backupDir); err != nil {
+		return fmt.Errorf("prepare private config backup directory: %w", err)
 	}
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, data, 0o644); err != nil {
-		logging.Warnf("Failed to create config backup: %v", err)
-		return
+	if err := writePrivateConfigArtifact(backupFile, data); err != nil {
+		return fmt.Errorf("create config backup: %w", err)
 	}
-	writeConfigVersionSource(backupDir, version, source)
+	if err := writeConfigVersionSource(backupDir, version, source); err != nil {
+		_ = os.Remove(backupFile)
+		return fmt.Errorf("write config backup source metadata: %w", err)
+	}
 	logging.Infof("Config backup created: %s", backupFile)
+	return nil
+}
+
+func ensurePrivateConfigBackupDir(backupDir string) error {
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(backupDir, 0o700)
+}
+
+func writePrivateConfigArtifact(path string, data []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, writeErr := file.Write(data); writeErr != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return writeErr
+	}
+	if syncErr := file.Sync(); syncErr != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return syncErr
+	}
+	if closeErr := file.Close(); closeErr != nil {
+		_ = os.Remove(path)
+		return closeErr
+	}
+	return nil
 }
 
 func readConfigVersionSource(backupDir, version string) configVersionSource {
 	data, err := os.ReadFile(configVersionSourcePath(backupDir, version))
 	if err != nil {
-		return configVersionSourceLegacy
+		return configVersionSourceUnknown
 	}
-	switch source := configVersionSource(strings.TrimSpace(string(data))); source {
-	case configVersionSourceAPI, configVersionSourceDSL, configVersionSourceRollback:
+	if source, ok := knownConfigVersionSources[configVersionSource(strings.TrimSpace(string(data)))]; ok {
 		return source
-	default:
-		return configVersionSourceLegacy
 	}
+	return configVersionSourceUnknown
 }
 
 // handleConfigHash reports persisted, generated-runtime, and active config
@@ -457,29 +565,61 @@ func (s *ClassificationAPIServer) handleConfigHash(w http.ResponseWriter, _ *htt
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	data, err := os.ReadFile(paths.sourcePath)
+	sourceHash, runtimeHash, kubernetesTarget, err := s.resolveConfigSourceAndRuntimeHash(paths)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read config: %v", err))
+		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", err.Error())
 		return
 	}
 
-	hash := sha256.Sum256(data)
-	runtimeHash, err := configFileHash(paths.runtimePath)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read runtime config: %v", err))
-		return
-	}
 	activeHash := s.activeConfigDocumentHash()
-	status := "pending"
-	if activeHash != "" && activeHash == runtimeHash {
-		status = "active"
-	} else if activeHash == "" {
-		status = "unknown"
+	status := s.configActivationStatus(runtimeHash, activeHash)
+	if kubernetesTarget && status != "active" {
+		// A mismatch here can never resolve by polling: the ConfigMap write
+		// never touches the running process, so only a restart picks it up.
+		status = "persisted"
 	}
 	s.writeJSONResponse(w, http.StatusOK, configHashResponse{
-		Hash:        hex.EncodeToString(hash[:]),
-		RuntimeHash: runtimeHash,
-		ActiveHash:  activeHash,
-		Status:      status,
+		SourceConfigHash:     sourceHash,
+		GeneratedRuntimeHash: runtimeHash,
+		ActiveRuntimeHash:    activeHash,
+		ActiveVersion:        s.activeConfigVersion(activeHash),
+		ActivationStatus:     status,
+		Activation:           s.configActivation(runtimeHash),
+		LastRejection:        s.lastConfigRejection(),
 	})
+}
+
+// resolveConfigSourceAndRuntimeHash reads the current source and runtime
+// document hashes. On a Kubernetes ConfigMap target, both come from the
+// ConfigMap itself (the single document that backs the mounted file, per
+// issue #3688): the mounted file is read-only and never reflects an API
+// write, so reading it here would report stale hashes indefinitely.
+func (s *ClassificationAPIServer) resolveConfigSourceAndRuntimeHash(paths configPersistencePaths) (sourceHash, runtimeHash string, kubernetesTarget bool, err error) {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		writer, writerErr := resolvedConfigMapWriter()
+		if writerErr != nil {
+			return "", "", true, fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", writerErr)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+		defer cancel()
+		data, found, readErr := writer.Read(ctx, target)
+		if readErr != nil {
+			return "", "", true, fmt.Errorf("failed to read config ConfigMap: %w", readErr)
+		}
+		if !found {
+			return "", "", true, nil
+		}
+		hash := configDocumentETagHash(data)
+		return hash, hash, true, nil
+	}
+
+	data, err := os.ReadFile(paths.sourcePath)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to read config: %w", err)
+	}
+	runtimeHash, err = configFileHash(paths.runtimePath)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to read runtime config: %w", err)
+	}
+	return configDocumentETagHash(data), runtimeHash, false, nil
 }

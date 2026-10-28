@@ -7,14 +7,15 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
 	pkgtestcases.Register("pii-long-text", pkgtestcases.TestCase{
-		Description: "Verify /api/v1/classify/pii detects entities past the classifier's sequence limit",
+		Description: "Verify /api/v1/diagnostics/classify/pii detects entities past the classifier's sequence limit",
 		Tags:        []string{"kubernetes", "apiserver", "classification", "pii", "api"},
 		Fn:          testPIILongText,
 	})
@@ -36,7 +37,7 @@ func testPIILongText(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(60 * time.Second)
-	url := session.URL("/api/v1/classify/pii")
+	url := session.URL("/api/v1/diagnostics/classify/pii")
 
 	// Filler carries no names, numbers or dates, so any entity reported here
 	// belongs to the trailing secret.

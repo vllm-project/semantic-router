@@ -1,317 +1,290 @@
-"""Grafana dashboard sections for semantic router observability."""
+"""Reported model usage, instrumented plugin work, and telemetry health."""
 
-from grafana_panel_factories import (
-    create_bar_chart_panel,
-    create_row_panel,
-    create_target,
-    create_timeseries_panel,
-)
+from grafana_panel_factories import create_target, histogram_mean, metric, rate_sum
 
 
-def append_routing_selection_section(ctx) -> None:
-    ctx.panels.append(
-        create_row_panel("Routing and Model Selection", y=ctx.y_pos, panel_id=550)
+def append_backend_section(ctx):
+    ctx.row("Model responses and usage")
+    ctx.pair(
+        [
+            (
+                "Reported tokens by model",
+                [
+                    create_target(
+                        rate_sum("llm_model_tokens_total", "model"), "{{model}}"
+                    )
+                ],
+                "tps",
+                "Tokens reported by response usage. Missing usage is not measured as zero; cache responses may include reused usage. "
+                "Not billed cost, physical token generation or capability. Use Evaluation for frozen-price comparisons.",
+            ),
+            (
+                "Requests in flight by model",
+                [
+                    create_target(
+                        f'sum({metric("llm_model_inflight_requests")}) by (model)',
+                        "{{model}}",
+                    )
+                ],
+                "short",
+                "Requests tracked against each logical model, collected at scrape time. No waiting-queue length or utilization is inferred.",
+            ),
+            (
+                "Response duration by model",
+                [
+                    create_target(
+                        histogram_mean("llm_model_completion_latency_seconds", "model"),
+                        "{{model}}",
+                    )
+                ],
+                "s",
+                "Mean duration from request-body processing through recorded response completion, including routing. "
+                "This observation can include cache responses and is not the terminal-request population above.",
+            ),
+            (
+                "First response observation by model",
+                [
+                    create_target(
+                        histogram_mean(
+                            "llm_model_first_response_observation_seconds", "model"
+                        ),
+                        "{{model}}",
+                    )
+                ],
+                "s",
+                "Mean time from request-body processing to the first observed streaming chunk or nonstreaming response headers. "
+                "Includes routing and may precede a content token; not a uniform backend time-to-first-token measurement.",
+            ),
+            (
+                "Response duration per output token",
+                [
+                    create_target(
+                        histogram_mean(
+                            "llm_model_response_duration_per_output_token_seconds",
+                            "model",
+                        ),
+                        "{{model}}",
+                    )
+                ],
+                "s",
+                "Mean of per-response duration / reported output-token count, for responses with output tokens. "
+                "Includes routing and first-response wait; not decode inter-token latency or a token-weighted aggregate.",
+            ),
+            (
+                "Recorded model errors",
+                [
+                    create_target(
+                        rate_sum("llm_request_errors_total", "model, reason"),
+                        "{{model}} / {{reason}}",
+                    )
+                ],
+                "ops",
+                "Instrumented model error events. Use Inference outcomes for request-level denominators; "
+                "these diagnostic events are not a disjoint terminal-request counter.",
+            ),
+        ]
     )
-    ctx.y_pos += 1
-
-    append_routing_latency_panels(ctx)
-    append_selection_inflight_panels(ctx)
-    append_request_error_panels(ctx)
 
 
-def append_routing_latency_panels(ctx) -> None:
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Router Routing Latency (P50/P95/P99)",
-            [
-                create_target(
-                    "histogram_quantile(0.50, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))",
-                    "P50",
-                    "A",
-                ),
-                create_target(
-                    "histogram_quantile(0.95, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))",
-                    "P95",
-                    "B",
-                ),
-                create_target(
-                    "histogram_quantile(0.99, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))",
-                    "P99",
-                    "C",
-                ),
-            ],
-            x=0,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="s",
-        )
+def append_plugin_cache_section(ctx):
+    ctx.row("Plugins and response cache")
+    ctx.pair(
+        [
+            (
+                "Plugin executions",
+                [
+                    create_target(
+                        rate_sum(
+                            "llm_plugin_execution_total",
+                            "plugin_type, decision_name, status",
+                        ),
+                        "{{plugin_type}} / {{decision_name}} / {{status}}",
+                    )
+                ],
+                "ops",
+                "Instrumented plugin executions and recorded outcomes. Missing series do not imply success or that every configured plugin ran.",
+            ),
+            (
+                "Plugin duration",
+                [
+                    create_target(
+                        histogram_mean(
+                            "llm_plugin_execution_latency_seconds", "plugin_type"
+                        ),
+                        "{{plugin_type}}",
+                    )
+                ],
+                "s",
+                "Mean measured duration of instrumented plugin executions. Unknown or absent observations stay absent.",
+            ),
+            (
+                "Cache lookup outcomes",
+                [
+                    create_target(
+                        rate_sum(
+                            "llm_response_cache_operation_duration_seconds_count",
+                            "backend, operation, status",
+                            'operation=~"lookup_exact|lookup_semantic"',
+                        ),
+                        "{{backend}} / {{operation}} / {{status}}",
+                    )
+                ],
+                "ops",
+                "Measured response-cache lookup hit, miss and error operations. Exact and semantic lookups stay distinct. "
+                "One request can perform multiple lookups; these counts do not define a request-level hit percentage.",
+            ),
+            (
+                "Cache operation duration",
+                [
+                    create_target(
+                        histogram_mean(
+                            "llm_response_cache_operation_duration_seconds",
+                            "backend, operation",
+                        ),
+                        "{{backend}} / {{operation}}",
+                    )
+                ],
+                "s",
+                "Mean wall-clock duration measured by the response-cache service. Uses timed canonical operations, "
+                "not legacy backend callbacks that can report placeholder zero durations.",
+            ),
+        ]
     )
-    ctx.panel_id += 1
 
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Model Selection Duration (P95)",
-            [
-                create_target(
-                    "histogram_quantile(0.95, sum(rate(llm_model_selection_duration_seconds_bucket[5m])) by (le, method, tier))",
-                    "{{method}} {{tier}}",
-                    "A",
-                )
-            ],
-            x=12,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="s",
-        )
+
+def append_accounting_section(ctx):
+    coverage = (
+        "Detailed attempt instrumentation currently covers Confidence execution. "
+        "An absent series for another algorithm does not prove zero attempts. "
     )
-    ctx.panel_id += 1
-    ctx.y_pos += 8
-
-
-def append_selection_inflight_panels(ctx) -> None:
-    ctx.panels.append(
-        create_bar_chart_panel(
-            "Selection Count by Method and Tier",
-            [
-                create_target(
-                    "sum(increase(llm_model_selection_total[$__range])) by (method, tier)",
-                    "{{method}} {{tier}}",
-                    "A",
-                )
-            ],
-            x=0,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="short",
-        )
+    price_basis = (
+        "Known configured-price amounts only, not invoices or hardware cost. "
+        "Unknown usage or prices are omitted; a known subtotal does not prove complete accounting. "
+        "Currencies remain separate; no savings percentage is inferred. "
     )
-    ctx.panel_id += 1
-
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Inflight Requests by Model",
-            [
-                create_target(
-                    "sum(llm_model_inflight_requests) by (model)",
-                    "{{model}}",
-                    "A",
-                )
-            ],
-            x=12,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="short",
-        )
+    ctx.pair(
+        [
+            (
+                "Known model cost rate",
+                [
+                    create_target(
+                        rate_sum("llm_model_cost_total", "model, currency"),
+                        "{{model}} / {{currency}} per second",
+                    )
+                ],
+                "short",
+                price_basis
+                + "Each series is currency units per second attributed to a logical model. "
+                "Do not add this series to Looper attempt cost: accounting scopes can overlap.",
+            ),
+            (
+                "Reported prompt and completion tokens",
+                [
+                    create_target(
+                        rate_sum("llm_model_prompt_tokens_total", "model"),
+                        "{{model}} / prompt",
+                        "A",
+                    ),
+                    create_target(
+                        rate_sum("llm_model_completion_tokens_total", "model"),
+                        "{{model}} / completion",
+                        "B",
+                    ),
+                ],
+                "tps",
+                "Reported usage breakdown per second. Responses with only total-token usage do not enter this breakdown. "
+                "Prompt tokens can include cache reads/writes; these series alone do not establish billed-token buckets.",
+            ),
+            (
+                "Looper attempt outcomes",
+                [
+                    create_target(
+                        rate_sum(
+                            "llm_looper_attempts_total", "algorithm, stage, status"
+                        ),
+                        "{{algorithm}} / {{stage}} / {{status}}",
+                    )
+                ],
+                "ops",
+                coverage
+                + "One terminal event per instrumented attempt. Internal model/verifier attempts are distinct from public inference request outcomes.",
+            ),
+            (
+                "Looper attempt duration",
+                [
+                    create_target(
+                        histogram_mean(
+                            "llm_looper_attempt_duration_seconds",
+                            "algorithm, stage, status",
+                        ),
+                        "{{algorithm}} / {{stage}} / {{status}}",
+                    )
+                ],
+                "s",
+                coverage
+                + "Mean measured end-to-end attempt duration by stage and outcome. Milliseconds are converted to seconds by the emitter.",
+            ),
+            (
+                "Known Looper attempt cost rate",
+                [
+                    create_target(
+                        rate_sum(
+                            "llm_looper_attempt_cost_total",
+                            "algorithm, stage, currency",
+                        ),
+                        "{{algorithm}} / {{stage}} / {{currency}} per second",
+                    )
+                ],
+                "short",
+                coverage
+                + price_basis
+                + "Each series is known currency units per second. Do not sum with model cost counters.",
+            ),
+            (
+                "Looper attempt tokens",
+                [
+                    create_target(
+                        rate_sum(
+                            "llm_looper_attempt_tokens_total",
+                            "algorithm, stage, token_type",
+                        ),
+                        "{{algorithm}} / {{stage}} / {{token_type}}",
+                    )
+                ],
+                "tps",
+                coverage
+                + "Reported prompt/completion usage for internal model and verifier stages. "
+                "These attempt observations may overlap model usage counters and must not be added to them.",
+            ),
+        ]
     )
-    ctx.panel_id += 1
-    ctx.y_pos += 8
 
 
-def append_request_error_panels(ctx) -> None:
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Request Errors by Reason",
-            [
-                create_target(
-                    "sum(rate(llm_request_errors_total[5m])) by (reason)",
-                    "{{reason}}",
-                    "A",
-                )
-            ],
-            x=0,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="ops",
-        )
+def append_telemetry_section(ctx):
+    ctx.row("Telemetry health")
+    ctx.pair(
+        [
+            (
+                "Telemetry scrape health",
+                [
+                    create_target(
+                        'up{job=~"semantic-router|jaeger"}', "{{job}} / {{instance}}"
+                    )
+                ],
+                "short",
+                "All router and Jaeger scrape targets, independent of the Router instance filter. "
+                "1 means scrape success, 0 means failure; missing means no scrape evidence. Does not prove inference traces exist.",
+            ),
+            (
+                "Router trace export outcomes",
+                [
+                    create_target(
+                        rate_sum("llm_trace_export_spans_total", "result"), "{{result}}"
+                    )
+                ],
+                "ops",
+                "Spans in exporter batches. Excludes unsampled and SDK queue-dropped spans and does not prove durable collector storage. "
+                "No data may mean no batch was exported in this interval.",
+            ),
+        ]
     )
-    ctx.panel_id += 1
-
-    ctx.panels.append(
-        create_bar_chart_panel(
-            "Top Failing Models",
-            [
-                create_target(
-                    "topk(10, sum(increase(llm_request_errors_total[$__range])) by (model))",
-                    "{{model}}",
-                    "A",
-                )
-            ],
-            x=12,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="short",
-        )
-    )
-    ctx.panel_id += 1
-    ctx.y_pos += 8
-
-
-def append_windowed_model_health_section(ctx) -> None:
-    ctx.panels.append(
-        create_row_panel("Windowed Model Health", y=ctx.y_pos, panel_id=575)
-    )
-    ctx.y_pos += 1
-
-    append_windowed_latency_error_panels(ctx)
-    append_windowed_queue_utilization_panels(ctx)
-
-
-def append_windowed_latency_error_panels(ctx) -> None:
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Windowed Model Latency",
-            [
-                create_target(
-                    "llm_model_latency_windowed_seconds",
-                    "{{model}} {{time_window}} avg",
-                    "A",
-                ),
-                create_target(
-                    "llm_model_latency_p95_windowed_seconds",
-                    "{{model}} {{time_window}} p95",
-                    "B",
-                ),
-                create_target(
-                    "llm_model_latency_p99_windowed_seconds",
-                    "{{model}} {{time_window}} p99",
-                    "C",
-                ),
-            ],
-            x=0,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="s",
-        )
-    )
-    ctx.panel_id += 1
-
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Windowed Model Error Rate",
-            [
-                create_target(
-                    "llm_model_error_rate_windowed",
-                    "{{model}} {{time_window}}",
-                    "A",
-                )
-            ],
-            x=12,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="percentunit",
-        )
-    )
-    ctx.panel_id += 1
-    ctx.y_pos += 8
-
-
-def append_windowed_queue_utilization_panels(ctx) -> None:
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Estimated Queue Depth by Model",
-            [
-                create_target(
-                    "llm_model_queue_depth_estimated",
-                    "{{model}}",
-                    "A",
-                )
-            ],
-            x=0,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="short",
-        )
-    )
-    ctx.panel_id += 1
-
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Model Utilization by Window",
-            [
-                create_target(
-                    "llm_model_utilization_percentage",
-                    "{{model}} {{time_window}}",
-                    "A",
-                )
-            ],
-            x=12,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="percent",
-        )
-    )
-    ctx.panel_id += 1
-    ctx.y_pos += 8
-
-
-def append_session_cache_warmth_section(ctx) -> None:
-    ctx.panels.append(
-        create_row_panel("Session and Cache Warmth", y=ctx.y_pos, panel_id=590)
-    )
-    ctx.y_pos += 1
-
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Session Model Transitions",
-            [
-                create_target(
-                    "sum(rate(llm_session_model_transitions_total[5m])) by (from_model, to_model)",
-                    "{{from_model}} to {{to_model}}",
-                    "A",
-                )
-            ],
-            x=0,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="ops",
-        )
-    )
-    ctx.panel_id += 1
-
-    ctx.panels.append(
-        create_timeseries_panel(
-            "Cache Warmth Estimate (P50/P95)",
-            [
-                create_target(
-                    "histogram_quantile(0.50, sum(rate(llm_cache_warmth_estimate_bucket[5m])) by (le, model))",
-                    "{{model}} p50",
-                    "A",
-                ),
-                create_target(
-                    "histogram_quantile(0.95, sum(rate(llm_cache_warmth_estimate_bucket[5m])) by (le, model))",
-                    "{{model}} p95",
-                    "B",
-                ),
-            ],
-            x=12,
-            y=ctx.y_pos,
-            w=12,
-            h=8,
-            panel_id=ctx.panel_id,
-            unit="percentunit",
-        )
-    )
-    ctx.panel_id += 1
-    ctx.y_pos += 8

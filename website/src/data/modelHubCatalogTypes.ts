@@ -137,6 +137,56 @@ export interface CatalogEvaluation {
   }
 }
 
+export interface CatalogIndexComponent {
+  benchmark?: string
+  metric?: string
+  benchmark_profile?: string
+  benchmark_profiles?: string[]
+  index?: string
+  weight: number
+  normalization: MetricNormalization
+}
+
+export interface CatalogIndex {
+  id: string
+  display_name: string
+  description: string
+  methodology?: string
+  aggregation: 'weighted_mean'
+  scale: [number, number]
+  missing: {
+    policy: 'require_all' | 'require_coverage' | 'reported_only'
+    minimum?: number
+  }
+  domains: Record<string, number>
+  components: CatalogIndexComponent[]
+}
+
+export interface CatalogIndexResultComponent {
+  benchmark?: string
+  metric?: string
+  benchmark_profile?: string
+  benchmark_profiles?: string[]
+  index?: string
+  evaluation?: string
+  weight: number
+  status: 'available' | 'missing' | 'failed' | 'not_applicable' | 'withheld'
+  value?: number | null
+  normalized?: number | null
+}
+
+export interface CatalogIndexResult {
+  model: string
+  reasoning_effort: string
+  index: string
+  status: 'available' | 'partial' | 'missing'
+  score: number | null
+  coverage: number
+  components: CatalogIndexResultComponent[]
+  domains?: Record<string, number>
+  provenance: string[]
+}
+
 export interface CatalogReasoningFamily {
   id: string
   type: 'chat_template_kwargs' | 'reasoning_effort' | 'reasoning_mode' | 'top_level_reasoning_effort'
@@ -151,12 +201,21 @@ export interface CatalogReasoningFamily {
 }
 
 export interface CatalogSnapshot {
+  catalogs: Array<{
+    catalog_version: string
+    channel: string
+    default_model: string
+    enabled_models: string[]
+    default_intelligence_index: string
+  }>
   protocols: CatalogProtocol[]
   providers: CatalogProvider[]
   reasoning_families: CatalogReasoningFamily[]
   models: CatalogModel[]
   benchmarks: CatalogBenchmark[]
   evaluations: CatalogEvaluation[]
+  indices: CatalogIndex[]
+  index_results: CatalogIndexResult[]
 }
 
 export interface BenchmarkRow {

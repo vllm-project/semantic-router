@@ -20,6 +20,10 @@ python3 -m venv .venv-eval
 python -m pip install -e 'bench[real_eval]'
 ```
 
+The runner patches specific EvalScope adapter source, so this extra pins the
+tested EvalScope 1.8.1 release. After installing, run the dry run below before
+starting a benchmark.
+
 Some adapters require additional EvalScope extras, Docker images, datasets, or
 simulators. Read the selected entry's `notes`, `sandbox`, and `dataset_args`
 before starting a run. In particular:

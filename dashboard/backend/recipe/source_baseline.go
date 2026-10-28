@@ -28,7 +28,7 @@ func (s *Store) RefreshSourceBaseline(config []byte) error {
 	recordPath := filepath.Join(s.root, "source-baseline.json")
 	_, statErr := os.Lstat(configPath)
 	if errors.Is(statErr, os.ErrNotExist) {
-		if writeErr := writeFileAtomically(configPath, config, 0o600); writeErr != nil {
+		if writeErr := writeFileAtomically(configPath, config); writeErr != nil {
 			return writeErr
 		}
 	} else if statErr != nil {
@@ -37,7 +37,7 @@ func (s *Store) RefreshSourceBaseline(config []byte) error {
 		return errors.New("source Recipe baseline object is inconsistent")
 	}
 	record := sourceBaselineRecord{SchemaVersion: sourceBaselineSchema, ConfigDigest: digest}
-	return writeJSONAtomically(recordPath, record, 0o600)
+	return writeJSONAtomically(recordPath, record)
 }
 
 func (s *Store) SourceBaseline() ([]byte, error) {

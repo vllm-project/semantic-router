@@ -129,6 +129,14 @@ function ModelTable({
   return (
     <div className={styles.tableFrame}>
       <table>
+        <colgroup>
+          <col className={styles.modelColumn} />
+          <col className={styles.distributionColumn} />
+          <col className={styles.contextColumn} />
+          <col className={styles.providersColumn} />
+          <col className={styles.resultsColumn} />
+          <col className={styles.releasedColumn} />
+        </colgroup>
         <thead>
           <tr>
             <th>Model</th>

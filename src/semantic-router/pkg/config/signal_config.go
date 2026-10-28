@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Signals struct {
@@ -23,6 +25,7 @@ type Signals struct {
 	ModalityRules      []ModalityRule         `yaml:"modality_rules,omitempty"`
 	RoleBindings       []RoleBinding          `yaml:"role_bindings,omitempty"`
 	JailbreakRules     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	SafetyRules        []SafetyRule           `yaml:"safety,omitempty"`
 	HallucinationRules []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PIIRules           []PIIRule              `yaml:"pii,omitempty"`
 	KBRules            []KBSignalRule         `yaml:"kb,omitempty"`
@@ -31,6 +34,11 @@ type Signals struct {
 	MetadataRules      []MetadataRule         `yaml:"metadata,omitempty"`
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
+	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
+	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	// TopicContinuityRules are context-policy evidence sources; they are not
+	// decision-referenceable.
+	TopicContinuityRules []TopicContinuityRule `yaml:"topic_continuity,omitempty"`
 }
 
 // HallucinationRule declares the response-stage hallucination observation:
@@ -43,10 +51,6 @@ type Signals struct {
 type HallucinationRule struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
-	// UseNLI asks the detector for span-level NLI explanations. It decides how
-	// the observation is produced, so it lives on the rule; the plugin's
-	// use_nli is ignored once a rule is declared.
-	UseNLI bool `yaml:"use_nli,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.
@@ -72,6 +76,12 @@ type KeywordRule struct {
 	BM25Threshold  float32  `yaml:"bm25_threshold,omitempty"`
 	NgramThreshold float32  `yaml:"ngram_threshold,omitempty"`
 	NgramArity     int      `yaml:"ngram_arity,omitempty"`
+	// IncludeHistory widens the text this rule matches. When false (the
+	// default), only the current user message is evaluated, preserving existing
+	// behavior. When true, recent prior user messages are also evaluated,
+	// so a marker stated earlier in the conversation still matches.
+	// Assistant and system messages are never included.
+	IncludeHistory bool `yaml:"include_history,omitempty"`
 }
 
 type AggregationMethod string
@@ -101,14 +111,32 @@ const (
 )
 
 type EmbeddingRule struct {
-	Name                      string            `yaml:"name"`
-	SimilarityThreshold       float32           `yaml:"threshold"`
-	Candidates                []string          `yaml:"candidates"`
+	Name                string  `yaml:"name"`
+	SimilarityThreshold float32 `yaml:"threshold"`
+	// Candidates and ImageCandidates form the positive bank. Negative candidates
+	// optionally define a contrastive bank; the score is positive minus negative.
+	Candidates                []string          `yaml:"candidates,omitempty"`
+	ImageCandidates           []string          `yaml:"image_candidates,omitempty"`
+	NegativeCandidates        []string          `yaml:"negative_candidates,omitempty"`
+	NegativeImageCandidates   []string          `yaml:"negative_image_candidates,omitempty"`
 	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
 	// QueryModality controls which modality of the incoming request payload
 	// the query embedding is computed from. Defaults to "text" when omitted,
 	// preserving existing behavior.
 	QueryModality QueryModality `yaml:"query_modality,omitempty"`
+	// PrototypeScoring overrides construction and scoring for this rule.
+	// Text-only rules inherit the family config. Media queries or image
+	// candidates retain all anchors and use raw max by default; a present object explicitly opts
+	// into its complete policy (with built-in defaults).
+	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+}
+
+func (r EmbeddingRule) HasImageCandidates() bool {
+	return len(r.ImageCandidates) > 0 || len(r.NegativeImageCandidates) > 0
+}
+
+func (r EmbeddingRule) HasNegativeCandidates() bool {
+	return len(r.NegativeCandidates) > 0 || len(r.NegativeImageCandidates) > 0
 }
 
 // EffectiveQueryModality returns the rule's declared query modality, or
@@ -120,6 +148,26 @@ func (r EmbeddingRule) EffectiveQueryModality() QueryModality {
 		return QueryModalityText
 	}
 	return m
+}
+
+// EffectivePrototypeScoring preserves cross-modal anchors unless the rule
+// explicitly opts into compression. Nearby text embeddings need not be
+// interchangeable for an image or audio query.
+func (r EmbeddingRule) EffectivePrototypeScoring(family PrototypeScoringConfig) PrototypeScoringConfig {
+	if r.PrototypeScoring != nil {
+		return r.PrototypeScoring.WithDefaults()
+	}
+	if r.HasImageCandidates() {
+		disabled := false
+		return PrototypeScoringConfig{Enabled: &disabled, BestWeight: 1, TopM: 1}.WithDefaults()
+	}
+	switch r.EffectiveQueryModality() {
+	case QueryModalityImage, QueryModalityAudio:
+		disabled := false
+		return PrototypeScoringConfig{Enabled: &disabled, BestWeight: 1, TopM: 1}.WithDefaults()
+	default:
+		return family.WithDefaults()
+	}
 }
 
 type FactCheckRule struct {
@@ -174,6 +222,7 @@ type PIIRule struct {
 	Threshold       float32  `yaml:"threshold"`
 	PIITypesAllowed []string `yaml:"pii_types_allowed,omitempty"`
 	IncludeHistory  bool     `yaml:"include_history,omitempty"`
+	Source          string   `yaml:"source,omitempty"`
 	Description     string   `yaml:"description,omitempty"`
 }
 
@@ -450,12 +499,92 @@ func HasImageCandidatesInRules(rules []ComplexityRule) bool {
 }
 
 type ComplexityRule struct {
-	Name        string               `yaml:"name"`
-	Threshold   float32              `yaml:"threshold"`
-	Hard        ComplexityCandidates `yaml:"hard"`
-	Easy        ComplexityCandidates `yaml:"easy"`
-	Description string               `yaml:"description,omitempty"`
-	Composer    *RuleCombination     `yaml:"composer,omitempty"`
+	Name string `yaml:"name"`
+	// PrototypeScoring applies to all local text/image hard/easy banks. Nil
+	// inherits the family config; a present object is a complete override.
+	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Threshold is the symmetric shorthand, kept because the local margin is
+	// signed and centred on zero: hard above +threshold, easy below
+	// -threshold. Mutually exclusive with the explicit pair below.
+	//
+	// Zero and omitted mean the same thing to the local path, so a zero is
+	// not written back out: a rule that states a pair must not grow a
+	// `threshold: 0` on its way through the operator or the DSL emitter and
+	// then be refused for stating both.
+	Threshold float32              `yaml:"threshold,omitempty"`
+	Hard      ComplexityCandidates `yaml:"hard"`
+	Easy      ComplexityCandidates `yaml:"easy"`
+	// The explicit boundary pair, for a score whose scale is the model's own
+	// rather than a signed margin. The pair used states which way difficulty
+	// runs, so no separate direction field is needed: hard_above with
+	// easy_below where a higher score is harder, hard_below with easy_above
+	// where a lower one is. Resolved by EffectiveBoundaries.
+	HardAbove   *float64         `yaml:"hard_above,omitempty"`
+	EasyBelow   *float64         `yaml:"easy_below,omitempty"`
+	HardBelow   *float64         `yaml:"hard_below,omitempty"`
+	EasyAbove   *float64         `yaml:"easy_above,omitempty"`
+	Description string           `yaml:"description,omitempty"`
+	Composer    *RuleCombination `yaml:"composer,omitempty"`
+
+	// ThresholdSet records that the threshold key was written, so that a
+	// written `threshold: 0` alongside an explicit pair can be refused the
+	// way the CRD refuses it, instead of passing as an absent key. Threshold
+	// is a float32 with no presence of its own, and widening it to a pointer
+	// would ripple through the DSL compiler, the operator and every literal
+	// that builds a rule. Never serialised: presence is a property of the
+	// document the rule came from, not of the rule.
+	ThresholdSet bool `yaml:"-" json:"-"`
+}
+
+// UnmarshalYAML decodes a rule and records whether `threshold` was written.
+// The value is decoded exactly as before; only the presence is added.
+func (r *ComplexityRule) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ComplexityRule
+	var decoded plain
+	if err := unmarshal(&decoded); err != nil {
+		return err
+	}
+	// A second pass into a map is the presence probe. A map rather than a
+	// one-field struct, because the strict loader refuses fields a struct
+	// does not name. A null value counts as absent, as it does for the CRD.
+	var raw map[interface{}]interface{}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	*r = ComplexityRule(decoded)
+	value, written := raw["threshold"]
+	r.ThresholdSet = written && value != nil
+	return nil
+}
+
+// MarshalYAML writes the rule as its fields, with one exception. Threshold
+// carries omitempty so a pair rule does not grow a `threshold: 0` on its way
+// through the operator or the DSL emitter, but a zero that was written has to
+// survive emission: dropping it would let a rule the loader refuses pass once
+// it has been serialised and read back. That one case is written through a
+// map with the key restored. Every other rule is written exactly as before.
+func (r ComplexityRule) MarshalYAML() (interface{}, error) {
+	type plain ComplexityRule
+	if !r.ThresholdSet || r.Threshold != 0 {
+		return plain(r), nil
+	}
+	encoded, err := yaml.Marshal(plain(r))
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]interface{}{}
+	if err := yaml.Unmarshal(encoded, &fields); err != nil {
+		return nil, err
+	}
+	fields["threshold"] = r.Threshold
+	return fields, nil
+}
+
+// thresholdDeclared reports whether the rule states a threshold at all: a
+// written key, whatever its value, or a non-zero value from a caller that
+// assigned the field directly.
+func (r ComplexityRule) thresholdDeclared() bool {
+	return r.ThresholdSet || r.Threshold != 0
 }
 
 type Category struct {

@@ -1,168 +1,209 @@
 ---
 sidebar_position: 1
 title: Quickstart
-description: Install vLLM Semantic Router, start the local stack, configure a model, and send a first request.
+description: Install vLLM Semantic Router and send your first routed request.
 ---
+
+import Tabs from '@theme/Tabs'
+import TabItem from '@theme/TabItem'
+import CodeBlock from '@theme/CodeBlock'
+import {
+  AGENT_INSTALL_DOC_PATH,
+  AGENT_INSTALL_PROMPT,
+  AGENT_SKILL_PATH,
+  CURL_INSTALL_COMMAND,
+  PIP_INSTALL_COMMAND,
+  UV_INSTALL_COMMAND,
+} from '@site/src/data/installation'
 
 # Quickstart
 
-This guide starts the local Docker stack and sends a request through the Router.
-The Router itself runs on CPU; the model backend can be local or remote.
+Install vLLM Semantic Router, connect one model, and send your first routed
+request. To serve typed decision questions without a Chat backend, follow the
+[System One quickstart](../model-runtime/quickstart.md) instead. Both paths use
+the same [frontend and model runtime](../overview/component-architecture).
+
+`vllm-sr serve` runs a local stack in Docker: the Router, which serves an
+OpenAI-compatible API on port 8899 itself (standalone mode, the default), the
+Dashboard on port 8700, and the
+[model runtime](../model-runtime/overview.md) that runs the Router's own
+classifiers and embedding models. The models that answer your users run
+elsewhere, such as Ollama, a vLLM server or a hosted API, and you connect them
+in the Dashboard.
+
+:::note Release channel
+These pages follow `main`. Standalone mode and the built-in model runtime came
+after `vllm-sr` 0.4.0, the current stable release, which puts Envoy in front
+of the Router and has no `--gateway` option. To follow these pages today,
+use the development channel. The installation tabs below select it: the curl
+installer uses `--channel dev`, and pip/uv allow prereleases. Stable-release
+upgrade instructions are separate from this `main` quickstart.
+:::
 
 ## Requirements
 
-- Python 3.10 or newer
-- Docker, or Podman as a fallback on Linux
-- Linux, macOS, or WSL2 on Windows
+| Host | You need |
+| --- | --- |
+| Every host | Linux, macOS or WSL2; Docker (Linux can use Podman instead); Python 3.10 or newer; about 5 GB of free disk for the images, plus 1–1.5 GB for each built-in model your routes use |
+| CPU | Nothing else. The `vllm-sr` image runs every built-in model on the CPU; plan about 1.3 GB of memory for each 307M task model your routes use |
+| AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform rocm`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
+| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda`. CUDA is validated (H200, A100, Tesla T4 records). Fused kernels without bit-exact evidence stay off the exact profile |
 
-Native Windows Python can run configuration and validation commands, but the
-local Docker serving workflow requires WSL2 or another Linux environment.
+On macOS the Docker target runs on the CPU only; see
+[Gateway Modes](gateway-modes#macos).
+
+For the curl installer, pass `--runtime podman` to force Podman or
+`--runtime skip` to skip container-runtime preparation. For example:
+
+```bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --runtime skip
+```
+
+These are installer options. `vllm-sr serve --container-runtime` selects a
+container runtime (`docker` or `podman`); `skip` is not a `serve` runtime.
 
 ## Install
 
-### One-line installer
+<Tabs groupId="install-method" defaultValue="curl" values={[
+  {label: 'curl', value: 'curl'},
+  {label: 'pip', value: 'pip'},
+  {label: 'uv', value: 'uv'},
+  {label: 'Agent', value: 'agent'},
+]}>
+  <TabItem value="curl">
+    <CodeBlock language="bash">{CURL_INSTALL_COMMAND}</CodeBlock>
+  </TabItem>
+  <TabItem value="pip">
+    <CodeBlock language="bash">{PIP_INSTALL_COMMAND}</CodeBlock>
+  </TabItem>
+  <TabItem value="uv">
+    <CodeBlock language="bash">{UV_INSTALL_COMMAND}</CodeBlock>
+  </TabItem>
+  <TabItem value="agent">
+    Copy this prompt into your coding agent:
+    <CodeBlock language="text">{AGENT_INSTALL_PROMPT}</CodeBlock>
+    The prompt points to the public, self-contained <a href={AGENT_SKILL_PATH}>vLLM SR agent skill</a>.
+    See <a href={AGENT_INSTALL_DOC_PATH}>Install with an agent</a> for the workflow and safety boundaries.
+  </TabItem>
+</Tabs>
 
-On macOS or Linux:
+Verify the CLI:
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | \
-  bash -s -- --channel dev
-```
-
-The installer creates an isolated CLI environment, adds a launcher under
-`~/.local/bin`, prepares a container runtime, and starts `vllm-sr serve`
-unless you opt out. Under `--runtime auto` (the default) it prefers an
-existing Docker daemon and falls back to Podman on Linux when Docker is
-not reachable; the selected runtime is persisted to
-`~/.local/share/vllm-sr/runtime.env` so later CLI sessions reuse it.
-The development channel resolves and pins the newest published `.dev` package
-so the Quickstart follows current project capabilities. It prints the
-Dashboard URL and, on a remote host, an SSH tunnel hint.
-
-### Install with pip
-
-```bash
-python -m venv vsr
-source vsr/bin/activate
-VLLM_SR_DEV_VERSION="$(
-  python -m pip index versions --pre vllm-sr 2>/dev/null |
-  awk -F': ' '/^Available versions:/ {
-    count = split($2, versions, ", ")
-    for (i = 1; i <= count; i++) {
-      if (versions[i] ~ /^[0-9]+([.][0-9]+)*[.]dev[0-9]+$/) {
-        print versions[i]
-        exit
-      }
-    }
-  }'
-)"
-test -n "${VLLM_SR_DEV_VERSION}" || {
-  echo "No published vllm-sr development package found" >&2
-  exit 1
-}
-python -m pip install --upgrade "vllm-sr==${VLLM_SR_DEV_VERSION}"
 vllm-sr --version
 ```
 
-The resolver selects the first published `.dev` version from pip's ordered
-version list and installs that exact package. A bare `--pre` is not sufficient
-when the stable release has a higher PEP 440 precedence than development builds
-with the same base version. For production, select and pin an explicit stable
-version after reviewing its release notes and compatibility requirements.
+## Start the stack
 
-## Open or start the local stack
-
-The one-line installer starts the stack automatically; continue to the
-Dashboard URL it prints. If you installed with pip or passed `--no-launch`, run
-the following command from the directory where you want to keep `config.yaml`
-and local runtime state:
+The curl installer starts the stack for you. After a pip or uv install, start
+it yourself:
 
 ```bash
-vllm-sr serve
+vllm-sr serve                  # Auto-detect the execution target
+vllm-sr serve --platform rocm   # AMD GPUs
 ```
 
-On the first run, an empty workspace starts the Dashboard in setup mode. Open
-[http://localhost:8700](http://localhost:8700), then:
+The first start pulls the images, which takes a few minutes. With no
+`config.yaml` in the current directory, the stack starts in setup mode: the
+Dashboard runs, and the Router waits for a configuration.
 
-1. add one or more model endpoints;
-2. choose a routing preset or a single-model baseline; and
-3. activate the generated configuration.
+## Set up in the Dashboard
 
-Activation writes `config.yaml` and starts the inference listener. The local
-stack exposes Envoy at `http://localhost:8899` by default.
+Open [http://localhost:8700](http://localhost:8700). The Dashboard listens on
+`127.0.0.1`; on a remote host, run `ssh -L 8700:127.0.0.1:8700 <host>` first.
 
-:::tip[Want a local model?]
-Follow [Local model with Ollama](ollama) if you want a simple local backend
-without setting up vLLM or a GPU environment.
-:::
+1. **Create the first administrator:** a name, an email and a password.
+2. **Connect a model:** its name, its provider (vLLM, Ollama, OpenAI
+   Compatible or Anthropic) and its address as the Router container sees it,
+   for example `host.docker.internal:11434` for Ollama on the same host. For a
+   first local model, follow [Configure models with Ollama](ollama).
+3. **Choose routing:** **From scratch** makes one default route to that model.
+4. **Review and Activate.**
+
+`vllm-sr serve` keeps waiting during setup. After you activate, it starts the
+Router from that configuration, prints the endpoints and exits. If you stopped
+it first, run `vllm-sr serve` again; until then `vllm-sr status` says that
+setup is complete. Agents can do the same work through the CLI and the Router
+management API without using the Dashboard.
 
 ## Send a request
 
-After activation:
-
 ```bash
-curl http://localhost:8899/v1/chat/completions \
+curl -s -D - http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
+  -H 'x-vsr-debug: true' \
   -d '{
     "model": "vllm-sr/auto",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-Use the model name shown by your active configuration. A virtual model resolves
-to its recipe; a configured physical model name is sent directly to that
-backend.
+`vllm-sr/auto` lets the Router choose. The response headers say what it chose:
+`x-vsr-selected-decision` names the route and `x-vsr-selected-model` the
+model; with `x-vsr-debug: true`, the `x-vsr-matched-*` headers list the
+signals that matched. See [Router headers](../troubleshooting/vsr-headers).
 
 ## Operate the stack
 
 ```bash
-vllm-sr status
-vllm-sr logs router
-vllm-sr logs envoy -f
-vllm-sr dashboard
+vllm-sr status            # what runs, and whether setup or a restart is pending
+vllm-sr logs router -f    # Router logs
 vllm-sr stop
 ```
 
-The Dashboard can show bounded Router, Envoy, and Dashboard logs for supported
-local stacks. Log access is permission-controlled, and service output may
-contain tenant or credential-adjacent data. Treat both Dashboard log access and
-the local log directory as sensitive.
+Later changes the Router hot-reloads apply at once. A change the running
+containers can't take, such as a listener's new port, is saved and the
+Dashboard answers "Restart required: run `vllm-sr serve` to apply."; the next
+`vllm-sr serve` applies it, and `vllm-sr status` reports it until then. See
+[Configuration Management](configuration-management).
 
-## Start from YAML
+`vllm-sr serve --gateway extproc` puts an Envoy container in front of the
+Router, as releases before standalone mode did.
+[Gateway Modes](gateway-modes) explains when you need it.
 
-If you already have a complete canonical config:
+## What the installer leaves behind
 
-```bash
-vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
-```
+`install.sh` writes these paths (defaults - `--install-root` and `--bin-dir`
+move them):
 
-Environment references such as `${MODEL_API_KEY}` are resolved from the launch
-environment. Do not put literal credentials in a config that will be shared or
-committed.
+- `~/.local/share/vllm-sr/venv/`: the CLI's virtual environment.
+- `~/.local/share/vllm-sr/runtime.env`: the container runtime chosen at
+  install time. `vllm-sr` reads it when it selects the runtime;
+  `CONTAINER_RUNTIME` overrides it for one run, and a runtime missing from
+  `PATH` falls back to auto-detection with a warning. Delete the file to
+  return to auto-detection.
+- `~/.local/share/vllm-sr/first-run.log`: kept only when the first
+  `vllm-sr serve` waits for setup or fails.
+- `~/.local/bin/vllm-sr`: the launcher, which pins `VLLM_SR_INSTALL_ROOT`.
+- A completion line in your shell rc file: `vllm-sr completion install`
+  appends an eval line to `~/.bashrc` or `~/.zshrc`, or writes
+  `~/.config/fish/completions/vllm-sr.fish` on fish. Once the launcher is
+  gone, every new bash or zsh shell reports the missing command, so
+  remove the line - or the fish completions file - too.
+  [Shell Completion](shell-completion) has the details.
 
-For older configs, use:
+Run `vllm-sr stop` while the CLI is still installed: it removes the stack's
+containers and networks. Then delete the paths above.
 
-```bash
-vllm-sr config migrate --config old-config.yaml
-```
+Deleting those paths removes the install, but leaves in place:
+
+- system packages the installer added when missing: Python and its venv
+  support; in serve mode, Homebrew `docker` and `colima` on macOS, or the
+  Docker package, its enabled service and your `docker` group membership on
+  Linux;
+- the images `vllm-sr serve` pulled, and the Redis and Postgres data volumes
+  the stack wrote;
+- the state the first `vllm-sr serve` wrote in the directory it ran from:
+  `config.yaml`, `.vllm-sr/` (Dashboard data, recipe store, logs) and
+  `models/`. The installer starts that first serve from the directory the
+  installer ran in, falling back to `$HOME` when it is not writable.
 
 ## Next
 
-- [Choose a Deployment](deployment-options) for local, Kubernetes, gateway, and
-  model-hosting options.
-- [Protocol Compatibility](protocol-compatibility) for client endpoints,
-  backend API formats, and cross-protocol translation.
-- [Configuration](configuration) for canonical YAML, recipes, and environment
-  bindings.
-- [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-  for built-in models, backend binding, and the complete CLI workflow.
-- [Why Semantic Routing](../overview/goals) for the design goals.
-- [Routing Pipeline](../overview/signal-driven-decisions) for signals,
-  decisions, algorithms, and plugins.
-- [Troubleshooting](../troubleshooting/common-errors) when the stack does not
-  become ready.
-
-For support, open a
-[GitHub issue](https://github.com/vllm-project/semantic-router/issues) or join
-the `#semantic-router` channel in vLLM Slack.
+- [Connect an agent harness](agent-harness)
+- [Choose a deployment](deployment-options)
+- [Configure models](model-configuration)
+- [Configure routing](configuration)
+- [Use the built-in model runtime](../model-runtime/overview.md)
+- [Use the Router API](../api/router)
+- [Troubleshoot installation](../troubleshooting/common-errors)

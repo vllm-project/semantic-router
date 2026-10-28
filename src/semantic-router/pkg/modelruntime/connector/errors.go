@@ -1,16 +1,31 @@
 package connector
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrResponseTooLarge marks a KindResponse failure whose body exceeded
+// Options.MaxResponseBytes, so callers can classify it without parsing text.
+var ErrResponseTooLarge = errors.New("response body exceeds limit")
+
+// ErrRedirectRejected marks a KindRedirect failure: the remote answered with a
+// redirect, which the connector never follows because it would carry the
+// request body and credential headers to an origin the caller did not
+// configure.
+var ErrRedirectRejected = errors.New("redirect rejected")
 
 // ErrorKind identifies the stage at which a connector operation failed.
 type ErrorKind string
 
 const (
 	KindRequest       ErrorKind = "request"
+	KindBudget        ErrorKind = "budget"
 	KindAuthorization ErrorKind = "authorization"
 	KindTransport     ErrorKind = "transport"
 	KindStatus        ErrorKind = "status"
 	KindResponse      ErrorKind = "response"
+	KindRedirect      ErrorKind = "redirect"
 )
 
 // Error describes a connector failure without exposing a remote response body

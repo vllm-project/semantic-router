@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "algorithm": "svm",
+  "trained": true,
+  "feature_dim": 16,
+  "model_names": [
+    "model-a",
+    "model-b"
+  ],
+  "kernel_type": "Linear",
+  "kernel": "linear",
+  "gamma": 1.0,
+  "linear_classifiers": [
+    {
+      "model_name": "model-a",
+      "weights": [
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rho": 0
+    },
+    {
+      "model_name": "model-b",
+      "weights": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rho": 0
+    }
+  ]
+}

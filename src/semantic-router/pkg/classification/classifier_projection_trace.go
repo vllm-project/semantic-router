@@ -13,6 +13,11 @@ func mergeProjectionTrace(results *SignalResults, p config.Projections) *project
 	tr := &projectiontrace.Trace{SchemaVersion: projectiontrace.SchemaVersion}
 	tr.Partitions = existingPartitions
 	for _, score := range p.Scores {
+		// Failed scores are represented in SignalErrors and the decision trace;
+		// do not fabricate a numeric breakdown from their missing inputs.
+		if _, available := results.ProjectionScores[score.Name]; !available {
+			continue
+		}
 		sb := projectiontrace.ScoreBreakdown{Name: score.Name}
 		var sum float64
 		for _, input := range score.Inputs {

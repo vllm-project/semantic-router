@@ -44,11 +44,13 @@ func EvaluateResponseJailbreakSignal(rules []config.JailbreakRule, scan *Jailbre
 	for _, rule := range rules {
 		key := signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)
 		switch {
-		case scan != nil && scan.RiskScore >= rule.Threshold:
+		case scan != nil && scan.Matches(rule.Threshold):
 			// A match stands even when a chunk failed: what was scored is
 			// already over this rule's line, the way the request path keeps a
 			// match found past an unresolved chunk.
-			signal.Confidences[key] = float64(scan.RiskScore)
+			if scan.Decision == nil {
+				signal.Confidences[key] = float64(scan.RiskScore)
+			}
 			signal.MatchedRules = append(signal.MatchedRules, rule.Name)
 		case scan == nil || scan.PartialErr != nil:
 			// Unresolved, not clean. Recorded where every other signal records
@@ -56,7 +58,9 @@ func EvaluateResponseJailbreakSignal(rules []config.JailbreakRule, scan *Jailbre
 			// rather than silently treating the response as verified.
 			signal.Errors[key] = responseJailbreakSignalFailedCode
 		default:
-			signal.Confidences[key] = float64(scan.RiskScore)
+			if scan.Decision == nil {
+				signal.Confidences[key] = float64(scan.RiskScore)
+			}
 		}
 	}
 	return signal

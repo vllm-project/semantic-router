@@ -14,6 +14,23 @@ const routingHeaders = {
 }
 
 describe('chat routing metadata', () => {
+  it('labels native dispatch limits separately from consumed token usage', () => {
+    const markup = renderToStaticMarkup(
+      createElement(HeaderDisplay, {
+        headers: {
+          ...routingHeaders,
+          'x-vsr-effective-input-tokens': '512',
+          'x-vsr-effective-max-output-tokens': '261632',
+        },
+      }),
+    )
+
+    expect(markup).toContain('Rendered input tokens')
+    expect(markup).toContain('Output token limit')
+    expect(markup).toContain('261632')
+    expect(markup).not.toContain('Consumed tokens')
+  })
+
   it('keeps the primary route compact and puts supporting metadata behind details', () => {
     const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers: routingHeaders }))
 
@@ -51,6 +68,28 @@ describe('chat routing metadata', () => {
     expect(markup).toContain('Needs Fact Check')
     expect(markup).toContain('Frontier Complexity: Medium')
     expect(markup).not.toContain('unified_frontier_')
+  })
+})
+
+describe('System One routing headers', () => {
+  it('labels the decision model answers, recipe, confidence and routing latency', () => {
+    const markup = renderToStaticMarkup(
+      createElement(HeaderDisplay, {
+        headers: {
+          ...routingHeaders,
+          'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
+          'x-vsr-selected-recipe': 'default',
+          'x-vsr-selected-confidence': '0.91',
+          'x-vsr-routing-latency-ms': '61',
+        },
+      }),
+    )
+
+    expect(markup).toContain('System One Answers')
+    expect(markup).toContain('Recipe')
+    expect(markup).toContain('Decision Confidence')
+    expect(markup).toContain('Routing Latency')
+    expect(markup).toContain('61')
   })
 })
 

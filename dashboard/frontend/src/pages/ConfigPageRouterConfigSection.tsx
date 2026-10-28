@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import ProductIcon from '../components/ProductIcon'
 import styles from './ConfigPageRouterConfigSection.module.css'
 import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
@@ -6,7 +7,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
-  ROUTER_LAYER_META,
+  routerLayerMeta,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
@@ -48,6 +49,7 @@ export default function ConfigPageRouterConfigSection({
   refreshConfig,
   showLegacyCategories = false,
 }: ConfigPageRouterConfigSectionProps) {
+  const { hash } = useLocation()
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
   const [editorMode, setEditorMode] = useState<GlobalEditorMode>('visual')
   const [rawYaml, setRawYaml] = useState('{}\n')
@@ -55,6 +57,12 @@ export default function ConfigPageRouterConfigSection({
   const [rawSaving, setRawSaving] = useState(false)
   const [rawError, setRawError] = useState<string | null>(null)
   const [rawDirty, setRawDirty] = useState(false)
+
+  useEffect(() => {
+    if (editorMode === 'visual' && hash.startsWith('#global-section-')) {
+      document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+    }
+  }, [editorMode, hash])
 
   const loadRawGlobalConfig = useCallback(async () => {
     setRawLoading(true)
@@ -134,7 +142,7 @@ export default function ConfigPageRouterConfigSection({
     }
     return Array.from(groups.entries()).map(([layer, cards]) => ({
       layer,
-      meta: ROUTER_LAYER_META[layer as keyof typeof ROUTER_LAYER_META],
+      meta: routerLayerMeta(layer),
       cards,
     }))
   }, [sectionCards])
@@ -224,7 +232,7 @@ export default function ConfigPageRouterConfigSection({
             <h2>One place for router-wide behavior</h2>
             <p>
               {routerDefaults
-                ? 'Effective values are live. Edit a section to override only what should change.'
+                ? 'These are the saved configuration values. Edit a section to override what should change; Kubernetes deployments need a rollout to apply saved changes.'
                 : 'Router defaults are offline. Saved overrides remain available to inspect and edit.'}
             </p>
           </div>
@@ -296,7 +304,11 @@ export default function ConfigPageRouterConfigSection({
                   </header>
                   <div className={styles.sectionList}>
                     {group.cards.map((card) => (
-                      <article key={card.key} className={styles.systemRow}>
+                      <article
+                        key={card.key}
+                        id={`global-section-${card.key}`}
+                        className={styles.systemRow}
+                      >
                         <div className={styles.rowMain}>
                           <div className={styles.cardCopy}>
                             <div className={styles.cardTitleRow}>

@@ -3,8 +3,7 @@
 import logging
 import os
 
-import yaml
-
+from cli.config_yaml import safe_load_router_config
 from cli.terminal import TerminalLogHandler
 
 
@@ -51,6 +50,10 @@ def find_config_file(path=".", file=None):
 
 
 def load_config(config_file):
-    """Load and parse YAML config file."""
+    """Load and parse a YAML config file.
+
+    Context band token counts keep their source spelling so a config that is
+    re-serialized for Helm or a container carries what the Router would read.
+    """
     with open(config_file) as f:
-        return yaml.safe_load(f)
+        return safe_load_router_config(f)

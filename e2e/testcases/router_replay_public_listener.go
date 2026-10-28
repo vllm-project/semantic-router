@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -33,7 +34,7 @@ func testRouterReplayPublicListenerDenied(
 	raw, err := fixtures.DoGETRequest(
 		ctx,
 		session.HTTPClient(30*time.Second),
-		session.BaseURL()+"/v1/router_replay?limit=1",
+		session.BaseURL()+"/api/v1/observability/replays?limit=1",
 	)
 	if err != nil {
 		return fmt.Errorf("GET public Router Replay path: %w", err)

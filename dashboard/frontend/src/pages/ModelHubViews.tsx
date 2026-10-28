@@ -1,6 +1,5 @@
 import React from 'react'
 
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import {
   modelHubContextLabel,
   modelHubDistributionLabel as distributionLabel,
@@ -9,9 +8,7 @@ import {
   type ModelHubRow,
 } from './modelHubSupport'
 import { ModelMark } from './ModelHubComponents'
-import { ModelHubBenchmarkChart } from './ModelHubBenchmarkViews'
 import { OpenModelButton } from './ModelHubOpenModelButton'
-import { useModelHubBenchmarkController } from './modelHubBenchmarkController'
 import styles from './ModelHubViews.module.css'
 
 const EvaluationSummary: React.FC<{ row: ModelHubRow }> = ({ row }) => (
@@ -170,74 +167,6 @@ export const ModelList: React.FC<{
     ))}
   </div>
 )
-
-export const BenchmarkExplorer: React.FC<{
-  catalog: BuiltInModelCatalog
-  rows: ModelHubRow[]
-  openModel: (id: string) => void
-}> = ({ catalog, rows, openModel }) => {
-  const controller = useModelHubBenchmarkController(catalog, rows)
-
-  return (
-    <section className={styles.benchmarkExplorer} aria-label="Benchmark explorer">
-      <div className={styles.benchmarkHeading}>
-        <div>
-          <h2>Benchmarks</h2>
-          <span>{controller.chartCount} comparable sets</span>
-        </div>
-        <small>All published results</small>
-      </div>
-      {controller.chartCount ? (
-        <>
-          <div className={styles.benchmarkTags} role="group" aria-label="Filter benchmarks">
-            <button
-              type="button"
-              aria-pressed={controller.filter === 'all'}
-              onClick={() => controller.setFilter('all')}
-            >
-              All <span>{controller.chartCount}</span>
-            </button>
-            {controller.filters.map((filter) => (
-              <button
-                type="button"
-                key={filter.id}
-                aria-pressed={controller.filter === filter.id}
-                onClick={() => controller.setFilter(filter.id)}
-              >
-                {readable(filter.label)} <span>{filter.count}</span>
-              </button>
-            ))}
-          </div>
-          <div className={styles.benchmarkStack}>
-            {controller.charts.map((chart) => (
-              <article className={styles.benchmarkPanel} key={chart.key}>
-                <header className={styles.benchmarkPanelHeading}>
-                  <div>
-                    <h3>{chart.benchmark?.display_name ?? chart.selection.benchmark}</h3>
-                    <span>
-                      {readable(chart.selection.profile)} · {readable(chart.selection.metric)}
-                    </span>
-                  </div>
-                </header>
-                <div className={styles.chartMeta}>
-                  <span>{chart.points.length} results</span>
-                  <span>
-                    {chart.metric?.direction === 'lower_is_better'
-                      ? 'Lower is better'
-                      : 'Higher is better'}
-                  </span>
-                </div>
-                <ModelHubBenchmarkChart rows={rows} openModel={openModel} chart={chart} />
-              </article>
-            ))}
-          </div>
-        </>
-      ) : (
-        <EmptyResults title="No available scores" body="Change the model filters." />
-      )}
-    </section>
-  )
-}
 
 export const EmptyResults: React.FC<{ title?: string; body?: string }> = ({
   title = 'No matching models',

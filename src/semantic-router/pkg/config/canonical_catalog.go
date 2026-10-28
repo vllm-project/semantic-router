@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -44,14 +45,19 @@ func applyEffectiveModelRegistry(
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.ProviderProfiles = make(map[string]ProviderProfile)
 	cfg.VLLMEndpoints = nil
+	cfg.ProviderModelOrder = make([]string, 0, len(authoredModels))
 	authoredByAlias := make(map[string]*CanonicalProviderModel, len(authoredModels))
 	for _, model := range authoredModels {
 		authoredByAlias[model.Name] = cloneCanonicalProviderModel(&model)
+		cfg.ProviderModelOrder = append(cfg.ProviderModelOrder, model.Name)
 	}
 
 	for _, model := range models {
 		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex, defaults.ReasoningEffort)
 		params.AuthoredModel = authoredByAlias[model.Alias]
+		if params.AuthoredModel != nil {
+			params.Deployment = params.AuthoredModel.Deployment
+		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
 			if err != nil {
@@ -83,22 +89,23 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		indexResults = effortResults
 	}
 	params := ModelParams{
-		Catalog:           model.Catalog,
-		ParamSize:         card.ParameterSize,
-		ContextWindowSize: card.Limits.ContextWindowSize,
-		Description:       card.Description,
-		Capabilities:      append([]string(nil), card.Capabilities...),
-		LoRAs:             loraAdaptersFromEffectiveCard(model.Card),
-		Tags:              append([]string(nil), card.Tags...),
-		Evaluations:       cloneUserEvaluations(model.Card.Evaluations),
-		ReasoningFamily:   card.ReasoningFamily,
-		Modality:          modality,
-		IndexResults:      cloneCatalogIndexResults(indexResults),
-		QualityIndex:      qualityIndex,
-		Pricing:           modelPricingFromCatalog(model.BindingDefaults.Pricing),
-		Reliability:       providerReliabilityFromCatalog(model.BindingDefaults.Reliability),
-		AccessKeys:        map[string]string{},
-		ExternalModelIDs:  copyStringMap(model.BindingDefaults.ExternalModelIDs),
+		Catalog:              model.Catalog,
+		ParamSize:            card.ParameterSize,
+		ContextWindowSize:    card.Limits.ContextWindowSize,
+		MaxOutputTokens:      card.Limits.MaxOutputTokens,
+		Description:          card.Description,
+		Capabilities:         declaredCardCapabilities(model.Card),
+		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
+		Tags:                 append([]string(nil), card.Tags...),
+		ReasoningFamily:      card.ReasoningFamily,
+		Modality:             modality,
+		IndexResults:         cloneCatalogIndexResults(indexResults),
+		IndexResultsByEffort: cloneCatalogIndexResultsByEffort(model.IndicesByEffort),
+		QualityIndex:         qualityIndex,
+		Pricing:              modelPricingFromCatalog(model.BindingDefaults.Pricing),
+		Reliability:          providerReliabilityFromCatalog(model.BindingDefaults.Reliability),
+		AccessKeys:           map[string]string{},
+		ExternalModelIDs:     copyStringMap(model.BindingDefaults.ExternalModelIDs),
 	}
 	if params.ExternalModelIDs == nil {
 		params.ExternalModelIDs = map[string]string{}
@@ -107,6 +114,13 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		params.ExternalModelIDs["default"] = model.BindingDefaults.ModelID
 	}
 	return params
+}
+
+func declaredCardCapabilities(card modelcatalog.EffectiveModelCard) []string {
+	if _, declared := card.Provenance["capabilities"]; !declared {
+		return nil
+	}
+	return append([]string(nil), card.Card.Capabilities...)
 }
 
 func runtimeModalityFromCard(card modelcatalog.ModelCard) string {
@@ -207,7 +221,7 @@ func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, 
 	if params.Pricing == (ModelPricing{}) {
 		params.Pricing = modelPricingFromCatalog(pricing)
 	}
-	if params.Reliability == (ProviderReliability{}) {
+	if params.Reliability.IsZero() {
 		params.Reliability = providerReliabilityFromCatalog(effective.Binding.Reliability)
 	}
 }
@@ -265,7 +279,8 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath: provider.Instance.ChatPath,
+		ChatPath:            provider.Instance.ChatPath,
+		OpenAICompatGateway: provider.Instance.OpenAICompatGateway,
 	}
 }
 
@@ -373,6 +388,8 @@ func resolveProviderCredential(credentials modelcatalog.CredentialsRef) string {
 
 func apiFormatForProtocol(protocol string) (string, error) {
 	switch protocol {
+	case "vllm-sr/systemone@1":
+		return APIFormatSystemOne, nil
 	case "openai/chat-completions@1":
 		return APIFormatOpenAI, nil
 	case "openai/responses@1":
@@ -388,17 +405,15 @@ func modelPricingFromCatalog(pricing modelcatalog.Pricing) ModelPricing {
 	return ModelPricing{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CompletionPer1M: pricing.CompletionPer1M, CachedInputPer1M: pricing.CachedInputPer1M,
-		CacheWritePer1M: pricing.CacheWritePer1M,
+		CacheWritePer1M:   pricing.CacheWritePer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
 	}
 }
 
 func providerReliabilityFromCatalog(reliability modelcatalog.Reliability) ProviderReliability {
-	return ProviderReliability{
-		LBPolicy: reliability.LBPolicy, RetryCount: reliability.RetryCount, RetryOn: reliability.RetryOn,
-		Consecutive5xx: reliability.Consecutive5xx, BaseEjectionTime: reliability.BaseEjectionTime,
-		MaxEjectionPercent: reliability.MaxEjectionPercent, HealthCheckPath: reliability.HealthCheckPath,
-		HealthCheckInterval: reliability.HealthCheckInterval, HealthCheckTimeout: reliability.HealthCheckTimeout,
-	}
+	converted := ProviderReliability(reliability)
+	converted.RetriableStatusCodes = slices.Clone(reliability.RetriableStatusCodes)
+	return converted
 }
 
 func cloneCatalogIndexResults(source map[string]modelcatalog.IndexResult) map[string]modelcatalog.IndexResult {
@@ -408,6 +423,17 @@ func cloneCatalogIndexResults(source map[string]modelcatalog.IndexResult) map[st
 	result := make(map[string]modelcatalog.IndexResult, len(source))
 	for key, value := range source {
 		result[key] = cloneCatalogIndexResult(value)
+	}
+	return result
+}
+
+func cloneCatalogIndexResultsByEffort(source map[string]map[string]modelcatalog.IndexResult) map[string]map[string]modelcatalog.IndexResult {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]map[string]modelcatalog.IndexResult, len(source))
+	for effort, values := range source {
+		result[effort] = cloneCatalogIndexResults(values)
 	}
 	return result
 }

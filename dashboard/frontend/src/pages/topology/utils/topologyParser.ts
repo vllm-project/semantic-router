@@ -16,6 +16,7 @@ import type {
   SignalConfig,
   SignalType,
 } from '../types'
+import { SIGNAL_TYPES } from '../constants'
 import { extractSignals } from './topologySignalParser'
 
 /**
@@ -56,7 +57,6 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
       modelId: promptGuardModel || 'vLLM-SR-Jailbreak',
       threshold: promptGuard.threshold,
       config: {
-        use_modernbert: promptGuard.use_modernbert,
         use_vllm: promptGuard.use_vllm,
       },
     })
@@ -200,6 +200,7 @@ function extractDecisionAlgorithm(
     svm: algorithm.svm,
     mlp: algorithm.mlp,
     multi_factor: algorithm.multi_factor,
+    prompt: algorithm.prompt,
   }
 }
 
@@ -232,6 +233,12 @@ function parseRuleNode(node: RawRuleNode): RuleNode | null {
 }
 
 function parseRuleCombination(rules?: RawRuleCombination): RuleCombination {
+  // A single condition can be the whole rule tree: `rules: {type, name}`.
+  const rootCondition = rules && !rules.operator && !rules.conditions ? parseRuleNode(rules) : null
+  if (rootCondition) {
+    return { operator: 'AND', conditions: [rootCondition] }
+  }
+
   const conditions = (rules?.conditions || [])
     .map((condition: RawRuleNode) => parseRuleNode(condition))
     .filter((condition: RuleNode | null): condition is RuleNode => condition !== null)
@@ -309,28 +316,9 @@ function normalizeModelScores(
  * Group signals by type
  */
 export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, SignalConfig[]> {
-  const groups: Record<SignalType, SignalConfig[]> = {
-    keyword: [],
-    embedding: [],
-    domain: [],
-    fact_check: [],
-    user_feedback: [],
-    reask: [],
-    preference: [],
-    language: [],
-    context: [],
-    structure: [],
-    complexity: [],
-    modality: [],
-    authz: [],
-    jailbreak: [],
-    hallucination: [],
-    pii: [],
-    kb: [],
-    conversation: [],
-    event: [],
-    projection: [],
-  }
+  const groups = Object.fromEntries(
+    SIGNAL_TYPES.map((signalType) => [signalType, [] as SignalConfig[]]),
+  ) as Record<SignalType, SignalConfig[]>
 
   signals.forEach((signal) => {
     if (groups[signal.type]) {

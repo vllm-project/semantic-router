@@ -2,31 +2,28 @@ package looper
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
-// setInternalRequestHeaders attaches authenticated routing context for the
-// in-process extproc hop. These values are consumed and removed before the
-// physical model backend is invoked.
-func (c *Client) setInternalRequestHeaders(
-	request *http.Request,
+func (c *Client) requestHeaders(
 	ctx context.Context,
-	iteration int,
-) {
-	request.Header.Set(headers.VSRInternalAuth, internalauth.Token())
-	request.Header.Set(headers.VSRLooperRequest, "true")
-	request.Header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", iteration))
-	if depth := fusionDepthFromContext(ctx); depth > 0 {
-		request.Header.Set(headers.VSRFusionDepth, fmt.Sprintf("%d", depth))
+	target ModelTarget,
+	options CallOptions,
+) http.Header {
+	header := make(http.Header, len(c.headers)+5)
+	header.Set("Content-Type", "application/json")
+	for name, value := range c.headers {
+		header.Set(name, value)
 	}
-	if recipe := routingRecipeFromContext(ctx); recipe != "" {
-		request.Header.Set(headers.VSRSelectedRecipe, string(recipe))
+	traceHeaders := make(map[string]string)
+	tracing.InjectTraceContext(ctx, traceHeaders)
+	for name, value := range traceHeaders {
+		header.Set(name, value)
 	}
-	if c.decisionName != "" {
-		request.Header.Set(headers.VSRLooperDecision, c.decisionName)
+	if target.AccessKey != "" {
+		header.Set("Authorization", "Bearer "+target.AccessKey)
 	}
+	return header
 }

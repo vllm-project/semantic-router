@@ -45,12 +45,12 @@ spec:
       memory: 4Gi
     limits:
       cpu: 4000m
-      memory: 8Gi
+      memory: 12Gi
 
   # Semantic router configuration
   config:
     embedding_models:
-      mmbert_model_path: "models/mom-embedding-ultra"
+      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
       use_cpu: true
 
       embedding_config:
@@ -149,7 +149,7 @@ spec:
     # Prompt guard
     prompt_guard:
       enabled: true
-      threshold: "0.7"
+      threshold: "0.88"
 
     # Tools configuration
     tools:

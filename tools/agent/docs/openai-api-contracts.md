@@ -205,7 +205,7 @@ the ExtProc seam or Envoy E2E gate.
 | Data-plane seam | Client/backend orientation, provider model rewrite, API-root paths, buffered response, and streaming for all 3×3 pairs | `go test ./pkg/extproc` |
 | Concurrency | Immutable registry plus parallel 3×3 request, response, transport-error, and stream translations proving request-scoped model, error, lifecycle, and accumulator state | `go test -race ./pkg/llmprotocol ./pkg/protocolcodec ./pkg/extproc` |
 | Robustness | Malformed buffered and arbitrarily chunked stream input across all format pairs | protocol codec fuzz targets with a bounded CI or release time budget |
-| Envoy transport | Native and translated buffered, streaming, tools, provider errors, incomplete streams, and midstream errors | `make e2e-test E2E_PROFILE=response-api` and `make e2e-test E2E_PROFILE=anthropic-shim` |
+| Envoy transport | Native and translated buffered, streaming, tools, provider errors, incomplete streams, and midstream errors | `make e2e-test E2E_PROFILE=response-api` and `make e2e-test E2E_PROFILE=provider-protocols` |
 | Routing regression | Existing routing, cache, tool selection, replay, and streaming behavior | `make e2e-test E2E_PROFILE=envoy-ai-gateway` and `make e2e-test E2E_PROFILE=streaming` |
 
 The published-schema tier currently closes three Chat Completions object
@@ -268,7 +268,7 @@ during transport refactors:
 | Structured output | the complete JSON Schema survives routing mutation |
 | Anthropic `output_config` | reasoning effort and strict JSON Schema survive same-format mutation and OpenAI translation |
 | Reasoning streams | both OpenAI-compatible reasoning aliases and ordered Anthropic thinking/signature blocks remain explicit |
-| Terminal reasons | Anthropic pause/context-window stops and Responses content-filter incompletes remain exact or fail explicitly when the target cannot represent them; an Anthropic matched stop sequence is a separate response capability and can never silently collapse into a generic OpenAI `stop` |
+| Terminal reasons | Anthropic pause/context-window stops and Responses content-filter incompletes remain exact or fail explicitly when the target cannot represent them; an Anthropic matched stop sequence is a separate response capability that targets carrying it preserve exactly, while Chat and Responses targets receive the diagnosed projection to the generic OpenAI `stop` (`matched_stop_sequence` is dropped with a diagnostic, never silently) |
 | Stream indexes | Source-private neutral indexes are compacted by target encoders, while provider output indexes must be non-negative, contiguous, and bound to one active item identity |
 | Tool streams | Tool IDs and names are present before publication, immutable for the item lifetime, bounded, and paired with one final JSON-object argument value |
 | Parallel tool streams | Each call retains an independent identity, argument buffer, lifecycle, and compact target index even when deltas interleave or items finish out of order |
@@ -292,13 +292,14 @@ it remains valid when codec internals move.
 
 | Regression | Unit or seam contract | Envoy E2E contract |
 | --- | --- | --- |
+| [#4892](https://github.com/vllm-project/semantic-router/issues/4892) an Anthropic reply ending on a stop sequence must reach Chat and Responses clients as the generic `stop` terminal with a diagnostic, while capable targets keep the exact matched sequence | translate-seam projection tests for buffered and stream completions, the official terminal-reason inventory, and the capability goldens for the cross-format outcomes | `anthropic-chat-stop-sequence` |
 | [#2492](https://github.com/vllm-project/semantic-router/issues/2492) Responses streaming must preserve its public event taxonomy, tools, reasoning, refusal, headers, cache, and continuity across backend formats | complete official event inventory, 3×3 stream matrix, request-context propagation, and response-header rewrite tests | Responses-native plus Chat- and Messages-backed streaming matrices |
-| [#2486](https://github.com/vllm-project/semantic-router/issues/2486) FullDuplexStreamed must not replace an in-flight request with an empty body | non-EOS ExtProc responses defer mutation and EOS emits one complete body | `agentgateway-full-duplex-multiturn` |
+| [#2486](https://github.com/vllm-project/semantic-router/issues/2486) FullDuplexStreamed must not replace an in-flight request with an empty body | non-EOS ExtProc responses defer mutation and EOS emits one complete body | `envoy-full-duplex-routing` in the `streaming` profile checks delayed chunks, routing and EOS rejection against observed backends |
 | [#2316](https://github.com/vllm-project/semantic-router/issues/2316) provider SSE frames may split at arbitrary Envoy chunk boundaries | SSE carry-buffer, one-byte replay, CR/LF, and split UTF-8 tests | three backend streaming matrices |
 | [#3045](https://github.com/vllm-project/semantic-router/pull/3045) Responses clients must receive Responses SSE when the selected backend speaks Anthropic Messages | complete Responses event taxonomy and 3×3 stream matrix | Anthropic backend streaming matrix |
 | [#913](https://github.com/vllm-project/semantic-router/issues/913) a buffered semantic-cache entry must replay as valid SSE | neutral cached response is encoded through the client stream codec | `streaming-sse-cache` requires a cache hit, valid SSE, matching content, and one `[DONE]` terminal |
 | [#2846](https://github.com/vllm-project/semantic-router/pull/2846) intermediate usage chunks must not terminate or truncate streaming content | per-chunk usage continuation and one-terminal stream-state tests | `streaming` profile |
-| [#3068](https://github.com/vllm-project/semantic-router/issues/3068) Anthropic backend profile bypasses a second protocol processor and runs in affected-change CI | profile topology and classifier tests | `anthropic-shim` profile |
+| [#3068](https://github.com/vllm-project/semantic-router/issues/3068) Anthropic backend profile bypasses a second protocol processor and runs in affected-change CI | profile topology and classifier tests | `provider-protocols` profile |
 | [#3067](https://github.com/vllm-project/semantic-router/issues/3067) flat Responses tools and inline call results | 3×3 request and tool-history matrices | three backend tool-lifecycle cases |
 | [#3065](https://github.com/vllm-project/semantic-router/issues/3065) provider API-root joining | protocol × base-URL × custom-path table | all three backend profiles use their native route |
 | [#3064](https://github.com/vllm-project/semantic-router/issues/3064), fixed by [#3066](https://github.com/vllm-project/semantic-router/pull/3066), provider model ID rewrite | request dispatch tests for Chat, Responses, and Messages targets | buffered 3×3 backend matrices |
@@ -311,6 +312,7 @@ it remains valid when codec internals move.
 | [#3024](https://github.com/vllm-project/semantic-router/issues/3024) routed model rewrites retain the complete JSON Schema contract | structured-output 3×3 goldens and `TestExtProcStructuredOutputRequestProtocolMatrix` | three `protocol-codec-*-backend-structured-output` cases, each buffered and streamed |
 | [#3013](https://github.com/vllm-project/semantic-router/issues/3013) Responses clients never receive Chat SSE from an Anthropic backend | client/backend-independent 3×3 stream encoder matrix | Messages-backed Responses streaming profile |
 | [#2947](https://github.com/vllm-project/semantic-router/issues/2947) streamed cache accounting survives intermediate and terminal usage updates | cumulative usage-state tests plus Anthropic-to-every-target cache matrix | cached Messages stream through native backend profile |
+| [#5107](https://github.com/vllm-project/semantic-router/issues/5107) a Chat client of a Chat provider gets the same error event however the stream splits into body chunks | `TestChatUpstreamErrorEventDoesNotDependOnReadSplit`, `TestChatStreamFailureEndsItsBatch`, and `TestChatPublicStreamFilterDropsProviderErrorEvent` | `protocol-codec-vllm-stream-error` split markers |
 
 Adding or fixing a protocol issue updates this ledger and the corresponding test in
 the same change. Closing an issue does not permit deleting its regression.

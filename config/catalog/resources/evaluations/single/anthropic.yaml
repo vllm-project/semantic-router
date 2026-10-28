@@ -95,7 +95,7 @@
 - id: independent/claude-fable-5-1-high-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Claude Fable 5.1 (high with fallback)
@@ -257,7 +257,7 @@
 - id: independent/claude-fable-5-1-low-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
@@ -459,7 +459,7 @@
 - id: independent/claude-fable-5-1-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Fable 5.1 (max with fallback)
@@ -621,7 +621,7 @@
 - id: independent/claude-fable-5-1-medium-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Claude Fable 5.1 (medium with fallback)
@@ -805,7 +805,7 @@
 - id: independent/claude-fable-5-1-xhigh-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Claude Fable 5.1 (xhigh with fallback)
@@ -987,7 +987,7 @@
 - id: independent/claude-opus-5-high-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
@@ -1149,7 +1149,7 @@
 - id: independent/claude-opus-5-low-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
@@ -1351,7 +1351,7 @@
 - id: independent/claude-opus-5-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Opus 5 (max)
@@ -1513,7 +1513,7 @@
 - id: independent/claude-opus-5-medium-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
@@ -1697,7 +1697,7 @@
 - id: independent/claude-opus-5-xhigh-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Claude Opus 5 (xhigh)
@@ -1895,7 +1895,7 @@
 - id: independent/claude-sonnet-5-humanitys-last-exam@1.0.0
   model: anthropic/claude-sonnet-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
@@ -2133,7 +2133,7 @@
 - id: independent/claude-fable-5-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Fable 5 (with fallback)
@@ -2329,7 +2329,7 @@
 - id: independent/claude-opus-4-8-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-4.8
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)

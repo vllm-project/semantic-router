@@ -3,18 +3,19 @@ import { buildConnectedProviderModel } from './configPageConnectModelSupport'
 import {
   cloneConfigData,
   ensureProvidersConfig,
-  removeRoutingModelCardIfUnreferenced,
+  removeModelCardDataIfUnreferenced,
   writeRoutingModelCard,
 } from './configPageCanonicalization'
 import {
   buildProviderModelPayload,
+  effectiveModelCardFormData,
   normalizeModelBackendRefs,
   normalizeModelPricing,
   normalizeModelStringMap,
 } from './configPageModelFormSupport'
 import { validateNewModelName } from './configPageModelInventory'
 import { modelCardPatch } from './configPageModelsSectionSupport'
-import type { ConfigData, NormalizedModel } from './configPageSupport'
+import type { ConfigData, NormalizedModel, RoutingModelCard } from './configPageSupport'
 
 type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
 
@@ -54,6 +55,28 @@ export function buildAddedModelConfig(
   return next
 }
 
+// Edit shows effective metadata, but only an actual user change becomes a new
+// override. Preserve fields outside this form (for example max_output_tokens).
+function editedModelCardPatch(
+  model: NormalizedModel,
+  data: Record<string, unknown>,
+  existingCard?: RoutingModelCard,
+): Omit<RoutingModelCard, 'name'> {
+  const patch: Omit<RoutingModelCard, 'name'> = { ...existingCard }
+  delete (patch as Partial<RoutingModelCard>).name
+  const before = modelCardPatch(effectiveModelCardFormData(model))
+  const after = modelCardPatch(data)
+  for (const field of Object.keys(after) as Array<keyof typeof after>) {
+    if (
+      Object.prototype.hasOwnProperty.call(data, field) &&
+      JSON.stringify(before[field]) !== JSON.stringify(after[field])
+    ) {
+      Object.assign(patch, { [field]: after[field] })
+    }
+  }
+  return patch
+}
+
 export function buildEditedModelConfig(
   config: ConfigData,
   model: NormalizedModel,
@@ -71,10 +94,12 @@ export function buildEditedModelConfig(
         ? { ...providerModel, ...buildProviderModelPayload(model.name, data, providerModel) }
         : providerModel,
     )
-    if (oldCardID !== nextCardID) removeRoutingModelCardIfUnreferenced(next, oldCardID)
-    writeRoutingModelCard(next, nextCardID, modelCardPatch(data), {
-      removeWhenEmpty: oldCardID === nextCardID,
-    })
+    if (oldCardID !== nextCardID) removeModelCardDataIfUnreferenced(next, oldCardID)
+    const existingCard = next.routing?.modelCards?.find((card) => card.name === nextCardID)
+    const patch = editedModelCardPatch(model, data, existingCard)
+    if (existingCard || Object.values(patch).some((value) => value !== undefined)) {
+      writeRoutingModelCard(next, nextCardID, patch, { removeWhenEmpty: true })
+    }
   } else if (next.model_config) {
     next.model_config[model.name] = {
       ...next.model_config[model.name],
@@ -130,7 +155,7 @@ export function buildDeletedModelsConfig(
     )
     for (const modelName of namesToDelete) {
       const model = models.find((candidate) => candidate.name === modelName)
-      removeRoutingModelCardIfUnreferenced(next, model?.catalog || modelName)
+      removeModelCardDataIfUnreferenced(next, model?.catalog || modelName)
     }
   } else if (next.model_config) {
     for (const modelName of namesToDelete) delete next.model_config[modelName]

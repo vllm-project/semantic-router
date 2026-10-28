@@ -3,8 +3,10 @@ package classification
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -12,6 +14,7 @@ import (
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
 	return map[string]bool{
+		config.SignalTypeSafety:        len(c.safetyClassifiers) > 0,
 		config.SignalTypeKeyword:       c.keywordClassifier != nil,
 		config.SignalTypeEmbedding:     c.keywordEmbeddingClassifier != nil,
 		config.SignalTypeDomain:        c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
@@ -22,7 +25,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:       c.contextClassifier != nil,
 		config.SignalTypeStructure:     c.structureClassifier != nil,
-		config.SignalTypeComplexity:    c.complexityClassifier != nil,
+		config.SignalTypeComplexity:    c.isComplexitySignalReady(),
 		config.SignalTypeModality:      len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
 		config.SignalTypeJailbreak:     c.isJailbreakSignalReady(),
 		config.SignalTypePII:           len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
@@ -32,6 +35,8 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
 		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
+		config.SignalTypeAction:        len(c.Config.ActionRules) > 0,
+		config.SignalTypeDecision:      len(c.Config.DecisionRules) > 0,
 	}
 }
 
@@ -40,6 +45,15 @@ func (c *Classifier) signalReadiness() map[string]bool {
 // require only their preloaded embedding classifiers. Coupling both paths to
 // IsJailbreakEnabled silently skipped otherwise healthy contrastive rules when
 // the optional Prompt Guard model was disabled.
+// isComplexitySignalReady reports whether any path can produce the signal.
+// Keying only off the local classifier would report a remote-only config as
+// unavailable, and the dispatcher would skip the signal entirely.
+func (c *Classifier) isComplexitySignalReady() bool {
+	return c.complexityScoreBackend != nil ||
+		c.complexityLabelBackend != nil ||
+		c.complexityClassifier != nil
+}
+
 func (c *Classifier) isJailbreakSignalReady() bool {
 	// Response-direction rules are scored from the model's output, so they do
 	// not make the request-stage signal ready on their own.
@@ -114,22 +128,13 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFacts(
 	imageURL string,
 	requestFacts RequestFacts,
 ) *SignalResults {
-	return c.evaluateAllSignalsWithContext(
-		text,
-		contextText,
-		currentUserText,
-		priorUserMessages,
-		nonUserMessages,
-		hasPriorAssistantReply,
-		forceEvaluateAll,
-		uncompressedText,
-		skipCompressionSignals,
-		convFacts,
-		imageURL,
-		requestFacts,
-		nil,
-		false,
-	)
+	return c.evaluateAllSignalsWithContext(SignalEvaluationInput{
+		Text: text, ContextText: contextText, CurrentUserText: currentUserText,
+		PriorUserMessages: priorUserMessages, NonUserMessages: nonUserMessages,
+		HasPriorAssistantReply: hasPriorAssistantReply, ForceEvaluateAll: forceEvaluateAll,
+		UncompressedText: uncompressedText, SkipCompressionSignals: skipCompressionSignals,
+		ConversationFacts: convFacts, ImageURL: imageURL, RequestFacts: requestFacts,
+	}, nil, false)
 }
 
 // EvaluateAllSignalsWithRequestFactsForDecisions scopes signal usage to one
@@ -149,45 +154,20 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFactsForDecisions(
 	requestFacts RequestFacts,
 	decisions []config.Decision,
 ) *SignalResults {
-	return c.evaluateAllSignalsWithContext(
-		text,
-		contextText,
-		currentUserText,
-		priorUserMessages,
-		nonUserMessages,
-		hasPriorAssistantReply,
-		forceEvaluateAll,
-		uncompressedText,
-		skipCompressionSignals,
-		convFacts,
-		imageURL,
-		requestFacts,
-		decisions,
-		true,
-	)
+	return c.evaluateAllSignalsWithContext(SignalEvaluationInput{
+		Text: text, ContextText: contextText, CurrentUserText: currentUserText,
+		PriorUserMessages: priorUserMessages, NonUserMessages: nonUserMessages,
+		HasPriorAssistantReply: hasPriorAssistantReply, ForceEvaluateAll: forceEvaluateAll,
+		UncompressedText: uncompressedText, SkipCompressionSignals: skipCompressionSignals,
+		ConversationFacts: convFacts, ImageURL: imageURL, RequestFacts: requestFacts,
+	}, decisions, true)
 }
 
-func (c *Classifier) evaluateAllSignalsWithContext(
-	text string,
-	contextText string,
-	currentUserText string,
-	priorUserMessages []string,
-	nonUserMessages []string,
-	hasPriorAssistantReply bool,
-	forceEvaluateAll bool,
-	uncompressedText string,
-	skipCompressionSignals map[string]bool,
-	convFacts ConversationFacts,
-	imageURL string,
-	requestFacts RequestFacts,
-	signalScope []config.Decision,
-	signalScopeSet bool,
-) *SignalResults {
-	defer c.enterSignalEvaluationLoadGate()()
+func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, signalScope []config.Decision, signalScopeSet bool) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	switch {
-	case forceEvaluateAll:
+	case input.ForceEvaluateAll:
 		usedSignals = c.getAllSignalTypes()
 		logging.Debugf("[Signal Computation] Force evaluate all signals mode enabled")
 	case signalScopeSet:
@@ -196,7 +176,24 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		usedSignals = c.getUsedSignals()
 	}
 
-	textForSignal := textForSignalFunc(text, uncompressedText, skipCompressionSignals)
+	boundedText := textForSignalFunc(input.Text, input.UncompressedText, input.SkipCompressionSignals)
+	textForSignal := func(signalType string) string {
+		// Every signal a Vela 2.0 model answers reads the request as it came,
+		// so their questions share one state and one call.
+		if c.signalReadsWholeText(signalType) {
+			if input.UncompressedText != "" {
+				return input.UncompressedText
+			}
+			return input.Text
+		}
+		if c.hasLongContextClassifier(signalType) {
+			if input.UncompressedText != "" && input.SkipCompressionSignals[signalType] {
+				return input.UncompressedText
+			}
+			return input.Text
+		}
+		return boundedText(signalType)
+	}
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
@@ -206,47 +203,42 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		SignalErrors:       make(map[string]string),
 		SignalErrorMatches: make(map[string]bool),
 	}
-	if requestFacts.Context == nil {
+	if input.RequestFacts.Context == nil {
 		// The legacy, context-free classifier APIs do not have a caller context.
 		// Keep those APIs working while ensuring every request-aware path passes
 		// its supplied context all the way to remote category HTTP calls.
-		requestFacts.Context = context.Background()
+		input.RequestFacts.Context = context.Background()
 	}
 
+	// One request stage, one bundle: the model calls of every signal reach each
+	// runtime process as a single /v1/bundle call, before the signals' deadline,
+	// and every question the stage asks one decision model goes in one call.
+	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
+	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
+	defer cancel()
+	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	imgArg := imageURL
-
-	// Allocate a request-scoped image embedding cache only when an image is
-	// actually attached. Two signals - complexity (image rules) and embedding
-	// (image-modality rules) - independently pull image embeddings via FFI;
-	// the cache lets whichever runs first donate its result to the other,
-	// turning two SigLIP forward passes into one. With no image attached,
-	// neither signal touches the cache, so leaving it nil is correct.
-	var imgCache *requestImageEmbeddingCache
-	if imgArg != "" {
-		imgCache = newRequestImageEmbeddingCache()
+	var mediaCache *requestMediaEmbeddingCache
+	if input.ImageURL != "" || input.Audio != "" {
+		mediaCache = newRequestMediaEmbeddingCache()
 	}
+	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
 
-	dispatchers := c.buildSignalDispatchers(
-		results,
-		&mu,
-		textForSignal,
-		contextText,
-		currentUserText,
-		priorUserMessages,
-		nonUserMessages,
-		hasPriorAssistantReply,
-		imgArg,
-		imgCache,
-		convFacts,
-		requestFacts.Context,
-		requestFacts,
-		usedSignals,
-	)
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
+	asks := func(signalType string) []string { return c.signalQuestionDeployments(signalType, usedSignals) }
+	runSignalDispatchers(stage, dispatchers, usedSignals, ready, bundle, asks, &wg)
 
 	wg.Wait()
+	originalText := input.Text
+	if input.UncompressedText != "" {
+		originalText = input.UncompressedText
+	}
+	if textForSignal(config.SignalTypePII) != originalText {
+		results.PIIContentVerified = false
+	}
+	if input.ImageURL != "" || input.Audio != "" {
+		results.PIIContentVerified = false
+	}
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
 	results = c.applySignalOutputPolicies(results)

@@ -36,7 +36,7 @@ spec:
       memory: 2Gi
     limits:
       cpu: 2000m
-      memory: 4Gi
+      memory: 12Gi
 
   # Semantic router configuration
   config:
@@ -50,7 +50,7 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
-      threshold: "0.7"
+      threshold: "0.88"
 
     # Tools auto-selection
     tools:

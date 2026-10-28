@@ -77,7 +77,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(footer.locator('[data-footer-group]')).toHaveCount(3)
     await expect(footer.getByRole('link', { name: 'Hugging Face' })).toHaveAttribute(
       'href',
-      'https://huggingface.co/LLM-Semantic-Router',
+      'https://huggingface.co/vllm-sr',
     )
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -196,7 +196,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     expect(footerGroupBoxes[0]?.y ?? 0).toBeLessThan(footerGroupBoxes[1]?.y ?? 0)
     expect(footerGroupBoxes[1]?.y ?? 0).toBeLessThan(footerGroupBoxes[2]?.y ?? 0)
 
-    await page.getByRole('button', { name: 'Enter Dashboard' }).click()
+    await page.getByRole('link', { name: 'Enter Dashboard' }).last().click()
     await expect(page).toHaveURL(/\/login$/)
     await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
 

@@ -125,6 +125,16 @@ config:
             modelRefs:
               - model: base-model
                 use_reasoning: false
+  evaluation:
+    records:
+      - model: premium-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.9
+      - model: economy-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.1
   routing:
     decisions:
       - name: quality_policy_decision
@@ -165,6 +175,20 @@ config:
               latency: 0
               cost: 1
               load: 0
+      - name: random_policy_decision
+        description: Uniform random selection among eligible candidates
+        priority: 250
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: random_policy
+        modelRefs:
+          - model: premium-model
+          - model: economy-model
+        algorithm:
+          type: random
+          minimum_candidates: 2
       - name: code_keywords_decision
         description: Code and programming queries (BM25 classified)
         priority: 150
@@ -267,6 +291,11 @@ config:
           operator: OR
           keywords:
             - decision scoped cost policy
+          case_sensitive: false
+        - name: random_policy
+          operator: OR
+          keywords:
+            - decision scoped random policy
           case_sensitive: false
         - name: code_keywords
           operator: OR
@@ -374,26 +403,18 @@ config:
             - engineering
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.6
+          threshold: 0.88
           include_history: false
           description: Standard jailbreak detection for routing-strategies tests
       pii:
         - name: pii_deny_all
-          threshold: 0.7
+          threshold: 0.18
           include_history: false
           description: Block all PII
     modelCards:
       - name: base-model
       - name: premium-model
-        evaluations:
-          - benchmark: vllm-sr/operator-rating@1.0.0
-            metrics:
-              score: 0.9
       - name: economy-model
-        evaluations:
-          - benchmark: vllm-sr/operator-rating@1.0.0
-            metrics:
-              score: 0.1
   global:
     model_catalog:
       kbs: []

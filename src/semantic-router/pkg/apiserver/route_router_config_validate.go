@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -8,11 +8,15 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type RouterConfigValidateResponse struct {
 	Valid          bool   `json:"valid"`
 	NormalizedYAML string `json:"normalized_yaml"`
+	// Warnings are the findings the Router logs when it loads the document.
+	Warnings []config.ConfigWarning `json:"warnings"`
 }
 
 func (s *ClassificationAPIServer) handleConfigValidate(
@@ -20,7 +24,7 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 	r *http.Request,
 ) {
 	var req RouterConfigUpdateRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -38,7 +42,7 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 		)
 		return
 	}
-	normalized, err := normalizeRouterConfigDocumentWithoutEnv(doc)
+	normalized, warnings, err := normalizeRouterConfigDocumentWithoutEnv(doc)
 	if err != nil {
 		s.writeErrorResponse(
 			w,
@@ -61,6 +65,7 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 	s.writeJSONResponse(w, http.StatusOK, RouterConfigValidateResponse{
 		Valid:          true,
 		NormalizedYAML: string(normalized),
+		Warnings:       warnings,
 	})
 }
 

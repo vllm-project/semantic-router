@@ -9,6 +9,7 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
+	"cascade":       "native",
 	"automix":       "selection",
 	"confidence":    "looper",
 	"fusion":        "looper",
@@ -18,6 +19,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"latency-aware": "selection",
 	"mlp":           "selection",
 	"multi-factor":  "selection",
+	"random":        "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
 	"router-dc":     "selection",
@@ -25,6 +27,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"svm":           "selection",
 	"workflows":     "looper",
 	"prompt":        "selection",
+	"decision":      "selection",
 }
 
 var retiredAlgorithmTutorialDocs = []string{
@@ -38,11 +41,14 @@ var pluginTutorialBuckets = map[string]string{
 	"fast-response":       "response-and-mutation",
 	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",
+	"masking":             "response-and-mutation",
 	"memory":              "retrieval-and-memory",
+	"prompt-cache":        "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",
 	"request-params":      "response-and-mutation",
 	"response-jailbreak":  "safety-and-generation",
 	"router-replay":       "retrieval-and-memory",
+	"shadow-dispatch":     "retrieval-and-memory",
 	"response-cache":      "retrieval-and-memory",
 	"system-prompt":       "response-and-mutation",
 	"tool-selection":      "response-and-mutation",

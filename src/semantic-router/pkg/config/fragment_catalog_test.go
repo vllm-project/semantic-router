@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,6 +28,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	}
 
 	requiredAlgorithmFragments := map[string]string{
+		"cascade":       filepath.Join("native", "cascade.yaml"),
 		"automix":       filepath.Join("selection", "automix.yaml"),
 		"confidence":    filepath.Join("looper", "confidence.yaml"),
 		"fusion":        filepath.Join("looper", "fusion.yaml"),
@@ -36,6 +38,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"latency_aware": filepath.Join("selection", "latency-aware.yaml"),
 		"mlp":           filepath.Join("selection", "mlp.yaml"),
 		"multi_factor":  filepath.Join("selection", "multi-factor.yaml"),
+		"random":        filepath.Join("selection", "random.yaml"),
 		"ratings":       filepath.Join("looper", "ratings.yaml"),
 		"remom":         filepath.Join("looper", "remom.yaml"),
 		"router_dc":     filepath.Join("selection", "router-dc.yaml"),
@@ -43,6 +46,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"svm":           filepath.Join("selection", "svm.yaml"),
 		"workflows":     filepath.Join("looper", "workflows.yaml"),
 		"prompt":        filepath.Join("selection", "prompt.yaml"),
+		"decision":      filepath.Join("selection", "decision.yaml"),
 	}
 	for _, algorithmType := range SupportedDecisionAlgorithmTypes() {
 		relPath, ok := requiredAlgorithmFragments[algorithmType]
@@ -75,7 +79,12 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config", "fragments")
 
-	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(configRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -83,7 +92,7 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -131,7 +140,12 @@ func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config", "fragments")
 
-	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(configRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -139,7 +153,7 @@ func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,7 @@ func TestFetchRouterModelsInfoSuccess(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/info/models" {
+		if r.URL.Path != "/api/v1/inventory/models" {
 			t.Fatalf("unexpected path %q", r.URL.Path)
 		}
 
@@ -42,7 +43,7 @@ func TestFetchRouterModelsInfoSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	info := fetchRouterModelsInfo(server.URL + "/")
+	info := fetchRouterModelsInfo(context.Background(), server.URL+"/")
 	if info == nil {
 		t.Fatalf("expected router models info")
 	}
@@ -62,7 +63,7 @@ func TestFetchRouterModelsInfoIgnoresNonOKResponses(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if info := fetchRouterModelsInfo(server.URL); info != nil {
+	if info := fetchRouterModelsInfo(context.Background(), server.URL); info != nil {
 		t.Fatalf("expected nil info on non-200 response, got %+v", info)
 	}
 }
@@ -77,7 +78,7 @@ func TestFetchRouterModelsInfoUsesManagedCredential(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if info := fetchRouterModelsInfo(server.URL, statusCredentialProvider{token: "status-service-token"}); info == nil {
+	if info := fetchRouterModelsInfo(context.Background(), server.URL, statusCredentialProvider{token: "status-service-token"}); info == nil {
 		t.Fatal("expected authenticated model inventory")
 	}
 }

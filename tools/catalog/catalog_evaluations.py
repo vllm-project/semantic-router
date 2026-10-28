@@ -290,6 +290,7 @@ def _validate_index_component(
             "benchmark",
             "metric",
             "benchmark_profile",
+            "benchmark_profiles",
             "index",
             "weight",
             "normalization",
@@ -297,25 +298,30 @@ def _validate_index_component(
         path,
     )
     direct = any(
-        component.get(key) for key in ("benchmark", "metric", "benchmark_profile")
+        key in component
+        for key in ("benchmark", "metric", "benchmark_profile", "benchmark_profiles")
     )
-    dependency = component.get("index")
-    if direct == bool(dependency):
+    dependency_declared = "index" in component
+    if direct == dependency_declared:
         raise CatalogBuildError(f"{path} must reference exactly one metric or index")
+    dependency = (
+        None if direct else _nonempty_string(component.get("index"), f"{path}.index")
+    )
     metric_id: str | None = None
     if direct:
         benchmark = _nonempty_string(component.get("benchmark"), f"{path}.benchmark")
         metric = _nonempty_string(component.get("metric"), f"{path}.metric")
-        profile = _nonempty_string(
-            component.get("benchmark_profile"), f"{path}.benchmark_profile"
-        )
+        profiles = _validate_component_profiles(component, path)
         metric_id = f"{benchmark}#{metric}"
     if metric_id and metric_id not in metrics:
         raise CatalogBuildError(f"{path} references an unknown metric")
-    if metric_id and profile not in metrics[metric_id]["profiles"]:
-        raise CatalogBuildError(
-            f"{path}.benchmark_profile is not declared by its benchmark"
-        )
+    if metric_id:
+        unknown_profiles = set(profiles).difference(metrics[metric_id]["profiles"])
+        if unknown_profiles:
+            raise CatalogBuildError(
+                f"{path}.benchmark_profiles contains profiles not declared by its "
+                f"benchmark: {', '.join(sorted(unknown_profiles))}"
+            )
     if dependency and dependency not in index_ids:
         raise CatalogBuildError(f"{path} references an unknown index")
     weight = component.get("weight")
@@ -328,6 +334,32 @@ def _validate_index_component(
     _validate_normalization(normalization, normalization_path)
     domain = str(metrics[metric_id]["domain"]) if metric_id else None
     return float(weight), domain, str(dependency) if dependency else None
+
+
+def _validate_component_profiles(component: dict[str, Any], path: str) -> list[str]:
+    singular = component.get("benchmark_profile")
+    plural = component.get("benchmark_profiles")
+    if (singular is None) == (plural is None):
+        raise CatalogBuildError(
+            f"{path} must declare exactly one of benchmark_profile or benchmark_profiles"
+        )
+    if singular is not None:
+        return [_nonempty_string(singular, f"{path}.benchmark_profile")]
+    profiles = [
+        _nonempty_string(value, f"{path}.benchmark_profiles[{index}]")
+        for index, value in enumerate(_sequence(plural, f"{path}.benchmark_profiles"))
+    ]
+    if not profiles or len(profiles) != len(set(profiles)):
+        raise CatalogBuildError(
+            f"{path}.benchmark_profiles must contain unique profile identifiers"
+        )
+    return profiles
+
+
+def _component_profiles(component: dict[str, Any]) -> list[str]:
+    if component.get("benchmark_profiles") is not None:
+        return [str(profile) for profile in component["benchmark_profiles"]]
+    return [str(component["benchmark_profile"])]
 
 
 def _validate_normalization(normalization: dict[str, Any], path: str) -> None:
@@ -505,9 +537,13 @@ class _IndexEvaluator:
     ) -> _IndexAccumulation:
         accumulation = _IndexAccumulation()
         for component in definition["components"]:
-            value, domain, provenance, evaluation_id = self._component_value(
-                component, visiting
-            )
+            (
+                value,
+                domain,
+                provenance,
+                evaluation_id,
+                selected_profile,
+            ) = self._component_value(component, visiting)
             accumulation.provenance.update(provenance)
             component_result = _missing_component_result(component)
             if value is None:
@@ -515,6 +551,8 @@ class _IndexEvaluator:
                 continue
             if evaluation_id is not None:
                 component_result["evaluation"] = evaluation_id
+            if selected_profile is not None:
+                component_result["benchmark_profile"] = selected_profile
             normalized = normalize_component(
                 value, component.get("normalization", {"type": "identity"})
             )
@@ -525,31 +563,33 @@ class _IndexEvaluator:
 
     def _component_value(
         self, component: dict[str, Any], visiting: set[str]
-    ) -> tuple[float | None, str | None, set[str], str | None]:
+    ) -> tuple[float | None, str | None, set[str], str | None, str | None]:
         metric_id = component.get("metric")
         if metric_id:
             benchmark = str(component["benchmark"])
-            benchmark_profile = str(component["benchmark_profile"])
-            measurement = self.measurements.get(
-                (benchmark, benchmark_profile, str(metric_id))
-            )
-            if measurement is None:
-                return None, None, set(), None
-            value, record = measurement
-            return (
-                value,
-                str(self.benchmarks[benchmark]["domain"]),
-                {str(record["id"])},
-                str(record["id"]),
-            )
+            for benchmark_profile in _component_profiles(component):
+                measurement = self.measurements.get(
+                    (benchmark, benchmark_profile, str(metric_id))
+                )
+                if measurement is None:
+                    continue
+                value, record = measurement
+                return (
+                    value,
+                    str(self.benchmarks[benchmark]["domain"]),
+                    {str(record["id"])},
+                    str(record["id"]),
+                    benchmark_profile,
+                )
+            return None, None, set(), None, None
         dependency_id = str(component["index"])
         dependency = self.compute(dependency_id, visiting)
         provenance = set(dependency["provenance"])
         if dependency["status"] != "available" or dependency["score"] is None:
-            return None, None, provenance, None
+            return None, None, provenance, None, None
         lower, upper = self.definitions[dependency_id]["scale"]
         value = (dependency["score"] - lower) / (upper - lower)
-        return float(value), None, provenance, None
+        return float(value), None, provenance, None, None
 
     def _result(
         self,
@@ -558,11 +598,14 @@ class _IndexEvaluator:
         accumulation: _IndexAccumulation,
     ) -> dict[str, Any]:
         available = _index_is_available(definition, accumulation.present_weight)
+        status = "available"
+        if not available:
+            status = "partial" if accumulation.present_weight > 0 else "missing"
         result: dict[str, Any] = {
             "model": self.model["id"],
             "reasoning_effort": self.reasoning_effort,
             "index": index_id,
-            "status": "available" if available else "missing",
+            "status": status,
             "score": _index_score(definition, accumulation, available),
             "coverage": accumulation.present_weight,
             "components": accumulation.components,
@@ -613,7 +656,10 @@ def _missing_component_result(component: dict[str, Any]) -> dict[str, Any]:
     if component.get("metric"):
         result["benchmark"] = component["benchmark"]
         result["metric"] = component["metric"]
-        result["benchmark_profile"] = component["benchmark_profile"]
+        if component.get("benchmark_profiles") is not None:
+            result["benchmark_profiles"] = list(component["benchmark_profiles"])
+        else:
+            result["benchmark_profile"] = component["benchmark_profile"]
     if component.get("index"):
         result["index"] = component["index"]
     return result
@@ -699,6 +745,32 @@ def _model_reasoning_efforts(
     return efforts
 
 
+def index_leaf_components(
+    indices: list[dict[str, Any]], index_id: str
+) -> list[dict[str, Any]]:
+    """Return benchmark leaves in deterministic dependency order."""
+
+    definitions = {str(definition["id"]): definition for definition in indices}
+
+    def visit(identity: str, visiting: set[str]) -> list[dict[str, Any]]:
+        if identity in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {identity}")
+        definition = definitions.get(identity)
+        if definition is None:
+            raise CatalogBuildError(f"unknown index dependency: {identity}")
+        visiting.add(identity)
+        leaves: list[dict[str, Any]] = []
+        for component in definition["components"]:
+            if component.get("benchmark"):
+                leaves.append(component)
+            else:
+                leaves.extend(visit(str(component["index"]), visiting))
+        visiting.remove(identity)
+        return leaves
+
+    return visit(index_id, set())
+
+
 def index_results(resources: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     measurements = _available_evaluations(resources["evaluations"])
     definitions = {definition["id"]: definition for definition in resources["indices"]}
@@ -735,21 +807,58 @@ def evaluation_coverage(
 ) -> list[dict[str, Any]]:
     """Materialize required benchmark slots without inventing missing scores."""
 
+    materialized = results if results is not None else index_results(resources)
+    by_identity = {
+        (result["model"], result["reasoning_effort"], result["index"]): result
+        for result in materialized
+    }
+
+    def leaf_components(
+        result: dict[str, Any], visiting: set[str]
+    ) -> list[dict[str, Any]]:
+        index_id = str(result["index"])
+        if index_id in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {index_id}")
+        visiting.add(index_id)
+        leaves: list[dict[str, Any]] = []
+        for component in result["components"]:
+            if "benchmark" in component:
+                leaves.append(component)
+                continue
+            dependency_id = str(component["index"])
+            dependency_key = (
+                result["model"],
+                result["reasoning_effort"],
+                dependency_id,
+            )
+            dependency = by_identity.get(dependency_key)
+            if dependency is None:
+                raise CatalogBuildError(
+                    "missing materialized index dependency: "
+                    f"{result['model']}#{result['reasoning_effort']}#{dependency_id}"
+                )
+            leaves.extend(leaf_components(dependency, visiting))
+        visiting.remove(index_id)
+        return leaves
+
     rows: list[dict[str, Any]] = []
-    for result in results if results is not None else index_results(resources):
+    for result in materialized:
         if result["index"] != default_index:
             continue
-        for component in result["components"]:
-            if "benchmark" not in component:
-                continue
+        for component in leaf_components(result, set()):
             row: dict[str, Any] = {
                 "model": result["model"],
                 "reasoning_effort": result["reasoning_effort"],
                 "benchmark": component["benchmark"],
-                "benchmark_profile": component["benchmark_profile"],
+                "benchmark_profiles": list(
+                    component.get("benchmark_profiles")
+                    or [component["benchmark_profile"]]
+                ),
                 "metric": component["metric"],
                 "status": component["status"],
             }
+            if component.get("benchmark_profile") is not None:
+                row["benchmark_profile"] = component["benchmark_profile"]
             if component.get("value") is not None:
                 row["value"] = component["value"]
             if component.get("evaluation"):

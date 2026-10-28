@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -32,6 +33,7 @@ type inputModalityWireCase struct {
 	path           string
 	payload        map[string]interface{}
 	wantDecision   string
+	wantModel      string
 	wantMatched    []string
 	wantNotMatched []string
 }
@@ -60,7 +62,7 @@ func testInputModalityCrossProtocol(
 			name: "responses image request selects the vision decision",
 			path: "/v1/responses",
 			payload: map[string]interface{}{
-				"model": "MoM",
+				"model": "vllm-sr/auto",
 				"store": false,
 				"input": []map[string]interface{}{{
 					"role": "user",
@@ -71,6 +73,7 @@ func testInputModalityCrossProtocol(
 				}},
 			},
 			wantDecision:   "input_modality_vision_decision",
+			wantModel:      imageFileVisionModel,
 			wantMatched:    []string{"image_input", "text_input"},
 			wantNotMatched: nil,
 		},
@@ -78,11 +81,12 @@ func testInputModalityCrossProtocol(
 			name: "responses text request stays on the text decision",
 			path: "/v1/responses",
 			payload: map[string]interface{}{
-				"model": "MoM",
+				"model": "vllm-sr/auto",
 				"store": false,
 				"input": "describe the mona lisa",
 			},
 			wantDecision:   "input_modality_text_decision",
+			wantModel:      imageFileTextModel,
 			wantMatched:    []string{"text_input"},
 			wantNotMatched: []string{"image_input"},
 		},
@@ -90,7 +94,7 @@ func testInputModalityCrossProtocol(
 			name: "anthropic image request selects the vision decision",
 			path: "/v1/messages",
 			payload: map[string]interface{}{
-				"model":      "MoM",
+				"model":      "vllm-sr/auto",
 				"max_tokens": 64,
 				"messages": []map[string]interface{}{{
 					"role": "user",
@@ -103,6 +107,7 @@ func testInputModalityCrossProtocol(
 				}},
 			},
 			wantDecision:   "input_modality_vision_decision",
+			wantModel:      imageFileVisionModel,
 			wantMatched:    []string{"image_input", "text_input"},
 			wantNotMatched: nil,
 		},
@@ -110,13 +115,14 @@ func testInputModalityCrossProtocol(
 			name: "anthropic text request stays on the text decision",
 			path: "/v1/messages",
 			payload: map[string]interface{}{
-				"model":      "MoM",
+				"model":      "vllm-sr/auto",
 				"max_tokens": 64,
 				"messages": []map[string]interface{}{{
 					"role": "user", "content": "describe the mona lisa",
 				}},
 			},
 			wantDecision:   "input_modality_text_decision",
+			wantModel:      imageFileTextModel,
 			wantMatched:    []string{"text_input"},
 			wantNotMatched: []string{"image_input"},
 		},
@@ -168,6 +174,9 @@ func runInputModalityWireCase(ctx context.Context, session *fixtures.ServiceSess
 	if decision := response.Header.Get("x-vsr-selected-decision"); decision != tc.wantDecision {
 		return fmt.Errorf("selected decision = %q, want %q (body: %s)",
 			decision, tc.wantDecision, truncateString(string(body), 200))
+	}
+	if model := response.Header.Get("x-vsr-selected-model"); model != tc.wantModel {
+		return fmt.Errorf("selected model = %q, want %q", model, tc.wantModel)
 	}
 	return assertInputModalityHeader(response.Header.Get("x-vsr-matched-input-modality"), tc.wantMatched, tc.wantNotMatched)
 }

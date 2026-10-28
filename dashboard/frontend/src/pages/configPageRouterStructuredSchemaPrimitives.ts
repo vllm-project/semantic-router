@@ -9,6 +9,7 @@ export type RouterStructuredKind =
   | 'string-map'
   | 'object'
   | 'object-list'
+  | 'json'
 
 export interface RouterStructuredSchema {
   kind: RouterStructuredKind

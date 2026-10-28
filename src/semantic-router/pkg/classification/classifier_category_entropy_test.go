@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -25,14 +26,13 @@ func TestClassifyCategoryWithEntropySkipsNilEmbeddingClassifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer keywordClassifier.Free()
 
 	classifier := &Classifier{
 		Config:            &config.RouterConfig{},
 		keywordClassifier: keywordClassifier,
 	}
 
-	_, _, _, err = classifier.ClassifyCategoryWithEntropy("unrelated request")
+	_, _, _, err = classifier.ClassifyCategoryWithEntropyContext(context.Background(), "unrelated request")
 	if err == nil || err.Error() != "no category classification method available" {
 		t.Fatalf("unexpected error: %v", err)
 	}

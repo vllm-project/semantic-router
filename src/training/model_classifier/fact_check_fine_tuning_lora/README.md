@@ -1,5 +1,9 @@
 # Fact-Check Classifier Training
 
+For the Vela workflow with reviewed natural-request data, frozen partitions, and
+independent evaluation, see [Vela FactCheck repair](VELA_REPAIR.md). This page
+describes the original training script.
+
 This script fine-tunes a sequence classifier to predict whether a user prompt
 needs factual verification:
 
@@ -11,9 +15,16 @@ answer or replace a fact-checking system.
 
 ## Setup
 
-Create an isolated environment and install PyTorch, Transformers, Datasets,
-PEFT, Accelerate, scikit-learn, and the other imports required by the script.
-`setup_datasets.sh` can pre-populate a local dataset cache:
+Create the environment from this folder. `pyproject.toml` bounds the
+dependencies and `uv.lock` pins them:
+
+```bash
+uv sync --locked
+```
+
+Run the commands below with `uv run`, for example `uv run python
+fact_check_bert_finetuning_lora.py --help`. `setup_datasets.sh` can pre-populate
+a local dataset cache:
 
 ```bash
 ./setup_datasets.sh ./datasets_cache

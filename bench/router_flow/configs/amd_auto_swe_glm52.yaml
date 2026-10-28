@@ -7,9 +7,6 @@ listeners:
     timeout: 1800s
 
 global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   integrations:
     looper:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
@@ -111,56 +108,58 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: glm52-planner
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-patcher-a
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-patcher-b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-verifier
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-finalizer
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
 routing:
   modelCards:
     - name: glm52-planner
       context_window_size: 1048576
       description: GLM 5.2 planner alias for SWE-Bench Pro issue triage.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:planner, base:glm52]
     - name: glm52-patcher-a
       context_window_size: 1048576
       description: GLM 5.2 patch author alias for SWE-Bench Pro.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:patcher, base:glm52]
     - name: glm52-patcher-b
       context_window_size: 1048576
       description: GLM 5.2 alternate patch author alias for SWE-Bench Pro.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:patcher, base:glm52]
     - name: glm52-verifier
       context_window_size: 1048576
       description: GLM 5.2 verifier alias for regression and test-risk review.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:verifier, base:glm52]
     - name: glm52-finalizer
       context_window_size: 1048576
       description: GLM 5.2 finalizer alias for patch and answer contract synthesis.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:finalizer, base:glm52]
 
@@ -402,7 +401,7 @@ routing:
             policy: weight
             min_score: 0.0
             min_keep: 1
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0
             on_error: skip
 
     - name: swe_fallback_remom
@@ -477,3 +476,7 @@ routing:
             the checked-out source. When ready to submit, the single command
             must be exactly
             `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

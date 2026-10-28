@@ -4,16 +4,15 @@ import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { HubPagination } from './ModelHubComponents'
 import { ModelDetail } from './ModelHubDetail'
 import { HubFilters } from './ModelHubFilters'
-import { BenchmarkExplorer, EmptyResults, ModelList, ModelTable } from './ModelHubViews'
+import { EmptyResults, ModelList, ModelTable } from './ModelHubViews'
 import type { useModelHubPageController } from './modelHubPageController'
 import styles from './ModelHubPage.module.css'
 
 type ModelHubPageController = ReturnType<typeof useModelHubPageController>
 
 const ModelHubCatalogPanel: React.FC<{
-  catalog: BuiltInModelCatalog
   hub: ModelHubPageController
-}> = ({ catalog, hub }) => (
+}> = ({ hub }) => (
   <div className={styles.catalogPanel}>
     {hub.rows.length === 0 ? <EmptyResults /> : null}
     {hub.rows.length && hub.view === 'table' ? (
@@ -22,10 +21,7 @@ const ModelHubCatalogPanel: React.FC<{
     {hub.rows.length && hub.view === 'list' ? (
       <ModelList rows={hub.pagination.items} selected={hub.selected} select={hub.selectModel} />
     ) : null}
-    {hub.rows.length && hub.view === 'benchmarks' ? (
-      <BenchmarkExplorer catalog={catalog} rows={hub.rows} openModel={hub.openModelFromBenchmark} />
-    ) : null}
-    {hub.rows.length && hub.view !== 'benchmarks' ? (
+    {hub.rows.length ? (
       <HubPagination
         pagination={hub.pagination}
         setPage={hub.setPage}
@@ -38,7 +34,8 @@ const ModelHubCatalogPanel: React.FC<{
 const ModelHubDetailLayer: React.FC<{
   catalog: BuiltInModelCatalog
   hub: ModelHubPageController
-}> = ({ catalog, hub }) => (
+  evidenceReady?: boolean
+}> = ({ catalog, hub, evidenceReady = true }) => (
   <div
     ref={hub.detailLayerRef}
     className={`${styles.detailLayer} ${hub.detailOpen ? styles.detailLayerOpen : ''}`}
@@ -55,6 +52,7 @@ const ModelHubDetailLayer: React.FC<{
       key={hub.selected?.model.id ?? 'empty'}
       row={hub.selected}
       catalog={catalog}
+      evidenceReady={evidenceReady}
       modal={hub.compact && hub.detailOpen}
       closeButtonRef={hub.detailCloseRef}
       onClose={hub.closeDetail}
@@ -65,7 +63,8 @@ const ModelHubDetailLayer: React.FC<{
 export const ModelHubExplorer: React.FC<{
   catalog: BuiltInModelCatalog
   hub: ModelHubPageController
-}> = ({ catalog, hub }) => (
+  evidenceReady?: boolean
+}> = ({ catalog, hub, evidenceReady = true }) => (
   <section className={styles.explorer} id="catalog-explorer" aria-label="Built-in models">
     <div className={styles.explorerHeading}>
       <h2>Models</h2>
@@ -87,11 +86,9 @@ export const ModelHubExplorer: React.FC<{
         reset={hub.resetFilters}
       />
       <div className={styles.directoryContent}>
-        <div
-          className={`${styles.workspace} ${hub.view === 'benchmarks' ? styles.benchmarkWorkspace : ''}`}
-        >
-          <ModelHubCatalogPanel catalog={catalog} hub={hub} />
-          {hub.view !== 'benchmarks' ? <ModelHubDetailLayer catalog={catalog} hub={hub} /> : null}
+        <div className={styles.workspace}>
+          <ModelHubCatalogPanel hub={hub} />
+          <ModelHubDetailLayer catalog={catalog} hub={hub} evidenceReady={evidenceReady} />
         </div>
       </div>
     </div>

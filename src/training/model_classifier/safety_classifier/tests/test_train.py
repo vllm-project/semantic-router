@@ -185,5 +185,85 @@ class TrainingReceiptTest(unittest.TestCase):
             self.assertEqual(mapping["taxonomy_version"], "legacy-9-v1")
 
 
+class TrainingBehaviorTest(unittest.TestCase):
+    def test_accumulation_uses_mean_loss_normalization(self) -> None:
+        contract = load_contract()
+        trainer = SimpleNamespace(model_accepts_loss_kwargs=True)
+        factory = mock.Mock(return_value=trainer)
+        runtime = SimpleNamespace(
+            stack={
+                "Trainer": object,
+                "DataCollatorWithPadding": mock.Mock(),
+                "EarlyStoppingCallback": mock.Mock(),
+            },
+            torch=None,
+        )
+        with (
+            mock.patch.object(
+                train, "synchronized_checkpoint_trainer", return_value=factory
+            ),
+            mock.patch.object(train, "_build_training_arguments"),
+        ):
+            result = train._build_trainer(
+                contract,
+                task_contract(contract, "level1"),
+                SimpleNamespace(task="level1"),
+                runtime,
+                object(),
+                object(),
+                {"train": [], "validation": []},
+            )
+        self.assertIs(result, trainer)
+        self.assertFalse(result.model_accepts_loss_kwargs)
+
+    def test_final_evaluation_remains_explicit_with_legacy_default(self) -> None:
+        for evaluate_final in (None, False, True):
+            with self.subTest(evaluate_final=evaluate_final):
+                contract = {"training": {}, "model": {"max_length": 512}}
+                if evaluate_final is not None:
+                    contract["training"][
+                        "evaluate_test_after_training"
+                    ] = evaluate_final
+                args = SimpleNamespace(
+                    validate_only=False, task="level1", resume_from_checkpoint=None
+                )
+                runtime = SimpleNamespace(stack={})
+                trainer = mock.Mock()
+                trainer.train.return_value = SimpleNamespace(metrics={"loss": 0.2})
+                trainer.evaluate.return_value = {"accuracy": 0.9}
+                with (
+                    mock.patch.object(
+                        train,
+                        "_load_training_inputs",
+                        return_value=(contract, {}, Path("data"), {}),
+                    ),
+                    mock.patch.object(train, "_prepare_runtime", return_value=runtime),
+                    mock.patch.object(
+                        train,
+                        "_build_model_and_tokenizer",
+                        return_value=(object(), object()),
+                    ),
+                    mock.patch.object(
+                        train,
+                        "_tokenize_datasets",
+                        return_value={
+                            "train": "train",
+                            "validation": "dev",
+                            "test": "final",
+                        },
+                    ),
+                    mock.patch.object(train, "_build_trainer", return_value=trainer),
+                    mock.patch.object(train, "_save_training_output") as save,
+                ):
+                    train.train(args)
+                expected = [mock.call("dev", metric_key_prefix="validation")]
+                if evaluate_final is not False:
+                    expected.append(mock.call("final", metric_key_prefix="test"))
+                self.assertEqual(trainer.evaluate.call_args_list, expected)
+                self.assertEqual(
+                    "test" in save.call_args.args[-1], evaluate_final is not False
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

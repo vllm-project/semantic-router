@@ -74,28 +74,28 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 		serviceType = sr.Spec.Service.Type
 	}
 
-	ports := []corev1.ServicePort{
-		{
-			Name:       "grpc",
-			Port:       r.getInt32OrDefault(&sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
-			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort))),
+	traffic := corev1.ServicePort{
+		Name:       "grpc",
+		Port:       servicePortOrDefault(sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
+		TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort)),
+		Protocol:   corev1.ProtocolTCP,
+	}
+	if gatewayMode == GatewayModeStandalone {
+		traffic = corev1.ServicePort{
+			Name:       DefaultListenerName,
+			Port:       DefaultListenerPort,
+			TargetPort: intstr.FromString(DefaultListenerName),
 			Protocol:   corev1.ProtocolTCP,
-		},
+		}
+	}
+	ports := []corev1.ServicePort{
+		traffic,
 		{
 			Name:       "api",
-			Port:       r.getInt32OrDefault(&sr.Spec.Service.API.Port, DefaultAPIPort),
-			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.API.TargetPort, DefaultAPIPort))),
+			Port:       servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort),
+			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.API.TargetPort, DefaultAPIPort)),
 			Protocol:   corev1.ProtocolTCP,
 		},
-	}
-
-	if gatewayMode == "standalone" {
-		ports = append(ports, corev1.ServicePort{
-			Name:       "envoy-http",
-			Port:       8801,
-			TargetPort: intstr.FromInt(8801),
-			Protocol:   corev1.ProtocolTCP,
-		})
 	}
 
 	if sr.Spec.Service.Metrics.Enabled == nil || *sr.Spec.Service.Metrics.Enabled {
@@ -126,6 +126,15 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 			Selector: labels,
 		},
 	}
+}
+
+// Service ports are optional value fields, so omission decodes to zero rather
+// than nil. Unlike replica counts, a zero port is never a valid explicit value.
+func servicePortOrDefault(port, fallback int32) int32 {
+	if port == 0 {
+		return fallback
+	}
+	return port
 }
 
 func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) *autoscalingv2.HorizontalPodAutoscaler {
@@ -186,6 +195,9 @@ func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) 
 
 func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRouter) *networkingv1.Ingress {
 	pathType := networkingv1.PathTypePrefix
+	// An omitted servicePort targets the port the api Service actually
+	// exposes, mirroring how resolveIngressPathType defaults pathType.
+	apiPort := servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort)
 
 	var rules []networkingv1.IngressRule
 	for _, host := range sr.Spec.Ingress.Hosts {
@@ -199,7 +211,7 @@ func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRout
 					Service: &networkingv1.IngressServiceBackend{
 						Name: sr.Name,
 						Port: networkingv1.ServiceBackendPort{
-							Number: path.ServicePort,
+							Number: servicePortOrDefault(path.ServicePort, apiPort),
 						},
 					},
 				},

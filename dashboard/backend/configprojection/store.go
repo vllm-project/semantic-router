@@ -17,6 +17,17 @@ import (
 
 const currentSchemaVersion = 1
 
+// parseProjectionTime accepts timestamps from both the Go writers and SQLite's
+// schema seed, which uses a space instead of the RFC3339 T separator.
+func parseProjectionTime(value string) (time.Time, error) {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unsupported timestamp %q", value)
+}
+
 // Store is a SQLite-backed deployment projection store.
 type Store struct {
 	db *sql.DB
@@ -323,12 +334,9 @@ WHERE id = 1
 		return nil, fmt.Errorf("configprojection: read active status: %w", err)
 	}
 
-	parsedAt, err := time.Parse(time.RFC3339Nano, updatedAt)
+	parsedAt, err := parseProjectionTime(updatedAt)
 	if err != nil {
-		parsedAt, err = time.Parse(time.RFC3339, updatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("configprojection: parse updated_at: %w", err)
-		}
+		return nil, fmt.Errorf("configprojection: parse updated_at: %w", err)
 	}
 
 	return &ActiveProjectionStatus{

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -27,10 +29,11 @@ const (
 )
 
 type OpenAICompatibleConfig struct {
+	APIKey            string `json:"-"`
 	BaseURL           string
 	Model             string
 	APIKeyEnv         string
-	TimeoutSeconds    int
+	TimeoutSeconds    float64
 	MaxRetries        int
 	MaxResponseBytes  int64
 	Dimensions        int
@@ -39,6 +42,8 @@ type OpenAICompatibleConfig struct {
 }
 
 type OpenAICompatibleProvider struct {
+	connector         *connector.Client
+	apiKey            string
 	endpoint          string
 	model             string
 	apiKeyEnv         string
@@ -48,6 +53,13 @@ type OpenAICompatibleProvider struct {
 	dimensions        int
 	expectedDimension int
 	client            *http.Client
+}
+
+// EmbedFullInput relies on the OpenAI embeddings contract: an input beyond the
+// model's limit is rejected. The client sends the complete text and never asks
+// the server to truncate it; endpoint errors remain errors for the consumer.
+func (p *OpenAICompatibleProvider) EmbedFullInput(ctx context.Context, text string) ([]float32, error) {
+	return p.Embed(ctx, text)
 }
 
 type embeddingsRequest struct {
@@ -92,11 +104,10 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, err
 	}
 
-	timeoutSeconds := cfg.TimeoutSeconds
-	if timeoutSeconds == 0 {
-		timeoutSeconds = defaultTimeoutSeconds
+	timeout := config.DurationFromSeconds(cfg.TimeoutSeconds)
+	if timeout == 0 {
+		timeout = time.Duration(defaultTimeoutSeconds) * time.Second
 	}
-	timeout := time.Duration(timeoutSeconds) * time.Second
 	client := cfg.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
@@ -106,8 +117,9 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		client = &copyClient
 	}
 
-	return &OpenAICompatibleProvider{
+	provider := &OpenAICompatibleProvider{
 		endpoint:          endpoint,
+		apiKey:            cfg.APIKey,
 		model:             model,
 		apiKeyEnv:         strings.TrimSpace(cfg.APIKeyEnv),
 		timeout:           timeout,
@@ -116,7 +128,24 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		dimensions:        cfg.Dimensions,
 		expectedDimension: cfg.ExpectedDimension,
 		client:            client,
-	}, nil
+	}
+	if cfg.HTTPClient == nil {
+		remote, err := connector.New(endpoint, func(_ context.Context, req *http.Request) error {
+			key, err := provider.resolveAPIKey()
+			if err != nil {
+				return err
+			}
+			if key != "" {
+				req.Header.Set("Authorization", "Bearer "+key)
+			}
+			return nil
+		}, connector.Options{AttemptTimeout: timeout, MaxRetries: 0, MaxRequestBytes: 16 * 1024 * 1024, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxErrorBodyBytes})
+		if err != nil {
+			return nil, err
+		}
+		provider.connector = remote
+	}
+	return provider, nil
 }
 
 func resolveMaxResponseBytes(maxResponseBytes int64) (int64, error) {
@@ -200,6 +229,25 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		return nil, err
 	}
 
+	if p.connector != nil {
+		response, callErr := p.connector.Do(ctx, connector.Operation{Name: "embedding.v1", Method: http.MethodPost, RetrySafe: true}, body)
+		if callErr != nil {
+			var transport *connector.Error
+			if errors.As(callErr, &transport) && (transport.StatusCode == http.StatusUnauthorized || transport.StatusCode == http.StatusForbidden) {
+				return nil, fmt.Errorf("embedding provider authentication failed: %w", callErr)
+			}
+			return nil, callErr
+		}
+		decoded, decodeErr := decodeEmbeddingResponse(bytes.NewReader(response), p.maxResponseBytes)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if decoded.Error != nil && decoded.Error.Message != "" {
+			return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
+		}
+		return p.parseEmbeddings(decoded.Data, len(texts))
+	}
+
 	attemptCtx := ctx
 	var cancel context.CancelFunc
 	if p.timeout > 0 {
@@ -218,6 +266,12 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
+	// The normal connector path accounts for its own calls. Only this
+	// mutually exclusive injected-client path needs a reservation here.
+	if budgetErr := budget.Consume(attemptCtx); budgetErr != nil {
+		_ = req.Body.Close()
+		return nil, budgetErr
+	}
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -315,6 +369,9 @@ func (p *OpenAICompatibleProvider) convertEmbedding(values []float64) ([]float32
 }
 
 func (p *OpenAICompatibleProvider) resolveAPIKey() (string, error) {
+	if p.apiKey != "" {
+		return p.apiKey, nil
+	}
 	if p.apiKeyEnv == "" {
 		return "", nil
 	}
@@ -374,6 +431,10 @@ func responseError(resp *http.Response) error {
 }
 
 func shouldRetryEmbeddingError(err error) bool {
+	var transport *connector.Error
+	if errors.As(err, &transport) {
+		return transport.Retryable
+	}
 	var httpErr *embeddingHTTPError
 	if errors.As(err, &httpErr) {
 		return httpErr.retryable
@@ -392,4 +453,13 @@ func isTimeoutError(err error) bool {
 func isTemporaryNetworkError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && netErr.Temporary()
+}
+
+// Close releases idle owned connections without stopping the remote service.
+func (p *OpenAICompatibleProvider) Close() error {
+	if p.connector != nil {
+		return p.connector.Close()
+	}
+	p.client.CloseIdleConnections()
+	return nil
 }

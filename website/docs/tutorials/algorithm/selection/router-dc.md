@@ -121,7 +121,7 @@ offline analysis and learning diagnostics. The router response includes
 `x-vsr-replay-id`; send that value back with the model outcome:
 
 ```bash
-curl -sS -X POST http://localhost:8080/v1/router/outcomes \
+curl -sS -X POST http://localhost:8080/api/v1/observability/outcomes \
   -H "Authorization: Bearer ${VSR_MGMT_TOKEN}" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: router-dc-feedback-001" \

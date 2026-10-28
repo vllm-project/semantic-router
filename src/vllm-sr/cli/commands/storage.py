@@ -7,6 +7,7 @@ import click
 from cli.commands.common import exit_with_logged_error
 from cli.commands.runtime_paths import resolve_state_root_dir
 from cli.commands.runtime_support import apply_container_runtime_override
+from cli.commands.vector_stores import list_vector_stores
 from cli.consts import SUPPORTED_CONTAINER_RUNTIMES
 from cli.container_services import container_start_redis, container_status
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -34,7 +35,22 @@ RUNTIME_HELP = (
 
 @click.group()
 def storage() -> None:
-    """Manage the local stack's Redis and Postgres credentials."""
+    """Inspect Router storage or manage local storage credentials."""
+
+
+@storage.command("vector-stores")
+@click.option(
+    "--endpoint",
+    default=None,
+    help="Router management origin or /api/v1 root.",
+)
+@click.option("--timeout", default=15, show_default=True)
+@click.option("--token-env", default="VSR_MGMT_TOKEN", show_default=True)
+@exit_with_logged_error(log)
+def vector_stores(endpoint: str | None, timeout: int, token_env: str) -> None:
+    """List vector stores known to the Router management API."""
+
+    list_vector_stores(endpoint=endpoint, timeout=timeout, token_env=token_env)
 
 
 @storage.command("rotate")

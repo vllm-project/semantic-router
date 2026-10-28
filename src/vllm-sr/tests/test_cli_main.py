@@ -1,7 +1,9 @@
 import hashlib
 import importlib
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,14 +17,28 @@ if str(PROJECT_ROOT) not in sys.path:
 
 BootstrapResult = importlib.import_module("cli.bootstrap").BootstrapResult
 runtime_commands = importlib.import_module("cli.commands.runtime")
+runtime_config_mutation = importlib.import_module(
+    "cli.commands.runtime_config_mutation"
+)
+config_schema = importlib.import_module("cli.config_schema")
 serve_config = importlib.import_module("cli.commands.runtime_serve_config")
 main = importlib.import_module("cli.main").main
 recipe_package = importlib.import_module("cli.recipe_package")
 runtime_config_lock = importlib.import_module("cli.runtime_config_lock")
+runtime_lifecycle = importlib.import_module("cli.runtime_lifecycle")
 
 _PYPROJECT_VERSION_PATTERN = re.compile(
     r'^version = "(?P<version>[^"]+)"$', re.MULTILINE
 )
+
+
+@pytest.fixture
+def no_running_containers(monkeypatch):
+    """Exercise config replacement without depending on a host Docker daemon."""
+    monkeypatch.setattr(runtime_lifecycle, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_status_strict", lambda _name: "not found"
+    )
 
 
 def _project_version() -> str:
@@ -43,15 +59,46 @@ def test_cli_help_lists_registered_commands():
     for command_name in (
         "serve",
         "config",
-        "validate",
+        "route",
+        "request",
+        "benchmark",
+        "optimize",
         "status",
         "logs",
         "stop",
         "dashboard",
-        "chat",
+        "recipe",
+        "storage",
     ):
         assert command_name in result.output
+    for retired_name in ("validate", "eval", "chat", "rag"):
+        assert f"  {retired_name} " not in result.output
     assert " init" not in result.output
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--help"],
+        ["--version"],
+        ["optimize", "recipe-learning", "--help"],
+    ],
+)
+def test_cli_loads_with_malformed_port_offset(args):
+    # A fresh interpreter, because the defect is evaluation at import time.
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(PROJECT_ROOT)
+    environment["VLLM_SR_PORT_OFFSET"] = "x9"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cli.main", *args],
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_cli_version_matches_project_metadata():
@@ -73,7 +120,7 @@ def test_registered_serve_command_comes_from_cli_commands_runtime():
 
 
 def test_serve_materializes_active_config_under_custom_host_state_root(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
@@ -85,7 +132,7 @@ def test_serve_materializes_active_config_under_custom_host_state_root(
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         ),
@@ -144,6 +191,56 @@ def test_serve_materializes_active_config_under_custom_host_state_root(
     assert "VLLM_SR_STATE_ROOT_DIR" not in captured["env_vars"]
 
 
+def test_serve_replace_active_config_reaches_runtime_materializer(
+    monkeypatch, tmp_path: Path, no_running_containers
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nrouting:\n  decisions: []\n", encoding="utf-8"
+    )
+    bootstrap = BootstrapResult(
+        config_path=config_path,
+        output_dir=tmp_path / ".vllm-sr",
+        setup_mode=False,
+    )
+    captured: dict[str, object] = {}
+
+    class _StubBackend:
+        def deploy(self, **kwargs):
+            captured.update(kwargs)
+
+    def capture_materialization(source, effective, **kwargs):
+        captured["materialize_source"] = source
+        captured["materialize_effective"] = effective
+        captured["materialize_options"] = kwargs
+        return source
+
+    monkeypatch.setattr(
+        runtime_commands, "ensure_bootstrap_workspace", lambda _: bootstrap
+    )
+    monkeypatch.setattr(
+        runtime_commands, "_build_backend", lambda *a, **kw: _StubBackend()
+    )
+    monkeypatch.setattr(
+        serve_config, "materialize_runtime_config", capture_materialization
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            "--config",
+            str(config_path),
+            "--replace-active-config",
+            "--image-pull-policy",
+            "never",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["materialize_options"]["replace_active"] is True
+
+
 def test_k8s_serve_keeps_non_persistent_effective_config_flow(
     monkeypatch, tmp_path: Path
 ):
@@ -155,7 +252,7 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         ),
@@ -211,6 +308,28 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
     assert not (tmp_path / ".vllm-sr").exists()
 
 
+def test_k8s_serve_rejects_replace_active_config(tmp_path: Path, caplog):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nrouting:\n  decisions: []\n", encoding="utf-8"
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            "--target",
+            "k8s",
+            "--config",
+            str(config_path),
+            "--replace-active-config",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "--replace-active-config applies to the docker target" in result.output
+
+
 def test_serve_help_describes_docker_only_runtime():
     runner = CliRunner()
 
@@ -218,10 +337,12 @@ def test_serve_help_describes_docker_only_runtime():
 
     assert result.exit_code == 0
     assert "Local Docker deployment" in result.output
+    assert "--replace-active-config" in result.output
     assert "Podman" not in result.output
     assert "--topology" not in result.output
     assert "--log-level" in result.output
     assert "latency_aware" in result.output
+    assert "random" in result.output
     assert "session_aware" not in result.output
     assert "--sim-image" not in result.output
     assert "--recipe-env NAME" in result.output
@@ -230,7 +351,7 @@ def test_serve_help_describes_docker_only_runtime():
 
 
 def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowlist(
-    monkeypatch, tmp_path: Path, caplog
+    monkeypatch, tmp_path: Path, caplog, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -241,7 +362,17 @@ def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowli
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
                 "providers": {
-                    "models": [{"name": "custom", "api_key_env": "CUSTOM_API_KEY"}]
+                    "models": [
+                        {
+                            "name": "custom",
+                            "backend_refs": [
+                                {
+                                    "endpoint": "127.0.0.1:8000",
+                                    "api_key_env": "CUSTOM_API_KEY",
+                                }
+                            ],
+                        }
+                    ]
                 },
             },
             sort_keys=False,
@@ -327,7 +458,7 @@ def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowli
 
 
 def test_active_package_is_validated_before_source_materialization(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, caplog, no_running_containers
 ):
     initial = yaml.safe_dump(
         {
@@ -400,8 +531,20 @@ def test_active_package_is_validated_before_source_materialization(
     assert active.read_bytes() == initial
     assert Path(captured["runtime_config_file"]) == active
 
+    captured.clear()
+    rejected = CliRunner().invoke(
+        main,
+        ["serve", "--config", str(source), "--replace-active-config"],
+    )
+    assert rejected.exit_code != 0
+    assert captured == {}
+    assert "cannot replace an active Recipe package" in caplog.text
 
-def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
+
+def test_serve_passes_host_runtime_controls_to_backend_env(
+    monkeypatch, tmp_path: Path, no_running_containers
+):
+    monkeypatch.setenv("VLLM_SRUN_CPU_THREADS", "8")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -410,7 +553,7 @@ def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         )
@@ -449,9 +592,12 @@ def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
 
     assert result.exit_code == 0
     assert captured["env_vars"]["SR_LOG_LEVEL"] == "debug"
+    assert captured["env_vars"]["VLLM_SRUN_CPU_THREADS"] == "8"
 
 
-def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: Path):
+def test_serve_keeps_observability_enabled_in_setup_mode(
+    monkeypatch, tmp_path: Path, no_running_containers
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -460,7 +606,7 @@ def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: 
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
                 "setup": {"mode": True},
             },
             sort_keys=False,
@@ -501,7 +647,7 @@ def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: 
 
 
 def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -524,7 +670,7 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
         {
             "version": "v0.3",
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-            "routing": {"decisions": [{"name": "default"}]},
+            "routing": {"decisions": [{"name": "default", "priority": 0}]},
         },
         sort_keys=False,
     )
@@ -560,14 +706,21 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
     )
 
     assert result.exit_code == 0, result.output
-    assert active.read_text(encoding="utf-8") == completed
+    expected = yaml.safe_load(completed)
+    expected["global"] = {
+        "services": {"observability": {"tracing": {"exporter": {}, "enabled": False}}}
+    }
+    assert yaml.safe_load(active.read_text(encoding="utf-8")) == expected
+    assert yaml.safe_load(config_path.read_text(encoding="utf-8"))["setup"] == {
+        "mode": True
+    }
     assert "VLLM_SR_SETUP_MODE" not in captured["env_vars"]
     assert "DASHBOARD_SETUP_MODE" not in captured["env_vars"]
     assert captured["env_vars"]["DISABLE_DASHBOARD"] == "true"
 
 
 def test_serve_recovers_pending_config_before_choosing_setup_mode(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -577,7 +730,7 @@ def test_serve_recovers_pending_config_before_choosing_setup_mode(
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         ),
@@ -715,9 +868,23 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
         decision["algorithm"] for decision in rewritten["routing"]["decisions"]
     ]
     assert algorithms == [
-        {"type": "multi_factor"},
-        {"type": "multi_factor"},
+        {"type": "multi_factor", "multi_factor": {}},
+        {"type": "multi_factor", "multi_factor": {}},
     ]
+
+
+def test_algorithm_mutation_consumes_generated_router_payload_inventory():
+    algorithm_surfaces = config_schema.routing_surface_catalog()["algorithms"]
+    expected_blocks = {
+        surface["config_field"]
+        for surface in algorithm_surfaces
+        if surface.get("config_field")
+    }
+
+    assert set(runtime_config_mutation.ALGORITHM_CONFIG_BLOCKS) == expected_blocks
+    assert set(runtime_config_mutation.EXPECTED_CONFIG_BLOCK_BY_ALGORITHM) == {
+        surface["type"] for surface in algorithm_surfaces if surface.get("config_field")
+    }
 
 
 def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Path):
@@ -796,3 +963,37 @@ def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
             "roles": [{"name": "worker", "models": ["worker-a"]}],
         },
     }
+
+
+_GUARDED_FCNTL_MODULES = (
+    "cli.instance_controller",
+    "cli.runtime_config_lock",
+    "cli.runtime_lifecycle_lock",
+    "cli.sr_bench.dataset_io",
+    "cli.sr_bench.service",
+    "cli.sr_bench_runtime",
+)
+
+
+def test_guarded_imports_survive_fcntl_absence():
+    """Verify that guarded CLI modules survive fcntl absence in an isolated subprocess."""
+    program = (
+        "import importlib, sys; sys.modules['fcntl'] = None; "
+        + "; ".join(
+            f"m = importlib.reload(importlib.import_module('{name}')); "
+            f"assert m.fcntl is None, '{name}'"
+            for name in _GUARDED_FCNTL_MODULES
+        )
+        + "; import cli.main; assert hasattr(cli.main, 'main')"
+    )
+    subprocess.run([sys.executable, "-c", program], check=True, cwd=PROJECT_ROOT)
+
+
+def test_instance_controller_run_rejects_non_posix_host_when_fcntl_missing(
+    monkeypatch, tmp_path
+):
+    ic = importlib.import_module("cli.instance_controller")
+
+    monkeypatch.setattr(ic, "fcntl", None)
+    with pytest.raises(RuntimeError, match="POSIX"):
+        ic.run(tmp_path)

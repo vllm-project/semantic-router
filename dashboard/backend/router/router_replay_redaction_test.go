@@ -160,7 +160,7 @@ func TestRedactRouterReplayResponseSkipsWriteCapableUsers(t *testing.T) {
 	t.Parallel()
 
 	originalBody := []byte(`{"id":"replay-1","request_body":"secret request","tool_trace":{"flow":"secret flow"}}`)
-	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/api/v1/observability/replays/replay-1", nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
 	}
@@ -194,7 +194,7 @@ func TestRedactRouterReplayResponseFailsClosedForInvalidJSON(t *testing.T) {
 	t.Parallel()
 
 	body := []byte(`{"request_body":`)
-	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/api/v1/observability/replays/replay-1", nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
 	}
@@ -222,7 +222,7 @@ func TestRedactRouterReplayResponseDoesNotTrustContentType(t *testing.T) {
 		t.Run(contentType, func(t *testing.T) {
 			t.Parallel()
 			body := []byte(`{"id":"replay-1","request_body":"private-canary"}`)
-			req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil)
+			req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/api/v1/observability/replays/replay-1", nil)
 			if err != nil {
 				t.Fatalf("http.NewRequest() error = %v", err)
 			}
@@ -258,7 +258,7 @@ func TestRedactRouterReplayResponseDoesNotTrustContentType(t *testing.T) {
 func TestShouldRedactRouterReplayResponseRejectsLookalikePrefix(t *testing.T) {
 	t.Parallel()
 
-	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replayevil", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/api/v1/observability/replaysevil", nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
 	}

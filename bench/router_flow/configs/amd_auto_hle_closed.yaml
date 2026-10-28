@@ -7,9 +7,6 @@ listeners:
     timeout: 1800s
 
 global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   integrations:
     looper:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
@@ -57,26 +54,28 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: opus48-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
+    - model: gemini31-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: opus48-worker
       context_window_size: 1000000
       description: Closed-model HLE worker for high-confidence reasoning and disagreement checks.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.95
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:worker, pool:closed]
     - name: gemini31-worker
       context_window_size: 1000000
       description: Closed-model HLE worker and synthesis/judge model.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:synthesis, pool:closed]
 
@@ -273,7 +272,7 @@ routing:
             policy: weight
             min_score: 0.0
             min_keep: 1
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0
             on_error: skip
 
     - name: hle_fallback_closed_remom
@@ -324,3 +323,7 @@ routing:
             Explanation: {your concise reasoning}
             Exact Answer: {your succinct final answer}
             Confidence: {integer percentage between 0% and 100%}
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

@@ -12,6 +12,11 @@ from sentence_transformers.evaluation import (
     SimilarityFunction,
 )
 
+from .representation_contract import read_representation_contract
+from .representation_sentence_transformers import (
+    configure_sentence_transformer_representation,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,6 +72,7 @@ def _replace_layers(auto_model, layer_attr: str, layers: list) -> None:
 
 def test_layer_reduction(model: SentenceTransformer):
     """Run the qualitative layer-reduction smoke and restore the model."""
+    configure_sentence_transformer_representation(model)
     sentences = [
         "The weather is beautiful today.",
         "It's a lovely sunny day outside.",
@@ -82,19 +88,38 @@ def test_layer_reduction(model: SentenceTransformer):
     else:
         original_layers = list(auto_model.encoder.layer)
     num_layers = len(original_layers)
+    contract = read_representation_contract(auto_model.config, "embedding")
+    original_norm = getattr(auto_model, "final_norm", None)
     logger.info("\n%s", "=" * 60)
     logger.info("Testing Adaptive Layer Performance")
     logger.info("%s", "=" * 60)
-    for layer_count in [num_layers, num_layers // 2, 6, 3]:
-        if layer_count > num_layers or layer_count < 1:
-            continue
-        _replace_layers(auto_model, info["layer_attr"], original_layers[:layer_count])
-        embeddings = model.encode(sentences, normalize_embeddings=True)
-        logger.info("\nLayers: %s/%s", layer_count, num_layers)
-        logger.info(
-            "  'weather' vs 'sunny': %.4f", float(embeddings[0] @ embeddings[1])
-        )
-        logger.info(
-            "  'weather' vs 'Python': %.4f", float(embeddings[0] @ embeddings[2])
-        )
-    _replace_layers(auto_model, info["layer_attr"], original_layers)
+    try:
+        for layer_count in [num_layers, num_layers // 2, 6, 3]:
+            if layer_count > num_layers or layer_count < 1:
+                continue
+            _replace_layers(
+                auto_model, info["layer_attr"], original_layers[:layer_count]
+            )
+            if contract is not None:
+                if original_norm is None:
+                    raise ValueError(
+                        "Explicit representation requires a final_norm module"
+                    )
+                auto_model.final_norm = (
+                    torch.nn.Identity()
+                    if layer_count < num_layers
+                    and contract["intermediate_normalization"] == "none"
+                    else original_norm
+                )
+            embeddings = model.encode(sentences, normalize_embeddings=True)
+            logger.info("\nLayers: %s/%s", layer_count, num_layers)
+            logger.info(
+                "  'weather' vs 'sunny': %.4f", float(embeddings[0] @ embeddings[1])
+            )
+            logger.info(
+                "  'weather' vs 'Python': %.4f", float(embeddings[0] @ embeddings[2])
+            )
+    finally:
+        _replace_layers(auto_model, info["layer_attr"], original_layers)
+        if original_norm is not None:
+            auto_model.final_norm = original_norm

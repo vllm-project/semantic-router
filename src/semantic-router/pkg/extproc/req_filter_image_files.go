@@ -24,7 +24,7 @@ const (
 )
 
 // resolveImageFileReferences inlines image content that references a file held
-// by the Router's own file store (POST /v1/files with purpose=vision) so the
+// by the Router's own file store (POST /api/v1/storage/files with purpose=vision) so the
 // selected backend receives the image bytes that drove routing instead of a
 // Router-local identifier. It runs after retained Responses history has been
 // materialized, so images referenced by earlier turns are covered too.

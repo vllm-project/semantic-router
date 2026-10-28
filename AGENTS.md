@@ -28,22 +28,32 @@ prescribe a work loop, or decide when the task is complete.
 
 - `src/semantic-router/`: Go router, ExtProc runtime, routing, and APIs
 - `src/vllm-sr/`: Python CLI and local stack orchestration
+- `src/model-runtime/`: model runtime that serves every model the router uses
 - `config/`: canonical configuration, fragments, schemas, and recipes
-- `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`: inference bindings
 - `dashboard/`: React frontend and Go management backend
 - `deploy/`: deployment artifacts and operator
 - `e2e/`: end-to-end framework and profiles
 - `tools/`: build, development, release, security, and harness tooling
 - `website/`: public documentation
 
+`src/semantic-router/cmd/` contains only the Router process entrypoint and its
+lifecycle tests. Authoring commands belong in `tools/dev/`, calibration tools
+in `tools/calibration/`, benchmark drivers beside their benchmark, and the
+browser compiler in `dashboard/wasm/`. Keep shared Go contracts in the Router
+module; `tools/make/go-tools.mk` explicitly builds, tests, and lints external
+Go commands against that module's dependencies.
+
 ## Durable constraints
 
 - Use the existing `vllm-sr serve` local-image flow for local runtime behavior.
-- Keep steady-state configuration canonical. Legacy layouts belong in explicit
-  migration tooling, not the runtime parser.
+- Keep steady-state configuration canonical. The public document is
+  `version/listeners/providers/evaluation/routing/entrypoints/recipes/global`;
+  legacy layouts belong in explicit migration tooling, not the runtime parser.
 - A behavior-visible routing, startup, config, Docker, CLI, or API change needs
   an appropriate integration or E2E assertion. Pure refactors do not.
 - Generated artifacts and public docs change with their source contract.
+- Downloaded models and run caches are ignored artifacts. Unit tests use small
+  fixtures and temporary directories; model-backed tests take explicit inputs.
 - Numeric file, function, nesting, and interface limits are review signals, not
   architecture. Forbidden dependencies, new cycles, generated invariants, and
   unowned root files remain blocking checks.
@@ -53,6 +63,12 @@ prescribe a work loop, or decide when the task is complete.
   GitHub issues for tracked debt; keep repository-only architectural risks in
   `tools/agent/docs/architecture-risks.md`.
 - PR commits use `git commit -s`. Keep unrelated changes out of the branch.
+- Treat a PR in the merge queue as frozen: do not push to its branch. A push
+  restarts PR Gate and can dequeue it, and a push that changes the diff also
+  dismisses its approvals. After a dequeue caused by a branch-update failure,
+  follow the
+  [merge-queue recovery steps](CONTRIBUTING.md#troubleshoot-the-merge-queue)
+  to update the branch and let the rule requeue it automatically.
 - Never publish credentials, private hostnames, or private fleet details.
 
 ## Optional repository skills

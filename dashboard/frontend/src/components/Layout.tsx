@@ -11,6 +11,7 @@ import {
   BUILD_MENU_CATEGORIES,
   filterLayoutMenuCategories,
   findActiveLayoutMenuCategory,
+  getConfigSectionFromPathname,
   hasActiveLayoutMenuCategory,
   isLayoutMenuItemActive,
   OPERATE_MENU_CATEGORIES,
@@ -21,14 +22,13 @@ import {
   type LayoutNavLink,
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
-import { useReadonly } from '../contexts/ReadonlyContext'
+import { useCapability } from '../contexts/CapabilitiesContext'
+import { isCapabilityUsable } from '../contexts/dashboardCapabilities'
 import { canAccessDashboardPath, canAccessMLSetup, canViewUsers } from '../utils/accessControl'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
   children: ReactNode
-  configSection?: string
-  onConfigSectionChange?: (section: string) => void
   hideHeaderOnMobile?: boolean
   hideAccountControl?: boolean
 }
@@ -45,8 +45,6 @@ const DESKTOP_MENU_TRIGGER_IDS: Record<LayoutDropdownKey, string> = {
 
 const Layout: React.FC<LayoutProps> = ({
   children,
-  configSection,
-  onConfigSectionChange,
   hideHeaderOnMobile,
   hideAccountControl = false,
 }) => {
@@ -59,11 +57,13 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
-  const { evaluationAvailable } = useReadonly()
+  const evaluationAvailable = isCapabilityUsable(useCapability('evaluation'))
+  const mlSetupAvailable = isCapabilityUsable(useCapability('mlPipeline'))
   const location = useLocation()
+  const configSection = getConfigSectionFromPathname(location.pathname)
   const navigate = useNavigate()
   const canAccessUsers = canViewUsers(user)
-  const canUseMLSetup = canAccessMLSetup(user)
+  const canUseMLSetup = canAccessMLSetup(user) && mlSetupAvailable
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(
@@ -147,15 +147,6 @@ const Layout: React.FC<LayoutProps> = ({
     setMobileMenuOpen(false)
     setIsAccountDialogOpen((prev) => !prev)
   }
-  const handleMenuItemSelect = (item: LayoutMenuItem) => {
-    if (item.kind === 'config') {
-      onConfigSectionChange?.(item.configSection)
-      navigate(`/config/${item.configSection}`)
-    } else {
-      navigate(item.to)
-    }
-    closeMenus()
-  }
   const handleLogout = () => {
     logout()
     closeMenus()
@@ -170,7 +161,7 @@ const Layout: React.FC<LayoutProps> = ({
         isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
       }
       onFocus={() => void preloadDashboardRoute(link.to)}
-      onPointerEnter={() => void preloadDashboardRoute(link.to)}
+      onPointerDown={() => void preloadDashboardRoute(link.to)}
       onClick={closeMenus}
     >
       <ProductIcon name={link.icon} className={styles.navIcon} />
@@ -244,8 +235,8 @@ const Layout: React.FC<LayoutProps> = ({
             isItemActive={(item) =>
               isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
             }
-            onConfigSelect={handleMenuItemSelect}
             onItemIntent={(item) => {
+              if (item.kind === 'route' && item.reloadDocument) return
               const target = item.kind === 'config' ? `/config/${item.configSection}` : item.to
               void preloadDashboardRoute(target)
             }}
@@ -308,7 +299,7 @@ const Layout: React.FC<LayoutProps> = ({
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
         <div className={styles.headerContent} data-testid="layout-header-content">
-          <BrandLockup className={styles.brandPlacement} />
+          <BrandLockup className={styles.brandPlacement} to="/dashboard" />
 
           <nav className={styles.nav} aria-label="Global navigation">
             <div className={styles.navSection} role="group" aria-label="Primary navigation">
@@ -344,7 +335,7 @@ const Layout: React.FC<LayoutProps> = ({
           <div className={styles.headerRight}>
             <PlatformBranding variant="inline" className={styles.headerBranding} />
             <a
-              href="https://vllm-sr.ai"
+              href="https://vllm-sr.ai/docs/intro/"
               target="_blank"
               rel="noopener noreferrer"
               className={styles.iconButton}
@@ -447,7 +438,6 @@ const Layout: React.FC<LayoutProps> = ({
               { key: 'build', label: 'Build', categories: buildMenuCategories },
               { key: 'operate', label: 'System', categories: operateMenuCategories },
             ]}
-            onConfigSelect={handleMenuItemSelect}
             onNavigate={closeMenus}
             onSectionToggle={(section) =>
               setOpenMobileSection((current) => (current === section ? null : section))

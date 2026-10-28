@@ -45,14 +45,21 @@ type entry struct {
 }
 
 type modelState struct {
-	nextID  uint64
 	entries map[uint64]entry
 }
 
+// sync.Mutex, not sync.RWMutex: every exported method (SetMaxAge, Begin,
+// End, Get, Snapshot, Reset) takes the write lock, and Get/Snapshot mutate
+// map state via evictAndCount, so no production read path exists. An RWMutex
+// would pay reader-count maintenance on every Begin and End — the two hottest
+// calls on the request path, since load-aware selection consults Get per
+// candidate — for a read lock no code path can ever take. See also the
+// pkg/latency precedent (TPOTCache/TTFTCache on the same shape).
 var (
-	mu     sync.RWMutex
-	states = map[string]*modelState{}
-	maxAge = DefaultMaxAge
+	mu          sync.Mutex
+	states      = map[string]*modelState{}
+	maxAge      = DefaultMaxAge
+	nextTokenID uint64 // Never reset; stale tokens must not match later requests.
 )
 
 // SetMaxAge overrides DefaultMaxAge for the global tracker. Non-positive
@@ -69,7 +76,8 @@ func SetMaxAge(d time.Duration) {
 
 // Begin records the start of an in-flight request for model and returns a
 // token that must be passed to End to clear the entry. An empty model name
-// is ignored and the returned token will be a no-op when passed to End.
+// is ignored and the returned token will be a no-op when passed to End. Begin
+// panics if the process-wide token space is exhausted.
 func Begin(model string) uint64 {
 	model = strings.TrimSpace(model)
 	if model == "" {
@@ -77,13 +85,18 @@ func Begin(model string) uint64 {
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	if nextTokenID == ^uint64(0) {
+		panic("inflight: request token space exhausted")
+	}
 	st, ok := states[model]
 	if !ok {
 		st = &modelState{entries: map[uint64]entry{}}
 		states[model] = st
 	}
-	st.nextID++
-	id := st.nextID
+	// Keep token IDs process-wide so deleting an empty or expired model state
+	// cannot make a late or duplicate End match a newer request.
+	nextTokenID++
+	id := nextTokenID
 	st.entries[id] = entry{id: id, start: time.Now()}
 	return id
 }

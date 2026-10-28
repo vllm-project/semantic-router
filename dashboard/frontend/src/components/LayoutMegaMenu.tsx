@@ -12,7 +12,6 @@ interface LayoutMegaMenuProps {
   categories: LayoutMenuCategory[]
   activeCategoryKey?: string
   isItemActive: (item: LayoutMenuItem) => boolean
-  onConfigSelect: (item: Extract<LayoutMenuItem, { kind: 'config' }>) => void
   onItemIntent: (item: LayoutMenuItem) => void
   onNavigate: () => void
 }
@@ -24,7 +23,6 @@ const LayoutMegaMenu = ({
   categories,
   activeCategoryKey,
   isItemActive,
-  onConfigSelect,
   onItemIntent,
   onNavigate,
 }: LayoutMegaMenuProps) => {
@@ -123,6 +121,7 @@ const LayoutMegaMenu = ({
       id={id}
       aria-labelledby={triggerId}
       className={styles.menu}
+      data-category={selectedCategory.key}
       data-density={geometry.density}
       data-item-count={geometry.itemCount}
       data-section-count={geometry.sectionCount}
@@ -185,34 +184,20 @@ const LayoutMegaMenu = ({
                   const className = `${styles.item} ${active ? styles.itemActive : ''}`
                   const key = `${section.title}-${item.label}`
 
-                  if (item.kind === 'config') {
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        data-mega-link
-                        className={className}
-                        onFocus={() => onItemIntent(item)}
-                        onPointerEnter={() => onItemIntent(item)}
-                        onClick={() => onConfigSelect(item)}
-                      >
-                        <span className={styles.itemLabel}>
-                          <ProductIcon name={item.icon} />
-                          <span>{item.label}</span>
-                        </span>
-                        <ProductIcon name="chevron-right" className={styles.itemArrow} />
-                      </button>
-                    )
-                  }
-
+                  const to = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+                  const reloadDocument = item.kind === 'route' && item.reloadDocument
+                  const target = item.kind === 'route' ? item.target : undefined
                   return (
                     <NavLink
                       key={key}
                       data-mega-link
-                      to={item.to}
+                      to={to}
+                      reloadDocument={reloadDocument}
+                      target={target}
+                      rel={target === '_blank' ? 'noreferrer' : undefined}
                       className={className}
                       onFocus={() => onItemIntent(item)}
-                      onPointerEnter={() => onItemIntent(item)}
+                      onPointerDown={() => onItemIntent(item)}
                       onClick={onNavigate}
                     >
                       <span className={styles.itemLabel}>

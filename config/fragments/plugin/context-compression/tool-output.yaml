@@ -8,6 +8,8 @@ plugin:
       target_tokens: auto
       reserve_output_tokens: auto
     targets:
+      current_user:
+        mode: preserve
       tool_outputs:
         mode: extractive
         min_tokens: 2000

@@ -29,11 +29,41 @@ def migrate_v03_catalog_contract(
         reasoning_families,
         router_owns_transport=router_owns_transport,
     )
+    evaluation = _migrate_evaluation_root(canonical, catalog_by_alias)
+    records = _clone_list(evaluation.get("records"))
     routing = _as_dict(canonical.get("routing"))
-    _migrate_model_cards(routing, catalog_by_alias)
+    _migrate_model_cards(routing, catalog_by_alias, records)
+    if records:
+        evaluation["records"] = records
+    else:
+        evaluation.pop("records", None)
 
     canonical["providers"] = providers
+    if evaluation:
+        canonical["evaluation"] = evaluation
+    else:
+        canonical.pop("evaluation", None)
     canonical["routing"] = routing
+
+
+def _migrate_evaluation_root(
+    canonical: dict[str, Any], catalog_by_alias: dict[str, str]
+) -> dict[str, Any]:
+    current = canonical.pop("evaluation", None)
+    legacy = canonical.pop("evaluation_catalog", None)
+    if current is not None and legacy is not None:
+        raise ValueError("evaluation conflicts with retired evaluation_catalog")
+    evaluation = _as_dict(current if current is not None else legacy)
+    records = _clone_list(evaluation.get("records"))
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        model = str(record.get("model") or "").strip()
+        if model in catalog_by_alias:
+            record["model"] = catalog_by_alias[model]
+    if records:
+        evaluation["records"] = records
+    return evaluation
 
 
 def _rename_if_missing(target: dict[str, Any], old: str, new: str) -> None:
@@ -96,7 +126,9 @@ def _migrate_backend_refs(
 
 
 def _migrate_model_cards(
-    routing: dict[str, Any], catalog_by_alias: dict[str, str]
+    routing: dict[str, Any],
+    catalog_by_alias: dict[str, str],
+    records: list[Any],
 ) -> None:
     migrated_cards: list[dict[str, Any]] = []
     migrated_by_name: dict[str, dict[str, Any]] = {}
@@ -106,10 +138,11 @@ def _migrate_model_cards(
         alias = str(card.get("name") or "").strip()
         if alias in catalog_by_alias:
             card["name"] = catalog_by_alias[alias]
-        _migrate_quality_score(card)
+        card_name = str(card.get("name") or "").strip()
+        _migrate_nested_evaluations(card, card_name, records)
+        _migrate_quality_score(card, card_name, records)
         if set(card) == {"name"}:
             continue
-        card_name = str(card.get("name") or "").strip()
         existing = migrated_by_name.get(card_name)
         if existing is not None:
             _merge_model_card(existing, card, card_name)
@@ -163,18 +196,36 @@ def _merge_model_card_value(
     )
 
 
-def _migrate_quality_score(card: dict[str, Any]) -> None:
+def _migrate_nested_evaluations(
+    card: dict[str, Any], model: str, records: list[Any]
+) -> None:
+    for value in _clone_list(card.pop("evaluations", None)):
+        if not isinstance(value, dict):
+            continue
+        record = deepcopy(value)
+        record["model"] = model
+        _append_unique_record(records, record)
+
+
+def _migrate_quality_score(
+    card: dict[str, Any], model: str, records: list[Any]
+) -> None:
     quality = card.pop("quality_score", None)
     if not isinstance(quality, (int, float)):
         return
-    evaluations = _clone_list(card.get("evaluations"))
-    evaluations.append(
+    _append_unique_record(
+        records,
         {
+            "model": model,
             "benchmark": "vllm-sr/operator-rating@1.0.0",
             "metrics": {"score": float(quality)},
-        }
+        },
     )
-    card["evaluations"] = evaluations
+
+
+def _append_unique_record(records: list[Any], record: dict[str, Any]) -> None:
+    if record not in records:
+        records.append(record)
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

@@ -18,6 +18,7 @@ const configResponse = {
       {
         name: 'test-model',
         provider_model_id: 'test-model',
+        reasoning: { family: 'qwen3.8' },
         backend_refs: [
           {
             name: 'endpoint1',
@@ -78,7 +79,6 @@ const configResponse = {
       embeddings: {
         semantic: {
           mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-          bert_model_path: 'models/mom-embedding-bert',
           use_cpu: true,
           embedding_config: {
             model_type: 'mmbert',
@@ -111,100 +111,8 @@ model_catalog:
   embeddings:
     semantic:
       mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-      bert_model_path: models/mom-embedding-bert
       use_cpu: true
 `;
-
-const taxonomyClassifierResponse = {
-  items: [
-    {
-      name: 'privacy_classifier',
-      type: 'taxonomy',
-      builtin: true,
-      managed: true,
-      editable: false,
-      threshold: 0.3,
-      security_threshold: 0.25,
-      description: 'Built-in privacy routing taxonomy',
-      source: {
-        path: 'knowledge_bases/privacy/',
-        taxonomy_file: 'taxonomy.json',
-      },
-      tiers: [
-        { name: 'privacy_policy', description: 'Sensitive company content' },
-        { name: 'frontier_reasoning', description: 'General frontier reasoning' },
-      ],
-      categories: [
-        {
-          name: 'proprietary_code',
-          tier: 'privacy_policy',
-          description: 'Internal code and repositories',
-          exemplars: ['Review our private codebase'],
-        },
-        {
-          name: 'general_research',
-          tier: 'frontier_reasoning',
-          description: 'Open research requests',
-          exemplars: ['Summarize this public paper'],
-        },
-      ],
-      tier_groups: {
-        privacy_categories: ['proprietary_code'],
-      },
-      signal_references: [
-        {
-          name: 'privacy_policy',
-          bind: {
-            kind: 'tier',
-            value: 'privacy_policy',
-          },
-        },
-      ],
-      bind_options: {
-        tiers: ['privacy_policy', 'frontier_reasoning'],
-        categories: ['proprietary_code', 'general_research'],
-      },
-    },
-    {
-      name: 'research_classifier',
-      type: 'taxonomy',
-      builtin: false,
-      managed: true,
-      editable: true,
-      threshold: 0.41,
-      security_threshold: 0.28,
-      description: 'Custom research classifier',
-      source: {
-        path: 'classifiers/custom/research_classifier/',
-        taxonomy_file: 'taxonomy.json',
-      },
-      tiers: [
-        { name: 'internal', description: 'Private research assets' },
-        { name: 'external', description: 'Public artifacts' },
-      ],
-      categories: [
-        {
-          name: 'lab_notes',
-          tier: 'internal',
-          description: 'Private notes',
-          exemplars: ['Review our lab notes'],
-        },
-        {
-          name: 'papers',
-          tier: 'external',
-          description: 'Published papers',
-          exemplars: ['Summarize this paper'],
-        },
-      ],
-      tier_groups: {},
-      signal_references: [],
-      bind_options: {
-        tiers: ['internal', 'external'],
-        categories: ['lab_notes', 'papers'],
-      },
-    },
-  ],
-};
 
 async function mockConfigSurface(page: Page) {
   await mockAuthenticatedAppShell(page, {
@@ -225,14 +133,6 @@ async function mockConfigSurface(page: Page) {
 
   await page.route('**/api/router/config/global/raw', async route => {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
-  });
-
-  await page.route('**/api/router/config/kbs', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(taxonomyClassifierResponse),
-    });
   });
 
   await page.route('**/api/status', async route => {
@@ -270,6 +170,127 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
+  test('opens decision model settings directly and saves without pinning inherited bindings', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await mockConfigSurface(page);
+
+    let systemModels: Record<string, unknown> = {
+      decision_model: { deployment: 'main-judge' },
+      pii_classifier: 'models/custom-pii',
+    };
+    const deployments = {
+      'main-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B' },
+      'alternate-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-0.8B' },
+    };
+    await page.route('**/api/router/config/global', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ model_catalog: { system: systemModels, deployments } }),
+      });
+    });
+    await page.route('**/api/router/config/global/update', async route => {
+      const modelCatalog = route.request().postDataJSON().model_catalog;
+      systemModels = modelCatalog.system;
+      expect(Object.keys(modelCatalog)).toEqual(['system']);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success"}' });
+    });
+
+    await page.goto('/config/global-config#global-section-system_models');
+    const card = page.locator('#global-section-system_models');
+    await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
+    await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
+    await expect(card.getByText('Follows main-judge').first()).toBeVisible();
+    await expect(card.getByText('1 explicit binding', { exact: true })).toBeVisible();
+    await card.getByRole('button', { name: 'Edit', exact: true }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
+    await expect(modal.getByLabel('Deployment', { exact: true })).toHaveValue('main-judge');
+    await modal.getByLabel('Deployment', { exact: true }).fill('alternate-judge');
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(modal).toBeHidden();
+    expect(systemModels).toEqual({ decision_model: { deployment: 'alternate-judge' }, pii_classifier: 'models/custom-pii' });
+    await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
+    await expect(card.getByText('Follows alternate-judge').first()).toBeVisible();
+  });
+
+  test('keeps signal controls readable and aligned in the shared editor', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/signals');
+    await page.getByRole('button', { name: 'Add Signal' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Add Signal' });
+    const signalType = modal.getByLabel('Signal type');
+    const signalOption = signalType.locator('option').first();
+    await expect(signalType).toHaveCSS('color-scheme', 'dark');
+    await expect(signalOption).toHaveCSS('color', 'rgb(245, 245, 247)');
+    await expect(signalOption).toHaveCSS('background-color', 'rgb(17, 18, 22)');
+
+    const checkbox = modal.getByLabel('Case Sensitive');
+    const [checkboxBox, checkboxControlBox] = await Promise.all([
+      checkbox.boundingBox(),
+      checkbox.locator('..').boundingBox(),
+    ]);
+    expect(checkboxBox).not.toBeNull();
+    expect(checkboxControlBox).not.toBeNull();
+    expect(checkboxBox!.width).toBeCloseTo(checkboxBox!.height, 0);
+    expect(checkboxBox!.width).toBeLessThanOrEqual(15);
+    expect(checkboxControlBox!.height).toBeGreaterThanOrEqual(39.5);
+
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+    const checkmarkSize = await checkbox.evaluate((element) => {
+      const checkmark = window.getComputedStyle(element, '::before');
+      return {
+        width: Number.parseFloat(checkmark.width),
+        height: Number.parseFloat(checkmark.height),
+      };
+    });
+    expect(checkmarkSize.width).toBeLessThanOrEqual(4);
+    expect(checkmarkSize.height).toBeLessThanOrEqual(6);
+  });
+
+  test('uses the same hierarchy for projection editors', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/projections');
+    await page.getByRole('button', { name: 'Add Partition' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Add Projection Partition' });
+    await expect(modal.getByRole('heading', { name: 'Identity' })).toBeVisible();
+    await expect(modal.getByRole('heading', { name: 'Definition' })).toBeVisible();
+    await expectInside(modal, modal.getByLabel('Semantics'));
+    await expectInside(modal, modal.getByRole('button', { name: 'Add member' }));
+  });
+
+  test('uses the shared hierarchy for signal and decision view and edit flows', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/signals');
+    await page.getByRole('button', { name: 'View keyword-pricing' }).click();
+    const signalView = page.getByRole('dialog', { name: 'Signal: pricing' });
+    await expect(signalView.getByRole('heading', { name: 'Identity' })).toBeVisible();
+    await expect(signalView.getByRole('heading', { name: 'Definition' })).toBeVisible();
+    await signalView.getByRole('button', { name: 'Close' }).first().click();
+
+    await page.getByRole('button', { name: 'Edit keyword-pricing' }).click();
+    const signalEdit = page.getByRole('dialog', { name: 'Edit Signal: pricing' });
+    await expect(signalEdit.getByRole('heading', { name: 'Identity' })).toBeVisible();
+    await expect(signalEdit.getByRole('heading', { name: 'Definition' })).toBeVisible();
+    await signalEdit.getByRole('button', { name: 'Close editor' }).click();
+
+    await page.goto('/config/decisions');
+    await page.getByRole('button', { name: 'View business-route' }).click();
+    const decisionView = page.getByRole('dialog', { name: 'Decision: business-route' });
+    for (const section of ['Identity', 'Routing policy', 'Selection & runtime', 'Output behavior']) {
+      await expect(decisionView.getByRole('heading', { name: section })).toBeVisible();
+    }
+  });
+
   test('keeps decision model references editor controls inside the modal layout', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await mockConfigSurface(page);
@@ -282,9 +303,11 @@ test.describe('Config surface layout regressions', () => {
     const form = modal.locator('form').first();
     await expect(modal).toBeVisible();
     await expect(form).toBeVisible();
+    const modelSelect = modal.getByRole('combobox', { name: 'Model', exact: true });
+    await modelSelect.selectOption('test-model');
 
     const controls = [
-      page.getByLabel('Model').first(),
+      modelSelect,
       page.getByLabel('Reasoning effort').first(),
       page.getByLabel('Use reasoning').first(),
       page.getByLabel('LoRA adapter').first(),
@@ -306,7 +329,7 @@ test.describe('Config surface layout regressions', () => {
     expect(viewport).not.toBeNull();
     const rightGutter = viewport!.width - modalBox!.x - modalBox!.width;
     const bottomGutter = viewport!.height - modalBox!.y - modalBox!.height;
-    expect(modalBox!.width).toBeLessThanOrEqual(980);
+    expect(modalBox!.width).toBeLessThanOrEqual(1120);
     expect(modalBox!.x).toBeCloseTo(rightGutter, 0);
     expect(modalBox!.y).toBeCloseTo(bottomGutter, 0);
 
@@ -316,6 +339,9 @@ test.describe('Config surface layout regressions', () => {
     await page.keyboard.press('Tab');
     await expect(closeButton).toBeFocused();
     await page.keyboard.press('Escape');
+    const discardDialog = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: 'Discard changes' }).click();
     await expect(modal).toBeHidden();
     await expect(addDecisionButton).toBeFocused();
   });
@@ -349,7 +375,7 @@ test.describe('Config surface layout regressions', () => {
     await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
 
     const systemBindingsCard = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'System Model Bindings' }),
+      has: page.getByRole('heading', { name: 'Decision Model & Bindings' }),
     }).first();
     const embeddingsCard = page.locator('article').filter({
       has: page.getByRole('heading', { name: 'Embedding Models' }),
@@ -389,13 +415,13 @@ test.describe('Config surface layout regressions', () => {
     await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
   });
 
-  test('redirects the retired classifier route to the canonical knowledge base manager', async ({ page }) => {
+  test('falls back from the retired classifier route to Global Config', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1200 });
     await mockConfigSurface(page);
 
     await page.goto('/config/classifiers');
 
-    await expect(page).toHaveURL(/\/knowledge-bases\/bases$/);
-    await expect(page.getByRole('heading', { name: 'Knowledge Bases' })).toBeVisible();
+    await expect(page).toHaveURL(/\/config\/global-config$/);
+    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
   });
 });

@@ -50,10 +50,11 @@ func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 	}
 }
 
-func TestOpenAIRouterCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T) {
+func TestRouterServiceCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T) {
 	recovery := &closeTrackingRecoveryStore{closed: make(chan struct{})}
 	router := (&routerComponents{resources: newResourceScope()}).buildRouter()
 	router.CompressionRecovery = recovery
+	service := NewRouterService(router)
 	release, acquired := router.routerLearningRuntimeState().AcquireLease()
 	if !acquired {
 		t.Fatal("AcquireLease() rejected an active router learning runtime")
@@ -61,7 +62,7 @@ func TestOpenAIRouterCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T
 
 	closed := make(chan struct{})
 	go func() {
-		_ = router.Close()
+		_ = service.Close()
 		close(closed)
 	}()
 

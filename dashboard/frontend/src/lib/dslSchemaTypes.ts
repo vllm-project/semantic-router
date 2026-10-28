@@ -12,12 +12,15 @@ export interface FieldSchema {
     | 'object'
     | 'object[]'
     | 'key-value'
+    | 'json'
     | 'rule'
   options?: string[]
+  disabledOptions?: Record<string, string>
   required?: boolean
   placeholder?: string
   description?: string
   min?: number
+  max?: number
   fields?: FieldSchema[]
   addLabel?: string
   emptyLabel?: string

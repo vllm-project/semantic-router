@@ -24,6 +24,14 @@ It then applies a multiplicative bonus to cheaper models when cost adjustment
 is enabled. Cost is therefore a second-stage adjustment, not another linear
 term in the component average.
 
+Cache affinity is the last, bounded adjustment. For a request that continues a
+session, it favors the model that served the previous turn so the backend's
+prompt cache stays useful, and it fades to zero as the gap between the top two
+base scores grows. A `prompt_cache_key` also marks a request as a continuation.
+When the Router has no previous model for the session, it favors the model that
+last served the same key in the recipe. Each Router replica remembers that model
+for an hour after the key's last response.
+
 ## Select Flow
 
 ```mermaid
@@ -38,7 +46,8 @@ flowchart TD
     F --> G
     G --> H[Compute weighted composite score]
     H --> I[Apply cost and cache-affinity adjustments]
-    I --> J[Return top-scored model]
+    I --> J[Compare typed candidate scores]
+    J --> K[Return the exact winning candidate]
 ```
 
 ## Component Selectors
@@ -52,6 +61,16 @@ The Hybrid selector internally instantiates three sub-selectors:
 | `AutoMixSelector` | One-shot request path | Cost-quality value estimate |
 
 Each component shares the same `SelectionContext` and runs independently.
+Composition uses typed scores attached to the complete candidate reference, not
+model-name or display-label lookups. Two references to the same model at `low`
+and `high` reasoning effort therefore remain separate through normalization,
+comparison, Router Learning protection, and provider request encoding.
+
+Elo, description similarity, and cache observations can remain model-level
+signals; their values are explicitly applied to each candidate variant. AutoMix
+contributes its raw expected value, before its separate cost-aware starting-model
+adjustment. Neither those model-level priors nor learned feedback are presented
+as effort-specific benchmark measurements.
 
 ## What Problem Does It Solve?
 

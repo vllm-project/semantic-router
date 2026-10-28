@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "algorithm": "mlp",
+  "trained": true,
+  "model_names": [
+    "model-a",
+    "model-b"
+  ],
+  "feature_dim": 16,
+  "n_classes": 2,
+  "hidden_sizes": [],
+  "dropout": 0,
+  "layers": [
+    {
+      "type": "linear",
+      "in_features": 16,
+      "out_features": 2,
+      "weight": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      ],
+      "bias": [
+        0,
+        0
+      ]
+    }
+  ]
+}

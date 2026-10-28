@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -26,13 +27,9 @@ func init() {
 // routes to a model nothing defines. It clears the parse stage, so the only
 // thing that can reject it is config validation.
 //
-// The fragment carries its own modelCards deliberately. The unknown-model check
-// in the router config validator only runs when the merged document declares a
-// model surface, and the dashboard profile's router config
-// (e2e/profiles/dashboard/values.yaml) still uses the pre-v0.3 schema and
-// declares none. Without these modelCards the merged document validates, the
-// deploy succeeds, and this case would silently rewrite the active config
-// instead of asserting anything.
+// The active profile is canonical and defines base-model. Keeping that model
+// card in the fragment makes its unknown model reference the only deliberate
+// validation error, independently of the profile's routing rules.
 const safeFailureFragment = `routing:
   modelCards:
     - name: base-model
@@ -41,10 +38,8 @@ const safeFailureFragment = `routing:
       description: Deploy probe that must be rejected by config validation
       priority: 3
       rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: other
+        operator: AND
+        conditions: []
       modelRefs:
         - model: e2e-nonexistent-model
           use_reasoning: false
@@ -162,6 +157,9 @@ func postRejectedDashboardDeploy(
 	if rejection.Error != "config_validation_error" {
 		return "", fmt.Errorf("expected error=config_validation_error, got %q (message: %s)",
 			rejection.Error, truncateString(rejection.Message, 300))
+	}
+	if !strings.Contains(rejection.Message, "e2e-nonexistent-model") {
+		return "", fmt.Errorf("expected rejection for e2e-nonexistent-model, got: %s", truncateString(rejection.Message, 300))
 	}
 	return rejection.Error, nil
 }

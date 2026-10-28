@@ -31,7 +31,7 @@ func TestNewMemoryChunkStore_NilStore(t *testing.T) {
 }
 
 func TestNewMemoryChunkStore_ValidStore(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	assert.NotNil(t, extractor, "should return non-nil for valid store")
 }
@@ -41,13 +41,14 @@ func TestNewMemoryChunkStore_ValidStore(t *testing.T) {
 // =============================================================================
 
 func TestProcessResponse_StoresChunk(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"What is the capital of France?",
 		"The capital of France is Paris.",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -64,13 +65,14 @@ func TestProcessResponse_StoresChunk(t *testing.T) {
 }
 
 func TestProcessResponse_StripsThinkTags(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"What is the sum of two plus two?",
 		"<think>Let me calculate... 2+2=4</think>The answer is 4.",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -83,13 +85,14 @@ func TestProcessResponse_StripsThinkTags(t *testing.T) {
 }
 
 func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"Tell me an interesting fact about geography",
 		"<think>Reasoning about this...",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -104,12 +107,13 @@ func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
 }
 
 func TestProcessResponse_EmptyTurnSkipped(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"", "",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -119,12 +123,13 @@ func TestProcessResponse_EmptyTurnSkipped(t *testing.T) {
 }
 
 func TestProcessResponse_OnlyUserMessage(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"What is the capital city of France and why is it famous?", "",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -135,12 +140,13 @@ func TestProcessResponse_OnlyUserMessage(t *testing.T) {
 }
 
 func TestProcessResponse_OnlyAssistantResponse(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"", "Here is the detailed answer to your question about geography.",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -157,31 +163,34 @@ func TestProcessResponse_StoreDisabled(t *testing.T) {
 	}
 	extractor := NewMemoryChunkStore(disabledStore)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"test", "response",
+		nil,
 	)
 	assert.NoError(t, err, "should return nil when store is disabled")
 }
 
 func TestProcessResponse_NilExtractor(t *testing.T) {
 	var extractor *MemoryExtractor
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"test", "response",
+		nil,
 	)
 	assert.NoError(t, err, "nil extractor should not panic")
 }
 
 func TestProcessResponse_MultipleTurns(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		err := extractor.ProcessResponse(ctx, "session1", "user1",
+		_, err := extractor.ProcessResponseWithHistoryCount(ctx, "session1", "user1",
 			"What is the weather forecast for tomorrow?",
 			"Tomorrow will be sunny with a high of 75 degrees.",
+			nil,
 		)
 		require.NoError(t, err)
 	}
@@ -301,7 +310,7 @@ func TestBuildSessionChunk_WindowLargerThanHistory(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -314,13 +323,14 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	}
 
 	// 3rd turn triggers session chunk (stride=3)
-	err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistoryCount(
 		ctx, "session1", "user1",
 		"Tell me about Go concurrency.",
 		"Go uses goroutines and channels for concurrency.",
 		history,
 	)
 	require.NoError(t, err)
+	assert.Equal(t, 2, storedCount)
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
@@ -336,7 +346,7 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -353,7 +363,7 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 
 	var history []openai.ChatCompletionMessageParamUnion
 	for i, turn := range turns {
-		err := extractor.ProcessResponseWithHistory(
+		_, err := extractor.ProcessResponseWithHistoryCount(
 			ctx, "s1", "user1", turn.user, turn.assistant, history,
 		)
 		require.NoError(t, err, "turn %d", i+1)
@@ -377,7 +387,7 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -387,13 +397,14 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 		sdkAssistantMessage("Hi there!"),
 	}
 
-	err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistoryCount(
 		ctx, "session1", "user1",
 		"What is Go?",
 		"Go is a programming language created by Google.",
 		history,
 	)
 	require.NoError(t, err)
+	assert.Equal(t, 1, storedCount)
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
@@ -403,17 +414,18 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
-	err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistoryCount(
 		ctx, "session1", "user1",
 		"What is Go?",
 		"Go is a programming language.",
 		nil,
 	)
 	require.NoError(t, err)
+	assert.Equal(t, 1, storedCount)
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
@@ -460,6 +472,12 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			wantStored: 2,
 		},
 		{
+			name:       "low entropy",
+			user:       "Hi",
+			assistant:  "Hello!",
+			wantStored: 0,
+		},
+		{
 			name:       "sanitize rejected",
 			user:       "This message includes invalid UTF-8: " + string([]byte{0xff}),
 			assistant:  "This response is long enough to avoid the low entropy filter.",
@@ -467,7 +485,7 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 		},
 		{
 			name:       "store error",
-			store:      &failingMemoryStore{InMemoryStore: NewInMemoryStore()},
+			store:      &failingMemoryStore{InMemoryStore: newTestInMemoryStore()},
 			user:       "What should be remembered from this detailed request?",
 			assistant:  "This detailed response should attempt to store a conversation memory.",
 			wantStored: 0,
@@ -480,16 +498,17 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			MemoryExtractionFactsCount.Reset()
 			store := tt.store
 			if store == nil {
-				store = NewInMemoryStore()
+				store = newTestInMemoryStore()
 			}
 			extractor := NewMemoryChunkStore(store)
 			ctx := context.Background()
 
 			beforeCount, beforeSum := snapshot(t)
-			err := extractor.ProcessResponseWithHistory(
+			storedCount, err := extractor.ProcessResponseWithHistoryCount(
 				ctx, "session1", "user1",
 				tt.user, tt.assistant, tt.history,
 			)
+			assert.Equal(t, tt.wantStored, storedCount)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {

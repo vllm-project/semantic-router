@@ -12,9 +12,7 @@ import (
 )
 
 type routerLearningRuntime struct {
-	leaseMu         sync.Mutex
-	leaseRefs       sync.WaitGroup
-	retired         bool
+	generation      *routerGeneration
 	shared          *routerLearningSharedState
 	config          *config.RouterConfig
 	replayRecorder  *routerreplay.Recorder
@@ -26,8 +24,25 @@ type routerLearningRuntime struct {
 // generation-scoped on routerLearningRuntime.
 type routerLearningSharedState struct {
 	mu              sync.Mutex
-	experience      map[string]*routerLearningModelExperience
+	experience      map[routerLearningExperienceKey]*routerLearningModelExperience
 	idempotencyKeys map[string]*outcomeIdempotencyClaim
+}
+
+// routerLearningExperienceKey identifies one decision/tier/model experience
+// context. decision is "_global" when the entry is decision-agnostic, mirroring
+// the tier/model fallback in experienceSnapshot, and may itself be a
+// recipe-scoped key (see outcomeDecisionKey) when recipes are in use.
+type routerLearningExperienceKey struct {
+	decision string
+	tier     int
+	model    string
+}
+
+// MarshalText lets this struct key serialize as a map[K]V via encoding/json,
+// which otherwise requires string keys. finishEvalLearning hashes a
+// routerLearningPreviewSnapshot (keyed by this type) into a provenance receipt.
+func (k routerLearningExperienceKey) MarshalText() ([]byte, error) {
+	return []byte(k.decision + "|" + strconv.Itoa(k.tier) + "|" + k.model), nil
 }
 
 type outcomeIdempotencyClaim struct {
@@ -170,14 +185,15 @@ func (rt *routerLearningRuntime) tryAppendReplayOutcome(
 
 func routerReplayOutcome(outcome *routerruntime.RouterOutcome) routerreplay.Outcome {
 	return routerreplay.Outcome{
-		Timestamp: time.Now().UTC(),
-		Source:    string(outcome.Source),
-		Target:    string(outcome.Target),
-		TargetRef: strings.TrimSpace(outcome.TargetRef),
-		Verdict:   string(outcome.Verdict),
-		Reason:    strings.TrimSpace(outcome.Reason),
-		Score:     outcome.Score,
-		Metadata:  cloneLearningOutcomeMetadata(outcome.Metadata),
+		Timestamp:      time.Now().UTC(),
+		Source:         string(outcome.Source),
+		Target:         string(outcome.Target),
+		TargetRef:      strings.TrimSpace(outcome.TargetRef),
+		Verdict:        string(outcome.Verdict),
+		Reason:         strings.TrimSpace(outcome.Reason),
+		Score:          outcome.Score,
+		Metadata:       cloneLearningOutcomeMetadata(outcome.Metadata),
+		IdempotencyKey: strings.TrimSpace(outcome.IdempotencyKey),
 	}
 }
 
@@ -228,7 +244,7 @@ func newRouterLearningRuntime(
 ) *routerLearningRuntime {
 	return &routerLearningRuntime{
 		shared: &routerLearningSharedState{
-			experience:      map[string]*routerLearningModelExperience{},
+			experience:      map[routerLearningExperienceKey]*routerLearningModelExperience{},
 			idempotencyKeys: map[string]*outcomeIdempotencyClaim{},
 		},
 		config:          cfg,
@@ -257,30 +273,7 @@ func (rt *routerLearningRuntime) AcquireLease() (func(), bool) {
 	if rt == nil {
 		return nil, false
 	}
-	rt.leaseMu.Lock()
-	if rt.retired {
-		rt.leaseMu.Unlock()
-		return nil, false
-	}
-	rt.leaseRefs.Add(1)
-	rt.leaseMu.Unlock()
-
-	var once sync.Once
-	return func() {
-		once.Do(rt.leaseRefs.Done)
-	}, true
-}
-
-// RetireAndWait prevents new management leases and waits for requests that
-// already acquired this runtime before its replay store is closed.
-func (rt *routerLearningRuntime) RetireAndWait() {
-	if rt == nil {
-		return
-	}
-	rt.leaseMu.Lock()
-	rt.retired = true
-	rt.leaseMu.Unlock()
-	rt.leaseRefs.Wait()
+	return rt.generation.acquire()
 }
 
 func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
@@ -291,6 +284,7 @@ func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
 	defer r.routerLearningMu.Unlock()
 	if r.routerLearningRuntime == nil {
 		r.routerLearningRuntime = newRouterLearningRuntime(r.Config, r.ReplayRecorder, r.ReplayRecorders)
+		r.routerLearningRuntime.generation = r.generation
 	}
 	return r.routerLearningRuntime
 }
@@ -361,7 +355,7 @@ func (rt *routerLearningRuntime) experienceSnapshot(decisionName string, decisio
 	}
 	rt.shared.mu.Lock()
 	defer rt.shared.mu.Unlock()
-	for _, key := range []string{
+	for _, key := range []routerLearningExperienceKey{
 		modelExperienceKey(decisionName, decisionTier, model),
 		modelExperienceKey("", decisionTier, model),
 		modelExperienceKey("", 0, model),
@@ -380,11 +374,10 @@ func defaultRouterLearningModelExperience() routerLearningModelExperience {
 	}
 }
 
-func modelExperienceKey(decisionName string, decisionTier int, model string) string {
+func modelExperienceKey(decisionName string, decisionTier int, model string) routerLearningExperienceKey {
 	decisionName = strings.TrimSpace(decisionName)
-	model = strings.TrimSpace(model)
 	if decisionName == "" {
 		decisionName = "_global"
 	}
-	return decisionName + "|" + strconv.Itoa(decisionTier) + "|" + model
+	return routerLearningExperienceKey{decision: decisionName, tier: decisionTier, model: strings.TrimSpace(model)}
 }

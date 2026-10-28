@@ -1,0 +1,76 @@
+# Native Anthropic provider fixture. No model download or protocol sidecar.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: provider-protocols-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provider-mocker
+  namespace: provider-protocols-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: provider-mocker
+  template:
+    metadata:
+      labels:
+        app: provider-mocker
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+        - name: provider-mocker
+          image: semantic-router-ci/provider-mocker:e2e-test
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+              cpu: 500m
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-mocker
+  namespace: provider-protocols-system
+spec:
+  selector:
+    app: provider-mocker
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: provider-mocker
+  namespace: default
+spec:
+  endpoints:
+    - fqdn:
+        hostname: provider-mocker.provider-protocols-system.svc.cluster.local
+        port: 8000

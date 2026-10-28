@@ -12,6 +12,7 @@
 
 .modal {
   width: min(720px, 100%);
+  max-height: calc(100dvh - 3rem);
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -25,6 +26,7 @@
 
 .header {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
@@ -69,7 +71,18 @@
 
 .form {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .error {
@@ -210,6 +223,7 @@
 
 .footer {
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.1rem 1.4rem 1.35rem;
@@ -243,6 +257,10 @@
     padding: 1rem;
   }
 
+  .modal {
+    max-height: calc(100dvh - 2rem);
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -262,5 +280,42 @@
   .secondaryButton,
   .primaryButton {
     width: 100%;
+  }
+}
+
+@media (max-height: 480px) {
+  .overlay {
+    padding-block: 0.5rem;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .header {
+    align-items: center;
+    padding: 0.7rem 1rem;
+  }
+
+  .title {
+    margin-top: 0.2rem;
+    font-size: 1.15rem;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  .footer {
+    flex-direction: row;
+    padding: 0.7rem 1rem;
+  }
+
+  .secondaryButton,
+  .primaryButton {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 0;
+    padding-block: 0.65rem;
   }
 }

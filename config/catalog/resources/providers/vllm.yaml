@@ -39,6 +39,20 @@ models:
     status: claimed
     verified_at: 2026-09-06
     source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+- catalog: baidu/ernie-4.5-21b-a3b
+  relationship: self_hosted
+  id: baidu/ERNIE-4.5-21B-A3B-PT
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  restrictions:
+    minimum_vllm_version: 0.10.2
+    excluded_vllm_versions:
+    - 0.11.0
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
 - catalog: nvidia/nemotron-cascade-2-30b-a3b
   relationship: self_hosted
   id: nvidia/Nemotron-Cascade-2-30B-A3B
@@ -141,6 +155,19 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
+- catalog: cohere/north-micro-vision-instruct
+  relationship: self_hosted
+  id: CohereLabs/North-Micro-Vision-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    minimum_vllm_version: 0.30.0
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://github.com/vllm-project/vllm/pull/54774
 - catalog: deepseek/deepseek-v3.2
   relationship: self_hosted
   id: deepseek-ai/DeepSeek-V3.2
@@ -176,6 +203,18 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+- catalog: deepseek/deepseek-v4.1-flash
+  relationship: self_hosted
+  id: deepseek-ai/DeepSeek-V4.1-Flash
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/tree/dba1be0a40aa45a94ad051997016db3960a90277
 - catalog: deepseek/deepseek-r1
   relationship: self_hosted
   id: deepseek-ai/DeepSeek-R1
@@ -319,6 +358,20 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/moonshotai/Kimi-K3
+- catalog: moonshot/kimi-linear-48b-a3b-instruct
+  relationship: self_hosted
+  id: moonshotai/Kimi-Linear-48B-A3B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    minimum_vllm_version: 0.11.1
+    trust_remote_code: true
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md
 - catalog: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
   relationship: self_hosted
   id: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
@@ -386,6 +439,18 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/Qwen/Qwen3.8-27B
+- catalog: qwen/qwen3.8-flash-next
+  relationship: self_hosted
+  id: Qwen/Qwen3.8-Flash-Next
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
 - catalog: qwen/qwen3.8-2.4t-a95b
   relationship: self_hosted
   id: Qwen/Qwen3.8-2.4T-A95B
@@ -409,6 +474,19 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+- catalog: tencent/hunyuan-7b-instruct
+  relationship: self_hosted
+  id: tencent/Hunyuan-7B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    minimum_vllm_version: 0.10.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
 - catalog: zai/glm-5.1
   relationship: self_hosted
   id: zai-org/GLM-5.1
@@ -562,6 +640,17 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+- catalog: microsoft/phi-4-reasoning-plus
+  relationship: self_hosted
+  id: microsoft/Phi-4-reasoning-plus
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
 - catalog: cohere/tiny-aya-global
   relationship: self_hosted
   id: CohereLabs/tiny-aya-global
@@ -609,3 +698,212 @@ models:
     status: claimed
     verified_at: 2026-09-06
     source: https://huggingface.co/stepfun-ai/Step3-VL-10B
+- catalog: deepseek/deepseek-v3
+  relationship: self_hosted
+  id: deepseek-ai/DeepSeek-V3
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3
+- catalog: deepseek/deepseek-v3-0324
+  relationship: self_hosted
+  id: deepseek-ai/DeepSeek-V3-0324
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3-0324
+- catalog: deepseek/deepseek-v3.1-terminus
+  relationship: self_hosted
+  id: deepseek-ai/DeepSeek-V3.1-Terminus
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus
+- catalog: google/gemma-3-27b-it
+  relationship: self_hosted
+  id: google/gemma-3-27b-it
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/google/gemma-3-27b-it
+- catalog: google/gemma-3-12b-it
+  relationship: self_hosted
+  id: google/gemma-3-12b-it
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/google/gemma-3-12b-it
+- catalog: mistral/mistral-small-3.2-24b-instruct
+  relationship: self_hosted
+  id: mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+- catalog: mistral/ministral-3-14b-instruct
+  relationship: self_hosted
+  id: mistralai/Ministral-3-14B-Instruct-2512
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+- catalog: nvidia/nemotron-3-nano-30b-a3b
+  relationship: self_hosted
+  id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+- catalog: qwen/qwen3.5-397b-a17b
+  relationship: self_hosted
+  id: Qwen/Qwen3.5-397B-A17B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+- catalog: qwen/qwen3.5-122b-a10b
+  relationship: self_hosted
+  id: Qwen/Qwen3.5-122B-A10B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+- catalog: qwen/qwen3-235b-a22b-thinking-2507
+  relationship: self_hosted
+  id: Qwen/Qwen3-235B-A22B-Thinking-2507
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+- catalog: qwen/qwen3-30b-a3b-thinking-2507
+  relationship: self_hosted
+  id: Qwen/Qwen3-30B-A3B-Thinking-2507
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+- catalog: ibm/granite-4.2-30b
+  relationship: self_hosted
+  id: ibm-granite/granite-4.2-30b
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-17
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+- catalog: ibm/granite-4.2-8b
+  relationship: self_hosted
+  id: ibm-granite/granite-4.2-8b
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-17
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+- catalog: ibm/granite-4.2-3b
+  relationship: self_hosted
+  id: ibm-granite/granite-4.2-3b
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-17
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+- catalog: nvidia/nemotron-cascade-8b
+  relationship: self_hosted
+  id: nvidia/Nemotron-Cascade-8B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
+- catalog: tii/falcon-h1r-7b
+  relationship: self_hosted
+  id: tiiuae/Falcon-H1R-7B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-27
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+- catalog: tii/falcon-h1-0.5b-instruct
+  relationship: self_hosted
+  id: tiiuae/Falcon-H1-0.5B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-27
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+- catalog: tii/falcon-h1-34b-instruct
+  relationship: self_hosted
+  id: tiiuae/Falcon-H1-34B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-27
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct

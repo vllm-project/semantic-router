@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react'
 import Editor, { type OnMount, type BeforeMount, type Monaco } from '@monaco-editor/react'
 import type * as monacoNs from 'monaco-editor'
-import { useDSLStore } from '@/stores/dslStore'
+import { selectHasUnsavedChanges, useDSLStore } from '@/stores/dslStore'
 import {
   registerDSLLanguage,
   defineTheme,
@@ -50,12 +50,11 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     crdOutput,
     diagnostics,
     symbols,
-    wasmReady,
-    wasmError,
+    compilerReady,
+    compilerError,
     loading,
     compileError,
-    dirty,
-    initWasm,
+    initCompiler,
     setDslSource,
     compile,
     validate,
@@ -63,6 +62,10 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     reset,
     importYaml,
   } = useDSLStore()
+
+  // Derived from the store: the source differs from the last load, import, reset, or
+  // successful deploy snapshot. The reload guard and the (unsaved) label read this.
+  const unsaved = useDSLStore(selectHasUnsavedChanges)
 
   const [outputTab, setOutputTab] = useState<OutputTab>('yaml')
   const [copied, setCopied] = useState(false)
@@ -107,10 +110,10 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     document.addEventListener('mouseup', onUp)
   }, [])
 
-  // Initialize WASM on mount
+  // Check compiler availability on mount
   useEffect(() => {
-    initWasm()
-  }, [initWasm])
+    initCompiler()
+  }, [initCompiler])
 
   // Set diagnostics as Monaco markers whenever they change
   useEffect(() => {
@@ -151,7 +154,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
       ],
       run: () => format(),
     })
-  }, [compile, format, wasmReady])
+  }, [compile, format, compilerReady])
 
   // Register theme before Monaco renders so the first paint is already dark
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
@@ -276,21 +279,19 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     setTimeout(() => importTextareaRef.current?.focus(), 50)
   }, [])
 
-  const handleImportConfirm = useCallback(() => {
+  const handleImportConfirm = useCallback(async () => {
     const yaml = importText.trim()
     if (!yaml) {
       setImportError('Please paste YAML content')
       return
     }
     try {
-      importYaml(yaml)
+      await importYaml(yaml)
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+    } catch (err) {
+      setImportError(`Failed to import YAML: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [importText, importYaml])
 
@@ -347,7 +348,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   }, [importUrl])
 
   // Diagnostic counts (3 severity levels per design doc)
-  const errorCount = diagnostics.filter((d) => d.level === 'error').length
+  const errorCount = diagnostics.filter((d) => d.level === 'error').length + (compileError ? 1 : 0)
   const warnCount = diagnostics.filter((d) => d.level === 'warning').length
   const constraintCount = diagnostics.filter((d) => d.level === 'constraint').length
 
@@ -355,7 +356,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   const lineCount = dslSource.split('\n').length
   const signalCount = symbols?.signals?.length ?? 0
   const routeCount = symbols?.routes?.length ?? 0
-  const isValid = errorCount === 0 && wasmReady
+  const isValid = errorCount === 0 && compilerReady
 
   return (
     <div className={`${styles.page} ${embedded ? styles.embedded : ''}`}>
@@ -374,23 +375,23 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
               <path d="M2 3h12M2 8h8M2 13h10" strokeLinecap="round" />
             </svg>
             DSL Editor
-            {dirty && (
+            {unsaved && (
               <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>
             )}
           </div>
 
-          {/* WASM status */}
-          {wasmError ? (
+          {/* Compiler status */}
+          {compilerError ? (
             <span className={styles.statusError}>
-              <span className={styles.dot} /> WASM Error
+              <span className={styles.dot} /> Compiler unavailable
             </span>
-          ) : wasmReady ? (
+          ) : compilerReady ? (
             <span className={styles.statusReady}>
               <span className={styles.dot} /> Ready
             </span>
           ) : (
             <span className={styles.statusLoading}>
-              <span className={styles.dotPulse} /> Loading WASM…
+              <span className={styles.dotPulse} /> Connecting…
             </span>
           )}
 
@@ -399,7 +400,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           <button
             className={styles.toolbarBtn}
             onClick={handleOpenImport}
-            disabled={!wasmReady}
+            disabled={!compilerReady}
             title="Import routing from YAML config"
           >
             <svg
@@ -419,7 +420,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           <button
             className={styles.toolbarBtn}
             onClick={format}
-            disabled={!wasmReady || !dslSource.trim()}
+            disabled={!compilerReady || !dslSource.trim()}
             title="Format (Ctrl+Shift+F)"
           >
             <svg
@@ -438,7 +439,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           <button
             className={styles.toolbarBtn}
             onClick={validate}
-            disabled={!wasmReady || !dslSource.trim()}
+            disabled={!compilerReady || !dslSource.trim()}
             title="Validate DSL"
           >
             <svg
@@ -457,7 +458,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           <button
             className={styles.toolbarBtnPrimary}
             onClick={compile}
-            disabled={!wasmReady || !dslSource.trim() || loading}
+            disabled={!compilerReady || !dslSource.trim() || loading}
             title="Compile (Ctrl+Enter)"
           >
             <svg
@@ -492,8 +493,8 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             <span className={styles.paneTitle}>Source</span>
           </div>
 
-          {/* WASM loading overlay */}
-          {!wasmReady && !wasmError && (
+          {/* Compiler connection overlay */}
+          {!compilerReady && !compilerError && (
             <div className={styles.wasmOverlay}>
               <ProductLoadingState label="Loading compiler" compact />
             </div>
@@ -689,6 +690,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             <div className={styles.outputContent}>
               {compileError && (
                 <div
+                  role="alert"
                   style={{
                     padding: 'var(--spacing-md)',
                     color: 'var(--color-danger)',

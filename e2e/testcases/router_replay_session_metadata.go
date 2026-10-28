@@ -8,14 +8,15 @@ import (
 	"net/url"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
 	pkgtestcases.Register("router-replay-session-list-filter", pkgtestcases.TestCase{
-		Description: "GET /v1/router_replay?session_id= returns only replay rows for that session (x-session-id pinned chats)",
+		Description: "GET /api/v1/observability/replays?session_id= returns only replay rows for that session (x-session-id pinned chats)",
 		Tags:        []string{"router-replay", "functional", "router-replay-api"},
 		Fn:          testRouterReplaySessionListFilter,
 	})
@@ -154,7 +155,7 @@ func postChatCompletionsWithReplayHeaders(ctx context.Context, session *fixtures
 	}
 	chat := fixtures.NewChatCompletionsClient(session, 45*time.Second)
 	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model:    "auto",
+		Model:    "vllm-sr/auto",
 		User:     o.userID,
 		Messages: msgs,
 	}, map[string]string{
@@ -204,7 +205,7 @@ func fetchReplayListForSession(managementSession *fixtures.ServiceSession, sessi
 	raw, err := doRouterReplayManagementGET(
 		context.Background(),
 		managementSession,
-		"/v1/router_replay?"+q.Encode(),
+		"/api/v1/observability/replays?"+q.Encode(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GET router_replay list: %w", err)

@@ -1,6 +1,5 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import type { ConfigSection } from '../components/ConfigNav'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
 import AuthTransitionPage from '../pages/AuthTransitionPage'
@@ -13,17 +12,18 @@ import SetupStatusPage from './SetupStatusPage'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { useCapabilities } from '../contexts/CapabilitiesContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const { user } = useAuth()
+  const { user, refreshSession } = useAuth()
+  const { refreshSettings } = useReadonly()
   const {
-    isLoading: settingsLoading,
-    evaluationAvailable,
-    evaluationUnavailableReason,
-  } = useReadonly()
-  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
-  const canUseMLSetup = canAccessMLSetup(user)
+    capabilities,
+    isLoading: capabilitiesLoading,
+    error: capabilitiesError,
+    refreshCapabilities,
+  } = useCapabilities()
 
   if (isLoading) {
     return <ProductLoadingState label="Opening your workspace" />
@@ -64,14 +64,17 @@ const AppRouter: React.FC = () => {
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              configSection,
-              setConfigSection,
-              canUseMLSetup,
+              canAccessMLSetup: canAccessMLSetup(user),
               user,
               setupMode,
-              settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
+              capabilities,
+              capabilitiesLoading,
+              capabilitiesError,
+              onRefreshAccess: () => {
+                refreshSettings()
+                refreshCapabilities()
+                void refreshSession()
+              },
             })}
           </Route>
         </Route>

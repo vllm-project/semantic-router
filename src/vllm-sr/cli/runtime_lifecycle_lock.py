@@ -157,21 +157,29 @@ def _acquire_file_lock(
 
 
 def _default_lock_directory() -> Path:
-    user_id = os.geteuid()
-    linux_runtime = Path(f"/run/user/{user_id}")
+    return _resolve_lock_directory(
+        Path(f"/run/user/{os.geteuid()}"),
+        os.getenv("XDG_RUNTIME_DIR", "").strip(),
+        os.getenv("XDG_STATE_HOME", "").strip(),
+    )
+
+
+def _resolve_lock_directory(
+    linux_runtime: Path, xdg_runtime: str, xdg_state: str
+) -> Path:
     if _is_safe_owned_directory(linux_runtime):
         return linux_runtime / "vllm-sr" / "locks"
 
-    xdg_runtime = os.getenv("XDG_RUNTIME_DIR", "").strip()
     if xdg_runtime:
         runtime_path = Path(xdg_runtime).expanduser()
-        if not runtime_path.is_absolute() or not _is_safe_owned_directory(runtime_path):
-            raise RuntimeLifecycleLockError(
-                "XDG_RUNTIME_DIR is not a safe current-user directory."
-            )
-        return runtime_path / "vllm-sr" / "locks"
+        if runtime_path.is_absolute() and _is_safe_owned_directory(runtime_path):
+            return runtime_path / "vllm-sr" / "locks"
+        # A set-but-unusable XDG_RUNTIME_DIR (for example the /run/user/<uid>
+        # value WSL images commonly carry without a systemd session, where the
+        # directory is exported but never created) falls through to the
+        # state-home fallback below instead of aborting. The fallback only
+        # fails when it is itself unusable.
 
-    xdg_state = os.getenv("XDG_STATE_HOME", "").strip()
     state_path = (
         Path(xdg_state).expanduser() if xdg_state else Path.home() / ".local" / "state"
     )

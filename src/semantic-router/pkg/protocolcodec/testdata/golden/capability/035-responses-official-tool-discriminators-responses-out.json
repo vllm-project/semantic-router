@@ -13,7 +13,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -76,10 +75,33 @@
     {
       "name": "custom",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_tool"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "Use the selected tool.",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "format": {
+                "definition": "start: /.+/",
+                "syntax": "lark",
+                "type": "grammar"
+              },
+              "name": "apply_patch",
+              "type": "custom"
+            }
+          ]
         }
       }
     },
@@ -106,7 +128,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }

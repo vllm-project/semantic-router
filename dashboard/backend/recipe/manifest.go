@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -182,6 +184,7 @@ type routingAssets struct {
 type evaluationSettings struct {
 	RequestTimeoutSeconds *float64 `yaml:"request_timeout_seconds"`
 	Concurrency           *int     `yaml:"concurrency"`
+	Shards                *int     `yaml:"shards"`
 }
 
 type acceptancePolicy struct {
@@ -204,38 +207,48 @@ type robustnessPolicy struct {
 }
 
 type probeDecision struct {
-	ID                string              `yaml:"id"`
-	ExpectedDecision  string              `yaml:"expected_decision"`
-	Model             string              `yaml:"model"`
-	ExpectedRecipe    string              `yaml:"expected_recipe"`
-	ExpectedAlgorithm string              `yaml:"expected_algorithm"`
-	ExpectedPlugins   []string            `yaml:"expected_plugins"`
-	ForbiddenPlugins  []string            `yaml:"forbidden_plugins"`
-	PluginMatch       string              `yaml:"plugin_match"`
-	ExpectedAlias     string              `yaml:"expected_alias"`
-	ExpectedSignals   map[string][]string `yaml:"expected_signals"`
-	ForbiddenSignals  map[string][]string `yaml:"forbidden_signals"`
-	SignalMatch       string              `yaml:"signal_match"`
-	Robustness        robustnessPolicy    `yaml:"robustness"`
-	Objective         string              `yaml:"objective"`
-	Notes             string              `yaml:"notes"`
-	Variants          []probeVariant      `yaml:"variants"`
+	ExpectedSignalErrors    yaml.Node `yaml:"expected_signal_errors"`
+	signalErrors            map[string]string
+	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
+	signalValueBounds       map[string]SignalValueBounds
+	ExpectedSelectionStatus *string             `yaml:"expected_selection_status"`
+	ID                      string              `yaml:"id"`
+	ExpectedDecision        string              `yaml:"expected_decision"`
+	Model                   string              `yaml:"model"`
+	ExpectedRecipe          string              `yaml:"expected_recipe"`
+	ExpectedAlgorithm       string              `yaml:"expected_algorithm"`
+	ExpectedPlugins         []string            `yaml:"expected_plugins"`
+	ForbiddenPlugins        []string            `yaml:"forbidden_plugins"`
+	PluginMatch             string              `yaml:"plugin_match"`
+	ExpectedAlias           string              `yaml:"expected_alias"`
+	ExpectedSignals         map[string][]string `yaml:"expected_signals"`
+	ForbiddenSignals        map[string][]string `yaml:"forbidden_signals"`
+	SignalMatch             string              `yaml:"signal_match"`
+	Robustness              robustnessPolicy    `yaml:"robustness"`
+	Objective               string              `yaml:"objective"`
+	Notes                   string              `yaml:"notes"`
+	Variants                []probeVariant      `yaml:"variants"`
 }
 
 type probeVariant struct {
-	ID              string                 `yaml:"id"`
-	DisplayPrompt   string                 `yaml:"display_prompt"`
-	Playground      *probePlaygroundPolicy `yaml:"playground"`
-	Query           string                 `yaml:"query"`
-	Messages        []map[string]any       `yaml:"messages"`
-	Tools           []map[string]any       `yaml:"tools"`
-	ToolChoice      any                    `yaml:"tool_choice"`
-	Repeat          int                    `yaml:"repeat"`
-	Padding         *Padding               `yaml:"padding"`
-	GeneratedText   *probeGeneratedText    `yaml:"generated_text"`
-	Tags            []string               `yaml:"tags"`
-	Notes           string                 `yaml:"notes"`
-	ExpectedSignals map[string][]string    `yaml:"expected_signals"`
+	ExpectedSignalErrors    yaml.Node `yaml:"expected_signal_errors"`
+	signalErrors            map[string]string
+	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
+	signalValueBounds       map[string]SignalValueBounds
+	ExpectedSelectionStatus *string                `yaml:"expected_selection_status"`
+	ID                      string                 `yaml:"id"`
+	DisplayPrompt           string                 `yaml:"display_prompt"`
+	Playground              *probePlaygroundPolicy `yaml:"playground"`
+	Query                   string                 `yaml:"query"`
+	Messages                []map[string]any       `yaml:"messages"`
+	Tools                   []map[string]any       `yaml:"tools"`
+	ToolChoice              any                    `yaml:"tool_choice"`
+	Repeat                  int                    `yaml:"repeat"`
+	Padding                 *Padding               `yaml:"padding"`
+	GeneratedText           *probeGeneratedText    `yaml:"generated_text"`
+	Tags                    []string               `yaml:"tags"`
+	Notes                   string                 `yaml:"notes"`
+	ExpectedSignals         map[string][]string    `yaml:"expected_signals"`
 }
 
 type probePlaygroundPolicy struct {
@@ -312,6 +325,9 @@ func validateProbeEvaluationSettings(evaluation evaluationSettings, issues *[]st
 	if concurrency := evaluation.Concurrency; concurrency != nil && (*concurrency < 1 || *concurrency > 64) {
 		*issues = append(*issues, "evaluation.concurrency must be between 1 and 64")
 	}
+	if shards := evaluation.Shards; shards != nil && (*shards < 1 || *shards > 16) {
+		*issues = append(*issues, "evaluation.shards must be between 1 and 16")
+	}
 }
 
 func validateProbeDecision(
@@ -332,6 +348,13 @@ func validateProbeDecision(
 	decisionIDs[decision.ID] = struct{}{}
 	if strings.TrimSpace(decision.ExpectedDecision) == "" {
 		*issues = append(*issues, label+".expected_decision is required")
+	}
+	validateExpectedSelectionStatus(decision.ExpectedSelectionStatus, label, issues)
+	decision.signalErrors = validatedSignalErrors(decision.ExpectedSignalErrors, label, issues)
+	var valueErr error
+	decision.signalValueBounds, valueErr = parseSignalValueExpectations(decision.ExpectedSignalValues)
+	if valueErr != nil {
+		*issues = append(*issues, label+"."+valueErr.Error())
 	}
 	decision.PluginMatch = defaultMatchMode(decision.PluginMatch)
 	decision.SignalMatch = defaultMatchMode(decision.SignalMatch)
@@ -364,6 +387,13 @@ func validateProbeVariant(
 ) {
 	label := fmt.Sprintf("%s.variants[%d]", decisionLabel, variantIndex)
 	validateProbeVariantIdentity(decisionID, variant.ID, label, probeIDs, issues)
+	validateExpectedSelectionStatus(variant.ExpectedSelectionStatus, label, issues)
+	variant.signalErrors = validatedSignalErrors(variant.ExpectedSignalErrors, label, issues)
+	var valueErr error
+	variant.signalValueBounds, valueErr = parseSignalValueExpectations(variant.ExpectedSignalValues)
+	if valueErr != nil {
+		*issues = append(*issues, label+"."+valueErr.Error())
+	}
 	variant.Query = strings.TrimSpace(variant.Query)
 	variant.DisplayPrompt = strings.TrimSpace(variant.DisplayPrompt)
 	if utf8.RuneCountInString(variant.DisplayPrompt) > 2_000 {
@@ -372,6 +402,25 @@ func validateProbeVariant(
 	validateProbePlayground(variant, label, issues)
 	validateProbeVariantRequest(variant, label, issues)
 	validateProbeImageFixtureReferences(variant, imageFixtures, label, issues)
+}
+
+func validateExpectedSelectionStatus(status *string, label string, issues *[]string) {
+	if status == nil {
+		return
+	}
+	switch *status {
+	case "selected", "planned_final", "fallback", "execution_required", "unavailable", "failed", "not_required":
+		return
+	default:
+		*issues = append(*issues, label+".expected_selection_status is invalid")
+	}
+}
+
+func expectedSelectionStatusValue(status *string) string {
+	if status == nil {
+		return ""
+	}
+	return *status
 }
 
 func validateProbeVariantIdentity(
@@ -556,11 +605,14 @@ func expectedAssertionsForDecision(decision probeDecision) ExpectedAssertions {
 		Decision:         decision.ExpectedDecision,
 		Recipe:           decision.ExpectedRecipe,
 		Algorithm:        decision.ExpectedAlgorithm,
+		SelectionStatus:  expectedSelectionStatusValue(decision.ExpectedSelectionStatus),
 		Alias:            decision.ExpectedAlias,
 		Plugins:          nonNilStrings(decision.ExpectedPlugins),
 		ForbiddenPlugins: nonNilStrings(decision.ForbiddenPlugins),
 		PluginMatch:      decision.PluginMatch,
 		Signals:          nonNilSignalMap(decision.ExpectedSignals),
+		SignalValues:     cloneSignalValueBounds(decision.signalValueBounds),
+		SignalErrors:     cloneSignalErrors(decision.signalErrors),
 		ForbiddenSignals: nonNilSignalMap(decision.ForbiddenSignals),
 		SignalMatch:      decision.SignalMatch,
 	}
@@ -572,8 +624,17 @@ func flattenProbe(
 	expected ExpectedAssertions,
 	imageFixtures map[string]probeImageFixture,
 ) ProbeDetail {
+	if variant.ExpectedSelectionStatus != nil {
+		expected.SelectionStatus = *variant.ExpectedSelectionStatus
+	}
 	if variant.ExpectedSignals != nil {
 		expected.Signals = nonNilSignalMap(variant.ExpectedSignals)
+	}
+	if variant.signalValueBounds != nil {
+		expected.SignalValues = cloneSignalValueBounds(variant.signalValueBounds)
+	}
+	if variant.signalErrors != nil {
+		expected.SignalErrors = cloneSignalErrors(variant.signalErrors)
 	}
 	shapes, preview := probePresentation(variant)
 	return ProbeDetail{

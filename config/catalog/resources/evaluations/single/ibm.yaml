@@ -1,0 +1,255 @@
+- id: ibm/granite-4.2-30b-model-card-ifbench@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7717
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-aime@2025.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.8917
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-livecodebench@6.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.7577
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.776
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-scicode@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    score: 0.3876
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-ifbench@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7933
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-aime@2025.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.8667
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-livecodebench@6.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.7324
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7404
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-scicode@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    score: 0.3609
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-ifbench@1.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7433
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-aime@2025.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.7833
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-livecodebench@6.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.6971
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6784
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-scicode@1.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    score: 0.2411
+  status: available
+  observed_at: 2026-09-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true

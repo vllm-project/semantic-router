@@ -173,6 +173,13 @@ func (r *OpenAIRouter) handleToolSelection(
 	tsPlugin := ctx.VSRSelectedDecision.GetToolSelectionConfig()
 	toolsCfg := resolveDecisionToolsConfig(ctx)
 
+	// The trusted-facts gate runs before the decision-plugin branch and
+	// before relevance/ranking so deny and narrow close the bypass for
+	// tool_selection flows too: neither outcome can widen the tool set.
+	if r.applyTrustedFactsGate(request, ctx, toolsCfg, trustedFactsRequestStage) {
+		return nil
+	}
+
 	handled, err := r.handleToolSelectionDecisionPlugin(request, userContent, nonUserMessages, response, ctx, tsPlugin, toolsCfg)
 	if err != nil {
 		return err
@@ -380,7 +387,7 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 	if config.IsHybridHistoryRetrieval(advanced) {
 		transition := extractToolTransitionContextFromRequest(request, config.ResolveHybridHistoryHorizon(advanced), ctx)
 		decisionConfidence := float64(0)
-		if ctx != nil {
+		if ctx != nil && ctx.VSRSelectedDecisionConfidenceScored {
 			decisionConfidence = float64(ctx.VSRSelectedDecisionConfidence)
 		}
 		selected := tools.FilterAndRankToolsWithConversation(
@@ -409,6 +416,9 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 // recorded by the caller and stays unconditional.
 func emitToolObservability(response **ext_proc.ProcessingResponse, ctx *RequestContext, strategyID string, confidence float32, latency time.Duration) {
 	if response == nil || *response == nil {
+		return
+	}
+	if (*response).GetImmediateResponse() != nil {
 		return
 	}
 	if !debugHeadersRequested(ctx) {
@@ -469,7 +479,10 @@ func newToolRetrievalInput(
 	if ctx.VSRSelectedDecision != nil && in.DecisionName == "" {
 		in.DecisionName = ctx.VSRSelectedDecision.Name
 	}
-	in.DecisionConfidence = ctx.VSRSelectedDecisionConfidence
+	in.DecisionConfidenceAvailable = ctx.VSRSelectedDecisionConfidenceScored
+	if in.DecisionConfidenceAvailable {
+		in.DecisionConfidence = ctx.VSRSelectedDecisionConfidence
+	}
 	return in
 }
 
@@ -479,7 +492,7 @@ func resolveCategory(advanced *config.AdvancedToolFilteringConfig, ctx *RequestC
 		return cat
 	}
 	if advanced.CategoryConfidenceThreshold != nil &&
-		ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold) {
+		(!ctx.VSRSelectedDecisionConfidenceScored || ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold)) {
 		return ""
 	}
 	return cat

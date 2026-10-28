@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -29,8 +30,8 @@ func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
 
 // ClassifyAll performs embedding similarity classification on the given text.
 // Returns the highest-ranking matched rules, limited by embedding_config.top_k
-// (default 1, 0 disables truncation). When top_k is increased, the decision
-// engine can compose multiple embedding matches together.
+// (default 0 returns all accepted matches). A positive top_k explicitly limits
+// the evidence available to projections and decisions.
 func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 	result, err := c.ClassifyDetailed(text)
 	if err != nil {
@@ -44,6 +45,16 @@ func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 // output shaping. Only rules whose effective QueryModality is "text"
 // participate. For image/audio queries, use ClassifyDetailedMultimodal.
 func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassificationResult, error) {
+	return c.ClassifyDetailedWithContext(context.Background(), text)
+}
+
+// ClassifyDetailedWithContext carries request cancellation through candidate
+// preparation and provider admission. A started native call still drains before
+// returning; cancellation does not preempt its kernel or release its owner early.
+func (c *EmbeddingClassifier) ClassifyDetailedWithContext(ctx context.Context, text string) (*EmbeddingClassificationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(c.rules) == 0 {
 		return &EmbeddingClassificationResult{}, nil
 	}
@@ -61,14 +72,14 @@ func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassific
 	}
 
 	modelType := c.getModelType()
-	queryEmbedding, err := c.computeEmbedding(text, modelType)
+	queryEmbedding, err := c.computeEmbedding(ctx, text, modelType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 
 	logging.Infof("Computed query embedding (model: %s, dimension: %d)", modelType, len(queryEmbedding))
 
-	if ensureErr := c.ensureCandidateEmbeddings(); ensureErr != nil {
+	if ensureErr := c.ensureCandidateEmbeddings(ctx); ensureErr != nil {
 		return nil, ensureErr
 	}
 

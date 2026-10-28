@@ -390,12 +390,12 @@ func resolvePortForwardTarget(
 		return nil, nil, fmt.Errorf("no pods found for service %s/%s", namespace, service)
 	}
 
-	targetPod, err := firstRunningPod(pods.Items, namespace, service)
+	targetPod, err := firstReadyPod(pods.Items, namespace, service)
 	if err != nil {
 		return nil, nil, err
 	}
 	if verbose {
-		fmt.Printf("[Helper] Found running pod: %s\n", targetPod.Name)
+		fmt.Printf("[Helper] Found ready pod: %s\n", targetPod.Name)
 	}
 	return svc, targetPod, nil
 }
@@ -408,14 +408,20 @@ func serviceSelector(svc *corev1.Service) string {
 	return strings.Join(selectorParts, ",")
 }
 
-func firstRunningPod(pods []corev1.Pod, namespace, service string) (*corev1.Pod, error) {
+func firstReadyPod(pods []corev1.Pod, namespace, service string) (*corev1.Pod, error) {
 	for i := range pods {
 		pod := &pods[i]
-		if pod.Status.Phase == corev1.PodRunning {
-			return pod, nil
+		// A completed rollout can still leave terminating Pods in the list.
+		if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				return pod, nil
+			}
 		}
 	}
-	return nil, fmt.Errorf("no running pods found for service %s/%s", namespace, service)
+	return nil, fmt.Errorf("no ready pods found for service %s/%s", namespace, service)
 }
 
 func resolveContainerPort(svc *corev1.Service, servicePort string) string {

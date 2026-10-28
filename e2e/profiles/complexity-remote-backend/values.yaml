@@ -1,0 +1,120 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      # general-expert, not a profile-specific name: the shared
+      # AIGatewayRoute in deploy/kubernetes/ai-gateway/aigw-resources/
+      # matches x-ai-eg-model exactly against six names (math-, science-,
+      # social-, humanities-, law- and general-expert). A model outside that
+      # list has no route, so every request 404s at the gateway while the
+      # router itself looks perfectly healthy - which is what makes it easy
+      # to mistake for a router bug.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: general-expert
+    signals:
+      # Two rules over one remote score, differing only in where they draw
+      # their boundaries. No hard/easy candidates: with a backend the local
+      # prototype path is unreachable, so a verdict here can only have come
+      # from the remote scorer. That is what makes the assertion attributable
+      # rather than merely consistent.
+      complexity:
+        - name: needs_reasoning
+          description: Escalate when the remote scorer puts the request past 0.80
+          hard_above: 0.80
+          easy_below: 0.30
+        - name: extreme
+          description: A stricter reading of the same score
+          hard_above: 0.95
+          easy_below: 0.10
+    decisions:
+      # A score of 0.90 is past needs_reasoning's hard boundary but inside
+      # extreme's medium band, so one remote call must reach two different
+      # verdicts. Local prototype scoring cannot produce that: it has no
+      # candidates to compare against here.
+      - name: complexity_backend_hard
+        description: Deterministic remote complexity backend routing contract
+        priority: 2000
+        rules:
+          operator: OR
+          conditions:
+            - type: complexity
+              name: needs_reasoning:hard
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: complexity_backend_extreme
+        description: Reached only if the stricter rule also calls the request hard
+        priority: 3000
+        rules:
+          operator: OR
+          conditions:
+            - type: complexity
+              name: extreme:hard
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route, reached when the remote scorer produced no verdict
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      external:
+        - name: e2e-difficulty-scorer
+          model_role: classification
+          llm_endpoint:
+            address: mock-difficulty-scorer.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_model_name: difficulty-service
+          llm_timeout_seconds: 5
+      modules:
+        complexity:
+          # score.v1 rather than label_distribution.v1: the scorer returns a
+          # number and the rules above convert it. contract is required
+          # because complexity reads both, so omitting it would leave the
+          # runtime guessing which response shape to expect.
+          backend:
+            protocol: http_classify
+            contract: score.v1
+            model: e2e-difficulty-scorer
+            deadline_ms: 5000
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
+
+resources:
+  # 2Gi OOMKilled the router (exit 137) while it loaded the local mmbert
+  # embedding model the response cache is configured with. Taking the
+  # complexity scorer off-box does not avoid that load: the embedding models
+  # are gated separately from the classifier backend. The category profile
+  # runs in 2Gi because it configures no complexity rules and so resolves a
+  # different set of startup dependencies.
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 250m

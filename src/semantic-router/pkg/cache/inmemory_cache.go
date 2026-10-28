@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -19,8 +18,9 @@ import (
 // a few MB even for 1024-dim models.
 const defaultEmbeddingMemoSize = 512
 
-// InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
+// InMemoryCache provides a high-performance semantic cache over embeddings held in memory
 type InMemoryCache struct {
+	embeddingProvider   embedding.Provider
 	entries             []CacheEntry
 	entryMap            map[string]int // requestID -> index for O(1) lookup
 	exactEntries        map[string]exactMemoryEntry
@@ -43,10 +43,9 @@ type InMemoryCache struct {
 
 	hnswIndex        *HNSWIndex
 	useHNSW          bool
-	hnswNeedsRebuild bool                 // true while the HNSW graph is stale relative to entries
-	hnswEfSearch     int                  // Search-time ef parameter
-	embeddingModel   string               // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
-	polarityGuard    PolarityGuardOptions // optional NLI polarity tier (#2751)
+	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
+	hnswEfSearch     int    // Search-time ef parameter
+	embeddingModel   string // "mmbert" (default), "qwen3" or "multimodal"
 
 	// embMemo deduplicates query-embedding inference: a cache-miss request
 	// otherwise embeds the same query twice (lookup + pending write), so the
@@ -66,17 +65,17 @@ type InMemoryCache struct {
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
 type InMemoryCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	SimilarityThreshold float32
 	MaxEntries          int
 	TTLSeconds          int
 	Enabled             bool
 	EvictionPolicy      EvictionPolicyType
-	UseHNSW             bool                 // Enable HNSW index for faster search
-	HNSWM               int                  // Number of bi-directional links (default: 16)
-	HNSWEfConstruction  int                  // Size of dynamic candidate list during construction (default: 200)
-	HNSWEfSearch        int                  // Size of dynamic candidate list during search (default: 50)
-	EmbeddingModel      string               // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
-	PolarityGuard       PolarityGuardOptions // Optional NLI polarity tier (#2751)
+	UseHNSW             bool   // Enable HNSW index for faster search
+	HNSWM               int    // Number of bi-directional links (default: 16)
+	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
+	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
+	EmbeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 func attachInMemoryEvictionPolicy(cache *InMemoryCache, policy EvictionPolicyType) {
@@ -158,7 +157,6 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		"eviction_policy":      options.EvictionPolicy,
 		"use_hnsw":             options.UseHNSW,
 		"embedding_model":      embeddingModel,
-		"polarity_guard_nli":   options.PolarityGuard.UseNLI,
 	})
 
 	cache := &InMemoryCache{
@@ -174,7 +172,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
-		polarityGuard:       options.PolarityGuard,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, inMemoryEmbeddingOptions(embeddingModel)),
 		embMemo:             embedding.NewMemo(defaultEmbeddingMemoSize),
 	}
 
@@ -187,7 +185,6 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		"use_hnsw":             options.UseHNSW,
 		"hnsw_ef_search":       efSearch,
 		"embedding_model":      embeddingModel,
-		"polarity_guard_nli":   options.PolarityGuard.UseNLI,
 	})
 
 	attachInMemoryEvictionPolicy(cache, options.EvictionPolicy)
@@ -218,53 +215,17 @@ func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]f
 	}
 	if c.embMemo != nil {
 		return c.embMemo.GetOrCompute(text, func() ([]float32, error) {
-			return c.computeEmbedding(text)
+			return c.computeEmbedding(ctx, text)
 		})
 	}
-	return c.computeEmbedding(text)
+	return c.computeEmbedding(ctx, text)
 }
 
 // computeEmbedding runs the configured embedding model for text (no caching).
-func (c *InMemoryCache) computeEmbedding(text string) ([]float32, error) {
-	modelName := c.embeddingModel
+func (c *InMemoryCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
 
-	switch modelName {
-	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with TRUE continuous batching
-		// Now properly fixed to avoid CUDA context issues!
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma (standard version)
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "mmbert":
-		// Use GetEmbedding2DMatryoshka for mmBERT with 2D Matryoshka support
-		// Default to layer 6 (~3.6x speedup) and dimension 256 for good balance
-		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 6, 256)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "multimodal":
-		// Use multimodal text encoder branch (384-dim default)
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 384)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "bert":
-		// Use traditional GetEmbedding for BERT (default)
-		return candle_binding.GetEmbedding(text, 0)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
-	}
+func (c *InMemoryCache) computeEmbedding(ctx context.Context, text string) ([]float32, error) {
+	return invokeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
 // AddPendingRequest stores a request that is awaiting its response
@@ -300,6 +261,7 @@ func (c *InMemoryCache) AddPendingRequest(
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
+	polarityTokens := tokenizeForPolarity(query, nil)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -314,15 +276,16 @@ func (c *InMemoryCache) AddPendingRequest(
 	// Create cache entry for the pending request
 	now := time.Now()
 	entry := CacheEntry{
-		RequestID:    requestID,
-		RequestBody:  requestBody,
-		Model:        model,
-		Query:        query,
-		Embedding:    embedding,
-		Timestamp:    now,
-		LastAccessAt: now,
-		HitCount:     0,
-		TTLSeconds:   ttlSeconds,
+		RequestID:      requestID,
+		RequestBody:    requestBody,
+		Model:          model,
+		Query:          query,
+		polarityTokens: polarityTokens,
+		Embedding:      embedding,
+		Timestamp:      now,
+		LastAccessAt:   now,
+		HitCount:       0,
+		TTLSeconds:     ttlSeconds,
 	}
 
 	// Calculate expiration time if TTL is set
@@ -448,6 +411,7 @@ func (c *InMemoryCache) AddEntry(
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
+	polarityTokens := tokenizeForPolarity(query, nil)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -467,16 +431,17 @@ func (c *InMemoryCache) AddEntry(
 
 	now := time.Now()
 	entry := CacheEntry{
-		RequestID:    requestID,
-		RequestBody:  requestBody,
-		ResponseBody: responseBody,
-		Model:        model,
-		Query:        query,
-		Embedding:    embedding,
-		Timestamp:    now,
-		LastAccessAt: now,
-		HitCount:     0,
-		TTLSeconds:   ttlSeconds,
+		RequestID:      requestID,
+		RequestBody:    requestBody,
+		ResponseBody:   responseBody,
+		Model:          model,
+		Query:          query,
+		polarityTokens: polarityTokens,
+		Embedding:      embedding,
+		Timestamp:      now,
+		LastAccessAt:   now,
+		HitCount:       0,
+		TTLSeconds:     ttlSeconds,
 	}
 
 	// Calculate expiration time if TTL is set

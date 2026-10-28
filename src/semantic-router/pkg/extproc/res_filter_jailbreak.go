@@ -57,17 +57,19 @@ func (r *OpenAIRouter) enforceResponseJailbreakFromSignal(
 	}
 	if !matched {
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "not_detected", 0)
-		logging.Debugf("No jailbreak detected in response: risk=%.3f", ctx.VSRResponseJailbreakRisk)
+		logging.Debugf("No jailbreak detected in response: score_available=%v", ctx.VSRResponseJailbreakScoreAvailable)
 		return nil
 	}
 
 	ctx.ResponseJailbreakDetected = true
 	ctx.ResponseJailbreakType = ctx.VSRResponseJailbreakType
 	ctx.ResponseJailbreakConfidence = ctx.VSRResponseJailbreakRisk
+	ctx.ResponseJailbreakScoreAvailable = ctx.VSRResponseJailbreakScoreAvailable
+	ctx.ResponseJailbreakDecision = ctx.VSRResponseJailbreakDecision
 
 	metrics.RecordPluginExecution("response_jailbreak", decisionName, "detected", 0)
-	logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f, rules=%v, decision=%s",
-		ctx.VSRResponseJailbreakType, ctx.VSRResponseJailbreakRisk, ctx.VSRMatchedResponseJailbreak, decisionName)
+	logging.Warnf("Response jailbreak detected: type=%s, score_available=%v, rules=%v, decision=%s",
+		ctx.VSRResponseJailbreakType, ctx.VSRResponseJailbreakScoreAvailable, ctx.VSRMatchedResponseJailbreak, decisionName)
 
 	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
 		logging.Infof("Response jailbreak action is 'block', returning error response")
@@ -89,36 +91,36 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		return nil
 	}
 
-	rjCfg := ctx.VSRSelectedDecision.GetResponseJailbreakConfig()
-	threshold := rjCfg.Threshold
-	if threshold <= 0 && r.Config != nil {
-		threshold = r.Config.PromptGuard.Threshold
-	}
-	if threshold <= 0 {
-		threshold = 0.5
-	}
+	threshold := r.responseJailbreakThreshold(ctx.VSRSelectedDecision)
 
 	start := time.Now()
 	classifier := r.classifierForRequest(ctx)
 	// Scans the whole response in chunks and thresholds P(jailbreak) rather than
 	// the winning class's confidence, so this surface answers the same question
 	// as the routing signal and the classification API on the same text.
-	isJailbreak, jailbreakType, _, riskScore, err := classifier.CheckForJailbreakRiskWithThreshold(selectionRequestContext(ctx), assistantContent, threshold)
+	verdict, err := classifier.CheckForJailbreakVerdict(selectionRequestContext(ctx), assistantContent, threshold)
 	latency := time.Since(start).Seconds()
 
 	if err != nil {
 		logging.Errorf("Response jailbreak detection failed: %v", err)
 		metrics.RecordPluginError("response_jailbreak", "detection_error")
+		if classification.UnscannedInput(err) {
+			return r.responseJailbreakOnUnscanned(ctx, decisionName, latency)
+		}
 		return r.responseJailbreakOnClassifyError(ctx, responseJailbreakFailsClosed(classifierConfig(classifier)), decisionName, latency)
 	}
 
-	if isJailbreak {
+	if verdict.Detected {
 		ctx.ResponseJailbreakDetected = true
-		ctx.ResponseJailbreakType = jailbreakType
-		ctx.ResponseJailbreakConfidence = riskScore
+		ctx.ResponseJailbreakType = verdict.Label
+		ctx.ResponseJailbreakDecision = verdict.Decision
+		if verdict.RiskScore != nil {
+			ctx.ResponseJailbreakConfidence = *verdict.RiskScore
+			ctx.ResponseJailbreakScoreAvailable = true
+		}
 
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "detected", latency)
-		logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f", jailbreakType, riskScore)
+		logging.Warnf("Response jailbreak detected: type=%s, probabilities_available=%v", verdict.Label, verdict.RiskScore != nil)
 
 		action := r.getResponseJailbreakAction(ctx.VSRSelectedDecision)
 		if action == "block" {
@@ -128,7 +130,7 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		logging.Infof("Response jailbreak detected, action is '%s'", action)
 	} else {
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "not_detected", latency)
-		logging.Debugf("No jailbreak detected in response: risk=%.3f", riskScore)
+		logging.Debugf("No jailbreak detected in response: probabilities_available=%v", verdict.RiskScore != nil)
 	}
 
 	return nil
@@ -165,7 +167,9 @@ func (r *OpenAIRouter) responseJailbreakOnClassifyError(ctx *RequestContext, fai
 
 	ctx.ResponseJailbreakDetected = true
 	ctx.ResponseJailbreakType = classification.JailbreakClassificationErrorType
-	ctx.ResponseJailbreakConfidence = 1.0
+	ctx.ResponseJailbreakConfidence = 0
+	ctx.ResponseJailbreakScoreAvailable = false
+	ctx.ResponseJailbreakDecision = nil
 
 	metrics.RecordPluginExecution("response_jailbreak", decisionName, "fail_closed", latency)
 	logging.Warnf("Response jailbreak classifier failed and prompt_guard.on_error is %q; treating the response as unverified",
@@ -176,6 +180,25 @@ func (r *OpenAIRouter) responseJailbreakOnClassifyError(ctx *RequestContext, fai
 		// telling a caller the guardrail itself is down hands an attacker a
 		// probe for when the safety backend is offline. The cause is already in
 		// the log line and the replay record.
+		return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
+	}
+	return nil
+}
+
+// responseJailbreakOnUnscanned treats a response the guard did not read in
+// full (longer than its model's input or scan budget) as a detection, whatever
+// on_error says: padding a response must not carry content past the guard.
+func (r *OpenAIRouter) responseJailbreakOnUnscanned(ctx *RequestContext, decisionName string, latency float64) *ext_proc.ProcessingResponse {
+	ctx.ResponseJailbreakDetected = true
+	ctx.ResponseJailbreakType = classification.JailbreakUnscannedType
+	ctx.ResponseJailbreakConfidence = 0
+	ctx.ResponseJailbreakScoreAvailable = false
+	ctx.ResponseJailbreakDecision = nil
+
+	metrics.RecordPluginExecution("response_jailbreak", decisionName, "unscanned", latency)
+	logging.Warnf("Response jailbreak classifier did not read the whole response; treating it as unverified")
+
+	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
 		return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
 	}
 	return nil
@@ -287,4 +310,22 @@ func recordResponseSignal(ctx *RequestContext, confidences map[string]float64, e
 	for key, value := range errors {
 		ctx.VSRSignalErrors[key] = value
 	}
+}
+
+// responseJailbreakThreshold is shared by provider response processing and
+// management probes so the policy default cannot drift between the two.
+func (r *OpenAIRouter) responseJailbreakThreshold(decision *config.Decision) float32 {
+	threshold := float32(0)
+	if decision != nil {
+		if policy := decision.GetResponseJailbreakConfig(); policy != nil {
+			threshold = policy.Threshold
+		}
+	}
+	if threshold <= 0 && r.Config != nil {
+		threshold = r.Config.PromptGuard.Threshold
+	}
+	if threshold <= 0 {
+		threshold = 0.5
+	}
+	return threshold
 }

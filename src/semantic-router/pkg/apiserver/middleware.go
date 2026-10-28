@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -72,14 +72,10 @@ func (s *ClassificationAPIServer) writeManagementError(
 	message string,
 	requestID string,
 ) {
-	s.writeJSONResponse(w, statusCode, map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":       code,
-			"message":    scrubSecretsInErrorMessage(message),
-			"request_id": requestID,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-		},
-	})
+	s.writeJSONResponse(w, statusCode, managementErrorResponse{Error: managementErrorDetail{
+		Code: code, Message: scrubSecretsInErrorMessage(message), RequestID: requestID,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}})
 }
 
 func managementErrorMessage(code string) string {

@@ -9,6 +9,7 @@ import (
 )
 
 var signalTutorialBuckets = map[string]string{
+	"safety":         "learned",
 	"authz":          "heuristic",
 	"complexity":     "learned",
 	"context":        "heuristic",
@@ -31,6 +32,10 @@ var signalTutorialBuckets = map[string]string{
 	"metadata":       "heuristic",
 	"classifier":     "learned",
 	"input-modality": "heuristic",
+	"action":         "heuristic",
+	"decision":       "learned",
+
+	"topic-continuity": "heuristic",
 }
 
 var retiredSignalTutorialDocs = []string{

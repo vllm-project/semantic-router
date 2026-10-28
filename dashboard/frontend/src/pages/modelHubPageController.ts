@@ -105,7 +105,7 @@ function useMobileDetailDialog(
   }, [closeDetail, compact, detailCloseRef, detailLayerRef, detailOpen, detailTriggerRef])
 }
 
-function useBenchmarkModelFocus(view: ModelHubView, visibleRows: ModelHubRow[]) {
+function useArenaModelFocus(view: ModelHubView, visibleRows: ModelHubRow[]) {
   const [targetID, setTargetID] = useState<string | null>(null)
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   const [selectedID, setSelectedID] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const compact = useCompactModelHubLayout()
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(6)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const detailCloseRef = useRef<HTMLButtonElement>(null)
@@ -143,11 +143,8 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     () => paginateModelHubRows(rows, page, pageSize),
     [page, pageSize, rows],
   )
-  const selected = resolveModelHubSelection(
-    view === 'benchmarks' ? rows : pagination.items,
-    selectedID,
-  )
-  const focusBenchmarkModel = useBenchmarkModelFocus(view, pagination.items)
+  const selected = resolveModelHubSelection(pagination.items, selectedID)
+  const focusArenaModel = useArenaModelFocus(view, pagination.items)
 
   useEffect(() => {
     setPage(1)
@@ -177,7 +174,7 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     setPage(1)
   }
   const updatePageSize = (next: number): void => {
-    setPageSize(next)
+    setPageSize(Math.min(6, Math.max(1, next)))
     setPage(1)
   }
   const selectModel = (id: string): void => {
@@ -187,12 +184,12 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
       document.activeElement instanceof HTMLElement ? document.activeElement : null
     setDetailOpen(true)
   }
-  const openModelFromBenchmark = (id: string): void => {
+  const openModelFromArena = (id: string): void => {
     setSelectedID(id)
     setPage(modelHubPageForModel(rows, id, pageSize))
     setView('list')
     setDetailOpen(false)
-    focusBenchmarkModel(id)
+    focusArenaModel(id)
   }
 
   return {
@@ -218,6 +215,6 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     resetFilters,
     updatePageSize,
     selectModel,
-    openModelFromBenchmark,
+    openModelFromArena,
   }
 }

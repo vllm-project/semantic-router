@@ -3,6 +3,10 @@ package memory
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +23,20 @@ type QdrantStore struct {
 	qdrantConfig    *config.MemoryQdrantConfig
 	enabled         bool
 	embeddingConfig EmbeddingConfig
+
+	// retrievalUpdateMu serializes background reinforcement read-modify-writes so
+	// concurrent retrievals of the same memory cannot move access_count backwards.
+	retrievalUpdateMu sync.Mutex
+
+	// closeMu guards the closing transition so reinforcement registration
+	// (reinforcementWG.Add) can never race Close's drain (reinforcementWG.Wait).
+	closeMu sync.Mutex
+	// closed reports the store has begun closing: new reinforcement batches are
+	// rejected and queued batches exit without touching the client.
+	closed atomic.Bool
+	// reinforcementWG tracks in-flight reinforcement batches; Close drains it
+	// before releasing the client so no batch resumes against a closed pool.
+	reinforcementWG sync.WaitGroup
 }
 
 type QdrantStoreOptions struct {
@@ -45,16 +63,24 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		collectionName = "agentic_memory"
 	}
 
-	embCfg := EmbeddingConfig{Model: EmbeddingModelBERT}
+	embCfg := EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	if opts.EmbeddingConfig != nil {
 		embCfg = *opts.EmbeddingConfig
 	}
+
+	dimension, err := StorageDimension(opts.QdrantConfig.Dimension, embCfg)
+	if err != nil {
+		return nil, err
+	}
+	copied := *opts.QdrantConfig
+	copied.Dimension = dimension
+	embCfg.Dimension = dimension
 
 	s := &QdrantStore{
 		client:          opts.Client,
 		collectionName:  collectionName,
 		config:          opts.Config,
-		qdrantConfig:    opts.QdrantConfig,
+		qdrantConfig:    &copied,
 		enabled:         true,
 		embeddingConfig: embCfg,
 	}
@@ -78,13 +104,10 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to check qdrant collection: %w", err)
 	}
 	if exists {
-		return nil
+		return s.ensureListIndexes(ctx)
 	}
 
 	dim := s.qdrantConfig.Dimension
-	if dim <= 0 {
-		dim = 384
-	}
 
 	if err := s.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: s.collectionName,
@@ -100,17 +123,58 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to create qdrant memory collection: %w", err)
 	}
 
-	for _, field := range []string{"user_id", "project_id", "memory_type"} {
-		if _, err := s.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+	return s.ensureListIndexes(ctx)
+}
+
+// ensureListIndexes creates payload indexes used by List. An existing collection
+// still receives created_at so order-by works after upgrade. A duplicate index
+// is treated as success.
+func (s *QdrantStore) ensureListIndexes(ctx context.Context) error {
+	indexes := []struct {
+		name string
+		kind qdrant.FieldType
+	}{
+		{"user_id", qdrant.FieldType_FieldTypeKeyword},
+		{"project_id", qdrant.FieldType_FieldTypeKeyword},
+		{"memory_type", qdrant.FieldType_FieldTypeKeyword},
+		{"created_at", qdrant.FieldType_FieldTypeInteger},
+	}
+	for _, index := range indexes {
+		wait := true
+		_, err := s.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collectionName,
-			FieldName:      field,
-			FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
-		}); err != nil {
-			return fmt.Errorf("failed to create index on %q: %w", field, err)
+			FieldName:      index.name,
+			FieldType:      index.kind.Enum(),
+			Wait:           &wait,
+		})
+		if err != nil && !qdrantIndexAlreadyExists(err) {
+			return fmt.Errorf("failed to create index on %q: %w", index.name, err)
 		}
 	}
-
 	return nil
+}
+
+func qdrantIndexAlreadyExists(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already exists") || strings.Contains(msg, "already exist")
+}
+
+func qdrantListTotal(total uint64) (int, error) {
+	if total > uint64(math.MaxInt) {
+		return 0, fmt.Errorf("qdrant count %d exceeds the maximum supported list total", total)
+	}
+	return int(total), nil
+}
+
+func qdrantPointCreatedAt(point *qdrant.RetrievedPoint) (int64, error) {
+	if point == nil || point.Id == nil {
+		return 0, fmt.Errorf("qdrant ordered scroll returned a point without an ID")
+	}
+	createdAt, ok := point.Payload["created_at"]
+	if !ok || createdAt == nil {
+		return 0, fmt.Errorf("qdrant ordered scroll returned a point without created_at")
+	}
+	return createdAt.GetIntegerValue(), nil
 }
 
 // Qdrant only allows UUIDs and +ve integers.
@@ -192,24 +256,40 @@ func memoryToPayload(mem *Memory) map[string]any {
 }
 
 func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
+	startTime := time.Now()
+	operation := "store"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
+	if err := ctx.Err(); err != nil {
+		status = "error"
+		return err
+	}
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 	if mem.ID == "" {
+		status = "error"
 		return fmt.Errorf("memory ID is required")
 	}
 	if mem.Content == "" {
+		status = "error"
 		return fmt.Errorf("memory content is required")
 	}
 	if mem.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user ID is required")
 	}
 
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
@@ -234,10 +314,9 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		}},
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant upsert failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "store", "success", 0)
 	return nil
 }
 
@@ -245,8 +324,14 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	if !s.enabled {
 		return nil, nil
 	}
+	start := time.Now()
+	status := "error"
+	resultCount := -1
+	defer func() {
+		RecordMemoryRetrieval("qdrant", "retrieve", status, time.Since(start).Seconds(), resultCount)
+	}()
 
-	emb, err := GenerateEmbedding(opts.Query, s.embeddingConfig)
+	emb, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -259,6 +344,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	if threshold <= 0 {
 		threshold = float32(s.config.DefaultSimilarityThreshold)
 	}
+	queryLimit, scoreThreshold := qdrantRetrieveQuery(limit, threshold, opts)
 
 	must := []*qdrant.Condition{
 		qdrant.NewMatchKeyword("user_id", opts.UserID),
@@ -277,8 +363,8 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	scored, err := s.client.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: s.collectionName,
 		Query:          qdrant.NewQueryDense(emb),
-		Limit:          qdrant.PtrOf(uint64(limit)), //nolint:gosec
-		ScoreThreshold: &threshold,
+		Limit:          qdrant.PtrOf(queryLimit),
+		ScoreThreshold: scoreThreshold,
 		WithPayload:    qdrant.NewWithPayload(true),
 		Filter:         &qdrant.Filter{Must: must},
 	})
@@ -291,9 +377,187 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		m := payloadToMemory(sp.Payload)
 		results = append(results, &RetrieveResult{Memory: m, Score: sp.Score})
 	}
+	if opts.HybridSearch || opts.AdaptiveThreshold {
+		results = finalizePolicyRetrieve(results, opts, threshold, limit)
+	}
 
-	RecordMemoryStoreOperation("qdrant", "retrieve", "success", 0)
+	resultCount = len(results)
+	if resultCount == 0 {
+		status = "miss"
+	} else {
+		status = "hit"
+		//nolint:gosec // G118: reinforcement outlives the request by design; the
+		// batch derives its own bounded background context and registers with
+		// the store lifecycle, so Close drains it before releasing the client.
+		if s.beginReinforcement() {
+			go func() {
+				defer s.finishReinforcement()
+				s.recordRetrievalBatch(retrieveResultIDs(results))
+			}()
+		}
+	}
 	return results, nil
+}
+
+// beginReinforcement registers a background reinforcement batch with the store
+// lifecycle and reports whether the batch may start. Once closing has begun it
+// reports false, so no batch can start work against a client that is about to
+// be released. The registration happens under closeMu, which also guards the
+// closing transition, so an Add can never race the drain's Wait.
+func (s *QdrantStore) beginReinforcement() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.closed.Load() {
+		return false
+	}
+	s.reinforcementWG.Add(1)
+	return true
+}
+
+func (s *QdrantStore) finishReinforcement() { s.reinforcementWG.Done() }
+
+// recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved
+// memory in the background. The mutex only serializes this store's own
+// reinforcements; the per-memory compare-and-set in recordRetrieval keeps the
+// increment safe against other Router processes sharing the collection.
+func (s *QdrantStore) recordRetrievalBatch(ids []string) {
+	s.retrievalUpdateMu.Lock()
+	defer s.retrievalUpdateMu.Unlock()
+
+	// A batch queued behind this mutex can resume after Close began draining.
+	// The drain still waits for this batch (it is registered), but the client
+	// must not see any new work once closing has started.
+	if s.closed.Load() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, id := range ids {
+		if err := s.recordRetrieval(ctx, id); err != nil {
+			logging.Warnf("QdrantStore.recordRetrievalBatch: id=%s: %v", id, err)
+		}
+	}
+}
+
+// reinforcementRetryBudget bounds how long one reinforcement keeps retrying its
+// compare-and-set under cross-client contention before reporting the increment
+// as possibly lost.
+const reinforcementRetryBudget = 10 * time.Second
+
+// recordRetrieval performs the reinforcement for a single memory
+// (S += 1, t = now). Qdrant has no server-side counter, so the increment is an
+// atomic compare-and-set: SetPayload applies only while access_count still
+// holds the observed value. Without this, two Router processes sharing the
+// collection could each report a reinforcement while only one access persisted.
+//
+// The compare-and-set carries a unique per-attempt claim field. SetPayload
+// merges payload fields, so once the write applies, the claim survives every
+// later write; its presence proves this store's own write applied even when
+// competing clients obscured the count or token afterwards. It writes only the
+// access fields: payloads do not carry vectors, so routing this through Update
+// would re-embed the content on every reinforcement.
+func (s *QdrantStore) recordRetrieval(ctx context.Context, id string) error {
+	pointID := arbitraryIDToUUID(id)
+	started := time.Now()
+	for attempt := 1; ; attempt++ {
+		current, found, err := s.readAccessCount(ctx, pointID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("memory %q not found", id)
+		}
+
+		claim := "access_claim_" + uuid.NewString()
+		now := time.Now()
+		wait := true
+		_, err = s.client.SetPayload(ctx, &qdrant.SetPayloadPoints{
+			CollectionName: s.collectionName,
+			Payload: qdrant.NewValueMap(map[string]any{
+				"access_count":  int64(current + 1),
+				"updated_at":    now.Unix(),
+				"last_accessed": now.Unix(),
+				claim:           true,
+			}),
+			PointsSelector: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
+				Must: []*qdrant.Condition{
+					qdrant.NewHasID(pointID),
+					qdrant.NewMatchInt("access_count", int64(current)),
+				},
+			}),
+			Wait: &wait,
+		})
+		if err != nil {
+			return fmt.Errorf("qdrant reinforcement update failed: %w", err)
+		}
+
+		claimed, err := s.hasPayloadField(ctx, pointID, claim)
+		if err != nil {
+			return err
+		}
+		if claimed {
+			s.dropClaimField(ctx, pointID, claim)
+			return nil
+		}
+		// The compare-and-set was no-op'd by a competing reinforcement from the
+		// same observed count: this store's increment is not persisted yet.
+		// Retry with a fresh read.
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("qdrant reinforcement for memory %q interrupted while retrying: %w", id, err)
+		}
+		if time.Since(started) > reinforcementRetryBudget {
+			return fmt.Errorf("qdrant reinforcement compare-and-set kept losing races for memory %q for %s across %d attempts",
+				id, reinforcementRetryBudget, attempt)
+		}
+	}
+}
+
+// readAccessCount reads the access_count value the compare-and-set anchors on.
+func (s *QdrantStore) readAccessCount(ctx context.Context, pointID *qdrant.PointId) (int, bool, error) {
+	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collectionName,
+		Ids:            []*qdrant.PointId{pointID},
+		WithPayload:    qdrant.NewWithPayloadInclude("access_count"),
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("qdrant get failed: %w", err)
+	}
+	if len(pts) == 0 {
+		return 0, false, nil
+	}
+	var accessCount int
+	if v, ok := pts[0].Payload["access_count"]; ok {
+		accessCount = int(v.GetIntegerValue())
+	}
+	return accessCount, true, nil
+}
+
+// hasPayloadField reports whether the point carries the given payload field.
+func (s *QdrantStore) hasPayloadField(ctx context.Context, pointID *qdrant.PointId, field string) (bool, error) {
+	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collectionName,
+		Ids:            []*qdrant.PointId{pointID},
+		WithPayload:    qdrant.NewWithPayloadInclude(field),
+	})
+	if err != nil {
+		return false, fmt.Errorf("qdrant get failed: %w", err)
+	}
+	return len(pts) > 0 && pts[0].Payload[field] != nil, nil
+}
+
+// dropClaimField removes the spent claim field; a leftover is inert, so the
+// cleanup is best-effort.
+func (s *QdrantStore) dropClaimField(ctx context.Context, pointID *qdrant.PointId, claim string) {
+	wait := true
+	if _, err := s.client.DeletePayload(ctx, &qdrant.DeletePayloadPoints{
+		CollectionName: s.collectionName,
+		Keys:           []string{claim},
+		PointsSelector: qdrant.NewPointsSelector(pointID),
+		Wait:           &wait,
+	}); err != nil {
+		logging.Warnf("QdrantStore.recordRetrieval: claim cleanup failed: %v", err)
+	}
 }
 
 func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
@@ -317,27 +581,41 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error {
+	startTime := time.Now()
+	operation := "update"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
-	if _, err := s.Get(ctx, id); err != nil {
+	existing, err := s.Get(ctx, id)
+	if err != nil {
+		status = "error"
 		return err
 	}
 
 	mem.ID = id
+	if mem.CreatedAt.IsZero() {
+		mem.CreatedAt = existing.CreatedAt
+	}
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
 	mem.UpdatedAt = time.Now()
 
 	wait := true
-	_, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
+	_, err = s.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
@@ -347,24 +625,22 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		}},
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant update failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "update", "success", 0)
 	return nil
 }
 
 func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
 	if !s.enabled {
-		return &ListResult{}, nil
+		return nil, fmt.Errorf("qdrant store is not enabled")
 	}
-
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	if opts.UserID == "" {
+		return nil, fmt.Errorf("user ID is required for listing memories")
 	}
-	if limit > 100 {
-		limit = 100
+	limit, offset, err := normalizeListWindow(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	must := []*qdrant.Condition{
@@ -377,35 +653,105 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		}
 		must = append(must, qdrant.NewMatchKeywords("memory_type", typeVals...))
 	}
+	filter := &qdrant.Filter{Must: must}
 
-	points, _, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+	exact := true
+	total, err := s.client.Count(ctx, &qdrant.CountPoints{
 		CollectionName: s.collectionName,
-		Filter:         &qdrant.Filter{Must: must},
-		Limit:          qdrant.PtrOf(uint32(limit)), //nolint:gosec
-		WithPayload:    qdrant.NewWithPayload(true),
+		Filter:         filter,
+		Exact:          &exact,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("qdrant scroll failed: %w", err)
+		return nil, fmt.Errorf("qdrant count failed: %w", err)
+	}
+	totalAsInt, err := qdrantListTotal(total)
+	if err != nil {
+		return nil, err
 	}
 
-	memories := make([]*Memory, 0, len(points))
-	for _, pt := range points {
-		memories = append(memories, payloadToMemory(pt.Payload))
+	// Qdrant disables next_page_offset when a payload order is requested. Use
+	// created_at start_from and exclude the IDs at that timestamp instead. This
+	// advances through every ordered batch while retaining all rows that tie at
+	// the page boundary for the router-side ID tie-break.
+	direction := qdrant.Direction_Desc
+	window := offset + limit
+	collected := make([]*Memory, 0, window)
+	var startFrom *qdrant.StartFrom
+	var startTimestamp int64
+	var excludedIDs []*qdrant.PointId
+	for createdAtPrefixNeedsMore(collected, window) {
+		if createdAtTieGroupExceeds(collected, window, maxListTieGroup) {
+			return nil, fmt.Errorf("qdrant list tie group exceeds %d rows", maxListTieGroup)
+		}
+		batch := window - len(collected)
+		if batch < 1 || batch > maxListLimit {
+			batch = maxListLimit
+		}
+		scrollFilter := &qdrant.Filter{Must: must}
+		if len(excludedIDs) > 0 {
+			scrollFilter.MustNot = []*qdrant.Condition{qdrant.NewHasID(excludedIDs...)}
+		}
+		points, _, scrollErr := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+			CollectionName: s.collectionName,
+			Filter:         scrollFilter,
+			Limit:          qdrant.PtrOf(uint32(batch)), //nolint:gosec
+			OrderBy:        &qdrant.OrderBy{Key: "created_at", Direction: &direction, StartFrom: startFrom},
+			WithPayload:    qdrant.NewWithPayload(true),
+		})
+		if scrollErr != nil {
+			return nil, fmt.Errorf("qdrant scroll failed: %w", scrollErr)
+		}
+		if len(points) == 0 {
+			break
+		}
+		lastCreatedAt, pointErr := qdrantPointCreatedAt(points[len(points)-1])
+		if pointErr != nil {
+			return nil, pointErr
+		}
+		nextExcludedIDs := make([]*qdrant.PointId, 0, len(excludedIDs)+len(points))
+		if startFrom != nil && lastCreatedAt == startTimestamp {
+			nextExcludedIDs = append(nextExcludedIDs, excludedIDs...)
+		}
+		for _, pt := range points {
+			createdAt, pointErr := qdrantPointCreatedAt(pt)
+			if pointErr != nil {
+				return nil, pointErr
+			}
+			collected = append(collected, payloadToMemory(pt.Payload))
+			if createdAt == lastCreatedAt {
+				nextExcludedIDs = append(nextExcludedIDs, pt.Id)
+			}
+		}
+		startTimestamp = lastCreatedAt
+		startFrom = qdrant.NewStartFromInt(startTimestamp)
+		excludedIDs = nextExcludedIDs
 	}
+	sortMemoriesForList(collected)
+	page := pageMemories(collected, offset, limit)
 
 	return &ListResult{
-		Memories: memories,
-		Total:    len(memories),
+		Memories: page,
+		Total:    totalAsInt,
 		Limit:    limit,
+		Offset:   offset,
 	}, nil
 }
 
 func (s *QdrantStore) Forget(ctx context.Context, id string) error {
+	startTime := time.Now()
+	operation := "forget"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
 	if _, err := s.Get(ctx, id); err != nil {
+		status = "error"
 		return err
 	}
 
@@ -416,18 +762,26 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 		Points:         qdrant.NewPointsSelectorIDs([]*qdrant.PointId{arbitraryIDToUUID(id)}),
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant delete failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "forget", "success", 0)
 	return nil
 }
 
 func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
+	startTime := time.Now()
+	operation := "forget_by_scope"
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 	if scope.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user_id is required for ForgetByScope")
 	}
 
@@ -454,10 +808,9 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		}),
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("qdrant ForgetByScope failed: %w", err)
 	}
-
-	RecordMemoryStoreOperation("qdrant", "forget_by_scope", "success", 0)
 	return nil
 }
 
@@ -472,6 +825,13 @@ func (s *QdrantStore) CheckConnection(ctx context.Context) error {
 }
 
 func (s *QdrantStore) Close() error {
+	// Reject new reinforcement batches, then drain the in-flight and mutex-
+	// queued ones before releasing the client: a queued batch that resumed
+	// against a released pool would panic inside the client.
+	s.closeMu.Lock()
+	s.closed.Store(true)
+	s.closeMu.Unlock()
+	s.reinforcementWG.Wait()
 	if s.client != nil {
 		return s.client.Close()
 	}

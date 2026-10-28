@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -55,7 +54,7 @@ func (r *OpenAIRouter) retrieveFromQdrant(traceCtx context.Context, ctx *Request
 		topK = *ragConfig.TopK
 	}
 
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx)
 	if err != nil {
 		logging.Errorf("Failed to generate embedding for Qdrant RAG query: %v", err)
 		return "", fmt.Errorf("failed to generate embedding")

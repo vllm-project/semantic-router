@@ -22,17 +22,6 @@ presentation:
 conformance:
   status: unverified
 models:
-- catalog: moonshot/kimi-k2.5
-  relationship: first_party
-  id: kimi-k2.5
-  protocols:
-  - openai/chat-completions@1
-  reasoning_transport: thinking_object
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.moonshot.ai/docs/api/chat
 - catalog: moonshot/kimi-k2.6
   relationship: first_party
   id: kimi-k2.6

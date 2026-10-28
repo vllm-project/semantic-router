@@ -1,6 +1,70 @@
 {
   "cases": [
     {
+      "name": "cache_salt",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "cache_salt": "phase-salt",
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "min_p",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "min_p": 0,
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "repetition_penalty",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "repetition_penalty": 1.1
+        }
+      }
+    },
+    {
+      "name": "top_k",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_k": -1
+        }
+      }
+    },
+    {
       "name": "audio",
       "outcome": {
         "status": "error",
@@ -249,10 +313,16 @@
     {
       "name": "prompt_cache_key",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_prompt_cache_key"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "prompt_cache_key": "cache-key"
         }
       }
     },
@@ -537,10 +607,16 @@
     {
       "name": "verbosity",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_verbosity"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "verbosity": "low"
         }
       }
     },

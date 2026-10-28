@@ -4,6 +4,8 @@ metadata:
   name: semantic-router
 resources:
 - namespace.yaml
+- serviceaccount.yaml
+- rbac.yaml
 - pv-models.yaml
 - deployment.yaml
 - service.yaml
@@ -18,4 +20,11 @@ configMapGenerator:
   files:
   - config.yaml
   - tools_db.json
+  # Disabled: the running Router patches this ConfigMap directly through the
+  # Kubernetes API (issue #3688). A hash-suffixed name would mint a new
+  # ConfigMap on every `kubectl apply -k`, orphaning whatever the runtime
+  # write API had just written to the old one, and the RBAC Role above names
+  # this ConfigMap by its literal name.
+  options:
+    disableNameSuffixHash: true
 namespace: vllm-semantic-router-system

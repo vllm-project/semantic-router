@@ -21,12 +21,28 @@ const HEADER_INFO: Record<
     label: 'Model',
     type: 'info',
   },
+  'x-vsr-effective-input-tokens': {
+    label: 'Rendered input tokens',
+    type: 'info',
+  },
+  'x-vsr-effective-max-output-tokens': {
+    label: 'Output token limit',
+    type: 'info',
+  },
   'x-vsr-selected-algorithm': {
     label: 'Algorithm',
     type: 'info',
   },
   'x-vsr-selected-decision': {
     label: 'Decision',
+    type: 'info',
+  },
+  'x-vsr-selected-recipe': {
+    label: 'Recipe',
+    type: 'info',
+  },
+  'x-vsr-selected-confidence': {
+    label: 'Decision Confidence',
     type: 'info',
   },
   'x-vsr-selected-modality': {
@@ -125,6 +141,10 @@ const HEADER_INFO: Record<
     label: 'Jailbreak Signal',
     type: 'danger',
   },
+  'x-vsr-matched-safety': {
+    label: 'Safety Signal',
+    type: 'warning',
+  },
   'x-vsr-matched-hallucination': {
     label: 'Hallucination Signal',
     type: 'warning',
@@ -147,6 +167,10 @@ const HEADER_INFO: Record<
   },
   'x-vsr-matched-input-modality': {
     label: 'Input Modality Signal',
+    type: 'info',
+  },
+  'x-vsr-matched-decision-model': {
+    label: 'System One Answers',
     type: 'info',
   },
   'x-vsr-matched-projections': {
@@ -184,6 +208,10 @@ const HEADER_INFO: Record<
   },
   'x-vsr-looper-total-tokens': {
     label: 'Looper Total Tokens',
+    type: 'info',
+  },
+  'x-vsr-routing-latency-ms': {
+    label: 'Routing Latency',
     type: 'info',
   },
   'x-vsr-latency-ms': {
@@ -278,6 +306,7 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     'x-vsr-looper-model',
   ]
   const performanceKeys = [
+    'x-vsr-routing-latency-ms',
     'x-vsr-latency-ms',
     'x-vsr-ttft-ms',
     'x-vsr-tpot-ms',

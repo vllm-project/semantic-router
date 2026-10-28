@@ -18,8 +18,8 @@ providers:
 		t.Fatalf("parse canonical provider defaults: %v", err)
 	}
 
-	if warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(warnings) != 0 {
-		t.Fatalf("canonical provider defaults produced unknown-field warnings: %v", warnings)
+	if diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(diagnostics) != 0 {
+		t.Fatalf("canonical provider defaults produced unknown-field diagnostics: %v", diagnostics)
 	}
 }
 
@@ -42,9 +42,34 @@ routing:
 		t.Fatalf("parse canonical config: %v", err)
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-	if len(warnings) != 1 || !strings.Contains(warnings[0], `Unknown field "featured"`) {
-		t.Fatalf("featured must remain repository-only Provider metadata, warnings: %v", warnings)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0], `unknown field "featured"`) {
+		t.Fatalf("featured must remain repository-only Provider metadata, diagnostics: %v", diagnostics)
+	}
+}
+
+func TestParseYAMLBytesRejectsUnknownCanonicalField(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+      descriptin: typo
+`))
+	if err == nil {
+		t.Fatal("expected unknown canonical field to be rejected")
+	}
+	for _, fragment := range []string{
+		`unknown field "descriptin"`,
+		"routing.modelCards",
+		`did you mean "description"`,
+	} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("expected error to contain %q, got: %s", fragment, err)
+		}
 	}
 }
 
@@ -107,7 +132,7 @@ semantic_cache:
 
 	message := err.Error()
 	for _, fragment := range []string{
-		"config file must use canonical v0.3 version/listeners/providers/routing/global",
+		"config file must use the canonical v0.3 hierarchy",
 		"unexpected top-level keys: default_model, semantic_cache",
 		"vllm-sr config migrate --config old-config.yaml",
 	} {
@@ -340,7 +365,6 @@ routing:
       param_size: 3b
 global:
   router:
-    auto_model_name: auto
     clear_route_cache: false
     streamed_body:
       enabled: true
@@ -353,7 +377,6 @@ global:
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
-        bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
           min_score_threshold: 0.6
@@ -377,9 +400,6 @@ global:
 	if cfg.DefaultReasoningEffort != "low" {
 		t.Fatalf("expected default reasoning effort to be preserved, got %q", cfg.DefaultReasoningEffort)
 	}
-	if cfg.AutoModelName != "auto" {
-		t.Fatalf("expected auto model name override, got %q", cfg.AutoModelName)
-	}
 	if cfg.ClearRouteCache {
 		t.Fatal("expected clear_route_cache override to be false")
 	}
@@ -394,9 +414,6 @@ global:
 	}
 	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
 		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
-	}
-	if cfg.BertModelPath != "models/mom-embedding-light" {
-		t.Fatalf("expected bert embedding path override, got %q", cfg.BertModelPath)
 	}
 	if got := cfg.ModelConfig["qwen2.5:3b"].ReasoningFamily; got != "qwen3" {
 		t.Fatalf("expected provider model reasoning family, got %q", got)
@@ -444,7 +461,7 @@ global:
   model_catalog:
     embeddings:
       semantic:
-        bert_model_path: models/mom-embedding-light
+        qwen3_model_path: models/mom-embedding-pro
         use_cpu: true
 `)
 
@@ -473,6 +490,9 @@ global:
 	}
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
+	}
+	if got := cfg.Memory.Persistence.Queue; got != 64 {
+		t.Fatalf("expected sparse memory override to preserve default persistence queue 64, got %d", got)
 	}
 }
 
@@ -534,26 +554,17 @@ global:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 
-	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" {
+	if cfg.CategoryModel.ModelID != DefaultSystemModels().DomainClassifier {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
-	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
-		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
-	}
-	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" {
+	if cfg.PIIModel.ModelID != DefaultSystemModels().PIIClassifier {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
 	}
-	if !cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected sparse PII override to keep mmBERT-32K enabled")
-	}
-	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" {
+	if cfg.PromptGuard.ModelID != DefaultSystemModels().PromptGuard {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
-	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
-		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
-	}
-	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
-		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
+	if cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
+		t.Fatal("expected sparse classifier override to preserve default preference judgment mode")
 	}
 }
 
@@ -690,7 +701,7 @@ routing:
     - name: default
       priority: 1
       rules:
-        operator: OR
+        operator: AND
         conditions: []
       modelRefs:
         - model: gpt-worker
@@ -842,18 +853,15 @@ global:
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
         domain:
           model_ref: ""
           model_id: ""
           category_mapping_path: ""
-          use_mmbert_32k: false
         pii:
           model_ref: ""
           model_id: ""
           pii_mapping_path: ""
-          use_mmbert_32k: false
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -867,17 +875,11 @@ global:
 	if cfg.CategoryMappingPath != "" {
 		t.Fatalf("expected category mapping path to be cleared, got %q", cfg.CategoryMappingPath)
 	}
-	if cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected domain classifier mmBERT-32K default to be disabled")
-	}
 	if cfg.PIIModel.ModelID != "" {
 		t.Fatalf("expected PII classifier model to be cleared, got %q", cfg.PIIModel.ModelID)
 	}
 	if cfg.PIIMappingPath != "" {
 		t.Fatalf("expected PII mapping path to be cleared, got %q", cfg.PIIMappingPath)
-	}
-	if cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected PII classifier mmBERT-32K default to be disabled")
 	}
 	if cfg.PromptGuard.Enabled {
 		t.Fatal("expected prompt guard to be disabled")

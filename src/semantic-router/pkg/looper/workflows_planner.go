@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/shared"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -22,11 +23,8 @@ func (l *WorkflowsLooper) generateDynamicWorkflowPlan(
 	if cfg.PlannerModel == "" {
 		return nil, nil, fmt.Errorf("workflows dynamic mode requires planner.model")
 	}
-	plannerOriginal := requestTextWithOutputContract(original, req.OriginalRequest, req.OutputContract)
-	prompt := buildWorkflowPlannerPrompt(plannerOriginal, workerModels, cfg, req.OutputContractSpec)
-	planReq := appendFusionStageMessage(stripFusionToolUse(req.OriginalRequest), prompt)
-	configureWorkflowPlannerRequest(planReq)
-	resp, err := l.callWorkflowModel(ctx, planReq, cfg, cfg.PlannerModel, false, 1, req)
+	planReq := dynamicWorkflowPlannerRequest(req, cfg, original, workerModels)
+	resp, err := l.callWorkflowModel(ctx, planReq, workflowPlannerStageConfig(cfg), cfg.PlannerModel, llmprotocol.TrustedStageAdvisor, false, 1, req)
 	if err != nil {
 		return nil, resp, fmt.Errorf("workflow planner %q failed: %w", cfg.PlannerModel, err)
 	}
@@ -39,6 +37,21 @@ func (l *WorkflowsLooper) generateDynamicWorkflowPlan(
 		return nil, resp, fmt.Errorf("workflow planner %q returned invalid plan: %w", cfg.PlannerModel, err)
 	}
 	return plan, resp, nil
+}
+
+func dynamicWorkflowPlannerRequest(req *Request, cfg workflowsExecutionConfig, original string, workerModels []string) *openai.ChatCompletionNewParams {
+	plannerOriginal := requestTextWithOutputContract(original, req.OriginalRequest, req.OutputContract)
+	prompt := buildWorkflowPlannerPrompt(plannerOriginal, workerModels, cfg, req.OutputContractSpec)
+	planReq := appendFusionStageMessage(stripFusionToolUse(req.OriginalRequest), prompt)
+	configureWorkflowPlannerRequest(planReq)
+	return planReq
+}
+
+func workflowPlannerStageConfig(cfg workflowsExecutionConfig) workflowsExecutionConfig {
+	// A coordinator may also be an assigned worker. Its planner limit belongs
+	// to the planner call, not every call made to that same model identity.
+	cfg.MaxCompletionTokens = cfg.PlannerMaxCompletionTokens
+	return cfg
 }
 
 func shouldUseDynamicWorkflowFallback(cfg workflowsExecutionConfig) bool {
@@ -83,7 +96,7 @@ Available worker models, and the only worker models you may use:
 
 Limits:
 - steps: 1 to %d
-- models per step: 1 to %d
+- models per step: %d to %d
 - every step model must exactly match one available worker model
 
 Planning rules:
@@ -118,7 +131,7 @@ JSON schema:
 }
 
 Original user request:
-%s`, strings.Join(workerModels, "\n"), cfg.MaxSteps, cfg.MaxParallel, choicePlanningRule, original)
+%s`, strings.Join(workerModels, "\n"), cfg.MaxSteps, max(1, cfg.MinSuccessfulResponses), cfg.MaxParallel, choicePlanningRule, original)
 }
 
 func configureWorkflowPlannerRequest(req *openai.ChatCompletionNewParams) {

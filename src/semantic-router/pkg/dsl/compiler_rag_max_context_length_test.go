@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -130,4 +131,72 @@ func mustExtractRAGPluginConfig(t *testing.T, cfg *config.RouterConfig) config.R
 	}
 	t.Fatal("no rag plugin found on any decision")
 	return config.RAGPluginConfig{}
+}
+
+func TestRAGRerankSurvivesDSLCompileAndRoundTrip(t *testing.T) {
+	for _, test := range []struct {
+		name, field string
+		enabled     bool
+		topK        int
+	}{
+		{"top-k", "rerank: { top_k: 2 }", true, 2},
+		{"retain-all", "rerank: {}", true, 0},
+		{"omitted", "", false, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := mustCompile(t, ragRerankDSL(test.field))
+			source, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fromAST, errs := CompileAST(DecompileToAST(cfg))
+			if len(errs) != 0 {
+				t.Fatalf("AST round-trip: %v", errs)
+			}
+			for _, current := range []*config.RouterConfig{cfg, mustCompile(t, source), fromAST} {
+				if current.NeedsRAGReranker() != test.enabled {
+					t.Fatal("reranker activation changed")
+				}
+				rag := mustExtractRAGPluginConfig(t, current)
+				if rag.TopK == nil || *rag.TopK != 3 {
+					t.Fatal("retrieval candidate count changed")
+				}
+				if !test.enabled {
+					continue
+				}
+				if test.topK == 0 {
+					if rag.Rerank.TopK != nil {
+						t.Fatal("omitted rerank limit must retain all candidates")
+					}
+				} else if rag.Rerank.TopK == nil || *rag.Rerank.TopK != test.topK {
+					t.Fatalf("rerank.top_k = %v, want %d", rag.Rerank.TopK, test.topK)
+				}
+			}
+		})
+	}
+}
+
+func TestRAGRerankRejectsMalformedDSLValues(t *testing.T) {
+	for _, field := range []string{`rerank: true`, `rerank: { top_k: "two" }`} {
+		if _, errs := Compile(ragRerankDSL(field)); len(errs) == 0 {
+			t.Fatalf("accepted malformed reranker: %s", field)
+		}
+	}
+}
+
+func ragRerankDSL(field string) string {
+	return fmt.Sprintf(`
+SIGNAL domain test { description: "test" }
+ROUTE rag_route {
+ PRIORITY 100
+ WHEN domain("test")
+ MODEL "model-a"
+ PLUGIN rag {
+  enabled: true
+  backend: "vectorstore"
+  backend_config: { vector_store_id: "documents" }
+  top_k: 3
+  %s
+ }
+}`, field)
 }

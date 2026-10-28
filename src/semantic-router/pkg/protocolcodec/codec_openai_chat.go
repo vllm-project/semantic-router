@@ -17,7 +17,8 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityAudioInput,
 		llmprotocol.CapabilityFileInput,
-		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityReasoning,
+		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools,
+		llmprotocol.CapabilityReasoning,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
@@ -25,7 +26,10 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityReasoningEffort,
 		llmprotocol.CapabilityReasoningBudget, llmprotocol.CapabilitySamplingSeed,
 		llmprotocol.CapabilitySamplingPenalties, llmprotocol.CapabilityStopSequences,
+		llmprotocol.CapabilitySamplingTopK, llmprotocol.CapabilitySamplingMinP,
+		llmprotocol.CapabilityRepetitionPenalty, llmprotocol.CapabilityCacheIsolation,
 		llmprotocol.CapabilityRequestMetadata, llmprotocol.CapabilityRequestStorage,
+		llmprotocol.CapabilityTextVerbosity,
 	)
 }
 
@@ -52,7 +56,7 @@ type chatRequestWire struct {
 	Metadata             map[string]string      `json:"metadata,omitempty"`
 	Store                *bool                  `json:"store,omitempty"`
 	User                 string                 `json:"user,omitempty"`
-	PromptCacheKey       json.RawMessage        `json:"prompt_cache_key,omitempty"`
+	PromptCacheKey       string                 `json:"prompt_cache_key,omitempty"`
 	PromptCacheRetention json.RawMessage        `json:"prompt_cache_retention,omitempty"`
 	PromptCacheOptions   json.RawMessage        `json:"prompt_cache_options,omitempty"`
 	SafetyIdentifier     json.RawMessage        `json:"safety_identifier,omitempty"`
@@ -69,6 +73,10 @@ type chatRequestWire struct {
 	Verbosity            json.RawMessage        `json:"verbosity,omitempty"`
 	WebSearchOptions     json.RawMessage        `json:"web_search_options,omitempty"`
 	ChatTemplateKwargs   json.RawMessage        `json:"chat_template_kwargs,omitempty"`
+	TopK                 *int64                 `json:"top_k,omitempty"`
+	MinP                 *float64               `json:"min_p,omitempty"`
+	RepetitionPenalty    *float64               `json:"repetition_penalty,omitempty"`
+	CacheSalt            *string                `json:"cache_salt,omitempty"`
 }
 
 type chatStreamOptionsWire struct {
@@ -85,10 +93,15 @@ type chatMessageWire struct {
 	AlternateReasoning *string              `json:"reasoning,omitempty"`
 	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
 	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
-	ToolCalls          []chatToolCallWire   `json:"tool_calls,omitempty"`
-	ToolCallID         string               `json:"tool_call_id,omitempty"`
-	Annotations        []chatAnnotationWire `json:"annotations,omitempty"`
-	Name               json.RawMessage      `json:"name,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on response messages. The content is opaque
+	// provider metadata and is not replayed to the client. Client requests
+	// that carry the field are rejected in decodeChatRequestMessage.
+	ProviderSpecificFields json.RawMessage      `json:"provider_specific_fields,omitempty"`
+	ToolCalls              []chatToolCallWire   `json:"tool_calls,omitempty"`
+	ToolCallID             string               `json:"tool_call_id,omitempty"`
+	Annotations            []chatAnnotationWire `json:"annotations,omitempty"`
+	Name                   json.RawMessage      `json:"name,omitempty"`
 }
 
 type chatAudioOutputWire struct {
@@ -145,8 +158,10 @@ type chatInputAudioWire struct {
 type chatToolCallWire struct {
 	ID       string               `json:"id"`
 	Type     string               `json:"type"`
-	Function chatFunctionCallWire `json:"function"`
-	Custom   json.RawMessage      `json:"custom,omitempty"`
+	Function chatFunctionCallWire `json:"function,omitzero"`
+	Custom   *chatCustomCallWire  `json:"custom,omitempty"`
+	// Ollama sends the stream-only index on buffered tool calls too.
+	Index *int `json:"index,omitempty"`
 }
 
 type chatFunctionCallWire struct {
@@ -164,7 +179,8 @@ type chatFunctionDefinitionWire struct {
 
 type chatToolWire struct {
 	Type         string                     `json:"type"`
-	Function     chatFunctionDefinitionWire `json:"function"`
+	Function     chatFunctionDefinitionWire `json:"function,omitzero"`
+	Custom       *chatCustomToolWire        `json:"custom,omitempty"`
 	CacheControl *anthropicCacheControlWire `json:"cache_control,omitempty"`
 }
 
@@ -182,6 +198,9 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeChatBaseRequest(wire)
+	if err := decodeTextVerbosity(wire.Verbosity, &request.TextVerbosity); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
 	if err := decodeChatMessages(wire.Messages, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -196,12 +215,12 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 
 func validateChatRequestWire(wire chatRequestWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"prompt_cache_key": wire.PromptCacheKey, "prompt_cache_retention": wire.PromptCacheRetention,
-		"prompt_cache_options": wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
+		"prompt_cache_retention": wire.PromptCacheRetention,
+		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
 		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
-		"top_logprobs": wire.TopLogprobs, "verbosity": wire.Verbosity,
+		"top_logprobs":       wire.TopLogprobs,
 		"web_search_options": wire.WebSearchOptions,
 	}); err != nil {
 		return err
@@ -242,10 +261,12 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 		ReasoningEffort: wire.ReasoningEffort, ReasoningBudgetTokens: wire.ReasoningBudget,
 		Sampling: llmprotocol.Sampling{
 			Temperature: wire.Temperature, TopP: wire.TopP, Seed: wire.Seed,
+			TopK: wire.TopK, MinP: wire.MinP, RepetitionPenalty: wire.RepetitionPenalty,
 			FrequencyPenalty: wire.FrequencyPenalty, PresencePenalty: wire.PresencePenalty,
 		},
 		Trusted:            llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
-		ChatTemplateKwargs: wire.ChatTemplateKwargs,
+		ChatTemplateKwargs: wire.ChatTemplateKwargs, CacheSalt: wire.CacheSalt,
+		PromptCacheKey: wire.PromptCacheKey,
 	}
 	if wire.StreamOptions != nil {
 		request.StreamOptions = llmprotocol.StreamOptions{
@@ -268,7 +289,9 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 			return err
 		}
 		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
-			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: message.Role, Content: message.Content})
+			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
+				Role: message.Role, Content: message.Content, Name: message.Name,
+			})
 		} else {
 			request.Messages = append(request.Messages, message)
 		}
@@ -278,8 +301,16 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 
 func decodeChatTools(tools []chatToolWire, request *llmprotocol.Request) error {
 	for _, toolWire := range tools {
-		if toolWire.Type != "function" || strings.TrimSpace(toolWire.Function.Name) == "" {
-			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools are supported", nil)
+		if toolWire.Type == "custom" {
+			tool, err := decodeChatCustomTool(toolWire)
+			if err != nil {
+				return err
+			}
+			request.Tools = append(request.Tools, tool)
+			continue
+		}
+		if toolWire.Type != "function" || toolWire.Custom != nil || strings.TrimSpace(toolWire.Function.Name) == "" {
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function and custom tools are supported", nil)
 		}
 		schema := toolWire.Function.Parameters
 		if len(schema) == 0 {
@@ -322,6 +353,11 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 }
 
 func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+	// Response-only LiteLLM metadata. The shared message wire accepts the
+	// field so upstream replies decode; a client request must not.
+	if err := rejectUnsupportedRequestField("messages.provider_specific_fields", wire.ProviderSpecificFields); err != nil {
+		return llmprotocol.Message{}, err
+	}
 	for _, call := range wire.ToolCalls {
 		if call.Function.TokenizedArguments != nil {
 			return llmprotocol.Message{}, llmprotocol.NewError(
@@ -358,7 +394,28 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	return assembleChatMessage(wire, index, role, contents, policy)
+	message, err := assembleChatMessage(wire, index, role, contents, policy)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	message.Content = dropEmptyTextBesideOtherContent(message.Content)
+	return message, nil
+}
+
+// Ollama answers "content":"" beside reasoning and tool calls. That empty
+// string is not an answer, so it is kept only when nothing else was returned.
+func dropEmptyTextBesideOtherContent(contents []llmprotocol.Content) []llmprotocol.Content {
+	kept := make([]llmprotocol.Content, 0, len(contents))
+	for _, content := range contents {
+		if content.Kind == llmprotocol.ContentText && content.Text == "" && len(content.Citations) == 0 {
+			continue
+		}
+		kept = append(kept, content)
+	}
+	if len(kept) == 0 {
+		return contents
+	}
+	return kept
 }
 
 func assembleChatMessage(
@@ -368,9 +425,16 @@ func assembleChatMessage(
 	contents []llmprotocol.Content,
 	policy llmprotocol.Policy,
 ) (llmprotocol.Message, error) {
-	message := llmprotocol.Message{ID: wire.ID, Role: role, Content: contents}
-	if wire.Refusal != nil {
-		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *wire.Refusal})
+	// Reasoning first, the order vLLM's own Messages and Responses output uses.
+	message := llmprotocol.Message{ID: wire.ID, Role: role}
+	name, err := decodeChatMessageName(wire.Name)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	// A tool result's name repeats the function of the call it answers, which
+	// tool_call_id already identifies.
+	if role != llmprotocol.RoleTool {
+		message.Name = name
 	}
 	reasoning := wire.Reasoning
 	if reasoning == nil {
@@ -380,6 +444,10 @@ func assembleChatMessage(
 		message.Content = append(message.Content, llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 		})
+	}
+	message.Content = append(message.Content, contents...)
+	if wire.Refusal != nil {
+		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *wire.Refusal})
 	}
 	toolCalls, err := decodeChatToolCalls(wire.ToolCalls, index, policy)
 	if err != nil {
@@ -398,10 +466,19 @@ func assembleChatMessage(
 	return message, nil
 }
 
-func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
-	if err := rejectUnsupportedRequestField("messages.name", wire.Name); err != nil {
-		return "", err
+func decodeChatMessageName(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
 	}
+	var name string
+	if err := json.Unmarshal(trimmed, &name); err != nil {
+		return "", llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_messages_name", "messages.name must be a string", nil)
+	}
+	return name, nil
+}
+
+func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
 	if wire.Audio != nil {
 		return "", llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_output_audio", "Chat output audio is unsupported", nil,
@@ -485,26 +562,18 @@ func chatRequestContentAllowed(role llmprotocol.Role, contentType string) bool {
 
 func decodeChatToolCalls(calls []chatToolCallWire, messageIndex int, policy llmprotocol.Policy) ([]llmprotocol.Content, error) {
 	contents := make([]llmprotocol.Content, 0, len(calls))
-	for toolIndex, call := range calls {
-		if (call.Type != "" && call.Type != "function") || len(call.Custom) > 0 {
-			return nil, llmprotocol.NewError(
-				llmprotocol.ErrorUnsupportedFeature,
-				"unsupported_tool_call",
-				"only function tool calls enter the model protocol",
-				nil,
-			)
+	for toolIndex, wire := range calls {
+		call, err := decodeChatToolCall(wire)
+		if err != nil {
+			return nil, err
 		}
-		id := call.ID
-		if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
-			id = llmprotocol.StableID("chat", fmt.Sprint(messageIndex), fmt.Sprint(toolIndex), call.Function.Name, call.Function.Arguments)
+		if call.ID == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
+			call.ID = llmprotocol.StableID("chat", fmt.Sprint(messageIndex), fmt.Sprint(toolIndex), call.Name, call.Arguments)
 		}
-		if id == "" {
+		if call.ID == "" {
 			return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "tool_call_id_required", "tool call ID is required", nil)
 		}
-		contents = append(contents, llmprotocol.Content{
-			Kind:     llmprotocol.ContentToolCall,
-			ToolCall: &llmprotocol.ToolCall{ID: id, Name: call.Function.Name, Arguments: call.Function.Arguments},
-		})
+		contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})
 	}
 	return contents, nil
 }
@@ -574,7 +643,7 @@ func decodeChatContent(body json.RawMessage, part chatContentWire) (llmprotocol.
 		if part.InputAudio == nil {
 			return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "audio_required", "input audio is required", nil)
 		}
-		return llmprotocol.Content{Kind: llmprotocol.ContentAudio, Data: part.InputAudio.Data, MediaType: part.InputAudio.Format, Cache: decodeAnthropicCacheControl(part.CacheControl)}, nil
+		return decodeChatAudioContent(part)
 	case "file":
 		content, err := decodeChatFileContent(part.File)
 		content.Cache = decodeAnthropicCacheControl(part.CacheControl)
@@ -692,13 +761,25 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 	var discriminator struct {
 		Type string `json:"type"`
 	}
-	if json.Unmarshal(raw, &discriminator) == nil && (discriminator.Type == "allowed_tools" || discriminator.Type == "custom") {
+	if json.Unmarshal(raw, &discriminator) == nil && discriminator.Type == "allowed_tools" {
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
 			"Chat Completions tool choice cannot be represented by the neutral protocol",
 			nil,
 		)
+	}
+	if discriminator.Type == "custom" {
+		var named struct {
+			Type   string `json:"type"`
+			Custom struct {
+				Name string `json:"name"`
+			} `json:"custom"`
+		}
+		if decodeWireValue(raw, &named, policy) != nil || named.Custom.Name == "" {
+			return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "custom tool choice is invalid", nil)
+		}
+		return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Custom.Name, Kind: llmprotocol.ToolKindCustom}, nil
 	}
 	var named struct {
 		Type     string `json:"type"`

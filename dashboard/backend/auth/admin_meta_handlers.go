@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 )
 
@@ -20,7 +22,8 @@ func adminPermissionsHandler(svc *Service) http.HandlerFunc {
 
 		perms, err := svc.store.ListRolePermissions(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to list role permissions: %v", err)
+			http.Error(w, "failed to list permissions", http.StatusInternalServerError)
 			return
 		}
 
@@ -56,7 +59,8 @@ func adminAuditLogsHandler(svc *Service) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to query audit logs: %v", err)
+			http.Error(w, "failed to query audit logs", http.StatusInternalServerError)
 			return
 		}
 
@@ -99,7 +103,12 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 		if _, err := svc.store.GetUserByID(r.Context(), req.UserID); err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "user not found", http.StatusNotFound)
+				return
+			}
+			log.Printf("failed to load user: %v", err)
+			http.Error(w, "failed to load user", http.StatusInternalServerError)
 			return
 		}
 
@@ -108,8 +117,15 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			writePasswordHashError(w, err)
 			return
 		}
-		if err := svc.store.UpdatePassword(r.Context(), req.UserID, hash); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if RejectRevokedMutation(w, r) {
+			return
+		}
+		if err := svc.store.UpdatePasswordAuthorized(r.Context(), ac, req.UserID, hash); err != nil {
+			if writeAdminMutationAuthorizationError(w, err) {
+				return
+			}
+			log.Printf("failed to update password: %v", err)
+			http.Error(w, "failed to update password", http.StatusInternalServerError)
 			return
 		}
 

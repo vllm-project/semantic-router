@@ -1,34 +1,31 @@
 import React from 'react'
 import { Navigate, Route } from 'react-router-dom'
-import type { ConfigSection } from '../components/ConfigNav'
 import AppShellLayout from './AppShellLayout'
-import {
-  ConfigSectionRoute,
-  KnowledgeBaseRoute,
-  LegacyTaxonomyRedirect,
-} from './ConfigSectionRoutes'
+import { ConfigSectionRoute } from './ConfigSectionRoutes'
 import {
   fallbackRouteTarget,
-  redirectRouteDefinitions,
   shellRouteDefinitions,
   type ShellRouteDefinition,
   type ShellRoutePage,
 } from './routeManifest'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import EvaluationAvailabilityRoute from './EvaluationAvailabilityRoute'
+import type { DashboardCapabilities } from '../contexts/dashboardCapabilities'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
   loadBuilderPage,
+  loadConfigSchemaReferencePage,
   loadDashboardPage,
+  loadDecisionModelPage,
+  loadDecisionMonitoringPage,
+  loadSystemOnePlaygroundPage,
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
-  loadKnowledgeMapPage,
   loadLogsPage,
   loadMLSetupPage,
   loadModelHubPage,
   loadMonitoringPage,
-  loadOpenClawPage,
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
   loadSetupWizardPage,
@@ -39,19 +36,30 @@ import {
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
-  configSection: ConfigSection
-  setConfigSection: (section: ConfigSection) => void
-  canUseMLSetup: boolean
+  canAccessMLSetup: boolean
   user: PermissionUser | null
   setupMode: boolean
-  settingsLoading: boolean
-  evaluationAvailable: boolean
-  evaluationUnavailableReason: string
+  capabilities: DashboardCapabilities | null
+  capabilitiesLoading: boolean
+  capabilitiesError: string | null
+  onRefreshAccess: () => void
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   builder: <RecoverableLazyRoute loader={loadBuilderPage} routeLabel="Config Builder" />,
+  'config-reference': (
+    <RecoverableLazyRoute loader={loadConfigSchemaReferencePage} routeLabel="Schema reference" />
+  ),
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,
+  'decision-model': (
+    <RecoverableLazyRoute loader={loadDecisionModelPage} routeLabel="Decision Models" />
+  ),
+  'decision-model-playground': (
+    <RecoverableLazyRoute loader={loadSystemOnePlaygroundPage} routeLabel="Decision Playground" />
+  ),
+  'decision-model-monitoring': (
+    <RecoverableLazyRoute loader={loadDecisionMonitoringPage} routeLabel="Decision Monitoring" />
+  ),
   evaluation: <RecoverableLazyRoute loader={loadEvaluationPage} routeLabel="Evaluation" />,
   insights: <RecoverableLazyRoute loader={loadInsightsPage} routeLabel="Insights" />,
   'insights-record': (
@@ -60,7 +68,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   models: <RecoverableLazyRoute loader={loadModelHubPage} routeLabel="Model Hub" />,
-  openclaw: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
@@ -71,12 +78,8 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
 const renderShellContent = (
   route: Pick<ShellRouteDefinition, 'hideAccountControl' | 'hideHeaderOnMobile'>,
   element: React.ReactElement,
-  configSection: ConfigSection,
-  setConfigSection: (section: ConfigSection) => void,
 ) => (
   <AppShellLayout
-    configSection={configSection}
-    setConfigSection={setConfigSection}
     hideHeaderOnMobile={route.hideHeaderOnMobile}
     hideAccountControl={route.hideAccountControl}
   >
@@ -86,24 +89,19 @@ const renderShellContent = (
 
 const renderShellElement = (
   route: ShellRouteDefinition,
-  configSection: ConfigSection,
-  setConfigSection: (section: ConfigSection) => void,
-  settingsLoading: boolean,
-  evaluationAvailable: boolean,
-  evaluationUnavailableReason: string,
+  capabilities: DashboardCapabilities | null,
+  capabilitiesLoading: boolean,
+  capabilitiesError: string | null,
+  onRefreshAccess: () => void,
 ) => {
-  const content = renderShellContent(
-    route,
-    shellPageElements[route.page],
-    configSection,
-    setConfigSection,
-  )
+  const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
   return (
     <EvaluationAvailabilityRoute
-      available={evaluationAvailable}
-      isLoading={settingsLoading}
-      reason={evaluationUnavailableReason}
+      capability={capabilities?.evaluation}
+      isLoading={capabilitiesLoading}
+      error={capabilitiesError}
+      onRefreshAccess={onRefreshAccess}
     >
       {content}
     </EvaluationAvailabilityRoute>
@@ -111,14 +109,13 @@ const renderShellElement = (
 }
 
 export const renderAuthenticatedAppRoutes = ({
-  configSection,
-  setConfigSection,
-  canUseMLSetup,
+  canAccessMLSetup,
   user,
   setupMode,
-  settingsLoading,
-  evaluationAvailable,
-  evaluationUnavailableReason,
+  capabilities,
+  capabilitiesLoading,
+  capabilitiesError,
+  onRefreshAccess,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
     <Route
@@ -133,11 +130,10 @@ export const renderAuthenticatedAppRoutes = ({
           canAccessDashboardPath(user, route.path) ? (
             renderShellElement(
               route,
-              configSection,
-              setConfigSection,
-              settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
+              capabilities,
+              capabilitiesLoading,
+              capabilitiesError,
+              onRefreshAccess,
             )
           ) : (
             <Navigate to="/dashboard" replace />
@@ -145,38 +141,8 @@ export const renderAuthenticatedAppRoutes = ({
         }
       />
     ))}
-    <Route
-      path="/config"
-      element={
-        <ConfigSectionRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
-    <Route
-      path="/config/:section"
-      element={
-        <ConfigSectionRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
-    {redirectRouteDefinitions.map((route) => (
-      <Route key={route.path} path={route.path} element={<Navigate to={route.to} replace />} />
-    ))}
-    <Route
-      path="/knowledge-bases/:name/map"
-      element={
-        canAccessDashboardPath(user, '/knowledge-bases/map') ? (
-          <RecoverableLazyRoute loader={loadKnowledgeMapPage} routeLabel="Knowledge map" />
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
-      }
-    />
-    <Route
-      path="/knowledge-bases/:view"
-      element={
-        <KnowledgeBaseRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
-    <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
+    <Route path="/config" element={<ConfigSectionRoute />} />
+    <Route path="/config/:section" element={<ConfigSectionRoute />} />
     <Route
       path="/playground/fullscreen"
       element={
@@ -189,13 +155,19 @@ export const renderAuthenticatedAppRoutes = ({
     <Route
       path="/ml-setup"
       element={
-        canUseMLSetup ? (
-          renderShellContent(
-            {},
-            <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-            configSection,
-            setConfigSection,
-          )
+        canAccessMLSetup ? (
+          <EvaluationAvailabilityRoute
+            capability={capabilities?.mlPipeline}
+            isLoading={capabilitiesLoading}
+            error={capabilitiesError}
+            onRefreshAccess={onRefreshAccess}
+            featureName="ML pipeline"
+          >
+            {renderShellContent(
+              {},
+              <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
+            )}
+          </EvaluationAvailabilityRoute>
         ) : (
           <Navigate to="/dashboard" replace />
         )

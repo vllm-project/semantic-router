@@ -15,10 +15,10 @@ func TestPublicListenerFailsClosedForRouterReplayBeforeSkipProcessing(t *testing
 		requestTarget string
 		skip          bool
 	}{
-		{name: "disabled list", router: &OpenAIRouter{}, requestTarget: "/v1/router_replay"},
-		{name: "enabled detail", router: enabledRouter, requestTarget: "/v1/router_replay/" + recordID},
-		{name: "aggregate with skip opt-out", router: newRouterWithSkipProcessingGate(true), requestTarget: "/v1/router_replay/aggregate", skip: true},
-		{name: "reserved prefix variant", router: &OpenAIRouter{}, requestTarget: "/v1/router_replay-export"},
+		{name: "disabled list", router: &OpenAIRouter{}, requestTarget: "/api/v1/observability/replays"},
+		{name: "enabled detail", router: enabledRouter, requestTarget: "/api/v1/observability/replays/" + recordID},
+		{name: "aggregate with skip opt-out", router: newRouterWithSkipProcessingGate(true), requestTarget: "/api/v1/observability/replays/aggregate", skip: true},
+		{name: "reserved prefix variant", router: &OpenAIRouter{}, requestTarget: "/api/v1/observability/replays-export"},
 	}
 
 	for _, test := range tests {
@@ -49,7 +49,7 @@ func TestPublicListenerFailsClosedForRouterReplayBeforeSkipProcessing(t *testing
 func TestManagementReplayAdapterPreservesExistingReplayResponse(t *testing.T) {
 	router, recordID := newReplayAPITestRouter(t)
 
-	response, handled := router.HandleReplayRequest("GET", "/v1/router_replay/"+recordID)
+	response, handled := router.HandleReplayRequest("GET", "/api/v1/observability/replays/"+recordID)
 	if !handled {
 		t.Fatal("management replay request was not handled")
 	}

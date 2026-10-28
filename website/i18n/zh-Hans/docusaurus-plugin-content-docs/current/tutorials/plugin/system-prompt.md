@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7c874be2"
   source_file: "docs/tutorials/plugin/system-prompt.md"
   outdated: false
 ---
 
-# 系统提示词（System Prompt）
+# 系统提示词
 
 ## 概览
 
@@ -24,7 +25,7 @@ translation:
 ## 何时使用
 
 - 某个路由需要专家或特定角色的指令层
-- 提示词插入应在 decision 匹配后进行
+- 提示词插入应在决策匹配后进行
 - 提示词策略应在路由配置中保持可见
 
 ## 配置

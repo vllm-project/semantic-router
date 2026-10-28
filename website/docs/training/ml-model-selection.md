@@ -21,7 +21,7 @@ provider models.
 | [KNN](/docs/tutorials/algorithm/selection/knn) | Combines recorded quality and speed across similar queries | Similar requests tend to favor the same model and traceability matters |
 | [KMeans](/docs/tutorials/algorithm/selection/kmeans) | Maps a request to a learned cluster | The workload forms stable clusters and lookup cost matters |
 | [SVM](/docs/tutorials/algorithm/selection/svm) | Uses a learned decision boundary | Candidate models separate cleanly in feature space |
-| [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector and can operate its runtime dependency |
+| [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector; the Router evaluates the trained artifact on CPU |
 
 There is no universally best selector. Compare each candidate against simple
 baselines such as a fixed default, random choice, and the best single model on
@@ -62,7 +62,7 @@ standalone canonical Router configuration. Its `config.model_selection`,
 `config.strategy`, and `config.decisions` fields must be reviewed and mapped to
 `global.router.model_selection`, `global.router.strategy`, and
 `routing.decisions` in a complete config. Add the required listeners and
-providers, then run `vllm-sr validate --config ...` before deployment.
+providers, then run `vllm-sr config validate --config ...` before deployment.
 
 :::
 
@@ -182,7 +182,7 @@ match the names recorded in the benchmark data and the configured provider
 aliases.
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## Evaluate before rollout

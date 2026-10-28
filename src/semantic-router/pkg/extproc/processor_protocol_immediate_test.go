@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -117,6 +118,62 @@ func assertCacheImmediateResponse(
 	assertImmediateJSON(t, response)
 	if _, _, _, err := engine.DecodeResponse(clientFormat, body); err != nil {
 		t.Fatalf("cache response is not valid %s: %v\n%s", clientFormat, err, body)
+	}
+}
+
+func TestImmediateResponsesIDsIgnoreSharedRequestID(t *testing.T) {
+	paths := map[string]func(*testing.T, *OpenAIRouter, *RequestContext){
+		"fast_response": func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) {
+			if _, _, _, err := router.encodeSyntheticTextResponse(ctx, "fast answer", false); err != nil {
+				t.Fatal(err)
+			}
+			router.persistImmediateResponseObject(createImmediateJSONResponse(200, []byte(`{}`)), ctx)
+		},
+		"cache_hit": func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) {
+			response := router.createCacheHitResponse(ctx, extProcResponseFixture(llmprotocol.OpenAIResponsesV1), "", "", nil, 1)
+			if response.GetImmediateResponse().GetStatus().GetCode() != 200 {
+				t.Fatalf("cache hit response = %v", response)
+			}
+			router.persistImmediateResponseObject(response, ctx)
+		},
+	}
+	for name, complete := range paths {
+		t.Run(name, func(t *testing.T) {
+			router, first, responseStore, _, _ := responseRetentionTestContext(t, nil)
+			second := memoryPolicyContext(nil)
+			second.TraceContext = t.Context()
+			second.SourceFormat = llmprotocol.OpenAIResponsesV1
+			state, err := router.ResponseAPIFilter.PrepareObjectState(t.Context(), *second.SemanticRequest, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second.ResponseObjectState = state
+			first.RequestID, second.RequestID = "shared-request-id", "shared-request-id"
+
+			complete(t, router, first)
+			complete(t, router, second)
+
+			if first.SemanticResponse == nil || second.SemanticResponse == nil {
+				t.Fatal("immediate path did not produce a semantic response")
+			}
+			if first.SemanticResponse.ID == second.SemanticResponse.ID {
+				t.Fatalf("requests sharing x-request-id got the same response ID %q", first.SemanticResponse.ID)
+			}
+			if first.SemanticResponse.Output[0].ID == second.SemanticResponse.Output[0].ID {
+				t.Fatalf("requests sharing x-request-id got the same item ID %q", first.SemanticResponse.Output[0].ID)
+			}
+			for _, ctx := range []*RequestContext{first, second} {
+				if ctx.SemanticResponse.ID != ctx.ResponseObjectState.GeneratedResponseID {
+					t.Fatalf("response ID = %v, want Router-generated %q", ctx.SemanticResponse, ctx.ResponseObjectState.GeneratedResponseID)
+				}
+				if _, err := responseStore.GetResponse(t.Context(), ctx.SemanticResponse.ID); err != nil {
+					t.Fatalf("response %q was not stored: %v", ctx.SemanticResponse.ID, err)
+				}
+			}
+			if len(responseStore.responses) != 3 {
+				t.Fatalf("stored responses = %d, want parent plus two turns", len(responseStore.responses))
+			}
+		})
 	}
 }
 

@@ -297,20 +297,21 @@ routing:
     - name: Model-A
     - name: Model-B
 global:
-  router:
-    auto_model_name: auto
   services:
     observability:
       tracing:
         enabled: true
-        sampling_ratio: 0.1
-        otlp_endpoint: ''
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: ''
+        sampling:
+          type: probabilistic
+          rate: 0.1
       metrics:
         enabled: true
-        port: 9190
     api:
       batch_classification:
-        enabled: true
         max_batch_size: 32
         max_concurrency: 4
   stores:
@@ -333,3 +334,7 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
+
+entrypoints:
+  - model_names: ["auto"]
+    recipe: default

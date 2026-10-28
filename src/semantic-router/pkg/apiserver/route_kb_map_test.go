@@ -1,44 +1,53 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-func stubKnowledgeBaseMapEmbeddings(t *testing.T) {
+func stubKnowledgeBaseMapEmbeddings(t *testing.T, server *ClassificationAPIServer) {
 	t.Helper()
-
-	restore := knowledgeBaseMapEmbeddingFunc
-	knowledgeBaseMapEmbeddingFunc = func(text string, modelType string, _ int) (*candle_binding.EmbeddingOutput, error) {
+	provider, err := embedding.NewFuncProvider("test", 3, func(_ context.Context, text string) ([]float32, error) {
 		text = strings.TrimSpace(text)
-		length := float32(len(text))
-		vector := []float32{
-			length,
-			float32(len(strings.Fields(text))) + 1,
-			float32((len(text) % 7) + 1),
-		}
-		return &candle_binding.EmbeddingOutput{
-			Embedding: vector,
-			ModelType: modelType,
-		}, nil
-	}
-	t.Cleanup(func() {
-		knowledgeBaseMapEmbeddingFunc = restore
+		return []float32{float32(len(text)), float32(len(strings.Fields(text))) + 1, float32(len(text)%7) + 1}, nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := server.currentConfig()
+	// No model runtime serves Domain's labels here.
+	cfg.CategoryMappingPath = filepath.Join(t.TempDir(), "category_mapping.json")
+	mapping := `{"category_to_idx": {"math": 0, "other": 1}, "idx_to_category": {"0": "math", "1": "other"}}`
+	if err = os.WriteFile(cfg.CategoryMappingPath, []byte(mapping), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	model := knowledgeBaseMapModelType(cfg)
+	prepared := embedding.NewSet(map[string]embedding.Provider{model: provider}, model)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = classifiers.Close() })
+	server.classificationSvc = services.NewRecipeClassificationService(classifiers, cfg)
 }
 
 func TestHandleKnowledgeBaseMapMetadataEndpoint(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
-	stubKnowledgeBaseMapEmbeddings(t)
+	stubKnowledgeBaseMapEmbeddings(t, apiServer)
 
-	metadataReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/metadata", nil)
+	metadataReq := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases/privacy_kb/map/metadata", nil)
 	metadataReq.SetPathValue("name", "privacy_kb")
 	metadataRR := httptest.NewRecorder()
 	apiServer.handleGetKnowledgeBaseMapMetadata(metadataRR, metadataReq)
@@ -67,9 +76,9 @@ func TestHandleKnowledgeBaseMapMetadataEndpoint(t *testing.T) {
 
 func TestHandleKnowledgeBaseMapDataEndpoint(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
-	stubKnowledgeBaseMapEmbeddings(t)
+	stubKnowledgeBaseMapEmbeddings(t, apiServer)
 
-	dataReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/data.ndjson", nil)
+	dataReq := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases/privacy_kb/map/data.ndjson", nil)
 	dataReq.SetPathValue("name", "privacy_kb")
 	dataRR := httptest.NewRecorder()
 	apiServer.handleGetKnowledgeBaseMapData(dataRR, dataReq)
@@ -94,9 +103,9 @@ func TestHandleKnowledgeBaseMapDataEndpoint(t *testing.T) {
 
 func TestHandleKnowledgeBaseMapMissingKnowledgeBase(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
-	stubKnowledgeBaseMapEmbeddings(t)
+	stubKnowledgeBaseMapEmbeddings(t, apiServer)
 
-	req := httptest.NewRequest(http.MethodGet, "/config/kbs/missing/map/metadata", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases/missing/map/metadata", nil)
 	req.SetPathValue("name", "missing")
 	rr := httptest.NewRecorder()
 	apiServer.handleGetKnowledgeBaseMapMetadata(rr, req)

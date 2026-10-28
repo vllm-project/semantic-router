@@ -1,0 +1,123 @@
+/*
+Copyright 2025 vLLM Semantic Router.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package looper
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
+// ModelTarget identifies one concrete model deployment for a Looper call.
+// AccessKey is request-scoped because different candidate models may use
+// different credentials.
+type ModelTarget struct {
+	Name      string
+	AccessKey string
+}
+
+// ResponseMode describes the wire response expected from the upstream model.
+type ResponseMode uint8
+
+const (
+	ResponseJSON ResponseMode = iota
+	ResponseSSE
+)
+
+func responseMode(streaming bool) ResponseMode {
+	if streaming {
+		return ResponseSSE
+	}
+	return ResponseJSON
+}
+
+// CallOptions carries request-scoped Looper execution metadata. Keeping this
+// data off Client allows one Client to be reused safely by concurrent calls.
+type CallOptions struct {
+	DecisionName string
+	Iteration    int
+	Mode         ResponseMode
+	Logprobs     *LogprobsConfig
+
+	// ToolStage is this attempt's trusted-facts role. Every call that keeps
+	// tools must name one: an empty stage matches no configured role, so an
+	// authoritative policy denies its tools.
+	ToolStage llmprotocol.TrustedStage
+
+	// candidateRequest retains admission policy through final wire mutations.
+	// It is request-scoped; a shared Client never stores recipe policy.
+	candidateRequest *Request
+}
+
+func (options CallOptions) validate(target ModelTarget) error {
+	if target.Name == "" {
+		return fmt.Errorf("model target name is required")
+	}
+	if options.Iteration <= 0 {
+		return fmt.Errorf("looper iteration must be positive")
+	}
+	if options.Mode != ResponseJSON && options.Mode != ResponseSSE {
+		return fmt.Errorf("unsupported looper response mode %d", options.Mode)
+	}
+	return nil
+}
+
+// CallModelWithOptions invokes a model without storing request-scoped metadata
+// on Client. The input request is passed by value so model and sampling fields
+// can be adjusted without mutating the caller's top-level request value.
+func (c *Client) CallModelWithOptions(
+	ctx context.Context,
+	request openai.ChatCompletionNewParams,
+	target ModelTarget,
+	options CallOptions,
+) (*ModelResponse, error) {
+	if c == nil {
+		return nil, fmt.Errorf("looper client is required")
+	}
+	if err := options.validate(target); err != nil {
+		return nil, err
+	}
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+	if c.connector == nil && c.hops == nil {
+		return nil, fmt.Errorf("looper connector is required")
+	}
+	request = gateAttemptTools(options, request)
+	return c.callModel(ctx, &request, target, options)
+}
+
+// gateAttemptTools applies the recipe's per-stage tool gate to one outbound
+// attempt. The gate sees the attempt's own stage, so a policy that authorizes
+// only final cannot send tools on a candidate or verifier call. Attempts that
+// carry no tools have nothing to gate, so they skip it and record nothing.
+func gateAttemptTools(options CallOptions, request openai.ChatCompletionNewParams) openai.ChatCompletionNewParams {
+	if options.candidateRequest == nil || options.candidateRequest.ToolStageGate == nil {
+		return request
+	}
+	if len(request.Tools) == 0 && len(request.Functions) == 0 {
+		return request
+	}
+	gated := options.candidateRequest.ToolStageGate(options.ToolStage, &request)
+	if gated == nil {
+		return request
+	}
+	return *gated
+}
