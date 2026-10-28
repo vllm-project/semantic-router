@@ -29,6 +29,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Request contains the input for looper execution
@@ -52,6 +53,11 @@ type Request struct {
 	// CandidateRequirements is the owning recipe's admission policy. Every
 	// generated stage rechecks this policy against its complete outbound request.
 	CandidateRequirements *config.CandidateRequirements
+
+	// CallerCapabilities are the capabilities an accepted agentic facts
+	// envelope requires. Every stage adds them to the demand of its outbound
+	// request, so a worker, helper or final model must declare them too.
+	CallerCapabilities llmprotocol.CapabilitySet
 
 	// ToolStageGate judges each model attempt's tools at that attempt's own
 	// stage. Nil leaves attempts' tools untouched.

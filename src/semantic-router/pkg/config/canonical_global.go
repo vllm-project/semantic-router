@@ -32,6 +32,7 @@ type CanonicalRouterGlobal struct {
 	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
 	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
 	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	AgenticFacts      AgenticFactsConfig       `yaml:"agentic_facts"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -289,6 +290,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
 	cfg.Fallback = router.Fallback.Clone()
+	cfg.AgenticFacts = router.AgenticFacts
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

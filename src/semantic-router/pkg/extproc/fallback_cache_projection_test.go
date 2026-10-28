@@ -133,7 +133,7 @@ func TestAnthropicCachedResponsesCandidateProgressesLikeSelection(t *testing.T) 
 	ref := config.ModelRef{Model: "chat"}
 	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
 	selectionContext := &selection.SelectionContext{CandidateModels: []config.ModelRef{ref}}
-	if err := router.candidateCapabilityMismatch(ref, &request, nil, nil, nil); err != nil {
+	if err := router.candidateCapabilityMismatch(ref, &request, nil, nil, nil, llmprotocol.CapabilitySet{}); err != nil {
 		t.Fatalf("normal selection rejected Anthropic cached request: %v", err)
 	}
 	if reason := router.progressCandidateReason(ctx, selectionContext, &ref); reason != "" {

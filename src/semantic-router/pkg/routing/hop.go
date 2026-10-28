@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Hop marks a routing session as one model call of a request graph: a call
@@ -24,6 +25,12 @@ type Hop struct {
 	// field by field: the request-graph step's layer. Nil keeps the
 	// decision's.
 	Fallback *fallback.FallbackOverride
+	// CallerCapabilities are the capabilities an accepted agentic facts
+	// envelope requires of every model that serves the client request. The
+	// Router carries the validated set here because a hop does not read the
+	// envelope again. Strict candidate admission adds it to the hop's own
+	// demand, so it only removes candidates.
+	CallerCapabilities llmprotocol.CapabilitySet
 }
 
 type hopKey struct{}

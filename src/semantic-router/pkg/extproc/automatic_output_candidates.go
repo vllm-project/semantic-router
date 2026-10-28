@@ -89,7 +89,7 @@ func (r *OpenAIRouter) renderAutomaticCandidates(ctx *RequestContext, refs []con
 		admission := selection.DemandForRequest(view)
 		admission.InputTokens = 0
 		admission.MaxOutputTokens = llmprotocol.Int64(1)
-		if admissionErr := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, admission); admissionErr != nil {
+		if admissionErr := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, admission, callerCapabilities(ctx)); admissionErr != nil {
 			continue
 		}
 		if ref.LoRAName != "" {
@@ -112,7 +112,7 @@ func (r *OpenAIRouter) renderAutomaticCandidates(ctx *RequestContext, refs []con
 			return nil, nil, err
 		}
 		demand := selection.DemandForRequest(view)
-		if err := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, demand); err != nil {
+		if err := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, demand, callerCapabilities(ctx)); err != nil {
 			continue
 		}
 		demands[ref.Model] = demand

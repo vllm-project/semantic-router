@@ -113,7 +113,7 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 	demand.InputTokens = 0
 	model, available := "", 0
 	for _, ref := range refs {
-		if err := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, demand); err != nil {
+		if err := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, demand, callerCapabilities(ctx)); err != nil {
 			continue
 		}
 		budget := r.contextOverflowInputBudget(ref.Model, demand, cfg)
@@ -160,7 +160,7 @@ func (r *OpenAIRouter) prepareDispatchContextOverflow(ctx *RequestContext, reque
 	}
 	available := r.contextOverflowInputBudget(model, selection.DemandForRequest(request), cfg)
 	if available == 0 {
-		if err := r.validateModelDemand(r.candidateRequirements(ctx), model, selection.DemandForRequest(request)); err != nil {
+		if err := r.validateModelDemand(r.candidateRequirements(ctx), model, selection.DemandForRequest(request), callerCapabilities(ctx)); err != nil {
 			return err
 		}
 		return fmt.Errorf("%w: selected model has no usable known input budget for context compression", selection.ErrNoEligibleCandidates)

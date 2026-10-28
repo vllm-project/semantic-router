@@ -230,6 +230,9 @@ func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 	if deleteField(diagnostics, "prepared_dispatch") {
 		changed = true
 	}
+	if clearArrayField(diagnostics, "agentic_facts_reasons") {
+		changed = true
+	}
 	return changed
 }
 
