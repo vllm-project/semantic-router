@@ -332,7 +332,7 @@ export const topNewContributorMembers: TeamMember[] = [
   },
   {
     name: 'Theo Hsiung',
-    role: <Translate id="team.members.theohsiung.role">Junior Software Engineer (Research Scientist)</Translate>,
+    role: <Translate id="team.members.theohsiung.role">Associate Research Scientist</Translate>,
     company: 'Delta Electronics',
     avatar: 'https://github.com/theohsiung.png',
     github: 'https://github.com/theohsiung',
