@@ -50,7 +50,14 @@ the decision model it was calibrated with, Vela 2.0 0.8B.
 | `confidential` | Yes or no, at 0.5 | Does the request share or concern private material, such as personal data, private source code, internal or confidential documents or images, or ask that it stay local, on-premises or out of the cloud? | Whether the request stays on the local privacy lane. |
 | `personal_data` | Yes or no, at 0.5 | Does the message contain personal data about a person, such as a name with an email address, phone number, street address or ID number? | Whether personal data in the text keeps the request on the local privacy lane. |
 | `domain` | Choice of 5, at 0.4 | Which field does this request belong to: law and health, software, math and science, business, or anything else? | Which specialist lane a request takes. |
-| `difficulty` | Score from 0 to 4 | How much reasoning does a strong expert need to answer this request well? | Simple (below 1), medium (1 to 2.5) or complex (2.5 or more) work, inside and outside the specialist fields. |
+| `difficulty` | Score from 0 to 4 | How much reasoning does a strong expert need to answer this request well? | Simple (below 1), medium (1 to 1.75) or complex (1.75 or more) work, inside and outside the specialist fields. |
+
+The difficulty thresholds ride on the decision model's use of the 0-4
+scale. Vela 2.0 0.8B compresses that range in practice: over 344 requests
+from real agentic sessions on hard software tasks, scores stayed within
+[0.08, 1.87] with a median of 1.36, so the complex threshold sits at 1.75
+(the observed 75th percentile). Re-calibrate the thresholds when you swap
+the decision model.
 
 One conversation fact needs no model: `agent_has_images` is true when the
 request carries image content.
@@ -66,12 +73,12 @@ Decisions are tried by priority, and the first that matches wins.
 | 320 | `local_privacy_policy` | `confidential` or `personal_data` | `qwen/qwen3.6-rocm` |
 | 300 | `simple_math_fast_path` | `domain`: math_science, `difficulty` below 1 | `qwen/qwen3.6-rocm` |
 | 260 | `domain_legal_health` | `domain`: legal_health | `anthropic/claude-opus-4.6` |
-| 255 | `domain_code_complex` | `domain`: code, `difficulty` 2.5 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
-| 250 | `domain_code` | `domain`: code, `difficulty` 1 to 2.5 | `google/gemini-2.5-flash-lite`, `google/gemini-3.1-pro` |
+| 255 | `domain_code_complex` | `domain`: code, `difficulty` 1.75 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
+| 250 | `domain_code` | `domain`: code, `difficulty` 1 to 1.75 | `google/gemini-2.5-flash-lite`, `google/gemini-3.1-pro` |
 | 240 | `domain_stem_research` | `domain`: math_science, `difficulty` 1 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
 | 230 | `domain_business` | `domain`: business | `google/gemini-2.5-flash-lite` |
-| 190 | `complex_general` | `difficulty` 2.5 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
-| 150 | `medium_general` | `difficulty` 1 to 2.5 | `google/gemini-2.5-flash-lite` |
+| 190 | `complex_general` | `difficulty` 1.75 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
+| 150 | `medium_general` | `difficulty` 1 to 1.75 | `google/gemini-2.5-flash-lite` |
 | 80 | `simple_general` | Nothing; the fallback | `qwen/qwen3.6-rocm` |
 
 Containment, images and privacy outrank every specialist lane, so a sensitive
