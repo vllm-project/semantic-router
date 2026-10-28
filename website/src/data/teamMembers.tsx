@@ -60,7 +60,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
   },
   {
     name: 'Kun-Tai Wu',
-    role: <Translate id="team.members.WUKUNTAI-0211.role">Software Engineer</Translate>,
+    role: <Translate id="team.members.WUKUNTAI-0211.role">Associate Research Scientist</Translate>,
     company: 'Delta Electronics',
     avatar: 'https://github.com/WUKUNTAI-0211.png',
     github: 'https://github.com/WUKUNTAI-0211',
