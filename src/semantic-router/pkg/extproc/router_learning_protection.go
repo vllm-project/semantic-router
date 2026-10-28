@@ -699,7 +699,7 @@ func sessionScopeProtectionTrace(
 		IdleExpired:                 false,
 		HasNonPortableContext:       session.HasNonPortableContext,
 		NonPortableContextReason:    session.NonPortableContextReason,
-		DecisionDrift:               session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(learningCtx),
+		DecisionDrift:               selectionDecisionDrift(learningCtx),
 		DecisionReason:              "session_scope_protect",
 		CacheWarmth:                 session.CacheWarmth,
 		CacheWarmthOK:               session.CacheWarmthOK,
@@ -795,7 +795,7 @@ func rescueProtectionTrace(
 	trace.IdleExpired = sessionScopeIdleExpired(cfg, session)
 	trace.HasNonPortableContext = session.HasNonPortableContext
 	trace.NonPortableContextReason = session.NonPortableContextReason
-	trace.DecisionDrift = session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(learningCtx)
+	trace.DecisionDrift = selectionDecisionDrift(learningCtx)
 	trace.CacheWarmth = session.CacheWarmth
 	trace.CacheWarmthOK = session.CacheWarmthOK
 	return trace

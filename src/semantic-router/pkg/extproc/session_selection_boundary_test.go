@@ -161,3 +161,47 @@ func TestSessionHardBoundaryConflictsRejectBeforeChangingOwnership(t *testing.T)
 		}
 	}
 }
+
+func TestSessionBoundaryDriftReleasesToolLoopLockInsteadOfDeadlocking(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		nonPortable  bool
+		wantRejected bool
+	}{
+		{name: "tool_loop_drift_released"},
+		{name: "opaque_state_drift_still_rejected", nonPortable: true, wantRejected: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sessiontelemetry.ResetRouterSessionMemoryForTesting()
+			t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+			router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+			router.Config.RouterLearning = routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeConversation).RouterLearning
+			router.Config.ModelConfig[primary] = addTestQuality(router.Config.ModelConfig[primary], .98)
+			router.Config.ModelConfig["prior"] = addTestQuality(router.Config.ModelConfig[primary], .1)
+			decision := &config.Decision{Name: "synthetic-drift-new", ModelRefs: []config.ModelRef{{Model: primary}}}
+			ctx := routerLearningRequestContext("driftlock", "conversation")
+			ctx.VSRSelectedDecision = decision
+			if tc.nonPortable {
+				ctx.PreviousResponseID = "opaque-unresolved"
+			} else {
+				ctx.VSRConversationFacts = classification.ConversationFacts{LastAssistantToolCall: true}
+			}
+			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+				SessionID:     "driftlock/conversation",
+				SelectedModel: "prior",
+				DecisionName:  config.RoutingNamespaceKey("", "synthetic-drift-old"),
+				Timestamp:     time.Now(),
+			})
+			selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{CandidateModels: decision.ModelRefs, DecisionName: decision.Name}, decision.Algorithm, ctx)
+			if tc.wantRejected {
+				if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
+					t.Fatalf("drift must not transfer opaque provider state: model=%+v err=%v", selected, err)
+				}
+				return
+			}
+			if err != nil || selected == nil || selected.Model != primary {
+				t.Fatalf("drifted decision deadlocked the tool loop: model=%+v err=%v", selected, err)
+			}
+		})
+	}
+}
