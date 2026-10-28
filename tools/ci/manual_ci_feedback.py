@@ -37,11 +37,22 @@ MESSAGES = {
         "job, then ask a committer to post a new `/ci run` comment."
     ),
     "revision": (
-        "CI requests need an open PR targeting `main` with an available merge "
-        "revision. Update the branch onto current `main` or resolve conflicts, "
-        "wait for its Plan job, then request CI again."
+        "CI requests need an open PR targeting `main` and an available planned "
+        "merge of its current head onto a base still in main's history. "
+        "Update the branch or resolve conflicts, wait for its Plan job, then "
+        "request CI again. Main advancing alone does not require a branch update."
     ),
     "plan": "The current PR's CI plan is not ready. Wait for its Plan job, then post a new `/ci run` comment.",
+    "upgrade": (
+        "This PR's original CI source uses the older authorization resolver. "
+        "Update the branch from main once, wait for the new Plan job, then ask "
+        "a committer to post a new `/ci run` comment. Rerunning an old workflow "
+        "does not update its resolver."
+    ),
+    "superseded": (
+        "A newer CI run exists for this PR head. The older run was not restarted. "
+        "Wait for the newer run's Plan job, then post a new `/ci run` comment."
+    ),
     "busy": "Automatic CI is still running. After it finishes, rerun this command handler or post a new `/ci run` comment.",
     "trigger-failed": (
         "I could not confirm that the CI rerun was started. Check the PR CI run "

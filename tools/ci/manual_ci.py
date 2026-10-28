@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import ast
+import base64
+import binascii
 import hashlib
 import io
 import json
@@ -29,6 +32,9 @@ SHA = re.compile(r"[0-9a-f]{40}")
 PINNED_REVISION_COUNT = 3
 NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
+RUN_PAGE_LIMIT = 100
+PR_REVISION_POLICY = "planned-merge-v1"
+RESOLVER_LIMIT = 128 * 1024
 AUTHORIZATION_LIMIT = 65536
 PLAN_LIMIT = 16 * 1024 * 1024
 ERROR_STATUS_TAIL_LIMIT = 256
@@ -122,50 +128,165 @@ def timestamp(value: str) -> datetime:
         raise ManualCIError("Invalid authorization timestamp.") from None
 
 
-def source_identity(client, repo: str, number: int) -> dict:
+def open_pull(client, repo: str, number: int) -> dict:
     pull = client.request(f"repos/{repo}/pulls/{number}")
     if (
         pull.get("state") != "open"
         or pull.get("base", {}).get("ref") != "main"
         or pull.get("base", {}).get("repo", {}).get("full_name") != repo
+        or not isinstance(pull.get("head", {}).get("sha"), str)
+        or not SHA.fullmatch(pull["head"]["sha"])
     ):
         raise ManualCIError(
             "CI requests require an open pull request targeting main.",
             reason="revision",
         )
-    # The PR API's base.sha can lag behind the test merge commit. Read the
-    # actual target ref, then require one coherent base/head/merge revision.
-    base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+    return pull
+
+
+def main_contains(client, repo: str, base: str) -> bool:
+    """A planned base remains trusted when main advances without rewriting it."""
+    ref = client.request(f"repos/{repo}/git/ref/heads/main")
+    current = ref.get("object", {}).get("sha")
     if (
-        base_ref.get("ref") != "refs/heads/main"
-        or base_ref.get("object", {}).get("type") != "commit"
+        ref.get("ref") != "refs/heads/main"
+        or ref.get("object", {}).get("type") != "commit"
+        or not isinstance(current, str)
+        or not SHA.fullmatch(current)
     ):
-        raise ManualCIError(
-            "The current main revision is unavailable.", reason="revision"
+        return False
+    if current == base:
+        return True
+    comparison = client.request(f"repos/{repo}/compare/{base}...{current}")
+    return comparison.get("merge_base_commit", {}).get("sha") == base
+
+
+def run_source(repo: str, number: int, run: dict) -> str | None:
+    """Read the original merge from GitHub metadata, never from a PR artifact."""
+    ref = f"refs/pull/{number}/merge"
+    path = f"{repo}/.github/workflows/ci.yml@"
+    references = run.get("referenced_workflows")
+    if not isinstance(references, list):
+        return None
+    sources = {
+        item["sha"]
+        for item in references
+        if isinstance(item, dict)
+        and isinstance(item.get("sha"), str)
+        and SHA.fullmatch(item["sha"])
+        and item.get("ref") == ref
+        and item.get("path") in {path + item["sha"], path + ref}
+    }
+    return next(iter(sources)) if len(sources) == 1 else None
+
+
+def pr_runs(client, repo: str, head: str):
+    for page in range(1, RUN_PAGE_LIMIT + 1):
+        query = urlencode(
+            {
+                "event": "pull_request",
+                "head_sha": head,
+                "per_page": PAGE_SIZE,
+                "page": page,
+            }
         )
+        items = client.request(
+            f"repos/{repo}/actions/workflows/pr.yml/runs?{query}"
+        ).get("workflow_runs")
+        if not isinstance(items, list):
+            raise ManualCIError("Invalid PR workflow run inventory.")
+        yield from items
+        if len(items) < PAGE_SIZE:
+            return
+    raise ManualCIError("PR workflow run inventory exceeds the request limit.")
+
+
+def latest_pr_run(client, repo: str, run: dict) -> bool:
+    candidates = [
+        item
+        for item in pr_runs(client, repo, run["head_sha"])
+        if item.get("event") == "pull_request"
+        and item.get("head_sha") == run["head_sha"]
+        and item.get("head_branch") == run.get("head_branch")
+        and (item.get("head_repository") or {}).get("full_name")
+        == (run.get("head_repository") or {}).get("full_name")
+    ]
+    return (
+        bool(candidates)
+        and max(
+            candidates, key=lambda item: (timestamp(item["created_at"]), item["id"])
+        )["id"]
+        == run["id"]
+    )
+
+
+def require_current_resolver(client, repo: str, source: str) -> None:
+    # Reruns execute the resolver from this immutable PR source, not main.
+    # Inspect its declared compatibility without executing contributor code.
+    response = client.request(
+        f"repos/{repo}/contents/tools/ci/manual_ci.py?{urlencode({'ref': source})}"
+    )
+    compatible = False
+    if (
+        response.get("type") == "file"
+        and response.get("encoding") == "base64"
+        and type(response.get("size")) is int
+        and 0 < response["size"] <= RESOLVER_LIMIT
+        and isinstance(response.get("content"), str)
+        and len(response["content"]) <= RESOLVER_LIMIT * 2
+    ):
+        try:
+            content = base64.b64decode(
+                "".join(response["content"].splitlines()), validate=True
+            )
+            if len(content) <= RESOLVER_LIMIT:
+                module = ast.parse(content)
+                compatible = any(
+                    isinstance(node, ast.Assign)
+                    and any(
+                        isinstance(target, ast.Name)
+                        and target.id == "PR_REVISION_POLICY"
+                        for target in node.targets
+                    )
+                    and isinstance(node.value, ast.Constant)
+                    and node.value.value == PR_REVISION_POLICY
+                    for node in module.body
+                )
+        except (binascii.Error, SyntaxError, ValueError):
+            pass
+    if not compatible:
+        raise ManualCIError(
+            "The original PR source uses an older CI resolver; update the branch from main once.",
+            reason="upgrade",
+        )
+
+
+def source_identity(client, repo: str, number: int, *, source: str, base: str) -> dict:
+    # A rerun executes its original GITHUB_SHA, not today's test-merge ref.
+    # Bind authorization to that immutable source and the current contributor
+    # head. A forward-only main update must not invalidate this qualification;
+    # the merge queue qualifies its final candidate independently.
+    pull = open_pull(client, repo, number)
     result = {
-        "head_sha": pull.get("head", {}).get("sha"),
-        "base_sha": base_ref.get("object", {}).get("sha"),
-        "source_sha": pull.get("merge_commit_sha"),
+        "head_sha": pull["head"]["sha"],
+        "base_sha": base,
+        "source_sha": source,
     }
     if any(
         not isinstance(value, str) or not SHA.fullmatch(value)
         for value in result.values()
     ):
-        raise ManualCIError(
-            "The current PR merge revision is unavailable; resolve conflicts first.",
-            reason="revision",
-        )
-    commit = client.request(f"repos/{repo}/git/commits/{result['source_sha']}")
+        raise ManualCIError("Invalid planned PR revision.", reason="revision")
+    commit = client.request(f"repos/{repo}/git/commits/{source}")
     parents = commit.get("parents")
     if (
         not isinstance(parents, list)
         or any(not isinstance(parent, dict) for parent in parents)
-        or [parent.get("sha") for parent in parents]
-        != [result["base_sha"], result["head_sha"]]
+        or [parent.get("sha") for parent in parents] != [base, result["head_sha"]]
+        or not main_contains(client, repo, base)
     ):
         raise ManualCIError(
-            "The PR merge revision changed or is still being prepared; wait for its Plan job.",
+            "The planned merge revision changed or no longer matches the PR head or main history; wait for a new plan.",
             reason="revision",
         )
     return result
@@ -239,7 +360,7 @@ def read_artifact(client, repo: str, artifact: dict, filename: str, limit: int) 
         raise ManualCIError("CI artifact is not a valid bounded JSON object.") from None
 
 
-def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
+def plan_for_run(client, repo: str, run: dict) -> dict | None:
     artifacts = client.request(
         f"repos/{repo}/actions/runs/{run['id']}/artifacts?name=ci-plan&per_page=10"
     ).get("artifacts", [])
@@ -252,8 +373,10 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
             json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
         if (
-            plan.get("source_sha") == identity["source_sha"]
-            and plan.get("base_sha") == identity["base_sha"]
+            all(
+                isinstance(plan.get(key), str) and SHA.fullmatch(plan[key])
+                for key in ("source_sha", "base_sha")
+            )
             and plan.get("plan_sha256") == digest
         ):
             return plan
@@ -288,27 +411,15 @@ def authorize(client, event: dict) -> dict | None:
         raise ManualCIError(
             "The CI request changed after its creation event.", reason="edited"
         )
-    identity = source_identity(client, repo, number)
-    head = client.request(f"repos/{repo}/pulls/{number}")["head"]
-    if command["pinned"] and command["pinned"] != list(identity.values()):
-        raise ManualCIError(
-            "The requested head, base or merge SHA is no longer current.",
-            reason="expired",
-        )
-    query = urlencode(
-        {"event": "pull_request", "head_sha": identity["head_sha"], "per_page": 20}
-    )
-    runs = client.request(f"repos/{repo}/actions/workflows/pr.yml/runs?{query}").get(
-        "workflow_runs", []
-    )
+    head = open_pull(client, repo, number)["head"]
     for run in sorted(
-        runs,
+        pr_runs(client, repo, head["sha"]),
         key=lambda value: (timestamp(value["created_at"]), value["id"]),
         reverse=True,
     ):
         if (
             run.get("event") != "pull_request"
-            or run.get("head_sha") != identity["head_sha"]
+            or run.get("head_sha") != head["sha"]
             or run.get("head_repository", {}).get("full_name")
             != (head.get("repo") or {}).get("full_name")
             or run.get("head_branch") != head.get("ref")
@@ -324,9 +435,19 @@ def authorize(client, event: dict) -> dict | None:
         # Its rerun would cancel the current run through the PR concurrency group.
         if timestamp(comment["created_at"]) < timestamp(run["created_at"]):
             break
-        plan = plan_for_run(client, repo, run, identity)
-        if plan is None:
+        plan = plan_for_run(client, repo, run)
+        if plan is None or plan["source_sha"] != run_source(repo, number, run):
             break
+        identity = source_identity(
+            client, repo, number, source=plan["source_sha"], base=plan["base_sha"]
+        )
+        if identity["head_sha"] != head["sha"] or (
+            command["pinned"] and command["pinned"] != list(identity.values())
+        ):
+            raise ManualCIError(
+                "The requested head, base or merge SHA changed.", reason="expired"
+            )
+        require_current_resolver(client, repo, identity["source_sha"])
         return {
             "schema_version": 1,
             "repository": repo,
@@ -439,19 +560,20 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
     if os.environ.get("GITHUB_EVENT_NAME") != "pull_request":
         return dict(NO_AUTHORIZATION)
     repo, number = os.environ["GITHUB_REPOSITORY"], int(event["number"])
-    identity = source_identity(client, repo, number)
-    if (
-        identity["source_sha"] != source
-        or identity["base_sha"] != base
-        or identity["head_sha"]
-        != event.get("pull_request", {}).get("head", {}).get("sha")
-    ):
+    try:
+        identity = source_identity(client, repo, number, source=source, base=base)
+    except ManualCIError as error:
+        if error.reason != "revision":
+            raise
+        return dict(NO_AUTHORIZATION)
+    if identity["head_sha"] != event.get("pull_request", {}).get("head", {}).get("sha"):
         return dict(NO_AUTHORIZATION)
     run_id = int(os.environ["GITHUB_RUN_ID"])
     run = client.request(f"repos/{repo}/actions/runs/{run_id}")
     if (
         run.get("event") != "pull_request"
         or run.get("head_sha") != identity["head_sha"]
+        or source != run_source(repo, number, run)
     ):
         return dict(NO_AUTHORIZATION)
     if trusted_queue_pull(client.request(f"repos/{repo}/pulls/{number}"), repo):
@@ -488,13 +610,23 @@ def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
         record["pr_run_id"],
     )
     deadline = time.monotonic() + wait_seconds
+    require_current_resolver(client, repo, record["source_sha"])
     while True:
-        identity = source_identity(client, repo, number)
+        identity = source_identity(
+            client, repo, number, source=record["source_sha"], base=record["base_sha"]
+        )
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
-        if not matching_authorization(client, repo, number, run, identity, record):
+        if identity["source_sha"] != run_source(
+            repo, number, run
+        ) or not matching_authorization(client, repo, number, run, identity, record):
             raise ManualCIError(
                 "The PR revision or authorization changed; post a new /ci run request.",
                 reason="expired",
+            )
+        if not latest_pr_run(client, repo, run):
+            raise ManualCIError(
+                "A newer PR CI run superseded this request; wait for its Plan job and post a new /ci run comment.",
+                reason="superseded",
             )
         if run.get("status") == "completed":
             client.request(f"repos/{repo}/actions/runs/{run_id}/rerun", method="POST")

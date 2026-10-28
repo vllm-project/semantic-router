@@ -197,17 +197,50 @@ class ManualCIFeedbackTests(unittest.TestCase):
         )
         self.assertIn("new `/ci run`", self.client.comments[0]["body"])
 
-    def test_stale_merge_reports_branch_update_instead_of_only_waiting_for_plan(self):
+    def test_rewritten_main_reports_invalid_revision_without_starting_ci(self):
         self.client.base_ref["object"]["sha"] = "f" * 40
+        self.client.planned_base_ancestor = "e" * 40
         with self.assertRaises(manual_ci.ManualCIError) as error:
             manual_ci.authorize_with_feedback(self.client, self.event)
         self.assertEqual(error.exception.reason, "revision")
         self.assertEqual(self.client.posts, [])
         self.assertNotIn("rocket", self.client.reactions)
         self.assertIn(
-            "Update the branch onto current `main` or resolve conflicts",
+            "Update the branch or resolve conflicts",
             self.client.comments[0]["body"],
         )
+
+    def test_advanced_main_still_authorizes_and_starts_the_original_pr_run(self):
+        self.client.base_ref["object"]["sha"] = "f" * 40
+        record = manual_ci.authorize_with_feedback(self.client, self.event)
+        manual_ci.rerun_with_feedback(self.client, record, self.event)
+        self.assertEqual(self.client.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.assertIn("rocket", self.client.reactions)
+        self.assertNotIn("confused", self.client.reactions)
+
+    def test_old_resolver_explains_the_required_update_without_starting_ci(self):
+        self.client.resolver_source = "def resolve(): pass\n"
+        with self.assertRaises(manual_ci.ManualCIError) as error:
+            manual_ci.authorize_with_feedback(self.client, self.event)
+        self.assertEqual(error.exception.reason, "upgrade")
+        self.assertEqual(self.client.posts, [])
+        self.assertNotIn("rocket", self.client.reactions)
+        self.assertIn(
+            "Update the branch from main once", self.client.comments[0]["body"]
+        )
+        self.assertIn("does not update its resolver", self.client.comments[0]["body"])
+
+    def test_superseded_request_does_not_cancel_the_newer_run_or_report_started(self):
+        record = manual_ci.authorize_with_feedback(self.client, self.event)
+        self.client.pr_runs.append(
+            {**self.client.pr_run, "id": 124, "created_at": "2026-10-18T10:00:30Z"}
+        )
+        with self.assertRaises(manual_ci.ManualCIError) as error:
+            manual_ci.rerun_with_feedback(self.client, record, self.event)
+        self.assertEqual(error.exception.reason, "superseded")
+        self.assertEqual(self.client.posts, [])
+        self.assertNotIn("rocket", self.client.reactions)
+        self.assertIn("older run was not restarted", self.client.comments[0]["body"])
 
     def test_trigger_failure_or_timeout_is_not_reported_as_a_success_or_certainty(self):
         record = manual_ci.authorize_with_feedback(self.client, self.event)

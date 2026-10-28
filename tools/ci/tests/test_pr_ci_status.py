@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import io
@@ -12,6 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manual_ci import PR_REVISION_POLICY
+from manual_ci_feedback import MESSAGES
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -40,6 +43,13 @@ class Client:
             "status": "completed",
             "conclusion": "success",
             "run_attempt": 1,
+            "referenced_workflows": [
+                {
+                    "path": f"{REPO}/.github/workflows/ci.yml@{MERGE}",
+                    "ref": "refs/pull/3/merge",
+                    "sha": MERGE,
+                }
+            ],
         }
         self.pull = {
             "number": 3,
@@ -68,6 +78,8 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
+        self.main_sha, self.base_ancestor = BASE, BASE
+        self.resolver_source = f'PR_REVISION_POLICY = "{PR_REVISION_POLICY}"\n'
         self.refresh_report()
 
     def refresh_report(self):
@@ -102,6 +114,21 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        if path == "git/ref/heads/main":
+            return {
+                "ref": "refs/heads/main",
+                "object": {"type": "commit", "sha": self.main_sha},
+            }
+        if path.startswith(f"compare/{BASE}..."):
+            return {"merge_base_commit": {"sha": self.base_ancestor}}
+        if path.startswith("contents/tools/ci/manual_ci.py?"):
+            content = self.resolver_source.encode()
+            return {
+                "type": "file",
+                "encoding": "base64",
+                "size": len(content),
+                "content": base64.b64encode(content).decode(),
+            }
         if path == "actions/runs/101":
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
@@ -116,7 +143,17 @@ class Client:
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
         if path.startswith(f"commits/{HEAD}/check-runs?"):
-            return {"check_runs": copy.deepcopy(self.checks)}
+            checks = self.checks
+            if "filter=latest" in path:
+                # A rerun supersedes checks in earlier attempts' suites. PATCH
+                # changes their verdict, but does not make them current again.
+                checks = [
+                    item
+                    for item in checks
+                    if item.get("suite_attempt", self.run["run_attempt"])
+                    == self.run["run_attempt"]
+                ]
+            return {"check_runs": copy.deepcopy(checks)}
         if path.startswith("actions/runs/101/attempts/"):
             return {"jobs": copy.deepcopy(self.jobs)}
         if path.startswith("actions/runs/101/artifacts?"):
@@ -169,6 +206,7 @@ class Client:
                 **copy.deepcopy(payload),
                 "id": max([50, *(item["id"] for item in self.checks)]) + 1,
                 "app": {"id": APP_ID},
+                "suite_attempt": self.run["run_attempt"],
             }
             self.checks.append(check)
         elif "/check-runs/" in endpoint:
@@ -186,6 +224,92 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_old_resolver_requests_upgrade_before_requesting_ci(self):
+        for images_only in (False, True):
+            with self.subTest(images_only=images_only):
+                client = Client()
+                client.main_sha = "e" * 40
+                client.resolver_source = "def resolve(): pass\n"
+                if images_only:
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                    )
+                    client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                self.assertEqual(result["state"], "upgrade")
+                self.assertEqual(result["check"]["status"], "in_progress")
+                self.assertNotIn("conclusion", result["check"])
+                self.assertIn(MESSAGES["upgrade"], result["comment"])
+                self.assertIn("Update the branch", result["check"]["output"]["title"])
+                self.assertNotIn("can start the required checks", result["comment"])
+                self.assertNotIn("main advancing alone", result["comment"])
+
+    def test_old_resolver_updates_the_existing_guidance_comment(self):
+        client = Client()
+        client.resolver_source = "def resolve(): pass\n"
+        client.comments = [
+            {
+                "id": 88,
+                "body": MARKER + " Waiting for committer approval",
+                "user": {"login": "github-actions[bot]", "type": "Bot"},
+            }
+        ]
+        reconcile(client, REPO, 101)
+        endpoint, payload, options = client.writes[-1]
+        self.assertEqual(endpoint, f"repos/{REPO}/issues/comments/88")
+        self.assertEqual(options, {"method": "PATCH"})
+        self.assertIn(MESSAGES["upgrade"], payload["body"])
+
+    def test_old_legacy_resolver_gets_upgrade_guidance_without_a_competing_gate(self):
+        client = Client()
+        client.ready = False
+        client.resolver_source = "def resolve(): pass\n"
+        client.run["conclusion"] = "failure"
+        client.jobs = [
+            {"name": name, "conclusion": "failure"} for name in ["CI / Gate", "PR Gate"]
+        ]
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "legacy-upgrade")
+        self.assertIsNone(result["check"])
+        self.assertEqual(len(client.writes), 1)
+        self.assertIn(MESSAGES["upgrade"], result["comment"])
+        self.assertNotIn("can start the required checks", result["comment"])
+
+    def test_resolver_upgrade_does_not_hide_a_genuine_test_failure(self):
+        client = Client()
+        client.resolver_source = "def resolve(): pass\n"
+        client.run["conclusion"] = "failure"
+        client.jobs[-1]["conclusion"] = "failure"
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "failure")
+        self.assertEqual(result["check"]["conclusion"], "failure")
+        self.assertIn(MESSAGES["upgrade"], result["comment"])
+        self.assertNotIn("a committer must also comment", result["comment"])
+
+    def test_completed_qualification_does_not_require_a_resolver_upgrade(self):
+        client = Client()
+        client.resolver_source = "def resolve(): pass\n"
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        with patch("pr_ci_status.require_current_resolver") as compatibility:
+            result = reconcile(client, REPO, 101)
+        compatibility.assert_not_called()
+        self.assertEqual(result["state"], "success")
+        self.assertEqual(result["check"]["conclusion"], "success")
+
+    def test_upgrade_dry_run_does_not_publish_changes(self):
+        client = Client()
+        client.resolver_source = "def resolve(): pass\n"
+        result = reconcile(client, REPO, 101, dry_run=True)
+        self.assertEqual(result["state"], "upgrade")
+        self.assertIn(MESSAGES["upgrade"], result["comment"])
+        self.assertEqual(client.writes, [])
+
     def test_fork_waiting_is_pending_with_actionable_comment(self):
         client = Client()
         result = reconcile(client, REPO, 101)
@@ -272,7 +396,7 @@ class PRStatusTests(unittest.TestCase):
                 for _ in range(2):
                     result = reconcile(client, REPO, 101)
                     self.assertEqual(result["check"]["conclusion"], "success")
-                self.assertEqual(len(client.checks), 1)
+                self.assertEqual(len(client.checks), 2)
 
     def test_unowned_failed_checks_are_still_ci_failures(self):
         for override in (
@@ -355,6 +479,15 @@ class PRStatusTests(unittest.TestCase):
         self.assertEqual(result["state"], "failure")
         self.assertNotIn("@everyone", json.dumps(result))
 
+    def test_source_must_match_github_workflow_metadata_not_only_merge_parents(self):
+        client = Client()
+        client.plan["source_sha"] = "e" * 40
+        client.refresh_report()
+        self.assertEqual(reconcile(client, REPO, 101)["state"], "failure")
+        client = Client()
+        client.run["referenced_workflows"] = []
+        self.assertEqual(reconcile(client, REPO, 101)["state"], "failure")
+
     def test_stale_head_or_newer_run_does_not_write(self):
         for mutate in [
             lambda c: c.pull["head"].update(sha="f" * 40),
@@ -365,9 +498,9 @@ class PRStatusTests(unittest.TestCase):
             self.assertIn("ignored", reconcile(client, REPO, 101))
             self.assertEqual(client.writes, [])
 
-    def test_changed_base_stays_pending_and_requests_branch_update(self):
+    def test_rewritten_main_stays_pending_and_requests_branch_update(self):
         client = Client()
-        client.pull["merge_commit_sha"] = "f" * 40
+        client.main_sha, client.base_ancestor = "e" * 40, "f" * 40
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "stale")
         self.assertEqual(result["check"]["status"], "in_progress")
@@ -388,10 +521,14 @@ class PRStatusTests(unittest.TestCase):
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "running")
         self.assertTrue(result["check"]["external_id"].endswith(":2"))
-        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs/77")
-        self.assertEqual(client.writes[0][2], {"method": "PATCH"})
+        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs")
+        self.assertEqual(client.writes[0][2], {})
+        self.assertEqual(client.checks[0]["conclusion"], "neutral")
+        self.assertEqual(client.checks[-1]["status"], "in_progress")
 
-    def test_approval_completion_resolves_latest_pending_check_in_the_same_run(self):
+    def test_approval_completion_creates_a_new_gate_and_retires_old_pending_checks(
+        self,
+    ):
         client = Client()
         client.run["run_attempt"] = 3
         client.plan.update(
@@ -419,12 +556,145 @@ class PRStatusTests(unittest.TestCase):
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "success")
         endpoint, payload, options = client.writes[0]
-        self.assertEqual(endpoint, f"repos/{REPO}/check-runs/78")
-        self.assertEqual(options, {"method": "PATCH"})
+        self.assertEqual(endpoint, f"repos/{REPO}/check-runs")
+        self.assertEqual(options, {})
         self.assertEqual(payload["external_id"], f"{PREFIX}3:101:3")
-        self.assertEqual(payload["status"], "completed")
         self.assertEqual(payload["conclusion"], "success")
-        self.assertNotIn("head_sha", payload)
+        self.assertEqual(
+            [item[0] for item in client.writes if "/check-runs" in item[0]],
+            [
+                f"repos/{REPO}/check-runs",
+                f"repos/{REPO}/check-runs/77",
+                f"repos/{REPO}/check-runs/78",
+            ],
+        )
+        for _, retirement, _ in client.writes[1:3]:
+            self.assertEqual(
+                retirement, {"status": "completed", "conclusion": "neutral"}
+            )
+        self.assertEqual(client.checks[-1]["external_id"], f"{PREFIX}3:101:3")
+        self.assertEqual(client.checks[-1]["conclusion"], "success")
+        self.assertEqual(client.checks[0]["external_id"], f"{PREFIX}3:101:1")
+        self.assertEqual(client.checks[1]["external_id"], f"{PREFIX}3:101:2")
+
+    def test_rerun_verdict_is_visible_to_branch_protection(self):
+        for state in ("success", "failure", "awaiting-approval"):
+            with self.subTest(state=state):
+                client = Client()
+                reconcile(client, REPO, 101)
+                old_id = client.checks[0]["id"]
+                client.run.update(
+                    run_attempt=2,
+                    conclusion="failure" if state == "failure" else "success",
+                )
+                if state != "awaiting-approval":
+                    client.plan.update(
+                        expected_verification_ids=["quality", "e2e.dashboard"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                client.refresh_report()
+                for _ in range(2):
+                    self.assertEqual(reconcile(client, REPO, 101)["state"], state)
+                    visible = client.request(
+                        f"repos/{REPO}/commits/{HEAD}/check-runs?filter=latest"
+                    )["check_runs"]
+                    self.assertEqual(len(visible), 1)
+                    self.assertNotEqual(visible[0]["id"], old_id)
+                    if state == "awaiting-approval":
+                        self.assertEqual(visible[0]["status"], "in_progress")
+                        self.assertNotIn("conclusion", visible[0])
+                    else:
+                        self.assertEqual(visible[0]["conclusion"], state)
+                self.assertEqual(len(client.checks), 2)
+                self.assertEqual(client.checks[0]["conclusion"], "neutral")
+
+    def test_approved_rerun_after_main_advances_publishes_the_tested_revision(self):
+        client = Client()
+        reconcile(client, REPO, 101)
+        client.main_sha = "e" * 40
+        client.pull["base"]["sha"] = client.main_sha
+        client.pull["merge_commit_sha"] = "f" * 40
+        client.run["run_attempt"] = 2
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        self.assertEqual(result["check"]["head_sha"], HEAD)
+        visible = client.request(
+            f"repos/{REPO}/commits/{HEAD}/check-runs?filter=latest"
+        )["check_runs"]
+        self.assertEqual(len(visible), 1)
+        self.assertEqual(visible[0]["conclusion"], "success")
+        summary = result["check"]["output"]["summary"]
+        self.assertIn(f"Tested merge `{MERGE[:12]}`", summary)
+        self.assertIn(f"against base `{BASE[:12]}`", summary)
+        self.assertNotIn(client.main_sha[:12], summary)
+
+    def test_rewritten_main_before_publication_cannot_publish_success(self):
+        client = Client()
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        with patch("pr_ci_status.main_contains", side_effect=[True, False]):
+            self.assertIn("ignored", reconcile(client, REPO, 101))
+        self.assertEqual(client.writes, [])
+
+    def test_new_contributor_head_before_publication_cannot_publish_success(self):
+        client = Client()
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        original = client.request
+        reads = 0
+        revalidation_read = 2
+
+        def request(endpoint, **kwargs):
+            nonlocal reads
+            result = original(endpoint, **kwargs)
+            if endpoint.endswith("/pulls/3"):
+                reads += 1
+                if reads == revalidation_read:
+                    result["head"]["sha"] = "f" * 40
+            return result
+
+        client.request = request
+        self.assertIn("ignored", reconcile(client, REPO, 101))
+        self.assertEqual(client.writes, [])
+
+    def test_reconciliation_replaces_a_success_hidden_by_an_earlier_attempt(self):
+        client = Client()
+        reconcile(client, REPO, 101)
+        # Model the broken publisher: attempt 2 patched attempt 1's check.
+        client.checks[0].update(
+            external_id=f"{PREFIX}3:101:2", status="completed", conclusion="success"
+        )
+        client.run["run_attempt"] = 2
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for _ in range(2):
+            reconcile(client, REPO, 101)
+        visible = client.request(
+            f"repos/{REPO}/commits/{HEAD}/check-runs?filter=latest"
+        )["check_runs"]
+        self.assertEqual(len(client.checks), 2)
+        self.assertEqual(len(visible), 1)
+        self.assertEqual(visible[0]["conclusion"], "success")
+        self.assertEqual(visible[0]["external_id"], f"{PREFIX}3:101:2")
 
     def test_completed_or_different_run_or_pr_check_is_not_reused(self):
         for external, status in (
@@ -470,6 +740,8 @@ class PRStatusTests(unittest.TestCase):
         reconcile(client, REPO, 101)
         self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs/77")
         self.assertEqual(client.writes[0][2], {"method": "PATCH"})
+        self.assertEqual(client.checks[0]["external_id"], f"{PREFIX}3:101:2")
+        self.assertEqual(client.checks[1]["conclusion"], "neutral")
 
     def test_initial_attempt_does_not_invent_plan_or_compete_with_legacy_gate(self):
         client = Client()
@@ -503,7 +775,7 @@ class PRStatusTests(unittest.TestCase):
             self.assertIn("ignored", reconcile(client, REPO, 101))
         self.assertEqual(client.writes, [])
 
-    def test_base_or_merge_changing_before_write_cannot_publish_success(self):
+    def test_base_or_merge_metadata_changing_does_not_discard_a_valid_plan(self):
         revalidation_read = 2
         for field in ("base", "merge"):
             with self.subTest(field=field):
@@ -524,8 +796,10 @@ class PRStatusTests(unittest.TestCase):
                     return result
 
                 client.request = request
-                self.assertIn("ignored", reconcile(client, REPO, 101))
-                self.assertEqual(client.writes, [])
+                self.assertEqual(
+                    reconcile(client, REPO, 101)["state"], "awaiting-approval"
+                )
+                self.assertTrue(client.writes)
 
     def test_manual_dispatch_reads_run_id_from_event_inputs(self):
         with tempfile.TemporaryDirectory() as directory:

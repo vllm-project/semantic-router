@@ -136,6 +136,11 @@ evidence failures, and success only for complete passing evidence. Waiting
 does not reserve a runner. A genuine failure takes precedence when other work
 also awaits authorization. Contributors without repository write permission
 do not need to authorize CI and cannot approve these runs.
+Before asking for authorization, the publisher checks the planned source's
+resolver compatibility. Older sources receive the same one-time branch-update
+guidance as the controller, with the gate still pending. Legacy sources retain
+their native gate; an actual test failure stays a failure and includes the
+upgrade prerequisite. Completed qualification does not require a resolver upgrade.
 The short **CI Execution** job still summarizes the work that ran; its success
 alone does not satisfy the separately published PR Gate.
 
@@ -152,10 +157,30 @@ be confirmed. Feedback starts when the command-handler job gets a runner. A
 rocket confirms only that CI was triggered; **PR Gate** owns the test outcome.
 Retries update the same request's bot reply instead of adding duplicate errors.
 
-The command handler runs trusted main code and freezes the PR head, base, merge
-revision, and original PR workflow run. It rechecks the comment and permissions
-before rerunning that original event. Edits, withdrawn permissions, and changed
-revisions invalidate approval. This preserves the required PR check context.
+The command handler runs trusted main code and freezes the current PR head,
+the plan's exact base and merge revision, and the original PR workflow run.
+It verifies the merge commit's parents against that base and current head,
+binds the source to GitHub's referenced-workflow metadata for this PR, and
+verifies that the base remains an ancestor of main. Main advancing or GitHub
+regenerating the live test-merge ref does not invalidate the original plan.
+It rechecks the comment and permissions before rerunning that original event.
+Edits, withdrawn permissions, a new contributor head, or a different execution
+revision invalidate approval. A rewrite of main that removes the planned base
+also rejects the plan. Receipts and images remain bound to the tested source;
+the bot reports that merge and base separately from the current main revision.
+This preserves the required PR check context.
+Each wait-loop iteration checks the latest run for the same head, source
+repository, and branch before triggering a rerun. A newer run supersedes the
+request instead of being cancelled by an older workflow's restart.
+
+The planned source must declare the `planned-merge-v1` resolver policy in
+`tools/ci/manual_ci.py`. The controller inspects this declaration as data,
+without executing PR code, before accepting or restarting the run. Existing
+branches need a one-time update from main after this resolver fix lands and
+a new Plan job before requesting `/ci run`; rerunning the older workflow does
+not update its resolver. This declaration is a compatibility check and does
+not grant authorization or waive any source, permission, or evidence checks.
+
 A standalone workflow dispatch cannot replace the PR Gate. Verified Mergify
 queue PRs automatically qualify affected changes at the queue merge revision;
 a human-created branch with the same prefix gets no exemption.

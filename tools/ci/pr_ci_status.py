@@ -12,7 +12,17 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
 
-from manual_ci import PAGE_SIZE, GitHubClient, ManualCIError, read_artifact
+from manual_ci import (
+    PAGE_SIZE,
+    GitHubClient,
+    ManualCIError,
+    latest_pr_run,
+    main_contains,
+    read_artifact,
+    require_current_resolver,
+    run_source,
+)
+from manual_ci_feedback import MESSAGES
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -24,6 +34,9 @@ CAPABILITIES = (".github/workflows/ci-status.yml", "tools/ci/pr_ci_status.py")
 MAX_PAGES = 100
 MAX_IDENTIFIERS = 1000
 COMMENT_ITEM_LIMIT = 30
+LEGACY_STATES = frozenset({"legacy", "legacy-upgrade"})
+UPGRADE_STATES = frozenset({"upgrade", "legacy-upgrade"})
+GUIDANCE_STATES = frozenset({"awaiting-approval", "legacy", "stale"}) | UPGRADE_STATES
 
 
 class StatusClient(GitHubClient):
@@ -96,23 +109,7 @@ def current_pull(client, repo: str, run: dict) -> dict | None:
 
 
 def latest_run(client, repo: str, run: dict) -> bool:
-    query = urlencode({"event": "pull_request", "head_sha": run["head_sha"]})
-    candidates = [
-        item
-        for item in pages(
-            client,
-            f"repos/{repo}/actions/workflows/pr.yml/runs?{query}",
-            "workflow_runs",
-        )
-        if item.get("head_branch") == run.get("head_branch")
-        and (item.get("head_repository") or {}).get("full_name")
-        == (run.get("head_repository") or {}).get("full_name")
-    ]
-    return (
-        bool(candidates)
-        and max(candidates, key=lambda item: (item["created_at"], item["id"]))["id"]
-        == run["id"]
-    )
+    return latest_pr_run(client, repo, run)
 
 
 def artifact(client, repo: str, run: dict, name: str, filename: str, limit: int):
@@ -145,7 +142,7 @@ def identifiers(value) -> list[str]:
     return value
 
 
-def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
+def validate_plan(client, repo: str, number: int, run: dict, plan: dict) -> None:
     unsigned = {key: value for key, value in plan.items() if key != "plan_sha256"}
     digest = hashlib.sha256(
         json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
@@ -157,6 +154,10 @@ def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
         for key in ("source_sha", "base_sha")
     ):
         raise ManualCIError("Invalid qualification source revision.")
+    if plan["source_sha"] != run_source(repo, number, run):
+        raise ManualCIError(
+            "Qualification source differs from the PR workflow revision."
+        )
     commit = client.request(f"repos/{repo}/git/commits/{plan['source_sha']}")
     if [item.get("sha") for item in commit.get("parents", [])] != [
         plan["base_sha"],
@@ -221,7 +222,13 @@ def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
 
 
 def presentation(
-    state: str, repo: str, pull: dict, run: dict, plan: dict | None
+    state: str,
+    repo: str,
+    pull: dict,
+    run: dict,
+    plan: dict | None,
+    *,
+    upgrade_required=False,
 ) -> tuple[str, str]:
     url = f"https://github.com/{repo}/actions/runs/{run['id']}"
     titles = {
@@ -231,9 +238,13 @@ def presentation(
         "failure": "CI failed — inspect the failing checks",
         "success": "All required CI qualification passed",
         "legacy": "Waiting for committer approval — /ci run",
+        "upgrade": "Update the branch to upgrade CI authorization",
+        "legacy-upgrade": "Update the branch to upgrade CI authorization",
     }
     lines = [f"**{titles[state]}**", ""]
-    if state in {"awaiting-approval", "legacy"}:
+    if state in UPGRADE_STATES:
+        lines += [MESSAGES["upgrade"]]
+    elif state in {"awaiting-approval", "legacy"}:
         lines += [
             (
                 "Automatic checks passed. Required expensive checks have not run yet; this is not a test failure."
@@ -262,7 +273,9 @@ def presentation(
         lines += [
             "A check failed or its required evidence could not be verified. Open the run below for the failure; approval alone does not turn a failed test green."
         ]
-        if plan and plan.get("deferred_verifications"):
+        if upgrade_required:
+            lines += ["", MESSAGES["upgrade"]]
+        elif plan and plan.get("deferred_verifications"):
             lines += [
                 "After fixing the failure, a committer must also comment `/ci run` to authorize the remaining qualification."
             ]
@@ -310,10 +323,15 @@ def presentation(
         "",
         f"Revision `{pull['head']['sha'][:12]}` · [CI run, attempt {run['run_attempt']}]({url})",
     ]
+    if plan:
+        lines += [
+            "",
+            f"Tested merge `{plan['source_sha'][:12]}` against base `{plan['base_sha'][:12]}`. The merge queue qualifies the final candidate separately.",
+        ]
     if state in {"awaiting-approval", "legacy", "stale"}:
         lines += [
             "",
-            "Approval applies to this revision only. New commits or a changed merge base require fresh qualification.",
+            "Approval applies to this PR head and planned merge only. New contributor commits require fresh authorization; main advancing alone does not.",
         ]
     return titles[state], "\n".join(lines)
 
@@ -342,8 +360,11 @@ def publish(
     checks: list[dict],
     *,
     dry_run=False,
+    upgrade_required=False,
 ) -> dict:
-    title, summary = presentation(state, repo, pull, run, plan)
+    title, summary = presentation(
+        state, repo, pull, run, plan, upgrade_required=upgrade_required
+    )
     external = f"{PREFIX}{pull['number']}:{run['id']}:{run['run_attempt']}"
     payload = {
         "name": CHECK,
@@ -367,17 +388,29 @@ def publish(
     result = {
         "pr": pull["number"],
         "state": state,
-        "check": None if state == "legacy" else payload,
+        "check": None if state in LEGACY_STATES else payload,
         "comment": (
             comment_body
             if owned
-            or state in {"awaiting-approval", "legacy", "stale"}
+            or state in GUIDANCE_STATES
             or (plan and plan.get("deferred_verifications"))
             else None
         ),
     }
     if dry_run:
         return result
+    visible_ids = (
+        {
+            item["id"]
+            for item in pages(
+                client,
+                f"repos/{repo}/commits/{run['head_sha']}/check-runs?check_name=PR%20Gate&filter=latest",
+                "check_runs",
+            )
+        }
+        if state not in LEGACY_STATES
+        else set()
+    )
     # Recheck after reading artifacts/comments; an old completion must never
     # overwrite the status of a newer run, attempt, or contributor commit.
     fresh = client.request(f"repos/{repo}/actions/runs/{run['id']}")
@@ -385,37 +418,58 @@ def publish(
     if (
         current.get("state") != "open"
         or current["head"]["sha"] != run["head_sha"]
-        or current.get("merge_commit_sha") != pull.get("merge_commit_sha")
-        or current.get("base", {}).get("sha") != pull.get("base", {}).get("sha")
+        or current.get("base", {}).get("ref") != "main"
+        or current.get("base", {}).get("repo", {}).get("full_name") != repo
+        or (
+            plan
+            and state in {"success", "awaiting-approval"}
+            and not main_contains(client, repo, plan["base_sha"])
+        )
         or fresh.get("run_attempt") != run["run_attempt"]
         or fresh.get("status") != run["status"]
         or not latest_run(client, repo, run)
     ):
         return {"ignored": "superseded while preparing status"}
-    if state != "legacy":
-        existing = [item for item in checks if item.get("external_id") == external]
-        if not existing:
-            # An approval rerun should resolve its own pending check, without
-            # reopening a completed check or mutating another workflow run.
-            run_prefix = f"{PREFIX}{pull['number']}:{run['id']}:"
-            existing = [
-                item
-                for item in checks
-                if item.get("status") == "in_progress"
-                and str(item.get("external_id", "")).startswith(run_prefix)
-            ]
+    if state not in LEGACY_STATES:
+        # A rerun can supersede the earlier attempt's check suite. PATCHing its
+        # check succeeds, but branch protection no longer counts that check.
+        # Only reuse a visible check for this exact attempt; this also repairs
+        # verdicts an older publisher wrote onto a superseded check.
+        existing = [
+            item
+            for item in checks
+            if item.get("external_id") == external and item["id"] in visible_ids
+        ]
+        current_id = max((item["id"] for item in existing), default=None)
         if existing:
             update = dict(payload)
             update.pop("head_sha")
             client.write(
-                f"repos/{repo}/check-runs/{
-                    max(existing, key=lambda item: item['id'])['id']
-                }",
+                f"repos/{repo}/check-runs/{current_id}",
                 update,
                 method="PATCH",
             )
         else:
             client.write(f"repos/{repo}/check-runs", payload)
+        run_prefix = f"{PREFIX}{pull['number']}:{run['id']}:"
+        # Retire superseded pending checks only after publishing their
+        # replacement. Neutral keeps an older check in another active suite
+        # from blocking the current verdict, without claiming it passed.
+        for item in checks:
+            identity = str(item.get("external_id", ""))
+            attempt = identity.removeprefix(run_prefix)
+            if (
+                item.get("status") == "in_progress"
+                and item["id"] != current_id
+                and identity.startswith(run_prefix)
+                and attempt.isdecimal()
+                and int(attempt) <= run["run_attempt"]
+            ):
+                client.write(
+                    f"repos/{repo}/check-runs/{item['id']}",
+                    {"status": "completed", "conclusion": "neutral"},
+                    method="PATCH",
+                )
     if result["comment"]:
         if owned:
             comment = max(owned, key=lambda item: item["id"])
@@ -430,6 +484,16 @@ def publish(
                 f"repos/{repo}/issues/{pull['number']}/comments", {"body": comment_body}
             )
     return result
+
+
+def resolver_needs_upgrade(client, repo: str, source: str) -> bool:
+    try:
+        require_current_resolver(client, repo, source)
+    except ManualCIError as error:
+        if error.reason != "upgrade":
+            raise
+        return True
+    return False
 
 
 def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
@@ -462,9 +526,10 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         )
     )
     plan = None
+    upgrade_required = False
     try:
         plan = artifact(client, repo, run, "ci-plan", "plan.json", 16 * 1024 * 1024)
-        validate_plan(client, repo, run, plan)
+        validate_plan(client, repo, pull["number"], run, plan)
         if not publisher_ready(client, repo, plan["base_sha"]):
             # Old PR sources keep the original required Actions job. Never add a
             # competing check with the same required name during migration.
@@ -476,22 +541,43 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
             if plan["deferred_verifications"] and all(
                 job.get("name") in {"CI / Gate", "PR Gate"} for job in failures
             ):
+                state = (
+                    "legacy-upgrade"
+                    if resolver_needs_upgrade(client, repo, plan["source_sha"])
+                    else "legacy"
+                )
                 return publish(
-                    client, repo, pull, run, "legacy", plan, checks, dry_run=dry_run
+                    client, repo, pull, run, state, plan, checks, dry_run=dry_run
                 )
             return {"ignored": "legacy workflow owns PR Gate"}
         publisher_ids = {check["id"] for check in checks}
         jobs = [job for job in jobs if job.get("id") not in publisher_ids]
         report = artifact(client, repo, run, "ci-gate", "gate.json", 256 * 1024)
         state = verdict(run, plan, report, jobs)
-        if state != "failure" and pull.get("merge_commit_sha") != plan["source_sha"]:
+        if state in {"awaiting-approval", "failure"} and (
+            plan["deferred_verifications"] or plan["deferred_images"]
+        ):
+            upgrade_required = resolver_needs_upgrade(client, repo, plan["source_sha"])
+            if state == "awaiting-approval" and upgrade_required:
+                state = "upgrade"
+        if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
     except (ManualCIError, KeyError, ValueError, TypeError):
         if not checks and not any(job.get("name") == "CI Execution" for job in jobs):
             raise
         state = "failure"
         plan = None  # Never interpolate malformed artifact content into a comment.
-    return publish(client, repo, pull, run, state, plan, checks, dry_run=dry_run)
+    return publish(
+        client,
+        repo,
+        pull,
+        run,
+        state,
+        plan,
+        checks,
+        dry_run=dry_run,
+        upgrade_required=upgrade_required,
+    )
 
 
 def main() -> int:

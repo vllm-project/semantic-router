@@ -226,9 +226,22 @@ permission can post a new, unedited comment:
 This authorizes the affected work and reruns the original PR workflow.
 `/ci run full` requests the complete CPU inventory. Narrower scopes are
 documented in the [testing strategy](tools/agent/docs/testing-strategy.md#product-layers-and-execution-policy).
-Valid scopes accumulate for the same revision; partial authorization does not
-waive the remaining checks. A new head, base, or merge revision requires fresh
-authorization.
+Valid scopes accumulate for the same planned revision; partial authorization
+does not waive the remaining checks. Authorization stays bound to the PR head,
+the plan's exact base and merge commit, and its original workflow run. Main
+advancing or GitHub regenerating the test-merge ref does not invalidate that
+plan while its base remains in main's history. A new contributor head or a
+different planned execution requires fresh authorization. The merge queue
+qualifies the final merge candidate against its own base before merging.
+
+This behavior requires the planned PR source to include the newer authorization
+resolver. Existing branches must update from main once after this fix lands,
+wait for the new Plan job, then request `/ci run`. Rerunning an older workflow
+keeps its original resolver; updating the controller on main cannot upgrade it.
+The publisher reports this prerequisite instead of asking for immediate
+authorization; the handler checks it again before starting a rerun. While waiting,
+it also checks that the authorized run is still the latest for that PR head;
+if a newer run exists, wait for its Plan job and post a new request.
 
 The command handler reacts with 👀 when it receives a request and 🚀 after it
 successfully triggers the PR workflow. The rocket means CI was started, not that
