@@ -160,7 +160,7 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 		hazard.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
 		catalog.Deployments = map[string]ModelDeployment{"hazard": hazard}
 	}
-	primary, err := ImplicitModelRuntimeDeployment(Vela2SignalModel, true)
+	primary, err := ImplicitModelRuntimeDeployment(Vela3SignalModel, true)
 	if err == nil {
 		if catalog.Deployments == nil {
 			catalog.Deployments = make(map[string]ModelDeployment)
@@ -268,7 +268,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:   true,
-			Threshold: 0.75,
+			Threshold: ModuleThresholdsOf(Vela3SignalModel).PromptGuard,
 			UseCPU:    true,
 		},
 	}
@@ -279,14 +279,14 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		Domain: CanonicalCategoryModule{
 			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
-				Threshold: 0.28,
+				Threshold: ModuleThresholdsOf(Vela3SignalModel).Domain,
 				UseCPU:    true,
 			},
 		},
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
-				Threshold: 0.01,
+				Threshold: ModuleThresholdsOf(Vela3SignalModel).PII,
 				UseCPU:    true,
 			},
 		},
@@ -300,7 +300,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 		FactCheck: CanonicalFactCheckModule{
 			ModelRef: "fact_check_classifier",
 			FactCheckModelConfig: FactCheckModelConfig{
-				Threshold: 0.93,
+				Threshold: ModuleThresholdsOf(Vela3SignalModel).FactCheck,
 				UseCPU:    true,
 			},
 		},
@@ -322,26 +322,26 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 		ModelRef: "feedback_detector",
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:   true,
-			Threshold: 0.37,
+			Threshold: ModuleThresholdsOf(Vela3SignalModel).Feedback,
 			UseCPU:    true,
 		},
 	}
 }
 
 // DefaultSystemModels returns stable capability bindings for built-in runtime
-// models: Vela 2.0 0.3B for every built-in signal it answers, which then share
-// one deployment and one call per request, and Vela 1.0 Hazard.
+// models: Vela 3.0 vela3-fast for every built-in signal it answers, which then
+// share one deployment and one call per request, and Vela 1.0 Hazard.
 func DefaultSystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
 		DecisionModel:         DecisionModelBinding{Deployment: DefaultDecisionDeployment},
-		Safety:                Vela2SignalModel,
+		Safety:                Vela3SignalModel,
 		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
-		PromptGuard:           Vela2SignalModel,
-		DomainClassifier:      Vela2SignalModel,
-		PIIClassifier:         Vela2SignalModel,
-		FactCheckClassifier:   Vela2SignalModel,
-		HallucinationDetector: Vela2SignalModel,
-		FeedbackDetector:      Vela2SignalModel,
+		PromptGuard:           Vela3SignalModel,
+		DomainClassifier:      Vela3SignalModel,
+		PIIClassifier:         Vela3SignalModel,
+		FactCheckClassifier:   Vela3SignalModel,
+		HallucinationDetector: Vela3SignalModel,
+		FeedbackDetector:      Vela3SignalModel,
 	}
 }
 
