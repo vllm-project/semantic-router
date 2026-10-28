@@ -29,6 +29,7 @@ func (r *OpenAIRouter) reportCacheHitTelemetry(
 	usage := responseUsageFromSemanticUsage(semanticResponse.Usage)
 	totalTokens := responseUsageTotal(usage)
 	if totalTokens > 0 {
+		r.bindThreadObservationKey(ctx)
 		recordSessionTurn(ctx, usage, sessiontelemetry.TurnPricing{})
 	}
 	if ctx.RequestModel != "" {

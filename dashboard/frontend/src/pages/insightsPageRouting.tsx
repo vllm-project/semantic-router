@@ -111,11 +111,12 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
   }
   const policy =
     record.learning?.protection ?? record.session_policy ?? record.learning?.protection_preflight
-  if (record.session_id || policy) {
+  if (record.session_id || record.agent_id || policy) {
     sections.push({
       title: 'Session Routing',
       fields: [
         { label: 'Session', value: record.session_id || 'Not recorded' },
+        { label: 'Agent', value: record.agent_id || 'Not recorded' },
         { label: 'Conversation', value: record.conversation_id || 'Not recorded' },
         { label: 'Turn', value: record.turn_index + 1 },
         {

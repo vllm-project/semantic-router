@@ -296,6 +296,7 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 		// Looper usage is an aggregate across potentially differently priced
 		// calls. Preserve continuity and token totals without charging the whole
 		// cascade at the final response model's price.
+		r.bindThreadObservationKey(reqCtx)
 		recordSessionTurn(reqCtx, responseUsageMetrics{
 			promptTokens:     int(resp.Usage.PromptTokens),
 			completionTokens: int(resp.Usage.CompletionTokens),

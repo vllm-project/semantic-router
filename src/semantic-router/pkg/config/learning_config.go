@@ -73,19 +73,25 @@ type RouterLearningProtectionConfig struct {
 	Tuning   RouterLearningProtectionTuning `yaml:"tuning,omitempty"`
 }
 
-// RouterLearningIdentityConfig declares where protection reads stable client
-// identity. The runtime currently uses the session and conversation keys.
+// RouterLearningIdentityConfig declares where the router reads stable client
+// identity. Protection's hold key uses the session and conversation headers.
+// The agent header names a thread inside that session for Replay and for
+// previous-model and idle observations.
 type RouterLearningIdentityConfig struct {
 	Headers RouterLearningIdentityHeadersConfig `yaml:"headers,omitempty"`
 }
 
 // RouterLearningIdentityHeadersConfig is intentionally typed. The public
-// protection identity shape supports only the headers used by the protection
-// runtime; future identity needs should add typed fields instead of accepting
-// arbitrary header keys.
+// identity shape supports only these headers; future identity needs should
+// add typed fields instead of accepting arbitrary header keys.
 type RouterLearningIdentityHeadersConfig struct {
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
+	// Agent is the optional header that carries a child thread id. It has no
+	// default. When a request also carries the session header, Replay records
+	// the value and previous-model and idle observations stay on that thread.
+	// It does not change protection's hold key.
+	Agent *string `yaml:"agent,omitempty"`
 }
 
 // RouterLearningProtectionTuning exposes the stable protection knobs.
@@ -234,6 +240,13 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 			}
 		}
 		return routerLearningDefaultConversationHeader
+	case "agent":
+		if cfg.Identity.Headers.Agent != nil {
+			if value := strings.TrimSpace(*cfg.Identity.Headers.Agent); value != "" {
+				return value
+			}
+		}
+		return ""
 	default:
 		return ""
 	}

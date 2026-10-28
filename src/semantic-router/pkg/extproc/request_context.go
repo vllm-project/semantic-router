@@ -206,6 +206,9 @@ type RequestContext struct {
 	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
 	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
 	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
+	// threadObservationKey is the session-plus-agent key for previous-model and
+	// idle observations. Empty keeps routingSessionStateKey, including KV affinity.
+	threadObservationKey string
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation

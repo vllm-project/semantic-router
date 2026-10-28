@@ -115,6 +115,7 @@ type TrajectoryResponse struct {
 
 type TrajectoryRoute struct {
 	ConversationID       string    `json:"conversation_id,omitempty"`
+	AgentID              string    `json:"agent_id,omitempty"`
 	RecordID             string    `json:"record_id"`
 	Timestamp            time.Time `json:"timestamp"`
 	TurnIndex            int       `json:"turn_index"`

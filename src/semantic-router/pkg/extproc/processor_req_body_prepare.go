@@ -54,6 +54,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if !ctx.Routing.IsResolved() {
 		r.resolveEntrypointForRequest(originalModel, ctx)
 	}
+	r.bindThreadObservationKey(ctx)
 	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
 	// Keep the general snapshot payload-free, but attach tool-result text at the

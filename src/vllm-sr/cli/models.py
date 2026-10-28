@@ -1752,12 +1752,18 @@ class RouterLearningAdaptationConfig(BaseModel):
 
 
 class RouterLearningIdentityHeadersConfig(BaseModel):
-    """Header names used by Router Learning protection identity."""
+    """Header names used by Router Learning identity.
+
+    ``agent`` is optional and has no default. When a request carries it,
+    Replay records the value and previous-model and idle observations stay
+    on that thread. It does not change protection's hold key.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     session: Optional[StrictStr] = None
     conversation: Optional[StrictStr] = None
+    agent: Optional[StrictStr] = None
 
 
 class RouterLearningIdentityConfig(BaseModel):

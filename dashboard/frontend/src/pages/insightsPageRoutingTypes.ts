@@ -79,6 +79,7 @@ export interface ReplayRouteDiagnostics {
 
 export interface InsightsTrajectoryRoute {
   conversation_id?: string
+  agent_id?: string
   record_id: string
   timestamp: string
   turn_index: number

@@ -31,6 +31,7 @@ describe('session candidate inventory', () => {
     const sections = buildRoutingExplanationSections(record)
     const fields = sections.find((section) => section.title === 'Session Routing')?.fields
     expect(fields?.find((field) => field.label === 'Conversation')?.value).toBe('conversation-two')
+    expect(fields?.find((field) => field.label === 'Agent')?.value).toBe('Not recorded')
     expect(fields?.find((field) => field.label === 'Eligible models')?.value).toBe(
       'current, proposal, unscored',
     )
@@ -38,6 +39,17 @@ describe('session candidate inventory', () => {
     const html = renderToStaticMarkup(<>{scores?.fields[0].value}</>)
     expect(html).toContain('<td>unscored</td><td>—</td><td>—</td>')
     expect(html).toContain('<td>proposal</td><td>0.0000</td><td>0.0000</td>')
+  })
+
+  it('shows the configured agent id beside the shared session', () => {
+    const sections = buildRoutingExplanationSections({
+      ...recordBase,
+      session_id: 'run-shared',
+      agent_id: 'thread-review',
+    })
+    const fields = sections.find((section) => section.title === 'Session Routing')?.fields
+    expect(fields?.find((field) => field.label === 'Session')?.value).toBe('run-shared')
+    expect(fields?.find((field) => field.label === 'Agent')?.value).toBe('thread-review')
   })
 
   it('does not infer eligibility from legacy score maps', () => {
