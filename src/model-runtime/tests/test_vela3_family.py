@@ -97,6 +97,50 @@ def test_a_missing_adapter_routes_off(package, tmp_path) -> None:
     assert "relation_adapter.safetensors" not in verified.details["package"].files
 
 
+def _set_q(value):
+    """A config edit that gives ``[Q]`` the token ID ``value(config)``."""
+    return lambda config: config["decision"]["marker_ids"].update(
+        {"[Q]": value(config)}
+    )
+
+
+@pytest.mark.parametrize(
+    ("edit", "message"),
+    [
+        (_set_q(lambda config: config["vocab_size"]), "below vocab_size"),
+        (_set_q(lambda config: 1_000_000_000), "below vocab_size"),
+        (_set_q(lambda config: -1), "below vocab_size"),
+        (_set_q(lambda config: True), "below vocab_size"),
+        (_set_q(lambda config: 384.0), "below vocab_size"),
+        (_set_q(lambda config: config["decision"]["marker_ids"]["[O]"]), "distinct"),
+        (lambda config: config["decision"]["marker_ids"].pop("[Q]"), "must name"),
+        (lambda config: config["decision"].pop("marker_ids"), "must name"),
+        (lambda config: config.update({"vocab_size": "392"}), "vocab_size"),
+    ],
+    ids=[
+        "at-vocab-size",
+        "past-vocab",
+        "negative",
+        "bool",
+        "float",
+        "duplicate",
+        "missing-marker",
+        "no-marker-ids",
+        "vocab-size-not-int",
+    ],
+)
+def test_marker_ids_must_index_the_backbone_vocabulary(
+    package, tmp_path, edit, message
+) -> None:
+    copy = Path(shutil.copytree(package, tmp_path / "copy"))
+    config = json.loads((copy / "config.json").read_text(encoding="utf-8"))
+    edit(config)
+    (copy / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (copy / "SHA256SUMS").unlink()
+    with pytest.raises(PackageError, match=message):
+        Vela3Family().verify(PackageRef(copy))
+
+
 def test_bundled_runtime_is_never_imported(model) -> None:
     assert "vela3_encoder" not in sys.modules
     assert "vela3_schema" not in sys.modules
