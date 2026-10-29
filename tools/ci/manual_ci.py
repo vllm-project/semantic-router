@@ -32,6 +32,12 @@ PAGE_SIZE = 100
 AUTHORIZATION_LIMIT = 65536
 PLAN_LIMIT = 16 * 1024 * 1024
 ERROR_STATUS_TAIL_LIMIT = 256
+# A rate limit, and for reads a 5xx or a timeout, is waited out within one
+# budget per client, so a job stays inside its five-minute timeout.
+RETRY_DELAYS = (5, 15, 45)
+RETRY_BUDGET_SECONDS = 120
+GH_TIMEOUT_SECONDS = 60
+HTTP_SERVER_ERROR = 500
 
 
 def http_error_status(stderr: str | bytes) -> int | None:
@@ -41,6 +47,13 @@ def http_error_status(stderr: str | bytes) -> int | None:
         tail = tail.decode("ascii", errors="replace")
     match = re.search(r"\(HTTP ([45][0-9]{2})\)\s*\Z", tail)
     return int(match[1]) if match else None
+
+
+def rate_limited(status: int | None, stderr: str | bytes) -> bool:
+    """Classify a primary or secondary rate limit from gh's text, never echo it."""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    return status in {403, 429} and "rate limit" in stderr.lower()
 
 
 class ManualCIError(RuntimeError):
@@ -54,19 +67,54 @@ class ManualCIError(RuntimeError):
         self.http_status = http_status
 
 
+def api_failure(result, message: str) -> ManualCIError:
+    """Name the HTTP status and a rate limit, never gh's response text."""
+    status = http_error_status(result.stderr)
+    if rate_limited(status, result.stderr):
+        message += f" (HTTP {status}, rate limited); rerun after the limit resets."
+    elif status in {None, 401, 403, 404}:
+        suffix = f" (HTTP {status})" if status else ""
+        message += f"{suffix}; check workflow permissions."
+    else:
+        message += f" (HTTP {status})."
+    return ManualCIError(message, http_status=status)
+
+
 class GitHubClient:
+    retry_budget = RETRY_BUDGET_SECONDS
+
+    def gh(self, args: list[str], *, read: bool, **options):
+        """Run gh and wait out a transient failure while the budget lasts."""
+        for delay in (*RETRY_DELAYS, None):
+            try:
+                result = subprocess.run(
+                    args,
+                    capture_output=True,
+                    check=False,
+                    timeout=GH_TIMEOUT_SECONDS,
+                    **options,
+                )
+            except subprocess.TimeoutExpired:
+                self.retry_budget -= GH_TIMEOUT_SECONDS
+                if not read or delay is None or delay > self.retry_budget:
+                    raise
+            else:
+                status = http_error_status(result.stderr)
+                transient = result.returncode != 0 and (
+                    rate_limited(status, result.stderr)
+                    or (read and status is not None and status >= HTTP_SERVER_ERROR)
+                )
+                if not transient or delay is None or delay > self.retry_budget:
+                    return result
+            self.retry_budget -= delay
+            time.sleep(delay)
+
     def raw(self, endpoint: str, *, method="GET") -> bytes:
-        result = subprocess.run(
-            ["gh", "api", endpoint, "--method", method],
-            capture_output=True,
-            check=False,
-            timeout=60,
+        result = self.gh(
+            ["gh", "api", endpoint, "--method", method], read=method == "GET"
         )
         if result.returncode:
-            raise ManualCIError(
-                "GitHub API request failed; check workflow permissions.",
-                http_status=http_error_status(result.stderr),
-            )
+            raise api_failure(result, "GitHub API request failed")
         return result.stdout
 
     def request(self, endpoint: str, *, method="GET"):
@@ -74,19 +122,14 @@ class GitHubClient:
         return json.loads(value) if value.strip() else None
 
     def write(self, endpoint: str, payload: dict, *, method="POST"):
-        result = subprocess.run(
+        result = self.gh(
             ["gh", "api", endpoint, "--method", method, "--input", "-"],
+            read=False,
             input=json.dumps(payload),
             text=True,
-            capture_output=True,
-            check=False,
-            timeout=60,
         )
         if result.returncode:
-            raise ManualCIError(
-                "GitHub feedback API request failed.",
-                http_status=http_error_status(result.stderr),
-            )
+            raise api_failure(result, "GitHub feedback API request failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 

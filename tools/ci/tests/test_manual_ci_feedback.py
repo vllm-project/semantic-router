@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 
 import manual_ci  # noqa: E402
+import pr_ci_status  # noqa: E402
 from manual_ci_feedback import feedback_for_event, warning  # noqa: E402
 from test_manual_ci import REPO, TRUSTED, FakeGitHub  # noqa: E402
 
@@ -290,6 +291,7 @@ class ManualCIFeedbackTests(unittest.TestCase):
                     client = manual_ci.GitHubClient()
                     with (
                         patch("manual_ci.subprocess.run", return_value=result),
+                        patch("manual_ci.time.sleep"),
                         self.assertRaises(manual_ci.ManualCIError) as error,
                     ):
                         if raw:
@@ -488,6 +490,77 @@ class ManualCIFeedbackTests(unittest.TestCase):
                 self.client.feedback_error = True
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(manual_ci.main(), 0)
+
+    def test_transient_api_failures_are_waited_out_within_one_budget(self):
+        def gh(stderr="", returncode=1):
+            return subprocess.CompletedProcess(
+                args=[], returncode=returncode, stdout="{}", stderr=stderr
+            )
+
+        ok = gh(returncode=0)
+        limited = gh("gh: SECRET API rate limit exceeded for installation (HTTP 403)\n")
+        throttled = gh("gh: SECRET API rate limit exceeded (HTTP 429)\n")
+        server = gh("gh: SECRET bad gateway (HTTP 502)\n")
+        missing = gh("gh: SECRET not found (HTTP 404)\n")
+        timeout = subprocess.TimeoutExpired("SECRET command", timeout=60)
+
+        def read(client):
+            return client.raw("SECRET endpoint")
+
+        def rerun(client):
+            return client.raw("SECRET endpoint", method="POST")
+
+        def write(client):
+            return client.write("SECRET endpoint", {"body": "SECRET"})
+
+        def publish(_client):
+            return pr_ci_status.StatusClient().write(
+                "SECRET endpoint", {"body": "SECRET"}
+            )
+
+        for name, call, outcomes, sleeps, failure in (
+            ("read rate limit", read, [limited, ok], [5], None),
+            ("read 5xx", read, [server, ok], [5], None),
+            ("read timeout", read, [timeout, ok], [5], None),
+            (
+                "read 404",
+                read,
+                [missing],
+                [],
+                "(HTTP 404); check workflow permissions.",
+            ),
+            ("lasting rate limit", read, [limited] * 4, [5, 15, 45], "rate limited"),
+            ("rerun 5xx may have landed", rerun, [server], [], "(HTTP 502)."),
+            ("write 5xx may have landed", write, [server], [], "(HTTP 502)."),
+            ("write rate limit", write, [throttled, ok], [5], None),
+            ("status publish rate limit", publish, [throttled, ok], [5], None),
+        ):
+            with self.subTest(name=name):
+                client = manual_ci.GitHubClient()
+                with (
+                    patch("manual_ci.subprocess.run", side_effect=outcomes) as run,
+                    patch("manual_ci.time.sleep") as sleep,
+                ):
+                    if failure:
+                        with self.assertRaises(manual_ci.ManualCIError) as error:
+                            call(client)
+                        self.assertIn(failure, str(error.exception))
+                        self.assertNotIn("SECRET", str(error.exception))
+                    else:
+                        call(client)
+                self.assertEqual(run.call_count, len(outcomes))
+                self.assertEqual([c.args[0] for c in sleep.call_args_list], sleeps)
+
+        client = manual_ci.GitHubClient()
+        client.retry_budget = 10
+        with (
+            patch("manual_ci.subprocess.run", side_effect=[limited] * 4) as run,
+            patch("manual_ci.time.sleep") as sleep,
+            self.assertRaises(manual_ci.ManualCIError),
+        ):
+            read(client)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [5])
 
 
 if __name__ == "__main__":
