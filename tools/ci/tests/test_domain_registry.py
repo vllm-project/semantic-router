@@ -250,6 +250,30 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn("published-model-tests", result.domains)
                 self.assertIn("platform.models-cpu", result.selected_jobs)
 
+    def test_default_signal_model_changes_select_recipes_and_signal_e2e(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/config/model_runtime_implicit.go",
+            "src/semantic-router/pkg/config/registry.go",
+            "src/model-runtime/vllm_srun/registry/releases.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/vela3.py",
+        ):
+            with self.subTest(path=path):
+                selected = classify([path]).selected_jobs
+                for job in (
+                    "recipe-conformance",
+                    "e2e.envoy-ai-gateway",
+                    "e2e.vela-halu",
+                ):
+                    self.assertIn(job, selected)
+        self.assertNotIn(
+            "recipe-conformance",
+            classify(
+                ["src/semantic-router/pkg/config/vela_defaults_test.go"]
+            ).selected_jobs,
+        )
+
     def test_vela2_serving_and_fusion_select_the_published_model_contract(self) -> None:
         for path in (
             "src/model-runtime/vllm_srun/families/vela2/encoder_layout.py",
