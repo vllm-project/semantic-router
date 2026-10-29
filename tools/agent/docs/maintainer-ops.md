@@ -230,8 +230,9 @@ contract without making roadmap, priority, or close decisions:
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
   project work or `owner/maintainers` for repository governance; each exact
-  `/accept` event runs a paginated repository-wide reconciliation so earlier
-  valid decisions recover from queued, failed, or interrupted workflow runs;
+  `/accept` event reconciles every issue still labeled `needs-acceptance` that
+  carries an exact `/accept` comment, so earlier valid decisions recover from
+  queued, failed, or interrupted workflow runs;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;

@@ -8,7 +8,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import unquote, urlparse
 
 SCRIPT = Path(__file__).resolve().parents[1] / "community_lifecycle.py"
 if str(SCRIPT.parent) not in sys.path:
@@ -26,24 +26,67 @@ def labels(*names: str) -> list[dict[str, str]]:
 
 
 class FakeAcceptanceApi:
-    """Serve acceptance endpoints and record issue fetches and label writes."""
+    """Serve acceptance endpoints and record every request and label write."""
+
+    QUEUE_PAGE_SIZE = 50
+    THREAD_PAGE_SIZE = 100
 
     def __init__(
         self,
         issues,
-        comment_pages,
+        comments,
         permissions,
         *,
         failing_requests=None,
     ) -> None:
         self.issues = {int(issue["number"]): issue for issue in issues}
-        self.comment_pages = comment_pages
+        self.comments = comments
         self.permissions = permissions
         self.failing_requests = set(failing_requests or ())
+        self.requests: list[tuple[str, str]] = []
         self.fetched: list[int] = []
-        self.comment_pages_fetched: list[int] = []
         self.added: dict[int, set[str]] = {}
         self.removed: dict[int, set[str]] = {}
+
+    @property
+    def graphql_requests(self) -> int:
+        return sum(1 for _, endpoint in self.requests if endpoint == "graphql")
+
+    def graphql(self, variables):
+        if "number" in variables:
+            thread = self.comments.get(variables["number"], [])
+            start = int(variables["cursor"] or 0)
+            end = start + self.THREAD_PAGE_SIZE
+            page = {
+                "pageInfo": {"hasNextPage": end < len(thread), "endCursor": str(end)},
+                "nodes": thread[start:end],
+            }
+            return {"data": {"repository": {"issue": {"comments": page}}}}
+
+        queue = sorted(
+            number
+            for number, issue in self.issues.items()
+            if variables["label"] in {label["name"] for label in issue["labels"]}
+        )
+        start = int(variables["cursor"] or 0)
+        end = start + self.QUEUE_PAGE_SIZE
+        nodes = []
+        for number in queue[start:end]:
+            thread = self.comments.get(number, [])
+            nodes.append(
+                {
+                    "number": number,
+                    "comments": {
+                        "totalCount": len(thread),
+                        "nodes": thread[-self.THREAD_PAGE_SIZE :],
+                    },
+                }
+            )
+        page = {
+            "pageInfo": {"hasNextPage": end < len(queue), "endCursor": str(end)},
+            "nodes": nodes,
+        }
+        return {"data": {"repository": {"issues": page}}}
 
     def request(
         self,
@@ -53,15 +96,13 @@ class FakeAcceptanceApi:
         payload=None,
         ignore_not_found: bool = False,
     ):
+        self.requests.append((method, endpoint))
         if (method, endpoint) in self.failing_requests:
             raise RuntimeError(f"API failure for {method} {endpoint}")
+        if endpoint == "graphql":
+            return self.graphql(payload["variables"])
 
-        parsed = urlparse(endpoint)
-        parts = parsed.path.split("/")
-        if parts[3:] == ["issues", "comments"]:
-            page = int(parse_qs(parsed.query)["page"][0])
-            self.comment_pages_fetched.append(page)
-            return self.comment_pages.get(page, [])
+        parts = urlparse(endpoint).path.split("/")
         if parts[3] == "collaborators":
             return {"permission": self.permissions.get(unquote(parts[4]), "read")}
 
@@ -98,12 +139,8 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         issue.update(overrides)
         return issue
 
-    def comment(self, number: int, actor: str, body: str = "/accept"):
-        return {
-            "body": body,
-            "issue_url": f"https://api.github.com/repos/{self.REPO}/issues/{number}",
-            "user": {"login": actor},
-        }
+    def comment(self, actor: str, body: str = "/accept"):
+        return {"body": body, "author": {"login": actor}}
 
     def event(self, number: int = 999, body: str = "/accept"):
         return {
@@ -113,42 +150,97 @@ class AcceptanceReconciliationTests(unittest.TestCase):
             "sender": {"login": "triggering-user"},
         }
 
-    def test_one_event_pages_deduplicates_and_repairs_every_stale_issue(self) -> None:
-        page_size = community_lifecycle_github.API_PAGE_SIZE
-        first_page = [
-            self.comment(700 + index, "observer", "not /accept")
-            for index in range(page_size - 2)
-        ]
-        first_page.extend(
-            [self.comment(2, "maintainer"), self.comment(1, "maintainer")]
-        )
-        second_page = [
-            self.comment(2, "another-maintainer"),
-            self.comment(3, "maintainer"),
-            self.comment(4, "maintainer", "/accept "),
-            self.comment(5, "maintainer"),
-        ]
+    def test_one_event_reads_the_pending_queue_and_repairs_every_stale_issue(
+        self,
+    ) -> None:
         client = FakeAcceptanceApi(
             [
                 self.issue(1),
                 self.issue(2),
                 self.issue(3, labels=labels("accepted", "wg/agentic-context")),
-                self.issue(5, pull_request={"url": "example"}),
+                self.issue(4),
+                self.issue(5),
             ],
-            {1: first_page, 2: second_page},
+            {
+                1: [
+                    self.comment("observer", "not /accept"),
+                    self.comment("maintainer"),
+                ],
+                2: [
+                    self.comment("maintainer"),
+                    self.comment("another-maintainer"),
+                ],
+                3: [self.comment("maintainer")],
+                4: [self.comment("maintainer", "/accept ")],
+            },
             {"maintainer": "write", "another-maintainer": "maintain"},
         )
 
         community_lifecycle_github.accept_issue_event(client, self.event())
 
-        self.assertEqual(client.comment_pages_fetched, [1, 2])
-        self.assertEqual(client.fetched, [1, 2, 3, 5])
+        self.assertEqual(client.graphql_requests, 1)
+        self.assertEqual(client.fetched, [1, 2])
         self.assertEqual(client.added, {1: {"accepted"}, 2: {"accepted"}})
         self.assertEqual(
             client.removed,
             {1: {"needs-acceptance"}, 2: {"needs-acceptance"}},
         )
         self.assertNotIn(999, client.fetched)
+
+    def test_queue_is_paged_until_every_pending_issue_is_read(self) -> None:
+        numbers = range(1, 121)
+        client = FakeAcceptanceApi(
+            [self.issue(number) for number in numbers],
+            {number: [self.comment("maintainer")] for number in numbers},
+            {"maintainer": "write"},
+        )
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            community_lifecycle_github.accept_issue_event(client, self.event())
+
+        self.assertEqual(client.graphql_requests, 3)
+        self.assertEqual(client.fetched, list(numbers))
+        self.assertEqual(set(client.added), set(numbers))
+
+    def test_long_threads_are_read_in_full_before_matching(self) -> None:
+        thread = [self.comment("maintainer")]
+        thread.extend(self.comment("observer", f"note {index}") for index in range(129))
+        client = FakeAcceptanceApi(
+            [self.issue(7)],
+            {7: thread},
+            {"maintainer": "write"},
+        )
+
+        community_lifecycle_github.accept_issue_event(client, self.event())
+
+        self.assertEqual(client.graphql_requests, 3)
+        self.assertEqual(client.added, {7: {"accepted"}})
+
+    def test_request_count_does_not_grow_with_accepted_history(self) -> None:
+        history = range(100, 500)
+        client = FakeAcceptanceApi(
+            [self.issue(1)]
+            + [
+                self.issue(number, labels=labels("accepted", "wg/agentic-context"))
+                for number in history
+            ],
+            {1: [self.comment("maintainer")]}
+            | {number: [self.comment("maintainer")] for number in history},
+            {"maintainer": "write"},
+        )
+
+        community_lifecycle_github.accept_issue_event(client, self.event())
+
+        self.assertEqual(
+            [endpoint for _, endpoint in client.requests if endpoint != "graphql"],
+            [
+                f"repos/{self.REPO}/issues/1",
+                f"repos/{self.REPO}/collaborators/maintainer/permission",
+                f"repos/{self.REPO}/issues/1/labels",
+                f"repos/{self.REPO}/issues/1/labels/needs-acceptance",
+            ],
+        )
+        self.assertEqual(client.graphql_requests, 1)
 
     def test_invalid_candidates_remain_unchanged_with_actionable_output(self) -> None:
         client = FakeAcceptanceApi(
@@ -157,19 +249,15 @@ class AcceptanceReconciliationTests(unittest.TestCase):
                 self.issue(
                     11,
                     labels=labels(
-                        "needs-acceptance",
-                        "wg/agentic-context",
-                        "owner/maintainers",
+                        "needs-acceptance", "wg/agentic-context", "owner/maintainers"
                     ),
                 ),
                 self.issue(12, title="Improve context routing"),
             ],
             {
-                1: [
-                    self.comment(10, "outsider"),
-                    self.comment(11, "maintainer"),
-                    self.comment(12, "maintainer"),
-                ]
+                10: [self.comment("outsider")],
+                11: [self.comment("maintainer")],
+                12: [self.comment("maintainer")],
             },
             {"outsider": "read", "maintainer": "admin"},
         )
@@ -191,7 +279,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         failing_endpoint = f"repos/{self.REPO}/issues/20/labels"
         client = FakeAcceptanceApi(
             [self.issue(20), self.issue(21)],
-            {1: [self.comment(20, "maintainer"), self.comment(21, "maintainer")]},
+            {20: [self.comment("maintainer")], 21: [self.comment("maintainer")]},
             {"maintainer": "write"},
             failing_requests={("POST", failing_endpoint)},
         )
@@ -215,7 +303,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
                 client, self.event(body="/accept\n")
             )
 
-        self.assertEqual(client.comment_pages_fetched, [])
+        self.assertEqual(client.requests, [])
 
 
 if __name__ == "__main__":
