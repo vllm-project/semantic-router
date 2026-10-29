@@ -334,6 +334,20 @@ def test_long_inputs_fail_decisions_and_window_spans(model) -> None:
     assert "error" not in answer["answers"]["names"]
 
 
+def test_truncating_spans_read_their_route_window(model) -> None:
+    text = "paracetamol dose " * 200
+    span = {"type": "span", "overflow": "truncate"}
+    plan = model.plan(
+        {"user": text},
+        {
+            "evidence": {**span, "criteria": {"evidence": None}},
+            "names": {**span, "criteria": {"drug": None}},
+        },
+    )
+    read = {q: len(plan.rows[q].row.part("user").ids) for q in plan.rows}
+    assert read == {"evidence": 512, "names": 256}
+
+
 def test_deadline_answers_every_question(model) -> None:
     plan = model.plan(STATE, {"q": {"type": "noul", "instructions": "Is it urgent?"}})
     expired = model.finish_surface(
