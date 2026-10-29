@@ -65,7 +65,7 @@ func TestModalityRulesWithoutTheDetectorWarn(t *testing.T) {
 		`routing.signals.modality "AR"`,
 		`routing.signals.modality "DIFFUSION"`,
 		"global.model_catalog.modules.modality_detector is not enabled",
-		"confidence_threshold: 0.51",
+		"confidence_threshold: 0.63",
 	} {
 		if !strings.Contains(warnings[0].Message, want) {
 			t.Errorf("warning %q does not say %q", warnings[0].Message, want)
@@ -84,7 +84,7 @@ global:
       modality_detector:
         enabled: true
         method: classifier
-        confidence_threshold: 0.51
+        confidence_threshold: 0.63
 `
 	if warnings := modalityWarnings(t, enabled); len(warnings) != 0 {
 		t.Fatalf("warnings = %v, want none with the detector enabled", warnings)
