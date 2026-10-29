@@ -80,7 +80,7 @@ SIGNAL keyword reference_heavy_markers {
 
 SIGNAL keyword legal_risk_markers {
   operator: "OR"
-  keywords: ["contract clause", "liability analysis", "compliance memo", "regulatory risk", "legal exposure", "indemnity", "jurisdiction", "lawsuit", "合同条款", "合规分析", "法律风险", "责任认定"]
+  keywords: ["contract clause", "liability analysis", "compliance memo", "regulatory risk", "legal risk", "legal exposure", "indemnity", "jurisdiction", "lawsuit", "合同条款", "合规分析", "法律风险", "责任认定"]
 }
 
 SIGNAL keyword simple_request_markers {

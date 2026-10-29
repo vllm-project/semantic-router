@@ -63,6 +63,19 @@ func TestBalanceTaskIntentPolicy(t *testing.T) {
 			expectedDecision: "verified_health",
 		},
 		{
+			name: "legal risk request filed under business keeps the legal route",
+			signals: &SignalMatches{
+				DomainRules:     []string{"business"},
+				EmbeddingRules:  []string{"premium_legal_analysis"},
+				KeywordRules:    []string{"legal_risk_markers"},
+				FactCheckRules:  []string{"needs_fact_check"},
+				ContextRules:    []string{"short_context"},
+				ComplexityRules: []string{"general_reasoning:hard", "evidence_synthesis:medium"},
+				ProjectionRules: []string{"balance_medium"},
+			},
+			expectedDecision: "premium_legal",
+		},
+		{
 			name: "architecture domain and semantic intent",
 			signals: &SignalMatches{
 				DomainRules:    []string{"computer science"},
