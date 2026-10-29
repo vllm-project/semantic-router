@@ -2130,6 +2130,9 @@ global:
           headers:
             session: x-session-id
             conversation: x-conversation-id
+            # Optional: holds each named agent (a delegated subagent) on its own
+            # model inside the session. Claude Code sends this on subagent calls.
+            agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
