@@ -84,7 +84,7 @@ type responsesUsageWire struct {
 
 type responsesInputUsageDetails struct {
 	CachedTokens        *int64 `json:"cached_tokens"`
-	CacheWriteTokens    *int64 `json:"cache_write_tokens"`
+	CacheWriteTokens    *int64 `json:"cache_write_tokens,omitempty"`
 	CreatedCacheTokens  *int64 `json:"created_cache_tokens,omitempty"`
 	CacheCreationTokens *int64 `json:"cache_creation_tokens,omitempty"`
 }
