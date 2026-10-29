@@ -991,7 +991,7 @@ positions, each layer at its own rope base) with adapter networks over it.
 
 | Network | Weights | Answers |
 | --- | --- | --- |
-| Decision backbone | `model.safetensors`: the encoder and an option readout | Choice and Noul questions, one input per question: `<bos> [Q] instructions ([O] option)* [SEP_SCHEMA] [SEG_user] state <eos>`, the whole state as one part (a string as it is, anything else as compact JSON), up to 32,768 tokens |
+| Decision backbone | `model.safetensors`: the encoder and an option readout | Choice and Noul questions (a Noul by its instructions alone; one that describes `false` or `true` is invalid), one input per question: `<bos> [Q] instructions ([O] option)* [SEP_SCHEMA] [SEG_user] state <eos>`, the whole state as one part (a string as it is, anything else as compact JSON), up to 32,768 tokens |
 | Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
 | Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
 
