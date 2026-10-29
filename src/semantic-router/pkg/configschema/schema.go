@@ -348,6 +348,8 @@ func setCoreEnums(root *jsonschema.Schema) {
 	for _, field := range []string{"session", "conversation", "agent"} {
 		setDefinitionPropertyMinLength(root, "RouterLearningIdentityHeadersConfig", field, 1)
 	}
+	setDefinitionPropertyMinLength(root, "RouterLearningProtectionReleaseConfig", "header", 1)
+	setDefinitionPropertyMinimum(root, "RouterLearningProtectionReleaseConfig", "min_user_turns_between", 0)
 	setDefinitionPropertyMinLength(root, "RouterLearningRedisStateStoreConfig", "address", 1)
 	addRouterLearningStateStoreCondition(root)
 }

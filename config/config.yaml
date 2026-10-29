@@ -2151,6 +2151,12 @@ global:
             min_consecutive_recoveries: 2
             cooldown_seconds: 120
             max_switches_per_window: 2
+        # A client sends this header on one request to get a fresh decision for
+        # its protection key, at most once every min_user_turns_between user turns.
+        release:
+          enabled: true
+          header: x-vsr-protection-release
+          min_user_turns_between: 2
       state_store:
         backend: redis
         ttl_seconds: 86400

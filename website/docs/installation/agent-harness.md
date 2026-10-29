@@ -102,6 +102,13 @@ protection. Responses history, including `previous_response_id`, does not
 replace these headers. See [Session identification](../api/session-identification)
 for identity priority and privacy boundaries.
 
+When the task changes phase, the harness can ask for a fresh routing decision
+in the same session. It sends `x-vsr-protection-release: 1` on the first request
+of the new phase, at a user turn rather than inside a tool loop. Send it on that
+one request only. A refused release returns its reason in
+`x-vsr-protocol-warnings`. See
+[Explicit release](../tutorials/learning/protection#explicit-release).
+
 Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
