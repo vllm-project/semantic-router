@@ -1,0 +1,231 @@
+{
+  "date": "2026-10-12",
+  "hardware": "NVIDIA H200 sm_90 143771 MiB driver 580.178.04",
+  "head": "83c1ddced3cbe4b9d82b2f9bd2ad0dad23a34356",
+  "image": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+  "image_digest": null,
+  "published_cuda_image": false,
+  "stack": {
+    "torch": "2.10.0+cu128",
+    "cuda": "12.8",
+    "triton": "3.6.0",
+    "fla": "0.5.2",
+    "causal_conv1d": null
+  },
+  "profile": "exact",
+  "device": "cuda:0",
+  "accelerator_validated": false,
+  "fused_slots_exact": false,
+  "pod": "mr8uxlkhub0n6l",
+  "fused_probe": {
+    "gpu": "NVIDIA H200",
+    "capability": "9.0",
+    "results": [
+      {
+        "slot": "residual_add",
+        "shape": "4096x1024",
+        "n": 4194304,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "silu_mul.kernel_round",
+        "shape": "4096x1024",
+        "n": 4194304,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "silu_mul.aten",
+        "shape": "4096x1024",
+        "n": 4194304,
+        "mismatches": 1149524,
+        "max_abs": 0.0625,
+        "exact": false
+      },
+      {
+        "slot": "add_rmsnorm.hidden",
+        "shape": "4096x1024",
+        "n": 4194304,
+        "mismatches": 2252525,
+        "max_abs": 0.015625,
+        "exact": false
+      },
+      {
+        "slot": "add_rmsnorm.normed",
+        "shape": "4096x1024",
+        "n": 4194304,
+        "mismatches": 851092,
+        "max_abs": 0.0625,
+        "exact": false
+      },
+      {
+        "slot": "residual_add",
+        "shape": "4096x2560",
+        "n": 10485760,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "silu_mul.kernel_round",
+        "shape": "4096x2560",
+        "n": 10485760,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "silu_mul.aten",
+        "shape": "4096x2560",
+        "n": 10485760,
+        "mismatches": 2881267,
+        "max_abs": 0.0625,
+        "exact": false
+      },
+      {
+        "slot": "add_rmsnorm.hidden",
+        "shape": "4096x2560",
+        "n": 10485760,
+        "mismatches": 5634027,
+        "max_abs": 0.015625,
+        "exact": false
+      },
+      {
+        "slot": "add_rmsnorm.normed",
+        "shape": "4096x2560",
+        "n": 10485760,
+        "mismatches": 2101717,
+        "max_abs": 0.0625,
+        "exact": false
+      },
+      {
+        "slot": "residual_add",
+        "shape": "4096x4096",
+        "n": 16777216,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "silu_mul.kernel_round",
+        "shape": "4096x4096",
+        "n": 16777216,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "silu_mul.aten",
+        "shape": "4096x4096",
+        "n": 16777216,
+        "mismatches": 4607454,
+        "max_abs": 0.0625,
+        "exact": false
+      },
+      {
+        "slot": "add_rmsnorm.hidden",
+        "shape": "4096x4096",
+        "n": 16777216,
+        "mismatches": 9019529,
+        "max_abs": 0.015625,
+        "exact": false
+      },
+      {
+        "slot": "add_rmsnorm.normed",
+        "shape": "4096x4096",
+        "n": 16777216,
+        "mismatches": 3357157,
+        "max_abs": 0.125,
+        "exact": false
+      },
+      {
+        "slot": "gated_rmsnorm",
+        "shape": "4096x128",
+        "n": 524288,
+        "mismatches": 136416,
+        "max_abs": 0.125,
+        "exact": false
+      },
+      {
+        "slot": "sigmoid_gate",
+        "shape": "2x64x8x128",
+        "n": 131072,
+        "mismatches": 34092,
+        "max_abs": 0.03125,
+        "exact": false
+      },
+      {
+        "slot": "rotary_half.q",
+        "shape": "2x8x64x128",
+        "n": 131072,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "rotary_half.k",
+        "shape": "2x8x64x128",
+        "n": 131072,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "attn_prep.det.q",
+        "shape": "2x32",
+        "n": 65536,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "attn_prep.det.k",
+        "shape": "2x32",
+        "n": 16384,
+        "mismatches": 0,
+        "max_abs": 0.0,
+        "exact": true
+      },
+      {
+        "slot": "gdn_prep",
+        "exact": null,
+        "deterministic": true,
+        "note": "kernel launched; no causal-conv1d reference compare",
+        "n_out": 5
+      }
+    ]
+  },
+  "fla_pins": {
+    "device_class": "cuda:sm_90",
+    "fla": "0.5.2",
+    "triton": "3.6.0",
+    "kernels": [
+      "chunk_fwd_kernel_o",
+      "chunk_gated_delta_rule_fwd_kernel_h_blockdim64",
+      "chunk_gated_delta_rule_fwd_kkt_solve_kernel",
+      "chunk_local_cumsum_scalar_kernel",
+      "l2norm_fwd_kernel",
+      "recompute_w_u_fwd_kernel"
+    ],
+    "registry": "vllm_srun/registry/kernel_choices.json",
+    "measured": [
+      "vllm-sr/Decision-2.0-Eos-0.8B",
+      "vllm-sr/Decision-2.0-Sol-2B",
+      "vllm-sr/Decision-2.0-Nox-4B",
+      "vllm-sr/Decision-2.0-Lux-9B",
+      "vllm-sr/Decision-2.0-Vega-27B"
+    ],
+    "copied": [
+      "vllm-sr/Decision-1.0-Eos-0.8B",
+      "vllm-sr/Decision-1.0-Sol-2B",
+      "vllm-sr/Decision-1.0-Nox-4B",
+      "vllm-sr/Decision-1.0-Lux-9B",
+      "vllm-sr/Vela-2.0-0.8B",
+      "vllm-sr/Vela-2.0-4B",
+      "vllm-sr/Vela-2.0-9B"
+    ]
+  }
+}
