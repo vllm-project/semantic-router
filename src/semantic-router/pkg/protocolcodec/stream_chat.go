@@ -73,6 +73,9 @@ type chatChunkWire struct {
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Cerebras reports serving timing metadata on every response. It is
+	// provider timing metadata, not output content.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
 	// Ollama reports generation timings in an object beside the final usage.
 	Timings map[string]json.RawMessage `json:"timings,omitempty"`
 	// Aggregator gateways may report the handling agent alongside a chunk.
@@ -380,6 +383,13 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			&diagnostics,
 			"stream.timings",
 			"provider generation timings are not model output",
+		)
+	}
+	if len(chunk.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.TimeInfo), []byte("null")) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.time_info",
+			"provider serving timing metadata has no protocol-neutral representation",
 		)
 	}
 	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {

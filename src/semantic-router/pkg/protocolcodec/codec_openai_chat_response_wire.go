@@ -40,6 +40,14 @@ type chatResponseWire struct {
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
 	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+	// Cerebras reports serving timing metadata on every response. It is
+	// provider timing metadata, not output content.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
+}
+
+// hasTimeInfo reports Cerebras's top-level serving timing metadata.
+func (wire chatResponseWire) hasTimeInfo() bool {
+	return len(wire.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(wire.TimeInfo), []byte("null"))
 }
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
