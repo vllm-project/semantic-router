@@ -93,11 +93,16 @@ func branchesOf(models ...string) []Sequence {
 
 func run(t *testing.T, program *Program, caller Caller, opts ...func(*Options)) (*Outcome, error) {
 	t.Helper()
+	return runWithContext(t, context.Background(), program, caller, opts...)
+}
+
+func runWithContext(t *testing.T, ctx context.Context, program *Program, caller Caller, opts ...func(*Options)) (*Outcome, error) {
+	t.Helper()
 	options := Options{Caller: caller, Hop: routing.Hop{Decision: "panel", Recipe: "default"}}
 	for _, opt := range opts {
 		opt(&options)
 	}
-	return Run(context.Background(), program, Input{Request: chatRequest(t, "hello")}, options)
+	return Run(ctx, program, Input{Request: chatRequest(t, "hello")}, options)
 }
 
 func answerText(t *testing.T, outcome *Outcome) string {
