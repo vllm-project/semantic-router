@@ -130,7 +130,13 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 	input routerLearningInput,
 	preflight routerLearningProtectionPreflight,
 	proposal routerLearningDecision,
-) (routerLearningDecision, error) {
+) (out routerLearningDecision, err error) {
+	var release protectionReleaseVerdict
+	defer func() {
+		if err == nil {
+			applyProtectionReleasePolicy(input.ctx, &out, release, preflight.mode)
+		}
+	}()
 	baseResult := firstNonNilSelectionResult(proposal.selectionResult, input.baseResult)
 	baseCtx := firstNonNilSelectionContext(proposal.selectionContext, input.selCtx)
 	baseRef := firstNonNilModelRef(proposal.selectedModelRef, input.selectedModelRef)
@@ -156,6 +162,11 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		return decision, nil
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
+	release = evaluateProtectionRelease(input.ctx, preflight.config, learningCtx.AgenticSession)
+	recordProtectionReleaseWarning(input.ctx, release)
+	if release.honored {
+		learningCtx.AgenticSession.ReleaseRequested = true
+	}
 	if progressGateConfig(preflight.config.Tuning).Enabled {
 		learningCtx = r.progressEligibleContext(input.ctx, learningCtx)
 		if learningCtx == nil || len(learningCtx.CandidateModels) == 0 {
@@ -163,13 +174,19 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 			return decision, nil
 		}
 	}
-	rescue, rescued := r.protectionRescueDecision(input, learningCtx, preflight, proposal)
-	if rescued {
-		return rescue, nil
-	}
-	if protected, ok := sessionScopeProtectedResult(preflight.config, baseResult, learningCtx, preflight.identity); ok {
-		attachRejectedRescue(protected, rescue.selectionResult)
-		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
+	// A release asks for a fresh decision, so neither the held-model shortcut
+	// nor rescue evidence applies to it.
+	var rescue routerLearningDecision
+	if !release.honored {
+		var rescued bool
+		rescue, rescued = r.protectionRescueDecision(input, learningCtx, preflight, proposal)
+		if rescued {
+			return rescue, nil
+		}
+		if protected, ok := sessionScopeProtectedResult(preflight.config, baseResult, learningCtx, preflight.identity); ok {
+			attachRejectedRescue(protected, rescue.selectionResult)
+			return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
+		}
 	}
 
 	result, err := r.selectProtectionResultForContext(selectionRequestContext(input.ctx), preflight.config, baseResult, learningCtx, input.ctx)
@@ -484,6 +501,13 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 		trace.Decision, trace.Reason = selection.GateDecisionSuppress, hardReason
 	}
 	if !decision.Suppressed() && hardReason == "" {
+		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
+		return
+	}
+	// A client release replaces the evidence and oscillation rules with its own
+	// user-turn interval; hard eligibility above still applies.
+	if hardReason == "" && learningCtx.AgenticSession != nil && learningCtx.AgenticSession.ReleaseRequested {
+		trace.Decision, trace.Reason = selection.GateDecisionSwitch, switchGateReasonRelease
 		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
 		return
 	}

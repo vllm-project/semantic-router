@@ -38,8 +38,14 @@ type AgenticSessionContext struct {
 	MemoryCost                  float64
 	MemoryEstimatedCacheSavings float64
 	MemoryCacheAccountingSource string
+	MemoryUserTurnCount         int
+	MemoryLastReleaseUserTurn   int
 	LastDecisionName            string
 	LastDecisionReason          string
+
+	// ReleaseRequested marks a client release that protection has accepted;
+	// the selector treats it as a continuity boundary.
+	ReleaseRequested bool
 
 	HistoryTokens int
 	ContextTokens int

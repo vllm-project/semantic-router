@@ -30,6 +30,9 @@ const (
 const (
 	routerLearningDefaultSessionHeader      = "x-session-id"
 	routerLearningDefaultConversationHeader = "x-conversation-id"
+
+	DefaultProtectionReleaseHeader              = "x-vsr-protection-release"
+	defaultProtectionReleaseMinUserTurnsBetween = 2
 )
 
 // RouterLearningConfig is the public cross-request routing intelligence
@@ -67,10 +70,19 @@ type RouterLearningAdaptationConfig struct {
 
 // RouterLearningProtectionConfig configures online stability protection.
 type RouterLearningProtectionConfig struct {
-	Enabled  *bool                          `yaml:"enabled,omitempty"`
-	Scope    string                         `yaml:"scope,omitempty"`
-	Identity RouterLearningIdentityConfig   `yaml:"identity,omitempty"`
-	Tuning   RouterLearningProtectionTuning `yaml:"tuning,omitempty"`
+	Enabled  *bool                                 `yaml:"enabled,omitempty"`
+	Scope    string                                `yaml:"scope,omitempty"`
+	Identity RouterLearningIdentityConfig          `yaml:"identity,omitempty"`
+	Tuning   RouterLearningProtectionTuning        `yaml:"tuning,omitempty"`
+	Release  RouterLearningProtectionReleaseConfig `yaml:"release,omitempty"`
+}
+
+// RouterLearningProtectionReleaseConfig lets a client ask, on one request, for
+// a fresh decision on its protection key without changing session identity.
+type RouterLearningProtectionReleaseConfig struct {
+	Enabled             *bool   `yaml:"enabled,omitempty"`
+	Header              *string `yaml:"header,omitempty"`
+	MinUserTurnsBetween *int    `yaml:"min_user_turns_between,omitempty"`
 }
 
 // RouterLearningIdentityConfig declares where protection reads stable client
@@ -221,6 +233,26 @@ func (cfg RouterLearningProtectionConfig) EffectiveScope() string {
 		return RouterLearningScopeConversation
 	}
 	return cfg.Scope
+}
+
+func (cfg RouterLearningProtectionReleaseConfig) EffectiveEnabled() bool {
+	return cfg.Enabled == nil || *cfg.Enabled
+}
+
+func (cfg RouterLearningProtectionReleaseConfig) EffectiveHeader() string {
+	if cfg.Header != nil {
+		if value := strings.ToLower(strings.TrimSpace(*cfg.Header)); value != "" {
+			return value
+		}
+	}
+	return DefaultProtectionReleaseHeader
+}
+
+func (cfg RouterLearningProtectionReleaseConfig) EffectiveMinUserTurnsBetween() int {
+	if cfg.MinUserTurnsBetween != nil {
+		return *cfg.MinUserTurnsBetween
+	}
+	return defaultProtectionReleaseMinUserTurnsBetween
 }
 
 func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
