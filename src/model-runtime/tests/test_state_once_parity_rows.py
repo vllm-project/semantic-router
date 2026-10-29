@@ -8,6 +8,8 @@ import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 
+from vllm_srun.plugins.decisions import LONG_CONTEXT
+
 TOOL = Path(__file__).resolve().parent.parent / "tools" / "state_once_parity.py"
 
 
@@ -71,6 +73,29 @@ def test_no_budget_is_one_call_per_request():
     model = Rows()
     assert tool.run_rows(model, items(), None) == [f"q{i}" for i in range(6)]
     assert model.calls == [[f"q{i}" for i in range(6)]]
+
+
+def test_long_states_cap_the_per_row_groups_and_plan_with_long_context():
+    tool = load_tool()
+
+    class Probe:
+        def plan(self, state, questions):
+            return LONG_CONTEXT.get(), state, questions
+
+    assert tool.row_token_budget(True, None) == tool.LONG_STATE_ROW_TOKENS
+    assert tool.row_token_budget(True, 1024) == 1024
+    assert tool.row_token_budget(False, None) is None
+    request = {"state": "ticket", "questions": {"q": {}}}
+    assert tool.plan_request(Probe(), request, long_context=True) == (
+        True,
+        "ticket",
+        {"q": {}},
+    )
+    assert tool.plan_request(Probe(), request, long_context=False) == (
+        False,
+        "ticket",
+        {"q": {}},
+    )
 
 
 def test_long_state_text_reaches_the_token_count():

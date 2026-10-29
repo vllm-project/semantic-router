@@ -56,7 +56,7 @@ is_mtpe: true
 | `--batch-window-ms` | `2.0` | `--max-num-seqs` 大于 1 时，第一个请求到达后调度器再等多久收集更多请求。 |
 | `--dtype` | `auto` | `auto`（模型发布时的精度）、`float32`、`bfloat16` 或 `float16`（仅 GPU）。 |
 | `--enable-shared-context`、`--no-enable-shared-context` | 由模型家族决定 | 多问题决策请求的共享状态只算一次。只有 Decision 2.0 默认开启。 |
-| `--flash-attention-3`、`--no-flash-attention-3` | 关闭 | 在 Hopper 上用 FlashAttention-3 跑 state-once 分支注意力。不设置就保持关闭。 |
+| `--flash-attention-3`、`--no-flash-attention-3` | 关闭 | 在 Hopper 上用 FlashAttention-3 跑 state-once 分支注意力。不设置就保持关闭。头维度超出 64–256 会拒绝加载。 |
 | `--max-request-bytes` | `8388608` | 请求体上限。 |
 | `--max-bundle-tasks` | `64` | 一个 `/v1/bundle` 请求最多带多少任务。 |
 | `--load-attempts` | `5` | 一个模型加载几次之后就算 `failed`；包损坏或自检失败不重试。 |

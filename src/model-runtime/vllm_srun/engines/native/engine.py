@@ -137,7 +137,7 @@ class NativeEngineModel(EngineModel):
         )
         self.kernels = accelerator.kernels(device_info)
         if options.flash_attention_3:
-            reason = flash3.unavailable(device_info)
+            reason = flash3.opt_in_refusal(device_info, backbone)
             registered = any(
                 kernel.source == flash3.SOURCE
                 for kernel in self.kernels.available.get("branch_attention", [])

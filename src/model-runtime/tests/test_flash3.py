@@ -1,7 +1,9 @@
 """FlashAttention-3 is an opt-in for Hopper, not a family's approximate-kernel consent.
 
-Selection tests replace ``flash_attn_interface`` and run without a GPU. The kernel
-comparison runs only on a Hopper GPU where FlashAttention-3 is installed.
+Selection tests replace ``flash_attn_interface`` and run without a GPU. A missing
+install is ``sys.modules["flash_attn_interface"] = None``: deleting the entry lets
+``load`` import a real copy when one is installed. The kernel comparison runs
+only on a Hopper GPU where FlashAttention-3 is installed.
 """
 
 from __future__ import annotations
@@ -61,7 +63,7 @@ def branch_kernels(arch, monkeypatch, installed=True):
     if installed:
         install_flash3(monkeypatch)
     else:
-        monkeypatch.delitem(sys.modules, "flash_attn_interface", raising=False)
+        monkeypatch.setitem(sys.modules, "flash_attn_interface", None)
     # Fused Triton kernels are a separate path; these tests only watch branch attention.
     monkeypatch.setattr(cuda, "_optional", lambda module, attribute: None)
     return cuda.CUDAAccelerator().kernels(device(arch))
@@ -89,7 +91,7 @@ def test_only_hopper_with_the_import_can_run_flash_attention_3(monkeypatch):
     install_flash3(monkeypatch)
     assert flash3.unavailable(device("sm_90")) is None
     assert "Hopper" in flash3.unavailable(device("sm_80"))
-    monkeypatch.delitem(sys.modules, "flash_attn_interface", raising=False)
+    monkeypatch.setitem(sys.modules, "flash_attn_interface", None)
     assert (
         flash3.unavailable(device("sm_90")) == "flash_attn_interface is not installed"
     )
@@ -143,14 +145,73 @@ def test_the_wrapper_keeps_gqa_and_sets_num_splits_only_for_non_causal(monkeypat
     attend(query, key, value, cu_q, cu_k, 4, 6, True, 0.25)
     assert calls[-1]["num_splits"] is None
     assert calls[-1]["causal"] is True
-    odd = torch.zeros(4, 8, 128, dtype=torch.bfloat16)
-    attend(odd, odd, odd, cu_q, cu_q, 4, 4, False, 0.25)
-    assert fallback_calls and fallback_calls[-1][0] is odd
+    # Head sizes 64-256 call FlashAttention-3. Outside that, and FP32, the
+    # fallback runs. The registered kernel's fallback raises (see below).
+    for width in (flash3.HEAD_DIM_MIN, 128):
+        supported = torch.zeros(4, 8, width, dtype=torch.bfloat16)
+        attend(supported, supported, supported, cu_q, cu_q, 4, 4, False, 0.25)
+        assert calls[-1]["q"] is supported
+    assert fallback_calls == []
+    outside = torch.zeros(4, 8, 32, dtype=torch.bfloat16)
+    attend(outside, outside, outside, cu_q, cu_q, 4, 4, False, 0.25)
+    assert fallback_calls[-1][0] is outside
     fp32 = query.float()
     before = len(calls)
     attend(fp32, key.float(), value.float(), cu_q, cu_k, 4, 6, False, 0.25)
     assert len(calls) == before
     assert fallback_calls[-1][0] is fp32
+
+
+def test_opt_in_refuses_a_head_size_outside_64_to_256(monkeypatch):
+    install_flash3(monkeypatch)
+    small = torch.nn.Module()
+    small.head_dim = 16
+    reason = flash3.opt_in_refusal(device("sm_90"), small)
+    assert reason is not None and "16" in reason
+    for width in (flash3.HEAD_DIM_MIN, 128, flash3.HEAD_DIM_MAX):
+        module = torch.nn.Module()
+        module.head_dim = width
+        assert flash3.opt_in_refusal(device("sm_90"), module) is None
+    over = torch.nn.Module()
+    over.head_dim = flash3.HEAD_DIM_MAX + 8
+    assert flash3.opt_in_refusal(device("sm_90"), over) is not None
+
+
+def test_the_registered_kernel_does_not_fall_back_to_flash_attention_2(
+    flash_op, monkeypatch
+):
+    kernels = branch_kernels("sm_90", monkeypatch)
+    kernels.use_source("branch_attention", flash3.SOURCE)
+    attend = kernels.select("branch_attention").fn
+    cu = torch.tensor([0, 2], dtype=torch.int32)
+    supported = torch.zeros(2, 1, 128, dtype=torch.bfloat16)
+    assert (
+        attend(supported, supported, supported, cu, cu, 2, 2, False, 0.25) is supported
+    )
+    outside = torch.zeros(2, 1, 32, dtype=torch.bfloat16)
+    with pytest.raises(RuntimeError, match="does not fall back"):
+        attend(outside, outside, outside, cu, cu, 2, 2, False, 0.25)
+    missing_scale = torch.zeros(2, 1, flash3.HEAD_DIM, dtype=torch.bfloat16)
+
+    def no_scale(q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k):
+        return q
+
+    module = types.ModuleType("flash_attn_interface")
+    module.flash_attn_varlen_func = no_scale
+    monkeypatch.setitem(sys.modules, "flash_attn_interface", module)
+    refused = flash3.varlen(flash3.refuse)
+    with pytest.raises(RuntimeError, match="does not fall back"):
+        refused(
+            missing_scale,
+            missing_scale,
+            missing_scale,
+            cu,
+            cu,
+            2,
+            2,
+            False,
+            0.25,
+        )
 
 
 def test_opt_in_does_not_select_another_approximate_kernel():
@@ -220,30 +281,35 @@ def test_flash_attention_3_matches_the_reference_on_hopper():
     from vllm_srun.engines.native.models.branch import reference_attention
 
     torch.manual_seed(0)
-    heads, kv_heads, dim = 8, 2, flash3.HEAD_DIM
+    heads, kv_heads = 8, 2
     lengths = [16, 24]
     total = sum(lengths)
     device = torch.device("cuda")
-    query = torch.randn(total, heads, dim, device=device, dtype=torch.bfloat16)
-    key = torch.randn(total, kv_heads, dim, device=device, dtype=torch.bfloat16)
-    value = torch.randn(total, kv_heads, dim, device=device, dtype=torch.bfloat16)
     bounds = [0, *torch.tensor(lengths).cumsum(0).tolist()]
     cu = torch.tensor(bounds, device=device, dtype=torch.int32)
-    scale = dim**-0.5
-    attend = flash3.varlen(_flash)
-    for causal in (False, True):
-        got = attend(
-            query, key, value, cu, cu, max(lengths), max(lengths), causal, scale
-        )
-        ref = reference_attention(
-            query,
-            key,
-            value,
-            bounds,
-            bounds,
-            causal=causal,
-            scale=scale,
-            groups=heads // kv_heads,
-        )
-        assert got.shape == ref.shape
-        assert torch.allclose(got.float(), ref.float(), atol=5e-2, rtol=5e-2)
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("FlashAttention-3 fell back")
+
+    attend = flash3.varlen(fail_if_called)
+    for dim in (flash3.HEAD_DIM_MIN, 128, flash3.HEAD_DIM_MAX):
+        query = torch.randn(total, heads, dim, device=device, dtype=torch.bfloat16)
+        key = torch.randn(total, kv_heads, dim, device=device, dtype=torch.bfloat16)
+        value = torch.randn(total, kv_heads, dim, device=device, dtype=torch.bfloat16)
+        scale = dim**-0.5
+        for causal in (False, True):
+            got = attend(
+                query, key, value, cu, cu, max(lengths), max(lengths), causal, scale
+            )
+            ref = reference_attention(
+                query,
+                key,
+                value,
+                bounds,
+                bounds,
+                causal=causal,
+                scale=scale,
+                groups=heads // kv_heads,
+            )
+            assert got.shape == ref.shape
+            assert torch.allclose(got.float(), ref.float(), atol=5e-2, rtol=5e-2)

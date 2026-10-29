@@ -19,7 +19,7 @@ is_mtpe: true
 | `--batch-window-ms` | `batch_window_ms` | `2.0` | 第一个请求到达后，调度器再等多久收集更多请求。 |
 | `--dtype` | `dtype` | `auto` | 模型计算用的精度：`auto`、`float32`、`bfloat16` 或 `float16`。 |
 | `--enable-shared-context`、`--no-enable-shared-context` | `enable_shared_context` | 由模型家族决定 | 多问题决策请求的共享状态只算一次。 |
-| `--flash-attention-3`、`--no-flash-attention-3` | `flash_attention_3` | 关闭 | 在 Hopper 上用 FlashAttention-3 跑 state-once 分支注意力。 |
+| `--flash-attention-3`、`--no-flash-attention-3` | `flash_attention_3` | 关闭 | 在 Hopper 上用 FlashAttention-3 跑 state-once 分支注意力。头维度超出 64–256 会拒绝加载。 |
 
 ## 批处理 {#batching}
 
@@ -69,9 +69,9 @@ is_mtpe: true
 
 ## Hopper 上的 FlashAttention-3 {#flashattention-3-on-hopper}
 
-`--flash-attention-3` 用 FlashAttention-3 跑 state-once Decision 模型的变长注意力。不设置就保持关闭。在 H200 上，长 state 大约快 1.15 到 1.28 倍，191 个问题里有一个接近平局的决策变了，所以 BF16 Decision 3.0 不默认启用它（[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-flash-attention-3.md)）。
+`--flash-attention-3` 用 FlashAttention-3 跑 state-once Decision 模型的变长注意力。不设置就保持关闭。在 H200 上，长 state 大约快 1.15 到 1.28 倍。204 个问题（含 30K 和 60K state）里有一个接近平局的决策变了，score 一致率是 98.4%，所以 BF16 Decision 3.0 不默认启用它（[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-flash-attention-3.md)）。
 
-它需要 Hopper GPU（计算能力 9.x）以及进程里的 `flash_attn_interface`。CUDA 镜像不安装这个包。在其他设备上设置该参数会拒绝加载。它不会打开其余的近似 kernel。FP32 调用仍走参考注意力。参数保持关闭时，Ampere、ROCm 和 CPU 的前向仍走 FlashAttention-2 或参考实现。
+它需要 Hopper GPU（计算能力 9.x）、进程里的 `flash_attn_interface`，以及 64 到 256 的注意力头维度。CUDA 镜像不安装这个包。在其他设备上设置该参数，或者模型的头维度超出这个范围，会拒绝加载。它跑不了的调用不会退回 FlashAttention-2。它不会打开其余的近似 kernel。FP32 调用仍走参考注意力。参数保持关闭时，Ampere、ROCm 和 CPU 的前向仍走 FlashAttention-2 或参考实现。
 
 ## 设置方法 {#set-them}
 

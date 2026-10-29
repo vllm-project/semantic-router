@@ -43,7 +43,7 @@ def _register_branch_attention(kernels: KernelSet, device: DeviceInfo) -> None:
     kernels.register(
         Kernel(
             "branch_attention",
-            flash3.varlen(_flash),
+            flash3.varlen(flash3.refuse),
             flash3.SOURCE,
             exact=False,
             variant=flash3.SOURCE,

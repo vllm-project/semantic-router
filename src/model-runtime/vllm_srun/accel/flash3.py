@@ -4,9 +4,12 @@
 registers this kernel on compute capability 9.x when the import succeeds. It
 runs only when the operator sets the ``flash_attention_3`` engine argument.
 Non-causal calls pass ``num_splits=1`` so a long state does not allocate
-FlashAttention-3's split workspace (about 2.75 GiB at 60K tokens). A call it
-cannot run (another dtype or head size) uses the FlashAttention-2 function
-passed in.
+FlashAttention-3's split workspace (about 2.75 GiB at 60K tokens). Hopper
+kernels accept head sizes 64-256. A call outside that, another dtype, or a
+function that cannot take the scale, uses ``fallback``. The kernel registered
+for the engine argument passes ``refuse``, so the card's ``flash-attn-3``
+source is not a silent FlashAttention-2 call. A model whose attention head
+size is outside 64-256 refuses to load.
 """
 
 from __future__ import annotations
@@ -21,7 +24,11 @@ import torch
 from ..plugins.base import DeviceInfo
 
 SOURCE = "flash-attn-3"
-HEAD_DIM = 256
+# Hopper FlashAttention-3 accepts this range. ``HEAD_DIM`` is the width the
+# numeric test and the released hybrid Decision 3.0 packages use.
+HEAD_DIM_MIN = 64
+HEAD_DIM_MAX = 256
+HEAD_DIM = HEAD_DIM_MAX
 # ``sm_{major}{minor}`` keeps the minor version in the last digit (``sm_90``, ``sm_100``).
 _ARCH_MINOR_DIGITS = 1
 HOPPER_MAJOR = 9
@@ -81,11 +88,63 @@ def unavailable(device: DeviceInfo) -> str | None:
     return None
 
 
+def head_sizes(module: Any) -> set[int]:
+    """Attention ``head_dim`` values on ``module`` and its children."""
+    walk = getattr(module, "modules", None)
+    children = walk() if callable(walk) else (module,)
+    found: set[int] = set()
+    for child in children:
+        size = getattr(child, "head_dim", None)
+        if isinstance(size, int):
+            found.add(size)
+    return found
+
+
+def unsupported_heads(module: Any) -> str | None:
+    """Why ``module``'s attention head sizes cannot run FlashAttention-3, or None."""
+    outside = sorted(
+        size
+        for size in head_sizes(module)
+        if size < HEAD_DIM_MIN or size > HEAD_DIM_MAX
+    )
+    if not outside:
+        return None
+    shown = ", ".join(str(size) for size in outside)
+    return (
+        f"attention head size {shown} is outside {HEAD_DIM_MIN}-{HEAD_DIM_MAX}; "
+        "FlashAttention-3 does not run it and does not fall back to FlashAttention-2"
+    )
+
+
+def opt_in_refusal(device: DeviceInfo, module: Any) -> str | None:
+    """Why ``flash_attention_3`` cannot load for ``module`` on ``device``, or None."""
+    reason = unavailable(device)
+    if reason is not None:
+        return reason
+    return unsupported_heads(module)
+
+
+def refuse(*_args: object, **_kwargs: object) -> torch.Tensor:
+    """Fail a call FlashAttention-3 cannot run.
+
+    The registered kernel uses this as ``varlen``'s fallback. FlashAttention-2
+    here would leave the card saying ``flash-attn-3`` for a call that never
+    reached it.
+    """
+    raise RuntimeError(
+        "flash_attention_3: this call cannot run on FlashAttention-3 "
+        f"(needs bf16 or fp16, head size {HEAD_DIM_MIN}-{HEAD_DIM_MAX}, "
+        "and a scale argument) and does not fall back to FlashAttention-2"
+    )
+
+
 def varlen(fallback: Varlen) -> Varlen:
     """A kernel with ``branch._flash``'s signature that calls FlashAttention-3, else ``fallback``.
 
-    GQA is the head counts of ``q`` and ``k`` (``[T, H, D]``). Non-causal calls
-    set ``num_splits=1`` when the installed function accepts it.
+    Head sizes 64-256 in BF16 or FP16 call FlashAttention-3. GQA is the
+    head counts of ``q`` and ``k`` (``[T, H, D]``). Non-causal calls set
+    ``num_splits=1`` when the installed function accepts it. Anything else calls
+    ``fallback`` (``refuse`` on the registered kernel).
     """
     function = load()
     accepted = set(inspect.signature(function).parameters) if function else set()
@@ -101,12 +160,14 @@ def varlen(fallback: Varlen) -> Varlen:
         causal: bool,
         scale: float,
     ) -> torch.Tensor:
+        dim = query.shape[-1]
         if (
             function is None
             or not set(_VARLEN_ARGS) <= accepted
             or query.dtype not in DTYPES
-            or query.shape[-1] != HEAD_DIM
-            or key.shape[-1] != HEAD_DIM
+            or dim < HEAD_DIM_MIN
+            or dim > HEAD_DIM_MAX
+            or key.shape[-1] != dim
         ):
             return fallback(query, key, value, cu_q, cu_k, max_q, max_k, causal, scale)
         call: dict[str, Any] = dict(

@@ -23,10 +23,14 @@ question is still its own row under the same mask.
 
 ``--flash-attention-3`` sets the engine argument of that name (Hopper, off by default).
 ``--long-states`` adds the many-question ticket grown to about 30,000 and 60,000
-tokens, with 1 and 16 questions. ``--baseline`` answers the same questions again
-with the argument off and reports agreement, including per answer type, against
-the 99% bar a family would need to consent. ``--no-graphs`` loads with CUDA
-graphs off. ``--peak-memory`` records each branched forward's peak CUDA allocation.
+tokens, with 1 and 16 questions, and plans them with long context so a question
+over the validated length is kept. With no ``--row-tokens``, those per-row groups
+are capped at 65,536 padded tokens: a 30K state with 16 questions otherwise runs
+out of memory before the tool writes its JSON. ``--baseline`` answers the same
+questions again with the argument off and reports agreement, including per answer
+type, against the 99% bar a family would need to consent. ``--no-graphs`` loads
+with CUDA graphs off. ``--peak-memory`` records each branched forward's peak CUDA
+allocation.
 
 ``--golden`` checks the state split against a reference: a golden fixture holds, per question of the same
 requests, the token IDs and the state length the reference implementation's own split gives (a header line, then one
@@ -68,6 +72,7 @@ from vllm_srun.plugins.base import (  # noqa: E402
     PackageRef,
     RegistryOptions,
 )
+from vllm_srun.plugins.decisions import LONG_CONTEXT  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 # A second, longer state: the ticket followed by the store's earlier replies (about 2,000 tokens in all).
@@ -190,6 +195,8 @@ def load(
 # States the acceptance record asks for, in tokens of the state text, and the question counts measured with them.
 LONG_STATE_TOKENS = (30_000, 60_000)
 LONG_STATE_QUESTIONS = (1, 16)
+# A 30K state with 16 questions OOMs the per-row reference unless each group is capped.
+LONG_STATE_ROW_TOKENS = 65_536
 LONG_STATE_PIECE = (
     " The customer is still waiting for the replacement blender and a refund."
 )
@@ -204,6 +211,36 @@ def text_of_tokens(encode, tokens: int, seed: str, piece: str) -> str:
         if have >= tokens:
             return text
         text += piece * max(1, (tokens - have) // piece_tokens)
+
+
+def row_token_budget(long_states: bool, row_tokens: int | None) -> int | None:
+    """The per-row group cap. ``--long-states`` uses 65,536 when ``--row-tokens`` is omitted."""
+    if row_tokens is not None:
+        return row_tokens
+    if long_states:
+        return LONG_STATE_ROW_TOKENS
+    return None
+
+
+def plan_request(model: Any, request: dict[str, Any], *, long_context: bool) -> Any:
+    """Plan one parity request.
+
+    ``long_context`` lifts the validated-length cap, as ``options.long_context``
+    does, so a 60K state is not refused at 32,768 tokens.
+    """
+    token = LONG_CONTEXT.set(True) if long_context else None
+    try:
+        if request.get("images") or request.get("videos"):
+            return model.plan_images(
+                request["state"],
+                request["questions"],
+                request.get("images") or [],
+                request.get("videos"),
+            )
+        return model.plan(request["state"], request["questions"])
+    finally:
+        if token is not None:
+            LONG_CONTEXT.reset(token)
 
 
 def long_requests(model: Any) -> list[dict[str, Any]]:
@@ -367,7 +404,10 @@ def main() -> int:
     parser.add_argument(
         "--row-tokens",
         type=int,
-        help="the per-row path runs a state's questions in groups of at most this many padded tokens",
+        help=(
+            "the per-row path runs a state's questions in groups of at most this "
+            "many padded tokens (default with --long-states: 65536)"
+        ),
     )
     parser.add_argument(
         "--golden",
@@ -387,7 +427,11 @@ def main() -> int:
     parser.add_argument(
         "--long-states",
         action="store_true",
-        help="also run the many-question ticket at about 30,000 and 60,000 tokens, with 1 and 16 questions",
+        help=(
+            "also run the many-question ticket at about 30,000 and 60,000 tokens, "
+            "with 1 and 16 questions, planned with long context so a question over "
+            "the validated length is kept"
+        ),
     )
     parser.add_argument(
         "--baseline",
@@ -405,6 +449,7 @@ def main() -> int:
         help="record each branched forward's peak CUDA allocation",
     )
     args = parser.parse_args()
+    args.row_tokens = row_token_budget(args.long_states, args.row_tokens)
     package = args.package
     if args.attention_mode:
         target = package.parent / f"{package.name}-{args.attention_mode}"
@@ -450,15 +495,7 @@ def main() -> int:
     )
     for request in requests:
         try:
-            if request.get("images") or request.get("videos"):
-                plan = model.plan_images(
-                    request["state"],
-                    request["questions"],
-                    request.get("images") or [],
-                    request.get("videos"),
-                )
-            else:
-                plan = model.plan(request["state"], request["questions"])
+            plan = plan_request(model, request, long_context=args.long_states)
         except ValueError as exc:
             # The API answers such a request with an error as a whole (e.g. a null state).
             refused.append({"id": request.get("id"), "error": str(exc)})

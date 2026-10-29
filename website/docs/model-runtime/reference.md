@@ -81,7 +81,7 @@ a frontend attaches to, or for direct runtime development:
 | `--batch-window-ms` | `2.0` | How long the scheduler waits after the first request to collect more, when `--max-num-seqs` is above 1. |
 | `--dtype` | `auto` | `auto` (the precision the model was published in), `float32`, `bfloat16` or `float16` (GPUs only). |
 | `--enable-shared-context`, `--no-enable-shared-context` | the family's | Compute the shared state of a multi-question decision request once. On by default for Decision 2.0 only. |
-| `--flash-attention-3`, `--no-flash-attention-3` | off | Run state-once branched attention with FlashAttention-3 on Hopper. Off unless set. |
+| `--flash-attention-3`, `--no-flash-attention-3` | off | Run state-once branched attention with FlashAttention-3 on Hopper. Off unless set. Head sizes outside 64–256 refuse to load. |
 | `--max-request-bytes` | `8388608` | Largest request body. |
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
 | `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
