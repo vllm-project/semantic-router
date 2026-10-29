@@ -203,11 +203,33 @@ class BranchSpec:
 
 
 @dataclass(frozen=True)
+class AdapterSpec:
+    """A LoRA adapter network over the backbone, selected like a branch (``EncoderBatch.branch``).
+
+    ``weight_files`` hold, under ``weight_prefix``, the unmerged LoRA factors
+    of every ``targets`` Linear (``<module>.lora_A`` / ``<module>.lora_B``)
+    and the tensors the adapter trained apart from the backbone (whole top
+    layers, with a LoRA-wrapped Linear's weight named ``<module>.base.weight``).
+    Every other parameter is the backbone's own, shared, never copied; the
+    embedding, rotary tables and final norm are the backbone's modules.
+    ``base(x) + (alpha / rank) * B(A(x))``, unmerged.
+    """
+
+    weight_files: tuple[Path, ...]
+    rank: int
+    alpha: float
+    targets: tuple[str, ...]
+    weight_prefix: str = ""
+
+
+@dataclass(frozen=True)
 class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
-    batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
+    batch selects one with ``EncoderBatch.branch``. ``adapters`` names LoRA
+    adapter networks over the backbone (``AdapterSpec``), selected the same
+    way and never sharing a name with a branch. ``quantized`` names the linear
     layers the checkpoint holds as int4, FP8 or NVFP4 weights (``quantization.py``).
     """
 
@@ -218,6 +240,7 @@ class BackboneSpec:
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
     quantized: QuantizedWeights | None = None
+    adapters: Mapping[str, AdapterSpec] = field(default_factory=dict)
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:

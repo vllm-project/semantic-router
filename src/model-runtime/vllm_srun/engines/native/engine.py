@@ -35,6 +35,7 @@ from ...plugins.base import (
 from ...scheduler.planner import padded
 from . import fast, models, quantized
 from . import threads as adaptive_threads
+from .adapters import load_adapter_network
 from .encoder import EncoderGraphs
 from .models import branch as branch_module
 from .models.branch import (
@@ -1277,6 +1278,13 @@ class NativeEngine(Engine):
         branches = {
             name: load_branch(backbone, backbone_spec, name, private)
             for name in backbone_spec.branches
+        }
+        clash = sorted(set(branches) & set(backbone_spec.adapters))
+        if clash:
+            raise ValueError(f"an adapter and a branch share a name: {clash}")
+        branches |= {
+            name: load_adapter_network(backbone, backbone_spec, name, dtype, private)
+            for name in backbone_spec.adapters
         }
         towers = {
             name: load_tower(tower, dtype, private)

@@ -882,8 +882,8 @@
               }
             },
             "primary": {
-              "artifact": "vllm-sr/Vela-2.0-0.3B",
-              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "artifact": "vllm-sr/vela3-fast",
+              "revision": "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
               "provider": "model_runtime",
               "device": "cpu",
               "input": {}
@@ -1264,6 +1264,15 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "allow_lossy_translation": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "tool_result.is_error"
+            ]
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -6533,6 +6542,10 @@
           "minLength": 1
         },
         "conversation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent": {
           "type": "string",
           "minLength": 1
         }
