@@ -15,7 +15,7 @@ metadata:
             "config": {
               "prompt_guard": {
                 "enabled": true,
-                "threshold": "0.75"
+                "threshold": "0.88"
               },
               "response_cache": {
                 "enabled": true,
@@ -36,7 +36,7 @@ metadata:
             "resources": {
               "limits": {
                 "cpu": "2000m",
-                "memory": "4Gi"
+                "memory": "12Gi"
               },
               "requests": {
                 "cpu": "1000m",
