@@ -135,7 +135,7 @@ ingress:
 resources:
   # -- Resource limits
   limits:
-    memory: "7Gi"
+    memory: "12Gi"
     cpu: "2"
   # -- Resource requests
   requests:
