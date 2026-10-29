@@ -95,6 +95,7 @@ COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/topiccontinuity/ /app/src/semantic-router/pkg/topiccontinuity/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
+COPY src/semantic-router/pkg/websearch/ /app/src/semantic-router/pkg/websearch/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
