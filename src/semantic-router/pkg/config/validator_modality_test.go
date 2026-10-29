@@ -14,13 +14,13 @@ func classifierModalityConfig(method string, bindings map[string]ModelBinding) *
 	return cfg
 }
 
-func TestModalityClassifierRunsVela2WithoutAModelPath(t *testing.T) {
+func TestModalityClassifierRunsTheDefaultModelWithoutAModelPath(t *testing.T) {
 	cfg := classifierModalityConfig(ModalityDetectionClassifier, nil)
 	if err := validateGlobalModalityContracts(cfg); err != nil {
-		t.Fatalf("the classifier method runs Vela 2.0 0.3B without a model_path: %v", err)
+		t.Fatalf("the classifier method runs vela3-fast without a model_path: %v", err)
 	}
-	if model, useCPU, ok := cfg.ModalityClassifierModel(); !ok || model != Vela2SignalModel || !useCPU {
-		t.Fatalf("classifier model = %q (cpu %t, ok %t), want Vela 2.0 0.3B on CPU", model, useCPU, ok)
+	if model, useCPU, ok := cfg.ModalityClassifierModel(); !ok || model != Vela3SignalModel || !useCPU {
+		t.Fatalf("classifier model = %q (cpu %t, ok %t), want vela3-fast on CPU", model, useCPU, ok)
 	}
 	cfg.ModalityDetector.Classifier = &ModalityClassifierConfig{ModelPath: "models/Vela-1.0-Encoder-307M-Modality", UseCPU: true}
 	if model, _, _ := cfg.ModalityClassifierModel(); model != "models/Vela-1.0-Encoder-307M-Modality" {
