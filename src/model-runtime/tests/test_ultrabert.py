@@ -9,7 +9,8 @@ import torch
 from vllm_srun.accel.kernels import reference_kernels
 from vllm_srun.engines.native import models
 from vllm_srun.engines.native.adapters import load_adapter_network, module_name
-from vllm_srun.engines.native.models.modernbert import FULL, SLIDING
+from vllm_srun.engines.native.models import ultrabert
+from vllm_srun.engines.native.models.modernbert import FULL, SLIDING, Group, Layout
 from vllm_srun.engines.native.models.ultrabert import additive_masks
 from vllm_srun.engines.native.weights import load_backbone
 from vllm_srun.families.vela3.package import LORA_TARGETS
@@ -75,6 +76,22 @@ def test_padding_never_changes_a_rows_hidden_states(package) -> None:
         mask = torch.cat([torch.tensor([[1] * 9 + [0] * 5]), torch.ones(1, 14)]).long()
         together = module(batch, mask)
     assert torch.allclose(together[0, :9], alone[0], atol=1e-5)
+
+
+def test_cpu_key_masks_match_the_dense_masks_bit_for_bit(package, monkeypatch) -> None:
+    module = backbone(package)
+    monkeypatch.setattr(ultrabert, "LOCAL_QUERIES", 8)
+    torch.manual_seed(3)
+    ids = torch.randint(1, 300, (3, 21))
+    valid = torch.ones(3, 21, dtype=torch.bool)
+    valid[1, 13:], valid[2, 5:] = False, False
+    dense = additive_masks(valid, 3, 21, module.window, torch.float32)
+    with torch.no_grad():
+        expected = module.encode(ids, Layout((Group(3, 21, dict(dense)),)))
+        layout = module.padded(valid.long(), 3, 21, "cpu")
+        found = module.encode(ids, layout)
+    assert layout.groups[0].masks[FULL].shape == (3, 1, 1, 21)
+    assert torch.equal(found[module.num_layers], expected[module.num_layers])
 
 
 def test_tokens_past_the_local_window_reach_a_token_only_through_global_layers(
