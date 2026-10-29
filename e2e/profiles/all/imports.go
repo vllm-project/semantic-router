@@ -20,6 +20,7 @@ import (
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	modelruntime "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime"
 	modelruntimereal "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-real"
+	modelruntimevela3 "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-vela3"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
@@ -102,6 +103,7 @@ func init() {
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("model-runtime", func() framework.Profile { return modelruntime.NewProfile() }, framework.ProfileCapabilities{LocalImages: modelRuntimeLocalImages})
 	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("model-runtime-vela3", func() framework.Profile { return modelruntimevela3.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("conversation-routing", func() framework.Profile { return conversationrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})

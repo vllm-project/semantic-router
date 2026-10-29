@@ -584,7 +584,7 @@ func TestModelCatalogHandlerEnforcesCanonicalReadOnlyRoute(t *testing.T) {
 
 	methodResponse := httptest.NewRecorder()
 	handler.ServeHTTP(methodResponse, httptest.NewRequest(http.MethodPost, "/api/models/catalog", nil))
-	if methodResponse.Code != http.StatusMethodNotAllowed || methodResponse.Header().Get("Allow") != http.MethodGet {
+	if methodResponse.Code != http.StatusMethodNotAllowed || methodResponse.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatalf("POST status=%d allow=%q", methodResponse.Code, methodResponse.Header().Get("Allow"))
 	}
 
