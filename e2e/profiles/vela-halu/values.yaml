@@ -46,8 +46,10 @@ resources:
   requests:
     memory: 2Gi
     cpu: 500m
+  # The canonical Halu default is vela3-fast, which needs the chart's 12Gi
+  # limit. At 6Gi the Router never finished loading it.
   limits:
-    memory: 6Gi
+    memory: 12Gi
     cpu: "2"
 persistence:
   enabled: false
