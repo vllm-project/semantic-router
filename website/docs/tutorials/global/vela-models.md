@@ -129,10 +129,32 @@ and [matched instruction comparison](https://huggingface.co/vllm-sr/Vela-1.0-Omn
 for measurement identities, all tasks and regressions. These panels do not
 establish full multilingual or image coverage, latency, or memory performance.
 
+## Vela 3.0
+
+[Vela 3.0](https://huggingface.co/vllm-sr/vela3-fast)
+is the current routing-model family: six open models, 0.3B to 27B, that answer
+the router's decisions and return the spans you name in one call. The default
+router, **vela3-fast**, is a 380M UltraBERT encoder that answers the built-in
+domain, Guard, safety, fact-check, feedback and modality signals in one pass,
+with PII and hallucination span presets, and supports up to 32K tokens.
+
+| Model | Size | Best for |
+| --- | ---: | --- |
+| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | The default router: decisions and spans in one encoder pass, English, up to 32K tokens |
+| [vela3-fast-vision](https://huggingface.co/vllm-sr/vela3-fast-vision) | 0.3B | Images on CPU: image decisions, region pointing, OCR check, image hallucination spans |
+| [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | Small GPUs, low latency, multilingual |
+| [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | A balance of accuracy and speed |
+| [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | High-accuracy routing |
+| [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | The reference model |
+
+See the [Vela 3.0 launch announcement](/blog/vela-3-0-name-it-vela-finds-it) for
+benchmarks and the fast-vision package.
+
 ## Defaults and input budgets
 
 With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
-Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
+Feedback, Modality and hallucination signals run on **vela3-fast** (Vela 3.0),
+with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
 Semantic Embedding and the Reranker use Vela 1.0. The built-in Vela 1.0
 Hazard deployment is an explicit specialist binding; its presence in the
 catalog does not enable a Safety-to-Hazard cascade. Naming a Vela 1.0 task

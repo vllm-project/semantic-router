@@ -76,9 +76,25 @@ Mini 默认使用适合跨模态比较的共享文本模式。纯文本任务可
 
 Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带指令 English 评测使用固定的官方指令，并重新运行了匹配的原始文本对照：Mean(TaskType) 从 **58.79 提升到 64.68**，38 个任务提升、3 个下降。该指令模式不能替代跨图像/音频比较中的默认共享模式。两个新音频路径均重新评测；虽然音频聚合分数提升，语音与文本检索仍有退步。实际测量身份、全部任务和退步项见固定版本的 [Nano 评测](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md)、[Mini 评测](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)及[指令模式匹配对照](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)。这些面板不代表完整多语言或图像覆盖，也不证明时延或内存表现。
 
+## Vela 3.0 {#vela-30}
+
+[Vela 3.0](https://huggingface.co/vllm-sr/vela3-fast)
+是当前的路由模型家族：六个开源模型（0.3B 到 27B），一次调用即可给出路由决策并返回你点名的文本片段。默认路由模型 **vela3-fast** 是一个 380M 的 UltraBERT 编码器，一次前向即可回答内置的 Domain、Guard、safety、fact-check、feedback 和 modality 信号，并以 span 预设处理 PII 与幻觉检测，支持最长 32K tokens 输入。
+
+| 模型 | 参数量 | 适用场景 |
+| --- | ---: | --- |
+| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | 默认路由模型：一次编码器前向完成决策与 span，英文，最长 32K tokens |
+| [vela3-fast-vision](https://huggingface.co/vllm-sr/vela3-fast-vision) | 0.3B | CPU 上的图像处理：图像决策、区域指向、OCR 校验、图像幻觉 span |
+| [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | 小型 GPU、低时延、多语言 |
+| [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | 精度与速度的平衡 |
+| [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | 高精度路由 |
+| [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | 参考基准模型 |
+
+基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
+
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
-未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 Vela 2.0 0.3B 上运行，兼容问题按部署、输入和执行阶段合并；一次 API 调用不等于整个请求只执行一次 forward（见[选择模型](../../model-runtime/choose-a-model.md#vela-20)）。语义 Embedding 和 Reranker 使用 Vela 1.0。内置 Vela 1.0 Hazard deployment 需要显式绑定；目录中存在它不代表自动启用 Safety 到 Hazard 的级联。在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可选择该专用模型。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
+未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 **vela3-fast**（Vela 3.0）上运行，兼容问题按部署、输入和执行阶段合并；一次 API 调用不等于整个请求只执行一次 forward（见[选择模型](../../model-runtime/choose-a-model.md#vela-20)）。语义 Embedding 和 Reranker 使用 Vela 1.0。内置 Vela 1.0 Hazard deployment 需要显式绑定；目录中存在它不代表自动启用 Safety 到 Hazard 的级联。在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可选择该专用模型。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
 
 运行 Vela 1.0 任务模型且未设置阈值的模块使用 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
 
