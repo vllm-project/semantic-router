@@ -15,10 +15,10 @@ to select the CPU image explicitly. The [release note](release-notes/built-in-mo
 lists every breaking change of that release.
 
 **Review defaults as well as field migrations.** Features without an explicit
-model override use current defaults, including Vela 2.0 0.3B for common judgment
+model override use current defaults, including vela3-fast for common judgment
 tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
 change answers even when its YAML still parses. Review
-[model and threshold choices](./choose-a-model.md#vela-20) and test representative
+[model and threshold choices](./choose-a-model.md#built-in-signals) and test representative
 requests before rollout; explicit specialist assignments remain available.
 
 You need to migrate if your configuration contains any of these:
