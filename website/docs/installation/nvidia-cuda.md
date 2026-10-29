@@ -17,9 +17,10 @@ It does **not** download a language model or start a vLLM server.
 ## Prerequisites
 
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
-- an x86-64 host when using the current Semantic Router CUDA image;
+- an x86-64 or Arm64 host;
 - a GPU of compute capability 7.0 or newer (Volta and later) for the Router
-  image, the oldest architecture its PyTorch build (CUDA 12.8) includes;
+  image on x86-64, or 8.0 or newer on Arm64, the oldest architecture its
+  PyTorch build (CUDA 12.8) includes;
 - an NVIDIA driver, and GPU passthrough into the Router container for the
   Router-side models that run on CUDA;
 - Docker and NVIDIA Container Toolkit;

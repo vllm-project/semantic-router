@@ -9,7 +9,7 @@
 #   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm -t vllm-sr-rocm .
 #   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=cuda -t vllm-sr-cuda .
 #
-# ACCELERATOR is cpu (linux/amd64 and linux/arm64), rocm or cuda (linux/amd64).
+# ACCELERATOR is cpu or cuda (linux/amd64 and linux/arm64), or rocm (linux/amd64).
 # The CUDA image takes PyTorch from the official wheel, which carries its CUDA
 # user-space libraries. The ROCm image takes PyTorch and the ROCm user space
 # from vLLM's ROCm image (ROCM_TORCH_IMAGE, pinned by digest) and builds
@@ -176,7 +176,6 @@ FROM python-base AS torch-cuda
 ARG TARGETARCH
 ARG TORCH_CUDA=torch==2.10.0
 ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
-RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=cuda supports linux/amd64 only" >&2; exit 1; }
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \

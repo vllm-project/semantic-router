@@ -108,10 +108,10 @@ def test_runtime_takes_pytorch_from_the_accelerator_wheels() -> None:
     assert "https://download.pytorch.org/whl/rocm7.2" in graph["torch-rocm-base"][1]
     assert "https://download.pytorch.org/whl/cu" in graph["torch-cuda"][1]
     assert "fla-core" not in graph["torch-cpu"][1]
+    assert 'test "$TARGETARCH" = amd64' in graph["torch-rocm-base"][1]
+    assert 'test "$TARGETARCH" = amd64' not in graph["torch-cuda"][1]
     for stage in ("torch-rocm-base", "torch-cuda"):
-        body = graph[stage][1]
-        assert 'test "$TARGETARCH" = amd64' in body, stage
-        assert "fla-core==" in body, stage
+        assert "fla-core==" in graph[stage][1], stage
 
 
 def test_rocm_image_builds_causal_conv1d_with_the_released_rocm_sdk() -> None:

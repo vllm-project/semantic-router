@@ -59,9 +59,9 @@ class DockerCrossCompilationTests(unittest.TestCase):
                 self.assertEqual(dockerfile, ROUTER_DOCKERFILE)
                 self.assertEqual(target, "vllm-sr")
                 expected = (
-                    ["linux/amd64", "linux/arm64"]
-                    if accelerator == "cpu"
-                    else ["linux/amd64"]
+                    ["linux/amd64"]
+                    if accelerator == "rocm"
+                    else ["linux/amd64", "linux/arm64"]
                 )
                 self.assertEqual(platforms, expected)
         builder = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text()
