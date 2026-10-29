@@ -274,10 +274,16 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
         digest = hashlib.sha256(
             json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
+        if plan.get("plan_sha256") != digest:
+            continue
         if (
             plan.get("source_sha") == identity["source_sha"]
             and plan.get("base_sha") == identity["base_sha"]
-            and plan.get("plan_sha256") == digest
+        ):
+            return plan
+        if (
+            run.get("head_sha") == identity["head_sha"]
+            and plan.get("base_sha") != identity["base_sha"]
         ):
             return plan
     return None
@@ -420,7 +426,8 @@ def matching_authorization(
         or record.get("pr_number") != number
         or record.get("pr_run_id") != run["id"]
         or record.get("pr_run_created_at") != run["created_at"]
-        or any(record.get(key) != value for key, value in identity.items())
+        or record.get("head_sha") != identity["head_sha"]
+        or run.get("head_sha") != identity["head_sha"]
     ):
         return False
     comment = unchanged_comment(client, repo, number, int(record["comment_id"]))
@@ -429,7 +436,18 @@ def matching_authorization(
         command
         and command["scopes"] == record.get("scopes")
         and command["full"] == record.get("full")
-        and (not command["pinned"] or command["pinned"] == list(identity.values()))
+        and (
+            not command["pinned"]
+            or (
+                command["pinned"]
+                == [
+                    record.get("head_sha"),
+                    record.get("base_sha"),
+                    record.get("source_sha"),
+                ]
+                and command["pinned"] == list(identity.values())
+            )
+        )
         and comment.get("user", {}).get("login") == record.get("actor")
         and comment["created_at"] == record.get("comment_created_at")
         and timestamp(comment["created_at"]) >= timestamp(run["created_at"])
@@ -463,12 +481,39 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
         return dict(NO_AUTHORIZATION)
     repo, number = os.environ["GITHUB_REPOSITORY"], int(event["number"])
     identity = source_identity(client, repo, number)
+    head_sha = event.get("pull_request", {}).get("head", {}).get("sha")
     if (
-        identity["source_sha"] != source
-        or identity["base_sha"] != base
-        or identity["head_sha"]
-        != event.get("pull_request", {}).get("head", {}).get("sha")
+        identity["head_sha"] != head_sha
+        or not isinstance(source, str)
+        or not SHA.fullmatch(source)
+        or not isinstance(base, str)
+        or not SHA.fullmatch(base)
     ):
+        return dict(NO_AUTHORIZATION)
+    if source == identity["source_sha"] and base == identity["base_sha"]:
+        pass
+    elif base != identity["base_sha"]:
+        commit = client.request(f"repos/{repo}/git/commits/{source}")
+        parents = commit.get("parents") if isinstance(commit, dict) else None
+        if (
+            not isinstance(parents, list)
+            or len(parents) != MERGE_PARENT_COUNT
+            or any(not isinstance(parent, dict) for parent in parents)
+            or parents[1].get("sha") != head_sha
+            or parents[0].get("sha") != base
+        ):
+            return dict(NO_AUTHORIZATION)
+        base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+        current_main = (
+            base_ref.get("object", {}).get("sha")
+            if isinstance(base_ref, dict)
+            else None
+        )
+        if base != current_main:
+            comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
+            if comparison.get("merge_base_commit", {}).get("sha") != base:
+                return dict(NO_AUTHORIZATION)
+    else:
         return dict(NO_AUTHORIZATION)
     run_id = int(os.environ["GITHUB_RUN_ID"])
     run = client.request(f"repos/{repo}/actions/runs/{run_id}")
