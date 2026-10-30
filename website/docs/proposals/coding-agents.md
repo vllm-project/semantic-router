@@ -32,7 +32,7 @@ For coding agents, switching models between the requests of one run is not where
 | **Router** | The entrypoints and the models each may select, the model for each request, holding a run and each subagent run on one model, translation between the harness's and the backend's API format, scans, content-minimized records, and the offline model-choice report | Agent invocation, task state, starting subagents, the decision to restart a task |
 | **Serving backend** (vLLM, llm-d) | Prefix cache, replica placement by prefix and load, the CPU KV tier | Model choice |
 
-A run through the Router once the agent identity of #5348 is in place:
+A run through the Router with the agent identity of #5348, which #5363 added:
 
 ```mermaid
 flowchart LR
@@ -119,12 +119,12 @@ Whether a subagent on a cheaper model keeps a run's success is not in any public
 
 ### Recommended configuration
 
-For Claude Code against OpenAI-format backends, with the fields that #5348 and #5350 add:
+For Claude Code against OpenAI-format backends, with the fields that #5363 and #5365 added for #5348 and #5350:
 
 ```yaml
 global:
   router:
-    allow_lossy_translation: [tool_result.is_error] # added by #5350
+    allow_lossy_translation: [tool_result.is_error] # since #5365
     learning:
       enabled: true
       adaptation:
@@ -135,7 +135,7 @@ global:
         identity:
           headers:
             session: x-claude-code-session-id
-            agent: x-claude-code-agent-id # added by #5348
+            agent: x-claude-code-agent-id # since #5363
 
 entrypoints:
   - model_names: [team/coding-agents]
