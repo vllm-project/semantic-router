@@ -71,9 +71,15 @@ func TestEngineFrontendAnswersAFullWorkerPoolAsOverloaded(t *testing.T) {
 	}
 	// One worker admits 32 requests (replicaAdmissionLimit in pkg/modelservice); hold them all in the worker.
 	var admitted sync.WaitGroup
+	var served atomic.Int32
 	for range 32 {
 		admitted.Add(1)
-		go func() { defer admitted.Done(); ask() }()
+		go func() {
+			defer admitted.Done()
+			if ask().Code == http.StatusOK {
+				served.Add(1)
+			}
+		}()
 	}
 	for deadline := time.Now().Add(5 * time.Second); held.Load() < 32; time.Sleep(5 * time.Millisecond) {
 		if time.Now().After(deadline) {
@@ -88,6 +94,9 @@ func TestEngineFrontendAnswersAFullWorkerPoolAsOverloaded(t *testing.T) {
 	case <-drained:
 	case <-time.After(5 * time.Second):
 		t.Fatal("held requests did not finish after release")
+	}
+	if served.Load() != 32 {
+		t.Fatalf("%d of 32 held requests answered 200", served.Load())
 	}
 	if refused.Code != http.StatusTooManyRequests || !strings.Contains(refused.Body.String(), `"overloaded"`) || refused.Header().Get("Retry-After") != "1" {
 		t.Fatalf("full pool: %d %q Retry-After %q", refused.Code, refused.Body.String(), refused.Header().Get("Retry-After"))
