@@ -1,5 +1,9 @@
 ---
 is_mtpe: false
+translation:
+  source_commit: "d0957f61089711525993d9ff4d87473d4e55c75d"
+  source_file: "docs/tutorials/global/vela-models.md"
+  outdated: false
 ---
 
 # Vela Router 模型 {#vela-router-models}
