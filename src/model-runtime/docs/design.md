@@ -966,6 +966,49 @@ differ only by rounding ([record](records/state-once.md)). A question costs its
 block and its share of the state, so `usage.input_tokens` counts the state once
 and each question's block.
 
+**Prompt layout and temperature per request.** Two optional
+`decision_config.json` fields, both covered by the identity, change how a
+package reads a request. `prompt_layout` `header-v1` puts a text-only
+request's question list in front of `State:`: every valid question in request
+order, numbered, Choice and Score questions with their option texts
+(`prompt.header_block`). The list is part of the state block, so a state-once
+request still encodes it once and branches every question from it; requests
+with images, videos, assets or Box and track questions keep the d3 layout.
+`temperature_by_questions` gives the temperature of a request from its number
+of Choice, Noul and Score questions (the questions it renders, or, for a
+request with assets or Box and track questions, every question of those
+types). Each item carries its request's temperature, so a forward that merges
+requests divides each row by its own, one scalar division per temperature as a
+request's own forward divides; Box and track readouts keep the package
+temperature. A package without the fields answers as before
+([record](records/d3-ultra.md)).
+
+### 8.7 Vela 3.0 (`vela3`)
+
+vela3-fast (`vela3_config.json` format `vela3-encoder/1`) is one frozen
+UltraBERT-380M encoder (24 layers; two of every three attend within ±128
+positions, each layer at its own rope base) with adapter networks over it.
+
+| Network | Weights | Answers |
+| --- | --- | --- |
+| Decision backbone | `model.safetensors`: the encoder and an option readout | Choice and Noul questions, one input per question: `<bos> [Q] instructions ([O] option)* [SEP_SCHEMA] [SEG_user] state <eos>`, the whole state as one part (a string as it is, anything else as compact JSON), up to 32,768 tokens |
+| Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
+| Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
+
+Each adapter file holds LoRA factors for every projection of every layer, its
+own copies of the top layers it trained and the readout tensors it trained.
+The engine builds each one as an adapter network (`BackboneSpec.adapters`):
+the backbone's embedding, rotary tables and final norm, and every layer
+parameter the file does not hold, are the backbone's own objects, so an
+adapter adds only its own tensors. A request's inputs carry the call they
+belong to (all decisions; one router group on one adapter; one span
+question), and `run` batches each call as the released runtime does, by
+length under its token budget; calls never share a forward. The padded
+layout passes the modeling code's additive float masks, so the forwards are
+bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+The span and router layout, word units and span decoder are the Vela 2.0
+family's, which the package copies verbatim.
+
 ## 9. Scheduler and planner
 
 ```text
