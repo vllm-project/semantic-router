@@ -224,11 +224,14 @@ class ReadScoresTest(unittest.TestCase):
                 path = self.write(
                     tmp, "dup.jsonl", *({"id": k, "score": 0.5} for k in ids)
                 )
-                with self.subTest(flag), contextlib.redirect_stdout(io.StringIO()):
-                    with self.assertRaisesRegex(
+                with (
+                    self.subTest(flag),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    self.assertRaisesRegex(
                         ValueError, f"^{path}:5: duplicate id '{prefix}1'$"
-                    ):
-                        main(base + [flag, str(path)])
+                    ),
+                ):
+                    main([*base, flag, str(path)])
 
 
 class TerminalBenchRowsTest(unittest.TestCase):
