@@ -103,15 +103,15 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
                 )
             )
         elif finding_type == "default_model":
-            suggestions.append(
-                patch_suggestion(
-                    f"/routing/decisions/{decision}/modelRefs",
-                    "reorder",
-                    item.get("recommendation", ""),
-                    value=item.get("evidence", {}).get("recommended_model"),
-                    finding=item,
-                )
+            suggestion = patch_suggestion(
+                f"/routing/decisions/{decision}/modelRefs",
+                "reorder",
+                item.get("recommendation", ""),
+                value=item.get("evidence", {}).get("recommended_model"),
+                finding=item,
             )
+            suggestion["recipe"] = item.get("evidence", {}).get("recipe", "")
+            suggestions.append(suggestion)
         elif finding_type in {"underpowered_model", "model_overuse"}:
             suggestions.append(
                 patch_suggestion(
@@ -169,7 +169,9 @@ def apply_recipe_suggestion(
     path = parse_decision_patch_path(str(suggestion.get("path") or ""))
     if path is None:
         return candidate
-    decision = find_recipe_decision(candidate, path.decision)
+    decision = find_recipe_decision(
+        candidate, path.decision, str(suggestion.get("recipe") or "")
+    )
     if decision is None:
         return candidate
     adaptations = decision.setdefault("adaptations", {})
@@ -280,9 +282,21 @@ def apply_protection_mode_patch(
 
 
 def find_recipe_decision(
-    recipe: dict[str, Any], decision_name: str
+    recipe: dict[str, Any], decision_name: str, recipe_name: str = ""
 ) -> dict[str, Any] | None:
-    routing = recipe.get("routing")
+    """A decision from recipes[recipe_name].routing when that recipe exists,
+    else from top-level routing, which the router serves as the default recipe."""
+    scope = next(
+        (
+            item
+            for item in recipe.get("recipes") or []
+            if isinstance(item, dict)
+            and recipe_name
+            and item.get("name") == recipe_name
+        ),
+        recipe,
+    )
+    routing = scope.get("routing")
     if not isinstance(routing, dict):
         return None
     decisions = routing.get("decisions")

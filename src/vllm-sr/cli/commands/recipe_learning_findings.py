@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from cli.commands.recipe_learning_artifacts import find_recipe_decision
 from cli.commands.recipe_learning_metrics import numeric, optional_numeric_or_none
 
 _SUPPORT_REPLAY_LIMIT = 10
@@ -398,8 +399,9 @@ def build_run_findings(
     decision's current first modelRef (or for every confident one without a recipe).
     """
     findings: list[dict[str, Any]] = []
-    for decision, payload in (runs_payload.get("per_decision") or {}).items():
-        current = current_default_model(recipe, decision)
+    for payload in (runs_payload.get("per_decision") or {}).values():
+        decision, recipe_name = payload["decision"], payload["recipe"]
+        current = current_default_model(recipe, decision, recipe_name)
         for rec in payload.get("recommendations") or []:
             model = rec.get("model")
             if not rec.get("confident") or not model or model == current:
@@ -412,6 +414,7 @@ def build_run_findings(
                     f"Run outcomes favour {model} as this decision's default at "
                     f"{rec['value_per_success']} per successful run.",
                     {
+                        "recipe": recipe_name,
                         "value_per_success": rec["value_per_success"],
                         "recommended_model": model,
                         "current_default": current,
@@ -423,15 +426,13 @@ def build_run_findings(
     return findings
 
 
-def current_default_model(recipe: dict[str, Any] | None, decision: str) -> str:
+def current_default_model(
+    recipe: dict[str, Any] | None, decision: str, recipe_name: str = ""
+) -> str:
     if not isinstance(recipe, dict):
         return ""
-    for item in (recipe.get("routing") or {}).get("decisions") or []:
-        if (
-            isinstance(item, dict)
-            and str(item.get("name") or item.get("id") or "") == decision
-        ):
-            refs = item.get("modelRefs") or []
-            if refs and isinstance(refs[0], dict):
-                return str(refs[0].get("model") or "")
+    item = find_recipe_decision(recipe, decision, recipe_name) or {}
+    refs = item.get("modelRefs") or []
+    if refs and isinstance(refs[0], dict):
+        return str(refs[0].get("model") or "")
     return ""

@@ -32,6 +32,7 @@ _MIN_VALUES_FOR_SPREAD = 2
 
 @dataclass
 class _Run:
+    recipe: str
     decision: str
     model: str
     first_turn: tuple[int, float]
@@ -93,10 +94,14 @@ def group_runs(records: list[dict[str, Any]]) -> tuple[dict[str, _Run], int]:
         run = runs.get(key)
         if run is None:
             run = runs[key] = _Run(
-                decision=record_decision(record), model=model, first_turn=turn
+                recipe=str(record.get("recipe") or ""),
+                decision=record_decision(record),
+                model=model,
+                first_turn=turn,
             )
         elif turn < run.first_turn:
-            run.decision, run.model, run.first_turn = (
+            run.recipe, run.decision, run.model, run.first_turn = (
+                str(record.get("recipe") or ""),
                 record_decision(record),
                 model,
                 turn,
@@ -171,19 +176,27 @@ def build_run_model_choice(
 ) -> dict[str, Any]:
     """Per decision and model: run success rate and cost per run with 95%
     intervals, and, for each stated value of one successful run, the model with
-    the highest expected utility."""
+    the highest expected utility.
+
+    Decisions are scoped by the record's recipe, since two recipes may name a
+    decision alike; entries are keyed recipe/decision, or decision alone when
+    records carry no recipe."""
     runs, unidentified = group_runs(records)
-    by_decision: dict[str, dict[str, list[_Run]]] = {}
+    by_decision: dict[tuple[str, str], dict[str, list[_Run]]] = {}
     for run in runs.values():
-        by_decision.setdefault(run.decision, {}).setdefault(run.model, []).append(run)
+        by_decision.setdefault((run.recipe, run.decision), {}).setdefault(
+            run.model, []
+        ).append(run)
 
     decisions = {}
-    for decision, by_model in sorted(by_decision.items()):
+    for (recipe, decision), by_model in sorted(by_decision.items()):
         models = {
             model: model_run_stats(model_runs)
             for model, model_runs in sorted(by_model.items())
         }
-        decisions[decision] = {
+        decisions[f"{recipe}/{decision}" if recipe else decision] = {
+            "recipe": recipe,
+            "decision": decision,
             "models": models,
             "recommendations": [
                 recommend_default(models, value) for value in values_per_success or []

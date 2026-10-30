@@ -1,4 +1,8 @@
+from pathlib import Path
+
+import yaml
 from cli.commands.recipe_learning import build_recipe_learning_artifact
+from cli.commands.recipe_learning_findings import build_run_findings
 from cli.commands.recipe_learning_runs import (
     build_run_model_choice,
     group_runs,
@@ -229,3 +233,56 @@ def test_no_finding_when_recommendation_is_already_the_default():
 def test_no_values_means_no_recommendations():
     payload = build_run_model_choice(_runs("a", 30, 15, 0.01))
     assert payload["per_decision"]["code"]["recommendations"] == []
+
+
+def _typed_cascade_runs():
+    records = _runs("native-kai", 200, 150, 0.05, decision="typed-cascade")
+    records += _runs("native-vega", 200, 120, 0.25, decision="typed-cascade")
+    for record in records:
+        record["recipe"] = "native-handwritten"
+    return records
+
+
+def test_recipe_owned_decision_reads_its_recipe_default():
+    config = yaml.safe_load(
+        (Path(__file__).parents[3] / "config" / "config.yaml").read_text()
+    )
+    runs = build_run_model_choice(_typed_cascade_runs(), [1.0])
+    (rec,) = runs["per_decision"]["native-handwritten/typed-cascade"]["recommendations"]
+    assert rec["model"] == "native-kai" and rec["confident"]
+    assert build_run_findings(runs, config) == []
+
+
+def test_recipe_owned_decision_patch_lands_in_its_recipe():
+    top_level = {"name": "typed-cascade", "modelRefs": [{"model": "native-vega"}]}
+    recipe = {
+        "routing": {"decisions": [top_level]},
+        "recipes": [
+            {
+                "name": "native-handwritten",
+                "routing": {
+                    "decisions": [
+                        {
+                            "name": "typed-cascade",
+                            "modelRefs": [
+                                {"model": "native-vega"},
+                                {"model": "native-kai"},
+                            ],
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+    artifact = build_recipe_learning_artifact(
+        _typed_cascade_runs(), {}, recipe, values_per_success=[1.0]
+    )
+    (candidate,) = [
+        c
+        for c in artifact["candidate_recipes"]
+        if c["patch"]["suggestions"][0]["finding_type"] == "default_model"
+    ]
+    assert candidate["patch"]["suggestions"][0]["recipe"] == "native-handwritten"
+    owned = candidate["recipe"]["recipes"][0]["routing"]["decisions"][0]
+    assert [r["model"] for r in owned["modelRefs"]] == ["native-kai", "native-vega"]
+    assert candidate["recipe"]["routing"]["decisions"][0] == top_level

@@ -65,27 +65,32 @@ def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
     """Fetch up to limit records, paging by offset past the API's page cap.
 
     Run-level analysis needs every record of a run, so a single capped page
-    would cut runs short."""
+    would cut runs short. The list is newest first, so a record stored between
+    two requests shifts the next page and repeats a record; records are kept
+    once by id."""
     client = RouterManagementClient(endpoint or None, timeout=timeout)
     limit = max(1, min(limit, _MAX_REPLAY_LIMIT))
     if limit <= _REPLAY_PAGE_SIZE:
         return client.request(
             "GET", OBSERVABILITY_REPLAYS_PATH, params={"limit": str(limit)}
         ).payload
-    records: list[dict[str, Any]] = []
+    records: dict[str, dict[str, Any]] = {}
+    offset = 0
     while len(records) < limit:
         page_size = min(_REPLAY_PAGE_SIZE, limit - len(records))
         page = normalize_replay_payload(
             client.request(
                 "GET",
                 OBSERVABILITY_REPLAYS_PATH,
-                params={"limit": str(page_size), "offset": str(len(records))},
+                params={"limit": str(page_size), "offset": str(offset)},
             ).payload
         )
-        records.extend(page)
+        for index, record in enumerate(page, start=offset):
+            records.setdefault(str(record.get("id") or f"offset:{index}"), record)
+        offset += len(page)
         if len(page) < page_size:
             break
-    return {"object": "router_replay.list", "data": records}
+    return {"object": "router_replay.list", "data": list(records.values())}
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:
@@ -272,9 +277,13 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
 )
 @click.option(
     "--limit",
-    default=_DEFAULT_REPLAY_LIMIT,
-    show_default=True,
-    help="Replay records to fetch from the endpoint, in pages of 100.",
+    type=int,
+    default=None,
+    help=(
+        f"Replay records to fetch from the endpoint, in pages of 100. Defaults to "
+        f"{_DEFAULT_REPLAY_LIMIT}, or with --value-per-success to every record up "
+        f"to {_MAX_REPLAY_LIMIT}, so runs are not cut short."
+    ),
 )
 @click.option(
     "--output-dir",
@@ -312,7 +321,7 @@ def recipe_learning(
     endpoint: str | None,
     cases_file: Path | None,
     recipe_file: Path | None,
-    limit: int,
+    limit: int | None,
     output_dir: Path | None,
     output_json: bool,
     report_only: bool,
@@ -321,6 +330,8 @@ def recipe_learning(
 ) -> None:
     """Analyze replay and outcomes to produce recipe-learning artifacts."""
 
+    if limit is None:
+        limit = _MAX_REPLAY_LIMIT if values_per_success else _DEFAULT_REPLAY_LIMIT
     records = load_replay_records(replay_file, endpoint, limit, timeout)
     cases = load_eval_cases(cases_file)
     recipe = load_recipe_file(recipe_file)
