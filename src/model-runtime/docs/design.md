@@ -148,7 +148,7 @@ src/model-runtime/
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       artifacts.py          # file inventories and hash verification for packages without a manifest
       builtin.py            # the first-party models: the tables the installed families name
-      tables/               # the built-in families' tables: decision3.py, decision2.py, decision1.py, vela1.py, vela2.py, omni.py
+      tables/               # the built-in families' tables: decision3.py, decision2.py, decision1.py, vela1.py, vela2.py, vela3.py, omni.py
       golden_answers*.json  # golden references per family, per device class
       kernel_choices.json   # pinned autotuned kernel choices (Qwen3.5 decoders)
       policy.py             # licence and access policy, token handling
@@ -157,13 +157,15 @@ src/model-runtime/
     devices.py              # `vllm-srun devices`: the host's devices and the one auto takes
     supervision/            # readiness (golden answers), metrics
     families/               # package formats, rendering and answer assembly only
+      decision3/            # Decision 3.0 (d3): state-once prompts, images, videos, Box and track
       decision2/            # Decision 2.0 (Phase 1)
       decision1/            # Decision 1.0: vela-encoder and qwen3.5-decision runtimes
       task_heads/           # HF encoder task models (Vela 1.0 and compatible ModernBERT models)
       vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (0.8B, 4B, 9B); Set and Span
+      vela3/                # Vela 3.0 vela3-fast: one UltraBERT backbone and its adapter networks
       multimodal_embedding/ # Vela 1.0 Omni: the published package, readouts, processors; ONNX bundles
     engines/
-      native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, bert.py, siglip.py,
+      native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, ultrabert.py, bert.py, siglip.py,
                             #   whisper.py, clap.py, lora.py, tree.py
       onnxruntime/          # ONNX Runtime sessions, execution providers, graph outputs
     accel/                  # cpu, cuda, rocm, xpu, mps; kernels.py
@@ -658,6 +660,7 @@ Before any model code runs, the family verifies the package:
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
 | `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
+| `vela3` | `vllm-sr/vela3-fast` | `7cbefd4b` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in
@@ -1558,6 +1561,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | candle Qwen3 multi-LoRA, candle Qwen3Guard, DeBERTa `auto` | nothing wired | **Retire** |
 | Decision 1.0 (seven packages) | not served by the router today (proposal #4086) | **Add** via `decision1` |
 | Vela 2.0 0.3B, 0.8B, 4B, 9B | new | **Add** via `vela2` |
+| Vela 3.0 vela3-fast `7cbefd4b` | the built-in signals and the decision model, by default | **Add** via `vela3` |
 
 ### 16.4 Algorithms that leave the bindings
 
