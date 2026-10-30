@@ -126,6 +126,11 @@ category classifier served by the model runtime, not a remote `backend`, and a
 threshold of at least 0.5, where only the top label can match. Matching and its threshold are unchanged. The map changes only
 the score a matched domain contributes to ranking.
 
+The committed artifact was fitted on `vllm-sr/Vela-1.0-Encoder-307M-Domain`,
+which the `vela-amd` recipe serves. The default configuration answers domain
+with vela3-fast, so it does not start with this artifact, and a vela3-fast map
+needs its own artifact and held-out check.
+
 ## Dependencies and Limitations
 
 Domain classification uses the configured classifier module and processes the
