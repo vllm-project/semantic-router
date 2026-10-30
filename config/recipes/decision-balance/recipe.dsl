@@ -33,7 +33,7 @@ SIGNAL conversation has_prior_answer {
 }
 
 SIGNAL jailbreak prompt_attack {
-  threshold: 0.95
+  threshold: 0.99
 }
 
 SIGNAL safety unsafe_request {
@@ -135,7 +135,7 @@ ROUTE vision (description = "Image requests go to Qwen3.8-27B, strong on documen
 
 ROUTE recovery (description = "A user who says the last answer was wrong gets GLM-5.3-Flash at maximum effort, a different model family.", on_unknown = "no_match") {
   PRIORITY 800
-  WHEN conversation("has_prior_answer") AND decision("correction")
+  WHEN conversation("has_prior_answer") AND decision("correction") AND NOT conversation("tool_loop")
   MODEL "zai/glm-5.3-flash" (reasoning = true, effort = "max")
   ALGORITHM static
 }

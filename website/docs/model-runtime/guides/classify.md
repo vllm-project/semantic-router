@@ -18,7 +18,7 @@ image. Routes match on those labels.
 | [`classifier`](tutorials/signal/learned/classifier.md) | your own model | your labels |
 
 The table lists specialist models. With no task override, the built-in domain,
-fact-check, feedback, and modality signals use the default Vela 2.0 judgment
+fact-check, feedback, and modality signals use the default vela3-fast judgment
 deployment. The specialist bindings below select Vela 1.0 explicitly. See
 [Choose a model](../choose-a-model#by-task).
 

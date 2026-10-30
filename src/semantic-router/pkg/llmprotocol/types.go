@@ -114,11 +114,13 @@ type Message struct {
 	Role            Role
 	Content         []Content
 	ReasoningEffort string // Anthropic per-message output_config.effort.
+	Name            string // Chat Completions participant name; formats without one drop it.
 }
 
 type InstructionBlock struct {
 	Role    Role
 	Content []Content
+	Name    string // Chat Completions participant name; formats without one drop it.
 }
 
 type ToolCall struct {

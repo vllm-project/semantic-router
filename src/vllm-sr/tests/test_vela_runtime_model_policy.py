@@ -44,7 +44,7 @@ def test_reference_vela_policy_survives_runtime_materialization(
     # platform materialization must preserve its resource and input policy.
     assert catalog["system"]["decision_model"] == {"deployment": "primary"}
     assert catalog["deployments"] == authored["deployments"]
-    assert catalog["deployments"]["primary"]["artifact"] == "vllm-sr/Vela-2.0-0.3B"
+    assert catalog["deployments"]["primary"]["artifact"] == "vllm-sr/vela3-fast"
     modules = catalog["modules"]
     for module in (
         modules["safety"]["safety"],

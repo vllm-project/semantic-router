@@ -116,7 +116,7 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 
 func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) error {
 	for _, instruction := range request.Instructions {
-		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content})
+		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content, Name: instruction.Name})
 		if err != nil {
 			return err
 		}
@@ -197,6 +197,9 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		return chatMessageWire{}, err
 	}
 	wire := chatMessageWire{ID: message.ID, Role: role}
+	if message.Name != "" {
+		wire.Name, _ = json.Marshal(message.Name)
+	}
 	state := chatMessageEncodingState{wire: &wire, parts: make([]chatContentWire, 0, len(message.Content))}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {

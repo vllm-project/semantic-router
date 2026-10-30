@@ -84,6 +84,10 @@ higher-priority proof, code, or creative task route when that task is present.
 - Reachable OpenAI-compatible endpoints for the configured aliases.
 - Complexity, domain, embedding, feedback, fact-check, language, and re-ask
   signals enabled by [`config.yaml`](config.yaml).
+- The decision model stays `vllm-sr/Vela-2.0-0.3B`. These probes were calibrated
+  on that model. The router default is now vela3-fast, and an unset decision
+  model follows the default, which moves `premium_legal` traffic onto
+  `medium_explainer`.
 - A response-cache store when cache behavior is desired.
 - Calibrated cost and capability metadata for the actual deployment.
 
