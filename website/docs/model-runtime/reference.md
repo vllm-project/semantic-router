@@ -503,6 +503,19 @@ only their own tokens, and `usage.input_tokens` counts the state once and each
 question's block. Its answers are those of each question asked alone, up to
 rounding. `vllm-sr/d3-turbo` is such a package.
 
+Two more `decision_config.json` fields change how a package reads a request,
+and its identity covers both. With `prompt_layout` `header-v1`, a text-only
+request lists its valid questions in front of its state, numbered in request
+order, Choice and Score questions with their options: the list is part of the
+state block, so every question sees what else is asked. A request with images
+or videos, or with assets or Box and track questions, keeps the layout above.
+`temperature_by_questions` (`{"max_questions": [n_1, ..., n_k], "temperature":
+[t_1, ..., t_k, t_rest]}`) sets a request's temperature from its number of
+Choice, Noul and Score questions n: the `t_i` of the first `n <= n_i`, else
+`t_rest`. Box and track answers keep the package's `temperature`.
+`vllm-sr/d3-ultra` declares both: a one-question request answers at 1.046, any
+other at 1.0.
+
 ```json title="POST /v1/systemone"
 {
   "model": "d3-turbo",
@@ -637,7 +650,7 @@ In summary:
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
 | `device` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. |
-| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). |
+| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). That includes the default decision model, a deployment published for direct System One inference, and the deployment of a local System One alias, whether or not a listener publishes the alias. A routed System One entrypoint is not one deployment. A task binding that is none of these keeps a task-model limit. |
 | `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
 | `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |
 | `replicas` | deployment | Placements of independent workers for one logical model. Each has `device` or `endpoint`/`served_name`; omit for one worker. Do not combine with deployment-level placement. |
