@@ -83,18 +83,18 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 ## Vela 3.0 {#vela-30}
 
 [Vela 3.0](https://huggingface.co/collections/vllm-sr/vela-30-6ad1c430eb1718eb4754edcd)
-是当前的路由模型家族：六个开源模型（0.3B 到 27B），一次调用即可给出路由决策并返回你点名的文本片段。默认路由模型 **vela3-fast** 是一个 380M 的 UltraBERT 编码器（计入每题所用 adapter 后为 0.4B），回答内置的 Domain、Guard、Safety、FactCheck、Feedback 和 Modality 信号，并以 span 预设处理 PII 与幻觉检测；决策可读取最长 32K tokens（router 问题与 span 每个窗口 8,192）。
+是当前的路由模型家族：六个开源模型（0.3B 到 27B），一次调用即可给出路由决策并返回你点名的文本片段。默认路由模型 **vela3-fast** 是一个 380M 的 UltraBERT 编码器（计入每题所用 adapter 后为 0.4B），回答内置的 Domain、Guard、Safety、FactCheck、Feedback 和 Modality 信号，并以 span 预设处理 PII 与幻觉检测；决策可读取最长 32K tokens（router 问题与多数 span 每个窗口 8,192；evidence span 读取一个窗口，最长 32K）。
 
 | 模型 | 参数量 | 适用场景 |
 | --- | ---: | --- |
-| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | 默认路由模型：一次编码器前向完成决策与 span，英文，最长 32K tokens |
+| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | 默认路由模型：按问题完成决策与 span，英文，最长 32K tokens |
 | [vela3-fast-vision](https://huggingface.co/vllm-sr/vela3-fast-vision) | 0.3B | CPU 上的图像处理：图像决策、区域指向、OCR 校验、图像幻觉 span |
 | [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | 小型 GPU、低时延、多语言 |
 | [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | 精度与速度的平衡 |
 | [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | 高精度路由 |
 | [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | 参考模型 |
 
-模型运行时目前只服务 **vela3-fast**；其余五个尺寸和 vela3-fast-vision 暂时通过各自的包运行。基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
+0.4B 是基座加每题所用 adapter 的规模；部署加载全部 adapter，共 1.5B 参数，约 7 GB。模型运行时目前只服务 **vela3-fast**；其余四个尺寸和 vela3-fast-vision 暂时通过各自的包运行。基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 

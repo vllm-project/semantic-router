@@ -139,18 +139,20 @@ router, **vela3-fast**, is a 380M UltraBERT encoder (0.4B with the adapter a
 question runs on) that answers the built-in Domain, Guard, Safety, FactCheck,
 Feedback and Modality signals, with PII and hallucination span presets, and
 reads up to 32K tokens for a decision (8,192 per window for router questions
-and spans).
+and most spans; evidence spans read one window up to 32K).
 
 | Model | Size | Best for |
 | --- | ---: | --- |
-| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | The default router: decisions and spans in one encoder pass, English, up to 32K tokens |
+| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | The default router: decisions and spans per question, English, up to 32K tokens |
 | [vela3-fast-vision](https://huggingface.co/vllm-sr/vela3-fast-vision) | 0.3B | Images on CPU: image decisions, region pointing, OCR check, image hallucination spans |
 | [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | Small GPUs, low latency, multilingual |
 | [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | A balance of accuracy and speed |
 | [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | High-accuracy routing |
 | [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | The reference model |
 
-The model runtime serves **vela3-fast** today; the other five sizes and
+The 0.4B is the backbone plus the adapter a question runs on; the deployment
+loads its adapters, 1.5B parameters, about 7 GB.
+The model runtime serves **vela3-fast** today; the other four sizes and
 vela3-fast-vision run through their own packages for now.
 See the [Vela 3.0 launch announcement](/blog/vela-3-0-name-it-vela-finds-it) for
 benchmarks and the fast-vision package.
