@@ -25,6 +25,10 @@ from src.training.model_selection.policy_eval.prepare_terminal_bench import (
     STRONG,
     build_rows,
 )
+from src.training.model_selection.policy_eval.policy_eval import read_scores
+from src.training.model_selection.policy_eval.twinrouterbench_eval import (
+    main as twinrouterbench_main,
+)
 from src.training.model_selection.policy_eval.twinrouterbench_eval import tier
 
 DATA = Path(__file__).resolve().parents[1] / "data"
@@ -136,6 +140,14 @@ class TierTest(unittest.TestCase):
         self.assertEqual(tier(p, 0.4), 2)
         self.assertEqual(tier(p, 0.9), 0)
 
+    def test_repeated_answer_id_is_rejected_before_scoring(self):
+        rows = [{"id": k, "k": 0, "probs": {"tier": [1, 0, 0, 0]}} for k in "aba"]
+        with tempfile.TemporaryDirectory() as tmp:
+            answers = Path(tmp) / "answers.jsonl"
+            answers.write_text("".join(json.dumps(r) + "\n" for r in rows))
+            with self.assertRaisesRegex(ValueError, f"^{answers}:3: duplicate id 'a'$"):
+                twinrouterbench_main(["--checkout", tmp, "--answers", str(answers)])
+
 
 class ShippedAnswersTest(unittest.TestCase):
     def test_answers_cover_every_public_request(self):
@@ -145,17 +157,15 @@ class ShippedAnswersTest(unittest.TestCase):
             "twinrouterbench": (970, {"tier"}),
         }
         for name, (n, questions) in counts.items():
-            rows = [
-                json.loads(line)
-                for line in (DATA / f"{name}.d3-turbo.answers.jsonl")
-                .read_text()
-                .splitlines()
-            ]
-            self.assertEqual(len({r["id"] for r in rows}), n, name)
-            self.assertTrue(all(set(r["probs"]) == questions for r in rows), name)
-            for r in rows:
-                for p in r["probs"].values():
-                    self.assertAlmostEqual(sum(p), 1.0, places=4)
+            # read_scores also rejects a repeated id.
+            probs = read_scores(
+                DATA / f"{name}.d3-turbo.answers.jsonl", lambda r: r["probs"]
+            )
+            self.assertEqual(len(probs), n, name)
+            self.assertTrue(all(set(p) == questions for p in probs.values()), name)
+            for p in probs.values():
+                for q in p.values():
+                    self.assertAlmostEqual(sum(q), 1.0, places=4)
 
 
 if __name__ == "__main__":

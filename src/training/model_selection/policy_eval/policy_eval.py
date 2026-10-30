@@ -48,8 +48,8 @@ def read_jsonl(path):
         return [json.loads(line) for line in f if line.strip()]
 
 
-def read_scores(path):
-    """Map id to score from a JSONL file of {id, score}, rejecting a repeated id."""
+def read_scores(path, value=lambda r: r["score"]):
+    """Map id to value(record) from a JSONL file, rejecting a repeated id."""
     scores = {}
     with open(path) as f:
         for n, line in enumerate(f, 1):
@@ -57,7 +57,7 @@ def read_scores(path):
                 r = json.loads(line)
                 if r["id"] in scores:
                     raise ValueError(f"{path}:{n}: duplicate id {r['id']!r}")
-                scores[r["id"]] = r["score"]
+                scores[r["id"]] = value(r)
     return scores
 
 

@@ -22,6 +22,11 @@ import json
 import sys
 from pathlib import Path
 
+try:
+    from .policy_eval import read_scores
+except ImportError:  # run as a script
+    from policy_eval import read_scores
+
 HERE = Path(__file__).resolve().parent
 TIERS = ["low", "mid", "mid_high", "high"]
 CUTS = [None, 0.5, 0.3, 0.2, 0.1, 0.05]
@@ -48,6 +53,9 @@ def main(argv=None):
     ap.add_argument("--answers", default=str(DEFAULT_ANSWERS))
     ap.add_argument("--constant", choices=TIERS, help="score one fixed tier instead")
     a = ap.parse_args(argv)
+    answers = (
+        None if a.constant else read_scores(a.answers, lambda x: x["probs"]["tier"])
+    )
     sys.path.insert(0, a.checkout)
     from main.dataset import QUESTION_BANK_PATH  # noqa: PLC0415
     from main.eval.predictors import FunctionPredictor  # noqa: PLC0415
@@ -64,10 +72,6 @@ def main(argv=None):
     if a.constant:
         routers = {f"always {a.constant}": lambda row: TIERS.index(a.constant)}
     else:
-        answers = {
-            x["id"]: x["probs"]["tier"]
-            for x in map(json.loads, Path(a.answers).read_text().splitlines())
-        }
         routers = {
             ("argmax" if cut is None else f"cut {cut}"): (
                 lambda row, cut=cut: tier(answers[row["id"]], cut)
