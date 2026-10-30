@@ -76,7 +76,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             management["bind_address"] = "0.0.0.0"
             management["port"] = port
 
-        self._edit_config(lambda document: set_management_port(document, 8081))
+        self._edit_config(lambda document: set_management_port(document, 8080))
         try:
             self._serve()
             self._edit_config(lambda document: set_management_port(document, 8082))
@@ -90,16 +90,13 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 document["listeners"][0]["port"] = 8890
 
             self._edit_config(move_listener)
-            management_port = self.runtime_stack.host_port(
-                8081, name="management API host port"
-            )
+            # config apply recognizes the default local endpoint. A custom
+            # --endpoint follows its remote workflow and cannot save locally.
             saved = self._cli_json(
                 "config",
                 "apply",
                 "--config",
                 "config.yaml",
-                "--endpoint",
-                f"http://127.0.0.1:{management_port}",
             )
             self.assertEqual(saved["status"], "restart_required", saved)
 
@@ -109,6 +106,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             self.assertNotIn("Status unknown", stdout)
 
             self._serve()
+            self._edit_config(lambda document: set_management_port(document, 8083))
             code, stdout, stderr = self.run_cli(["status", "router"], timeout=60)
             self.assertEqual(code, 0, f"{stdout}\n{stderr}")
             self.assertRegex(stdout, r"Router\s+Running")
