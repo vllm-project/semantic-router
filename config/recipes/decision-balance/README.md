@@ -13,6 +13,12 @@ its reasoning setting.
 
 To try it, connect the three backends and follow the [quick start](#quick-start).
 
+The built-in [MoM V1](../built-in/latest/mom-v1/README.md) Balance recipe, `vllm-sr/mom-v1-blend`, asks
+the same questions with the router's default decision model and maps the same lanes onto three decisions,
+`reasoning`, `medium` and `simple`, over the models you assign. It leaves prompt attacks and unsafe content
+to MoM V1 Vault, and images and long inputs to its candidate checks. This recipe is the reference deployment
+on named models, with an effort for every lane.
+
 ## Model details
 
 | Model | Role | Relative cost per 1M output tokens |
@@ -77,7 +83,7 @@ Decisions, highest priority first:
 | `guard` | Prompt attack or unsafe request | No model; a fixed reply | `fast_response` plugin |
 | `long_context` | Input of 200K tokens or more | GLM-5.3-Flash, high | `static` |
 | `vision` | The request carries an image | Qwen3.8-27B, medium | `static` |
-| `recovery` | An earlier answer exists and the user says it was wrong | GLM-5.3-Flash, max | `static` |
+| `recovery` | An earlier answer exists, no tool loop is active, and the user says it was wrong | GLM-5.3-Flash, max | `static` |
 | `agentic` | An active tool loop, or declared tools the request needs | GLM-5.3-Flash, high | `static` |
 | `facts` | Facts most people would look up, for a facts, analysis or writing task below max effort | GLM-5.3-Flash, low | `static` |
 | `frontier` | Max effort | GLM-5.3-Flash max or Flash-Next xhigh | `decision`: the decision model chooses from the candidates' descriptions |
@@ -160,9 +166,14 @@ detector suppresses all content conservatively. Keep the rule when you want
 Replay to capture requests verified free of personal data.
 
 Prompt attacks and unsafe requests receive a fixed reply without reaching any
-model. The guard thresholds favor precision, because role-play and code
+model. The guard thresholds favor precision, because role-play, code and agent
 requests can score high on the prompt guard: a request the guard misses still
-reaches a model, which applies its own safety training.
+reaches a model, which applies its own safety training. Agent turns scored
+0.95 to 0.99 on `prompt_attack` (coding tasks that limit what may change, exact
+output instructions from evaluation harnesses, page context an agent adds), so
+it fires at 0.99. The prompt attacks in the probes score 0.990 to 0.997, and
+those near 0.99 that also match `unsafe_request` stay guarded either way. The
+margin is narrow: recalibrate the threshold when the decision model changes.
 
 Every routed request's text, up to the decision model's input limit, is read
 by the decision model inside the Router. Requests are sent to whichever
@@ -238,6 +249,10 @@ ratio.
 
 ## Changes
 
+- 0.3.3: agent tool loops. `prompt_attack` fires at 0.99 instead of 0.95, so
+  agent turns that score 0.95 to 0.99 reach a model instead of the guard's
+  fixed reply. `recovery` no longer applies while a tool loop is active: a
+  failed tool result, or a correction inside the loop, stays with `agentic`.
 - 0.3.2: bug fixes only; lanes, thresholds and models are unchanged.
   `personal_data` no longer matches places, organizations, dates, titles,
   domain names or group names on their own. With Router fixes in the same

@@ -53,7 +53,7 @@ global:
         enabled: true
 ```
 
-Without task overrides, these judgments use the default Vela 2.0 deployment.
+Without task overrides, these judgments use the default vela3-fast deployment.
 The explicit Vela 1.0 Halu binding below selects the specialist instead. That
 specialist reads up to 8,192 tokens of context, question, and answer together;
 its context preparation prioritizes retaining the answer. Input limits and
