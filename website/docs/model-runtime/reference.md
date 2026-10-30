@@ -503,6 +503,19 @@ only their own tokens, and `usage.input_tokens` counts the state once and each
 question's block. Its answers are those of each question asked alone, up to
 rounding. `vllm-sr/d3-turbo` is such a package.
 
+Two more `decision_config.json` fields change how a package reads a request,
+and its identity covers both. With `prompt_layout` `header-v1`, a text-only
+request lists its valid questions in front of its state, numbered in request
+order, Choice and Score questions with their options: the list is part of the
+state block, so every question sees what else is asked. A request with images
+or videos, or with assets or Box and track questions, keeps the layout above.
+`temperature_by_questions` (`{"max_questions": [n_1, ..., n_k], "temperature":
+[t_1, ..., t_k, t_rest]}`) sets a request's temperature from its number of
+Choice, Noul and Score questions n: the `t_i` of the first `n <= n_i`, else
+`t_rest`. Box and track answers keep the package's `temperature`.
+`vllm-sr/d3-ultra` declares both: a one-question request answers at 1.046, any
+other at 1.0.
+
 ```json title="POST /v1/systemone"
 {
   "model": "d3-turbo",

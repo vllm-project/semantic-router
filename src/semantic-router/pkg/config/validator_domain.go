@@ -28,6 +28,10 @@ func validateDomainContracts(cfg *RouterConfig) error {
 }
 
 func validateDeclaredDomain(category Category) error {
+	if err := validateCategoryModelScores(category); err != nil {
+		return err
+	}
+
 	for _, value := range category.MMLUCategories {
 		if IsSupportedRoutingDomainName(value) {
 			continue
