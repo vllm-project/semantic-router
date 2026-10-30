@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -13,6 +14,128 @@ core = importlib.import_module("cli.core")
 runtime_stack = importlib.import_module("cli.runtime_stack")
 runtime_service_status = importlib.import_module("cli.runtime_service_status")
 storage_backends = importlib.import_module("cli.storage_backends")
+
+
+@pytest.mark.parametrize("port", [None, 0, 9095])
+def test_report_router_status_uses_active_management_port(
+    monkeypatch, tmp_path, capsys, port
+):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    document = {
+        "global": {
+            "services": {"management_api": {} if port is None else {"port": port}}
+        }
+    }
+    expected_port = port or 8080
+    probed = []
+    # An edited source file must not override the running container's config.
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({"global": {"services": {"management_api": {"port": 9096}}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    def fake_exec(container_name, command):
+        assert container_name == stack_layout.router_container_name
+        if command == ["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH]:
+            return (1, "", "missing")
+        if command == ["sh", "-c", 'cat "$VLLM_SR_RUNTIME_CONFIG_PATH"']:
+            return (0, yaml.safe_dump(document), "")
+        probed.append(command)
+        return (
+            0 if command[-1] == f"http://localhost:{expected_port}/health" else 7,
+            "",
+            "",
+        )
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    runtime_service_status.report_service_status("router", stack_layout)
+
+    captured = capsys.readouterr()
+    assert "Router  Running" in captured.out
+    assert "Status unknown" not in captured.out
+    assert probed == [["curl", "-f", "-s", f"http://localhost:{expected_port}/health"]]
+
+
+@pytest.mark.parametrize(
+    "config_result",
+    [
+        (1, "", "missing"),
+        (0, "[invalid", ""),
+        (0, "- item", ""),
+        OSError("unavailable"),
+    ],
+)
+def test_router_status_falls_back_when_active_config_is_unreadable(
+    monkeypatch, config_result, capsys
+):
+    probed = []
+
+    def fake_exec(_container_name, command):
+        if command == ["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH]:
+            return (1, "", "missing")
+        if command[0] == "sh":
+            if isinstance(config_result, Exception):
+                raise config_result
+            return config_result
+        probed.append(command)
+        return (0, "", "")
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    assert runtime_service_status._check_router_status("router")
+    assert probed == [["curl", "-f", "-s", "http://localhost:8080/health"]]
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+@pytest.mark.parametrize("port", [True, "9095", -1, 65536])
+def test_router_status_does_not_probe_an_invalid_management_port(monkeypatch, port):
+    document = {"global": {"services": {"management_api": {"port": port}}}}
+    commands = []
+
+    def fake_exec(_container_name, command):
+        commands.append(command)
+        if command == ["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH]:
+            return (1, "", "missing")
+        return (0, yaml.safe_dump(document), "")
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    assert runtime_service_status._check_router_status("router") is False
+    assert commands == [
+        ["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH],
+        ["sh", "-c", 'cat "$VLLM_SR_RUNTIME_CONFIG_PATH"'],
+    ]
+
+
+@pytest.mark.parametrize("port", [8080, 9095])
+def test_router_status_prefers_the_startup_port_record(monkeypatch, port):
+    commands = []
+
+    def fake_exec(_container_name, command):
+        commands.append(command)
+        if command == ["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH]:
+            return (0, f"{port}\n", "")
+        assert command == ["curl", "-f", "-s", f"http://localhost:{port}/health"]
+        return (0, "", "")
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    assert runtime_service_status._check_router_status("router")
+    assert len(commands) == 2
+
+
+@pytest.mark.parametrize(
+    "record", ["", "true", '"9095"', "0", "-1", "65536", "9095;id"]
+)
+def test_router_status_rejects_an_invalid_startup_port_record(monkeypatch, record):
+    commands = []
+
+    def fake_exec(_container_name, command):
+        commands.append(command)
+        return (0, record, "")
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    assert runtime_service_status._check_router_status("router") is False
+    assert commands == [["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH]]
 
 
 def test_check_envoy_status_uses_ready_probe_when_available(monkeypatch):
