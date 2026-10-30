@@ -18,7 +18,8 @@ unchanged.
   FLA 0.5.2), pinned kernel choices.
 - **Model:** `vllm-sr/d3-flash` at the built-in revision `521525ef`.
 - **Code:** main with the cross-request batching of #5006, the Decision 3.0
-  graphs branch, and this branch.
+  graphs of #4999 (then unmerged), and this branch. The runs predate #5316,
+  which lets waiting requests share forwards up to the budget, and #5449.
 
 ## Why 32 tokens
 
