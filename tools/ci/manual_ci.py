@@ -41,12 +41,18 @@ HTTP_SERVER_ERROR = 500
 
 
 def http_error_status(stderr: str | bytes) -> int | None:
-    """Retain only gh's bounded HTTP error suffix, never response text."""
+    """Retain only gh's bounded HTTP error suffix, never response text.
+
+    gh ends with "(HTTP 503)" after a JSON message, or prints a bare
+    "gh: HTTP 503" line when the body is not JSON or carries no message.
+    """
     tail = stderr[-ERROR_STATUS_TAIL_LIMIT:]
     if isinstance(tail, bytes):
         tail = tail.decode("ascii", errors="replace")
-    match = re.search(r"\(HTTP ([45][0-9]{2})\)\s*\Z", tail)
-    return int(match[1]) if match else None
+    match = re.search(
+        r"(?:\(HTTP ([45][0-9]{2})\)|^gh: HTTP ([45][0-9]{2}))\s*\Z", tail, re.M
+    )
+    return int(match[1] or match[2]) if match else None
 
 
 def rate_limited(status: int | None, stderr: str | bytes) -> bool:

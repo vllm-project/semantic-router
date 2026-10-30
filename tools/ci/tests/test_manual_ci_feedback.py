@@ -279,6 +279,13 @@ class ManualCIFeedbackTests(unittest.TestCase):
             ("SECRET (HTTP 4030)", None),
             ("SECRET (HTTP 999)", None),
             ("SECRET (HTTP 403)\nSECRET trailing payload", None),
+            ("gh: HTTP 503\n", 503),
+            ("gh: HTTP 404", 404),
+            ("SECRET gh: HTTP 503\n", None),
+            ("gh: HTTP 503\nSECRET trailing payload", None),
+            ("gh: SECRET (SECRET message)\n", None),
+            ("gh: SECRET first\nSECRET second\n", None),
+            ("unexpected end of JSON input\n", None),
         ):
             for raw in (False, True):
                 with self.subTest(stderr=stderr, raw=raw):
@@ -502,6 +509,8 @@ class ManualCIFeedbackTests(unittest.TestCase):
         throttled = gh("gh: SECRET API rate limit exceeded (HTTP 429)\n")
         server = gh("gh: SECRET bad gateway (HTTP 502)\n")
         missing = gh("gh: SECRET not found (HTTP 404)\n")
+        bare_server = gh("gh: HTTP 503\n")
+        bare_missing = gh("gh: HTTP 404\n")
         timeout = subprocess.TimeoutExpired("SECRET command", timeout=60)
 
         def read(client):
@@ -533,6 +542,16 @@ class ManualCIFeedbackTests(unittest.TestCase):
             ("rerun 5xx may have landed", rerun, [server], [], "(HTTP 502)."),
             ("write 5xx may have landed", write, [server], [], "(HTTP 502)."),
             ("write rate limit", write, [throttled, ok], [5], None),
+            ("bare 503 read", read, [bare_server, ok], [5], None),
+            ("bare 503 rerun", rerun, [bare_server], [], "(HTTP 503)."),
+            ("bare 503 write", write, [bare_server], [], "(HTTP 503)."),
+            (
+                "bare 404 read",
+                read,
+                [bare_missing],
+                [],
+                "(HTTP 404); check workflow permissions.",
+            ),
             ("status publish rate limit", publish, [throttled, ok], [5], None),
         ):
             with self.subTest(name=name):
