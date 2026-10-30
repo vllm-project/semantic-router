@@ -25,14 +25,13 @@ from concurrent.futures import Future
 from dataclasses import dataclass, field, replace
 from functools import partial
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any
 
 from . import assets as assetlib
 from . import dtypes, media
 from .accel.autotune import KernelChoices, freeze_autotune
 from .accel.cpu import cap_threads
-from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
+from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig, name_of
 from .errors import (
     PackageError,
     RuntimeServiceError,
@@ -315,10 +314,6 @@ class ResultCache:
                 self._values.popitem(last=False)
 
 
-def _name_of(artifact: str) -> str:
-    return Path(artifact.rstrip("/")).name or artifact
-
-
 class ServedModel:
     """One model of the process: its configuration, loaded model, scheduler and health."""
 
@@ -356,10 +351,10 @@ class ServedModel:
 
     @property
     def label(self) -> str:
-        return self.served_id or _name_of(self.config.model)
+        return self.config.name or name_of(self.config.model)
 
     def names(self) -> set[str]:
-        names = {self.config.name, self.config.model, _name_of(self.config.model)}
+        names = {self.config.name, self.config.model, name_of(self.config.model)}
         if self.model is not None:
             names |= {self.model.info.id, self.model.info.repo}
         return {name for name in names if name}
@@ -974,7 +969,7 @@ class Runtime:
         self._planning: dict[object, float] = {}
         self._planning_lock = threading.Lock()
         self.served = [ServedModel(self, model) for model in config.served_models()]
-        labels = [served.config.name for served in self.served if served.config.name]
+        labels = [served.label for served in self.served]
         if len(labels) != len(set(labels)):
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
