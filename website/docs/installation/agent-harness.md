@@ -126,7 +126,9 @@ Claude Code sends `x-claude-code-session-id` on every Messages request and
 does not send `x-session-id`. To hold its runs, set
 `identity.headers.session: x-claude-code-session-id`. Its subagents send the
 same session ID as the agent that started them, so under that setting they
-are held on the model their parent was given.
+are held on the model their parent was given. To hold each subagent on its own
+model instead, also set `identity.headers.agent: x-claude-code-agent-id`, which
+Claude Code sends on subagent requests only.
 
 ### Agents that send tool output as messages
 
