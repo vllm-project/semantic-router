@@ -129,7 +129,7 @@ config:
           # Use the canonical Vela fact-check binding to gate detection.
           fact_check:
             model_ref: fact_check_classifier
-            threshold: 0.86
+            threshold: 0.9997
             use_cpu: true
           detector:
             include_explanation: false

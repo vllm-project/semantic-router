@@ -138,6 +138,7 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         "decision1",
         "task_heads",
         "vela2",
+        "vela3",
         "multimodal_embedding",
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
@@ -146,6 +147,7 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         for name in (
             "d3",
             "d3-turbo",
+            "d3-ultra",
             "d3-flash",
             "d3-mini",
             "d3-nano",
