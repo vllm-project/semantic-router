@@ -236,9 +236,11 @@ tests passed; **PR Gate** reports the final result. Rejected requests receive ðŸ
 and a short bot reply explaining the reason and next step, including when the
 requester lacks permission. Feedback appears when the command handler starts.
 
-Branches based on main before the status publisher was introduced retain the
-strict legacy PR Gate during bootstrap. Update the branch after the publisher
-lands on main to use the pending state and bot guidance.
+A pull request whose base main commit predates the status publisher keeps the
+strict legacy PR Gate. `publisher_ready` in `tools/ci/pr_ci_status.py` checks
+the base tree for `ci-status.yml` and the publisher script; update the branch
+from main to move the PR to the pending state and bot guidance. The legacy
+Gate does not waive required evidence or authorize expensive work.
 
 Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
@@ -258,6 +260,9 @@ succeed while that rule's conditions remain unmet. Items marked
 [.mergify.yml](.mergify.yml) defines the repository's queue rules, while the
 Summary check shows the effective conditions, including inherited requirements.
 
+- **No `PR Gate` check at all:** a PR whose base predates the publisher shows
+  the legacy `CI / Gate` display instead. The queue requires
+  `check-success = PR Gate`, so update the branch from main before queueing.
 - **Waiting in the queue:** the queue processes PRs serially, so a long wait
   can be normal.
   Avoid pushing while queued: a push restarts PR Gate, which the queue requires.

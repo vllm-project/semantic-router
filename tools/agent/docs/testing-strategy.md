@@ -160,17 +160,17 @@ A standalone workflow dispatch cannot replace the PR Gate. Verified Mergify
 queue PRs automatically qualify affected changes at the queue merge revision;
 a human-created branch with the same prefix gets no exemption.
 
-The publisher is installed on main. During its introduction, branches based on
-the old entrypoint retain the strict legacy PR Gate; missing qualification
-still fails that legacy check. Update such a branch after the publisher lands
-to receive the pending state and bot guidance. Bootstrap does not waive
-required evidence or authorize expensive work.
+A pull request whose base main commit predates the publisher keeps the strict
+legacy PR Gate (`publisher_ready` in `tools/ci/pr_ci_status.py` checks the base
+tree for `ci-status.yml` and the publisher script); updating the branch from
+main moves it to the pending state and bot guidance. The legacy Gate does not
+waive required evidence or authorize expensive work.
 
-Before the command handler first lands on main, a committer can use the explicit
-bootstrap form `/ci run full <head-sha> <base-sha> <merge-sha>` (or `affected`)
-and rerun that original PR workflow. The three full SHAs, unedited comment,
-current permission, and run creation time are verified; the short command does
-not use this path.
+The command handler also accepts an explicit revision form, `/ci run full
+<head-sha> <base-sha> <merge-sha>` (or `affected`), which verifies the three
+SHAs, the unedited comment, current permission, and run creation time before
+rerunning that original PR workflow. It exists so a new controller can qualify
+its own introduction pull request; the short `/ci run` form does not use it.
 
 For an isolated investigation, dispatch **CI** (`ci.yml`) with a catalog ID such
 as `platform.models-cpu`. This produces the same evidence but does not satisfy
