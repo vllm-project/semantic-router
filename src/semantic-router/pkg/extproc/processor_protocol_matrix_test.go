@@ -743,3 +743,34 @@ func extProcStreamFixture(format llmprotocol.WireFormat) []byte {
 		panic(fmt.Sprintf("unsupported stream fixture format %q", format))
 	}
 }
+
+// Cerebras reports time_info on the final stream chunk, and a same-format
+// stream that nothing mutated is byte-replay eligible: the client receives
+// the original caller bytes, including the field the neutral decode omits.
+// Pins the pass-through side of the #5633 diagnostic.
+func TestSameFormatChatStreamForwardsTimeInfoOnTheFinalChunk(t *testing.T) {
+	includeUsage := true
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+		SemanticRequest: &llmprotocol.Request{
+			Generation: 1, Model: "public-model", Stream: true,
+			StreamOptions: llmprotocol.StreamOptions{IncludeUsage: &includeUsage},
+		},
+	}
+	body := []byte(strings.Join([]string{
+		"data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":\"stop\"}]}\n\n",
+		"data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3},\"time_info\":{\"queue_time\":0.254,\"prompt_time\":0.05,\"completion_time\":0.6,\"total_time\":0.907,\"created\":1725397005}}\n\n",
+		"data: [DONE]\n\n",
+	}, ""))
+	response := router.handleSemanticStreamingResponseBody(body, true, ctx)
+	if ctx.StreamingAborted || !ctx.StreamingComplete {
+		t.Fatalf("stream did not complete: aborted=%v complete=%v", ctx.StreamingAborted, ctx.StreamingComplete)
+	}
+	if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
+		t.Fatalf("same-format stream should preserve the original caller bytes, time_info included: %+v", mutation)
+	}
+}

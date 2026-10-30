@@ -389,7 +389,7 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		decoder.appendStreamOmission(
 			&diagnostics,
 			"stream.time_info",
-			"provider serving timing metadata has no protocol-neutral representation",
+			"provider serving timing metadata has no protocol-neutral representation; a same-format replay forwards it unchanged",
 		)
 	}
 	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
