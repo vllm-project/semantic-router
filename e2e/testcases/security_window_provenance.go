@@ -201,8 +201,9 @@ func previewSignalValues(
 	}
 	request.Header.Set("Content-Type", "application/json")
 	// The preview runs every configured signal over the long prompt. On a CI
-	// CPU with vela3-fast that took 41 to 62 seconds.
-	response, err := session.HTTPClient(3 * time.Minute).Do(request)
+	// CPU with vela3-fast that took 41 to 62 seconds, so wait as long as the
+	// API server lets a response take.
+	response, err := session.HTTPClient(2 * time.Minute).Do(request)
 	if err != nil {
 		return nil, err
 	}
