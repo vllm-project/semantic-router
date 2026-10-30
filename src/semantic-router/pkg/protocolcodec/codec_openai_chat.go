@@ -294,7 +294,9 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 			return err
 		}
 		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
-			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: message.Role, Content: message.Content})
+			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
+				Role: message.Role, Content: message.Content, Name: message.Name,
+			})
 		} else {
 			request.Messages = append(request.Messages, message)
 		}
@@ -430,6 +432,15 @@ func assembleChatMessage(
 ) (llmprotocol.Message, error) {
 	// Reasoning first, the order vLLM's own Messages and Responses output uses.
 	message := llmprotocol.Message{ID: wire.ID, Role: role}
+	name, err := decodeChatMessageName(wire.Name)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	// A tool result's name repeats the function of the call it answers, which
+	// tool_call_id already identifies.
+	if role != llmprotocol.RoleTool {
+		message.Name = name
+	}
 	reasoning := wire.Reasoning
 	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
@@ -460,10 +471,19 @@ func assembleChatMessage(
 	return message, nil
 }
 
-func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
-	if err := rejectUnsupportedRequestField("messages.name", wire.Name); err != nil {
-		return "", err
+func decodeChatMessageName(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
 	}
+	var name string
+	if err := json.Unmarshal(trimmed, &name); err != nil {
+		return "", llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_messages_name", "messages.name must be a string", nil)
+	}
+	return name, nil
+}
+
+func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
 	if wire.Audio != nil {
 		return "", llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_output_audio", "Chat output audio is unsupported", nil,
