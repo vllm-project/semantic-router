@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
 	kubeyaml "sigs.k8s.io/yaml"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestDefaultOperatorSamplesSelectTheVela2Defaults(t *testing.T) {
+func TestDefaultOperatorSamplesSelectTheDefaultModel(t *testing.T) {
 	for _, name := range []string{
 		"vllm_v1alpha1_semanticrouter.yaml",
 		"vllm.ai_v1alpha1_semanticrouter_openshift.yaml",
@@ -33,16 +34,74 @@ func TestDefaultOperatorSamplesSelectTheVela2Defaults(t *testing.T) {
 			if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" {
 				t.Fatalf("embedding artifact = %q", cfg.MmBertModelPath)
 			}
-			if cfg.PromptGuard.ModelID != routerconfig.Vela2SignalModel || cfg.PromptGuard.Threshold != .75 {
+			if cfg.PromptGuard.ModelID != routerconfig.Vela3SignalModel || cfg.PromptGuard.Threshold != .88 {
 				t.Fatalf("guard model = %+v", cfg.PromptGuard)
 			}
-			if cfg.CategoryModel.ModelID != routerconfig.Vela2SignalModel {
+			if cfg.CategoryModel.ModelID != routerconfig.Vela3SignalModel {
 				t.Fatalf("domain model = %+v", cfg.CategoryModel)
 			}
-			if cfg.PIIModel.ModelID != routerconfig.Vela2SignalModel || cfg.PIIMappingPath != "" {
+			if cfg.PIIModel.ModelID != routerconfig.Vela3SignalModel || cfg.PIIMappingPath != "" {
 				t.Fatalf("PII model = %+v", cfg.PIIModel)
 			}
 		})
+	}
+}
+
+// vela3FastMemoryLimit is the least Router memory limit that holds vela3-fast
+// while it loads; 8Gi is OOM-killed.
+var vela3FastMemoryLimit = resource.MustParse("12Gi")
+
+func TestOperatorSamplesRunTheGuardAtItsModelsOperatingPoint(t *testing.T) {
+	names, err := filepath.Glob(filepath.Join("..", "config", "samples", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guarded := 0
+	for _, path := range names {
+		name := filepath.Base(path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sample vllmv1alpha1.SemanticRouter
+		if err := kubeyaml.Unmarshal(data, &sample); err != nil {
+			t.Fatal(err)
+		}
+		if sample.Kind != "SemanticRouter" {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			canonical := operatorModelConfig(t, data)
+			raw, err := yaml.Marshal(canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := routerconfig.ParseYAMLBytes(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !cfg.PromptGuard.Enabled {
+				return
+			}
+			guarded++
+			want := routerconfig.ModuleThresholdsOf(cfg.PromptGuard.ModelID).PromptGuard
+			if cfg.PromptGuard.Threshold != want {
+				t.Fatalf("guard threshold %v on %s, want its operating point %v",
+					cfg.PromptGuard.Threshold, cfg.PromptGuard.ModelID, want)
+			}
+			if cfg.PromptGuard.ModelID != routerconfig.Vela3SignalModel {
+				return
+			}
+			// No limit leaves the Router uncapped, which also holds the model.
+			limit := sample.Spec.Resources.Limits.Memory()
+			if !limit.IsZero() && limit.Cmp(vela3FastMemoryLimit) < 0 {
+				t.Fatalf("memory limit %s cannot hold vela3-fast; want at least %s",
+					limit, &vela3FastMemoryLimit)
+			}
+		})
+	}
+	if guarded == 0 {
+		t.Fatal("no sample runs the prompt guard")
 	}
 }
 

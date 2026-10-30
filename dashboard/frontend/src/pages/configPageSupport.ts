@@ -874,6 +874,7 @@ export interface RouterLearningConfig {
       headers?: {
         session?: string
         conversation?: string
+        agent?: string
       }
     }
     tuning?: {
