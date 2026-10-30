@@ -90,19 +90,18 @@ func authoritativeZeroUsage() llmprotocol.Usage {
 }
 
 func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
-	if r == nil {
-		return nil, fmt.Errorf("protocol runtime is unavailable")
-	}
-	return protocolEngineFor(r.ProtocolCodecs)
+	return r.protocolEngineForVendor("")
 }
 
-// protocolEngineFor serves callers that hold only the registry, such as
-// detached work that must not capture the router.
-func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
+// protocolEngineFor serves callers that hold only the registry and the
+// accepted losses, such as detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []string) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
-	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+	policy := llmprotocol.DefaultPolicy()
+	policy.AllowedLossyFields = allowedLossyFields
+	return protocolcodec.NewEngine(registry, policy)
 }
 
 // protocolEngineForVendor creates an engine with the specified response vendor policy.
@@ -116,6 +115,9 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	}
 	policy := llmprotocol.DefaultPolicy()
 	policy.ResponseVendor = vendor
+	if r.Config != nil {
+		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
+	}
 	return protocolcodec.NewEngine(registry, policy)
 }
 

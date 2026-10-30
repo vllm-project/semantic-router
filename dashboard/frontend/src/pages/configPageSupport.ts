@@ -790,6 +790,7 @@ export interface RouterCoreConfig {
   skip_processing?: { enabled?: boolean }
   model_selection?: ModelSelectionConfig
   learning?: RouterLearningConfig
+  allow_lossy_translation?: string[]
 }
 
 export interface CanonicalServiceGlobalConfig {
@@ -874,6 +875,7 @@ export interface RouterLearningConfig {
       headers?: {
         session?: string
         conversation?: string
+        agent?: string
       }
     }
     tuning?: {
