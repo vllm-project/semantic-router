@@ -137,9 +137,9 @@ func ModelCatalogHandler(source ModelCatalogSource) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			writeModelCatalogError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is supported.")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			writeModelCatalogError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET and HEAD are supported.")
 			return
 		}
 

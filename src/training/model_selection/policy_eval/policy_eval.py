@@ -48,6 +48,19 @@ def read_jsonl(path):
         return [json.loads(line) for line in f if line.strip()]
 
 
+def read_scores(path):
+    """Map id to score from a JSONL file of {id, score}, rejecting a repeated id."""
+    scores = {}
+    with open(path) as f:
+        for n, line in enumerate(f, 1):
+            if line.strip():
+                r = json.loads(line)
+                if r["id"] in scores:
+                    raise ValueError(f"{path}:{n}: duplicate id {r['id']!r}")
+                scores[r["id"]] = r["score"]
+    return scores
+
+
 class Table:
     """Rows of one (cheap, strong) pair as arrays, with optional scores."""
 
@@ -417,14 +430,8 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--json", help="also write the report as JSON")
     a = ap.parse_args(argv)
-    scores = (
-        None if not a.scores else {r["id"]: r["score"] for r in read_jsonl(a.scores)}
-    )
-    boundary = (
-        None
-        if not a.boundary_scores
-        else {r["id"]: r["score"] for r in read_jsonl(a.boundary_scores)}
-    )
+    scores = read_scores(a.scores) if a.scores else None
+    boundary = read_scores(a.boundary_scores) if a.boundary_scores else None
     baselines = [m for m in a.baselines.split(",") if m]
     table = Table(
         read_jsonl(a.rows), a.cheap, a.strong, scores, boundary, a.retry, baselines

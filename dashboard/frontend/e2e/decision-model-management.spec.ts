@@ -45,7 +45,7 @@ async function mockDecisionModelManager(
           }) as Record<string, { provider: string; artifact: string; device?: string }>,
     },
   }
-  let observed = options.defaultModel ? 'Vela-2.0-0.3B' : 'Vela-2.0-4B'
+  let observed = options.defaultModel ? 'vela3-fast' : 'Vela-2.0-4B'
   let observedDeployment = 'primary'
   const config = {
     version: 'v0.3',
@@ -283,7 +283,7 @@ async function mockDecisionModelManager(
       observedDeployment = global.model_catalog.system.decision_model?.deployment ?? 'primary'
       observed =
         global.model_catalog.deployments[observedDeployment]?.artifact.split('/').at(-1) ??
-        'Vela-2.0-0.3B'
+        'vela3-fast'
       pending = false
     },
   }
@@ -317,12 +317,12 @@ test.describe('System One model management and monitoring', () => {
     )
   })
 
-  test('keeps the default 0.3B model and shows absent samples as unknown without empty configuration clutter', async ({
+  test('keeps the default vela3-fast model and shows absent samples as unknown without empty configuration clutter', async ({
     page,
   }) => {
     await mockDecisionModelManager(page, { defaultModel: true, metrics: 'empty' })
     await page.goto('/decision-model')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 0.3B/ })).toBeChecked()
+    await expect(page.getByRole('radio', { name: /Vela 3.0 fast/ })).toBeChecked()
     await expect(page.getByRole('region', { name: 'Task bindings' })).toContainText(
       'No active task bindings in this configuration.',
     )

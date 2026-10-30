@@ -26,7 +26,9 @@ Rows, one per attempt of the cheap model, as JSONL:
 independent attempts) and `cost` is dollars per attempt. Scores are
 `{"id", "score"}` per row id, where a higher score should mean the cheap
 attempt needs replacing. Boundary scores are `{"id", "score"}` per task, for a
-decision taken before any attempt.
+decision taken before any attempt. An id that appears twice in either score
+file is an error naming the file and line, so the order of lines cannot pick
+the score.
 
 ## Policies
 

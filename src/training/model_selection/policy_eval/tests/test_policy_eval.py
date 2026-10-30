@@ -21,6 +21,7 @@ from src.training.model_selection.policy_eval.policy_eval import (
     judge_auroc,
     main,
     points,
+    read_scores,
     static_mix,
     stream_gain,
 )
@@ -163,6 +164,71 @@ class AurocTest(unittest.TestCase):
         self.assertAlmostEqual(overall, 6 / 9)
         self.assertEqual(within, 0.5)
         self.assertEqual(pairs, 4)
+
+
+class ReadScoresTest(unittest.TestCase):
+    def write(self, tmp, name, *records):
+        path = Path(tmp) / name
+        path.write_text("".join(json.dumps(r) + "\n" for r in records))
+        return path
+
+    def test_repeated_id_is_rejected_with_file_line_and_id(self):
+        cases = {
+            "low first": [0.1, 0.9],
+            "high first": [0.9, 0.1],
+            "identical": [0.5, 0.5],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, (first, second) in cases.items():
+                with self.subTest(name):
+                    path = self.write(
+                        tmp,
+                        "scores.jsonl",
+                        {"id": "a", "score": first},
+                        {"id": "b", "score": 0.3},
+                        {"id": "a", "score": second},
+                    )
+                    with self.assertRaisesRegex(
+                        ValueError, f"^{path}:3: duplicate id 'a'$"
+                    ):
+                        read_scores(path)
+
+    def test_reordered_unique_file_gives_the_same_mapping(self):
+        records = [{"id": k, "score": s} for k, s in [("a", 0.1), ("b", 0.9)]]
+        with tempfile.TemporaryDirectory() as tmp:
+            forward = read_scores(self.write(tmp, "f.jsonl", *records))
+            backward = read_scores(self.write(tmp, "b.jsonl", *records[::-1]))
+        self.assertEqual(forward, {"a": 0.1, "b": 0.9})
+        self.assertEqual(backward, forward)
+
+    def test_cli_rejects_a_repeated_id_in_either_score_file(self):
+        rows = [
+            row(f"r{i}", f"t{i}", cheap=(ok, 0.1), strong=(1.0, 1.0))
+            for i, ok in enumerate([1.0, 0.0, 1.0, 0.0])
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            base = [
+                "--rows",
+                str(self.write(tmp, "rows.jsonl", *rows)),
+                "--cheap",
+                "cheap",
+                "--strong",
+                "strong",
+                "--folds",
+                "2",
+                "--bootstrap",
+                "10",
+            ]
+            for flag, prefix in (("--scores", "r"), ("--boundary-scores", "t")):
+                ids = [f"{prefix}{i}" for i in (0, 1, 2, 3, 1)]
+                path = self.write(
+                    tmp, "dup.jsonl", *({"id": k, "score": 0.5} for k in ids)
+                )
+                with self.subTest(flag), contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(
+                        ValueError, f"^{path}:5: duplicate id '{prefix}1'$"
+                    ):
+                        main(base + [flag, str(path)])
 
 
 class TerminalBenchRowsTest(unittest.TestCase):
