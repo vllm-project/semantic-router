@@ -789,6 +789,10 @@ type EngineArgs struct {
 	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
 	EnableSharedContext bool `json:"enable_shared_context"`
 
+	// MaxModelLen The most input tokens one question of a Decision model may have, as configured; null keeps the
+	// package's limit. The limit the model applies is the card's `limits.max_input_tokens`.
+	MaxModelLen *int `json:"max_model_len"`
+
 	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
 	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
 	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
