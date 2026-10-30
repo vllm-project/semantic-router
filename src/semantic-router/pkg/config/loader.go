@@ -554,7 +554,7 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		if err := rejectUnknownMapFields(
 			prefix+".identity.headers",
 			nestedStringMap(identityMap["headers"]),
-			[]string{"session", "conversation"},
+			[]string{"session", "conversation", "agent"},
 		); err != nil {
 			return err
 		}

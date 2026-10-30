@@ -9,7 +9,7 @@ claims that context does not support. Define its rules under
 
 This family is learned: it relies on the hallucination detector under
 `global.model_catalog.modules.hallucination_mitigation.hallucination_model`
-(Vela 2.0 0.3B's span head by default, or Vela Halu), which runs in the
+(vela3-fast's span-set adapter by default, or Vela Halu), which runs in the
 [model runtime](../../../model-runtime/guides/hallucination.md).
 
 ## Key Advantages
