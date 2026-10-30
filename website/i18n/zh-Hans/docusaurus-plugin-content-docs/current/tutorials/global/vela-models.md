@@ -25,7 +25,7 @@ is_mtpe: false
 
 完整模型名由 `Vela-1.0-Encoder-307M` 和任务后缀组成。Modality 从文本请求判断所需的输出模态。FactCheck 判断是否需要核查，并不验证回答的事实真伪。
 
-公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。Halu 已接入 Router 的专用幻觉检测，Omni 已接入多模态嵌入；见[检查回答依据](../../model-runtime/guides/hallucination)和[图像与音频](../../model-runtime/guides/multimodal)。完整模型家族见 [Vela 1.0 发布公告](/blog/vela-models)。
+公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。Halu 已接入 Router 的专用幻觉检测，Omni 已接入多模态嵌入；见[检查回答依据](../../model-runtime/guides/hallucination)和[图像与音频](../../model-runtime/guides/multimodal)。完整模型家族见 [Vela 1.0 发布公告](/blog/vela-models)。当前的路由模型家族见 [Vela 3.0](#vela-30)。
 
 ## 解决什么问题 {#what-problem-does-it-solve}
 
@@ -78,8 +78,8 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## Vela 3.0 {#vela-30}
 
-[Vela 3.0](https://huggingface.co/vllm-sr/vela3-fast)
-是当前的路由模型家族：六个开源模型（0.3B 到 27B），一次调用即可给出路由决策并返回你点名的文本片段。默认路由模型 **vela3-fast** 是一个 380M 的 UltraBERT 编码器，一次前向即可回答内置的 Domain、Guard、safety、fact-check、feedback 和 modality 信号，并以 span 预设处理 PII 与幻觉检测，支持最长 32K tokens 输入。
+[Vela 3.0](https://huggingface.co/collections/vllm-sr/vela-30-6ad1c430eb1718eb4754edcd)
+是当前的路由模型家族：六个开源模型（0.3B 到 27B），一次调用即可给出路由决策并返回你点名的文本片段。默认路由模型 **vela3-fast** 是一个 380M 的 UltraBERT 编码器（计入每题所用 adapter 后为 0.4B），回答内置的 Domain、Guard、Safety、FactCheck、Feedback 和 Modality 信号，并以 span 预设处理 PII 与幻觉检测；决策可读取最长 32K tokens（router 问题与 span 每个窗口 8,192）。
 
 | 模型 | 参数量 | 适用场景 |
 | --- | ---: | --- |
@@ -88,9 +88,9 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 | [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | 小型 GPU、低时延、多语言 |
 | [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | 精度与速度的平衡 |
 | [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | 高精度路由 |
-| [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | 参考基准模型 |
+| [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | 参考模型 |
 
-基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
+模型运行时目前只服务 **vela3-fast**；其余五个尺寸和 vela3-fast-vision 暂时通过各自的包运行。基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
@@ -102,7 +102,7 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## 配置 {#configuration}
 
-每个 Vela 模型都运行在[模型运行时](../../model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
+Router 提供服务的每个 Vela 模型都运行在[模型运行时](../../model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
 
 ```yaml
 routing:
