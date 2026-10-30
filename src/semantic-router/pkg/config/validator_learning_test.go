@@ -775,3 +775,21 @@ global:
 		})
 	}
 }
+
+func TestRouterLearningProtectionAgentHeaderIsOptional(t *testing.T) {
+	cfg := RouterLearningProtectionConfig{}
+	if got := cfg.HeaderName("agent"); got != "" {
+		t.Fatalf("expected no default agent header, got %q", got)
+	}
+	agent := " x-claude-code-agent-id "
+	cfg.Identity.Headers.Agent = &agent
+	if got := cfg.HeaderName("agent"); got != "x-claude-code-agent-id" {
+		t.Fatalf("expected trimmed agent header, got %q", got)
+	}
+	empty := " "
+	cfg.Identity.Headers.Agent = &empty
+	err := validateRouterLearningProtectionConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "identity.headers.agent cannot be empty") {
+		t.Fatalf("expected empty agent header to be rejected, got %v", err)
+	}
+}
