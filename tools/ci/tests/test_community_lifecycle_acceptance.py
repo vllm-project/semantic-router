@@ -142,12 +142,12 @@ class AcceptanceReconciliationTests(unittest.TestCase):
     def comment(self, actor: str, body: str = "/accept"):
         return {"body": body, "author": {"login": actor}}
 
-    def event(self, number: int = 999, body: str = "/accept"):
+    def event(self, number: int, actor: str = "triggering-user", body: str = "/accept"):
         return {
             "repository": {"full_name": self.REPO},
             "issue": {"number": number},
-            "comment": {"body": body},
-            "sender": {"login": "triggering-user"},
+            "comment": {"body": body, "user": {"login": actor}},
+            "sender": {"login": actor},
         }
 
     def test_one_event_reads_the_pending_queue_and_repairs_every_stale_issue(
@@ -176,7 +176,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
             {"maintainer": "write", "another-maintainer": "maintain"},
         )
 
-        community_lifecycle_github.accept_issue_event(client, self.event())
+        community_lifecycle_github.accept_issue_event(client, self.event(1))
 
         self.assertEqual(client.graphql_requests, 1)
         self.assertEqual(client.fetched, [1, 2])
@@ -185,7 +185,73 @@ class AcceptanceReconciliationTests(unittest.TestCase):
             client.removed,
             {1: {"needs-acceptance"}, 2: {"needs-acceptance"}},
         )
-        self.assertNotIn(999, client.fetched)
+
+    def test_commented_issue_without_the_pending_label_is_accepted_with_the_queue(
+        self,
+    ) -> None:
+        client = FakeAcceptanceApi(
+            [self.issue(30, labels=labels("wg/agentic-context")), self.issue(31)],
+            {30: [self.comment("maintainer")], 31: [self.comment("maintainer")]},
+            {"maintainer": "write"},
+        )
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            community_lifecycle_github.accept_issue_event(
+                client, self.event(30, actor="maintainer")
+            )
+
+        self.assertEqual(client.graphql_requests, 1)
+        self.assertEqual(client.fetched, [30, 31])
+        self.assertEqual(client.added, {30: {"accepted"}, 31: {"accepted"}})
+        self.assertIn("Issue #30 accepted", output.getvalue())
+
+    def test_commented_issue_without_the_pending_label_keeps_every_check(
+        self,
+    ) -> None:
+        cases = {
+            "commenter cannot manage": (
+                self.issue(40, labels=labels("wg/agentic-context")),
+                "outsider",
+                "requires repository write",
+            ),
+            "no owner": (
+                self.issue(41, labels=labels()),
+                "maintainer",
+                "requires exactly one recognized owner",
+            ),
+            "two owners": (
+                self.issue(
+                    42, labels=labels("wg/agentic-context", "owner/maintainers")
+                ),
+                "maintainer",
+                "requires exactly one recognized owner",
+            ),
+            "title without a category": (
+                self.issue(
+                    43,
+                    title="Improve context routing",
+                    labels=labels("wg/agentic-context"),
+                ),
+                "maintainer",
+                "Title must begin",
+            ),
+        }
+        for name, (issue, actor, expected) in cases.items():
+            with self.subTest(name):
+                client = FakeAcceptanceApi(
+                    [issue], {}, {"outsider": "read", "maintainer": "write"}
+                )
+                output = io.StringIO()
+
+                with contextlib.redirect_stdout(output):
+                    community_lifecycle_github.accept_issue_event(
+                        client, self.event(issue["number"], actor=actor)
+                    )
+
+                self.assertEqual(client.added, {})
+                self.assertEqual(client.removed, {})
+                self.assertIn(expected, output.getvalue())
 
     def test_queue_is_paged_until_every_pending_issue_is_read(self) -> None:
         numbers = range(1, 121)
@@ -196,7 +262,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         )
 
         with contextlib.redirect_stdout(io.StringIO()):
-            community_lifecycle_github.accept_issue_event(client, self.event())
+            community_lifecycle_github.accept_issue_event(client, self.event(1))
 
         self.assertEqual(client.graphql_requests, 3)
         self.assertEqual(client.fetched, list(numbers))
@@ -211,7 +277,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
             {"maintainer": "write"},
         )
 
-        community_lifecycle_github.accept_issue_event(client, self.event())
+        community_lifecycle_github.accept_issue_event(client, self.event(7))
 
         self.assertEqual(client.graphql_requests, 3)
         self.assertEqual(client.added, {7: {"accepted"}})
@@ -229,7 +295,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
             {"maintainer": "write"},
         )
 
-        community_lifecycle_github.accept_issue_event(client, self.event())
+        community_lifecycle_github.accept_issue_event(client, self.event(1))
 
         self.assertEqual(
             [endpoint for _, endpoint in client.requests if endpoint != "graphql"],
@@ -264,7 +330,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         output = io.StringIO()
 
         with contextlib.redirect_stdout(output):
-            community_lifecycle_github.accept_issue_event(client, self.event())
+            community_lifecycle_github.accept_issue_event(client, self.event(10))
 
         self.assertEqual(client.added, {})
         self.assertEqual(client.removed, {})
@@ -286,7 +352,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         output = io.StringIO()
 
         with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
-            community_lifecycle_github.accept_issue_event(client, self.event())
+            community_lifecycle_github.accept_issue_event(client, self.event(20))
 
         self.assertNotIn(20, client.removed)
         self.assertEqual(client.added[21], {"accepted"})
@@ -300,7 +366,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             community_lifecycle_github.accept_issue_event(
-                client, self.event(body="/accept\n")
+                client, self.event(1, body="/accept\n")
             )
 
         self.assertEqual(client.requests, [])

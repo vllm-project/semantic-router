@@ -407,10 +407,24 @@ def reconciliation_failure_message(error: BaseException) -> str:
     return str(error) or "A GitHub API request failed."
 
 
-def reconcile_issue_acceptance(client: GitHubClient, repo: str) -> None:
-    """Reconcile every pending issue that carries an exact ``/accept`` comment."""
+def reconcile_issue_acceptance(
+    client: GitHubClient,
+    repo: str,
+    *,
+    event_issue: int | None = None,
+    event_actor: str | None = None,
+) -> None:
+    """Reconcile the commented issue and every pending ``/accept`` candidate.
+
+    The commented issue is always visited, so a valid decision is not lost when
+    its ``needs-acceptance`` label is missing.
+    """
 
     candidates = acceptance_candidates(client, repo)
+    if event_issue is not None:
+        event_actors = candidates.setdefault(event_issue, set())
+        if event_actor:
+            event_actors.add(event_actor)
     permission_cache: dict[str, bool] = {}
     results = {"accepted": 0, "synchronized": 0, "skipped": 0}
     failures = 0
@@ -444,14 +458,20 @@ def reconcile_issue_acceptance(client: GitHubClient, repo: str) -> None:
 
 
 def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
-    """Reconcile repository acceptance after an exact ``/accept`` event."""
+    """Reconcile the commented issue and the pending queue after ``/accept``."""
 
-    command = (event.get("comment") or {}).get("body") or ""
+    comment = event.get("comment") or {}
+    command = comment.get("body") or ""
     if command != "/accept":
         print("::error::The acceptance command must be exactly `/accept`.")
         raise SystemExit(1)
 
-    reconcile_issue_acceptance(client, repository_name(event))
+    reconcile_issue_acceptance(
+        client,
+        repository_name(event),
+        event_issue=(event.get("issue") or {}).get("number"),
+        event_actor=(comment.get("user") or {}).get("login"),
+    )
 
 
 def linked_issues_for_pull_request(
