@@ -44,9 +44,13 @@ now supervises a separate worker for each replica of a logical deployment.
 5. **One call per request.** A runtime process can serve several models, and
    the router sends all of a request's model work for one runtime as one
    bundled call.
-6. **Universal hardware, honestly labelled.** CPU and ROCm are validated, CUDA
-   is implemented and unit-tested but marked unvalidated, and XPU and MPS are
-   plugins marked unvalidated.
+6. **Universal hardware, honestly labelled.** CPU, ROCm, and CUDA are
+   validated. CUDA measurements are under `docs/records/cuda-*.md` (H200,
+   A100, Tesla T4). Vela 2.0 0.3B at 32 tokens is a known p50 regression on
+   H200. Fused kernels without bit-exact evidence stay excluded from the
+   exact profile; that is a valid outcome of item 4.
+   `CUDAAccelerator.validated` is true. XPU and MPS are plugins marked
+   unvalidated.
 7. **One stack.** After Phase 4 the router has no native model bindings: the Go
    router is free of cgo model code, and every model runs in the runtime.
 
@@ -64,7 +68,7 @@ running packaged remote code (`trust_remote_code`).
 | Naming | Domain `src/model-runtime/`, distribution and command `vllm-srun`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. The distribution ships in the router images and is not published to PyPI. Router mode keeps working and the router manages the runtime's lifecycle. |
 | Numerics | A request's reference path is byte-identical to the released packages' runtime. Cross-request batching is the default (section 5.4); shared context and faster kernels each have a measured accuracy record and are on by default only where it shows no loss. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
-| Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
+| Hardware | ROCm (MI300 / MI325X), CPU, and CUDA validated. CUDA records are under `docs/records/cuda-*.md`. |
 
 ### 2.2 Phases 2–4
 
@@ -284,7 +288,11 @@ class EngineModel(ABC):
 ```
 
 `ForwardBatch` carries padded token IDs, the attention mask, the gathered
-positions (decision endpoints and query rows) and the shared-context prefix.
+positions (decision endpoints and query rows) and the shared-context prefix;
+with `packed`, an engine that `supports_packed` runs the rows back to back in
+one row instead (`engines/native/models/packed.py`: variable-length attention,
+the chunked gated delta rule over `cu_seqlens`, each causal convolution from a
+zero history), which only merged forwards ask for.
 `EncoderBatch` carries padded token IDs, the mask, the layer exits the readout
 needs and, for engines that run a graph, named graph inputs; `EncoderOutput`
 returns hidden states by layer or named graph outputs. Readouts stay in the
@@ -320,6 +328,17 @@ only for a family that consents to approximate kernels
 (`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
+`Accelerator.golden_reference(device)` names an optional hardware-qualified
+golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
+instruction set and native or emulated BF16 capability, for example
+`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+
+`tools/golden_answers.py --record` writes both the generic device-class baseline
+and any qualified reference. The first generic baseline is preserved within a
+revision; later hardware runs update only their qualified entries. A revision
+change clears all old references. Record the new revision on the intended
+baseline device before adding other hardware classes.
+
 ### 5.4 Engine arguments
 
 A served model batches and computes as its engine arguments say (`EngineArgs`,
@@ -327,17 +346,38 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 
 | Argument | Default | What it does |
 | --- | --- | --- |
-| `max_num_seqs` | 8192 | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise. At the default token budget it never binds (a row costs at least 8 padded tokens); 1 runs every row alone |
-| `max_num_batched_tokens` | 65,536 | Padded tokens one forward may hold: its rows times its longest row, counted so also for models that pack rows |
+| `max_num_seqs` | by device | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone |
+| `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
 | `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
-| `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0) |
+| `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0, and state-once Decision 3.0 packages, whose requests always branch from their state: there it only decides whether whole requests share forwards) |
+
+Limits left unset take the device's memory class (`scheduler/calibration.py`:
+32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
+8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU and a device that reports no
+memory, such as MPS or a plugin's accelerator, keep 65,536 / 8,192). On a
+GPU the runtime then calibrates the token budget after the golden check, from
+merged forwards of the model's calibration rows (`calibration_items`; a
+state-once package's rows each branch from a state of their own, as a burst of
+one-question requests does) at doubling budgets: the largest budget whose cost
+per token is within 2% of the cheapest timed (on a flat curve the smallest
+would follow timing noise), but never more than one forward does in 0.3 s
+(interpolated between the timed forwards) nor than 85% of the free device
+memory holds. It logs the chosen values and their source, and `engine_args`
+reports them.
 
 The batcher (`scheduler/batching.py`) plans the rows of every queued request
-together, longest first (`coalesced`): a row's padding and GEMM shapes then
-depend on the rows beside it, so an answer can move by rounding. vLLM has no
-batching window because each decode step is a point where new sequences join;
-a request here is one forward, so the window is what lets a burst share it. A
+together (`coalesced`), one lane at a time (`LoadedModel.lane`; Decision 3.0:
+text rows and rows that read media), with a token budget per lane
+(`coalesced_token_budget(lane)`). Padded forwards take rows longest first; a
+model that packs merged rows fills forwards in arrival order and counts their
+summed length. The n-th batches of the lanes share one turn (`Batch.sub`): the
+scheduler runs each as its own forward, the one expected to take least first,
+and answers its rows as soon as it ran, so a planning round adds as many turns
+as its busiest lane needs. A row's padding, neighbours and GEMM shapes depend
+on the rows beside it, so an answer can move by rounding. A request here is one
+forward, with no later step where it could join others, so the batching window
+is what lets a burst share it. A
 batch-invariant model (`LoadedModel.batch_invariant`, set at load from a test
 that every row answers the same alone or in any batch) merges the requests
 already queued without waiting and keeps forwards within 512 padded tokens
@@ -401,16 +441,22 @@ Every surface and bundle response, errors included, carries a
 for the exchange to record each call's transport.
 A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
-404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
-(the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
-Item-level failures (`max_length_exceeded`, `invalid_input`,
-`invalid_model_output`, `deadline_exceeded`, `unavailable`) are reported in
-place and never fail sibling items.
+404 `model_not_found`, 413 `request_too_large`, 415 `unsupported_media_type`,
+422 `unsupported_surface` (the model does not serve this surface), 429
+`overloaded`, 503 `not_ready`. A forward out of device memory is 413
+`request_too_large` for a request that had it alone and 429 `overloaded` for
+one that shared it (`scheduler.py`). Item-level failures
+(`max_length_exceeded`, `invalid_input`, `invalid_model_output`,
+`deadline_exceeded`, `unavailable`) are reported in place with a fixed
+`reason` and never fail sibling items, except on `POST /v1/systemone`, where
+the first one answers the request (`question_failed`).
 
 ### 6.1 `POST /v1/decisions`
 
-Phase 1's strict superset of System One, with `POST /v1/systemone` as an
-alias. Every family validates the System One fields through one reader
+Phase 1's System One questions, extended. `POST /v1/systemone` takes the same
+requests and answers a request with a failed question as a whole, as System
+One does; the reference page's System One compatibility section documents its
+bodies, assets, Box and long context. Every family validates the System One fields through one reader
 (`systemone.read_question`): text is never blank, keys are unique non-blank
 strings, and a question takes only its type's fields plus those its family
 reads itself (`over`, `head`, `threshold`, `preset`); anything else is
@@ -566,8 +612,8 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
 HTTP, whatever its models' states. All three report `api_version`, the
-contract version (`info.version`); a client refuses a runtime of another
-major version.
+contract version (`info.version`). A router and its runtime come from one
+release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 
@@ -645,7 +691,8 @@ separately, the last token of each option segment is that option's endpoint
 and the last token overall is the query position. The candidate head reads
 the endpoint and query rows in FP32. Answers follow the released runtime
 (per-level Score offsets, temperature, softmax, arg-max with first-option
-ties, P(true), expected level, normalised-entropy confidence). The native
+ties, P(true), expected level), with System One's published Choice and Score
+confidence, as every family reports it. The native
 engine implements the Qwen3 dense and Qwen3.5 hybrid backbones and Vega-27B's
 unmerged LoRA; on GPUs the backbone runs under BF16 autocast with BF16-resident
 Linear weights, FLA kernels with the released kernel choices pinned per model
@@ -835,11 +882,132 @@ changing an answer: image and video data URLs are keyed by the SHA-256 of their 
 and a hit reuses the processed patch rows; the tower's features of a
 request's images are kept by the images' digests and the number of copies
 one tower call holds, which is what a pass of that many rows runs, so later
-passes of that size reuse them. Batched, text rows of concurrent
-requests share a pass, media rows of any requests share another, each
-request's images go through the tower once, and a coalesced forward is sized
-to about 0.3 seconds of device time at the measured cost per token
-([record](records/decision3-batching.md)).
+passes of that size reuse them. Batched, text rows and media rows of
+concurrent requests are planned in lanes of their own, each sized to about 0.3
+seconds of device time at its own measured cost per token
+([record](records/decision3-batching.md)). Where the engine packs rows, the
+tower reads the images of every request of a media forward in one call with
+one variable-length attention per block (features cached apart from the exact
+path's), and a merged pass runs its rows packed when left-padding them would
+add more than 10% to its tokens ([record](records/decision3-lanes-packing.md)).
+Request images and videos are decoded in the process's media worker processes
+(`vllm_srun/media.py`, `--media-workers`).
+
+A package may hold its projections quantized, declared by a compressed-tensors
+`quantization_config` in `config.json` (`quantization.py`): FP8 weights with
+one scale per output channel and FP8 activations per token (`float-quantized`,
+FP8_DYNAMIC), or 4-bit integer weights in groups, symmetric (GPTQ) or with
+zero points (AWQ), and BF16 activations (`pack-quantized`), or NVFP4 weights
+and activations: FP4 in groups of 16 with FP8 block scales under a global
+scale, activations quantized per request (`nvfp4-pack-quantized`). Any other
+scheme, including every other FP4 variant, is refused. The targeted layers
+become `Float8Linear`, `Int4Linear` or `NVFP4Linear` on the meta backbone and
+load the stored tensors as they are (`engines/native/quantized.py`): FP8 runs
+`torch._scaled_mm` after one Triton kernel quantizes the activations per row,
+and needs FP8 matrix units; int4 unpacks its weights to BF16 with one Triton
+kernel per call (plain torch on a CPU) and multiplies in BF16, which keeps the
+memory but not the time; NVFP4 quantizes the activations with one Triton kernel
+that writes their scales in cuBLAS's layout and multiplies in
+`torch.nn.functional.scaled_mm` with 1x16 block scales, which needs FP4 tensor
+cores (a Blackwell GPU). At load, NVFP4 projections of one input (q / k / v,
+gate / up) whose input and weight global scales agree are merged into one
+layer (`merge_siblings`): one quantization and one product per group, each
+part keeping views of the merged weight so device memory stays the same, and
+its outputs reaching the fused kernels as column-slice views. Projections that
+share only the input global scale (`in_proj_qkv` / `in_proj_z`) share its
+quantization (`project`). Each column is the one its separate product gives, so
+answers do not change. With approximate kernels on compute capability 12.x,
+graph captures of up to 512 rows multiply in FlashInfer's CUTLASS FP4 GEMM
+instead, where FlashInfer is installed and can tune its tiles (it compiles a
+delay kernel for its tuner with a CUDA 12.9 or later toolkit), each weight
+shape checked against cuBLAS first (`accel/flashinfer_nvfp4.py`,
+`use_flashinfer`); the receipt's `nvfp4_product` says which runs and why. A
+quantized package is its own model: its manifest's parameter counts are the
+logical ones, placement counts its files, and its answers are compared with
+the BF16 package's in `docs/records/decision3-quantized.md`.
+
+**State-once packages.** A package may declare an `attention_mode` under
+which no state token attends to a question (`StateOnceModel`,
+`families/decision3/state_once.py`):
+
+| `attention_mode` | Full-attention layers |
+| --- | --- |
+| `prefix_bidir` | The state attends within itself, both ways; a question block attends to the state and within itself, both ways |
+| `prefix_causal` | As `prefix_bidir`, with the state causal within itself |
+| `causal` | Every token attends to itself and the tokens before it |
+
+The Gated DeltaNet layers stay causal and positions run 0..L-1 over the row,
+as the checkpoint expects. The state block is the leading tokens of the rendered prompt
+that end within the state text: the system turn, the user turn's image and
+video placeholders, `State:` and the state. Each question block holds the
+rest: the blank line after the state (with any token that merges the state's
+last characters into it), the question, its coded options and the generation
+prompt. Because the text after the state is always `\n\nQuestion:`, the split
+depends on the state alone, and the reference implementation splits its rows the same way. A
+request's state block is tokenized and encoded once, its images and videos go
+through the tower once as part of it, and every question block branches from
+it (`EngineModel.branch`, `BranchBatch`). The native engine packs the states
+and blocks of a batch in one row (`models/branch.py`): a state attends within
+itself, and a block takes one softmax over its state's keys followed by its
+own (one variable-length call for all states, one for all blocks); a Gated
+DeltaNet block starts from its state's final recurrent state, its
+convolution window seeded with the state's last inputs, and the chunked rule
+runs every state and every block over `cu_seqlens`. On gfx942 the fused
+layers run on the packed row, the gated-delta preparation on the rows laid out
+with each block after its state's last inputs. The branched forward is the
+model's reference: the golden check, shared-context batches and batches that
+merge requests all run it, and whole requests share forwards up to the
+coalesced token budget (`merges_shared_batches`). A lone text question
+shares nothing, so it runs as its row under the same mask while the dense mask
+stays small; merged batches branch, since their dense masks cost more than the
+variable-length kernels save. `run_rows` runs each
+question as its own row under the same mask (`ForwardBatch.states`); the two
+differ only by rounding ([record](records/state-once.md)). A question costs its
+block and its share of the state, so `usage.input_tokens` counts the state once
+and each question's block.
+
+**Prompt layout and temperature per request.** Two optional
+`decision_config.json` fields, both covered by the identity, change how a
+package reads a request. `prompt_layout` `header-v1` puts a text-only
+request's question list in front of `State:`: every valid question in request
+order, numbered, Choice and Score questions with their option texts
+(`prompt.header_block`). The list is part of the state block, so a state-once
+request still encodes it once and branches every question from it; requests
+with images, videos, assets or Box and track questions keep the d3 layout.
+`temperature_by_questions` gives the temperature of a request from its number
+of Choice, Noul and Score questions (the questions it renders, or, for a
+request with assets or Box and track questions, every question of those
+types). Each item carries its request's temperature, so a forward that merges
+requests divides each row by its own, one scalar division per temperature as a
+request's own forward divides; Box and track readouts keep the package
+temperature. A package without the fields answers as before
+([record](records/d3-ultra.md)).
+
+### 8.7 Vela 3.0 (`vela3`)
+
+vela3-fast (`vela3_config.json` format `vela3-encoder/1`) is one frozen
+UltraBERT-380M encoder (24 layers; two of every three attend within ±128
+positions, each layer at its own rope base) with adapter networks over it.
+
+| Network | Weights | Answers |
+| --- | --- | --- |
+| Decision backbone | `model.safetensors`: the encoder and an option readout | Choice and Noul questions, one input per question: `<bos> [Q] instructions ([O] option)* [SEP_SCHEMA] [SEG_user] state <eos>`, the whole state as one part (a string as it is, anything else as compact JSON), up to 32,768 tokens |
+| Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
+| Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
+
+Each adapter file holds LoRA factors for every projection of every layer, its
+own copies of the top layers it trained and the readout tensors it trained.
+The engine builds each one as an adapter network (`BackboneSpec.adapters`):
+the backbone's embedding, rotary tables and final norm, and every layer
+parameter the file does not hold, are the backbone's own objects, so an
+adapter adds only its own tensors. A request's inputs carry the call they
+belong to (all decisions; one router group on one adapter; one span
+question), and `run` batches each call as the released runtime does, by
+length under its token budget; calls never share a forward. The padded
+layout passes the modeling code's additive float masks, so the forwards are
+bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+The span and router layout, word units and span decoder are the Vela 2.0
+family's, which the package copies verbatim.
 
 ## 9. Scheduler and planner
 
@@ -870,13 +1038,17 @@ items are answered from the model's result cache (`--result-cache-entries`,
 keyed by content).
 
 The worker runs planned batches in order of their jobs' expected finish: the
-time a job was queued plus its tokens at the measured cost per token (a running
-average of recent forwards). Short work goes first, and a long job still runs
+time a job was queued plus its tokens at the measured cost per token of their
+lane (a running average of that lane's recent forwards). Short work goes first, and a long job still runs
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (on a
 model whose batcher coalesces, once they have waited one batching window), so a short request
-waits for the forward in flight, not for the remaining windows of a long one;
-each job is answered as soon as its own batches have run. The order of
+waits for the forward in flight, not for the remaining windows of a long one.
+It plans them together with the jobs of planned batches that have not started,
+so requests that wait for the device share forwards up to the budget instead of
+keeping the batches their arrival formed; a started batch, a job split over
+forwards once one of them ran, and reference forwards keep their plan. Each job
+is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
@@ -917,9 +1089,11 @@ CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
 available device with enough free memory. The memory estimate is the weights
 in the dtype the accelerator holds them in (FP32 as an upper bound, or BF16
-plus 10% for a family whose `gpu_weights` / `cpu_weights` name it) plus a
-2 GiB activation reserve, matched to the peaks in
-[the Decision 3.0 device memory record](records/decision3-device-memory.md);
+plus 10% for a family whose `gpu_weights` / `cpu_weights` name it and, on GPUs,
+for the BF16-stored Linear weights of a `bf16_resident` family) plus a 2 GiB
+activation reserve, matched to the peaks in
+[the Decision 3.0 device memory record](records/decision3-device-memory.md) and
+[the BF16-resident one](records/bf16-resident-device-memory.md);
 `--memory-budget` caps it per model. A refusal names, per device, what the
 model needs and how much is free; on a host with a GPU the GPU's reasons come
 first and the CPU's last. A model names the device capabilities it requires per
@@ -930,8 +1104,13 @@ load. The Qwen3.5
 decoders require `lapack` on the CPU, since their gated-delta kernel solves
 triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
 refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
-CPU image, or a GPU device). When every device the model may use lacks a
-capability, the failure is final instead of retried.
+CPU image, or a GPU device). A package with FP8 weights requires `float8` on
+every accelerator, which a GPU reports when it has FP8 matrix units (an NVIDIA
+GPU of compute capability 8.9 or later, or an MI300 or MI350 series GPU), so
+any other device refuses it before its weights load. A package with NVFP4
+weights likewise requires `nvfp4`, which a GPU of compute capability 10.x or
+12.x (Blackwell) reports. When every device the
+model may use lacks a capability, the failure is final instead of retried.
 
 ### 10.2 Readiness and health
 
@@ -939,7 +1118,11 @@ Per model: `loading` (resolve, verify, load, identity) → `warming` (golden
 answers) → `ready`, or `failed` with a reason. Readiness is gated on golden
 answers per surface: every built-in revision carries golden requests with
 reference answers per device class (1e-3 on CPU, 0.02 on GPUs; encoder
-embeddings compare by cosine). Every golden request runs through its
+embeddings compare by cosine). A recorded hardware-qualified key takes
+precedence over the device-class reference; otherwise the existing device-class
+reference is used. A selected reference that fails is never replaced by another
+candidate. The tolerance is selected by device class, not reference key.
+Every golden request runs through its
 surface the same way: the loaded model's `golden_values` and `golden_compare`
 say what to compare and how, so decisions count questions and the other
 surfaces count values. Without a reference the runtime checks
@@ -971,14 +1154,14 @@ Section 13.4.
 
 | Engine | Runs | Devices |
 | --- | --- | --- |
-| `native` | Qwen3, Qwen3.5 (GDN hybrid), ModernBERT, BERT, unmerged LoRA; Omni's SigLIP, Whisper and CLAP towers; hidden states, gathered rows, shared-context trees | Every accelerator |
+| `native` | Qwen3, Qwen3.5 (GDN hybrid), ModernBERT, BERT, unmerged LoRA; Omni's SigLIP, Whisper and CLAP towers; hidden states, gathered rows, shared-context trees, state-once branches | Every accelerator |
 | `onnxruntime` (optional: the `onnx` extra, not in the router images) | Package ONNX graphs (heads baked in) and prepared Omni bundles | CPU EP (validated); CUDA EP, ROCm / MIGraphX EPs and the OpenVINO EP when the installed build provides them (unvalidated until recorded) |
 
 | Accelerator | Status | Kernels |
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs, at `--dtype auto` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -1006,6 +1189,10 @@ graph captures anyway, §9); a captured graph keeps the configurations it was
 captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
+The choices are recorded at the published precision, so a model served at
+another `--dtype` runs without them and its kernels tune their own: a BF16
+configuration can need more shared memory than an FP32 kernel has (d3 at
+`float32` on gfx942).
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 
@@ -1018,8 +1205,8 @@ answers their panels byte for byte. The official wheel still provides torch's
 Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
 ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
 machine code is the released build's. It carries
-code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
-`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for gfx90a, gfx942, gfx950 and gfx1151 (Instinct MI200, MI300 and
+MI350, and Ryzen AI Max; `CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
 code for rather than falling back. Triton's compiled kernels and
 MIOpen's databases live in the model volume, since the charts run the router
 on a read-only root without a home directory.
@@ -1425,8 +1612,8 @@ files carry `!windows && cgo` build tags only because of these imports.
 The legacy driver calls the legacy router's diagnostics API
 (`/api/v1/diagnostics/...`), built from `main` before this change, so the
 reference is exactly what the router served. Each record states the commit,
-image, device, inputs and every disagreement. CUDA stays implemented,
-unit-tested and unvalidated.
+image, device, inputs and every disagreement. CUDA records are
+`docs/records/cuda-*.md`; the accelerator `validated` flag is true.
 
 ## 18. Performance
 
@@ -1436,7 +1623,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 
 | Where | Technique | Records |
 | --- | --- | --- |
-| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks (and, on CUDA only, of Vela 2.0's forest forward), bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `rocm-mi300x-fused.md` (each fast path on and off), `cuda-vela-forest-graphs.md`, `decision1-performance.md`, `vela2-performance.md`, `decision3-graphs.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on the CPU reference path, batch-invariant as probed at load, so concurrent requests merge without a window; dynamic cross-request batching (the default); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced copies in merged forwards only where the records show no decision changed (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
 | Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; independent deployment/replica workers with a stable CPU thread budget; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md` (historical process layout), `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
@@ -1452,7 +1639,7 @@ Later: a serving option for the graph cap (1,024 is 1–5% faster under
 Index-like traffic); kernel choices for other device classes; more
 approximate kernels with their accuracy records; an opt-in deterministic mode
 (every row the same answer in any batch); a `vllm` engine (pooling runner plus the family readouts) and a
-`llamacpp` engine; CUDA validation on CUDA hardware.
+`llamacpp` engine.
 
 Router `decision` signals ask Choice, Noul and Score questions, which every
 decision family answers, Vela 2.0 included. Set and Span answers are served

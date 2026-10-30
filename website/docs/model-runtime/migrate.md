@@ -15,10 +15,10 @@ to select the CPU image explicitly. The [release note](release-notes/built-in-mo
 lists every breaking change of that release.
 
 **Review defaults as well as field migrations.** Features without an explicit
-model override use current defaults, including Vela 2.0 0.3B for common judgment
+model override use current defaults, including vela3-fast for common judgment
 tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
 change answers even when its YAML still parses. Review
-[model and threshold choices](./choose-a-model.md#vela-20) and test representative
+[model and threshold choices](./choose-a-model.md#built-in-signals) and test representative
 requests before rollout; explicit specialist assignments remain available.
 
 You need to migrate if your configuration contains any of these:
@@ -275,6 +275,12 @@ options changed with them; a removed flag fails with the one that replaces it:
 | `vllm-srun serve --max-batch-tokens N` | `--max-num-batched-tokens N` |
 | `"options": {"profile": "exact"}` on a request | refused (`invalid_request`): a request runs with its deployment's engine arguments |
 | `profile` in `GET /v1/models` and in a response's `meta` | `engine_args`, `dtype` and `numerics` (`exact` or `approximate`) |
+
+Clients of the public System One API see two of these changes. A request that
+sets `options.profile` returns `400` (`invalid_request`) from the Router, and
+the `meta` of a `return_meta` answer reports `dtype` and `numerics` instead of
+`profile`. Drop the option, and read `numerics` where you read `profile`. See
+[System One API stability](../api/router.md#system-one-api-stability).
 
 ## Re-embed when the embedding model changes
 

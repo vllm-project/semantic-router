@@ -45,6 +45,9 @@ type SystemStatus struct {
 	Endpoints     []string             `json:"endpoints,omitempty"`
 	Version       string               `json:"version,omitempty"`
 	History       statusstore.History  `json:"history"`
+	// routerReady is whether the Router can serve requests; StatusMonitor
+	// shares it with capability discovery.
+	routerReady bool
 }
 
 // StatusHandler returns the status of vLLM-SR services, from the Router's and
@@ -57,14 +60,14 @@ func StatusHandler(routerAPIURL, envoyURL, configDir string, stack StackState, c
 // Handler serves the live snapshot together with server-observed hourly history.
 func (m *StatusMonitor) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.stack, m.credentialProvider...)
+		status := m.observe(r.Context())
 		status.History = readStatusHistory(r, m.historyStore, status.Services)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {

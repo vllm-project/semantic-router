@@ -80,11 +80,11 @@ unscanned policy.
 
 ## Hardware
 
-CPU and AMD GPUs (MI300X, MI325X) are validated. NVIDIA GPUs work but are not
-yet validated; Intel GPUs (`xpu`) and Apple GPUs (`mps`) are available and not
+CPU, AMD GPUs (MI300X, MI325X) and NVIDIA GPUs are validated. Intel GPUs
+(`xpu`), Ascend NPUs (`npu`) and Apple GPUs (`mps`) are available and not
 yet validated. Every router image runs models on the CPU. The AMD and NVIDIA
-images (`vllm-sr serve --platform rocm` or `--platform cuda`) also run them on
-the GPU.
+images (`vllm-sr serve --platform rocm` or `--platform cuda`) also run them
+on the GPU.
 
 ## Coming from an older release?
 

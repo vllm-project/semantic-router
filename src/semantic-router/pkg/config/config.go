@@ -222,6 +222,10 @@ type Listener struct {
 
 type ListenerSystemOne struct {
 	Models []string `yaml:"models"`
+	// MaxDeadlineMs bounds how long the listener waits for a model it calls
+	// directly, however long a request's options.deadline_ms asks for.
+	// Omitted, it is DefaultSystemOneMaxDeadlineMs.
+	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
 }
 
 // ListenerIdentity names the identity sources a standalone listener trusts.
@@ -262,6 +266,7 @@ type RouterOptions struct {
 	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

@@ -56,12 +56,12 @@ global:
 | `provider` | 对 runtime 服务的模型来说，永远是 `model_runtime`。 |
 | `artifact` | Hugging Face 仓库，或本地副本的绝对路径。 |
 | `revision` | 要加载的 40 位 commit。内置模型已钉好版本；其他仓库需要指定。 |
-| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`mps`，或插件添加的加速器。 |
+| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`npu:N`、`mps`，或插件添加的加速器。 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 引擎参数：worker 怎么对请求做批处理、用什么精度计算。不写就用 runtime 的默认值。见[引擎参数](./engine-args.md)。 |
 | `input` | 对任务模型：最长输入（`max_tokens`，token 数），以及超长输入怎么办（`overflow`：`reject`、`truncate` 或 `window`）。 |
 | `replicas` | 给这个模型显式指定受管 `device`，或挂接的 `endpoint`/`served_name` 放置。省略时只有一个 worker。 |
 | `endpoint` | 挂到一个你自己跑的 runtime，不新起进程。 |
-| `served_name` | 挂接的 runtime 同时服务多个模型时，本模型在那边叫什么（默认用部署名）。 |
+| `served_name` | 本模型在挂接的 runtime 上的 ID，即它的 `GET /v1/models` 列出的名字（默认用部署名）。 |
 
 然后用一个**绑定**把功能连到部署上：
 
@@ -161,8 +161,10 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Lux-9B
         endpoint: http://gpu-runtime.internal:8100
-        served_name: vllm-sr/Decision-2.0-Lux-9B
+        served_name: Decision-2.0-Lux-9B
 ```
+
+`served_name` 是 runtime 在 `GET /v1/models` 里列出的 ID。已发布的模型以去掉组织名的仓库名列出，这里是 `Decision-2.0-Lux-9B`，除非用 `--served-model-name` 另起名字。不写 `served_name` 时 router 按部署名去找。runtime 不提供的名字会让这个部署一直不可用。
 
 `endpoint` 收 `http://host:port`、`https://host:port` 或 Unix socket（`unix:///path/to/runtime.sock`）。挂接的 runtime  router 不启动、不重启、不停——它只探活，runtime 挂了就当作不可用。
 

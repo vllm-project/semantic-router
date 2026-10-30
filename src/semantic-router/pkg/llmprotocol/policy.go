@@ -14,6 +14,16 @@ const (
 	LossyAllowWithDiagnostic LossyPolicy = "allow_with_diagnostic"
 )
 
+// LossyFieldToolResultError names the Anthropic tool-result failure flag, which
+// OpenAI request formats cannot carry.
+const LossyFieldToolResultError = "tool_result.is_error"
+
+// OptInLossyFields lists the losses an operator may accept while every other
+// lossy translation keeps failing closed.
+func OptInLossyFields() []string {
+	return []string{LossyFieldToolResultError}
+}
+
 type MissingIDPolicy string
 
 const (
@@ -45,6 +55,12 @@ const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 // observed, so this vendor changes only how failures are decoded.
 const ResponseVendorSnowflake ResponseVendor = "snowflake"
 
+// ResponseVendorOpenAICompatGateway permits the usage-metering fields that
+// OpenAI-compatible aggregating gateways (one-api/new-api style relays) append
+// to otherwise canonical chat completion responses. True vLLM endpoints emit
+// canonical bodies, so declaring this vendor for them is a no-op.
+const ResponseVendorOpenAICompatGateway ResponseVendor = "openai-compat-gateway"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
@@ -59,6 +75,9 @@ type Policy struct {
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when
 	// the target wire format can carry a matched stop sequence.
 	ProviderStopSequences bool
+	// AllowedLossyFields are translated with a diagnostic even under
+	// LossyReject. Entries come from OptInLossyFields.
+	AllowedLossyFields []string
 }
 
 type Limits struct {

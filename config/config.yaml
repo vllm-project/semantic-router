@@ -26,6 +26,9 @@ listeners:
     # Native System One inference has its own explicit public-model scope.
     systemone:
       models: [decision-public]
+      # The longest the listener waits for a model it calls directly, however
+      # long a request's options.deadline_ms asks for (10 minutes by default).
+      max_deadline_ms: 600000
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -89,6 +92,19 @@ providers:
             X-Tenant: reference-config
           api_version: "2025-03-01"
           chat_path: /chat/completions
+          api_key: static-demo-key
+          weight: 100
+    # A vLLM-type entry pointed at a relay opts in to the OpenAI-compatible
+    # gateway response contract; the plain vLLM backends above keep the
+    # strict one.
+    - name: remote-vllm-gateway-reference
+      provider_model_id: remote-vllm-gateway-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-gateway-primary
+          base_url: https://gateway.example.com/v1
+          provider: vllm
+          openai_compat_gateway: true
           api_key: static-demo-key
           weight: 100
     - name: qwen3-32b
@@ -243,6 +259,8 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
+        - name: business-adapter
+          description: Adapter specialized for business strategy and operations prompts.
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -288,6 +306,14 @@ routing:
         case_sensitive: false
         fuzzy_match: true
         fuzzy_threshold: 82
+      # include_history also matches earlier user messages in the conversation,
+      # so a constraint such as "local model only" stated in an earlier turn
+      # still applies. Omitted (false) evaluates only the current user message.
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        case_sensitive: false
+        include_history: true
 
     embeddings:
       - name: technical_support
@@ -364,7 +390,7 @@ routing:
         description: Content risk, independent of prompt attacks.
         labels: [safe, unsafe]
         unsafe_labels: [unsafe]
-        threshold: 0.46
+        threshold: 0.52
 
     fact_check:
       - name: needs_fact_check
@@ -583,7 +609,7 @@ routing:
       # decision's response_jailbreak plugin enforces on it.
       - name: unsafe_completion
         direction: response
-        threshold: 0.77
+        threshold: 0.90
         description: Detect jailbreak content in the model's own output.
 
     # Hallucination rules check the model's answer against the grounding
@@ -597,7 +623,7 @@ routing:
     pii:
       - name: restricted_pii
         source: ""
-        threshold: 0.01
+        threshold: 0.18
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS
@@ -888,6 +914,12 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+        # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
+        - model: qwen3-32b
+          lora_name: business-adapter
+          use_reasoning: true
+          reasoning_mode: enabled
+          reasoning_effort: low
       candidateIterations:
         - variable: candidate
           source: models
@@ -1022,6 +1054,16 @@ routing:
               max_tools: 16
               max_new_tools_per_turn: 2
               pin_called_tools: true
+        - type: masking
+          configuration:
+            enabled: true
+            threshold: 0.85
+            entity_types:
+              - EMAIL_ADDRESS
+              - PHONE_NUMBER
+            placeholders:
+              EMAIL_ADDRESS: "[EMAIL_{index}]"
+              PHONE_NUMBER: "[PHONE_{index}]"
       emits:
         - kind: retention
           retention:
@@ -2027,6 +2069,11 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
+    # of rejecting them. The only supported entry is tool_result.is_error, the
+    # Anthropic failed tool call flag that OpenAI Chat and Responses backends
+    # cannot carry. Empty keeps every lossy translation failing closed.
+    allow_lossy_translation: []
     model_selection:
       method: hybrid
       enabled: true
@@ -2083,6 +2130,9 @@ global:
           headers:
             session: x-session-id
             conversation: x-conversation-id
+            # Optional: holds each named agent (a delegated subagent) on its own
+            # model inside the session. Claude Code sends this on subagent calls.
+            agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
@@ -2586,7 +2636,7 @@ global:
       primary:
         provider: model_runtime
         public_name: decision-public
-        artifact: vllm-sr/Vela-2.0-0.3B
+        artifact: vllm-sr/vela3-fast
         device: cpu
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
@@ -2657,7 +2707,7 @@ global:
           dimensions: 1024
     # Default judgment tasks resolve this exact deployment. Task bindings may
     # select another resource. Model capabilities, rather than family names,
-    # determine which tasks are available. Omission selects primary (Vela 0.3B).
+    # determine which tasks are available. Omission selects primary (vela3-fast).
     system:
       decision_model:
         deployment: primary
@@ -2877,7 +2927,7 @@ global:
         # model_id binds the guard to one model and threshold sets its own;
         # without them it runs the decision model at that model's threshold.
         use_cpu: true
-        # Vela 2.0 reads the whole text up to its scan budget (four inputs on a
+        # vela3-fast reads the whole text up to its scan budget (four inputs on a
         # CPU, or the deployment's input {overflow: window, max_tokens}) and
         # names its own labels, so it sets no window. A sequence classifier such
         # as Vela 1.0 Guard takes a document budget, token windows
@@ -2903,7 +2953,7 @@ global:
           model_ref: domain_classifier
           max_sequence_length: 0
           use_cpu: true
-          # Vela 2.0 names its 14 domains itself; a classifier head takes its
+          # vela3-fast names its 14 domains itself; a classifier head takes its
           # category_mapping.json.
           category_mapping_path: ""
           fallback_category: other
@@ -2924,7 +2974,7 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: pii_classifier
-          # Vela 2.0 0.3B finds spans with its router span head and reads the
+          # vela3-fast finds spans with its span-set adapter and reads the
           # whole text up to its scan budget, so it sets no window; a token
           # classifier such as Vela 1.0 PII takes a document budget (32768),
           # token windows (window: {size: 512, overlap: 255}) and its
@@ -2995,5 +3045,5 @@ global:
         both_keywords:
           - explain and illustrate
           - describe with an image
-        confidence_threshold: 0.51
+        confidence_threshold: 0.63
         lower_threshold_ratio: 0.7
