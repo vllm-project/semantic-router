@@ -11,8 +11,13 @@ UltraVBERT backbones (the raw image-hallucination/OCR backbone in
 ``model.safetensors``, the decision-trained ``backbone_h2`` and
 ``backbone_v2`` two tasks name as their ``backbone_file``) and the span,
 decision, box and OCR task adapters. The identity is the digest set of
-those seven weight files, the formula the image serving path must
-reproduce; the parameter count sums the seven files' safetensors headers.
+those seven weight files. The parameter count sums their safetensors
+headers and is provisional: the serving path's load count deduplicates the
+backbone tensors the span and box adapters overwrite, as ``vela3-fast``
+shows (1,518,582,809 loaded against 1,504,140,559 by headers). The
+``text/`` subtree is a nested text-encoder package with six more weight
+files and is not part of this pin; ``processor_config.json`` stays unpinned
+until the image serving path loads it.
 """
 
 from __future__ import annotations
