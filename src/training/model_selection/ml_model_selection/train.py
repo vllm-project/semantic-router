@@ -223,6 +223,7 @@ def run_training_pipeline(
     skip_mlp: bool = False,
     algorithm: str = "all",
     on_progress=None,
+    embedding_revision: str = None,
 ) -> List[str]:
     """
     Run the full training pipeline: load data -> embed -> create samples -> train.
@@ -234,6 +235,7 @@ def run_training_pipeline(
         data_file: Path to JSONL benchmark data (or None to download from HF).
         output_dir: Directory to write model files.
         embedding_model: Embedding model alias (default: qwen3).
+        embedding_revision: Embedding model revision to pin (default: unpinned).
         cache_dir: Cache directory for downloads and embeddings.
         quality_weight: Weight for quality in best model selection.
         batch_size: Batch size for embedding generation.
@@ -280,13 +282,13 @@ def run_training_pipeline(
     queries = get_unique_queries(records)
     print(f"  {len(queries)} unique queries")
 
-    cache_file = Path(cache_dir) / f"embeddings_{embedding_model}.npz"
     embeddings = generate_embeddings_for_queries(
         queries,
         model_name=embedding_model,
         batch_size=batch_size,
         cache_dir=cache_dir,
-        cache_file=str(cache_file),
+        embeddings_dir=cache_dir,
+        model_revision=embedding_revision,
     )
     print(f"  Embedding dim: {len(next(iter(embeddings.values())))}")
 
@@ -366,6 +368,12 @@ Examples:
         type=str,
         default="qwen3",
         help="Embedding model: qwen3, gte, mpnet, e5, bge (default: qwen3)",
+    )
+    parser.add_argument(
+        "--embedding-revision",
+        type=str,
+        default=None,
+        help="Pin the embedding model revision; an unpinned model cannot detect upstream changes",
     )
     parser.add_argument(
         "--cache-dir",
@@ -487,6 +495,7 @@ Examples:
         data_file=args.data_file,
         output_dir=args.output_dir,
         embedding_model=args.embedding_model,
+        embedding_revision=args.embedding_revision,
         cache_dir=args.cache_dir,
         quality_weight=args.quality_weight,
         batch_size=args.batch_size,
