@@ -52,7 +52,7 @@ routing:
 
 保持规则名与决策要引用的路由行为对齐。
 
-检测器默认关闭，因此这些规则只有在配置了 `modality_detector` 块时才会匹配。使用 `method: classifier` 且不设置 `classifier.model_path` 时，它运行 Vela 2.0 0.3B，其校准后的 `confidence_threshold` 为 0.51：
+检测器默认关闭，因此这些规则只有在配置了 `modality_detector` 块时才会匹配。使用 `method: classifier` 且不设置 `classifier.model_path` 时，它运行 **vela3-fast**（Vela 3.0），其校准后的 `confidence_threshold` 为 0.63：
 
 ```yaml
 global:
@@ -61,7 +61,7 @@ global:
       modality_detector:
         enabled: true
         method: classifier
-        confidence_threshold: 0.51
+        confidence_threshold: 0.63
 ```
 
 没有这个块时，Router 加载配置时会记录 `modality_detector_disabled` 警告，`vllm-sr config validate` 也会通过 Router 自身的校验打印同一警告。`method: keyword` 需要 `keywords`；`method: hybrid` 还需要 `lower_threshold_ratio`，以及分类器或关键词。
