@@ -1,6 +1,8 @@
-# Uses the canonical pinned Halu default, which the Router serves through its
-# managed model runtime on CPU. No endpoint detector or mock classification
-# response participates in this test.
+# Pins Vela 1.0 Halu, which the Router serves through its managed model runtime
+# on CPU. The canonical default detector is now vela3-fast, which holds about
+# 7 GB and does not fit this profile's 6Gi limit; the contract this profile
+# checks (pair input, 8192-token task limit) is Vela 1.0 Halu's. No endpoint
+# detector or mock classification response participates in this test.
 config:
   version: v0.3
   listeners: []
@@ -37,6 +39,8 @@ config:
       modules:
         hallucination_mitigation:
           enabled: true
+          detector:
+            model_id: models/Vela-1.0-Encoder-307M-Halu
           # The probe supplies whether fact checking is needed. It exercises
           # the actual detector without adding another classifier's verdict.
           fact_check:
