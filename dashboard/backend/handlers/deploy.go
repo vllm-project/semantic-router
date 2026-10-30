@@ -214,7 +214,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 // GET /api/router/config/versions
 func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}

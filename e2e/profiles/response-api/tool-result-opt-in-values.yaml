@@ -1,0 +1,52 @@
+# A second Router in this profile, standalone, in front of the same provider
+# simulator. It accepts the tool-result failure loss, which the profile's main
+# Router keeps rejecting for protocol-codec-*-backend-tool-lifecycle.
+configOverride:
+  version: v0.3
+  listeners:
+    - name: http-8899
+      address: 0.0.0.0
+      port: 8899
+      timeout: 300s
+  providers:
+    defaults:
+      model: mock/opt-in-chat
+    models:
+      - name: mock/opt-in-chat
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            provider: vllm
+      - name: mock/opt-in-responses
+        api_format: responses
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            provider: vllm
+  routing:
+    modelCards:
+      - name: mock/opt-in-chat
+      - name: mock/opt-in-responses
+    decisions:
+      - name: opt_in_default
+        description: Every request without a concrete model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: mock/opt-in-chat
+            use_reasoning: false
+  global:
+    router:
+      allow_lossy_translation:
+        - tool_result.is_error
+resources:
+  limits:
+    cpu: "1"
+    memory: 2Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+persistence:
+  enabled: false
