@@ -284,3 +284,45 @@ def test_native_stage_cannot_shadow_abstention(native_document):
         "name"
     ] = "abstain"
     assert validate_native_execution(UserConfig.model_validate(native_document))
+
+
+@pytest.mark.parametrize("publish", [False, True])
+@pytest.mark.parametrize(
+    "budget",
+    [
+        {"max_tokens": 512, "overflow": "truncate"},
+        {"max_tokens": 32768, "overflow": "reject"},
+    ],
+)
+def test_native_cascade_rejects_a_task_input_on_a_local_alias(
+    native_document, publish, budget
+):
+    # Stage fast calls local-kai through the decisions API. The routed
+    # entrypoint stays listed; kai may or may not.
+    models = ["vllm-sr/auto", "strong"]
+    if publish:
+        models.append("kai")
+    native_document["listeners"][0]["systemone"]["models"] = models
+    native_document["global"]["model_catalog"]["deployments"]["local-kai"][
+        "input"
+    ] = budget
+    errors = validate_native_execution(UserConfig.model_validate(native_document))
+    assert any(
+        "local-kai" in error.message and "never truncate" in error.message
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize("publish", [False, True])
+def test_native_cascade_accepts_a_scan_budget_on_a_local_alias(
+    native_document, publish
+):
+    models = ["vllm-sr/auto", "strong"]
+    if publish:
+        models.append("kai")
+    native_document["listeners"][0]["systemone"]["models"] = models
+    native_document["global"]["model_catalog"]["deployments"]["local-kai"]["input"] = {
+        "max_tokens": 32768,
+        "overflow": "window",
+    }
+    assert validate_native_execution(UserConfig.model_validate(native_document)) == []

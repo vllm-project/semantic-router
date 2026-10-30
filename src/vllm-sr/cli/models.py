@@ -1758,6 +1758,7 @@ class RouterLearningIdentityHeadersConfig(BaseModel):
 
     session: Optional[StrictStr] = None
     conversation: Optional[StrictStr] = None
+    agent: Optional[StrictStr] = None
 
 
 class RouterLearningIdentityConfig(BaseModel):

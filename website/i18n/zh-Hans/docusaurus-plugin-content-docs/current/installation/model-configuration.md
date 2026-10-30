@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置模型
 description: 选择目录支持或自定义模型，将其绑定到 provider，并从路由决策中使用它。
 translation:

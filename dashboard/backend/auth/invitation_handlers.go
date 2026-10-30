@@ -31,7 +31,7 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			items, err := svc.store.ListInvitations(r.Context())
 			if err != nil {
 				http.Error(w, "failed to list invitations", http.StatusInternalServerError)
@@ -132,7 +132,7 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 		}
 		token := parts[0]
 		switch {
-		case r.Method == http.MethodGet && len(parts) == 1:
+		case (r.Method == http.MethodGet || r.Method == http.MethodHead) && len(parts) == 1:
 			item, err := svc.InvitationInfo(r.Context(), token)
 			if err != nil {
 				writeInvitationError(w, err)

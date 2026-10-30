@@ -61,22 +61,18 @@ type Config struct {
 	Platform string
 
 	// sr-bench is a separate durable service shared by CLI and Dashboard.
-	SRBenchURL               string
-	SRBenchTokenEnv          string
-	SRBenchAvailable         bool
-	SRBenchUnavailableReason string
-	PythonPath               string
+	SRBenchURL      string
+	SRBenchTokenEnv string
+	PythonPath      string
 
 	// MCP configuration
 	MCPEnabled bool
 
 	// ML Pipeline configuration
-	MLPipelineEnabled           bool
-	MLPipelineDataDir           string
-	MLPipelineAvailable         bool
-	MLPipelineUnavailableReason string
-	MLTrainingDir               string // path to src/training/model_selection/ml_model_selection
-	MLServiceURL                string // URL of the Python ML service sidecar (empty = subprocess mode)
+	MLPipelineEnabled bool
+	MLPipelineDataDir string
+	MLTrainingDir     string // path to src/training/model_selection/ml_model_selection
+	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
 
 	// Durable workflow state (ML pipeline jobs, MCP servers)
 	WorkflowDBPath string

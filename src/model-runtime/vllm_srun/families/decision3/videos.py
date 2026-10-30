@@ -29,8 +29,9 @@ from typing import Any
 
 import torch
 
+from ...accel.cpu import on_device_thread
 from ...errors import MediaError
-from .images import _PREPROCESS, _resize
+from .images import _resize
 
 FPS = 2.0
 MIN_FRAMES = 4
@@ -470,8 +471,8 @@ def timestamps(indices: tuple[int, ...], fps: float, merge: int) -> tuple[float,
 
 
 def preprocess(video: Video, settings: VideoSettings) -> ProcessedVideo:
-    """One decoded video through the processor (on the preprocessing thread): FP32 patch rows and its grid."""
-    return _PREPROCESS.submit(_preprocess, video, settings).result()
+    """One decoded video through the processor (on the CPU device thread): FP32 patch rows and its grid."""
+    return on_device_thread(lambda: _preprocess(video, settings))
 
 
 def _preprocess(video: Video, settings: VideoSettings) -> ProcessedVideo:
