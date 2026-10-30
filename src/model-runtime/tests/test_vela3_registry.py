@@ -7,7 +7,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from vllm_srun.errors import PackageError
 from vllm_srun.families.vela3.family import Vela3Family
 from vllm_srun.families.vela3.package import (
@@ -76,7 +75,7 @@ def test_the_vision_identity_is_the_weight_digest_set() -> None:
     assert sorted(weights) == sorted(set(VISION_WEIGHTS))
 
 
-def test_the_vision_pins_match_the_published_SHA256SUMS(tmp_path) -> None:
+def test_the_vision_pins_match_the_published_sha256sums() -> None:
     """The pins re-derived from the release's own SHA256SUMS, transcribed at review time."""
     sums = """65e0c0284eb8c6e494c058d1988ad1b3d2eab60c368bb3d704e09174d1220bd5  backbone_h2.safetensors
 46e65f6e6b906a64e4ad57e2e76957522bd01e2eeb5d8467078b895410d1e0aa  backbone_v2.safetensors
