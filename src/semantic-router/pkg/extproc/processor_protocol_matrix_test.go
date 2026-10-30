@@ -770,7 +770,15 @@ func TestSameFormatChatStreamForwardsTimeInfoOnTheFinalChunk(t *testing.T) {
 	if ctx.StreamingAborted || !ctx.StreamingComplete {
 		t.Fatalf("stream did not complete: aborted=%v complete=%v", ctx.StreamingAborted, ctx.StreamingComplete)
 	}
+	// The Chat client path carries the public usage filter, so a pass-through
+	// stream still arrives as a body mutation; the contract is that its bytes
+	// are the caller's, time_info included, not that the mutation is absent.
 	if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
-		t.Fatalf("same-format stream should preserve the original caller bytes, time_info included: %+v", mutation)
+		if got := mutation.GetBody(); !bytes.Equal(got, body) {
+			t.Fatalf(
+				"same-format stream should preserve the original caller bytes, time_info included:\n got: %s\nwant: %s",
+				got, body,
+			)
+		}
 	}
 }
