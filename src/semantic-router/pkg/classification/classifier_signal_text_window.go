@@ -18,10 +18,13 @@ import (
 //     attack, an unsupported claim) must read all of the text, because a
 //     dropped part is a silent miss. Use securitySignalChunkSpans with a budget
 //     below, or a native token window defined by the model's tokenizer.
-//   - Whole text. When the configuration declares a budget above 512 tokens
-//     for the model (hasLongContextClassifier), pass the text unchanged. The
-//     declared budget then governs, and a deployment's overflow policy, reject
-//     by default, decides what happens past it.
+//   - Whole text. When the signal's model reads a whole text itself
+//     (signalReadsWholeText and piiReadsWholeText, which the runtime models
+//     of the default configuration do), or the configuration declares a
+//     budget above 512 tokens for it (hasLongContextClassifier), pass the
+//     text unchanged. The model's own input budget or the declared one then
+//     governs, and a deployment's overflow policy, reject by default, decides
+//     what happens past it.
 //
 // Never hand a long text to a model that truncates it to its own limit. That
 // answers on a prefix while reporting a verdict for the whole input, which is
@@ -40,9 +43,10 @@ import (
 //
 // semanticSignalUnitLimit is 440 estimated tokens for the three samples, which
 // leaves room for the two omission markers (39 estimated tokens) and the
-// special tokens. PII scans 128-token chunks because local token
-// classification loses entity confidence in long windows. That leaves room for
-// text about four times denser than the estimate before a forward truncates.
+// special tokens. When PII is chunked, it scans 128-token chunks because local
+// token classification loses entity confidence in long windows. That leaves
+// room for text about four times denser than the estimate before a forward
+// truncates.
 // Jailbreak scans 384-token chunks because detection gains from broader
 // context, which leaves room for about a third more.
 const (
