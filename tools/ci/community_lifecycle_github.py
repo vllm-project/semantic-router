@@ -407,27 +407,65 @@ def reconciliation_failure_message(error: BaseException) -> str:
     return str(error) or "A GitHub API request failed."
 
 
+def current_accept_decision(
+    client: GitHubClient, repo: str, event: dict[str, Any]
+) -> tuple[int, str | None] | None:
+    """Return the commented issue and author if its comment still reads ``/accept``.
+
+    The event payload is a snapshot, so the comment is read again by id: an edit
+    or a deletion before the job runs withdraws the decision.
+    """
+
+    number = (event.get("issue") or {}).get("number")
+    comment_id = (event.get("comment") or {}).get("id")
+    if number is None or comment_id is None:
+        return None
+    comment = client.request(
+        f"repos/{repo}/issues/comments/{comment_id}", ignore_not_found=True
+    )
+    if not comment or comment.get("body") != "/accept":
+        print(
+            f"::notice title=Issue #{number} not read from the event::"
+            "The `/accept` comment was edited or deleted before the job ran."
+        )
+        return None
+    return int(number), (comment.get("user") or {}).get("login")
+
+
 def reconcile_issue_acceptance(
     client: GitHubClient,
     repo: str,
     *,
-    event_issue: int | None = None,
-    event_actor: str | None = None,
+    event: dict[str, Any] | None = None,
 ) -> None:
     """Reconcile the commented issue and every pending ``/accept`` candidate.
 
-    The commented issue is always visited, so a valid decision is not lost when
-    its ``needs-acceptance`` label is missing.
+    The commented issue is added only while its comment still reads ``/accept``,
+    even when its ``needs-acceptance`` label is missing. If that comment cannot
+    be read, the issue is left alone, the queue is still processed, and the job
+    fails afterwards.
     """
 
     candidates = acceptance_candidates(client, repo)
-    if event_issue is not None:
-        event_actors = candidates.setdefault(event_issue, set())
-        if event_actor:
-            event_actors.add(event_actor)
     permission_cache: dict[str, bool] = {}
     results = {"accepted": 0, "synchronized": 0, "skipped": 0}
     failures = 0
+
+    if event is not None:
+        try:
+            decision = current_accept_decision(client, repo, event)
+        except (Exception, SystemExit) as error:
+            failures += 1
+            print(
+                "::error title=Triggering comment check failed::"
+                f"{reconciliation_failure_message(error)}"
+            )
+        else:
+            if decision:
+                event_issue, event_actor = decision
+                event_actors = candidates.setdefault(event_issue, set())
+                if event_actor:
+                    event_actors.add(event_actor)
 
     print(f"::notice::Discovered {len(candidates)} pending acceptance candidate(s).")
     for number, actors in sorted(candidates.items()):
@@ -460,18 +498,12 @@ def reconcile_issue_acceptance(
 def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
     """Reconcile the commented issue and the pending queue after ``/accept``."""
 
-    comment = event.get("comment") or {}
-    command = comment.get("body") or ""
+    command = (event.get("comment") or {}).get("body") or ""
     if command != "/accept":
         print("::error::The acceptance command must be exactly `/accept`.")
         raise SystemExit(1)
 
-    reconcile_issue_acceptance(
-        client,
-        repository_name(event),
-        event_issue=(event.get("issue") or {}).get("number"),
-        event_actor=(comment.get("user") or {}).get("login"),
-    )
+    reconcile_issue_acceptance(client, repository_name(event), event=event)
 
 
 def linked_issues_for_pull_request(

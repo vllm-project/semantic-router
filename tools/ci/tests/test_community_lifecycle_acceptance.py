@@ -38,11 +38,13 @@ class FakeAcceptanceApi:
         permissions,
         *,
         failing_requests=None,
+        current_comments=None,
     ) -> None:
         self.issues = {int(issue["number"]): issue for issue in issues}
         self.comments = comments
         self.permissions = permissions
         self.failing_requests = set(failing_requests or ())
+        self.current_comments = current_comments or {}
         self.requests: list[tuple[str, str]] = []
         self.fetched: list[int] = []
         self.added: dict[int, set[str]] = {}
@@ -105,6 +107,15 @@ class FakeAcceptanceApi:
         parts = urlparse(endpoint).path.split("/")
         if parts[3] == "collaborators":
             return {"permission": self.permissions.get(unquote(parts[4]), "read")}
+        if parts[4] == "comments":
+            comment_id = int(parts[5])
+            if comment_id in self.current_comments:
+                return self.current_comments[comment_id]
+            return {
+                "id": comment_id,
+                "body": "/accept",
+                "user": {"login": "triggering-user"},
+            }
 
         number = int(parts[4])
         tail = parts[5:]
@@ -121,6 +132,7 @@ class FakeAcceptanceApi:
 
 class AcceptanceReconciliationTests(unittest.TestCase):
     REPO = "acme/router"
+    COMMENT_ID = 7001
 
     def setUp(self) -> None:
         repository_environment = mock.patch.dict(
@@ -142,11 +154,18 @@ class AcceptanceReconciliationTests(unittest.TestCase):
     def comment(self, actor: str, body: str = "/accept"):
         return {"body": body, "author": {"login": actor}}
 
+    def rest_comment(self, actor: str, body: str = "/accept"):
+        return {"id": self.COMMENT_ID, "body": body, "user": {"login": actor}}
+
     def event(self, number: int, actor: str = "triggering-user", body: str = "/accept"):
         return {
             "repository": {"full_name": self.REPO},
             "issue": {"number": number},
-            "comment": {"body": body, "user": {"login": actor}},
+            "comment": {
+                "id": self.COMMENT_ID,
+                "body": body,
+                "user": {"login": actor},
+            },
             "sender": {"login": actor},
         }
 
@@ -193,6 +212,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
             [self.issue(30, labels=labels("wg/agentic-context")), self.issue(31)],
             {30: [self.comment("maintainer")], 31: [self.comment("maintainer")]},
             {"maintainer": "write"},
+            current_comments={self.COMMENT_ID: self.rest_comment("maintainer")},
         )
         output = io.StringIO()
 
@@ -240,7 +260,10 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         for name, (issue, actor, expected) in cases.items():
             with self.subTest(name):
                 client = FakeAcceptanceApi(
-                    [issue], {}, {"outsider": "read", "maintainer": "write"}
+                    [issue],
+                    {},
+                    {"outsider": "read", "maintainer": "write"},
+                    current_comments={self.COMMENT_ID: self.rest_comment(actor)},
                 )
                 output = io.StringIO()
 
@@ -252,6 +275,67 @@ class AcceptanceReconciliationTests(unittest.TestCase):
                 self.assertEqual(client.added, {})
                 self.assertEqual(client.removed, {})
                 self.assertIn(expected, output.getvalue())
+
+    def test_withdrawn_comment_does_not_accept_its_issue_and_the_queue_still_runs(
+        self,
+    ) -> None:
+        pending = labels("needs-acceptance", "wg/agentic-context")
+        lost = labels("wg/agentic-context")
+        cases = {
+            "deleted, label missing": (lost, None),
+            "edited, label missing": (lost, "/accept please"),
+            "deleted, label present": (pending, None),
+            "edited, label present": (pending, "/accept please"),
+        }
+        for name, (issue_labels, edited_body) in cases.items():
+            with self.subTest(name):
+                current = (
+                    None
+                    if edited_body is None
+                    else self.rest_comment("maintainer", edited_body)
+                )
+                thread = (
+                    []
+                    if edited_body is None
+                    else [self.comment("maintainer", edited_body)]
+                )
+                client = FakeAcceptanceApi(
+                    [self.issue(50, labels=issue_labels), self.issue(51)],
+                    {50: thread, 51: [self.comment("maintainer")]},
+                    {"maintainer": "write"},
+                    current_comments={self.COMMENT_ID: current},
+                )
+                output = io.StringIO()
+
+                with contextlib.redirect_stdout(output):
+                    community_lifecycle_github.accept_issue_event(
+                        client, self.event(50, actor="maintainer")
+                    )
+
+                self.assertEqual(client.fetched, [51])
+                self.assertEqual(client.added, {51: {"accepted"}})
+                self.assertIn("edited or deleted", output.getvalue())
+
+    def test_unreadable_comment_leaves_its_issue_alone_and_fails_the_job(self) -> None:
+        comment_endpoint = f"repos/{self.REPO}/issues/comments/{self.COMMENT_ID}"
+        client = FakeAcceptanceApi(
+            [self.issue(60, labels=labels("wg/agentic-context")), self.issue(61)],
+            {61: [self.comment("maintainer")]},
+            {"maintainer": "write"},
+            failing_requests={("GET", comment_endpoint)},
+        )
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
+            community_lifecycle_github.accept_issue_event(
+                client, self.event(60, actor="maintainer")
+            )
+
+        self.assertEqual(client.fetched, [61])
+        self.assertEqual(client.added, {61: {"accepted"}})
+        self.assertIn("Triggering comment check failed", output.getvalue())
+        self.assertIn("1 accepted", output.getvalue())
+        self.assertIn("1 failed", output.getvalue())
 
     def test_queue_is_paged_until_every_pending_issue_is_read(self) -> None:
         numbers = range(1, 121)
@@ -300,6 +384,7 @@ class AcceptanceReconciliationTests(unittest.TestCase):
         self.assertEqual(
             [endpoint for _, endpoint in client.requests if endpoint != "graphql"],
             [
+                f"repos/{self.REPO}/issues/comments/{self.COMMENT_ID}",
                 f"repos/{self.REPO}/issues/1",
                 f"repos/{self.REPO}/collaborators/maintainer/permission",
                 f"repos/{self.REPO}/issues/1/labels",
