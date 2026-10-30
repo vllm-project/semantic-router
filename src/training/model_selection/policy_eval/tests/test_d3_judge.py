@@ -21,11 +21,11 @@ from src.training.model_selection.policy_eval.d3_judge import (
     task_state,
     tb2_requests,
 )
+from src.training.model_selection.policy_eval.policy_eval import read_scores
 from src.training.model_selection.policy_eval.prepare_terminal_bench import (
     STRONG,
     build_rows,
 )
-from src.training.model_selection.policy_eval.policy_eval import read_scores
 from src.training.model_selection.policy_eval.twinrouterbench_eval import (
     main as twinrouterbench_main,
 )
