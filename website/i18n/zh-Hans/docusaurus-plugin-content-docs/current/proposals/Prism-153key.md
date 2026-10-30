@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: PRISM：用于模型选择的 153 键合法性层
 description: 提出资格、分类和执行检查，以判定所选模型是否有资格处理请求。
 created: 2026-03-20
