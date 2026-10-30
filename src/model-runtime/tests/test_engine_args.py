@@ -7,7 +7,13 @@ import asyncio
 import pytest
 from vllm_srun import dtypes
 from vllm_srun.accel import onednn
-from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, EngineArgs, ModelConfig, ServeConfig
+from vllm_srun.config import (
+    DEFAULT_MAX_NUM_SEQS,
+    EngineArgs,
+    ModelConfig,
+    ServeConfig,
+    load_models_file,
+)
 from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
@@ -277,3 +283,67 @@ def test_task_heads_keep_shared_context_off_and_report_exact_numerics_where_batc
             )
     finally:
         runtime.stop()
+
+
+@pytest.mark.parametrize(
+    "models",
+    [
+        (
+            ModelConfig(model="facebook/opt-125m", device="cpu"),
+            ModelConfig(model="facebook/opt-125m", device="cpu"),
+        ),
+        (
+            ModelConfig(model="org1/qwen-2.5-7b", device="cpu"),
+            ModelConfig(model="org2/qwen-2.5-7b", device="cpu"),
+        ),
+        (
+            ModelConfig(model="org/foo", device="cpu"),
+            ModelConfig(model="bar", name="foo", device="cpu"),
+        ),
+        (
+            ModelConfig(model="bar", name="foo", device="cpu"),
+            ModelConfig(model="org/foo", device="cpu"),
+        ),
+    ],
+)
+def test_runtime_rejects_duplicate_and_colliding_model_names(models):
+    with pytest.raises(ValueError, match="served model names must be unique"):
+        Runtime(ServeConfig(models=models))
+
+
+def test_runtime_accepts_distinct_explicit_names_for_same_model():
+    models = (
+        ModelConfig(model="facebook/opt-125m", name="opt-0", device="cpu"),
+        ModelConfig(model="facebook/opt-125m", name="opt-1", device="cpu"),
+    )
+    runtime = Runtime(ServeConfig(models=models))
+    assert [served.label for served in runtime.served] == ["opt-0", "opt-1"]
+    assert set(runtime.health.describe().keys()) == {"opt-0", "opt-1"}
+
+
+@pytest.mark.parametrize(
+    "content,expected_name",
+    [
+        (
+            "models:\n  - model: org1/qwen-2.5-7b\n  - model: org2/qwen-2.5-7b\n",
+            "qwen-2.5-7b",
+        ),
+        (
+            "models:\n  - model: org/foo\n  - model: bar\n    name: foo\n",
+            "foo",
+        ),
+        (
+            "models:\n  - model: bar\n    name: foo\n  - model: org/foo\n",
+            "foo",
+        ),
+    ],
+)
+def test_load_models_file_rejects_unnamed_duplicate_and_colliding_models(
+    tmp_path, content, expected_name
+):
+    path = tmp_path / "models.yaml"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match=f"duplicate model name {expected_name!r}"
+    ):
+        load_models_file(path)

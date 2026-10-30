@@ -216,6 +216,8 @@ def test_a_models_file_lists_each_model(tmp_path):
         ("models:\n  - {name: x}\n", "model"),
         ("models:\n  - {model: a, colour: red}\n", "unknown fields"),
         ("models:\n  - {model: a, name: x}\n  - {model: b, name: x}\n", "duplicate"),
+        ("models:\n  - {model: org1/foo}\n  - {model: org2/foo}\n", "duplicate"),
+        ("models:\n  - {model: org/foo}\n  - {model: bar, name: foo}\n", "duplicate"),
         (
             "models:\n  - {model: a, max_num_seqs: 0}\n",
             "max_num_seqs must be at least 1",
