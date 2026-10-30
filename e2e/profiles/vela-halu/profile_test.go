@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestProfileUsesCanonicalHaluWithoutAuxiliaryClassifiers(t *testing.T) {
+func TestProfilePinsVela1HaluWithoutAuxiliaryClassifiers(t *testing.T) {
 	data, err := os.ReadFile("values.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -31,8 +31,9 @@ func TestProfileUsesCanonicalHaluWithoutAuxiliaryClassifiers(t *testing.T) {
 	if module["enabled"] != true {
 		t.Fatal("Halu detector must be enabled")
 	}
-	if _, overridden := module["detector"]; overridden {
-		t.Fatal("profile must inherit the canonical pinned Halu detector")
+	detector := section(module, "detector")
+	if detector["model_id"] != "models/Vela-1.0-Encoder-307M-Halu" {
+		t.Fatal("profile must pin Vela 1.0 Halu; the default detector is vela3-fast, which needs more memory than this profile's limit")
 	}
 	factCheck := section(module, "fact_check")
 	if factCheck["model_ref"] != "" || factCheck["model_id"] != "" {
