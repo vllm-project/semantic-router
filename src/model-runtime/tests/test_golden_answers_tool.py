@@ -138,8 +138,6 @@ def test_explicit_model_still_attempts_the_unserved_package(monkeypatch):
         return {"model": model}
 
     monkeypatch.setattr(recorder, "answers", fake_answers)
-    monkeypatch.setattr(
-        sys, "argv", ["golden_answers.py", "vllm-sr/vela3-fast-vision"]
-    )
+    monkeypatch.setattr(sys, "argv", ["golden_answers.py", "vllm-sr/vela3-fast-vision"])
     recorder.main()
     assert seen == [("vllm-sr/vela3-fast-vision", None)]
