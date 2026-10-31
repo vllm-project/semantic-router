@@ -249,6 +249,7 @@ func appendMaterializedEndpoint(
 		Name: endpointName, Address: address, Port: port, Weight: endpointURL.weight,
 		Type: provider.Definition.ID, APIKey: credential, ProviderProfileName: endpointName,
 		Model: modelAlias, Protocol: scheme,
+		Telemetry: endpointTelemetryFromInstance(provider.Instance.Telemetry),
 	})
 	params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
 	return nil

@@ -174,10 +174,9 @@ export default function ConfigPageConnectModelAdvanced({
                 onChange={(event) => update('loadBalancing', event.target.value)}
               >
                 <option value="">Platform default</option>
-                <option value="ROUND_ROBIN">Round robin</option>
-                <option value="LEAST_REQUEST">Least requests</option>
-                <option value="RING_HASH">Ring hash</option>
-                <option value="MAGLEV">Maglev</option>
+                <option value="round_robin">Round robin</option>
+                <option value="least_request">Least requests</option>
+                <option value="load_aware">Least engine load</option>
               </select>
             </Field>
             <Field label="Retry conditions" hint="Optional" fullWidth>
