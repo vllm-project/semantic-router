@@ -192,11 +192,12 @@ func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
 		{name: "math that needs reasoning takes the STEM lane", signals: answers(3.4, "domain:math_science", "difficulty"), expectedDecision: "domain_stem_research"},
 		{name: "law and health keep their lane", signals: answers(1.9, "domain:legal_health", "difficulty"), expectedDecision: "domain_legal_health"},
 		{name: "hard software work takes the complex code lane", signals: answers(2.9, "domain:code", "difficulty"), expectedDecision: "domain_code_complex"},
-		{name: "medium software work takes the code lane", signals: answers(1.7, "domain:code", "difficulty"), expectedDecision: "domain_code"},
+		{name: "code work at the complex threshold escalates", signals: answers(1.75, "domain:code", "difficulty"), expectedDecision: "domain_code_complex"},
+		{name: "medium software work takes the code lane", signals: answers(1.4, "domain:code", "difficulty"), expectedDecision: "domain_code"},
 		{name: "a simple software question stays local", signals: answers(0.6, "domain:code"), expectedDecision: "simple_general"},
 		{name: "business keeps its lane", signals: answers(1.9, "domain:business", "difficulty"), expectedDecision: "domain_business"},
 		{name: "deep general reasoning escalates", signals: answers(3.0, "domain:general", "difficulty"), expectedDecision: "complex_general"},
-		{name: "a general comparison takes the medium lane", signals: answers(1.8, "domain:general", "difficulty"), expectedDecision: "medium_general"},
+		{name: "a general comparison takes the medium lane", signals: answers(1.6, "domain:general", "difficulty"), expectedDecision: "medium_general"},
 		{name: "no answer falls to the local lane", signals: &SignalMatches{}, expectedDecision: "simple_general"},
 	}
 	for _, tt := range tests {
