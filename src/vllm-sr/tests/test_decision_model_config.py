@@ -258,6 +258,19 @@ def test_selector_candidates_must_be_model_refs():
     )
 
 
+def test_selector_candidate_count_applies_once_models_are_assigned():
+    def model_free(document):
+        decision = document["routing"]["decisions"][0]
+        del decision["modelRefs"]
+        del decision["algorithm"]["decision"]["candidates"]
+
+    def one_model(document):
+        document["routing"]["decisions"][0]["modelRefs"] = [{"model": "small"}]
+
+    assert _errors(_config(model_free)) == []
+    assert any("modelRefs to choose from" in e for e in _errors(_config(one_model)))
+
+
 def test_selector_without_deployment_asks_the_decision_model():
     def omit(document):
         del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
