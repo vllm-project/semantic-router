@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:623534162e01ea988586e943d49e8a2112bc1c0d8458509879a3a97f4c53113e
+  sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
 protocols:
 - id: vllm-sr/systemone@1
   display_name: System One
@@ -9645,7 +9645,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:623534162e01ea988586e943d49e8a2112bc1c0d8458509879a3a97f4c53113e
+    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9712,7 +9712,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:623534162e01ea988586e943d49e8a2112bc1c0d8458509879a3a97f4c53113e
+    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9782,7 +9782,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:623534162e01ea988586e943d49e8a2112bc1c0d8458509879a3a97f4c53113e
+    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9867,7 +9867,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:623534162e01ea988586e943d49e8a2112bc1c0d8458509879a3a97f4c53113e
+    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -9920,7 +9920,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:623534162e01ea988586e943d49e8a2112bc1c0d8458509879a3a97f4c53113e
+    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro

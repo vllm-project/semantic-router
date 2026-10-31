@@ -943,6 +943,65 @@ decisions:
       - has_tools
       - tool_required
     notes: A forced tool call (tool_choice naming a function) is tool work, whatever the text asks.
+  - id: balance_agentic__correction_inside_tool_loop
+    messages:
+    - role: user
+      content: Fix the premium discount in pricing.py and run the tests.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_1
+        type: function
+        function:
+          name: run_command
+          arguments: '{"command": "python3 -m unittest -v"}'
+    - role: tool
+      tool_call_id: call_1
+      content: "FAILED (failures=1)\nAssertionError: 10.0 != 90.0"
+    - role: assistant
+      content: I changed the rate to 0.9 for premium customers; the tests should pass now.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_2
+        type: function
+        function:
+          name: run_command
+          arguments: '{"command": "python3 -m unittest -v"}'
+    - role: tool
+      tool_call_id: call_2
+      content: "FAILED (failures=1)\nAssertionError: 10.0 != 90.0"
+    - role: user
+      content: That's wrong, the test still fails. Your fix didn't work, check it again.
+    tools:
+    - type: function
+      function:
+        name: run_command
+        description: Run a shell command in the workspace
+        parameters:
+          type: object
+          properties:
+            command:
+              type: string
+          required:
+          - command
+    tags:
+    - language:en
+    - multi-turn
+    - shape:messages
+    - shape:tools
+    - negative
+    - collision
+    expected_signals:
+      conversation:
+      - tool_loop
+      - has_prior_answer
+      decision:
+      - correction
+      user_feedback:
+      - wrong_answer
+    notes: A correction typed while a tool loop is active stays with agentic, although every other recovery condition
+      holds; recovery applies outside tool loops.
   - id: balance_long__tool_loop__tool_result_after_long_record
     display_prompt: Check every item in this long inventory record with the lookup tool, then report the unavailable
       ones.

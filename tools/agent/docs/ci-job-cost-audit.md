@@ -236,7 +236,7 @@ and process deadlines. This can take longer to finish than two concurrent jobs.
 | `standalone-0` | Standalone `multi-objective` | 129 |
 | `standalone-1` | Standalone `balance`, `knowledge` | 91 |
 | `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 103 |
-| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 21–32 (365 total) |
+| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 21–32 (366 total) |
 
 All eight recipes remain. Weights count authored probe variants, not measured
 seconds. The heavy built-in recipe remains alone: its historical median job

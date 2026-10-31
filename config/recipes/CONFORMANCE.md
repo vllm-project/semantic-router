@@ -209,7 +209,7 @@ recipe to its catalog entrypoint and supplies explicit Preview-only backend
 fixtures, including capabilities, context limits, pricing, and synthetic
 benchmark records for model selection. It preserves every authored decision,
 signal, projection, algorithm, plugin, and probe. The current MoM bundle runs
-all five entrypoints and all 365 authored probes; counts are checked against the
+all five entrypoints and all 366 authored probes; counts are checked against the
 discovered inventory rather than used to select a smaller sample. These fixtures
 do not measure backend LLM quality or call external providers.
 

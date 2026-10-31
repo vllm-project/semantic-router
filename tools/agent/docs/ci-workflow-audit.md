@@ -147,7 +147,7 @@ sibling evidence. This shares setup, not a live cluster across profiles.
 
 Recipe grouping uses three balanced standalone shards and 16 built-in
 `mom-v1` probe shards. Current standalone variant weights are 129, 91, and 103;
-the built-in recipe has 365 probes, split by estimated read cost. Inventory and result aggregation remain separate jobs.
+the built-in recipe has 366 probes, split by estimated read cost. Inventory and result aggregation remain separate jobs.
 The report adapter reconstructs the same source-aware matrix and rejects a
 missing image receipt or missing required probe. None of these reductions
 means runner-minutes should fall in the same proportion as worker count.
