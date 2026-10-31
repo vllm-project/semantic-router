@@ -44,9 +44,13 @@ now supervises a separate worker for each replica of a logical deployment.
 5. **One call per request.** A runtime process can serve several models, and
    the router sends all of a request's model work for one runtime as one
    bundled call.
-6. **Universal hardware, honestly labelled.** CPU and ROCm are validated, CUDA
-   is implemented and unit-tested but marked unvalidated, and XPU and MPS are
-   plugins marked unvalidated.
+6. **Universal hardware, honestly labelled.** CPU, ROCm, and CUDA are
+   validated. CUDA measurements are under `docs/records/cuda-*.md` (H200,
+   A100, Tesla T4). Vela 2.0 0.3B at 32 tokens is a known p50 regression on
+   H200. Fused kernels without bit-exact evidence stay excluded from the
+   exact profile; that is a valid outcome of item 4.
+   `CUDAAccelerator.validated` is true. XPU and MPS are plugins marked
+   unvalidated.
 7. **One stack.** After Phase 4 the router has no native model bindings: the Go
    router is free of cgo model code, and every model runs in the runtime.
 
@@ -64,7 +68,7 @@ running packaged remote code (`trust_remote_code`).
 | Naming | Domain `src/model-runtime/`, distribution and command `vllm-srun`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. The distribution ships in the router images and is not published to PyPI. Router mode keeps working and the router manages the runtime's lifecycle. |
 | Numerics | A request's reference path is byte-identical to the released packages' runtime. Cross-request batching is the default (section 5.4); shared context and faster kernels each have a measured accuracy record and are on by default only where it shows no loss. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
-| Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
+| Hardware | ROCm (MI300 / MI325X), CPU, and CUDA validated. CUDA records are under `docs/records/cuda-*.md`. |
 
 ### 2.2 Phases 2–4
 
@@ -144,7 +148,7 @@ src/model-runtime/
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       artifacts.py          # file inventories and hash verification for packages without a manifest
       builtin.py            # the first-party models: the tables the installed families name
-      tables/               # the built-in families' tables: decision3.py, decision2.py, decision1.py, vela1.py, vela2.py, omni.py
+      tables/               # the built-in families' tables: decision3.py, decision2.py, decision1.py, vela1.py, vela2.py, vela3.py, omni.py
       golden_answers*.json  # golden references per family, per device class
       kernel_choices.json   # pinned autotuned kernel choices (Qwen3.5 decoders)
       policy.py             # licence and access policy, token handling
@@ -153,13 +157,15 @@ src/model-runtime/
     devices.py              # `vllm-srun devices`: the host's devices and the one auto takes
     supervision/            # readiness (golden answers), metrics
     families/               # package formats, rendering and answer assembly only
+      decision3/            # Decision 3.0 (d3): state-once prompts, images, videos, Box and track
       decision2/            # Decision 2.0 (Phase 1)
       decision1/            # Decision 1.0: vela-encoder and qwen3.5-decision runtimes
       task_heads/           # HF encoder task models (Vela 1.0 and compatible ModernBERT models)
       vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (0.8B, 4B, 9B); Set and Span
+      vela3/                # Vela 3.0 vela3-fast: one UltraBERT backbone and its adapter networks
       multimodal_embedding/ # Vela 1.0 Omni: the published package, readouts, processors; ONNX bundles
     engines/
-      native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, bert.py, siglip.py,
+      native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, ultrabert.py, bert.py, siglip.py,
                             #   whisper.py, clap.py, lora.py, tree.py
       onnxruntime/          # ONNX Runtime sessions, execution providers, graph outputs
     accel/                  # cpu, cuda, rocm, xpu, mps; kernels.py
@@ -654,6 +660,7 @@ Before any model code runs, the family verifies the package:
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
 | `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
+| `vela3` | `vllm-sr/vela3-fast` | `7cbefd4b` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in
@@ -962,6 +969,49 @@ differ only by rounding ([record](records/state-once.md)). A question costs its
 block and its share of the state, so `usage.input_tokens` counts the state once
 and each question's block.
 
+**Prompt layout and temperature per request.** Two optional
+`decision_config.json` fields, both covered by the identity, change how a
+package reads a request. `prompt_layout` `header-v1` puts a text-only
+request's question list in front of `State:`: every valid question in request
+order, numbered, Choice and Score questions with their option texts
+(`prompt.header_block`). The list is part of the state block, so a state-once
+request still encodes it once and branches every question from it; requests
+with images, videos, assets or Box and track questions keep the d3 layout.
+`temperature_by_questions` gives the temperature of a request from its number
+of Choice, Noul and Score questions (the questions it renders, or, for a
+request with assets or Box and track questions, every question of those
+types). Each item carries its request's temperature, so a forward that merges
+requests divides each row by its own, one scalar division per temperature as a
+request's own forward divides; Box and track readouts keep the package
+temperature. A package without the fields answers as before
+([record](records/d3-ultra.md)).
+
+### 8.7 Vela 3.0 (`vela3`)
+
+vela3-fast (`vela3_config.json` format `vela3-encoder/1`) is one frozen
+UltraBERT-380M encoder (24 layers; two of every three attend within ±128
+positions, each layer at its own rope base) with adapter networks over it.
+
+| Network | Weights | Answers |
+| --- | --- | --- |
+| Decision backbone | `model.safetensors`: the encoder and an option readout | Choice and Noul questions, one input per question: `<bos> [Q] instructions ([O] option)* [SEP_SCHEMA] [SEG_user] state <eos>`, the whole state as one part (a string as it is, anything else as compact JSON), up to 32,768 tokens |
+| Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
+| Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
+
+Each adapter file holds LoRA factors for every projection of every layer, its
+own copies of the top layers it trained and the readout tensors it trained.
+The engine builds each one as an adapter network (`BackboneSpec.adapters`):
+the backbone's embedding, rotary tables and final norm, and every layer
+parameter the file does not hold, are the backbone's own objects, so an
+adapter adds only its own tensors. A request's inputs carry the call they
+belong to (all decisions; one router group on one adapter; one span
+question), and `run` batches each call as the released runtime does, by
+length under its token budget; calls never share a forward. The padded
+layout passes the modeling code's additive float masks, so the forwards are
+bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+The span and router layout, word units and span decoder are the Vela 2.0
+family's, which the package copies verbatim.
+
 ## 9. Scheduler and planner
 
 ```text
@@ -1114,7 +1164,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs, at `--dtype auto` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -1511,6 +1561,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | candle Qwen3 multi-LoRA, candle Qwen3Guard, DeBERTa `auto` | nothing wired | **Retire** |
 | Decision 1.0 (seven packages) | not served by the router today (proposal #4086) | **Add** via `decision1` |
 | Vela 2.0 0.3B, 0.8B, 4B, 9B | new | **Add** via `vela2` |
+| Vela 3.0 vela3-fast `7cbefd4b` | the built-in signals and the decision model, by default | **Add** via `vela3` |
 
 ### 16.4 Algorithms that leave the bindings
 
@@ -1565,8 +1616,8 @@ files carry `!windows && cgo` build tags only because of these imports.
 The legacy driver calls the legacy router's diagnostics API
 (`/api/v1/diagnostics/...`), built from `main` before this change, so the
 reference is exactly what the router served. Each record states the commit,
-image, device, inputs and every disagreement. CUDA stays implemented,
-unit-tested and unvalidated.
+image, device, inputs and every disagreement. CUDA records are
+`docs/records/cuda-*.md`; the accelerator `validated` flag is true.
 
 ## 18. Performance
 
@@ -1592,7 +1643,7 @@ Later: a serving option for the graph cap (1,024 is 1–5% faster under
 Index-like traffic); kernel choices for other device classes; more
 approximate kernels with their accuracy records; an opt-in deterministic mode
 (every row the same answer in any batch); a `vllm` engine (pooling runner plus the family readouts) and a
-`llamacpp` engine; CUDA validation on CUDA hardware.
+`llamacpp` engine.
 
 Router `decision` signals ask Choice, Noul and Score questions, which every
 decision family answers, Vela 2.0 included. Set and Span answers are served

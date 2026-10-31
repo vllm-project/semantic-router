@@ -131,17 +131,17 @@ neighbouring labels.
 - Reachable OpenAI-compatible endpoints for the configured aliases.
 - The decision model for the four questions. The recipe declares it as the
   `primary` deployment of Vela 2.0 0.8B, which
-  `global.model_catalog.system.decision_model` names. The deployment sets no
-  device, so the model runtime uses a GPU when the router has one and the CPU
-  otherwise.
+  `global.model_catalog.system.decision_model` names. Keep that binding: an
+  unset decision model follows the router default, vela3-fast, on which these
+  thresholds were not calibrated.
   In the CPU conformance run, with the router limited to 4 CPUs and 4
   requests in flight, the median request took 28 s and the 95th
   percentile 59 s.
   Serve it on a GPU for live traffic. With no device set, the runtime uses a
-  GPU when the router has one; set `device: rocm` or `device: cuda` on the
-  `primary` deployment to require one. For a smaller model, change its
-  `artifact` (for example to `vllm-sr/Vela-2.0-0.3B`) or point
-  `global.model_catalog.system.decision_model.deployment` at another
+  GPU when the router has one and the CPU otherwise; set `device: rocm` or
+  `device: cuda` on the `primary` deployment to require one. For a smaller
+  model, change its `artifact` (for example to `vllm-sr/Vela-2.0-0.3B`) or
+  point `global.model_catalog.system.decision_model.deployment` at another
   deployment, and rerun the probes, because the thresholds were calibrated on
   the 0.8B.
 - A response-cache store when cache behavior is desired.
