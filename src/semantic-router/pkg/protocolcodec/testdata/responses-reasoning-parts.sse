@@ -1,0 +1,54 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_1","object":"response","created_at":100,"model":"provider-model","status":"in_progress","output":[],"usage":null},"sequence_number":0}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"rs_1","type":"reasoning","status":"in_progress","summary":[],"content":[]},"sequence_number":1}
+
+event: response.reasoning_summary_part.added
+data: {"output_index":0,"item_id":"rs_1","summary_index":0,"type":"response.reasoning_summary_part.added","part":{"type":"summary_text","text":""},"sequence_number":2}
+
+event: response.reasoning_summary_text.delta
+data: {"output_index":0,"item_id":"rs_1","summary_index":0,"type":"response.reasoning_summary_text.delta","delta":"summary","sequence_number":3}
+
+event: response.reasoning_summary_text.done
+data: {"output_index":0,"item_id":"rs_1","summary_index":0,"type":"response.reasoning_summary_text.done","text":"summary","sequence_number":4}
+
+event: response.reasoning_summary_part.done
+data: {"output_index":0,"item_id":"rs_1","summary_index":0,"type":"response.reasoning_summary_part.done","part":{"type":"summary_text","text":"summary"},"sequence_number":5}
+
+event: response.content_part.added
+data: {"output_index":0,"item_id":"rs_1","content_index":0,"type":"response.content_part.added","part":{"type":"reasoning_text","text":""},"sequence_number":6}
+
+event: response.reasoning_text.delta
+data: {"output_index":0,"item_id":"rs_1","content_index":0,"type":"response.reasoning_text.delta","delta":"think","sequence_number":7}
+
+event: response.reasoning_text.done
+data: {"output_index":0,"item_id":"rs_1","content_index":0,"type":"response.reasoning_text.done","text":"think","sequence_number":8}
+
+event: response.content_part.done
+data: {"output_index":0,"item_id":"rs_1","content_index":0,"type":"response.content_part.done","part":{"type":"reasoning_text","text":"think"},"sequence_number":9}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"rs_1","type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"summary"}],"content":[{"type":"reasoning_text","text":"think"}]},"sequence_number":10}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"item":{"id":"msg_1","type":"message","role":"assistant","status":"in_progress","content":[]},"sequence_number":11}
+
+event: response.content_part.added
+data: {"output_index":1,"item_id":"msg_1","content_index":0,"type":"response.content_part.added","part":{"type":"output_text","text":"","annotations":[]},"sequence_number":12}
+
+event: response.output_text.delta
+data: {"output_index":1,"item_id":"msg_1","content_index":0,"type":"response.output_text.delta","delta":"done","sequence_number":13}
+
+event: response.output_text.done
+data: {"output_index":1,"item_id":"msg_1","content_index":0,"type":"response.output_text.done","text":"done","sequence_number":14}
+
+event: response.content_part.done
+data: {"output_index":1,"item_id":"msg_1","content_index":0,"type":"response.content_part.done","part":{"type":"output_text","text":"done","annotations":[]},"sequence_number":15}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":1,"item":{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]},"sequence_number":16}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_1","object":"response","created_at":100,"model":"provider-model","status":"completed","output":[{"id":"rs_1","type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"summary"}],"content":[{"type":"reasoning_text","text":"think"}]},{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]}],"usage":{"input_tokens":2,"input_tokens_details":{"cached_tokens":0},"output_tokens":3,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":5}},"sequence_number":17}
+
