@@ -1,0 +1,16 @@
+{
+  "operation": "stream",
+  "cases": [
+    {
+      "name": "cerebras_time_info",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "llama3.1-8b",
+        "chunks": [
+          "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"llama3.1-8b\",\"choices\":[{\"index\":0,\"finish_reason\":null,\"delta\":{\"role\":\"assistant\",\"content\":\"answer\"}}]}\n\n",
+          "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"llama3.1-8b\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{}}],\"time_info\":{\"queue_time\":0.05,\"prompt_time\":0.21,\"completion_time\":0.44,\"total_time\":0.7,\"created\":1760000000}}\n\ndata: [DONE]\n\n"
+        ]
+      }
+    }
+  ]
+}

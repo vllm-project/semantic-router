@@ -1,0 +1,73 @@
+{
+  "cases": [
+    {
+      "name": "cerebras_time_info",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "chatcmpl_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "content": "answer"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "chatcmpl_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {},
+                    "finish_reason": "stop",
+                    "index": 0
+                  }
+                ],
+                "id": "chatcmpl_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": "[DONE]",
+              "event": ""
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "stream.time_info",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

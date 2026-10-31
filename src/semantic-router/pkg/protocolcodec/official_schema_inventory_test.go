@@ -151,7 +151,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
 				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
-				"provider", "remote_host", "remote_port", "usage_breakdown", "x_groq",
+				"provider", "remote_host", "remote_port", "time_info", "usage_breakdown", "x_groq",
 			),
 		},
 		{

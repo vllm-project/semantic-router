@@ -81,6 +81,10 @@ type chatChunkWire struct {
 	// Mistral reports a stream transport marker alongside chunks.
 	// It is transport metadata, not response content.
 	P *string `json:"p,omitempty"`
+	// Cerebras reports its request timings in a top-level time_info object on
+	// every chunk. It has no neutral slot, so it is dropped with a diagnostic
+	// instead of failing the strict decode.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -401,6 +405,13 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			&diagnostics,
 			"stream.moderation",
 			"moderation metadata has no protocol-neutral representation",
+		)
+	}
+	if len(chunk.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.TimeInfo), []byte("null")) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.time_info",
+			"provider request timings have no protocol-neutral representation",
 		)
 	}
 	if chunk.Usage != nil {
