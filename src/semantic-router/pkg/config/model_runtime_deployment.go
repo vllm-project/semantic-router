@@ -321,7 +321,7 @@ func validateModelRuntimeEndpoint(endpoint string) error {
 
 // HasEngineArgs reports whether the deployment sets any engine argument.
 func (d ModelDeployment) HasEngineArgs() bool {
-	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil
+	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil || d.MaxModelLen != nil
 }
 
 func (d ModelDeployment) validateEngineArgs() error {
@@ -336,6 +336,12 @@ func (d ModelDeployment) validateEngineArgs() error {
 	}
 	if d.Dtype != "" && !modelRuntimeDtypes[d.Dtype] {
 		return fmt.Errorf("dtype must be one of auto, float32, bfloat16 or float16")
+	}
+	if d.MaxModelLen != nil && *d.MaxModelLen < 1 {
+		return fmt.Errorf("max_model_len must be at least 1")
+	}
+	if d.MaxModelLen != nil && (d.Endpoint != "" || len(d.Replicas) > 0) {
+		return fmt.Errorf("max_model_len applies only to a managed worker, not to an attached endpoint or replicas")
 	}
 	return nil
 }

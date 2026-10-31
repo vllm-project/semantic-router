@@ -4711,6 +4711,9 @@
         "enable_shared_context": {
           "type": "boolean"
         },
+        "max_model_len": {
+          "type": "integer"
+        },
         "endpoint": {
           "type": "string"
         },
