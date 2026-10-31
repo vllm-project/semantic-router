@@ -6,6 +6,11 @@ dependencies. Use this README when developing the chart. For an end-user
 comparison of deployment methods, see
 [Deployment options](../../website/docs/installation/deployment-options.md).
 
+The chart in [`semantic-router-operator/`](semantic-router-operator/)
+deploys the Semantic Router operator (the controller manager for
+`SemanticRouter` custom resources) as an alternative to the make-based
+install in [`deploy/operator`](../operator/); see its own README.
+
 ## Choose an install path
 
 The CLI is the shortest path when you already have a canonical Router config:
