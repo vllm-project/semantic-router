@@ -3,10 +3,58 @@
 from cli.consts import DEFAULT_METRICS_PORT, DEFAULT_ROUTER_PORT
 from cli.models import UserConfig
 from cli.parser import parse_user_config
+from cli.runtime_management_config import ROUTER_MANAGEMENT_PORT_PATH
 from cli.runtime_stack import RuntimeStackLayout
 
 _MAX_PORT = 65_535
 _ROUTER_SERVICE_PORTS = frozenset({DEFAULT_ROUTER_PORT, DEFAULT_METRICS_PORT})
+
+# This command is stored in the container, so its process-local port record is
+# refreshed on restart and recipe replacement, including with older images.
+_ROUTER_MANAGEMENT_STARTUP_SCRIPT = """
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "/app")
+import yaml
+from cli.runtime_management_config import _configured_management_port
+
+record = Path(sys.argv[2])
+temporary = None
+try:
+    record.unlink(missing_ok=True)
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        document = yaml.safe_load(handle) or {}
+    if not isinstance(document, dict):
+        raise ValueError("configuration must be a mapping")
+    port = _configured_management_port(document)
+    with tempfile.NamedTemporaryFile(mode="w", dir=record.parent, delete=False) as handle:
+        temporary = Path(handle.name)
+        handle.write(str(port) + "\\n")
+    os.replace(temporary, record)
+except (OSError, ValueError, yaml.YAMLError):
+    if temporary is not None:
+        temporary.unlink(missing_ok=True)
+    sys.exit("Unable to record the Router management port")
+os.execv(sys.argv[3], sys.argv[3:])
+""".strip()
+
+
+def router_management_entrypoint(
+    service_entrypoint: str, service_args: list[str]
+) -> tuple[str, list[str]]:
+    """Record the startup port outside the mutable, mounted runtime config."""
+
+    return "python3", [
+        "-c",
+        _ROUTER_MANAGEMENT_STARTUP_SCRIPT,
+        service_args[0],
+        ROUTER_MANAGEMENT_PORT_PATH,
+        service_entrypoint,
+        *service_args,
+    ]
 
 
 def _managed_management_listener(

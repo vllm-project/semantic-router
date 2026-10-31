@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli import local_stack_config
+from cli import local_stack_config, runtime_service_status
 from cli.commands import config_management
 from cli.local_stack_config import LocalStack, save_pending_restart
 from cli.main import main
@@ -230,6 +230,45 @@ def test_save_pending_restart_writes_what_serve_applies(stack, tmp_path):
     # serve of the same file finds the document it would write, so it applies it.
     receipt = runtime_config.with_suffix(".provenance.json")
     assert receipt.is_file()
+
+
+@pytest.mark.parametrize("running_port", [8080, 9095])
+def test_status_keeps_the_bound_port_after_a_restart_required_save(
+    monkeypatch, stack, tmp_path, running_port
+):
+    source = tmp_path / "config.yaml"
+    candidate = yaml.safe_load(source.read_text(encoding="utf-8"))
+    candidate["global"] = {
+        "services": {"management_api": {"bind_address": "0.0.0.0", "port": 9096}}
+    }
+    source.write_text(yaml.safe_dump(candidate), encoding="utf-8")
+    record = tmp_path / "management-port"
+    record.write_text(f"{running_port}\n", encoding="utf-8")
+    probed = []
+
+    def fake_exec(_container_name, command):
+        if command == ["cat", runtime_service_status.ROUTER_MANAGEMENT_PORT_PATH]:
+            return (0, record.read_text(encoding="utf-8"), "")
+        if command == ["sh", "-c", 'cat "$VLLM_SR_RUNTIME_CONFIG_PATH"']:
+            return (0, stack.runtime_config().read_text(encoding="utf-8"), "")
+        probed.append(command[-1])
+        return (
+            (0 if command[-1] == f"http://localhost:{running_port}/health" else 7),
+            "",
+            "",
+        )
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    runtime_config = save_pending_restart(stack, source, "listeners changed")
+    saved = yaml.safe_load(runtime_config.read_text(encoding="utf-8"))
+    assert saved["global"]["services"]["management_api"]["port"] == 9096
+    pending = read_pending_activation(runtime_config)
+    assert pending is not None and pending.reason == "restart"
+
+    assert runtime_service_status._check_router_status(
+        stack.layout.router_container_name
+    )
+    assert probed == [f"http://localhost:{running_port}/health"]
 
 
 def test_local_stack_reads_the_router_container(monkeypatch, tmp_path):
