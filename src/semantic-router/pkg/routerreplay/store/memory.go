@@ -215,6 +215,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		return fmt.Errorf("record with ID %s not found", id)
 	}
 
+	rec.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
 	rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 	rec.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
