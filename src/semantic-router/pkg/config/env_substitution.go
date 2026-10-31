@@ -28,9 +28,106 @@ var processEnv = envExpander{lookup: os.LookupEnv}
 func noEnv(string) (string, bool) { return "", false }
 
 func (e envExpander) expandMap(raw map[string]interface{}) {
+	_, externalAPIRequest := raw["request_format"]
 	for key, value := range raw {
+		if template, ok := value.(string); ok && key == "request_template" {
+			if externalAPIRequest {
+				// The external API template compiler owns environment
+				// references: it resolves them into JSON string values at
+				// render time. Splicing raw values into the template text here
+				// would let a value containing a quote rewrite the request's
+				// JSON structure.
+				continue
+			}
+			raw[key] = e.expandRequestTemplateString(template)
+			continue
+		}
 		raw[key] = e.expandValue(value)
 	}
+}
+
+// expandRequestTemplateString expands unambiguous config-owned environment
+// references without claiming ownership of a request template's runtime
+// language. Braced tokens are expanded only when the entire variable name uses
+// uppercase environment syntax and the optional operator is exactly :- or -.
+// Every other complete or malformed braced token remains literal for the typed
+// configuration owner to interpret or reject. Unbraced references and $$ keep
+// their generic expansion behavior.
+func (e envExpander) expandRequestTemplateString(value string) string {
+	if value == "" || !strings.Contains(value, "$") {
+		return value
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(value))
+
+	for i := 0; i < len(value); {
+		if value[i] != '$' {
+			builder.WriteByte(value[i])
+			i++
+			continue
+		}
+		if i+1 < len(value) && value[i+1] == '$' {
+			builder.WriteByte('$')
+			i += 2
+			continue
+		}
+		if i+1 >= len(value) || value[i+1] != '{' {
+			expanded, next := e.expandUnbracedToken(value, i)
+			builder.WriteString(expanded)
+			i = next
+			continue
+		}
+
+		closeOffset := strings.IndexByte(value[i+2:], '}')
+		if closeOffset < 0 {
+			builder.WriteString(value[i:])
+			break
+		}
+		closeIndex := i + 2 + closeOffset
+		inner := value[i+2 : closeIndex]
+		if isUppercaseRequestTemplateEnvReference(inner) {
+			builder.WriteString(e.resolveBraced(inner))
+		} else {
+			builder.WriteString(value[i : closeIndex+1])
+		}
+		i = closeIndex + 1
+	}
+
+	return builder.String()
+}
+
+func isUppercaseRequestTemplateEnvReference(inner string) bool {
+	if inner == "" || !isUppercaseEnvironmentNameStart(inner[0]) {
+		return false
+	}
+
+	nameEnd := 1
+	for nameEnd < len(inner) && isUppercaseEnvironmentNameByte(inner[nameEnd]) {
+		nameEnd++
+	}
+	if nameEnd == len(inner) {
+		return true
+	}
+
+	defaultValue := ""
+	switch {
+	case strings.HasPrefix(inner[nameEnd:], ":-"):
+		defaultValue = inner[nameEnd+2:]
+	case inner[nameEnd] == '-':
+		defaultValue = inner[nameEnd+1:]
+	default:
+		return false
+	}
+	return !strings.ContainsAny(defaultValue, "{}")
+}
+
+func isUppercaseEnvironmentNameStart(ch byte) bool {
+	return ch >= 'A' && ch <= 'Z' || ch == '_'
+}
+
+func isUppercaseEnvironmentNameByte(ch byte) bool {
+	return isUppercaseEnvironmentNameStart(ch) || ch >= '0' && ch <= '9'
 }
 
 func (e envExpander) expandValue(value interface{}) interface{} {

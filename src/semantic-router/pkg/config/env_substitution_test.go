@@ -277,3 +277,79 @@ func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
 		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v, want the invalid default", err)
 	}
 }
+
+func TestExpandEnvSubstitutionsPreservesExternalRAGRequestPlaceholders(t *testing.T) {
+	t.Setenv("user_content", "wrong-query")
+	t.Setenv("user_contents", "wrong-query-typo")
+	t.Setenv("Mixed_Name", "wrong-mixed-case-value")
+	t.Setenv("top_k", "999")
+	t.Setenv("threshold", "1.0")
+	t.Setenv("RAG_TENANT", "production")
+
+	raw := map[string]interface{}{
+		"backend_config": map[interface{}]interface{}{
+			"request_template": `{"query":"${user_content}","typo":"${user_contents}","mixed":"${Mixed_Name}","top_k":${top_k},"threshold":${threshold},"tenant":"${RAG_TENANT}"}`,
+		},
+	}
+	processEnv.expandMap(raw)
+
+	backend := nestedStringMap(raw["backend_config"])
+	want := `{"query":"${user_content}","typo":"${user_contents}","mixed":"${Mixed_Name}","top_k":${top_k},"threshold":${threshold},"tenant":"production"}`
+	if got := backend["request_template"]; got != want {
+		t.Fatalf("request_template = %q, want %q", got, want)
+	}
+}
+
+func TestExpandRequestTemplateEnvStringClassifiesWholeReference(t *testing.T) {
+	t.Setenv("RAG_TENANT", "production")
+	t.Setenv("RAG_TENANT_2", "secondary")
+	t.Setenv("RAG_TENANTmixed", "must-not-expand")
+	t.Setenv("Mixed_Name", "must-not-expand")
+	t.Setenv("user_contents", "must-not-expand")
+	t.Setenv("REQUEST_TEMPLATE_EMPTY", "")
+	t.Setenv("REQUEST_TEMPLATE_UNSET", "temporary")
+	if err := os.Unsetenv("REQUEST_TEMPLATE_UNSET"); err != nil {
+		t.Fatalf("Unsetenv() error = %v", err)
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "uppercase", input: `${RAG_TENANT}`, want: "production"},
+		{name: "uppercase digits", input: `${RAG_TENANT_2}`, want: "secondary"},
+		{name: "colon default set", input: `${RAG_TENANT:-fallback}`, want: "production"},
+		{name: "colon default empty", input: `${REQUEST_TEMPLATE_EMPTY:-fallback}`, want: "fallback"},
+		{name: "dash default empty", input: `${REQUEST_TEMPLATE_EMPTY-fallback}`, want: ""},
+		{name: "dash default unset", input: `${REQUEST_TEMPLATE_UNSET-fallback}`, want: "fallback"},
+		{name: "lowercase", input: `${user_contents}`, want: `${user_contents}`},
+		{name: "mixed case start", input: `${Mixed_Name}`, want: `${Mixed_Name}`},
+		{name: "mixed case suffix", input: `${RAG_TENANTmixed}`, want: `${RAG_TENANTmixed}`},
+		{name: "invalid colon operator", input: `${RAG_TENANT:default}`, want: `${RAG_TENANT:default}`},
+		{name: "unsupported plus operator", input: `${RAG_TENANT:+alternate}`, want: `${RAG_TENANT:+alternate}`},
+		{name: "empty name", input: `${}`, want: `${}`},
+		{name: "missing closing brace", input: `${RAG_TENANT`, want: `${RAG_TENANT`},
+		{name: "nested default", input: `${REQUEST_TEMPLATE_UNSET:-${nested}}`, want: `${REQUEST_TEMPLATE_UNSET:-${nested}}`},
+		{name: "escaped uppercase", input: `$${RAG_TENANT}`, want: `${RAG_TENANT}`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := processEnv.expandRequestTemplateString(test.input); got != test.want {
+				t.Fatalf("expandRequestTemplateString(%q) = %q, want %q", test.input, got, test.want)
+			}
+		})
+	}
+}
+
+func TestExpandEnvSubstitutionsKeepsEscapedRAGPlaceholderCompatibility(t *testing.T) {
+	raw := map[string]interface{}{
+		"request_template": `$${user_content}`,
+	}
+	processEnv.expandMap(raw)
+
+	if got := raw["request_template"]; got != `${user_content}` {
+		t.Fatalf("escaped request_template = %q, want literal placeholder", got)
+	}
+}
