@@ -22,6 +22,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadow"
 )
 
 // Shadow dispatch sends a bounded, sampled copy of the approved request to a
@@ -56,6 +57,7 @@ const (
 	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
+	shadowReasonBudgetConcurrency    = "budget_concurrency_limit"
 
 	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
 	// finish before cancelling them. Their primary requests already completed
@@ -96,7 +98,11 @@ type shadowRequestEncoder func(request llmprotocol.Request, target *shadowTarget
 // shadowJob is everything a shadow call needs, captured synchronously so the
 // worker never reads mutable request state after the primary path moves on.
 type shadowJob struct {
-	cfg             config.ShadowDispatchPluginConfig
+	cfg config.ShadowDispatchPluginConfig
+	// model is the shadow target model for this specific arm (multi-arm
+	// issue #3376); cfg carries the shared decision-level settings.
+	model           string
+	budget          *shadow.ShadowBudget
 	routerConfig    *config.RouterConfig
 	engine          *protocolcodec.Engine
 	encode          shadowRequestEncoder
@@ -392,9 +398,6 @@ func (d *shadowDispatcher) submit(
 	case ctx.LooperRequest:
 		dropEarly(shadowReasonInternalRequest)
 		return
-	case cfg.Model == "" || cfg.Model == dispatch.logicalModel:
-		dropEarly(shadowReasonSameAsPrimary)
-		return
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
 		return
@@ -404,27 +407,67 @@ func (d *shadowDispatcher) submit(
 		metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultSampledOut, shadowReasonSampledOut)
 		return
 	}
-
-	now := d.now()
-	job := &shadowJob{
-		cfg:             cfg,
-		routerConfig:    deps.routerConfig,
-		engine:          deps.engine,
-		encode:          deps.encode,
-		request:         *ctx.SemanticRequest,
-		extraHeaders:    deps.extraHeaders,
-		decision:        decision,
-		recipe:          recipe,
-		primaryRequest:  ctx.RequestID,
-		primaryModel:    dispatch.logicalModel,
-		primaryBackend:  dispatch.backendName,
-		shadowRequestID: shadowRequestID(ctx.RequestID),
-		replayID:        ctx.RouterReplayID,
-		recorder:        ctx.RouterReplayRecorder,
-		enqueuedAt:      now,
-		deadline:        now.Add(time.Duration(cfg.TimeoutSeconds) * time.Second),
+	// Resolve the arm set only after the request is known to be eligible, so
+	// the same-as-primary drop keeps meaning "every arm is the primary model"
+	// instead of also covering looper and sampled-out requests.
+	targets := make([]string, 0, 1+len(cfg.Arms))
+	for _, model := range cfg.ShadowModels() {
+		if model == dispatch.logicalModel {
+			metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultDropped, shadowReasonSameAsPrimary)
+			continue
+		}
+		targets = append(targets, model)
 	}
-	d.enqueue(config.RoutingDecisionKey(config.RecipeName(recipe), decision), job)
+	if len(targets) == 0 {
+		// Each skipped arm already recorded the same-as-primary drop above;
+		// recording the empty outcome again would double-count one decision.
+		return
+	}
+
+	// The per-request aggregate budget gates each arm at admission; arms it
+	// rejects are dropped with a deterministic reason, never run. Each arm
+	// reserves the per-arm response bound so the byte cap also binds early.
+	budget := shadow.NewShadowBudget(cfg.Budget, int64(cfg.MaxResponseBytes))
+	now := d.now()
+	for _, model := range targets {
+		if reason, ok := budget.TryEnter(); !ok {
+			d.budgetDrop(decision, model, reason)
+			continue
+		}
+		job := &shadowJob{
+			cfg:             cfg,
+			model:           model,
+			budget:          budget,
+			routerConfig:    deps.routerConfig,
+			engine:          deps.engine,
+			encode:          deps.encode,
+			request:         *ctx.SemanticRequest,
+			extraHeaders:    deps.extraHeaders,
+			decision:        decision,
+			recipe:          recipe,
+			primaryRequest:  ctx.RequestID,
+			primaryModel:    dispatch.logicalModel,
+			primaryBackend:  dispatch.backendName,
+			shadowRequestID: shadowRequestID(ctx.RequestID),
+			replayID:        ctx.RouterReplayID,
+			recorder:        ctx.RouterReplayRecorder,
+			enqueuedAt:      now,
+			deadline:        now.Add(time.Duration(cfg.TimeoutSeconds) * time.Second),
+		}
+		d.enqueue(config.RoutingDecisionKey(config.RecipeName(recipe), decision), job)
+	}
+}
+
+// budgetDrop reports an arm rejected by the aggregate budget at admission. It
+// is bounded by the per-request budget, so like other drops it is observable
+// through metrics and logs rather than a replay-store write.
+func (d *shadowDispatcher) budgetDrop(decision, model, reason string) {
+	metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultDropped, reason)
+	logging.ComponentDebugEvent("extproc", "shadow_dispatch_budget_dropped", map[string]interface{}{
+		"decision":     decision,
+		"shadow_model": model,
+		"reason":       reason,
+	})
 }
 
 func shadowRequestID(primary string) string {
@@ -504,15 +547,20 @@ func (d *shadowDispatcher) waitForSlot(lane *shadowLane, job *shadowJob) (bool, 
 
 // recordDrop reports a shadow call that never reached a worker. Drops are
 // bounded-resource signals, so they are observable through metrics and logs
-// rather than replay-store writes that could amplify an overload.
+// rather than replay-store writes that could amplify an overload. The arm
+// already holds its admission reservation, so dropping it releases that
+// reservation again.
 func (d *shadowDispatcher) recordDrop(job *shadowJob, reason string) {
+	if job.budget != nil {
+		job.budget.Refund()
+	}
 	metrics.RecordShadowDispatch(job.decision, metrics.ShadowDispatchResultDropped, reason)
 	logging.ComponentWarnEvent("extproc", "shadow_dispatch_dropped", map[string]interface{}{
 		"request_id":        job.primaryRequest,
 		"shadow_request_id": job.shadowRequestID,
 		"decision":          job.decision,
 		"recipe":            job.recipe,
-		"shadow_model":      job.cfg.Model,
+		"shadow_model":      job.model,
 		"reason":            reason,
 	})
 }
@@ -521,9 +569,20 @@ func (d *shadowDispatcher) execute(job *shadowJob) {
 	metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Inc()
 	defer metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Dec()
 
+	if job.budget != nil {
+		if !job.budget.EnterInflight() {
+			d.budgetDrop(job.decision, job.model, shadowReasonBudgetConcurrency)
+			job.budget.Refund()
+			return
+		}
+		defer job.budget.LeaveInflight()
+	}
 	callCtx, cancel := context.WithDeadline(d.ctx, job.deadline)
 	defer cancel()
 	result := d.call(callCtx, job)
+	if job.budget != nil {
+		job.budget.Reconcile(result.verdict == shadowVerdictCompleted, result.inputTokens, result.outputTokens, int64(result.responseBytes))
+	}
 	d.record(job, result)
 }
 
@@ -547,7 +606,7 @@ func (d *shadowDispatcher) record(job *shadowJob, result shadowResult) {
 			Timestamp: result.finishedAt.UTC(),
 			Source:    shadowDispatchOutcomeSource,
 			Target:    shadowDispatchOutcomeTarget,
-			TargetRef: job.cfg.Model,
+			TargetRef: job.model,
 			Verdict:   result.verdict,
 			Reason:    result.reason,
 			Metadata:  metadata,
@@ -587,7 +646,7 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 		"shadow_request_id":  job.shadowRequestID,
 		"primary_model":      job.primaryModel,
 		"primary_backend":    job.primaryBackend,
-		"shadow_model":       job.cfg.Model,
+		"shadow_model":       job.model,
 		"shadow_backend":     result.shadowBackend,
 		"decision":           job.decision,
 		"recipe":             job.recipe,
