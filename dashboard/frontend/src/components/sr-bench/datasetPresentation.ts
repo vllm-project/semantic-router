@@ -1,6 +1,7 @@
 import type { Dataset, DatasetPreparation } from './types'
 
 const benchmarkTitles: Record<string, string> = {
+  'agent-session-replay': 'Agent Session Replay',
   'arc-agi': 'ARC-AGI',
   'arc-agi-2': 'ARC-AGI 2',
   'gpqa-diamond': 'GPQA Diamond',

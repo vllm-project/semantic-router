@@ -13,7 +13,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.metadata import entry_points
-from typing import Protocol
+from typing import Any, Protocol
 
 from .grading import MCQ_GRADER_VERSION, basic_grade
 
@@ -23,7 +23,16 @@ class AdapterContext(Protocol):
     config: dict
     limits: dict
 
-    def call(self, messages, role="subject", target=None, extra_body=None) -> dict: ...
+    def call(
+        self,
+        messages: list[dict[str, Any]],
+        role: str = "subject",
+        target: dict[str, Any] | str | None = None,
+        extra_body: dict[str, Any] | None = None,
+        fixture_phase: str | None = None,
+        *,
+        require_complete_output: bool = True,
+    ) -> dict[str, Any]: ...
     def cancelled(self) -> bool: ...
 
 
@@ -123,6 +132,11 @@ def _initialize():
                 not in {"scicode", "tau3", "terminal-bench-2.1"},
                 weight=BENCHMARK_WEIGHTS[identity],
             )
+        # Built-in extension diagnostics stay outside the published score.
+        from .agent_session import build_adapter  # noqa: PLC0415 - registry cycle
+
+        session_replay = build_adapter()
+        found[session_replay.id] = session_replay
         # Only the operator's installed Python environment supplies entry points.
         for entry in entry_points(group="vllm_sr.sr_bench.adapters"):
             value = entry.load()
