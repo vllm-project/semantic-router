@@ -890,6 +890,33 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self.assertEqual(
             minimax_binding["reasoning_modes"], ["disabled", "adaptive", "enabled"]
         )
+        minimax_flash = next(
+            binding
+            for binding in providers["minimax"]["models"]
+            if binding["catalog"] == "minimax/minimax-m3.1-flash"
+        )
+        self.assertEqual(minimax_flash["id"], "MiniMax-M3.1-Flash")
+        self.assertEqual(minimax_flash["reasoning_transport"], "top_level_effort")
+        self.assertEqual(minimax_flash["reasoning_modes"], ["adaptive"])
+        self.assertEqual(
+            minimax_flash["reasoning_efforts"], ["low", "medium", "high", "xhigh", "max"]
+        )
+        self.assertEqual(minimax_flash["restrictions"]["context_window_size"], 1000000)
+        self.assertEqual(
+            minimax_flash["restrictions"]["unsupported_request_fields"],
+            {"openai/chat-completions@1": ["service_tier"]},
+        )
+        self.assertEqual(
+            [binding["id"] for binding in providers["minimax"]["models"][:2]],
+            ["MiniMax-M3.1-Flash", "MiniMax-M3"],
+        )
+        self.assertEqual(minimax_binding["pricing"]["prompt_per_1m"], 0.30)
+        self.assertEqual(minimax_binding["pricing"]["cached_input_per_1m"], 0.06)
+        self.assertEqual(minimax_binding["pricing"]["completion_per_1m"], 1.20)
+        flash_model = models["minimax/minimax-m3.1-flash"]
+        self.assertEqual(flash_model["limits"]["context_window_size"], 1000000)
+        self.assertEqual(flash_model["limits"]["max_output_tokens"], 524288)
+        self.assertEqual(flash_model["modalities"]["input"], ["text", "image", "video"])
         for runtime in ("vllm", "sglang"):
             qwen_binding = next(
                 binding

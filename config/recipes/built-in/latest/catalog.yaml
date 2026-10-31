@@ -1346,26 +1346,35 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
-  - catalog: minimax/minimax-m2.5
+  - catalog: minimax/minimax-m3.1-flash
     relationship: first_party
-    id: MiniMax-M2.5
+    id: MiniMax-M3.1-Flash
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    reasoning_modes:
+    - adaptive
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      cached_input_per_1m: 0.015
+      completion_per_1m: 0.6
+    restrictions:
+      context_window_size: 1000000
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - service_tier
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://platform.minimax.io/docs/guides/models-intro
-  - catalog: minimax/minimax-m2.7
-    relationship: first_party
-    id: MiniMax-M2.7
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://platform.minimax.io/docs/guides/models-intro
+      verified_at: '2026-10-20'
+      source: https://platform.minimax.io/docs/guides/models-intro.md
   - catalog: minimax/minimax-m3
     relationship: first_party
     id: MiniMax-M3
@@ -1376,6 +1385,47 @@ providers:
     - disabled
     - adaptive
     - enabled
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.3
+      cached_input_per_1m: 0.06
+      completion_per_1m: 1.2
+    restrictions:
+      context_window_size: 1000000
+      pricing_note: Standard <=512k input; >512k doubles prices; priority multiplies by 1.5.
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-10-20'
+      source: https://platform.minimax.io/docs/pricing/overview.md
+  - catalog: minimax/minimax-m2.5
+    relationship: first_party
+    id: MiniMax-M2.5
+    protocols:
+    - openai/chat-completions@1
+    restrictions:
+      suggested: false
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-05'
+      source: https://platform.minimax.io/docs/guides/models-intro
+  - catalog: minimax/minimax-m2.7
+    relationship: first_party
+    id: MiniMax-M2.7
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: thinking_object
+    reasoning_modes:
+    - enabled
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.3
+      cached_input_per_1m: 0.06
+      completion_per_1m: 1.2
+    restrictions:
+      context_window_size: 204800
+      suggested: false
     lifecycle: active
     verification:
       status: claimed
@@ -4468,6 +4518,19 @@ reasoning_families:
   modes:
   - enabled
   default_mode: enabled
+- id: minimax-m3.1-flash
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  default: max
+  modes:
+  - adaptive
+  default_mode: adaptive
 - id: minimax-m3
   type: reasoning_mode
   parameter: thinking_mode
@@ -4476,6 +4539,12 @@ reasoning_families:
   - adaptive
   - enabled
   default_mode: adaptive
+- id: minimax-m2-always-on
+  type: reasoning_mode
+  parameter: thinking_mode
+  modes:
+  - enabled
+  default_mode: enabled
 - id: muse-glimmer
   type: reasoning_effort
   parameter: reasoning_strength
@@ -6749,6 +6818,48 @@ models:
   - open_weights
   - reasoning
   - dense
+- id: minimax/minimax-m3.1-flash
+  display_name: MiniMax M3.1 Flash
+  description: MiniMax's fast multimodal API model for reasoning, coding, and agentic workloads.
+  kind: physical
+  publisher: MiniMax
+  presentation:
+    logo: package:minimax
+    monogram: M
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://platform.minimax.io/docs/guides/models-intro.md
+  family: minimax-m3.1
+  reasoning_family: minimax-m3.1-flash
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 524288
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: MiniMax
+    status: claimed
+    verified_at: '2026-10-20'
+    source: https://platform.minimax.io/docs/guides/models-intro.md
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
 - id: minimax/minimax-m3
   display_name: MiniMax M3
   description: Native multimodal open-weight MiniMax model with million-token context.
@@ -6808,6 +6919,7 @@ models:
     source: https://huggingface.co/MiniMaxAI/MiniMax-M2.7
     license: MiniMax-Community-License
   family: minimax-m2
+  reasoning_family: minimax-m2-always-on
   parameter_size: 230B
   lifecycle: active
   limits:
