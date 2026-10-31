@@ -39,28 +39,8 @@ func prepareMCPServerConfig(w http.ResponseWriter, config *mcp.ServerConfig) boo
 	if config.ID == "" {
 		config.ID = uuid.New().String()
 	}
-	if config.Name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
-		return false
-	}
-	if config.Transport == "" {
-		http.Error(w, "Transport is required", http.StatusBadRequest)
-		return false
-	}
-	if config.Transport != mcp.TransportStdio && config.Transport != mcp.TransportStreamableHTTP {
-		http.Error(w, "Invalid transport type. Must be 'stdio' or 'streamable-http'", http.StatusBadRequest)
-		return false
-	}
-	if err := mcp.ValidateSecurity(config.Security); err != nil {
+	if err := mcp.ValidateServerConfig(config); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return false
-	}
-	if config.Transport == mcp.TransportStdio && config.Connection.Command == "" {
-		http.Error(w, "Command is required for stdio transport", http.StatusBadRequest)
-		return false
-	}
-	if config.Transport == mcp.TransportStreamableHTTP && config.Connection.URL == "" {
-		http.Error(w, "URL is required for streamable-http transport", http.StatusBadRequest)
 		return false
 	}
 	return true
@@ -174,6 +154,10 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.UpdateServer(&config); err != nil {
+			if errors.Is(err, mcp.ErrInvalidServerConfig) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			writeMCPInternalError(w, "Update server", err)
 			return
 		}
@@ -373,8 +357,11 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 		}
 		if err := h.manager.TestConnection(ctx, &config); err != nil {
 			log.Printf("[MCP-Handler] Test connection failed: error_class=%T", err)
+			// A validation failure is reported in this endpoint's envelope, not
+			// as a 400: the dialog's caller reads the message out of the body,
+			// and a non-ok status would drop it to a generic statusText.
 			message := "Connection test failed"
-			if errors.Is(err, mcp.ErrUnsupportedSecurity) {
+			if errors.Is(err, mcp.ErrInvalidServerConfig) || errors.Is(err, mcp.ErrUnsupportedSecurity) {
 				message = err.Error()
 			}
 			w.Header().Set("Content-Type", "application/json")
