@@ -3,7 +3,16 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import chat, classify, images, looper, messages, provider_boundary, responses
+from . import (
+    chat,
+    classify,
+    images,
+    looper,
+    messages,
+    provider_boundary,
+    responses,
+    speech,
+)
 from .cache import SessionCacheTracker
 from .provider_boundary import RequestStore
 from .settings import Settings
@@ -26,6 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         responses.router,
         messages.router,
         images.router,
+        speech.router,
     ):
         instance.include_router(router)
     if settings.shadow_control:
