@@ -263,6 +263,8 @@
         "cost_in_usd_ticks",
         "is_byok",
         "num_sources_used",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
         "prompt_time",
         "queue_time",
         "server_tool_use",
