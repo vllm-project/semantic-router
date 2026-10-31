@@ -75,6 +75,28 @@ Neither scope can retain a previous model outside the admitted candidate set.
 If the configured identity headers are missing, protection fails open and
 records diagnostics instead of failing the request.
 
+### Agents that delegate to subagents
+
+A harness such as Claude Code sends one session ID for a run and its subagents.
+Under `scope: session` that holds every subagent on the model its parent was
+given, even when a decision routes the subagent's request elsewhere. Name the
+header that identifies each agent to hold them separately:
+
+```yaml
+protection:
+  enabled: true
+  scope: session
+  identity:
+    headers:
+      session: x-claude-code-session-id
+      agent: x-claude-code-agent-id
+```
+
+Claude Code sends `x-claude-code-agent-id` only on subagent requests, so the
+main agent keeps its session key and each subagent gets its own. A subagent is
+held on the model chosen for its first request, under the same rules as a
+session. Without `agent`, protection behaves as before.
+
 ## Guards
 
 Protection has two guard points:
