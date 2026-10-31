@@ -84,7 +84,7 @@ func (v *VLLMJailbreakInference) Classify(context.Context, string) (SequenceClas
 
 // Decide preserves the model's actual safety verdict without invented scores.
 func (v *VLLMJailbreakInference) Decide(ctx context.Context, text string) (tasks.LabelDecision, error) {
-	ctx, cancel := context.WithTimeout(ctx, v.timeout)
+	ctx, cancel := classifierCallContext(ctx, v.timeout, v.client.connector)
 	defer cancel()
 
 	// Format prompt - flexible to support different models

@@ -60,7 +60,7 @@ func newExternalPreferenceClassifier(
 }
 
 func (p *PreferenceClassifier) classifyExternal(conversationJSON string) (*PreferenceResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	ctx, cancel := classifierCallContext(context.Background(), p.timeout, p.client.connector)
 	defer cancel()
 
 	start := time.Now()

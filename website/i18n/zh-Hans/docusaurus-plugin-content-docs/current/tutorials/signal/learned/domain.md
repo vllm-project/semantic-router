@@ -87,7 +87,29 @@ global:
             contract: label_distribution.v1
             model: domain-service
             deadline_ms: 5000
+            circuit_breaker:
+              enabled: true
+              consecutive_failures: 3
+              open_interval_ms: 30000
 ```
+
+可选的 `circuit_breaker` 默认关闭。启用后默认阈值为 3 次失败，打开间隔为
+30000 ms；仅在启用时要求显式值为正数。远程分类器的 `backend.circuit_breaker`
+块替换 `global.model_catalog.external[]` 中的整个熔断器块，省略字段使用启用后的默认值。
+启用熔断器保留现有的分类器总截止时间和重试预算。传输故障（包括超时及 HTTP/2 流重置或 GOAWAY 等响应体读取中断）
+及可重试的服务不可用在重试结束后按调用计数；调用方取消或超时、不可重试的 4xx 状态错误及 connector 合同错误
+（如响应大小限制或无效 gzip 响应体）保持中立。截止时间在重试退避期间到期时，
+保留前一次尝试的可用性分类。读取错误响应体时发生的故障遵循响应体读取分类。
+熔断器观察 connector 的结果；适配器解码和语义验证
+失败发生在 connector 完成之后，不会撤销传输成功。成功重置计数。
+冷却后只允许一个探测：成功关闭，不可用重新打开，中立允许替代探测。
+跳过保留 timeout/Unknown 及 `on_unknown`/`on_error`，包括 jailbreak/PII
+的 fail-closed 策略。本地分类器不受影响。状态按 connector 实例隔离，
+`llm_remote_connector_circuit_breaker_transitions_total{backend, state}` 汇总相同
+backend 名称的 connector 转换到 `closed`、`open`、`half_open` 的次数。
+`llm_remote_connector_circuit_breaker_skipped_total{backend}` 记录跳过次数。
+跳过调用也在现有 connector 请求指标中记录 `circuit_open` 结果和延迟。
+每次状态转换记录一条结构化日志。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

@@ -39,14 +39,16 @@ func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey st
 }
 
 func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
-	return newVLLMClientWithLimits(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxRequestBytes(), cfg.GetMaxResponseBytes(), cfg.GetTimeout())
+	timeout := cfg.GetTimeout()
+	breaker := classifierCircuitBreaker(cfg, "http_chat")
+	return newVLLMClientWithLimits(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxRequestBytes(), cfg.GetMaxResponseBytes(), timeout, breaker)
 }
 
 func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
-	return newVLLMClientWithLimits(endpoint, accessKey, config.DefaultClassifyMaxRequestBytes, maxResponseBytes, timeout)
+	return newVLLMClientWithLimits(endpoint, accessKey, config.DefaultClassifyMaxRequestBytes, maxResponseBytes, timeout, nil)
 }
 
-func newVLLMClientWithLimits(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxRequestBytes, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
+func newVLLMClientWithLimits(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxRequestBytes, maxResponseBytes int64, timeout time.Duration, breaker *connector.CircuitBreakerOptions) *VLLMClient {
 	if endpoint == nil {
 		return &VLLMClient{initErr: fmt.Errorf("classifier endpoint is required")}
 	}
@@ -57,6 +59,7 @@ func newVLLMClientWithLimits(endpoint *config.ClassifierVLLMEndpoint, accessKey 
 	}
 	baseURL := fmt.Sprintf("%s://%s:%d", scheme, endpointCopy.Address, endpointCopy.Port)
 	options := connector.Options{AttemptTimeout: timeout, MaxRequestBytes: maxRequestBytes, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxClassifyErrorBodyBytes}
+	options.CircuitBreaker = breaker
 	transport, err := connector.New(baseURL, bearerAuthorizer(accessKey), options)
 	return &VLLMClient{connector: transport, initErr: err, endpoint: &endpointCopy, timeout: timeout, transportOptions: options, accessKey: accessKey}
 }

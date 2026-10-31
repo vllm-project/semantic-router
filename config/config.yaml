@@ -2809,6 +2809,10 @@ global:
         access_key: external-sequence-classifier-key
         max_request_bytes: 262144
         max_response_bytes: 1048576
+        circuit_breaker:
+          enabled: false
+          consecutive_failures: 3
+          open_interval_ms: 30000
     kbs:
       - name: privacy_kb
         source:

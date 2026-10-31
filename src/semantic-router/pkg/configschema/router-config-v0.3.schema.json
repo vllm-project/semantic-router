@@ -1664,6 +1664,21 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ClassifierCircuitBreaker": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "open_interval_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ClassifierSignalRule": {
       "properties": {
         "name": {
@@ -2899,6 +2914,9 @@
     },
     "ExternalModelConfig": {
       "properties": {
+        "circuit_breaker": {
+          "$ref": "#/$defs/ClassifierCircuitBreaker"
+        },
         "name": {
           "type": "string"
         },
@@ -6134,6 +6152,9 @@
     },
     "RemoteClassifierBackend": {
       "properties": {
+        "circuit_breaker": {
+          "$ref": "#/$defs/ClassifierCircuitBreaker"
+        },
         "protocol": {
           "type": "string"
         },

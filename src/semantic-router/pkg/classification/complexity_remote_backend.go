@@ -70,6 +70,7 @@ func newScoringHTTPBackend(cfg *config.ExternalModelConfig, deadline time.Durati
 
 	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
 		AttemptTimeout:   timeout,
+		CircuitBreaker:   classifierCircuitBreaker(cfg, "http_score"),
 		MaxRetries:       1,
 		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
 		MaxResponseBytes: cfg.GetMaxResponseBytes(),
@@ -89,7 +90,7 @@ func newScoringHTTPBackend(cfg *config.ExternalModelConfig, deadline time.Durati
 // The value is returned unclamped: a regression head is not a probability, and
 // what a given number means is decided by the rule's boundaries, not here.
 func (s *scoringHTTPBackend) Score(ctx context.Context, text string) (float64, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := classifierCallContext(ctx, s.timeout, s.connector)
 	defer cancel()
 
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})

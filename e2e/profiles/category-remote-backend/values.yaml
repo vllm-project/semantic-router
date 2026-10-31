@@ -70,6 +70,10 @@ config:
               contract: label_distribution.v1
               model: e2e-category-classifier
               deadline_ms: 5000
+              circuit_breaker:
+                enabled: true
+                consecutive_failures: 2
+                open_interval_ms: 60000
     services:
       response_api:
         enabled: true
