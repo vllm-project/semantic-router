@@ -52,12 +52,15 @@ the decision model it was calibrated with, Vela 2.0 0.8B.
 | `domain` | Choice of 5, at 0.4 | Which field does this request belong to: law and health, software, math and science, business, or anything else? | Which specialist lane a request takes. |
 | `difficulty` | Score from 0 to 4 | How much reasoning does a strong expert need to answer this request well? | Simple (below 1), medium (1 to 1.75) or complex (1.75 or more) work, inside and outside the specialist fields. |
 
-The difficulty thresholds ride on the decision model's use of the 0-4
-scale. Vela 2.0 0.8B compresses that range in practice: over 344 requests
-from real agentic sessions on hard software tasks, scores stayed within
-[0.08, 1.87] with a median of 1.36, so the complex threshold sits at 1.75
-(the observed 75th percentile). Re-calibrate the thresholds when you swap
-the decision model.
+The difficulty cut is specific to the text Vela 2.0 0.8B scores. It reads
+the latest textual user message; a tool-result block is not that text, so a
+tool-loop continuation is scored on the user text already in the
+conversation. Over 344 requests from real agentic sessions on hard software
+tasks, those scores stayed within [0.08, 1.87], median 1.36, and a threshold
+of 2.5 matched none of them. At 1.75, 15.7% of those requests reach a strong
+lane. The short maintained probes still use the rest of the scale: medium
+probes score 1.28 to 2.13 and complex probes 2.70 or more, as the
+calibration notes record. Re-calibrate when you swap the decision model.
 
 One conversation fact needs no model: `agent_has_images` is true when the
 request carries image content.
@@ -110,7 +113,13 @@ Vela 2.0 0.8B:
   instead.
 - The lane-deciding `domain` answers have probability 0.77 or more.
 - `difficulty` puts the simple probes at 0.78 or less, the medium probes at
-  1.28 to 2.13, and the complex probes at 2.70 or more.
+  1.28 to 2.13, and the complex probes at 2.70 or more. The agent-session
+  cut at 1.75 sits inside that medium band. Two probes whose live scores
+  fall between 1.75 and 2.5 therefore take a complex lane: `python_bug`
+  matches `domain_code_complex`, and `followup`, a short note-taking
+  comparison, matches `complex_general`. `concept_explanation` stays on
+  `medium_general`, and `api_refactor` and `tool_conversation_followup`
+  stay on `domain_code`.
 
 When you change a question or a threshold, or move to another decision model,
 rerun the probes.
