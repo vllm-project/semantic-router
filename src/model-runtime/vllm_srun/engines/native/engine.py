@@ -35,6 +35,7 @@ from ...plugins.base import (
 from ...scheduler.planner import padded
 from . import fast, models, quantized
 from . import threads as adaptive_threads
+from .adapters import load_adapter_network
 from .encoder import EncoderGraphs
 from .models import branch as branch_module
 from .models.branch import (
@@ -154,13 +155,18 @@ class NativeEngineModel(EngineModel):
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
                 lay_out_linears(module, self.linear.fn)
-        # Packed linears, contiguous GeGLU, norms and unpadded attention grids
-        # (``packed(uniform=True)``) compute each row the same in any batch.
+        self._cpu_threads = options.threads or torch.get_num_threads()
+        # Contiguous GeGLU, norms and unpadded uniform attention grids
+        # (``packed(uniform=True)``) compute each row the same in any batch;
+        # whether the packed linears do depends on the oneDNN build, the
+        # product shape and the thread count, so it is measured on this
+        # model's own layers (``onednn.invariant``) rather than assumed.
         self.batch_invariant = (
             spec.encoder
             and self.device.type == "cpu"
             and self.linear.variant == onednn.PACKED
             and self.kernels.select("geglu").variant == CONTIGUOUS
+            and self._packed_invariant()
         )
         for module in (
             *self.stacks().values(),
@@ -171,7 +177,6 @@ class NativeEngineModel(EngineModel):
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
         self.branch_graphs: fast.Graphs | None = None
-        self._cpu_threads = options.threads or torch.get_num_threads()
         self.threads_resolver = (
             adaptive_threads.AdaptiveThreads(
                 self._cpu_threads, serve=adaptive_threads.serving_enabled()
@@ -1093,6 +1098,11 @@ class NativeEngineModel(EngineModel):
             layer for module in self._modules() for layer in quantized.layers(module)
         ]
 
+    def _packed_invariant(self) -> bool:
+        """Whether this model's packed linears pass ``onednn.invariant`` at the count its forwards use."""
+        adaptive_threads.CpuTeam.apply(self._cpu_threads)
+        return onednn.invariant(self._packed())
+
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
@@ -1265,6 +1275,13 @@ class NativeEngine(Engine):
         branches = {
             name: load_branch(backbone, backbone_spec, name, private)
             for name in backbone_spec.branches
+        }
+        clash = sorted(set(branches) & set(backbone_spec.adapters))
+        if clash:
+            raise ValueError(f"an adapter and a branch share a name: {clash}")
+        branches |= {
+            name: load_adapter_network(backbone, backbone_spec, name, dtype, private)
+            for name in backbone_spec.adapters
         }
         towers = {
             name: load_tower(tower, dtype, private)

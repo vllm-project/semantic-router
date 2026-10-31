@@ -206,7 +206,7 @@ python3 -m pytest -q bench/hallucination/test_trajectories.py
 The `flask-async-commit-misreported` trajectory combines the `grep` and
 `git_log` samples for `pallets__flask-4074` from the test split of the
 [LettuceDetect Grounded Hallucination Dataset](https://huggingface.co/datasets/KRLabsOrg/lettucedetect-code-hallucination)
-by KRLabsOrg (Kovács et al., [arXiv:2607.00895](https://arxiv.org/abs/2607.00895)),
+by KRLabsOrg (Kovács et al., [GroundLM 2026](https://aclanthology.org/2026.groundlm-1.44/), [arXiv:2607.00895](https://arxiv.org/abs/2607.00895)),
 revision `866a7c5392c3cf87e4fbc2b3808815d524f54331`, used under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The request joins the
 two samples' questions, each tool output is the text inside the sample's code
