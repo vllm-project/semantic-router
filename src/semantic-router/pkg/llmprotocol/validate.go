@@ -179,6 +179,9 @@ func validateRequestMessage(
 	if exceeds(message.ID, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "message_id_limit", "message ID exceeds the configured limit", nil)
 	}
+	if exceeds(message.Name, limits.IdentifierBytes) {
+		return NewError(ErrorInvalidRequest, "message_name_limit", "message name exceeds the configured limit", nil)
+	}
 	if !validRequestRole(message.Role) {
 		return NewError(ErrorInvalidRequest, "invalid_role", "message role is invalid", nil)
 	}
@@ -229,6 +232,9 @@ func validateRequestInstructions(instructions []InstructionBlock, limits Limits,
 		}
 		if len(instruction.Content) == 0 {
 			return NewError(ErrorInvalidRequest, "empty_instruction", "instructions must contain at least one content block", nil)
+		}
+		if exceeds(instruction.Name, limits.IdentifierBytes) {
+			return NewError(ErrorInvalidRequest, "message_name_limit", "message name exceeds the configured limit", nil)
 		}
 		for _, content := range instruction.Content {
 			if content.Kind == ContentToolCall || content.Kind == ContentToolResult {
@@ -494,7 +500,7 @@ func validateReasoningEffort(request Request, limits Limits) error {
 
 func validateReasoningDisplay(request Request) error {
 	switch request.ReasoningDisplay {
-	case "", "summarized", "omitted":
+	case "", "summarized", "omitted", "updates":
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_display", "reasoning display mode is invalid", nil)
 	}
