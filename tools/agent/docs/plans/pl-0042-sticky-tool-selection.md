@@ -338,27 +338,31 @@ The [accepted split](https://github.com/vllm-project/semantic-router/issues/4517
 keeps this phase independently implementable as library work. It must not
 construct a sticky manager/store in ExtProc or lift either enablement gate.
 
-- [ ] `TASK-07` Pure `sessiontools.Merge`: current eligible identities,
+- [x] `TASK-07` Pure `sessiontools.Merge`: current eligible identities,
       deterministic retention, bounded growth, pin replacement/overflow,
       explicit requirements, and typed content-free receipts.
-- [ ] `TASK-08` `sessiontools.Manager.Update`: frozen request evidence,
+- [x] `TASK-08` `sessiontools.Manager.Update`: frozen request evidence,
       conditional invalidation, at most three CAS attempts under one timeout,
       independent logical-turn metadata, and guarded revision exhaustion.
-- [ ] `TASK-09` Stabilize `ToolsDatabase`: normalized unique names, catalog
+- [x] `TASK-09` Stabilize `ToolsDatabase`: normalized unique names, catalog
       enumeration, equal-score name ordering, finite ranking inputs, isolated
       snapshots, and lossless schema numbers on file/incremental admission.
 
 ### Phase 3 — Complete local runtime integration (#4519)
 
-Starts only after Phase 2 lands. The trusted-facts dependency
-[#3476](https://github.com/vllm-project/semantic-router/issues/3476) needs an
-owner or an explicit missing-facts contract before runtime work is accepted.
+Phase 2 landed in #4558. Phase 3 consumes the trusted-facts contract from
+[#3476](https://github.com/vllm-project/semantic-router/issues/3476)
+(implementation PR #3600) and resolves the missing-facts question by failing
+closed: a sticky decision must declare authoritative `trusted_facts` that can
+authorize both the `candidate` and `final` stages, and session state is used
+only when both evaluate to `allow`. Any other outcome, an untrusted identity,
+or a store failure uses ordinary selection without touching state.
 
-- [ ] `TASK-10` Refactor add/filter selection into one ExtProc finalizer;
+- [x] `TASK-10` Refactor add/filter selection into one ExtProc finalizer;
       consume trusted identity/eligibility and model/wire capabilities;
       rehydrate current definitions; implement the full invalidation,
       recovery, and stateless fallback matrix before lifting either gate.
-- [ ] `TASK-11` Generation-owned store lifetime, bounded Router Replay
+- [x] `TASK-11` Generation-owned store lifetime, bounded Router Replay
       receipt, and request-path integration assertions covering trusted and
       missing facts, explicit requirements, and disabled configurations.
 
@@ -371,22 +375,14 @@ owner or an explicit missing-facts contract before runtime work is accepted.
 
 ## Next Action
 
-Phase 1 is complete — TASK-01 through TASK-06 are all done (see TASK-06's
-own entry above for the exit-gate run, what it found and fixed, and the
-one sandbox-only caveat it left: `make test-semantic-router` couldn't
-complete end-to-end here because ~16 unrelated packages module-wide fail
-to even link a test binary without a `candle-binding` native artifact this
-Docker sandbox has no Rust toolchain to build — not a regression from this
-branch, and confirmed the packages this branch actually touches that
-*could* execute their tests did pass).
-
-Implement the accepted disabled planner in [#4517](https://github.com/vllm-project/semantic-router/issues/4517)
-(TASK-07 through TASK-09). `pkg/sessiontools` owns selection and bounded CAS;
-ExtProc runtime adaptation stays in [#4519](https://github.com/vllm-project/semantic-router/issues/4519).
-Both public admission and pre-parsed construction continue rejecting
-`sticky.enabled: true`, and disabled configurations construct no manager or
-store. Preserve the historical Phase 1 evidence below; validate Phase 2
-against the current repository checks and deterministic race regressions.
+Phase 3 is implemented on a branch stacked on #3600 and awaits #4519
+acceptance and the #3600 merge. Local sticky selection is enabled only for
+single-model decisions with authoritative trusted facts and the local store;
+Looper algorithms and sticky-enabled Redis stay rejected at admission and
+construction. Explicit `tool_choice` values other than `auto` and empty
+queries stay stateless, so explicit requirements keep their existing
+protocol behavior. Phase 4 (TASK-12/13) adds the Redis store and the
+maintained E2E profile.
 
 Verification depth across Phase 1 varied by what this sandbox can actually
 execute for each package: `pkg/config` (TASK-01/02) and

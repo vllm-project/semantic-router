@@ -23,6 +23,10 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if !r.semanticCacheEnabledForRequest(ctx) {
 		return
 	}
+	if stickyToolSelectionDecision(ctx) {
+		metrics.RecordCacheWriteSkipped("sticky_tool_selection")
+		return
+	}
 	if ctx.CacheWriteBypass {
 		metrics.RecordCacheWriteSkipped("request_no_store")
 		return

@@ -42,7 +42,7 @@ func (r *OpenAIRouter) lookupPersonalizedExactCache(
 }
 
 func canUsePersonalizedExactCache(ctx *RequestContext) bool {
-	if !personalizedExactCacheEnabled(ctx) {
+	if !personalizedExactCacheEnabled(ctx) || stickyToolSelectionDecision(ctx) {
 		return false
 	}
 	personalized, reason := ctx.HasPersonalizedContext()

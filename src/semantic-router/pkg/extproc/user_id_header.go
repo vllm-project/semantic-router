@@ -32,6 +32,11 @@ func authHeaderUserID(ctx *RequestContext) string {
 	return headerValueCI(ctx, headers.AuthzUserID)
 }
 
+// authHeaderTenantID returns the authenticated tenant id from the authz header.
+func authHeaderTenantID(ctx *RequestContext) string {
+	return headerValueCI(ctx, headers.AuthzTenantID)
+}
+
 // cacheScopeUserID resolves the user id used only for semantic-cache key scoping.
 // It prefers the trusted auth header, then optionally a fallback header name from
 // SEMANTIC_CACHE_FALLBACK_USER_HEADER (intended for E2E when the gateway strips

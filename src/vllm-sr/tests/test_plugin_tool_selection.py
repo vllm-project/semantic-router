@@ -169,6 +169,81 @@ providers:
         finally:
             os.unlink(temp_path)
 
+    def test_sticky_tool_selection_keeps_trusted_facts_policy(self):
+        """A sticky decision and its trusted-facts policy survive parsing and validation."""
+        config_yaml = """
+version: v0.1
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+signals:
+  keywords:
+    - name: "test_keywords"
+      operator: "OR"
+      keywords: ["test"]
+decisions:
+  - name: "sticky_decision"
+    description: "Sticky tool selection"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "test_keywords"
+    modelRefs:
+      - model: "test_model"
+    plugins:
+      - type: "tool_selection"
+        configuration:
+          enabled: true
+          mode: "filter"
+          sticky:
+            enabled: true
+            max_tools: 8
+            max_new_tools_per_turn: 0
+            pin_called_tools: true
+      - type: "tools"
+        configuration:
+          enabled: true
+          mode: "passthrough"
+          trusted_facts:
+            enabled: true
+            enforcement: "authoritative"
+            trust_sources: ["operator-policy"]
+            stage_roles: ["candidate", "final"]
+providers:
+  models:
+    - name: "test_model"
+      endpoints:
+        - name: "ep1"
+          weight: 1
+          endpoint: "localhost:8000"
+  default_model: "test_model"
+"""
+
+        temp_path = _write_config(config_yaml)
+        try:
+            config = parse_user_config(temp_path)
+            selection, tools = config.decisions[0].plugins
+            assert selection.configuration["sticky"] == {
+                "enabled": True,
+                "max_tools": 8,
+                "max_new_tools_per_turn": 0,
+                "pin_called_tools": True,
+            }
+            assert tools.configuration["trusted_facts"]["stage_roles"] == [
+                "candidate",
+                "final",
+            ]
+            assert validate_user_config(config) == []
+
+            tools.configuration["trusted_facts"]["trust_sources"] = ["client-metadata"]
+            errors = validate_user_config(config)
+            assert any("tools" in str(error) for error in errors), errors
+        finally:
+            os.unlink(temp_path)
+
     def test_tool_selection_invalid_mode_rejected(self):
         """mode outside {add, filter} is rejected by the Literal constraint."""
         with pytest.raises(PydanticValidationError):
