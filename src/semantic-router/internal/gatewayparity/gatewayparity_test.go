@@ -3,6 +3,7 @@ package gatewayparity
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -76,8 +77,12 @@ func TestNativeGatewayServesTheParityCorpus(t *testing.T) {
 	}
 	frontend := httptest.NewServer(handler)
 	defer frontend.Close()
+	// Each corpus case states its client's Accept-Encoding; the client must
+	// not add one of its own or decode the reply for the test.
+	client := frontend.Client()
+	client.Transport.(*http.Transport).DisableCompression = true
 
-	records := parity.RecordWire(context.Background(), frontend.Client(), frontend.URL, backend, corpus.Cases)
+	records := parity.RecordWire(context.Background(), client, frontend.URL, backend, corpus.Cases)
 	for _, got := range records {
 		t.Run(got.Case, func(t *testing.T) {
 			want := loadParityRecord(t, got.Case)
