@@ -46,6 +46,37 @@ func TestCandidateRequirementsBudgetAndMetadata(t *testing.T) {
 	}
 }
 
+func TestCandidateEligibilityErrorsExposeStableReasons(t *testing.T) {
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role:    llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentImage, URL: "https://example.invalid/image.png"}},
+	}}}
+	demand := DemandForRequest(request)
+	requirements := &config.CandidateRequirements{Capabilities: config.CandidateCapabilitiesDeclared, Context: config.CandidateContextKnownLimits}
+
+	tests := []struct {
+		name   string
+		params config.ModelParams
+		demand CandidateDemand
+		want   EligibilityReason
+	}{
+		{"missing metadata", config.ModelParams{}, demand, EligibilityReasonMissingCapabilities},
+		{"unsupported capability", config.ModelParams{Capabilities: []string{"chat"}}, demand, EligibilityReasonUnsupportedCapability},
+		{"context limit", config.ModelParams{Capabilities: []string{"chat", "image_input"}, ContextWindowSize: 1, MaxOutputTokens: 1}, func() CandidateDemand { d := demand; d.MaxOutputTokens = llmprotocol.Int64(1); return d }(), EligibilityReasonContextLimit},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateCandidateRequirements(requirements, "model", test.params, test.demand)
+			if got := EligibilityReasonOf(err); got != test.want {
+				t.Fatalf("reason=%q, want %q (err=%v)", got, test.want, err)
+			}
+			if !errors.Is(err, ErrNoEligibleCandidates) {
+				t.Fatalf("error %v does not preserve ErrNoEligibleCandidates", err)
+			}
+		})
+	}
+}
+
 func TestEffectiveCandidateDemandStripsToolsWithoutMutatingIngress(t *testing.T) {
 	tools, _ := config.NewStructuredPayload(map[string]any{"enabled": true, "mode": "none", "strip_tool_history": true})
 	params, _ := config.NewStructuredPayload(map[string]any{"default_max_tokens": 32})
