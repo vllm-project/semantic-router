@@ -68,7 +68,7 @@ routing:
 
 ### 本地分类器的 Token 窗口 {#token-windows-for-a-local-classifier}
 
-默认的 prompt guard 模型 Vela 2.0 0.3B 完整读取每段文本（最多 8,192 个 token），不使用窗口（见[选择模型](../../../model-runtime/choose-a-model.md#vela-20)）。模块运行 Vela 1.0 Guard 时，按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token，文档预算为该模型的 32,768 token（含特殊 token）。此行为仅适用于未指定配方模型绑定或 `window`，且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
+默认的 prompt guard 模型 vela3-fast 不使用窗口配置（见[选择模型](../../../model-runtime/choose-a-model.md#vela-20)）。它按 8,192 token 的输入完整读取每段文本，相邻输入重叠 512 个 token，直到扫描预算：CPU 上为 32,768 token，GPU 上为 262,144 token（见[长输入](../../../model-runtime/reference.md#long-inputs)）。模块运行 Vela 1.0 Guard 时，按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token，文档预算为该模型的 32,768 token（含特殊 token）。此行为仅适用于未指定配方模型绑定或 `window`，且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
 
 显式模型绑定、文档预算、窗口策略与远程后端保持各自的配置行为。例如，经过资格验证并设置 `input.overflow: reject` 的 8K 部署仍在其预算内处理整个片段。
 
