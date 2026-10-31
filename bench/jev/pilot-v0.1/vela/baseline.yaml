@@ -1,0 +1,24 @@
+dataset_version: pilot-v0.1
+language: en
+task: domain
+model:
+  repo: llm-semantic-router/Vela-1.0-Encoder-307M-Domain
+  revision: f6354f54adcf38770f635ad903be2b00577f6c11
+  router_model_path: models/Vela-1.0-Encoder-307M-Domain
+  contract: label_distribution.v1
+  mapping_file: category_mapping.json
+labels:
+  - biology
+  - business
+  - chemistry
+  - computer science
+  - economics
+  - engineering
+  - health
+  - history
+  - law
+  - math
+  - other
+  - philosophy
+  - physics
+  - psychology
