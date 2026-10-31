@@ -31,7 +31,10 @@ from cli.container_log_spool import (
     LOG_SPOOL_ROOT_ENV,
     bounded_log_spool_entrypoint,
 )
-from cli.container_management_listener import _managed_management_listener
+from cli.container_management_listener import (
+    _managed_management_listener,
+    router_management_entrypoint,
+)
 from cli.container_run_command import (
     append_custom_dns,
     append_env_vars,
@@ -481,12 +484,15 @@ def _build_router_runtime_command(
     # Dashboard too.
     for name in secret_names:
         router_env.setdefault(name, "")
-    service_entrypoint, service_args = bounded_log_spool_entrypoint(
+    service_entrypoint, service_args = router_management_entrypoint(
         "/app/start-router.sh",
         [
             runtime_paths["runtime_container_config"],
             "/app/.vllm-sr",
         ],
+    )
+    service_entrypoint, service_args = bounded_log_spool_entrypoint(
+        service_entrypoint, service_args
     )
     return _build_service_run_command(
         runtime=runtime,
