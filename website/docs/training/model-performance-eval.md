@@ -34,14 +34,14 @@ contain the domain categories used by the generator.
 - Enough provider capacity and budget to send every selected question to each
   candidate model
 
-Create an isolated environment from the repository root:
+Create the locked environment from the repository root:
 
 ```bash
 cd src/training/model_eval
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+uv sync --locked
 ```
+
+`uv run python` runs a script in that environment.
 
 The scripts save prompts, model responses, correctness labels, and timing data.
 Choose an output directory with retention and access controls appropriate for
@@ -52,7 +52,7 @@ the evaluated content.
 Start with a small sample to verify model IDs and response formatting:
 
 ```bash
-python mmlu_pro_vllm_eval.py \
+uv run python mmlu_pro_vllm_eval.py \
   --endpoint http://localhost:8000/v1 \
   --models phi4 qwen3-0.6B \
   --samples-per-category 10 \
@@ -88,7 +88,7 @@ without disclosing them can make an unreliable endpoint look better.
 Use ARC as a second dataset, not as a source for domain scores:
 
 ```bash
-python arc_challenge_vllm_eval.py \
+uv run python arc_challenge_vllm_eval.py \
   --endpoint http://localhost:8000/v1 \
   --models phi4 qwen3-0.6B \
   --samples 100 \
@@ -103,7 +103,7 @@ concurrency, model, and prompt-mode options mirror the MMLU-Pro script.
 The plotter reads MMLU-Pro `analysis.json` files recursively:
 
 ```bash
-python plot_category_accuracies.py \
+uv run python plot_category_accuracies.py \
   --results-dir results/mmlu-smoke \
   --plot-type heatmap \
   --output-file results/mmlu-smoke/category-accuracy.png
@@ -116,7 +116,7 @@ result.
 ## Generate a configuration scaffold
 
 ```bash
-python result_to_config.py \
+uv run python result_to_config.py \
   --results-dir results/mmlu-smoke \
   --output-file config.eval.yaml \
   --backend-endpoint 127.0.0.1:8000 \
