@@ -12,7 +12,13 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
 
-from manual_ci import PAGE_SIZE, GitHubClient, ManualCIError, read_artifact
+from manual_ci import (
+    PAGE_SIZE,
+    GitHubClient,
+    ManualCIError,
+    api_failure,
+    read_artifact,
+)
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -28,18 +34,14 @@ COMMENT_ITEM_LIMIT = 30
 
 class StatusClient(GitHubClient):
     def write(self, endpoint: str, payload: dict, *, method="POST"):
-        result = subprocess.run(
+        result = self.gh(
             ["gh", "api", endpoint, "--method", method, "--input", "-"],
+            read=False,
             input=json.dumps(payload),
             text=True,
-            capture_output=True,
-            timeout=60,
-            check=False,
         )
         if result.returncode:
-            raise ManualCIError(
-                "Could not publish CI status; check workflow permissions."
-            )
+            raise api_failure(result, "Could not publish CI status")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
