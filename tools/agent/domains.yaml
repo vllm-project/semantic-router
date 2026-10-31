@@ -674,6 +674,14 @@ domains:
     checks: [make test-agent-crew]
     verifications: [bench-tools]
 
+  agent-kv-tier-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_kv_tier/**
+      - tools/make/tooling.mk
+    checks: [make test-agent-kv-tier-bench]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
