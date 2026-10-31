@@ -162,6 +162,11 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// ToolResultFailed is a request-scoped fact: the live semantic request
+	// carries a structured tool-result failure (ToolResult.IsError=true).
+	// Free-form tool text never sets this.
+	ToolResultFailed bool
+
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded

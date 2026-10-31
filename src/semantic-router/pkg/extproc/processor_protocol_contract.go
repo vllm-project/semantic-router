@@ -151,7 +151,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
-	ctx.SemanticRequest = &request
+	attachSemanticRequest(ctx, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
