@@ -34,6 +34,7 @@ def candidate_manifest(baseline, targets, mode="live", name=None, experiment=Non
             "benchmark_options",
             "auxiliary_targets",
             "adapter_versions",
+            "result_kinds",
             "benchmark_weights",
             "cost_policy",
             "output_policy",
@@ -76,6 +77,7 @@ def validate_candidate_protocol(baseline, candidate):
         "cost_policy",
         "benchmark_options",
         "adapter_versions",
+        "result_kinds",
         "benchmark_weights",
         "output_policy",
     ):

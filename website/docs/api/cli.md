@@ -20,7 +20,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark`](#vllm-sr-benchmark) | Prepare, run, inspect, and compare sr-bench 1.0 evaluations. |
 | [`vllm-sr benchmark cancel`](#vllm-sr-benchmark-cancel) | Cancel remaining work while retaining all existing evidence. |
 | [`vllm-sr benchmark candidate-plan`](#vllm-sr-benchmark-candidate-plan) | Reuse a terminal baseline's frozen protocol without repeating its requests. |
-| [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Show the nine benchmark adapters and evaluation profiles. |
+| [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Show benchmark adapters, diagnostics, and evaluation profiles. |
 | [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare matched cases against the best observed single model. |
 | [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
 | [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
@@ -169,7 +169,7 @@ questions and settings. This does not qualify their measurements for Compare.
 Usage: vllm-sr benchmark catalog [OPTIONS]
 ```
 
-Show the nine benchmark adapters and evaluation profiles.
+Show benchmark adapters, diagnostics, and evaluation profiles.
 
 | Parameter | Description |
 | --- | --- |
