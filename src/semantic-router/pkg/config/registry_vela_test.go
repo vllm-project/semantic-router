@@ -56,10 +56,10 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 }
 
 func TestVelaShieldIsSelectableWithoutChangingTheSafetyDefault(t *testing.T) {
-	if got := DefaultSystemModels().Safety; got != Vela2SignalModel {
+	if got := DefaultSystemModels().Safety; got != Vela3SignalModel {
 		t.Fatalf("default safety model changed to %q", got)
 	}
-	if got := DefaultGlobalConfig().SafetyModels.Safety.ModelID; got != Vela2SignalModel {
+	if got := DefaultGlobalConfig().SafetyModels.Safety.ModelID; got != Vela3SignalModel {
 		t.Fatalf("default safety module resolves to %q", got)
 	}
 	shield := GetModelByPath("models/Vela-1.0-Encoder-307M-Shield")
