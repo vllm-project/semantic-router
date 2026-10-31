@@ -73,6 +73,8 @@ var BaselineRouterContract = []string{
 	"action-routing",
 	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
 	"context-safety-overlap",
+	// Reliability timeouts runtime contract (issue #3210)
+	"reliability-timeouts",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.

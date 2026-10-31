@@ -1,0 +1,86 @@
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
+metadata:
+  name: semantic-router-timeout-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: semantic-router
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: timeout-probe-fast
+      backendRefs:
+        - name: vllm-llama3-8b-instruct
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: timeout-probe-slow
+      backendRefs:
+        - name: vllm-llama3-8b-instruct
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: timeout-unreachable-backend
+      backendRefs:
+        - name: timeout-unreachable-backend
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: semantic-router-timeout-policy
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: semantic-router
+  timeout:
+    tcp:
+      connectTimeout: 1s
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
+metadata:
+  name: semantic-router-timeout-stall
+  namespace: default
+spec:
+  parentRefs:
+    - name: semantic-router
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: timeout-probe-stall
+      backendRefs:
+        - name: vllm-llama3-8b-instruct
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: semantic-router-timeout-stall-idle-timeout
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch
+  jsonPatches:
+    - type: type.googleapis.com/envoy.config.route.v3.RouteConfiguration
+      name: default/semantic-router/http
+      operation:
+        op: add
+        jsonPath: >-
+          ..routes[?(@.name == "httproute/default/semantic-router-timeout-stall/rule/0/match/0/*")]
+        path: route/idle_timeout
+        value: 2s
