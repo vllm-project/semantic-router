@@ -716,8 +716,21 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		case evaluator.IsAutoMixEntailment():
 			// AutoMix entailment cascade (arXiv:2310.12963 §3.2): delegate
 			// verification to an external few-shot entailment server.
-			var verifyErr error
-			confidence, meetsThreshold, verifyErr = l.performAutoMixEntailment(ctx, req, evaluator, modelName, resp.Content)
+			verification, verifyErr := l.performAutoMixVerification(ctx, req, evaluator, modelName, resp.Content)
+			if verification != nil {
+				// Preserve the prior subtotal rather than allowing untrusted
+				// verifier counters to overflow the cascade's aggregate.
+				subtotal := SumUsage(allResponses...)
+				if err := accumulateVerifierUsage(&subtotal, verification.Usage); err != nil {
+					verification.Usage = TokenUsage{Unreported: true}
+					verifyErr = err
+				}
+				allResponses = append(allResponses, &ModelResponse{Usage: verification.Usage})
+				if verification.Confidence != nil {
+					confidence = *verification.Confidence
+				}
+				meetsThreshold = verification.Disposition == DispositionApprove
+			}
 			if verifyErr != nil {
 				usable = false
 				attemptReason = AttemptReasonInvalidResponse
@@ -1118,27 +1131,27 @@ func getAutoMixVerifierClient(serverURL string, timeoutSeconds int, maxResponseB
 	return actual.(*selection.AutoMixVerifierClient)
 }
 
-// performAutoMixEntailment runs the AutoMix paper-faithful self-verification
+// performAutoMixVerification runs the AutoMix paper-faithful self-verification
 // step (arXiv:2310.12963 §3.2) for one candidate model: it sends the original
 // question and the candidate's answer to an external entailment verifier and
-// returns (confidence, accepted, err). A non-nil err signals an unrecoverable
+// returns verification evidence and any error. A non-nil err signals an unrecoverable
 // verifier failure; the caller decides how to react via the looper's on_error
 // policy. Missing or malformed configuration is reported as a hard error so it
 // fails loudly at the first request rather than silently degrading.
-func (l *ConfidenceLooper) performAutoMixEntailment(
+func (l *ConfidenceLooper) performAutoMixVerification(
 	ctx context.Context,
 	req *Request,
 	evaluator *ConfidenceEvaluator,
 	modelName string,
 	responseContent string,
-) (float64, bool, error) {
+) (*VerifierResult, error) {
 	if evaluator.VerifierServerURL == "" {
-		return 0, false, fmt.Errorf("confidence_method=%s requires verifier_server_url", MethodAutoMixEntailment)
+		return nil, fmt.Errorf("confidence_method=%s requires verifier_server_url", MethodAutoMixEntailment)
 	}
 
 	question := l.extractQuestionFromRequest(req.OriginalRequest)
 	if question == "" {
-		return 0, false, fmt.Errorf("could not extract user question from request")
+		return nil, fmt.Errorf("could not extract user question from request")
 	}
 
 	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
@@ -1162,26 +1175,29 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 			{ID: modelName, Content: responseContent},
 		},
 	})
+	if result == nil {
+		result = &VerifierResult{Usage: TokenUsage{Unreported: true}}
+	}
 	if err != nil {
 		var verr *VerifierError
 		if errors.As(err, &verr) && verr.Code == VerifierFailureTimeout {
 			if attempt != nil {
-				attempt.finish(attemptResult{err: context.DeadlineExceeded})
+				attempt.finish(attemptResult{err: context.DeadlineExceeded, usage: &result.Usage, verifierType: MethodAutoMixEntailment, verifierVersion: result.Version})
 			}
-			return 0, false, fmt.Errorf("verifier call failed (timeout): %w", err)
+			return result, fmt.Errorf("verifier call failed (timeout): %w", err)
 		}
 		if attempt != nil {
-			attempt.finish(attemptResult{err: err})
+			attempt.finish(attemptResult{err: err, usage: &result.Usage, verifierType: MethodAutoMixEntailment, verifierVersion: result.Version})
 		}
-		return 0, false, fmt.Errorf("verifier call failed: %w", err)
+		return result, fmt.Errorf("verifier call failed: %w", err)
 	}
 	if result.Confidence == nil {
 		err := errors.New("verifier returned no confidence")
 		if attempt != nil {
 			usable := false
-			attempt.finish(attemptResult{err: err, reason: AttemptReasonInvalidResponse, usable: &usable})
+			attempt.finish(attemptResult{err: err, reason: AttemptReasonInvalidResponse, usable: &usable, usage: &result.Usage, verifierType: MethodAutoMixEntailment, verifierVersion: result.Version})
 		}
-		return 0, false, err
+		return result, err
 	}
 
 	confidence := *result.Confidence
@@ -1193,11 +1209,11 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 			reason = AttemptReasonThresholdMet
 		}
 		attempt.finish(attemptResult{
-			reason: reason, usable: &usable, accepted: &accepted,
+			reason: reason, usable: &usable, accepted: &accepted, usage: &result.Usage,
 			score: &confidence, threshold: &evaluator.Threshold,
 			verifierType:    MethodAutoMixEntailment,
 			verifierVersion: result.Version,
 		})
 	}
-	return confidence, accepted, nil
+	return result, nil
 }
