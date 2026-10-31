@@ -459,3 +459,36 @@ def test_migration_example_is_what_the_tool_writes():
             "vela-domain.precision"
         ):
             assert note.message in page, note.message
+
+
+def test_external_nli_readme_config_loads(tmp_path):
+    page = (REPO_ROOT / "src/model-runtime/README.md").read_text()
+    config = re.search(r"cat > nli-config.yaml <<'YAML'\n(.*?)\nYAML", page, re.S)
+    assert config is not None
+    path = tmp_path / "nli-config.yaml"
+    path.write_text(config.group(1), encoding="utf-8")
+
+    errors = validate_user_config(parse_user_config(str(path)))
+
+    assert [str(error) for error in errors] == []
+
+
+def test_external_nli_public_commands_parse():
+    pages = [
+        REPO_ROOT / "src/model-runtime/README.md",
+        REPO_ROOT / "src/model-runtime/docs/records/nli-modernbert-parity.md",
+    ]
+    commands = []
+    for page in pages:
+        for language, _, text in FENCE.findall(page.read_text()):
+            if language != "bash":
+                continue
+            for line in text.replace("\\\n", " ").splitlines():
+                if not re.search(r"(?:^|\s)vllm-sr ", line):
+                    continue
+                words = shlex.split(line)
+                if "vllm-sr" in words:
+                    commands.append(words[words.index("vllm-sr") + 1 :])
+    assert commands
+    for arguments in commands:
+        _parse_cli(arguments)

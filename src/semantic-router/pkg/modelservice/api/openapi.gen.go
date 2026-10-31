@@ -272,6 +272,8 @@ const (
 // Choice `(p_max - 1/n) / (1 - 1/n)`; Score `max(0, 1 - sum_i p_i |i - m| / MAD_unif)`, m the most likely
 // level and `MAD_unif = sum_i |i - (n - 1)/2| / n`. A failed question has only type, error, reason and,
 // when the runtime knows why, message.
+// For NLI classifiers, Choice probabilities are a softmax over candidate entailment logits; Noul is
+// the entailment probability against all non-entailment labels. These scores are not calibrated confidence.
 type Answer struct {
 	// AbstainProbability Probability of the model's abstain option, where it has one (not calibrated).
 	AbstainProbability *float64 `json:"abstain_probability,omitempty"`
@@ -403,6 +405,8 @@ type ChoiceOption struct {
 
 // ClassifyInput A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
 // `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+// Sequence heads frame pairs with the tokenizer's pair template. Pair overflow rejects by default;
+// truncate keeps the complete text_pair and truncates only text. Pair windowing is unsupported.
 type ClassifyInput struct {
 	union json.RawMessage
 }
@@ -450,6 +454,8 @@ type ClassifyRequest struct {
 
 	// Input A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
 	// `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+	// Sequence heads frame pairs with the tokenizer's pair template. Pair overflow rejects by default;
+	// truncate keeps the complete text_pair and truncates only text. Pair windowing is unsupported.
 	Input   ClassifyInput    `json:"input"`
 	Model   *string          `json:"model,omitempty"`
 	Options *ClassifyOptions `json:"options,omitempty"`
@@ -1167,7 +1173,10 @@ type Question struct {
 	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 	Head *QuestionHead `json:"head,omitempty"`
 
-	// Instructions The question; non-blank text, an object or an array.
+	// Instructions The question; non-blank text, an object or an array. NLI sequence classifiers require text:
+	// Choice uses a hypothesis template with exactly one literal `{label}` placeholder, filled with
+	// each option's description (or key when null). Noul uses an affirmative hypothesis; a true
+	// criterion overrides it, and a non-null false criterion is unsupported.
 	Instructions *interface{} `json:"instructions,omitempty"`
 
 	// Labels Ordered Set or Span labels, an alternative to a criteria object.
