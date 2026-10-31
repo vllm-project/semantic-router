@@ -536,8 +536,13 @@ func (r *OpenAIRouter) protectionIdentity(
 	scope := cfg.EffectiveScope()
 	sessionHeader := cfg.HeaderName("session")
 	conversationHeader := cfg.HeaderName("conversation")
+	agentHeader := cfg.HeaderName("agent")
 	sessionID := strings.TrimSpace(headerValueCI(ctx, sessionHeader))
 	conversationID := strings.TrimSpace(headerValueCI(ctx, conversationHeader))
+	agentID := ""
+	if agentHeader != "" {
+		agentID = strings.TrimSpace(headerValueCI(ctx, agentHeader))
+	}
 	if sessionID == "" {
 		return routerLearningIdentity{}, false
 	}
@@ -548,6 +553,11 @@ func (r *OpenAIRouter) protectionIdentity(
 		}
 		components = append(components, conversationID)
 	}
+	if agentID != "" {
+		// The marker component gives agent keys a component count no session
+		// or conversation key has, so the two can never collide.
+		components = append(components, "agent", agentID)
+	}
 	return routerLearningIdentity{
 		sessionID:          sessionID,
 		conversationID:     conversationID,
@@ -555,6 +565,8 @@ func (r *OpenAIRouter) protectionIdentity(
 		scope:              scope,
 		sessionHeader:      sessionHeader,
 		conversationHeader: conversationHeader,
+		agentID:            agentID,
+		agentHeader:        agentHeader,
 	}, true
 }
 
