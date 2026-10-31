@@ -1,0 +1,17 @@
+[project]
+name = "vllm-sr-sequence-repair"
+version = "0.0.0"
+description = "Environment for the sequence repair trainer under src/training/model_classifier/sequence_repair"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "huggingface_hub>=0.20,<2",
+    "peft>=0.10,<1",
+    "pyarrow>=14,<27",
+    "safetensors>=0.6,<1",
+    "tokenizers>=0.21,<1",
+    "torch>=2.2,<3",
+    "transformers>=4.40,<6",
+]
+
+[tool.uv]
+package = false
