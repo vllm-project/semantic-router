@@ -157,7 +157,7 @@ routing:
         description: Long inputs that leave too little room on a 256K-token model.
     jailbreak:
       - name: prompt_attack
-        threshold: 0.95
+        threshold: 0.99
         include_history: false
     pii:
       - name: personal_data
@@ -351,6 +351,10 @@ routing:
             name: has_prior_answer
           - type: decision
             name: correction
+          - operator: NOT
+            conditions:
+              - type: conversation
+                name: tool_loop
       modelRefs:
         - model: zai/glm-5.3-flash
           use_reasoning: true

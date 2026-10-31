@@ -30,6 +30,7 @@ var (
 		validateComplexityModelBackendContracts,
 		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
+		validateLossyTranslationContracts,
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
