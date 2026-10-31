@@ -296,7 +296,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 }
 ```
 
-无效的问题答 `{"type", "error": "invalid_question", "message"}`，message 指出字段，比如 `set questions do not take ['colour']`；其他问题照常答。一个问题都无效的请求答 400 `invalid_request`，每个问题的理由在 message 里。
+无效的问题答 `{"type", "error": "invalid_question", "message"}`，message 指出字段，比如 `set questions do not take ['colour']`；其他问题照常答。Vela 3.0 只按 instructions 读 Noul，描述了 `false` 或 `true` 的 Noul 答 `invalid_question`。一个问题都无效的请求答 400 `invalid_request`，每个问题的理由在 message 里。
 
 一次请求可以问更多的 state。`states` 的每一条含一个 `state` 和它自己的 `questions`，读法和带它们的请求完全一样（连同请求的模型和选项），在响应的 `states` 里按同名答回。请求的信号让一个部署读多段文本时——比如能看历史的越狱或 PII 规则读到的先前消息——router 就这么问：
 
