@@ -67,7 +67,7 @@ versioned** so implementation PRs do not invent parallel locations.
 
 | Artifact | Owner | Proposed location | Versioning |
 | --- | --- | --- | --- |
-| Per-recipe evaluation manifest | MoM & Routing (content) · Evaluation & Quality (schema) | Authoring: `config/recipes/built-in/<channel>/<bundle>/mom-evaluation.yaml` for built-in MoM families; `config/recipes/<name>/mom-evaluation.yaml` for standalone maintained MoM recipes. Package mirror: `src/vllm-sr/cli/model_assets/<channel>/<bundle>/mom-evaluation.yaml` (generated only) | `schema_version: vllm-sr/mom-evaluation/v1` |
+| Per-recipe evaluation manifest | MoM & Routing (content) · Evaluation & Quality (schema) | Authoring: `config/recipes/built-in/<channel>/<bundle>/mom-evaluation.yaml` for built-in MoM families; `config/recipes/<name>/mom-evaluation.yaml` for standalone maintained MoM recipes. Package copy: ignored build-only staging at `src/vllm-sr/cli/model_assets/<channel>/<bundle>/mom-evaluation.yaml` | `schema_version: vllm-sr/mom-evaluation/v1` |
 | Manifest and result JSON Schemas | Evaluation & Quality | `config/evaluation/schema/` | `$id` under `https://vllm-sr.ai/schemas/`; bump only via new schema version |
 | Core suite manifest | Evaluation & Quality | `config/evaluation/mom-core-suite/v1/manifest.yaml` | `schema_version: vllm-sr/mom-core-suite/v1`; suite `version` semver |
 | Baseline protocol | Evaluation & Quality | `config/evaluation/baseline-protocol/v1.yaml` | `schema_version: vllm-sr/baseline-protocol/v1` |
@@ -100,9 +100,9 @@ artifacts remain in `config/evaluation/` and are referenced by path from the
 manifest (`core_suite_ref`, `baseline_protocol_ref`, `extension_packs`). The
 manifest itself is owned with the MoM identity it evaluates.
 
-| MoM publication surface | Authoring source of truth | Package mirror |
+| MoM publication surface | Authoring source of truth | Package copy |
 | --- | --- | --- |
-| Built-in catalog asset (for example `mom-v1`) | `config/recipes/built-in/<channel>/<bundle>/mom-evaluation.yaml` | `src/vllm-sr/cli/model_assets/<channel>/<bundle>/mom-evaluation.yaml` |
+| Built-in catalog asset (for example `mom-v1`) | `config/recipes/built-in/<channel>/<bundle>/mom-evaluation.yaml` | Ignored build-only staging at `src/vllm-sr/cli/model_assets/<channel>/<bundle>/mom-evaluation.yaml` |
 | Standalone maintained MoM recipe | `config/recipes/<name>/mom-evaluation.yaml` | None until the recipe is packaged |
 
 Settled rules:
@@ -114,16 +114,19 @@ Settled rules:
 2. **No catalog-indirection authoring** — `catalog.yaml` does not reference a
    separate evaluation fragment. Catalog entries continue to bind models to an
    `asset` bundle; evaluation content lives in that bundle directory.
-3. **CLI copy is generated, not authored** — the installable package mirror under
-   `src/vllm-sr/cli/model_assets/` follows the same rule as `catalog.yaml` and
-   bundled recipe files: maintainers edit only the authoring tree under
-   `config/recipes/built-in/`, then regenerate the mirror with
-   `tools/release/sync_model_catalog.py` (extended in MOM-02 to include
-   `mom-evaluation.yaml`).
-4. **Drift is rejected in CI** — the Built-in Model Catalog workflow runs
-   `sync_model_catalog.py --check`; direct edits to `cli/model_assets/` fail the
-   gate, matching the existing built-in catalog source/package parity rule enforced
-   by `tools/release/sync_model_catalog.py`.
+3. **CLI package copy is build-only staging** — maintainers edit only the
+   authoring tree under `config/recipes/built-in/`. A source checkout reads that
+   tree. Version trees under `src/vllm-sr/cli/model_assets/` are an ignored
+   packaging workspace, created when a wheel or sdist needs the same bytes.
+   `tools/release/stage_model_catalog_package.py`
+   (`make model-catalog-package-stage`) stages that workspace. MOM-02 extends
+   the stager so staged bundles include `mom-evaluation.yaml`.
+4. **Drift and checked-in mirrors are rejected** — package builds run
+   `stage_model_catalog_package.py --check` (`make model-catalog-package-check`)
+   so the staged workspace matches the authoring tree byte for byte.
+   `make model-catalog-boundary-check` rejects any checked-in version tree under
+   `cli/model_assets/`. MOM-02 retains that boundary check, so those version
+   trees stay build-only staging.
 5. **Runners resolve the authoring path** — validators and runners take an explicit
    manifest path from the caller (recipe directory, bundle path, or generated
    runtime materialization). Formal runs record the resolved authoring path and
@@ -293,7 +296,7 @@ reuses against these slices — not against the Epic.
 | Slice | Child issue | Scope | Lands |
 | --- | --- | --- | --- |
 | **MOM-01** | [#3238](https://github.com/vllm-project/semantic-router/issues/3238) | JSON Schemas, core suite manifest, baseline protocol, pack registry and pack manifests | `config/evaluation/**` contract tree |
-| **MOM-02** | TBD | Static validation tooling, recipe conformance integration for published MoM recipes, and `sync_model_catalog.py` extension for `mom-evaluation.yaml` mirror checks | `make mom-eval-validate`, agent harness checks, Built-in Model Catalog workflow |
+| **MOM-02** | TBD | Static validation tooling, recipe conformance integration for published MoM recipes, and extending `tools/release/stage_model_catalog_package.py` plus `make model-catalog-package-check` to stage `mom-evaluation.yaml` while retaining `make model-catalog-boundary-check` | `make mom-eval-validate`, agent harness checks, model-catalog package and boundary checks |
 | **MOM-03** | TBD | Runner, collectors, regression comparison, failure slicing, publish pipeline | `tools/evaluation/mom/` |
 | **MOM-04** | TBD | Make targets and smoke CI workflow | `tools/make/mom-eval.mk`, `.github/workflows/mom-eval-rc.yml` |
 | **MOM-05** | TBD | Reference scorecards for all five MoM V1 entrypoints | `config/evaluation/scorecards/` |
