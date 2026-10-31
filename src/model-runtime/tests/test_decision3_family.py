@@ -612,15 +612,13 @@ FLA_KERNELS = {
 
 @pytest.mark.parametrize("model", DECISION3_MODELS, ids=lambda model: model.repo_id)
 def test_every_model_records_goldens_and_kernel_choices(model):
-    expected = {"cpu", "rocm"}
+    expected = {"cpu", "cpu:x86_64:avx512:bf16_native", "rocm"}
     devices = {"rocm:gfx942"}
     if model.repo_id == "vllm-sr/d3-edge":
         expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
         devices.add("cuda:sm_89")
-    elif model.repo_id in ("vllm-sr/d3", "vllm-sr/d3-turbo"):
-        expected.add("cpu:x86_64:avx512:bf16_native")
     elif model.repo_id == "vllm-sr/d3-ultra":
-        expected.update({"cpu:x86_64:avx512:bf16_native", "rocm:gfx942"})
+        expected.add("rocm:gfx942")
     assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {
