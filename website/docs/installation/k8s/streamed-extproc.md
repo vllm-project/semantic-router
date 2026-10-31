@@ -15,6 +15,12 @@ Semantic Router is an Envoy External Processor. In buffered mode the gateway sen
 
 Requests that name a concrete model are accumulated the same way as `vllm-sr/auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
 
+Each chunk is checked against the remaining `max_bytes` budget before it is
+copied into the body buffer; a body exactly at the limit is allowed. If a size
+or timeout guard rejects the request, Semantic Router sends one immediate
+response (413 or 408), releases the body handler, and ends the ExtProc stream.
+Later chunks or trailers cannot resume routing or invoke request-body plugins.
+
 For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
 
 - looper algorithms return `Content-Type: text/event-stream` when the original request has `"stream": true`;
