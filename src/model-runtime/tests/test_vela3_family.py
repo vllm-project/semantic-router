@@ -11,7 +11,9 @@ import numpy as np
 import pytest
 from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.engines.native import engine
 from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.engines.native.models.lora import LoRALinear
 from vllm_srun.errors import PackageError
 from vllm_srun.families.vela2.encoder_layout import EncoderSequence
 from vllm_srun.families.vela3 import routing
@@ -184,6 +186,22 @@ def test_golden_request_answers_every_question(model) -> None:
             question_id in response["spans"] and question_id in response["thresholds"]
         )
     assert response["usage"]["input_tokens"] > 0
+
+
+def test_folded_lora_scaling_answers_bit_for_bit(package, model, monkeypatch) -> None:
+    layers = [
+        layer
+        for stack in model.engine_model.stacks().values()
+        for layer in stack.modules()
+        if isinstance(layer, LoRALinear)
+    ]
+    assert model.engine_model.receipt()["lora_folded"] == len(layers) > 0
+    monkeypatch.setattr(engine, "fold_scaling", lambda module: 0)
+    unfolded = load(package)
+    assert "lora_folded" not in unfolded.engine_model.receipt()
+    assert ask(model, GOLDEN_STATE, GOLDEN_QUESTIONS) == ask(
+        unfolded, GOLDEN_STATE, GOLDEN_QUESTIONS
+    )
 
 
 def test_span_thresholds_follow_the_route(model) -> None:
