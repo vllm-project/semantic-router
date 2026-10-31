@@ -16,7 +16,11 @@ limitations under the License.
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore/docformat"
+)
 
 // VectorStoreConfig holds configuration for the vector store feature.
 type VectorStoreConfig struct {
@@ -202,7 +206,30 @@ func (c *VectorStoreConfig) Validate() error {
 	if err := validateVectorStoreMetadataStore(c); err != nil {
 		return err
 	}
+	if err := validateVectorStoreSupportedFormats(c.SupportedFormats); err != nil {
+		return err
+	}
 	return validateVectorStoreBackendConfig(c)
+}
+
+// validateVectorStoreSupportedFormats rejects a format that no text extractor
+// reads. The upload route would accept such a file and the ingestion would
+// fail on it later, so the configuration names it as a mistake.
+func validateVectorStoreSupportedFormats(formats []string) error {
+	for _, format := range formats {
+		ext := docformat.Normalize(format)
+		if ext == "" {
+			return fmt.Errorf("vector_store.supported_formats must not list an empty format")
+		}
+		if !docformat.Supported(ext) {
+			return fmt.Errorf(
+				"vector_store.supported_formats lists '%s', which has no text extractor (supported: %s)",
+				format,
+				docformat.List(),
+			)
+		}
+	}
+	return nil
 }
 
 func validateVectorStoreBackendType(backendType string) error {

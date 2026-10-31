@@ -40,6 +40,7 @@ var (
 		validateModelDeploymentContracts,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
+		validateVectorStoreContracts,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.
