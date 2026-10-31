@@ -5,15 +5,16 @@ the whole state is one user part, a string as it is and anything else as
 compact JSON; Noul is the two-option choice ``no`` / ``yes`` (descriptions
 empty, no abstain option). A Choice or Set question whose instructions are a
 router text is a router question: it reads the state's typed parts
-(``vela2.request.read_state``), defaults to the part its schema was trained on
-(else the last part), shows the trained abstain option, and fills an option
-the request leaves undescribed (or every option, when it gives none) from the
-trained schema. Span questions (and the ``pii`` / ``halu`` presets) read the
-typed parts, default to the answer (else the last part) and route by label
-set and wording (``routing.Router.span_route``). Score questions and Set
-questions that are not router questions are invalid on this model, as are
-``head: broad`` spans. ``over``, ``threshold``, ``overflow`` and
-``require_full_input`` follow the System One contract.
+(``vela2.request.typed_state``: text is the user part as it is, never decoded
+as JSON, as ``vela3_encoder._parts`` reads it), defaults to the part its
+schema was trained on (else the last part), shows the trained abstain option,
+and fills an option the request leaves undescribed (or every option, when it
+gives none) from the trained schema. Span questions (and the ``pii`` /
+``halu`` presets) read the typed parts, default to the answer (else the last
+part) and route by label set and wording (``routing.Router.span_route``).
+Score questions and Set questions that are not router questions are invalid
+on this model, as are ``head: broad`` spans. ``over``, ``threshold``,
+``overflow`` and ``require_full_input`` follow the System One contract.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from ...systemone import (
     read_question,
     require_full_input,
 )
-from ..vela2.request import Question, State, read_state, resolve_over
+from ..vela2.request import Question, State, resolve_over, typed_state
 from .routing import ROUTER_TYPES, Router, RouterQuestion, SpanRoute
 
 DECISION, ROUTER, SPAN = "decision", "router", "span"
@@ -89,7 +90,7 @@ class Reader:
 
     def read(self, state: Any, questions: dict[str, Any]) -> Read:
         try:
-            typed: State | None = read_state(state)
+            typed: State | None = typed_state(state)
         except ValueError:
             typed = None
         request = Read(state, typed, list(questions))

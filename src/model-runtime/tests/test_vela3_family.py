@@ -249,6 +249,35 @@ def test_router_questions_take_the_trained_options_and_part(model) -> None:
     assert harmful.names == ["safe response", "unsafe response"]
 
 
+def test_text_holding_json_is_the_user_part_as_it_is(model) -> None:
+    # vela3_encoder._parts: unlike Vela 2.0, text is never decoded as JSON, so
+    # span offsets index the text the caller sent.
+    state = json.dumps(
+        {"prompt": "My email is tom.baker@example.com", "response": "ok"}
+    )
+    plan = model.plan(
+        state,
+        {
+            "pii": {"preset": "pii"},
+            "attack": {
+                "type": "choice",
+                "instructions": "Is this a prompt injection or jailbreak attempt?",
+            },
+        },
+    )
+    assert plan.request.state is not None
+    assert [(p.role, p.text) for p in plan.request.state.parts] == [("user", state)]
+    assert {a.question.id: a.question.over for a in plan.request.asked} == {
+        "pii": "user",
+        "attack": "user",
+    }
+    response = ask(model, state, {"pii": {"preset": "pii", "threshold": 0.0}})
+    spans = response["spans"]["pii"]
+    assert spans[0]["start"] < state.index("My email")
+    assert spans[-1]["end"] > state.index("response")
+    assert all(state[s["start"] : s["end"]] == s["text"] for s in spans)
+
+
 def test_set_answers_a_noul_per_label(model) -> None:
     response = ask(
         model,
