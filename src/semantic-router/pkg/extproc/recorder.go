@@ -794,7 +794,7 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
-	if ctx == nil || ctx.RouterReplayID == "" || usage.TotalTokens == nil {
+	if ctx == nil || ctx.RouterReplayID == "" || (usage.TotalTokens == nil && usage.ProviderCache == nil) {
 		return
 	}
 
