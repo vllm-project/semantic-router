@@ -137,15 +137,16 @@ config:
 # serves: the startup embedding download, gated only on
 # !EmbeddingModels.UsesRemoteEmbeddingBackend() and the model_catalog.embeddings
 # *_model_path values (pkg/modeldownload/feature_gates.go), and the fact-check
-# model (Vela 2.0 0.3B by default) that gates when detection runs. 2Gi held while this
-# profile was selection: manual and never ran in CI; on the PR lane the pod is
-# OOMKilled during fact-check initialization before the startup probe passes.
-# jailbreak-onerror needs 6Gi for the embedding load alone, so this profile,
-# which adds the 32K classifier on top, gets 8Gi.
+# model (vela3-fast by default, about 7 GB once loaded) that gates when
+# detection runs. 2Gi held while this profile was selection: manual and never
+# ran in CI; on the PR lane the pod is OOMKilled during fact-check
+# initialization before the startup probe passes. 8Gi leaves vela3-fast little
+# room beside the embedding process (the Router restarted once while loading in
+# CI), so this profile gets the 12Gi limit the default model needs.
 resources:
   limits:
     cpu: '2'
-    memory: 8Gi
+    memory: 12Gi
   requests:
     cpu: 500m
     memory: 2Gi

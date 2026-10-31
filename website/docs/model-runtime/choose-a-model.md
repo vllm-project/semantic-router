@@ -109,7 +109,7 @@ and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
 spans of text (`span`), and the router routes on both. Its router span head
 also answers the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
 [`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) signals,
-which is how the default 0.3B deployment replaces the separate PII and Halu
+which is how a 0.3B deployment replaces the separate PII and Halu
 models. On a CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens
 (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and 9B
 are the most accurate.
@@ -212,7 +212,7 @@ CPU. Measured through the Router on the
 | Router on 12 CPU cores | p50 | p95 | Requests per second | At concurrency 16 |
 | --- | ---: | ---: | ---: | ---: |
 | Vela 1.0 specialists (restored) | 16 ms | 58 ms | 38.9 | 51.8 |
-| Vela 2.0 0.3B (the default) | 79 ms | 100 ms | 11.9 | 12.8 |
+| Vela 2.0 0.3B (the previous default) | 79 ms | 100 ms | 11.9 | 12.8 |
 
 [#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on the
 CPU latency. On a GPU (`use_cpu: false`), the 0.3B answers the same questions
