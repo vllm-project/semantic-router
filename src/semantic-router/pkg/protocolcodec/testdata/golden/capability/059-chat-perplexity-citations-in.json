@@ -1,0 +1,16 @@
+{
+  "operation": "stream",
+  "cases": [
+    {
+      "name": "perplexity_citations",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "sonar",
+        "chunks": [
+          "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"sonar\",\"choices\":[{\"index\":0,\"finish_reason\":null,\"delta\":{\"role\":\"assistant\",\"content\":\"answer\"}}]}\n\n",
+          "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"sonar\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{}}],\"citations\":[\"https://example.com/source\"],\"search_results\":[{\"title\":\"Source\",\"url\":\"https://example.com/source\",\"date\":\"2026-01-01\"}]}\n\ndata: [DONE]\n\n"
+        ]
+      }
+    }
+  ]
+}
