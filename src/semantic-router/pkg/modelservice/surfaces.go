@@ -214,6 +214,9 @@ func (c *Client) send(ctx context.Context, task api.BundleTask) (api.BundleResul
 	started := time.Now()
 	switch {
 	case task.Decisions != nil:
+		if err := c.checkMediaBody(*task.Decisions, hasDecisionMedia(task.Decisions)); err != nil {
+			return api.BundleResult{}, exchangeTiming{}, err
+		}
 		response, err := c.api.CreateDecisionsWithResponse(ctx, *task.Decisions)
 		if err != nil {
 			return api.BundleResult{}, exchangeTiming{}, transportError(ctx, err)
@@ -253,6 +256,12 @@ func (c *Client) Bundle(ctx context.Context, tasks []api.BundleTask) ([]api.Bund
 }
 
 func (c *Client) sendBundle(ctx context.Context, tasks []api.BundleTask) ([]api.BundleResult, exchangeTiming, error) {
+	if err := c.checkMediaBody(api.BundleRequest{Tasks: tasks}, bundleHasMedia(tasks)); err != nil {
+		if len(tasks) < 2 {
+			return nil, exchangeTiming{}, err
+		}
+		return c.splitMediaBundle(ctx, tasks)
+	}
 	started := time.Now()
 	response, err := c.api.CreateBundleWithResponse(ctx, api.BundleRequest{Tasks: tasks})
 	if err != nil {

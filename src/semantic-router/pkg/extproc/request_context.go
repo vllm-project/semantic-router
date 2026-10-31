@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -438,6 +439,7 @@ type RequestContext struct {
 	// contract and neutral request.
 	SourceFormat    llmprotocol.WireFormat
 	TargetFormat    llmprotocol.WireFormat
+	decisionMedia   map[string]modelservice.DecisionMedia
 	SemanticRequest *llmprotocol.Request
 	// FallbackRequest is an immutable, protocol-neutral snapshot taken after all
 	// request plugins and final capability checks. Every provider retry clones

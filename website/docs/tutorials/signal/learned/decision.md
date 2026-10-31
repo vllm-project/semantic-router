@@ -276,3 +276,56 @@ are listed in the `x-vsr-matched-decision-model` response header.
 
 To choose a model, size and hardware, or to run the model on your own GPU
 server, see [Decision models](../../../model-runtime/guides/decisions.md).
+
+## Images and videos in Router decisions
+
+Decision deployments can opt into inline user images and videos. The setting
+is off by default and applies to request-stage decision signals, compatible built-in questions
+sharing their call, and the decision model selection algorithm.
+The policy is per deployment, with no per-question override. Questions sharing
+a deployment's call receive the same media.
+Response-stage jailbreak and hallucination checks do not inherit user attachments,
+even when they share a deployment.
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      decision-d3:
+        provider: model_runtime
+        artifact: vllm-sr/d3-lite
+        input:
+          media:
+            images: {max_count: 4}
+            videos: {max_count: 1, max_bytes: 16000000}
+```
+
+Bind your decision question or selector to `decision-d3`. Startup checks that
+the model card advertises each enabled modality. `max_bytes` defaults to the
+card's limit and can only lower it. `max_count` defaults to four images or one
+video and can only lower those defaults. Omitting a modality disables it;
+zero limits mean use the default.
+
+Images must be inline PNG, JPEG, or WebP data URLs. Videos must be inline MP4,
+WebM, QuickTime, or Matroska data URLs. The Router validates base64 and container
+signatures; the runtime owns pixel, duration, and frame limits. The most recent
+eligible attachments are retained in input order within each modality. Remote
+URLs and file references are never fetched for decisions. The backend request
+keeps its original media.
+
+`vllm-sr route preview --request-file request.json` applies the same deployment
+media policy to request signals and decision model selection as live routing.
+Include the inline attachments in the request's `messages`; they are not included
+in the preview response. Response-stage checks do not inherit request media.
+
+The Router skips malformed, unsupported, excessive, or oversized attachments.
+`vsr_decision_media_skipped_total{kind,reason}` counts skips during deployment
+preparation for a request. It exposes neither URLs nor payloads. Timeouts and
+refused runtime calls retain the existing unknown-signal behavior.
+
+Chat Completions `video_url` parts are no longer refused at ingress, even when
+decision media is disabled. A backend with a recognized capability declaration
+must include `video_input` to receive the request. When a backend has no capability
+declaration, the Router forwards the video as it does images; this does not verify
+that the backend model supports video. With `input.media` absent, decision model
+calls remain text-only.

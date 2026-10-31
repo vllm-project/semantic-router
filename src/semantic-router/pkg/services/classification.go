@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/decisionmedia"
 )
 
 // Global classification service instance
@@ -189,7 +190,7 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		}, nil
 	}
 
-	input.requestFacts.Context = ctx
+	input.requestFacts.Context = classifier.RequestDecisionContext(ctx, decisionmedia.FromRequest(input.semanticRequest))
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,

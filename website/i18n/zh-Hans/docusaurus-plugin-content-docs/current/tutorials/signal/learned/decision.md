@@ -232,3 +232,26 @@ routing:
 Decision 信号可能按部署的扫描预算截取用于路由判断的输入。这不会缩短发送给所选 Chat 后端的请求；需要完整输入覆盖时，请使用专用的 PII 或 Reask 任务。匹配的 Decision 信号会列在 `x-vsr-matched-decision-model` 响应头中。
 
 关于模型、规模、硬件的选择，以及如何在自己的 GPU 服务器上运行模型，请参阅 [Decision 模型指南](/model-runtime/guides/decisions.md)。
+
+## Router 判断中的图像和视频
+
+Decision 部署可以显式启用请求中的内联图像和视频。默认不启用。该设置按部署生效，适用于请求阶段的 Decision 信号、共享调用的内置问题以及 Decision 选模算法。响应阶段的检查不会继承用户附件。
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      decision-d3:
+        provider: model_runtime
+        artifact: vllm-sr/d3-lite
+        input:
+          media:
+            images: {max_count: 4}
+            videos: {max_count: 1, max_bytes: 16000000}
+```
+
+将问题或选模器绑定到 `decision-d3`。启动时会验证模型卡是否支持已启用的模态。`max_bytes` 和 `max_count` 只能收紧模型卡或默认限制；省略某种模态即禁用该模态。
+
+图像只接受内联 PNG、JPEG 或 WebP 数据 URL；视频只接受内联 MP4、WebM、QuickTime 或 Matroska 数据 URL。Router 会验证 base64 和容器签名，不会为 Decision 调用获取远程 URL 或文件。无效、不支持、过多或过大的附件会被跳过，原始后端请求仍保留其媒体。
+
+`vllm-sr route preview --request-file request.json` 与实时路由使用相同的部署媒体策略。请将内联附件放在请求的 `messages` 中。预览响应不会包含附件，响应阶段检查也不会继承这些附件。

@@ -234,6 +234,15 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 		return appendChatTextField(&state.wire.Refusal, content)
 	case llmprotocol.ContentReasoning:
 		return appendChatTextField(&state.wire.Reasoning, content)
+	case llmprotocol.ContentVideo:
+		if content.Cache != nil {
+			return unsupportedChatCacheDirective("video_url")
+		}
+		url := content.URL
+		if url == "" && content.Data != "" {
+			url = "data:" + content.MediaType + ";base64," + content.Data
+		}
+		state.parts = append(state.parts, chatContentWire{Type: "video_url", VideoURL: &chatVideoURLWire{URL: url}})
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)
 	case llmprotocol.ContentAudio:

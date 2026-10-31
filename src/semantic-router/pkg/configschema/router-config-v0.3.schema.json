@@ -2231,6 +2231,30 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DecisionMediaConfig": {
+      "properties": {
+        "images": {
+          "$ref": "#/$defs/DecisionMediaLimit"
+        },
+        "videos": {
+          "$ref": "#/$defs/DecisionMediaLimit"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionMediaLimit": {
+      "properties": {
+        "max_count": {
+          "type": "integer"
+        },
+        "max_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DecisionModelBinding": {
       "properties": {
         "deployment": {
@@ -4747,6 +4771,9 @@
     },
     "ModelInputBudget": {
       "properties": {
+        "media": {
+          "$ref": "#/$defs/DecisionMediaConfig"
+        },
         "max_tokens": {
           "type": "integer"
         },
