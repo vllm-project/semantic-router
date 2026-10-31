@@ -76,7 +76,7 @@ func testDashboardStdioShutdown(t *testing.T, mode string) {
 	process := stdioHelperProcess(t, exitMarker)
 	// Manager.Connect cancels its initialization context on success. The
 	// process must remain usable until the manager explicitly closes it.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), preconditionBudget)
 	defer cancel()
 	if _, err := dashboard.mcpManager.ExecuteTool(ctx, config.ID, "ping", nil); err != nil {
 		t.Fatalf("stdio connection did not survive initialization: %v", err)
@@ -129,7 +129,7 @@ func TestDashboardCloseCancelsStdioInitialization(t *testing.T) {
 	defer cancel()
 	connectDone := make(chan error, 1)
 	go func() { connectDone <- dashboard.mcpManager.Connect(ctx, config.ID) }()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(preconditionBudget)
 	for {
 		if _, err := os.Stat(exitMarker + ".initializing"); err == nil {
 			break
