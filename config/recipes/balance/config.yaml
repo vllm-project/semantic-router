@@ -6,11 +6,18 @@ listeners:
     timeout: 1200s
 global:
   model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
     embeddings:
       semantic:
         embedding_config:
           enable_soft_matching: true
           top_k: 1
+    system:
+      decision_model:
+        deployment: primary
   stores:
     response_cache:
       enabled: false
