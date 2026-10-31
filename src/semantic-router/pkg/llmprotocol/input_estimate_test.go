@@ -65,3 +65,16 @@ func TestInputEstimateIncludesConstrainedOutputSchema(t *testing.T) {
 		t.Fatalf("schema demand before=%+v after=%+v", before, after)
 	}
 }
+
+func TestInputEstimateIncludesReasoningContinuityHistory(t *testing.T) {
+	request := Request{Messages: []Message{{Role: RoleAssistant}}}
+	before := EstimateInput(&request)
+	request.Messages[0].Content = []Content{
+		{Kind: ContentReasoning, ReasoningDetail: &ReasoningDetail{Type: ReasoningDetailText, Text: OptionalString{Present: true, Value: "12345678"}, Signature: OptionalString{Present: true, Value: "signed"}}},
+		{Kind: ContentReasoning, ReasoningDetail: &ReasoningDetail{Type: ReasoningDetailEncrypted, Data: OptionalString{Present: true, Value: "opaque-state"}}},
+	}
+	after := EstimateInput(&request)
+	if after.TextBytes-before.TextBytes != 8 || after.StructuredBytes-before.StructuredBytes != 18 || after.Tokens-before.Tokens != 20 || !after.HasNonText {
+		t.Fatalf("continuity history was not reserved: before=%+v after=%+v", before, after)
+	}
+}
