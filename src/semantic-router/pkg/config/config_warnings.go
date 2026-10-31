@@ -67,7 +67,7 @@ func modalityDetectorOffWarning(cfg *RouterConfig) (ConfigWarning, bool) {
 		Field: "global.model_catalog.modules.modality_detector",
 		Message: fmt.Sprintf(
 			"the modality signal never matches: %s use it, but global.model_catalog.modules.modality_detector is not enabled; "+
-				"enable it with method: classifier and confidence_threshold: 0.51 (Vela 2.0 0.3B), or remove the modality rules",
+				"enable it with method: classifier and confidence_threshold: 0.63 (vela3-fast), or remove the modality rules",
 			strings.Join(uses, ", "),
 		),
 	}, true
