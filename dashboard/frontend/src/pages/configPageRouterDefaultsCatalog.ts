@@ -122,21 +122,20 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     tools_db_path: 'config/tools_db.json',
     fallback_to_empty: true,
   } satisfies ToolIntegrationConfig,
+  // The module thresholds are left out: the Router gives a module without one
+  // the operating point of the model it runs.
   prompt_guard: {
     enabled: true,
     model_ref: 'prompt_guard',
-    threshold: 0.75,
     use_cpu: true,
   },
   classifier: {
     domain: {
       model_ref: 'domain_classifier',
-      threshold: 0.28,
       use_cpu: true,
     },
     pii: {
       model_ref: 'pii_classifier',
-      threshold: 0.01,
       use_cpu: true,
     },
     preference: {
@@ -147,7 +146,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.93,
       use_cpu: true,
     },
     detector: {
@@ -162,7 +160,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   feedback_detector: {
     enabled: true,
     model_ref: 'feedback_detector',
-    threshold: 0.37,
     use_cpu: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
   complexity: {},

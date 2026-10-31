@@ -972,13 +972,13 @@ config:
       jailbreak:
         - name: jailbreak_standard
           # Match the published Guard operating point in canonical defaults.
-          threshold: 0.75
+          threshold: 0.88
           include_history: false
           description: Standard jailbreak detection
       pii:
         - &pii_deny_all
           name: pii_deny_all
-          threshold: 0.01
+          threshold: 0.18
           include_history: false
           description: Block all PII
       classifiers:

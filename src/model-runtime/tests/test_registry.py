@@ -91,11 +91,11 @@ def test_licence_policy():
     )
 
 
-def test_every_builtin_model_has_cpu_and_rocm_golden_answers():
+def test_every_builtin_model_has_cpu_rocm_and_cuda_golden_answers():
     from vllm_srun.plugins.decisions import well_formed
 
     for model in builtin.all_models("decision2"):
-        for device_class in ("cpu", "rocm"):
+        for device_class in ("cpu", "rocm", "cuda:sm_90"):
             answers = model.golden_answers.get(device_class)
             assert answers, (model.repo_id, device_class)
             assert set(answers) == {"domain", "reasoning", "difficulty"}
@@ -138,6 +138,7 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         "decision1",
         "task_heads",
         "vela2",
+        "vela3",
         "multimodal_embedding",
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
@@ -146,6 +147,7 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         for name in (
             "d3",
             "d3-turbo",
+            "d3-ultra",
             "d3-flash",
             "d3-mini",
             "d3-nano",

@@ -47,8 +47,8 @@ apply. Without a rule the plugin classifies the answer itself, which is the
 compatibility path and is reported at load as such.
 
 The plugin depends on
-`global.model_catalog.modules.hallucination_mitigation`, whose detector (Vela
-2.0 0.3B by default, with Vela Halu available as a specialist) runs in the [model runtime](../../model-runtime/guides/hallucination.md).
+`global.model_catalog.modules.hallucination_mitigation`, whose detector
+(vela3-fast by default, with Vela Halu available as a specialist) runs in the [model runtime](../../model-runtime/guides/hallucination.md).
 Model responses and supplied grounding context are processed by that module.
 NLI explanations (`use_nli`) are retired; `vllm-sr config migrate` removes the
 setting. Input handling depends on the selected detector and deployment budget;
