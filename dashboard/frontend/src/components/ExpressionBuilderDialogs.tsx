@@ -1,33 +1,56 @@
 import React, { memo, useCallback, useId, useMemo, useState } from 'react'
 
+import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
+import { RULE_ON_ERROR_VALUES } from '@/lib/decisionRuleAst'
+
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './ExpressionBuilder.module.css'
-import type { RuleNode, SignalDescriptor } from './ExpressionBuilderSupport'
+import {
+  newRuleNodeId,
+  PREDICATE_FIELDS,
+  predicateDraft,
+  predicateFromDraft,
+  type PredicateDraft,
+  type RuleLeaf,
+  type RuleNode,
+  type SignalDescriptor,
+} from './ExpressionBuilderSupport'
 import { OPERATOR_ORDER } from './ExpressionBuilderNodes'
 
 interface EditSignalDialogProps {
-  signalType: string
-  signalName: string
+  initial: RuleLeaf
   availableSignals: SignalDescriptor[]
-  onSave: (signalType: string, signalName: string) => void
+  /** Fields set to undefined are cleared on the leaf. */
+  onSave: (edit: Partial<RuleLeaf>) => void
   onCancel: () => void
 }
 
+// label and on_error only apply to classifier and decision conditions.
+const isLabelledType = (signalType: string) => {
+  const type = signalType.trim().toLowerCase()
+  return type === 'classifier' || type === 'decision'
+}
+
 export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
-  ({ signalType: initialType, signalName: initialName, availableSignals, onSave, onCancel }) => {
-    const [signalType, setSignalType] = useState(initialType)
-    const [signalName, setSignalName] = useState(initialName)
+  ({ initial, availableSignals, onSave, onCancel }) => {
+    const [signalType, setSignalType] = useState(initial.signalType)
+    const [signalName, setSignalName] = useState(initial.signalName)
+    const [label, setLabel] = useState(initial.label ?? '')
+    const [onError, setOnError] = useState<string>(initial.onError ?? '')
+    const [predicate, setPredicate] = useState<PredicateDraft>(() => predicateDraft(initial.predicate))
     const [search, setSearch] = useState('')
     const titleId = useId()
+    const labelListId = useId()
     const dialogRef = useAccessibleDialog<HTMLDivElement>({
       isOpen: true,
       onClose: onCancel,
     })
 
-    const types = useMemo(
-      () => Array.from(new Set(availableSignals.map(signal => signal.signalType))).sort(),
-      [availableSignals]
-    )
+    const types = useMemo(() => {
+      const known = new Set<string>(DECISION_SIGNAL_TYPES)
+      for (const signal of availableSignals) known.add(signal.signalType)
+      return Array.from(known).sort()
+    }, [availableSignals])
 
     const filteredSignals = useMemo(() => {
       let list = availableSignals.filter(signal => signal.signalType === signalType)
@@ -38,14 +61,43 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
       return list
     }, [availableSignals, search, signalType])
 
+    const descriptor = useMemo(
+      () => availableSignals.find(signal => signal.signalType === signalType && signal.name === signalName),
+      [availableSignals, signalName, signalType]
+    )
+    const labelled = isLabelledType(signalType)
+    const typeChanged = signalType !== initial.signalType
+    // A type change drops label and on_error only when the new type cannot
+    // carry them; an unchanged type keeps whatever the leaf already had.
+    const keepsLabelFields = labelled || !typeChanged
+    const dropsLabelFields = !keepsLabelFields && Boolean(initial.label || initial.onError)
+    const unsupportedPredicateKeys = useMemo(() => {
+      const raw = (initial.predicate ?? {}) as Record<string, unknown>
+      return Object.keys(raw).filter(
+        key => raw[key] !== undefined && !(PREDICATE_FIELDS as readonly string[]).includes(key)
+      )
+    }, [initial.predicate])
+    const parsedPredicate = useMemo(
+      () => predicateFromDraft(predicate, initial.predicate),
+      [initial.predicate, predicate]
+    )
+    const canSave = Boolean(signalType.trim() && signalName.trim()) && parsedPredicate.invalid.length === 0
+
     const handleSubmit = useCallback(
       (event: React.FormEvent) => {
         event.preventDefault()
-        if (signalType.trim() && signalName.trim()) {
-          onSave(signalType, signalName)
-        }
+        // Synthetic submit events bubble through portals to a host form.
+        event.stopPropagation()
+        if (!canSave) return
+        onSave({
+          signalType,
+          signalName,
+          label: keepsLabelFields && label !== '' ? label : undefined,
+          predicate: parsedPredicate.predicate,
+          onError: keepsLabelFields && onError !== '' ? (onError as RuleLeaf['onError']) : undefined,
+        })
       },
-      [onSave, signalName, signalType]
+      [canSave, keepsLabelFields, label, onError, onSave, parsedPredicate.predicate, signalName, signalType]
     )
 
     return (
@@ -54,6 +106,7 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
           ref={dialogRef}
           className={styles.editDialog}
           role="dialog"
+          data-rule-editor-dialog
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
@@ -122,6 +175,70 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
                 </div>
               </div>
             ) : null}
+            {labelled ? (
+              <>
+                <label className={styles.editLabel}>
+                  Label
+                  <input
+                    className={styles.editInput}
+                    value={label}
+                    list={descriptor?.labels?.length ? labelListId : undefined}
+                    onChange={event => setLabel(event.target.value)}
+                    placeholder="Declared label"
+                  />
+                  {descriptor?.labels?.length ? (
+                    <datalist id={labelListId}>
+                      {descriptor.labels.map(option => (
+                        <option key={option} value={option} />
+                      ))}
+                    </datalist>
+                  ) : null}
+                </label>
+                <label className={styles.editLabel}>
+                  On error
+                  <select
+                    className={styles.editSelect}
+                    value={onError}
+                    onChange={event => setOnError(event.target.value)}
+                  >
+                    <option value="">Not set</option>
+                    {RULE_ON_ERROR_VALUES.map(value => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
+            <fieldset className={styles.editLabel} style={{ border: 'none', margin: 0, padding: 0 }}>
+              <legend>Score predicate</legend>
+              <div className={styles.editFieldRow}>
+                {PREDICATE_FIELDS.map(key => (
+                  <label key={key} className={styles.editLabel}>
+                    {key}
+                    <input
+                      className={styles.editInput}
+                      type="number"
+                      step="any"
+                      value={predicate[key]}
+                      aria-invalid={parsedPredicate.invalid.includes(key) ? true : undefined}
+                      onChange={event => setPredicate(current => ({ ...current, [key]: event.target.value }))}
+                    />
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {unsupportedPredicateKeys.length > 0 ? (
+              <p className={styles.editNote} role="note">
+                Unsupported predicate {unsupportedPredicateKeys.length === 1 ? 'field' : 'fields'}{' '}
+                {unsupportedPredicateKeys.join(', ')} {unsupportedPredicateKeys.length === 1 ? 'is' : 'are'} kept
+                and reported as an error until removed from the config.
+              </p>
+            ) : null}
+            {dropsLabelFields ? (
+              <p className={styles.editNote} role="note">
+                {signalType} conditions cannot carry a label or on_error, so saving clears them.
+              </p>
+            ) : null}
             <div className={styles.editDialogActions}>
               <button type="button" className={styles.editBtnCancel} onClick={onCancel}>
                 Cancel
@@ -129,7 +246,7 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
               <button
                 type="submit"
                 className={styles.editBtnSave}
-                disabled={!signalType.trim() || !signalName.trim()}
+                disabled={!canSave}
               >
                 Save
               </button>
@@ -191,6 +308,7 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
           ref={dialogRef}
           className={styles.addPickerDialog}
           role="dialog"
+          data-rule-editor-dialog
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
@@ -219,8 +337,8 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
                     onClick={() =>
                       onPick(
                         operator === 'NOT'
-                          ? { operator: 'NOT', conditions: [] as unknown as [RuleNode] }
-                          : { operator, conditions: [] }
+                          ? { id: newRuleNodeId(), operator: 'NOT', conditions: [] as unknown as [RuleNode] }
+                          : { id: newRuleNodeId(), operator, conditions: [] }
                       )
                     }
                   >
@@ -250,7 +368,7 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
                           key={signal.name}
                           className={styles.addPickerSignalItem}
                           onClick={() =>
-                            onPick({ signalType: signal.signalType, signalName: signal.name })
+                            onPick({ id: newRuleNodeId(), signalType: signal.signalType, signalName: signal.name })
                           }
                         >
                           {signal.name}

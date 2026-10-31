@@ -276,6 +276,8 @@ export interface DecisionCondition {
   on_error?: 'no_match' | 'match'
   operator?: 'AND' | 'OR' | 'NOT'
   conditions?: DecisionCondition[]
+  // Keys the dashboard does not model stay typed instead of being lost.
+  [key: string]: unknown
 }
 
 // The root is a combination, a single leaf condition, or empty (unconditional).
@@ -1424,6 +1426,21 @@ export interface DecisionFormState {
   reliability: Record<string, unknown>
   fallback: Record<string, unknown>
   declarative: Record<string, unknown>
+}
+
+/**
+ * Replaces the named decision in place, keeping the decision order. Returns
+ * false when no decision has that name.
+ */
+export function replaceDecisionByName(
+  config: { decisions?: DecisionConfig[] },
+  name: string,
+  next: DecisionConfig,
+): boolean {
+  const index = (config.decisions || []).findIndex((decision) => decision.name === name)
+  if (index === -1 || !config.decisions) return false
+  config.decisions = config.decisions.map((decision, current) => (current === index ? next : decision))
+  return true
 }
 
 export function mergeDecisionForSave(

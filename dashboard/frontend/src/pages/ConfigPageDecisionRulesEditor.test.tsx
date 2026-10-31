@@ -30,19 +30,66 @@ describe('decision rules editor', () => {
     expect(view).toContain('jailbreak: prompt_injection')
     expect(view).toContain('On unknown: no_match')
     expect(view).not.toContain('Unconditional match')
+  })
 
-    const editor = renderRules(singleCondition)
-    expect(editor).toContain('<option value="CONDITION" selected="">Single condition</option>')
-    expect(editor).toContain('<option value="jailbreak" selected="">')
-    expect(editor).toContain('value="prompt_injection"')
-    expect(editor).toContain('<option value="no_match" selected="">No match</option>')
+  it('renders predicates readably and keeps on_unknown on an unconditional view', () => {
+    const view = renderRules(
+      {
+        operator: 'AND',
+        conditions: [
+          { type: 'classifier', name: 'intent', label: 'billing', predicate: { gte: 0.7, lt: 0.95 }, on_error: 'match' },
+        ],
+      },
+      true,
+    )
+    expect(view).toContain('Label: billing')
+    expect(view).toContain('Predicate: gte 0.7, lt 0.95')
+    expect(view).toContain('On error: match')
+    expect(view).not.toContain('{&quot;gte&quot;')
+    expect(renderRules({ on_unknown: 'match' }, true)).toContain('On unknown: match')
   })
 
   it('keeps empty rules unconditional', () => {
     expect(renderRules({}, true)).toBe('<span>Unconditional match</span>')
+  })
+
+  it('edits through the shared decision rule editor with the on_unknown policy', () => {
+    const editor = renderRules(singleCondition)
+    // One canvas implementation: the shared editor's Result line and raw toggle.
+    expect(editor).toContain('jailbreak(&quot;prompt_injection&quot;)')
+    expect(editor).toContain('id="config-decision-rules-raw-toggle"')
+    expect(editor).toContain('id="config-decision-rules-on-unknown"')
+    expect(editor).toContain('<option value="no_match" selected="">No match</option>')
+    expect(editor).toContain('When a signal evaluator fails')
+    // The old per-condition form editor is gone.
+    expect(editor).not.toContain('Root behavior')
+    expect(editor).not.toContain('Add Condition')
+  })
+
+  it('shows an empty rule set as an unconditional canvas', () => {
     const editor = renderRules({})
-    expect(editor).toContain('<option value="" selected="">Unconditional match</option>')
-    expect(editor).not.toContain('Single condition')
+    expect(editor).toContain('No condition — matches all requests')
+    expect(editor).toContain('<option value="" selected="">Use condition policy</option>')
+  })
+
+  it('reports a tree the DSL cannot express inline and leaves validity to the Router', () => {
+    const editor = renderToStaticMarkup(
+      createElement(ConfigPageDecisionRulesEditor, {
+        value: { operator: 'AND', conditions: [{ operator: 'NOT', conditions: [] }] },
+        onChange: vi.fn(),
+        availableSignals: [{ signalType: 'keyword', name: 'recipe-only' }],
+      }),
+    )
+    expect(editor).toContain('NOT requires exactly one child condition, got 0')
+    // An undeclared reference is the Router's to reject on save.
+    const undeclared = renderToStaticMarkup(
+      createElement(ConfigPageDecisionRulesEditor, {
+        value: { type: 'keyword', name: 'root-only' },
+        onChange: vi.fn(),
+        availableSignals: [{ signalType: 'keyword', name: 'recipe-only' }],
+      }),
+    )
+    expect(undeclared).not.toContain('is not declared')
   })
 
   it('counts a single root condition in the decisions table', () => {
