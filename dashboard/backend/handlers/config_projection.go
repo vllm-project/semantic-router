@@ -11,7 +11,7 @@ import (
 // GET /api/router/config/deployments
 func ConfigDeploymentsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -38,7 +38,7 @@ func ConfigDeploymentsHandler() http.HandlerFunc {
 // GET /api/router/config/deployments/{version}
 func ConfigDeploymentDetailHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -75,7 +75,7 @@ func ConfigDeploymentDetailHandler() http.HandlerFunc {
 // GET /api/router/config/active-projection
 func ActiveConfigProjectionHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}

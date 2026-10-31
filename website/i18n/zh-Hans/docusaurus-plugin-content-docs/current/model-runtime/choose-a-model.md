@@ -228,7 +228,7 @@ global:
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
 | AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform rocm` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
-| NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
+| NVIDIA GPU | 已验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
 | 昇腾 NPU（910B、950） | 可用，尚未验证 | 设置 `device: npu:0`，把运行时安装在 torch_npu 旁边并备好宿主机 CANN 工具包。见[昇腾 NPU](../installation/ascend-npu.md)。 |
 | Apple 芯片 | 本版本仅支持 CPU | 在 macOS 上 docker 目标使用 CPU 镜像，因为 Docker 的 Linux 虚拟机拿不到 GPU。通过宿主机使用 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。 |
