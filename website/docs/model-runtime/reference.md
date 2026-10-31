@@ -237,7 +237,8 @@ Vela 2.0 question that supports windowing reads a long state part whole up to it
 0.3B) and 32 on a GPU. A decisions request's `options.max_tokens`, or the
 models-file option `max_scan_tokens`, sets another. A question with
 `overflow: truncate` reads only the part's first `limits.truncate_tokens`
-instead: one input on a CPU, one forward. Questions of both kinds share their
+instead: one input on a CPU, one forward. A Vela 3.0 evidence span question
+truncates to its own 32,768-token window instead. Questions of both kinds share their
 model input, as they would without `overflow`, unless a part has to be read
 in windows. An input over its scan budget fails instead of being read:
 
