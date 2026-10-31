@@ -97,6 +97,7 @@ type OpenAIRouter struct {
 	LookupTable          lookuptable.LookupTable
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          memory.Store
+	memoryStore          *memory.StoreSlot
 	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry

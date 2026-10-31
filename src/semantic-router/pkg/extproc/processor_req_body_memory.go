@@ -274,7 +274,23 @@ func recordMemoryOutcome(ctx *RequestContext, status, reason string, failOpen bo
 }
 
 func (r *OpenAIRouter) getMemoryStore() memory.Store {
+	if r == nil {
+		return nil
+	}
+	if r.memoryStore != nil {
+		return r.memoryStore.Load()
+	}
 	return r.MemoryStore
+}
+
+func (r *OpenAIRouter) getMemoryExtractor() *memory.MemoryExtractor {
+	if r == nil {
+		return nil
+	}
+	if r.memoryStore != nil {
+		return memory.NewMemoryChunkStore(r.memoryStore.Load())
+	}
+	return r.MemoryExtractor
 }
 
 // getUserIDFromContext returns the Router-authenticated tenant user.
