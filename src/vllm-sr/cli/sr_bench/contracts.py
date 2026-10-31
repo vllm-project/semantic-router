@@ -29,6 +29,7 @@ from .dataset_io import (
     verified_lines,
 )
 from .experiments import validate_membership, validate_role
+from .fault_contract import validate_fault_schedule_entry
 from .native_output import configure as configure_output_policy
 
 MAX_PARAMETER_BYTES = 65536
@@ -582,6 +583,49 @@ def plan(manifest, *, policy=None):
     m["sampling"] = sampling
     if "experiment" in m:
         validate_role(m, m["experiment"]["role"])
+    case_ids = {c["id"] for c in cases}
+    for c in cases:
+        if "fault_schedule" in c:
+            fs = c["fault_schedule"]
+            if not isinstance(fs, list):
+                raise ValueError(
+                    f"case {c['id']} fault_schedule must be a list of entries"
+                )
+            c["fault_schedule"] = [
+                validate_fault_schedule_entry(entry, f"case {c['id']} fault_schedule")
+                for entry in fs
+            ]
+
+    raw_schedules = m.get("fault_schedules") or m.get("fault_schedule")
+    if raw_schedules is not None:
+        if not isinstance(raw_schedules, dict):
+            raise ValueError(
+                "fault_schedules must be an object mapping task IDs to lists of fault entries"
+            )
+        normalized_schedules = {}
+        for task_id, entries in raw_schedules.items():
+            if task_id not in case_ids:
+                raise ValueError(
+                    f"fault_schedule task ID '{task_id}' not found in manifest cases"
+                )
+            if isinstance(entries, list):
+                norm_entries = [
+                    validate_fault_schedule_entry(e, f"task {task_id} fault_schedule")
+                    for e in entries
+                ]
+            elif isinstance(entries, dict):
+                norm_entries = [
+                    validate_fault_schedule_entry(
+                        {"call_index": int(k), **v}, f"task {task_id} fault_schedule"
+                    )
+                    for k, v in entries.items()
+                ]
+            else:
+                raise ValueError(
+                    f"task {task_id} fault_schedule must be a list of entries"
+                )
+            normalized_schedules[task_id] = norm_entries
+        m["fault_schedules"] = normalized_schedules
     m["case_sha256"] = digest(cases)
     expected_weights = {
         **BENCHMARK_WEIGHTS,
