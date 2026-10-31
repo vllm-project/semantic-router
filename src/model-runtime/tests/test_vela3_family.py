@@ -308,7 +308,21 @@ def test_unanswerable_questions_fail_alone(model) -> None:
             },
             "broad": {"type": "span", "criteria": {"a": None}, "head": "broad"},
             "preset": {"preset": "relevance"},
+            "described": {
+                "type": "noul",
+                "instructions": "Is it text?",
+                "criteria": {"true": "The input is text"},
+            },
+            "listed": {
+                "type": "noul",
+                "choices": [{"key": "true", "description": "The input is text"}],
+            },
             "fine": {"type": "noul", "instructions": "Is it text?"},
+            "undescribed": {
+                "type": "noul",
+                "instructions": "Is it text?",
+                "criteria": {"true": None},
+            },
         },
     )
     answers = response["answers"]
@@ -318,9 +332,14 @@ def test_unanswerable_questions_fail_alone(model) -> None:
         "wrong": "invalid_question",
         "broad": "invalid_question",
         "preset": "invalid_question",
+        "described": "invalid_question",
+        "listed": "invalid_question",
         "fine": None,
+        "undescribed": None,
     }
     assert answers["set"]["reason"] == "type_unsupported"
+    assert "instructions" in answers["described"]["message"]
+    assert answers["undescribed"]["noul"] == answers["fine"]["noul"]
 
 
 def test_long_inputs_fail_decisions_and_window_spans(model) -> None:
