@@ -80,7 +80,7 @@ docker-build-vllm-sr-envoy:
 	@$(LOG_TARGET)
 	@echo "Ensuring official Envoy image is available..."
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
-	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
+	@$(CONTAINER_RUNTIME) run --rm --entrypoint /usr/local/bin/envoy $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 
 # Build the vllm-sr router image (the vllm-sr target of the router Dockerfile)
 docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
@@ -380,7 +380,7 @@ vllm-sr-dev:
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
 		$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE); \
-		$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null; \
+		$(CONTAINER_RUNTIME) run --rm --entrypoint /usr/local/bin/envoy $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null; \
 		echo ""; \
 		echo "Envoy image available: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
@@ -449,7 +449,7 @@ vllm-sr-envoy-build:
 	@$(LOG_TARGET)
 	@echo "Ensuring official Envoy image is available..."
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
-	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
+	@$(CONTAINER_RUNTIME) run --rm --entrypoint /usr/local/bin/envoy $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 	@echo "Image available: $(VLLM_SR_ENVOY_IMAGE)"
 
 vllm-sr-dashboard-build: ## Build vLLM Semantic Router dashboard Docker image

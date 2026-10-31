@@ -149,7 +149,7 @@ docker-build-envoy:
 	@echo "Image: $(FULL_ENVOY_IMAGE)"
 	@echo ""
 	@docker image inspect $(FULL_ENVOY_IMAGE) >/dev/null 2>&1 || docker pull $(FULL_ENVOY_IMAGE)
-	@docker run --rm $(FULL_ENVOY_IMAGE) --version >/dev/null
+	@docker run --rm --entrypoint /usr/local/bin/envoy $(FULL_ENVOY_IMAGE) --version >/dev/null
 	@echo ""
 	@echo "Docker image available: $(FULL_ENVOY_IMAGE)"
 	@echo ""
