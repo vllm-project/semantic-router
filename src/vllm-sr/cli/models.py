@@ -1202,6 +1202,46 @@ class FastResponsePluginConfig(BaseModel):
     message: str
 
 
+BLOCKABLE_REQUEST_PARAMS: set[str] = {
+    "frequency_penalty",
+    "presence_penalty",
+    "max_tokens",
+    "max_completion_tokens",
+    "max_output_tokens",
+    "n",
+    "candidate_count",
+    "response_format",
+    "output_format",
+    "seed",
+    "stop",
+    "temperature",
+    "top_p",
+    "min_p",
+    "repetition_penalty",
+    "cache_salt",
+    "prompt_cache_key",
+    "top_k",
+    "tools",
+    "tool_choice",
+    "parallel_tool_calls",
+    "reasoning_effort",
+    "reasoning_budget_tokens",
+    "reasoning.summary",
+    "reasoning.display",
+    "metadata",
+    "store",
+    "auto_store",
+    "stream",
+    "stream_options",
+    "verbosity",
+    "text.verbosity",
+    "user",
+    "truncation",
+    "previous_response_id",
+    "conversation",
+}
+
+
 class RequestParamsPluginConfig(BaseModel):
     """Configuration for request_params plugin."""
 
@@ -1212,6 +1252,25 @@ class RequestParamsPluginConfig(BaseModel):
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
     strip_unknown: Optional[bool] = None
+
+    @field_validator("blocked_params")
+    @classmethod
+    def validate_blocked_params(cls, names: Optional[List[str]]) -> Optional[List[str]]:
+        if names is None:
+            return None
+        for name in names:
+            stripped = name.strip() if isinstance(name, str) else ""
+            if not stripped:
+                raise ValueError("empty parameter name cannot be blocked")
+            if stripped in {"model", "messages"}:
+                raise ValueError(
+                    f"required semantic field {stripped!r} cannot be blocked"
+                )
+            if stripped not in BLOCKABLE_REQUEST_PARAMS:
+                raise ValueError(
+                    f"parameter {stripped!r} cannot be blocked by request_params"
+                )
+        return names
 
 
 class ResponseJailbreakPluginConfig(BaseModel):
