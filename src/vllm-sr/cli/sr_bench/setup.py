@@ -9,10 +9,20 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .legacy_reasoning import CONFIGURATIONS, ENVIRONMENT, REQUIREMENTS, SOURCE_REVISION
+
 GRADER_BASE_IMAGE = "docker.io/library/python:3.12-slim-bookworm"
 
 # Harness and task versions are part of sr-bench 1.0, never a moving branch.
 PACKAGES = {
+    ENVIRONMENT: {
+        "env": "LEGACY_REASONING",
+        "module": "reasoning",
+        "repo": "https://github.com/vllm-project/semantic-router.git",
+        "revision": SOURCE_REVISION,
+        "python": "3.12",
+        "sparse": ["bench/reasoning"],
+    },
     "tau3": {
         "env": "TAU3",
         "module": "tau2",
@@ -95,6 +105,11 @@ def home():
 
 
 def harness_paths(benchmark):
+    if (
+        benchmark.startswith("legacy-")
+        and benchmark.removeprefix("legacy-") in CONFIGURATIONS
+    ):
+        benchmark = ENVIRONMENT
     spec = PACKAGES[benchmark]
     root = Path(
         os.environ.get(
@@ -256,7 +271,7 @@ def setup(benchmark="all", install=False, build_sandbox=False):
     )
 
     names = list(COUNTS) if benchmark == "all" else [benchmark]
-    if any(name not in COUNTS for name in names):
+    if any(name not in COUNTS and name not in PACKAGES for name in names):
         raise ValueError("Unknown benchmark")
     result = []
     for name in names:
@@ -273,7 +288,24 @@ def setup(benchmark="all", install=False, build_sandbox=False):
                 _checkout(spec, root)
                 if name == "tau3":
                     validate_tau3_text_assets(root)
-                if (root / "uv.lock").is_file() and name != "livecodebench":
+                if name == ENVIRONMENT:
+                    if not python.is_file():
+                        _run([uv, "venv", "--python", spec["python"], root / ".venv"])
+                    _run([uv, "pip", "sync", "--python", python, REQUIREMENTS])
+                    _run(
+                        [
+                            uv,
+                            "pip",
+                            "install",
+                            "--python",
+                            python,
+                            "--no-deps",
+                            "--no-build-isolation",
+                            "-e",
+                            root / "bench",
+                        ]
+                    )
+                elif (root / "uv.lock").is_file() and name != "livecodebench":
                     uv_command = [uv]
                     if spec.get("uv_version"):
                         uv_command += [
