@@ -15,6 +15,7 @@ from vllm_srun.config import (
     load_models_file,
 )
 from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.families.task_heads import family as task_heads
 from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.fixtures import write_fixture
@@ -277,10 +278,45 @@ def test_task_heads_keep_shared_context_off_and_report_exact_numerics_where_batc
         assert not served.shared
         if served.model.batch_invariant:
             assert served.numerics == "exact"
-        elif onednn.available():
-            pytest.fail(
-                "a native CPU task model with oneDNN's packed linear is batch-invariant"
-            )
+        else:
+            # no packed linear on this host, or the load-time probes found the
+            # packed products or the whole forward moving with the batch
+            assert served.numerics == "approximate"
+    finally:
+        runtime.stop()
+
+
+def test_a_task_model_is_exact_where_its_packed_linears_and_forward_are_invariant(
+    tmp_path, monkeypatch
+):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    monkeypatch.setattr(onednn, "invariant", lambda layers: True)
+    monkeypatch.setattr(task_heads, "batch_invariant", lambda model, vocab: True)
+    package = write_fixture(tmp_path / "heads", family="task_heads")
+    runtime = serve(package)
+    try:
+        served = runtime.served[0]
+        assert served.model.engine_model.batch_invariant
+        assert served.model.batch_invariant
+        assert served.numerics == "exact"
+    finally:
+        runtime.stop()
+
+
+def test_a_task_model_is_approximate_where_its_packed_linears_are_not_invariant(
+    tmp_path, monkeypatch
+):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    monkeypatch.setattr(onednn, "invariant", lambda layers: False)
+    package = write_fixture(tmp_path / "heads", family="task_heads")
+    runtime = serve(package)
+    try:
+        served = runtime.served[0]
+        assert not served.model.engine_model.batch_invariant
+        assert not served.model.batch_invariant
+        assert served.numerics == "approximate"
     finally:
         runtime.stop()
 
