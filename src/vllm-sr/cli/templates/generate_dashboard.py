@@ -83,7 +83,7 @@ def main():
     """Generate the checked-in dashboard without depending on the caller's cwd."""
     dashboard = generate_dashboard_document()
     output_file = _TEMPLATES_DIR / "llm-router-dashboard.serve.json"
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(dashboard, f, indent=2)
 
     print(f"Dashboard generated successfully: {output_file}")
