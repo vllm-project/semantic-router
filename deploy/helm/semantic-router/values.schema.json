@@ -94,6 +94,17 @@
         }
       }
     },
+    "modelDownload": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "hfEndpoint": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Endpoint for the Router's startup model download, rendered as the single HF_ENDPOINT container variable."
+        }
+      }
+    },
     "safetyGuards": {
       "type": "object",
       "additionalProperties": true,
