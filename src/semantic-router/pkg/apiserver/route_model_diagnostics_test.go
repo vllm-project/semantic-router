@@ -387,3 +387,29 @@ func TestModelDiagnosticsDeadlineRetainsGenerationUntilNativeReturn(t *testing.T
 		t.Fatal("completed inference retained its generation")
 	}
 }
+
+func TestModelDiagnosticsDecisionRelevanceHasCoverageAndDistinctUnits(t *testing.T) {
+	runtime, _ := servingtest.Runtime(t, map[string]runtimetest.Model{"judge": {}})
+	scorer, err := runtime.Relevance(context.Background(), config.ResolvedModelBinding{
+		Recipe: "default", Name: config.RAGRerankerConsumer,
+		Binding:    config.ModelBinding{Deployment: "judge", Contract: config.DecisionTaskContract},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scorer.Close()
+	cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: runtime}, &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}}})
+	registry := routerruntime.NewRegistry(cfg)
+	registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service})
+	server := httptest.NewServer((&ClassificationAPIServer{config: cfg, runtimeRegistry: registry}).setupRoutes())
+	defer server.Close()
+	status, body := diagnosticRequest(t, server, "rerank", `{"recipe":"default","binding":"rag.reranker","pairs":[{"query":"q","document":"a"}]}`)
+	var response ModelDiagnosticResponse[ModelDiagnosticRerankResult]
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || response.Result.ScoreType != "decision_relevance" || !reflect.DeepEqual(response.Result.Coverage, []string{"complete"}) || len(response.Result.Inputs) != 0 || response.Result.InputTokens == nil {
+		t.Fatalf("wrong score contract: %d %s", status, body)
+	}
+}
