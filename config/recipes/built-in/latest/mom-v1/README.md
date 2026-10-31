@@ -235,8 +235,12 @@ The bundle declares its decision model: a `primary` deployment of
 `vllm-sr/Vela-2.0-0.8B` with no fixed device, named by
 `global.model_catalog.system.decision_model`. With no device the router uses a
 GPU where one exists and the CPU otherwise. `vllm-sr recipe builtin init`
-copies only the learning and Replay defaults, so add this block to your
-configuration to use the model the probes were calibrated on:
+copies this deployment and binding into a configuration that binds no decision
+model. A configuration that already binds one, or that declares a `primary`
+deployment, keeps it; a configuration saved by Dashboard setup declares
+vela3-fast as `primary`. Balance asks a `score` question that vela3-fast cannot
+answer, so a Balance configuration on vela3-fast stops at router startup. To use
+the model the probes were calibrated on, set:
 
 ```yaml
 global:
@@ -254,7 +258,9 @@ On a CPU the decision call is slow. Measured through the router with its
 container limited to 4 CPUs and one request at a time, a short message takes
 about 4 seconds at the median and 6 seconds at the 90th percentile; a long
 input takes about 75 seconds, because the model reads 16,384 tokens of it.
-Serve the decision model on a GPU for live traffic: set
+On one AMD Instinct MI300X, with four requests in flight, routing Balance's
+probes took 0.25 seconds at the median and at most 2.4 seconds, long inputs
+included. Serve the decision model on a GPU for live traffic: set
 `device: rocm` or `device: cuda` on the deployment to require one. A smaller
 model, such as `vllm-sr/Vela-2.0-0.3B` in `artifact`, answers faster; re-run the
 probes after any change. See
