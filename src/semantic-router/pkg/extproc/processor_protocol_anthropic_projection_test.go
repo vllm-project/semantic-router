@@ -147,6 +147,7 @@ func TestAnthropicCrossFormatProjectionRejectsMeaningfulEditsAndDisplay(t *testi
 		{"clear_last", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"last"}]}}`, "lossy_translation"},
 		{"unknown_edit_option", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all","new_option":true}]}}`, "lossy_translation"},
 		{"summarized", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"summarized"}}`, "unsupported_reasoning_display"},
+		{"updates", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"updates"}}`, "unsupported_reasoning_display"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(test.body))
