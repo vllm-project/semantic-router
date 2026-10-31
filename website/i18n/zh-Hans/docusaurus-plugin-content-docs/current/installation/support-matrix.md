@@ -3,7 +3,7 @@ is_mtpe: false
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
-  source_commit: "49fd62932eb54334c4e4bbc64977733f1c7ed5fa"
+  source_commit: "56dbe50035d3cfeebdfdfed9124fadf0da2158c2"
   source_file: "docs/installation/support-matrix.md"
   outdated: false
 ---
@@ -90,7 +90,7 @@ translation:
 | Linux x86-64 上的 NVIDIA CUDA | Supported integration | 遵循 [NVIDIA CUDA](nvidia-cuda) 了解受支持的 Router 侧模型，或将 Router 保留在 CPU 上，并对照 vLLM 的支持矩阵限定单独的 NVIDIA 后端。 |
 | Linux x86-64 上的 AMD ROCm | Supported integration | 遵循 [AMD ROCm](amd-rocm) 了解受支持的 Router 侧模型，并将 Router、vLLM、ROCm 和模型 revision 作为一套进行限定。 |
 | AMD AI PC/NPU | Experimental, not qualified | 尚无维护中的部署契约；由 [issue #2373](https://github.com/vllm-project/semantic-router/issues/2373) 跟踪。 |
-| NVIDIA DGX Spark Arm64 | Experimental, not qualified | Arm64 镜像并不限定此平台上的 CUDA 或端到端推理；由 [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374) 跟踪。 |
+| NVIDIA DGX Spark Arm64 | Experimental, not qualified | `config/recipes/gb10` 和 `tools/qualification/gb10` 描述 GB10 上的一种 Kai 0.6B 配置。在该主机写出通过的收据之前，此配置保持未限定。其他模型、其他 GPU、Kubernetes GPU 服务，以及笼统的 ARM64+CUDA 声明仍未限定。由 [issue #5302](https://github.com/vllm-project/semantic-router/issues/5302) 和 [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374) 跟踪。 |
 | 其他加速器和操作系统 | Not qualified | 没有维护中的配置。用可复现的硬件、软件、镜像和测试证据开一个限定 issue。 |
 
 ## 投产之前

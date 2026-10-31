@@ -31,6 +31,7 @@ _run:
 		-f tools/make/helm.mk \
 		-f tools/make/openshift.mk \
 		-f tools/make/recipe-conformance.mk \
+		-f tools/make/gb10-qualification.mk \
 		-f tools/make/tooling.mk \
 		-f tools/make/e2e.mk \
 		-f tools/make/performance.mk \
