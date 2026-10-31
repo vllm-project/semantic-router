@@ -12,7 +12,8 @@ Policies, for one cheap model C and one strong model S:
   escalate   C runs, and when score > t S runs as well and its result is kept
   retry      C runs, and when score > t another C attempt runs (--retry names it)
   boundary   C or S is chosen before any attempt, from a per-task score
-  oracle     escalate exactly the attempts S rescues (an upper bound)
+  oracle     C or S per task, knowing both outcomes (an upper bound on the
+             policies over C and S at every budget)
 
 The report gives the resolve rate each policy reaches at a budget per task
 (sweeping its threshold), utility V * resolved - cost against the best single
@@ -123,11 +124,7 @@ def policy_names(table):
 
 
 def policy_score(table, name):
-    if name in ("escalate", "retry"):
-        return table.score
-    if name == "boundary":
-        return table.boundary
-    return (1 - table.ok[table.cheap]) * table.ok[table.strong]
+    return table.boundary if name == "boundary" else table.score
 
 
 def run(table, name, threshold):
@@ -181,6 +178,29 @@ def static_mix(table, budget):
         else 0.0
     )
     return max([*inside, interpolated])
+
+
+def oracle_frontier(table, budget):
+    """The best resolve rate any choice of C or S per task reaches at a budget.
+
+    Every task starts on the cheaper of the two and moves to the other where
+    that solves more, the most resolve per extra dollar first. Interpolating
+    between those moves gives the linear-programming bound, which no policy
+    over C and S passes: escalate pays for both attempts, boundary for one.
+    """
+    ok = np.stack([table.ok[table.cheap], table.ok[table.strong]])
+    cost = np.stack([table.cost[table.cheap], table.cost[table.strong]])
+    rows = np.arange(ok.shape[1])
+    base = cost.argmin(axis=0)
+    gain = ok[1 - base, rows] - ok[base, rows]
+    extra = cost[1 - base, rows] - cost[base, rows]
+    up = gain > 0
+    with np.errstate(divide="ignore"):
+        rate = np.where(extra[up] > 0, gain[up] / extra[up], np.inf)
+    order = np.argsort(-rate, kind="stable")
+    xs = (cost[base, rows].sum() + np.r_[0, np.cumsum(extra[up][order])]) / len(rows)
+    ys = (ok[base, rows].sum() + np.r_[0, np.cumsum(gain[up][order])]) / len(rows)
+    return float(np.interp(budget, xs, ys)) if budget >= xs[0] else 0.0
 
 
 def best_threshold(table, name, value, quantiles=QUANTILES):
@@ -319,21 +339,25 @@ def evaluate(
             "within_task_pairs": pairs,
         }
     for name in policy_names(table):
+        if name == "oracle":
+            report["policies"][name] = {
+                "resolved_at_budget": [oracle_frontier(table, b) for b in budgets]
+            }
+            continue
         pts = points(table, name, quantiles)
         entry = {"resolved_at_budget": [frontier(pts, b) for b in budgets]}
-        if name != "oracle":
-            entry["cv_gain"] = {}
-            for v in values:
-                per_row = cross_validated_gain(table, name, v, folds, quantiles)
-                entry["cv_gain"][str(v)] = {
-                    "mean": float(per_row.mean()),
-                    "interval_95": task_bootstrap(per_row, table.task, bootstrap, seed),
-                }
-            entry["stream_gain"] = {
-                f"V={v:g} n={n}": stream_gain(table, name, v, n, draws, seed, quantiles)
-                for v in values
-                for n in stream
+        entry["cv_gain"] = {}
+        for v in values:
+            per_row = cross_validated_gain(table, name, v, folds, quantiles)
+            entry["cv_gain"][str(v)] = {
+                "mean": float(per_row.mean()),
+                "interval_95": task_bootstrap(per_row, table.task, bootstrap, seed),
             }
+        entry["stream_gain"] = {
+            f"V={v:g} n={n}": stream_gain(table, name, v, n, draws, seed, quantiles)
+            for v in values
+            for n in stream
+        }
         report["policies"][name] = entry
     return report
 
@@ -355,8 +379,10 @@ def render(report):
             if a["within_task"] is None
             else f"{a['within_task']:.3f} over {a['within_task_pairs']} pairs"
         )
+        # Undefined when the cheap model solved every attempt or none.
+        overall = "n/a" if a["overall"] is None else f"{a['overall']:.3f}"
         lines.append(
-            f"   score AUROC for the cheap attempt failing: overall {a['overall']:.3f}, within task {within}"
+            f"   score AUROC for the cheap attempt failing: overall {overall}, within task {within}"
         )
     head = "".join(f" ${b:<5}" for b in report["budgets"])
     lines.append(

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import contextlib
 import io
+import itertools
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+import numpy as np
 
 # Direct unittest discovery also runs this file without installing the package.
 # ruff: noqa: E402
@@ -20,6 +23,7 @@ from src.training.model_selection.policy_eval.policy_eval import (
     frontier,
     judge_auroc,
     main,
+    oracle_frontier,
     points,
     read_scores,
     static_mix,
@@ -109,6 +113,86 @@ class PolicyCostTest(unittest.TestCase):
             report = json.loads(out.read_text())
         self.assertEqual(report["policies"]["escalate"]["resolved_at_budget"], [1.0])
         self.assertEqual(report["score_auroc"]["overall"], 1.0)
+
+
+class OracleTest(unittest.TestCase):
+    def test_oracle_takes_the_rescue_that_fits_the_budget(self):
+        # Escalating only t2 fits $0.05 and reaches 0.75. Escalating both rescues
+        # does not fit, which left the old oracle at the cheap model's 0.5.
+        rows = [
+            row(f"r{i}", f"t{i}", cheap=(ok, 0.01), strong=(1.0, cost))
+            for i, (ok, cost) in enumerate([(1, 0.5), (1, 0.5), (0, 0.12), (0, 0.5)])
+        ]
+        scores = {"r0": 0.1, "r1": 0.2, "r2": 0.9, "r3": 0.3}
+        table = Table(rows, "cheap", "strong", scores=scores)
+        self.assertEqual(frontier(points(table, "escalate"), 0.05), 0.75)
+        self.assertGreaterEqual(oracle_frontier(table, 0.05), 0.75)
+        # t2 on the strong model alone costs 0.12 instead of 0.13.
+        self.assertEqual(oracle_frontier(table, 0.0375), 0.75)
+        self.assertEqual(oracle_frontier(table, 0.0099), 0.0)
+
+    def test_oracle_bounds_every_choice_of_model_per_task(self):
+        rng = np.random.default_rng(0)
+        for _ in range(50):
+            n = int(rng.integers(1, 7))
+            rows = [
+                row(
+                    f"r{i}",
+                    f"t{i}",
+                    cheap=(float(rng.choice([0.0, 1.0, rng.random()])), rng.random()),
+                    strong=(float(rng.choice([0.0, 1.0, rng.random()])), rng.random()),
+                )
+                for i in range(n)
+            ]
+            table = Table(rows, "cheap", "strong")
+            picks = [
+                (
+                    np.where(pick, table.cost["strong"], table.cost["cheap"]).mean(),
+                    np.where(pick, table.ok["strong"], table.ok["cheap"]).mean(),
+                )
+                for pick in itertools.product([False, True], repeat=n)
+            ]
+            for budget in np.linspace(0, 1.2, 13):
+                best = max([y for x, y in picks if x <= budget] + [0.0])
+                self.assertGreaterEqual(oracle_frontier(table, budget), best - 1e-12)
+
+
+class AurocReportTest(unittest.TestCase):
+    def test_cli_reports_an_undefined_auroc_when_the_cheap_model_never_fails(self):
+        rows = [
+            row(f"r{i}", f"t{i}", cheap=(1.0, 0.1), strong=(1.0, 1.0)) for i in range(4)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = {
+                n: Path(tmp) / n for n in ("rows.jsonl", "scores.jsonl", "out.json")
+            }
+            paths["rows.jsonl"].write_text("".join(json.dumps(r) + "\n" for r in rows))
+            paths["scores.jsonl"].write_text(
+                "".join(json.dumps({"id": r["id"], "score": 0.5}) + "\n" for r in rows)
+            )
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                main(
+                    [
+                        "--rows",
+                        str(paths["rows.jsonl"]),
+                        "--cheap",
+                        "cheap",
+                        "--strong",
+                        "strong",
+                        "--scores",
+                        str(paths["scores.jsonl"]),
+                        "--folds",
+                        "2",
+                        "--bootstrap",
+                        "10",
+                        "--json",
+                        str(paths["out.json"]),
+                    ]
+                )
+            report = json.loads(paths["out.json"].read_text())
+        self.assertIsNone(report["score_auroc"]["overall"])
+        self.assertIn("overall n/a", printed.getvalue())
 
 
 class ThresholdSelectionTest(unittest.TestCase):

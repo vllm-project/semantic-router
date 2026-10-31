@@ -39,9 +39,11 @@ the score.
 | escalate | the cheap model, then the strong one when score > t | both when escalated |
 | retry | the cheap model, then another cheap attempt (`--retry`) when score > t | both when retried |
 | boundary | the strong or the cheap model, chosen from the task score | one |
-| oracle | escalate exactly the attempts the strong model rescues | both when escalated |
+| oracle | the cheap or the strong model per task, knowing both outcomes, the most resolve per dollar first | one, interpolated between tasks |
 
 Escalation restarts the task, so a rejected attempt is still paid for.
+
+The oracle is an upper bound on every policy over the two models at every budget: no escalation or boundary choice reaches a higher resolve rate for the same cost.
 
 ## Report
 
