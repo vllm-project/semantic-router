@@ -64,10 +64,10 @@ func deploymentsByArtifact(t *testing.T, raw string) map[string][]string {
 	return byArtifact
 }
 
-func TestBuiltInSignalsShareOneVela2DeploymentOnCPU(t *testing.T) {
+func TestBuiltInSignalsShareOneDefaultDeploymentOnCPU(t *testing.T) {
 	got := deploymentsByArtifact(t, builtInSignalsYAML(""))
-	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B cpu"]) != 1 || got["vllm-sr/Vela-2.0-0.3B cpu"][0] != DefaultDecisionDeployment {
-		t.Fatalf("every built-in signal must run on one Vela 2.0 0.3B CPU deployment, got %v", got)
+	if len(got) != 1 || len(got["vllm-sr/vela3-fast cpu"]) != 1 || got["vllm-sr/vela3-fast cpu"][0] != DefaultDecisionDeployment {
+		t.Fatalf("every built-in signal must run on one vela3-fast CPU deployment, got %v", got)
 	}
 }
 

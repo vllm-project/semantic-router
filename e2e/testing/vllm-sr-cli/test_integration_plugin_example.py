@@ -25,7 +25,6 @@ import unittest
 from pathlib import Path
 from urllib.error import URLError
 
-import tomllib
 from runtime_http import (
     HTTP_OK,
     READY_TIMEOUT_SECONDS,
@@ -36,6 +35,11 @@ from runtime_http import (
     page_requests,
     router_image,
 )
+
+try:
+    import tomllib
+except ImportError:  # Python 3.10: tomllib was added in 3.11
+    import tomli as tomllib
 
 REPO = Path(__file__).resolve().parents[3]
 GUIDE = REPO / "website/docs/model-runtime/plugins.md"
