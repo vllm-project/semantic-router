@@ -65,6 +65,22 @@ the answer plus `x-vsr-selected-recipe` and `x-vsr-selected-model`; HTTP success
 alone does not verify the output or route. See [routing
 receipts](../troubleshooting/vsr-headers) and [CLI previews and probes](../api/cli).
 
+### Model names the harness picks itself
+
+A harness can request models other than the one you configured. Claude Code,
+for example, asks for its own Haiku model ID when it starts an Explore
+subagent. The Router answers a model it does not publish with "the requested
+model is not available", and that subagent fails. Point every model setting
+the harness has at an entrypoint (for Claude Code, `ANTHROPIC_MODEL` and the
+`ANTHROPIC_DEFAULT_*_MODEL` variables), or list the IDs it sends in the
+entrypoint's `model_names`:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, claude-haiku-5-5]
+    recipe: default
+```
+
 ## Set budgets before running a task
 
 `GET /v1/models` discovers virtual names and routing metadata; it does not
@@ -106,6 +122,30 @@ Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
 
+Claude Code sends `x-claude-code-session-id` on every Messages request and
+does not send `x-session-id`. To hold its runs, set
+`identity.headers.session: x-claude-code-session-id`. Its subagents send the
+same session ID as the agent that started them, so under that setting they
+are held on the model their parent was given. To hold each subagent on its own
+model instead, also set `identity.headers.agent: x-claude-code-agent-id`, which
+Claude Code sends on subagent requests only.
+
+### Agents that send tool output as messages
+
+Some harnesses, such as mini-SWE-agent, do not use the protocol's tool calls: the model writes a command in its reply and the
+harness sends the command's output back as the next user message. The Router
+cannot tell that output from a new user turn, so it never sees a tool loop, and
+signals read the latest output as if the user had written it.
+
+Under `scope: conversation`, a decision that changes on such an output releases
+the current model, and `min_turns_before_switch` does not hold it. Use
+`scope: session` with a new session ID for every agent run instead: a changed
+decision alone then keeps the run on its model, while idle timeout, a bypass
+decision, candidate exclusion, or a qualified [rescue](../tutorials/learning/protection)
+can still release it. To restart a task on a
+different model, start a new run with a new session ID, or name the concrete
+model, which bypasses recipe routing.
+
 ## Program the policy behind the entrypoint
 
 [Connect models and publish a recipe](../tutorials/global/models-entrypoints-serving)
@@ -118,3 +158,38 @@ model bindings, classifier requirements, and replay retention before using it;
 its checked-in configuration records request and response data. Use the
 [recipe evaluation workflow](../benchmarking/agent-evaluation-loop) to test
 representative tasks before adopting a policy change.
+
+## Keep agent calls on a warm prompt cache
+
+An agent resends its conversation on every call, so most of each prompt is a
+prefix the backend has already processed. Whether that prefix is still cached
+decides much of a call's latency and cost, and three things lose it.
+
+- **A model change.** A prompt cache belongs to one model, so a switch in the
+  middle of a run computes the whole context again on the new model. Keep each
+  run on one model as described above. The
+  [hybrid selector](../tutorials/algorithm/selection/hybrid) also favors the
+  model that served the session's previous turn.
+- **A replica change.** Each replica keeps its own prefix cache, and a model's
+  `lb_policy` (`round_robin` or `least_request`, see
+  [model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health))
+  does not keep a session on one replica. When several replicas serve agent
+  sessions, route the model to a pool whose scheduler places requests by prefix
+  cache and load, such as [llm-d](k8s/llm-d), instead of listing the replicas
+  as `backend_refs`.
+- **Eviction.** When the sessions in flight need more KV cache than the GPU
+  holds, a returning session finds its prefix evicted. A CPU offload tier on the
+  backend, such as LMCache for vLLM, returns those prefixes instead of computing
+  them again.
+
+The harness can also start the prompt over itself. When it compacts its history,
+replacing earlier turns with a summary to stay within the context window, the
+backend computes most of the new prompt again on the same model and replica.
+The Router neither causes nor prevents this, so a drop in prefix reuse right
+after a compaction is not a routing or placement fault.
+
+Leave cross-model KV transfer (`global.integrations.kv_transfer`) off for agent
+entrypoints. The receiving model must serve with prefix caching disabled, and
+the [connector](https://github.com/vllm-project/semantic-router/tree/main/src/kv_connector)
+rejects scaled RoPE, so neither model can serve a context extended past its
+native length.
