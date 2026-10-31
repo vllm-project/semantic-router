@@ -74,7 +74,7 @@ func validateResponsesEncodableRequest(request llmprotocol.Request) error {
 
 func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWire, error) {
 	wire := responsesRequestWire{
-		Model: request.Model, Stream: request.Stream, Metadata: request.Metadata,
+		Model: request.Model, Stream: request.Stream, Metadata: encodeWireMetadata(request.Metadata),
 		Store: request.Store, AutoStore: request.AutoStore, PreviousResponseID: request.PreviousResponseID,
 		Truncation: request.Truncation, User: request.EndUserID, PromptCacheKey: request.PromptCacheKey,
 		ParallelToolCalls: request.ParallelToolCalls, Temperature: request.Sampling.Temperature,
