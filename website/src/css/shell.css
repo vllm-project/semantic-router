@@ -169,17 +169,14 @@
   box-shadow: 0 0 0 3px var(--site-accent-soft);
 }
 
+/* Docusaurus puts the className on the dropdown's inner link, so hide the
+ * wrapper too or it keeps its width in the navbar. */
 html[data-route-kind="home"] .nav-docs-only,
 html[data-route-kind="page"] .nav-docs-only,
-html[data-route-kind="blog"] .nav-docs-only {
-  display: none;
-}
-
-/* Docusaurus puts the className on the dropdown's inner link, so the rule above
- * leaves the dropdown wrapper (and its width) in the navbar. Hide the wrapper. */
-html[data-route-kind="home"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only),
-html[data-route-kind="page"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only),
-html[data-route-kind="blog"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only) {
+html[data-route-kind="blog"] .nav-docs-only,
+html[data-route-kind="home"] .navbar__items--right > .navbar__item:has(> .nav-docs-only),
+html[data-route-kind="page"] .navbar__items--right > .navbar__item:has(> .nav-docs-only),
+html[data-route-kind="blog"] .navbar__items--right > .navbar__item:has(> .nav-docs-only) {
   display: none;
 }
 
@@ -230,20 +227,56 @@ html[data-route-kind="blog"] .site-root .navbar__inner .navbar__items--right > .
   text-transform: none;
 }
 
-/* Keep desktop row visible down to 996px collapse point. The locale dropdown
- * is dropped here so the right group fits beside the primary links; it stays
- * available in the collapsed navigation. */
+/* The groups share the bar. Only the version dropdown gives up width, by
+ * truncating its label, so a long label such as "Latest (unreleased)" cannot
+ * squeeze the logo or push the right group into the primary links. */
+@media (min-width: 997px) {
+  .navbar__inner > .navbar__items:not(.navbar__items--right) {
+    flex-shrink: 0;
+  }
+
+  .navbar__items--right > .navbar__item:has(> .nav-docs-only) {
+    flex-shrink: 1;
+    min-width: 6rem;
+  }
+
+  .navbar__items--right > .navbar__item > .nav-docs-only {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    padding-right: 1.6rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Keep the caret out of the text line so the ellipsis cannot clip it. */
+  .navbar__items--right > .navbar__item > .nav-docs-only::after {
+    position: absolute;
+    top: 50%;
+    right: 0.65rem;
+    margin: 0;
+  }
+}
+
+/* The locale dropdown has no room from 997px to 1339px, so its choices move
+ * into More. Everywhere else More leaves them out. */
+li:has(> .nav-locale-more) {
+  display: none;
+}
+
 @media (min-width: 997px) and (max-width: 1339px) {
-  .site-root .navbar__inner .navbar__items--right > .navbar__item.navbar__link {
-    display: inline-flex;
-  }
-
-  .site-root .navbar__inner .navbar__items--right > .navbar__item.dropdown {
-    display: inline-flex;
-  }
-
-  .site-root .navbar__inner .navbar__items--right > .navbar__item.dropdown:has(> .nav-locale) {
+  .navbar__items--right > .navbar__item:has(> .nav-locale) {
     display: none;
+  }
+
+  .navbar__items--right .dropdown__menu > li:has(> .nav-locale-more) {
+    display: list-item;
+  }
+
+  .navbar__items--right .dropdown__menu > li:not(:has(> .nav-locale-more)) + li:has(> .nav-locale-more) {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--site-border);
   }
 }
 

@@ -126,8 +126,8 @@ html[data-theme='dark'],
 /* ------------------------------------------------------------------ *
  * Navbar placement
  *
- * shell.css hides `.navbar__items--right` below 1340px, which would take the
- * search control with it on every tablet and phone. Restore the container —
+ * shell.css hides `.navbar__items--right` at 996px and below, which would take
+ * the search control with it on every tablet and phone. Restore the container —
  * and only the container — so search stays reachable; the README treats mobile
  * as first class. Everything else in that group stays hidden as before.
  * ------------------------------------------------------------------ */
@@ -147,7 +147,7 @@ html[data-theme='dark'],
   }
 }
 
-@media (max-width: 1339px) {
+@media (max-width: 996px) {
   .navbar__inner .navbar__items--right {
     display: flex;
     align-items: center;
@@ -162,9 +162,7 @@ html[data-theme='dark'],
   .navbar__inner .navbar-color-mode-toggle {
     margin-left: 0;
   }
-}
 
-@media (max-width: 996px) {
   /*
    * Docusaurus absolutely pins search to the navbar edge below 996px. Keep
    * search + theme toggle in normal flow instead so the toggle stays at the
