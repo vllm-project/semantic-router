@@ -1,0 +1,65 @@
+# Harness versions the Router has replayed, and the protection granularity
+# that evidence supports. The protocol compatibility guide renders this file
+# between the HARNESS SUPPORT TABLE markers. Exact versions only: a range is
+# not a support claim. Derived session fingerprints are telemetry and do not
+# appear here, because protection reads configured headers.
+
+levels:
+  R0:
+    held: Each request is routed independently
+    identity: None
+    configuration: Protection off, or the required header is absent
+  R1:
+    held: One conversation
+    identity: Session and conversation headers
+    configuration: "scope: conversation"
+  R2:
+    held: One run, subagents included
+    identity: Session header
+    configuration: "scope: session"
+  R3:
+    held: Each agent of a run separately
+    identity: Session and agent headers
+    configuration: "scope: session with identity.headers.agent"
+
+clients:
+  - client: claude-code
+    display_name: Claude Code
+    versions:
+      - version: "2.1.281"
+        status: verified
+        last_verified: "2026-09-26"
+        paths:
+          - /v1/messages
+        identity: []
+        level: R0
+        limits: >-
+          This capture has no session or agent header, so it does not
+          evidence a protection hold.
+        evidence:
+          captures:
+            - claude-code-2.1.281-messages-tool-loop.json
+          e2e:
+            - protocol-codec-chat-backend-agent-client-replay
+            - protocol-codec-responses-backend-agent-client-replay
+            - protocol-codec-anthropic-backend-agent-client-replay
+  - client: copilot-cli
+    display_name: Copilot CLI
+    versions:
+      - version: "1.0.88"
+        status: verified
+        last_verified: "2026-09-26"
+        paths:
+          - /v1/chat/completions
+          - /v1/messages
+        identity: []
+        level: R0
+        limits: The capture has no identity header.
+        evidence:
+          captures:
+            - copilot-cli-1.0.88-chat-tool-loop.json
+            - copilot-cli-1.0.88-messages-tool-loop.json
+          e2e:
+            - protocol-codec-chat-backend-agent-client-replay
+            - protocol-codec-responses-backend-agent-client-replay
+            - protocol-codec-anthropic-backend-agent-client-replay
