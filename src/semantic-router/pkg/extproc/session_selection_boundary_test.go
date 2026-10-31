@@ -166,10 +166,16 @@ func TestSessionBoundaryDriftReleasesToolLoopLockInsteadOfDeadlocking(t *testing
 	for _, tc := range []struct {
 		name         string
 		nonPortable  bool
+		sameDecision bool
 		wantRejected bool
 	}{
 		{name: "tool_loop_drift_released"},
-		{name: "opaque_state_drift_still_rejected", nonPortable: true, wantRejected: true},
+		// The opaque case also carries a tool loop. Without that fact the
+		// rejection never reaches the !HasNonPortableContext carve-out.
+		{name: "tool_loop_and_opaque_state_drift_still_rejected", nonPortable: true, wantRejected: true},
+		// The recorded decision name matches the current one. An empty last
+		// decision never exercises the same-decision comparison.
+		{name: "same_decision_tool_loop_still_rejected", sameDecision: true, wantRejected: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sessiontelemetry.ResetRouterSessionMemoryForTesting()
@@ -181,21 +187,24 @@ func TestSessionBoundaryDriftReleasesToolLoopLockInsteadOfDeadlocking(t *testing
 			decision := &config.Decision{Name: "synthetic-drift-new", ModelRefs: []config.ModelRef{{Model: primary}}}
 			ctx := routerLearningRequestContext("driftlock", "conversation")
 			ctx.VSRSelectedDecision = decision
+			ctx.VSRConversationFacts = classification.ConversationFacts{LastAssistantToolCall: true}
 			if tc.nonPortable {
 				ctx.PreviousResponseID = "opaque-unresolved"
-			} else {
-				ctx.VSRConversationFacts = classification.ConversationFacts{LastAssistantToolCall: true}
+			}
+			recordedDecision := "synthetic-drift-old"
+			if tc.sameDecision {
+				recordedDecision = decision.Name
 			}
 			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
 				SessionID:     "driftlock/conversation",
 				SelectedModel: "prior",
-				DecisionName:  config.RoutingNamespaceKey("", "synthetic-drift-old"),
+				DecisionName:  config.RoutingNamespaceKey("", recordedDecision),
 				Timestamp:     time.Now(),
 			})
 			selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{CandidateModels: decision.ModelRefs, DecisionName: decision.Name}, decision.Algorithm, ctx)
 			if tc.wantRejected {
 				if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
-					t.Fatalf("drift must not transfer opaque provider state: model=%+v err=%v", selected, err)
+					t.Fatalf("%s: lock was released: model=%+v err=%v", tc.name, selected, err)
 				}
 				return
 			}
