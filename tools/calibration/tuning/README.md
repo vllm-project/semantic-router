@@ -166,6 +166,59 @@ Keep regression probes representative of behavior that must not change. A
 tuning result is only as useful as its labels, severity weights, and protected
 coverage.
 
+## Signal calibration onto `label_correctness/v1`
+
+`signal_calibration.py` puts one signal family's score on a declared scale so
+decision ranking can compare it across families. The contract is versioned by
+its schema names: the manifest is `signal-calibration/v1` and the artifact is
+`signal-calibration-artifact/v1`.
+
+- Scale: `label_correctness/v1`, the probability that the label a signal matched
+  is the request's true label. Its valid domain is `[0, 1]` for both the raw and
+  the calibrated score.
+- Outcome: one recorded row per request, correct when its top label equals the
+  gold label. The manifest states the population and the outcome in words.
+- Method: isotonic regression fitted on the `calibration` split only. The
+  mapping is a list of knots, rising strictly in raw score and never falling in
+  calibrated value. The router interpolates linearly between knots and clamps
+  outside them, so the order of raw scores is kept.
+- Identity: `model.labels` binds the classifier's label order and
+  `model.model_sha256` the model, as the identity the model runtime computes
+  over the files it loads and reports on `/v1/models`. `source` records the
+  manifest and split digests, and
+  `artifact_id` hashes the artifact. A configuration pins the artifact file by
+  `sha256`, which is the reviewed promotion. Nothing changes at request time.
+- Report: raw and calibrated accuracy, Brier score, ten-bin expected
+  calibration error and reliability bins for both splits, coverage and
+  accuracy at the operating threshold on `held_out`, per-category slices, and
+  labels with no held-out rows. `status` is `calibrated` when the held-out
+  Brier score does not get worse, and `no_improvement` otherwise. The router
+  loads only `calibrated` artifacts.
+
+Only `domain` is supported. `collect_domain_results.py` scores a local Vela
+Domain checkpoint on the quality baseline's held-out rows (MMLU-Pro test
+questions whose source is not MMLU, #4300), splits them by question id and
+writes the results and manifest:
+
+```bash
+python tools/calibration/tuning/collect_domain_results.py \
+  --model-dir models/Vela-1.0-Encoder-307M-Domain \
+  --model-id vllm-sr/Vela-1.0-Encoder-307M-Domain \
+  --model-revision 736c049c8710e16011c0216ff1bd79c5a1c399db \
+  --dataset-revision b189ec765aa7ed75c8acfea42df31fdae71f97be \
+  --output-dir .cache/calibration/domain
+
+PYTHONPATH=tools/calibration \
+python -m tuning.signal_calibration \
+  --manifest .cache/calibration/domain/manifest.json \
+  --output vela-domain-label-correctness-v1.json
+```
+
+The collector needs `torch`, `transformers`, `huggingface_hub`, `pyarrow` and
+the model runtime (`pip install -e src/model-runtime`), whose identity function
+it uses.
+The builder needs only the standard library.
+
 ## Add a Scenario
 
 Implement `Scenario` in a module under `tuning/scenarios/`, then register the

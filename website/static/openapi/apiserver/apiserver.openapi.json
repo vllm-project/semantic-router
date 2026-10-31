@@ -25250,6 +25250,9 @@
                                   "runner_up": {
                                     "type": "string"
                                   },
+                                  "score_artifact": {
+                                    "type": "string"
+                                  },
                                   "score_kind": {
                                     "type": "string"
                                   },
@@ -29999,6 +30002,9 @@
                               "type": "string"
                             },
                             "runner_up": {
+                              "type": "string"
+                            },
+                            "score_artifact": {
                               "type": "string"
                             },
                             "score_kind": {
@@ -37666,6 +37672,9 @@
                         "runner_up": {
                           "type": "string"
                         },
+                        "score_artifact": {
+                          "type": "string"
+                        },
                         "score_kind": {
                           "type": "string"
                         },
@@ -41222,6 +41231,9 @@
                               "type": "string"
                             },
                             "runner_up": {
+                              "type": "string"
+                            },
+                            "score_artifact": {
                               "type": "string"
                             },
                             "score_kind": {

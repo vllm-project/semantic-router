@@ -1,5 +1,7 @@
 package config
 
+import "slices"
+
 // ScoreKind classifies what a matched signal leaf contributes to a decision's
 // confidence. Ranking may only compare scores of the same kind, and a leaf
 // that reports no measurement at all contributes nothing.
@@ -23,6 +25,11 @@ const (
 	// `method: contrastive`. Both write the same key, so the signal type does
 	// not establish the quantity and selection must not rank on it.
 	ScoreKindUnknown ScoreKind = "unknown"
+	// ScoreKindCalibrated marks a probability a reviewed artifact mapped onto
+	// the declared label_correctness/v1 scale: the probability that the label
+	// the signal matched is the request's true label. Scores on that scale
+	// compare across signal families.
+	ScoreKindCalibrated ScoreKind = "calibrated"
 )
 
 // signalScoreKinds records the kind each evidence signal reports. A type is
@@ -46,9 +53,13 @@ var signalScoreKinds = map[string]ScoreKind{
 }
 
 // SignalScoreKind reports the score kind of a signal type. Policy types report
-// ScoreKindNone.
-func SignalScoreKind(signalType string) ScoreKind {
-	return signalScoreKinds[signalType]
+// ScoreKindNone, and a type named in calibrated reports ScoreKindCalibrated.
+func SignalScoreKind(signalType string, calibrated ...string) ScoreKind {
+	kind := signalScoreKinds[signalType]
+	if kind == ScoreKindProbability && slices.Contains(calibrated, signalType) {
+		return ScoreKindCalibrated
+	}
+	return kind
 }
 
 // IsEvidenceSignal reports whether a signal type carries measured evidence. An
@@ -61,8 +72,8 @@ func IsEvidenceSignal(signalType string) bool {
 // DeclaredScoreKinds reports the distinct score kinds a rule tree can produce.
 // Selection uses it to refuse a decision whose confidence would depend on
 // which branch of an OR matched.
-func DeclaredScoreKinds(node *RuleNode) []ScoreKind {
+func DeclaredScoreKinds(node *RuleNode, calibrated ...string) []ScoreKind {
 	kinds := map[ScoreKind]struct{}{}
-	collectScoreKinds(node, kinds)
+	collectScoreKinds(node, kinds, calibrated)
 	return sortedKinds(kinds)
 }

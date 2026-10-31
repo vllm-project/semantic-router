@@ -244,6 +244,9 @@ func ValidateCategoryModelBackend(cfg *RouterConfig) error {
 		return fmt.Errorf("category model configuration is nil")
 	}
 	model := &cfg.CategoryModel
+	if err := validateCategoryCalibration(model); err != nil {
+		return err
+	}
 	if model.Backend == nil {
 		return nil
 	}
