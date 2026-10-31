@@ -98,6 +98,12 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr status`](#vllm-sr-status) | Show status of vLLM Semantic Router services. |
 | [`vllm-sr stop`](#vllm-sr-stop) | Stop vLLM Semantic Router. |
 | [`vllm-sr storage`](#vllm-sr-storage) | Inspect Router storage or manage local storage credentials. |
+| [`vllm-sr storage response-cache`](#vllm-sr-storage-response-cache) | Inspect or manage the Router response cache. |
+| [`vllm-sr storage response-cache capabilities`](#vllm-sr-storage-response-cache-capabilities) | Get response cache backend capabilities. |
+| [`vllm-sr storage response-cache flush`](#vllm-sr-storage-response-cache-flush) | Advance response-cache epoch or flush scoped cache entries. |
+| [`vllm-sr storage response-cache health`](#vllm-sr-storage-response-cache-health) | Check response cache backend health. |
+| [`vllm-sr storage response-cache invalidate`](#vllm-sr-storage-response-cache-invalidate) | Dry-run or invalidate scoped response-cache partitions. |
+| [`vllm-sr storage response-cache stats`](#vllm-sr-storage-response-cache-stats) | Get response cache performance and usage statistics. |
 | [`vllm-sr storage rotate`](#vllm-sr-storage-rotate) | Replace this stack's storage credentials with freshly generated ones. |
 | [`vllm-sr storage vector-stores`](#vllm-sr-storage-vector-stores) | List vector stores known to the Router management API. |
 
@@ -1592,6 +1598,114 @@ Inspect Router storage or manage local storage credentials.
 
 | Parameter | Description |
 | --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr storage response-cache` {#vllm-sr-storage-response-cache}
+
+```text
+Usage: vllm-sr storage response-cache [OPTIONS] COMMAND [ARGS]...
+```
+
+Inspect or manage the Router response cache.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr storage response-cache capabilities` {#vllm-sr-storage-response-cache-capabilities}
+
+```text
+Usage: vllm-sr storage response-cache capabilities [OPTIONS]
+```
+
+Get response cache backend capabilities.
+
+| Parameter | Description |
+| --- | --- |
+| `--endpoint TEXT` | Router management origin or /api/v1 root. |
+| `--timeout FLOAT` | [default: 15.0] |
+| `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--json` | Print the raw JSON response payload. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr storage response-cache flush` {#vllm-sr-storage-response-cache-flush}
+
+```text
+Usage: vllm-sr storage response-cache flush [OPTIONS]
+```
+
+Advance response-cache epoch or flush scoped cache entries.
+
+| Parameter | Description |
+| --- | --- |
+| `-y, --yes` | Confirm flush without interactive prompt. Default: false. |
+| `--recipe TEXT` | Scope operation to a recipe partition. |
+| `--decision TEXT` | Scope operation to a decision partition. |
+| `--request-model TEXT` | Scope operation to an incoming requested model. |
+| `--selected-model TEXT` | Scope operation to a routed target model. |
+| `--protocol TEXT` | Scope operation to a protocol. |
+| `--namespace TEXT` | Scope operation to a partition namespace. |
+| `--epoch TEXT` | Scope operation to a partition epoch. |
+| `--endpoint TEXT` | Router management origin or /api/v1 root. |
+| `--timeout FLOAT` | [default: 30.0] |
+| `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--json` | Print the raw JSON response payload. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr storage response-cache health` {#vllm-sr-storage-response-cache-health}
+
+```text
+Usage: vllm-sr storage response-cache health [OPTIONS]
+```
+
+Check response cache backend health.
+
+| Parameter | Description |
+| --- | --- |
+| `--endpoint TEXT` | Router management origin or /api/v1 root. |
+| `--timeout FLOAT` | [default: 15.0] |
+| `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--json` | Print the raw JSON response payload. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr storage response-cache invalidate` {#vllm-sr-storage-response-cache-invalidate}
+
+```text
+Usage: vllm-sr storage response-cache invalidate [OPTIONS]
+```
+
+Dry-run or invalidate scoped response-cache partitions.
+
+| Parameter | Description |
+| --- | --- |
+| `--execute / --dry-run` | Execute invalidation (default is dry-run mode for safety).  [default: dry-run] |
+| `--recipe TEXT` | Scope operation to a recipe partition. |
+| `--decision TEXT` | Scope operation to a decision partition. |
+| `--request-model TEXT` | Scope operation to an incoming requested model. |
+| `--selected-model TEXT` | Scope operation to a routed target model. |
+| `--protocol TEXT` | Scope operation to a protocol. |
+| `--namespace TEXT` | Scope operation to a partition namespace. |
+| `--epoch TEXT` | Scope operation to a partition epoch. |
+| `--endpoint TEXT` | Router management origin or /api/v1 root. |
+| `--timeout FLOAT` | [default: 30.0] |
+| `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--json` | Print the raw JSON response payload. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr storage response-cache stats` {#vllm-sr-storage-response-cache-stats}
+
+```text
+Usage: vllm-sr storage response-cache stats [OPTIONS]
+```
+
+Get response cache performance and usage statistics.
+
+| Parameter | Description |
+| --- | --- |
+| `--endpoint TEXT` | Router management origin or /api/v1 root. |
+| `--timeout FLOAT` | [default: 15.0] |
+| `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--json` | Print the raw JSON response payload. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr storage rotate` {#vllm-sr-storage-rotate}
