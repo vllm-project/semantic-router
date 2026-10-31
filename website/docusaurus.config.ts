@@ -365,6 +365,12 @@ const config: Config = {
               label: 'Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
             },
+            // The locale dropdown above gives up its place from 997px to
+            // 1339px; shell.css shows these links only in that range.
+            {
+              type: 'custom-localeLinks',
+              className: 'nav-locale-more',
+            },
           ],
         },
         {
