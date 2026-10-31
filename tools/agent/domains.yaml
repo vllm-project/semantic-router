@@ -22,6 +22,8 @@ domains:
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
+      - tools/docker/Dockerfile.attached
+      - tools/docker/riscv64/**
       - tools/linter/**
       - tools/make/**
     checks: [make harness-check]
