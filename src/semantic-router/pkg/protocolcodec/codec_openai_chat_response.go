@@ -23,6 +23,9 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	var diagnostics llmprotocol.Diagnostics
 	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
+		"choices.raw_output": chatChoicesHaveRawOutput(wire.Choices),
+	}, "the provider's raw decoded output duplicates the parsed message and is not replayed")
+	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
 		"choices.message.tool_calls.index":                       chatChoicesHaveToolCallIndex(wire.Choices),
 		"choices.message.provider_specific_fields":               chatChoicesHaveMessageProviderSpecificFields(wire.Choices),
@@ -47,14 +50,24 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// provider, native finish reason and accounting decorations were dropped
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
-	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations()
+	// not be replayed, and neither is Fireworks' raw_output.
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() ||
+		chatChoicesHaveRawOutput(wire.Choices)
 	if needsReencode {
 		canonicalBody = nil
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
 	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
+}
+
+func chatChoicesHaveRawOutput(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if choice.RawOutput != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {

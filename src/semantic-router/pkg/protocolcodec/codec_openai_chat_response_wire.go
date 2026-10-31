@@ -83,6 +83,10 @@ type chatChoiceWire struct {
 	FinishReason       *string           `json:"finish_reason"`
 	NativeFinishReason *string           `json:"native_finish_reason,omitempty"`
 	Logprobs           *chatLogprobsWire `json:"logprobs,omitempty"`
+	// Fireworks repeats the raw decoded text beside the parsed message. The
+	// message is the canonical output, so the raw copy is recognized here
+	// and dropped with a diagnostic instead of being replayed.
+	RawOutput *string `json:"raw_output,omitempty"`
 	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
 	// provider_specific_fields on each choice. The content is opaque provider
 	// metadata and is not replayed to the client.

@@ -1,0 +1,21 @@
+{
+  "id": "fw-response-fixture",
+  "object": "chat.completion",
+  "created": 7,
+  "model": "accounts/fireworks/models/glm-5p3",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "raw_output": "OK",
+      "message": {"role": "assistant", "content": "OK", "reasoning_content": "because"}
+    }
+  ],
+  "service_tier": "default",
+  "usage": {
+    "prompt_tokens": 9,
+    "completion_tokens": 1,
+    "total_tokens": 10,
+    "completion_tokens_details": {"reasoning_tokens": 0, "accepted_prediction_tokens": 2, "rejected_prediction_tokens": 1}
+  }
+}
