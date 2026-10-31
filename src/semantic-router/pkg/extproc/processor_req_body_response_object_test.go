@@ -23,7 +23,7 @@ func TestSameFormatResponsesBodyPublishesRouterOwnedID(t *testing.T) {
 		},
 	}
 	response := router.handleNonStreamingResponseBody(
-		extProcResponseFixture(llmprotocol.OpenAIResponsesV1), ctx, 0,
+		extProcResponseFixture(llmprotocol.OpenAIResponsesV1), ctx, 0, false,
 	)
 	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
 	if mutation == nil || !bytes.Contains(mutation.GetBody(), []byte(`"id":"resp_router_owned"`)) {

@@ -366,7 +366,7 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 			const responseText = "Deploy the service using a regional cluster and a load balancer."
 			responseBody, err := router.encodeClientResponse(*memoryTestResponse(responseText), ctx)
 			require.NoError(t, err)
-			response := router.handleNonStreamingResponseBody(responseBody, ctx, 0)
+			response := router.handleNonStreamingResponseBody(responseBody, ctx, 0, false)
 			require.NotNil(t, response.GetResponseBody(), "auto_store policy must preserve response delivery")
 			deliveredBody := responseBody
 			if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
