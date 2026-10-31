@@ -36,11 +36,14 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 }
 
 func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {
+	// The reference config cannot show client_auth while normalization still
+	// rejects it; it joins the reference once the Router enforces it.
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, root, "entrypoints"),
 		reflect.TypeOf(CanonicalEntrypoint{}),
 		"entrypoints",
+		"client_auth",
 	)
 	assertSliceUnionCoversStructFields(
 		t,

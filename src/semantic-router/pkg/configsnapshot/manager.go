@@ -396,13 +396,13 @@ func (m *Manager) compile(a *attemptState, u Update, version uint64) (*Snapshot,
 	if u.Config == nil {
 		return nil, Reject(StageParse, CodeInvalidDocument, errors.New("config reload candidate is nil"))
 	}
-	resources, err := Compile(u.Config)
+	resources, clientAuth, err := compile(u.Config)
 	if err != nil {
 		return nil, err
 	}
 	return &Snapshot{
 		version: version, hash: a.attempt.Hash, origin: u.Origin, document: u.Document, config: u.Config,
-		resources: resources, createdAt: m.now().UTC(),
+		resources: resources, clientAuth: clientAuth, createdAt: m.now().UTC(),
 	}, nil
 }
 

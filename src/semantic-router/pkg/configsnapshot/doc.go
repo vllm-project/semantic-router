@@ -13,8 +13,9 @@
 // in one atomic step under the next version; the snapshot it replaces drains
 // before what it alone used is closed.
 //
-// The package depends only on the configuration model and metrics. The
-// Router's serving parts are built and activated through the Runtime
-// interface, so the routing pipeline, the upstream layer and the gateway plug
-// into the lifecycle rather than the other way round.
+// The package depends only on the configuration model, the client policy it
+// compiles from that model, and metrics. The Router's serving parts are built
+// and activated through the Runtime interface, so the routing pipeline, the
+// upstream layer and the gateway plug into the lifecycle rather than the
+// other way round.
 package configsnapshot

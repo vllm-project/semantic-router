@@ -2,9 +2,11 @@ package configsnapshot
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/clientauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -12,8 +14,16 @@ import (
 // resolves and that names are unique within a kind. It reports every problem
 // it finds as a *Rejection at StageCompile.
 func Compile(cfg *config.RouterConfig) (*Resources, error) {
+	resources, _, err := compile(cfg)
+	return resources, err
+}
+
+// compile is Compile that also returns the client policy of cfg's
+// entrypoints, with their keys read from this process's environment: a
+// reference to a variable that holds no usable key does not resolve.
+func compile(cfg *config.RouterConfig) (*Resources, *clientauth.Policy, error) {
 	if cfg == nil {
-		return nil, RejectReasons(StageCompile, []Reason{{
+		return nil, nil, RejectReasons(StageCompile, []Reason{{
 			Stage: StageCompile, Code: CodeInvalidDocument, Message: "the configuration is empty",
 		}})
 	}
@@ -25,10 +35,11 @@ func Compile(cfg *config.RouterConfig) (*Resources, error) {
 	c.routes()
 	c.listeners()
 	c.resolve()
+	policy := c.clientAuth()
 	if len(c.reasons) > 0 {
-		return nil, RejectReasons(StageCompile, c.reasons)
+		return nil, nil, RejectReasons(StageCompile, c.reasons)
 	}
-	return newResources(c.resources), nil
+	return newResources(c.resources), policy, nil
 }
 
 type compiler struct {
@@ -214,7 +225,7 @@ func (c *compiler) clusterSecret(alias string, params config.ModelParams, endpoi
 		return nil
 	}
 	secret := &Resource{
-		Ref:  Ref{Kind: KindSecret, Name: alias},
+		Ref:  Ref{Kind: KindSecret, Name: "cluster/" + alias},
 		Path: "providers.models[" + alias + "].backend_refs",
 		Hash: secretFingerprint(alias, spec, values),
 		Spec: spec,
@@ -264,17 +275,56 @@ func (c *compiler) programs() {
 
 func (c *compiler) routes() {
 	for index, entrypoint := range c.cfg.Entrypoints {
+		path := "entrypoints[" + strconv.Itoa(index) + "]"
+		secret := c.entrypointSecret(path, entrypoint)
 		for _, model := range entrypoint.ModelNames {
 			program := Ref{Kind: KindProgram, Name: string(entrypoint.Recipe)}
-			c.add(&Resource{
+			route := &Resource{
 				Ref:  Ref{Kind: KindRoute, Name: model},
-				Path: "entrypoints[" + strconv.Itoa(index) + "]",
-				Hash: fingerprint(model, program.Name),
+				Path: path,
+				Hash: fingerprint(model, program.Name, entrypoint.ClientAuth),
 				Refs: []Ref{program},
 				Spec: RouteSpec{Model: model, Program: program.Name},
-			})
+			}
+			if secret != nil {
+				route.Refs = append(route.Refs, secret.Ref)
+			}
+			c.add(route)
 		}
 	}
+}
+
+// entrypointSecret compiles where the keys of a protected entrypoint come
+// from, or returns nil for a public one. Its routes share it.
+func (c *compiler) entrypointSecret(path string, entrypoint config.EntrypointMapping) *Resource {
+	if entrypoint.ClientAuth == nil || len(entrypoint.ModelNames) == 0 {
+		return nil
+	}
+	api := entrypoint.API
+	if api == "" {
+		api = config.ChatAPI
+	}
+	spec := SecretSpec{Env: append([]string(nil), entrypoint.ClientAuth.APIKeyEnvs...)}
+	secret := &Resource{
+		Ref:  Ref{Kind: KindSecret, Name: "entrypoint/" + string(api) + "/" + entrypoint.ModelNames[0]},
+		Path: path + ".client_auth",
+		Spec: spec,
+	}
+	secret.Hash = secretFingerprint(secret.Name, spec)
+	c.add(secret)
+	return secret
+}
+
+// clientAuth compiles the client policy of the entrypoints, reporting each
+// reference to a variable that holds no usable key.
+func (c *compiler) clientAuth() *clientauth.Policy {
+	policy, problems := clientauth.Compile(c.cfg.Entrypoints, os.LookupEnv)
+	for _, problem := range problems {
+		c.reasons = append(c.reasons, Reason{
+			Stage: StageCompile, Code: CodeUnresolvedReference, Path: problem.Path, Message: problem.Message,
+		})
+	}
+	return policy
 }
 
 func (c *compiler) listeners() {
