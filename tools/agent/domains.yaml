@@ -631,6 +631,14 @@ domains:
     checks: [make test-learning-tools]
     verifications: [learning-tools]
 
+  looper-bench-contracts:
+    owner: router-core
+    paths:
+      - bench/looper_tts/**
+      - tools/make/tooling.mk
+    checks: [make test-looper-tts]
+    verifications: [bench-tools]
+
   grounded-fusion-bench:
     owner: evaluation-quality
     paths:
@@ -725,7 +733,7 @@ domains:
       - bench/openai_fault_proxy.py
       - bench/test_openai_fault_proxy.py
       - tools/make/soak.mk
-    checks: [make soak-test]
+    checks: [make soak-test, make test-fault-proxy]
     verifications: [soak-tools]
 
   image-runtime-artifacts:
