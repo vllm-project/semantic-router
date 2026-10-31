@@ -324,3 +324,125 @@ func TestChatStreamPFieldStaysStrict(t *testing.T) {
 		})
 	}
 }
+
+// Cerebras's OpenAI-compatible replies carry a top-level time_info object
+// (issue #5628) with serving timing metadata: queue_time, prompt_time,
+// completion_time, total_time, and a duplicate created. It is provider timing
+// metadata, not model output, so the response decodes with the usage untouched
+// and the drop is reported.
+const cerebrasChatResponseFixture = `{
+  "id":"chatcmpl-cerebras","object":"chat.completion","created":1725397005,
+  "model":"llama3.1-8b",
+  "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
+  "time_info":{"queue_time":0.254,"prompt_time":0.05,"completion_time":0.6,"total_time":0.907,"created":1725397005},
+  "usage":{"prompt_tokens":18,"completion_tokens":5,"total_tokens":23},
+  "system_fingerprint":"fp_1"
+}`
+
+func TestOpenAIChatResponseAcceptsCerebrasTimeInfo(t *testing.T) {
+	response, _, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(cerebrasChatResponseFixture))
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if response.Usage.Total.Value == nil || *response.Usage.Total.Value != 23 {
+		t.Fatalf("usage = %+v", response.Usage)
+	}
+	assertDiagnosticFields(t, diagnostics, "time_info")
+}
+
+// A null time_info is "no timing reported", not a field to report, and every
+// other unknown field is still rejected.
+func TestOpenAIChatResponseTimeInfoStaysStrict(t *testing.T) {
+	t.Run("null time_info reports nothing", func(t *testing.T) {
+		body := strings.Replace(
+			cerebrasChatResponseFixture,
+			`"time_info":{"queue_time":0.254,"prompt_time":0.05,"completion_time":0.6,"total_time":0.907,"created":1725397005}`,
+			`"time_info":null`, 1,
+		)
+		_, _, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+		if err != nil {
+			t.Fatalf("DecodeResponse() error = %v", err)
+		}
+		for _, diagnostic := range diagnostics {
+			if diagnostic.Field == "time_info" {
+				t.Fatalf("null time_info was reported: %+v", diagnostics)
+			}
+		}
+	})
+
+	t.Run("unrelated unknown field", func(t *testing.T) {
+		body := strings.Replace(cerebrasChatResponseFixture, `"time_info"`, `"x_unknown":1,"time_info"`, 1)
+		_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+	})
+}
+
+// Cerebras rides the same time_info object on stream chunks. A field on every
+// chunk is one drop, not one per chunk.
+func TestChatStreamAcceptsCerebrasTimeInfo(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	timeInfo := `"time_info":{"queue_time":0.254,"prompt_time":0.05,"completion_time":0.6,"total_time":0.907,"created":1725397005}`
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl-cerebras\",\"object\":\"chat.completion.chunk\",\"created\":1725397005,\"model\":\"model\"," + timeInfo + ",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":null}]}\n\n" +
+			"data: {\"id\":\"chatcmpl-cerebras\",\"object\":\"chat.completion.chunk\",\"created\":1725397005,\"model\":\"model\"," + timeInfo + ",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":5,\"total_tokens\":23}}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	_, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("Cerebras stream chunks were rejected: %v", err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Field != "stream.time_info" || diagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("time_info omission was not explicit or not once per stream: %+v", diagnostics)
+	}
+}
+
+// A null time_info on a chunk is "no timing reported", and every other unknown
+// field is still rejected.
+func TestChatStreamCerebrasTimeInfoStaysStrict(t *testing.T) {
+	t.Run("null time_info reports nothing", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"time_info\":null,\"choices\":[]}\n\n")
+		_, diagnostics, err := decoder.Push(payload)
+		if err != nil {
+			t.Fatalf("chunk with null time_info was rejected: %v", err)
+		}
+		for _, diagnostic := range diagnostics {
+			if diagnostic.Field == "stream.time_info" {
+				t.Fatalf("null time_info was reported: %+v", diagnostics)
+			}
+		}
+	})
+
+	t.Run("unrelated unknown field", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[],\"surprise\":{\"a\":1}}\n\n")
+		if _, _, err := decoder.Push(payload); err == nil {
+			t.Fatal("chunk with an unrelated unknown field was accepted")
+		}
+	})
+}
+
+// A same-format Chat response replays the original bytes, so the omission the
+// diagnostic reports describes the neutral representation only: the client
+// still receives time_info verbatim. Both facts are pinned here so neither
+// side can drift silently.
+func TestOpenAIChatResponseSameFormatReplayForwardsTimeInfo(t *testing.T) {
+	engine := NewBuiltinEngine()
+	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(cerebrasChatResponseFixture), nil)
+	if err != nil {
+		t.Fatalf("TranslateResponse() error = %v", err)
+	}
+	if string(translated.Body) != cerebrasChatResponseFixture {
+		t.Fatal("same-format response was not replayed byte-for-byte; time_info must reach the client unchanged")
+	}
+	assertDiagnosticFields(t, translated.Diagnostics, "time_info")
+}

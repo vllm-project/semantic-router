@@ -243,6 +243,7 @@
         "remote_engine_id",
         "remote_host",
         "remote_port",
+        "time_info",
         "usage_breakdown",
         "x_groq"
       ],
