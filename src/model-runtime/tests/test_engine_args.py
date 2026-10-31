@@ -379,7 +379,5 @@ def test_load_models_file_rejects_unnamed_duplicate_and_colliding_models(
 ):
     path = tmp_path / "models.yaml"
     path.write_text(content, encoding="utf-8")
-    with pytest.raises(
-        ValueError, match=f"duplicate model name {expected_name!r}"
-    ):
+    with pytest.raises(ValueError, match=f"duplicate model name {expected_name!r}"):
         load_models_file(path)
