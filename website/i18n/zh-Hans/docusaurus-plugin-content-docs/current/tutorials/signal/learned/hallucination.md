@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/hallucination.md"
@@ -11,7 +12,7 @@ translation:
 
 `hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `routing.signals.hallucination` 下定义其规则。
 
-该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器（默认是 Vela 2.0 0.3B 的片段头，也可以是 Vela Halu），并在[模型运行时](../../../model-runtime/guides/hallucination)中执行。NLI 解释器已退役。
+该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器（默认是 vela3-fast 的 span-set 适配器，也可以是 Vela Halu），并在[模型运行时](../../../model-runtime/guides/hallucination)中执行。NLI 解释器已退役。
 
 ## 主要优势 {#key-advantages}
 

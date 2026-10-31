@@ -93,10 +93,15 @@ type chatMessageWire struct {
 	AlternateReasoning *string              `json:"reasoning,omitempty"`
 	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
 	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
-	ToolCalls          []chatToolCallWire   `json:"tool_calls,omitempty"`
-	ToolCallID         string               `json:"tool_call_id,omitempty"`
-	Annotations        []chatAnnotationWire `json:"annotations,omitempty"`
-	Name               json.RawMessage      `json:"name,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on response messages. The content is opaque
+	// provider metadata and is not replayed to the client. Client requests
+	// that carry the field are rejected in decodeChatRequestMessage.
+	ProviderSpecificFields json.RawMessage      `json:"provider_specific_fields,omitempty"`
+	ToolCalls              []chatToolCallWire   `json:"tool_calls,omitempty"`
+	ToolCallID             string               `json:"tool_call_id,omitempty"`
+	Annotations            []chatAnnotationWire `json:"annotations,omitempty"`
+	Name                   json.RawMessage      `json:"name,omitempty"`
 }
 
 type chatAudioOutputWire struct {
@@ -284,7 +289,9 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 			return err
 		}
 		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
-			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: message.Role, Content: message.Content})
+			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
+				Role: message.Role, Content: message.Content, Name: message.Name,
+			})
 		} else {
 			request.Messages = append(request.Messages, message)
 		}
@@ -346,6 +353,11 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 }
 
 func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+	// Response-only LiteLLM metadata. The shared message wire accepts the
+	// field so upstream replies decode; a client request must not.
+	if err := rejectUnsupportedRequestField("messages.provider_specific_fields", wire.ProviderSpecificFields); err != nil {
+		return llmprotocol.Message{}, err
+	}
 	for _, call := range wire.ToolCalls {
 		if call.Function.TokenizedArguments != nil {
 			return llmprotocol.Message{}, llmprotocol.NewError(
@@ -415,6 +427,15 @@ func assembleChatMessage(
 ) (llmprotocol.Message, error) {
 	// Reasoning first, the order vLLM's own Messages and Responses output uses.
 	message := llmprotocol.Message{ID: wire.ID, Role: role}
+	name, err := decodeChatMessageName(wire.Name)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	// A tool result's name repeats the function of the call it answers, which
+	// tool_call_id already identifies.
+	if role != llmprotocol.RoleTool {
+		message.Name = name
+	}
 	reasoning := wire.Reasoning
 	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
@@ -445,10 +466,19 @@ func assembleChatMessage(
 	return message, nil
 }
 
-func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
-	if err := rejectUnsupportedRequestField("messages.name", wire.Name); err != nil {
-		return "", err
+func decodeChatMessageName(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
 	}
+	var name string
+	if err := json.Unmarshal(trimmed, &name); err != nil {
+		return "", llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_messages_name", "messages.name must be a string", nil)
+	}
+	return name, nil
+}
+
+func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
 	if wire.Audio != nil {
 		return "", llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_output_audio", "Chat output audio is unsupported", nil,

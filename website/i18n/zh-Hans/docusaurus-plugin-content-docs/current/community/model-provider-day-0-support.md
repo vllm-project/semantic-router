@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型与提供商 Day-0 支持
 description: 一次加入内置模型或提供商，再从共享目录生成所有运行时和产品视图。
 translation:

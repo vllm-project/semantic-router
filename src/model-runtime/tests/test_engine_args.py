@@ -9,6 +9,7 @@ from vllm_srun import dtypes
 from vllm_srun.accel import onednn
 from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, EngineArgs, ModelConfig, ServeConfig
 from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.families.task_heads import family as task_heads
 from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.fixtures import write_fixture
@@ -156,6 +157,45 @@ def test_another_dtype_is_served_and_named_without_golden_references(
         runtime.stop()
 
 
+@pytest.mark.parametrize("override", ["none", "model", "process"])
+def test_placement_estimates_the_dtype_a_model_or_the_process_asks_for(
+    qwen3_package, monkeypatch, override
+):
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.accel.cuda import CUDAAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
+    from vllm_srun.errors import PlacementError
+    from vllm_srun.placement import ACTIVATION_RESERVE, place
+    from vllm_srun.plugins.base import DeviceInfo
+
+    gpu = DeviceInfo("rocm", 0, "AMD Instinct MI300X", 192 << 30, 180 << 30, True)
+    monkeypatch.setattr(ROCmAccelerator, "available", lambda self: True)
+    monkeypatch.setattr(ROCmAccelerator, "devices", lambda self: [gpu])
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: False)
+    placed = []
+
+    def placing(spec, device, parameters, *args):
+        placed.append((parameters, place(spec, device, parameters, *args)))
+        raise PlacementError("placed")  # this host has no GPU to load the weights on
+
+    monkeypatch.setattr(runtime_module, "place", placing)
+    model = ModelConfig(
+        model=str(qwen3_package),
+        device="rocm:0",
+        dtype="float32" if override == "model" else None,
+    )
+    process = EngineArgs(dtype="float32" if override == "process" else "auto")
+    runtime = Runtime(ServeConfig(models=(model,), engine_args=process))
+    with pytest.raises(PlacementError, match="placed"):
+        runtime.load()
+    ((parameters, placement),) = placed
+    fp32 = 4 * parameters + ACTIVATION_RESERVE
+    if override == "none":
+        assert placement.estimated_bytes < fp32
+    else:
+        assert placement.estimated_bytes == fp32
+
+
 def test_float16_needs_a_gpu(qwen3_package):
     runtime = Runtime(
         ServeConfig(
@@ -232,9 +272,44 @@ def test_task_heads_keep_shared_context_off_and_report_exact_numerics_where_batc
         assert not served.shared
         if served.model.batch_invariant:
             assert served.numerics == "exact"
-        elif onednn.available():
-            pytest.fail(
-                "a native CPU task model with oneDNN's packed linear is batch-invariant"
-            )
+        else:
+            # no packed linear on this host, or the load-time probes found the
+            # packed products or the whole forward moving with the batch
+            assert served.numerics == "approximate"
+    finally:
+        runtime.stop()
+
+
+def test_a_task_model_is_exact_where_its_packed_linears_and_forward_are_invariant(
+    tmp_path, monkeypatch
+):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    monkeypatch.setattr(onednn, "invariant", lambda layers: True)
+    monkeypatch.setattr(task_heads, "batch_invariant", lambda model, vocab: True)
+    package = write_fixture(tmp_path / "heads", family="task_heads")
+    runtime = serve(package)
+    try:
+        served = runtime.served[0]
+        assert served.model.engine_model.batch_invariant
+        assert served.model.batch_invariant
+        assert served.numerics == "exact"
+    finally:
+        runtime.stop()
+
+
+def test_a_task_model_is_approximate_where_its_packed_linears_are_not_invariant(
+    tmp_path, monkeypatch
+):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    monkeypatch.setattr(onednn, "invariant", lambda layers: False)
+    package = write_fixture(tmp_path / "heads", family="task_heads")
+    runtime = serve(package)
+    try:
+        served = runtime.served[0]
+        assert not served.model.engine_model.batch_invariant
+        assert not served.model.batch_invariant
+        assert served.numerics == "approximate"
     finally:
         runtime.stop()
