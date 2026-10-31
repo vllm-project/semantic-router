@@ -263,7 +263,7 @@ func TestValkeyFieldsToMemory(t *testing.T) {
 			"content":      "test content",
 			"user_id":      "user1",
 			"memory_type":  "semantic",
-			"metadata":     `{"project_id":"proj1","source":"conversation","importance":0.8,"access_count":3,"last_accessed":1700000000}`,
+			"metadata":     `{"project_id":"proj1","source":"conversation","importance":0.8,"access_count":3,"last_accessed":1700000000,"created_by_user_id":"user-origin","conversation_id":"conversation-123","created_via":"llm_extraction"}`,
 			"created_at":   "1700000000",
 			"updated_at":   "1700000100",
 			"embedding":    string(valkeyFloat32ToBytes(embedding)),
@@ -278,6 +278,9 @@ func TestValkeyFieldsToMemory(t *testing.T) {
 		assert.Equal(t, MemoryType("semantic"), mem.Type)
 		assert.Equal(t, "proj1", mem.ProjectID)
 		assert.Equal(t, "conversation", mem.Source)
+		assert.Equal(t, "user-origin", mem.CreatedByUserID)
+		assert.Equal(t, "conversation-123", mem.ConversationID)
+		assert.Equal(t, "llm_extraction", mem.CreatedVia)
 		assert.InDelta(t, float32(0.8), mem.Importance, 0.01)
 		assert.Equal(t, 3, mem.AccessCount)
 		assert.False(t, mem.CreatedAt.IsZero())
@@ -690,11 +693,14 @@ func TestValkeyBuildHashFields_AccessCountNotInMetadata(t *testing.T) {
 	t.Parallel()
 
 	mem := &Memory{
-		ID:          "mem_race_test",
-		Content:     "test content",
-		UserID:      "u1",
-		AccessCount: 5,
-		Importance:  0.8,
+		ID:              "mem_race_test",
+		Content:         "test content",
+		UserID:          "u1",
+		AccessCount:     5,
+		Importance:      0.8,
+		CreatedByUserID: "user-origin",
+		ConversationID:  "conversation-123",
+		CreatedVia:      "llm_extraction",
 	}
 	embedding := []float32{0.1, 0.2, 0.3}
 
@@ -711,6 +717,9 @@ func TestValkeyBuildHashFields_AccessCountNotInMetadata(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(metadataStr), &metadata))
 	_, hasAccessCount := metadata["access_count"]
 	assert.False(t, hasAccessCount, "access_count must NOT be stored in metadata JSON to prevent concurrent write races")
+	assert.Equal(t, mem.CreatedByUserID, metadata["created_by_user_id"])
+	assert.Equal(t, mem.ConversationID, metadata["conversation_id"])
+	assert.Equal(t, mem.CreatedVia, metadata["created_via"])
 }
 
 // ---------------------------------------------------------------------------
