@@ -34,8 +34,14 @@ func Applicable(pluginType string, request, backend llmprotocol.CapabilitySet, b
 	if !request.Contains(required) {
 		return false, SkipRequestDoesNotRequire
 	}
-	if backendDeclared && !backend.Contains(required.TaskCapabilities()) {
+	if !CoversRequest(required, backend, backendDeclared) {
 		return false, SkipBackendLacksCapability
 	}
 	return true, ""
+}
+
+// CoversRequest reports whether a backend's declared capabilities cover the task
+// capabilities a request needs. Text is assumed, and an undeclared backend is not gated.
+func CoversRequest(request, backend llmprotocol.CapabilitySet, backendDeclared bool) bool {
+	return !backendDeclared || backend.Contains(request.TaskCapabilities())
 }
