@@ -69,6 +69,11 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return fmt.Errorf("-config-history-limit must keep at least one version, not %d", opts.configHistoryLimit)
 	}
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
+
+	// Administrative one-shot: needs the config, nothing else. Runs before
+	// any model download, listener or runtime registry is touched.
+	exitIfFinalizeResponseIndex(opts.finalizeResponseIndex, cfg)
+
 	if err := config.ValidateGatewayCapabilities(cfg, opts.gateway); err != nil {
 		return err
 	}
