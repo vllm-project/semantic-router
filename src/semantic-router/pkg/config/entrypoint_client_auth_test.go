@@ -150,3 +150,15 @@ entrypoints:
 		t.Fatalf("export or resolution shares the normalized policy: %+v", cfg.Entrypoints[0].ClientAuth)
 	}
 }
+
+func TestValidateRawFieldsSeesFieldsDecodingDrops(t *testing.T) {
+	if err := ValidateRawFields(clientAuthDocument("null")); err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth: entrypoint client authentication is not available yet") {
+		t.Fatalf("ValidateRawFields(client_auth: null) = %v, want the client_auth rejection", err)
+	}
+	if err := ValidateRawFields([]byte("global:\n  router:\n    auto_model_names: null\n")); err == nil || !strings.Contains(err.Error(), "global.router.auto_model_names was removed") {
+		t.Fatalf("ValidateRawFields(removed field) = %v, want it rejected", err)
+	}
+	if err := ValidateRawFields([]byte(recipeTestBaseYAML)); err != nil {
+		t.Fatalf("ValidateRawFields(valid config) = %v", err)
+	}
+}
