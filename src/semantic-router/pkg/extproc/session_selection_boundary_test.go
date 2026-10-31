@@ -161,3 +161,56 @@ func TestSessionHardBoundaryConflictsRejectBeforeChangingOwnership(t *testing.T)
 		}
 	}
 }
+
+func TestSessionBoundaryDriftReleasesToolLoopLockInsteadOfDeadlocking(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		nonPortable  bool
+		sameDecision bool
+		wantRejected bool
+	}{
+		{name: "tool_loop_drift_released"},
+		// The opaque case also carries a tool loop. Without that fact the
+		// rejection never reaches the !HasNonPortableContext carve-out.
+		{name: "tool_loop_and_opaque_state_drift_still_rejected", nonPortable: true, wantRejected: true},
+		// The recorded decision name matches the current one. An empty last
+		// decision never exercises the same-decision comparison.
+		{name: "same_decision_tool_loop_still_rejected", sameDecision: true, wantRejected: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sessiontelemetry.ResetRouterSessionMemoryForTesting()
+			t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+			router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+			router.Config.RouterLearning = routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeConversation).RouterLearning
+			router.Config.ModelConfig[primary] = addTestQuality(router.Config.ModelConfig[primary], .98)
+			router.Config.ModelConfig["prior"] = addTestQuality(router.Config.ModelConfig[primary], .1)
+			decision := &config.Decision{Name: "synthetic-drift-new", ModelRefs: []config.ModelRef{{Model: primary}}}
+			ctx := routerLearningRequestContext("driftlock", "conversation")
+			ctx.VSRSelectedDecision = decision
+			ctx.VSRConversationFacts = classification.ConversationFacts{LastAssistantToolCall: true}
+			if tc.nonPortable {
+				ctx.PreviousResponseID = "opaque-unresolved"
+			}
+			recordedDecision := "synthetic-drift-old"
+			if tc.sameDecision {
+				recordedDecision = decision.Name
+			}
+			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+				SessionID:     "driftlock/conversation",
+				SelectedModel: "prior",
+				DecisionName:  config.RoutingNamespaceKey("", recordedDecision),
+				Timestamp:     time.Now(),
+			})
+			selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{CandidateModels: decision.ModelRefs, DecisionName: decision.Name}, decision.Algorithm, ctx)
+			if tc.wantRejected {
+				if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
+					t.Fatalf("%s: lock was released: model=%+v err=%v", tc.name, selected, err)
+				}
+				return
+			}
+			if err != nil || selected == nil || selected.Model != primary {
+				t.Fatalf("drifted decision deadlocked the tool loop: model=%+v err=%v", selected, err)
+			}
+		})
+	}
+}
