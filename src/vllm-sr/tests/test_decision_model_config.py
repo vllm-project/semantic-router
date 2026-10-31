@@ -296,6 +296,7 @@ def test_decision_type_requires_its_configuration():
         ({"artifact": "/models/kai", "max_num_seqs": 64, "dtype": "bfloat16"}, None),
         ({"artifact": "/models/kai", "batch_window_ms": 0}, None),
         ({"artifact": "/models/kai", "enable_shared_context": False}, None),
+        ({"artifact": "/models/kai", "flash_attention_3": True}, None),
         ({"artifact": "./models/kai"}, "Hub repository ID or an absolute"),
         ({"artifact": "/models/kai", "revision": REVISION}, "only to Hub"),
         ({"artifact": "vllm-sr/x", "revision": "main"}, "40-hex"),
@@ -313,6 +314,10 @@ def test_decision_type_requires_its_configuration():
         (
             {"artifact": "vllm-sr/x", "enable_shared_context": 1},
             "enable_shared_context must be",
+        ),
+        (
+            {"artifact": "vllm-sr/x", "flash_attention_3": 1},
+            "flash_attention_3 must be",
         ),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "truncate"}}, None),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "cut"}}, "input.overflow"),

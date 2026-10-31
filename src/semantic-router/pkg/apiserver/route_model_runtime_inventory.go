@@ -52,6 +52,7 @@ type modelRuntimeEngineArgs struct {
 	BatchWindowMS       float64 `json:"batch_window_ms"`
 	Dtype               string  `json:"dtype"`
 	EnableSharedContext bool    `json:"enable_shared_context"`
+	FlashAttention3     bool    `json:"flash_attention_3"`
 }
 
 type modelRuntimeHead struct {
@@ -96,7 +97,7 @@ func modelRuntimeInventory(statuses []modelservice.DeploymentStatus) modelRuntim
 			if args := card.EngineArgs; args != (modelservice.EngineArgs{}) {
 				deployment.EngineArgs = &modelRuntimeEngineArgs{
 					MaxNumSeqs: args.MaxNumSeqs, MaxNumBatchedTokens: args.MaxNumBatchedTokens, BatchWindowMS: args.BatchWindowMS,
-					Dtype: args.Dtype, EnableSharedContext: args.EnableSharedContext,
+					Dtype: args.Dtype, EnableSharedContext: args.EnableSharedContext, FlashAttention3: args.FlashAttention3,
 				}
 			}
 			for _, head := range card.Heads {

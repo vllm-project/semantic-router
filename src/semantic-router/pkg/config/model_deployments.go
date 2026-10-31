@@ -34,6 +34,9 @@ type ModelDeployment struct {
 	// EnableSharedContext computes the shared state of a multi-question
 	// request once; unset leaves it to the model family (on for Decision 2.0).
 	EnableSharedContext *bool `yaml:"enable_shared_context,omitempty" json:"enable_shared_context,omitempty"`
+	// FlashAttention3 runs state-once branched attention with FlashAttention-3
+	// on Hopper. Unset leaves it off. Other devices refuse to load when it is set.
+	FlashAttention3 *bool `yaml:"flash_attention_3,omitempty" json:"flash_attention_3,omitempty"`
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
 	// not manage (unix:///path, http://host:port or https://host:port).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`

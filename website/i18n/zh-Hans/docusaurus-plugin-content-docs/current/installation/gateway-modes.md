@@ -169,7 +169,7 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 
 | 范围 | 选项 |
 | --- | --- |
-| 模型与运行 | `MODEL`、`--engine`、`--revision`、`--data-parallel-size` / `-dp`，以及引擎参数 `--max-num-seqs`、`--max-num-batched-tokens`、`--batch-window-ms`、`--dtype`、`--enable-shared-context` |
+| 模型与运行 | `MODEL`、`--engine`、`--revision`、`--data-parallel-size` / `-dp`，以及引擎参数 `--max-num-seqs`、`--max-num-batched-tokens`、`--batch-window-ms`、`--dtype`、`--enable-shared-context`、`--flash-attention-3` |
 | 平台 | `--platform auto/cpu/cuda/rocm`，auto 检查实际 Docker 主机或目标 Kubernetes 集群 |
 | Docker 设备 | `--device-ids` 使用主机编号，按已有可见掩码映射；一个编号允许同卡多副本，N 个编号对应 N 个副本 |
 | 配置 | `--config`、`--target`、`--gateway`、`--minimal`、`--readonly`、`--algorithm` |

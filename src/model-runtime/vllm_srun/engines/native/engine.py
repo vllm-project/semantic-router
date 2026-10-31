@@ -12,7 +12,7 @@ from typing import Any, TypeVar, cast
 import torch
 from torch import nn
 
-from ...accel import onednn
+from ...accel import flash3, onednn
 from ...accel.kernels import CONTIGUOUS
 from ...plugins.base import (
     Accelerator,
@@ -144,6 +144,18 @@ class NativeEngineModel(EngineModel):
             }
         )
         self.kernels = accelerator.kernels(device_info)
+        if options.flash_attention_3:
+            reason = flash3.opt_in_refusal(device_info, backbone)
+            registered = any(
+                kernel.source == flash3.SOURCE
+                for kernel in self.kernels.available.get("branch_attention", [])
+            )
+            if reason is not None or not registered:
+                raise RuntimeError(
+                    "flash_attention_3: "
+                    + (reason or "FlashAttention-3 is not registered on this device")
+                )
+            self.kernels.use_source("branch_attention", flash3.SOURCE)
         self.kernels.allow_approximate = (
             not options.exact_kernels_only and spec.dtype.approximate_kernels
         )

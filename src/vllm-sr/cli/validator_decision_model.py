@@ -70,6 +70,9 @@ def engine_args_error(deployment: dict) -> str | None:
     shared = deployment.get("enable_shared_context")
     if shared is not None and not isinstance(shared, bool):
         return "enable_shared_context must be a boolean"
+    flash3 = deployment.get("flash_attention_3")
+    if flash3 is not None and not isinstance(flash3, bool):
+        return "flash_attention_3 must be a boolean"
     return None
 
 
