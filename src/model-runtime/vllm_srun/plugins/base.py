@@ -531,6 +531,10 @@ class EngineModel(ABC):
         """Whether decoder forwards replay captured device graphs."""
         return False
 
+    def replays_shape(self, rows: int, width: int, padded: bool) -> bool:
+        """Whether a decoder forward of this shape replays a captured graph or may still capture one."""
+        return False
+
     @property
     def approximate_kernels(self) -> bool:
         """Whether a kernel this model runs is not bit-exact against its reference (``KernelSet``)."""
