@@ -2,7 +2,8 @@
 
 For models that name them it registers the ``geglu`` slot's ``contiguous``
 variant and, on x86, the ``linear`` slot's ``float32-packed`` one
-(``onednn.py``): together they make an encoder's forward batch-invariant.
+(``onednn.py``): together they make an encoder's forward batch-invariant where
+the packed products measure so at load (``onednn.invariant``).
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
