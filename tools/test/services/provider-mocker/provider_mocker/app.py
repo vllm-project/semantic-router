@@ -46,6 +46,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if request.method == "POST" and (
             request.url.path.startswith("/v1/") or settings.scenario == "cli"
         ):
+            leaked = [
+                name
+                for name in settings.forbidden_headers
+                if request.headers.get(name) is not None
+            ]
+            if leaked:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": {
+                            "type": "invalid_request_error",
+                            "message": "forbidden header received: "
+                            + ", ".join(leaked),
+                        }
+                    },
+                )
             expected = settings.expected_authorization
             if expected is not None:
                 if request.headers.get("Authorization", "") != f"Bearer {expected}":

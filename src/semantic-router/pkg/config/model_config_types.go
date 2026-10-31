@@ -385,6 +385,10 @@ type ProviderProfile struct {
 	// the response decoder tolerates them instead of stripping undeclared
 	// usage fields. A plain vLLM backend must leave it unset.
 	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
+	// TrustedGateway selects the request's trusted gateway credential as this
+	// backend's credential; static keys and per-user provider keys are not
+	// consulted for it.
+	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
 }
 
 type ModelPricing struct {
