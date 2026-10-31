@@ -45,10 +45,7 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
-`threshold` is optional: a rule without one takes every span the PII model
-reports. A Vela 2.0 model reports only spans above its size's calibrated
-threshold, and vela3-fast only spans above the threshold of the text's length:
-0.35 up to 1,024 tokens, 0.95 up to 6,144 and 0.40 beyond.
+`threshold` is optional: a rule without one takes every span the PII model reports. A Vela 2.0 model reports only spans above its size's calibrated threshold, and vela3-fast only spans above the threshold of the text's length: 0.35 up to 1,024 tokens, 0.95 up to 6,144 and 0.40 beyond.
 
 To scan textual results returned by tools, opt in with `source: tool_result`:
 
@@ -72,14 +69,7 @@ leaving it empty) preserves the legacy prompt and optional history behavior.
 
 ## Complete local scans
 
-The default PII model, vela3-fast, reads each text item whole, in 8,192-token
-inputs with 512 tokens of overlap, up to its scan budget: 32,768 tokens on a
-CPU and 262,144 on a GPU
-([Long inputs](../../../model-runtime/reference.md#long-inputs)). It finds spans
-with its span-set adapter. When the module runs Vela 1.0 PII, it scans each text item up to 32,768 tokens, including
-special tokens. Each forward uses at most 512 tokens, with 255 content tokens
-of overlap. The model tokenizer defines the windows; character estimates
-and text re-tokenization at window boundaries do not determine coverage.
+The default PII model, vela3-fast, reads each text item whole, in 8,192-token inputs with 512 tokens of overlap, up to its scan budget: 32,768 tokens on a CPU and 262,144 on a GPU ([Long inputs](../../../model-runtime/reference.md#long-inputs)). It finds spans with its span-set adapter. When the module runs Vela 1.0 PII, it scans each text item up to 32,768 tokens, including special tokens. Each forward uses at most 512 tokens, with 255 content tokens of overlap. The model tokenizer defines the windows; character estimates and text re-tokenization at window boundaries do not determine coverage.
 
 The [model runtime](../../../model-runtime/guides/pii.md) reports spans as
 character offsets into the original text, chooses one observation per token by
