@@ -19,6 +19,7 @@ import { AlgorithmSchemaEditor, PluginSchemaEditor } from "./builderPageEntityFo
 import {
   RouteDslPreviewPanel,
   generateRouteDslPreview,
+  routeInputHasErrors,
   validateRouteInput,
 } from "./builderPageRoutePreview";
 import { ModelNameInput, ManualPluginAdder } from "./builderPageRouteSharedControls";
@@ -54,6 +55,9 @@ const AddRouteForm: React.FC<{
   const handleSubmit = useCallback(() => {
     const n = name.trim().replace(/\s+/g, "_");
     if (!n) return;
+    if (routeInputHasErrors(n, models, algorithm, plugins)) {
+      return;
+    }
     onAdd(n, {
       description: description.trim() || undefined,
       priority,
@@ -114,6 +118,7 @@ const AddRouteForm: React.FC<{
     () => validateRouteInput(name.trim(), models, algorithm, plugins),
     [name, models, algorithm, plugins],
   );
+  const hasValidationErrors = validationIssues.some((issue) => issue.level === "error");
 
   const activePluginNames = useMemo(
     () => new Set(plugins.map((p) => p.name)),
@@ -151,7 +156,12 @@ const AddRouteForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSubmit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || hasValidationErrors}
+            title={
+              hasValidationErrors
+                ? "Fix validation errors before creating"
+                : undefined
+            }
           >
             Create
           </button>
@@ -310,6 +320,35 @@ const AddRouteForm: React.FC<{
                       placeholder="—"
                     />
                   </div>
+                </div>
+                <div className={styles.modelAttrField}>
+                  <span className={styles.modelAttrLabel}>
+                    max_completion_tokens:
+                  </span>
+                  <input
+                    className={styles.fieldInput}
+                    style={{
+                      width: "80px",
+                      fontSize: "var(--text-xs)",
+                      padding: "0.25rem 0.5rem",
+                    }}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={
+                      m.maxCompletionTokens !== undefined
+                        ? m.maxCompletionTokens
+                        : ""
+                    }
+                    onChange={(e) =>
+                      updateModel(idx, {
+                        maxCompletionTokens: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="—"
+                  />
                 </div>
               </div>
             </div>

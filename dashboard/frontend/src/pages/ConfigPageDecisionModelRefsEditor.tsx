@@ -21,6 +21,7 @@ type ModelRefField =
   | 'reasoning_effort'
   | 'lora_name'
   | 'weight'
+  | 'max_completion_tokens'
 type ModelRefValue = string | boolean | number | undefined
 
 interface EditorProps {
@@ -46,6 +47,7 @@ const emptyModelRef = (): ModelRef => ({
   reasoning_effort: '',
   lora_name: '',
   weight: undefined,
+  max_completion_tokens: undefined,
 })
 
 const updateModelRef = (
@@ -172,6 +174,23 @@ function ModelReferenceMetadata({ value, onChange }: Pick<RowProps, 'value' | 'o
             placeholder="Optional weight"
             step="0.1"
             min="0"
+            className={decisionStyles.editorInput}
+          />
+        </label>
+        <label className={decisionStyles.editorControlLabel}>
+          <span className={decisionStyles.editorControlLabelText}>Max completion tokens</span>
+          <input
+            type="number"
+            value={typeof value.max_completion_tokens === 'number' ? value.max_completion_tokens : ''}
+            onChange={(event) =>
+              onChange(
+                'max_completion_tokens',
+                event.target.value === '' ? undefined : Number(event.target.value),
+              )
+            }
+            placeholder="Optional ceiling"
+            min="1"
+            step="1"
             className={decisionStyles.editorInput}
           />
         </label>

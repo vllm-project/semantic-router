@@ -261,12 +261,15 @@ func (l *FusionLooper) callFusionModel(
 	} else if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
+	var authoredStage *int64
 	if override.MaxCompletionTokens > 0 {
 		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(override.MaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(override.MaxCompletionTokens)
 	} else if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(cfg.MaxCompletionTokens)
 	}
 	return l.dispatchModel(
 		ctx,
@@ -274,9 +277,10 @@ func (l *FusionLooper) callFusionModel(
 		callReq,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
 		CallOptions{
-			DecisionName: req.DecisionName,
-			Iteration:    iteration,
-			Mode:         responseMode(streaming),
+			DecisionName:         req.DecisionName,
+			Iteration:            iteration,
+			Mode:                 responseMode(streaming),
+			StageMaxOutputTokens: authoredStage,
 			// Panel and analysis calls drop tools above. Only synthesis and the
 			// quorum fallback keep them, and both produce the final answer.
 			ToolStage: llmprotocol.TrustedStageFinal,

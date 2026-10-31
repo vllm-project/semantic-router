@@ -35,6 +35,7 @@ import {
   DECISION_RELIABILITY_SCHEMA,
 } from './configPageDecisionAdvancedSchemas'
 import {
+  decisionModelRefsForForm,
   decisionModelRefsForSave,
   decisionPluginsForSave,
   decisionRulesForSave,
@@ -105,6 +106,9 @@ export default function ConfigPageDecisionsSection({
       ref.reasoning_effort ? `Effort: ${ref.reasoning_effort}` : null,
       ref.lora_name ? `LoRA: ${ref.lora_name}` : null,
       typeof ref.weight === 'number' ? `Weight: ${ref.weight}` : null,
+      typeof ref.max_completion_tokens === 'number'
+        ? `Max completion tokens: ${ref.max_completion_tokens}`
+        : null,
     ].filter((value): value is string => Boolean(value))
 
     const details = [
@@ -346,21 +350,16 @@ export default function ConfigPageDecisionsSection({
               annotations: decision.annotations || {},
             },
             rules: JSON.parse(JSON.stringify(decision.rules || {})),
-            modelRefs: (decision.modelRefs || []).map((ref) => ({
-              model: ref.model,
+            modelRefs: decisionModelRefsForForm(decision.modelRefs).map((ref) => ({
+              ...ref,
               use_reasoning:
-                !!ref.use_reasoning ||
+                ref.use_reasoning ||
                 reasoningFamilyIsAlwaysOn(
                   reasoningFamilyForModel(
                     models.find((model) => model.name === ref.model),
                     reasoningFamilies,
                   ),
                 ),
-              reasoning_description: ref.reasoning_description || '',
-              reasoning_mode: ref.reasoning_mode || '',
-              reasoning_effort: ref.reasoning_effort || '',
-              lora_name: ref.lora_name || '',
-              weight: typeof ref.weight === 'number' ? ref.weight : undefined,
             })),
             plugins: (decision.plugins || []).map((plugin) => ({
               type: plugin.type,

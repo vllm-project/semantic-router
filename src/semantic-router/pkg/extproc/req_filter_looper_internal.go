@@ -139,6 +139,7 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 	if ctx.SemanticRequest == nil {
 		return r.createErrorResponse(400, "Invalid inference request"), nil
 	}
+	applyLooperHopOutputTokenBounds(ctx)
 	ctx.SemanticRequest.Model = modelName
 	ctx.SemanticRequest.Generation++
 	ctx.VSRSelectedModel = modelName
@@ -152,6 +153,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	r.hydrateLooperRoutingContext(ctx)
+	applyLooperHopOutputTokenBounds(ctx)
 	decisionName := looperHopDecision(ctx)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {

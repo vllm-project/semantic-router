@@ -92,20 +92,7 @@ func (c *Compiler) appendModelRef(decision *config.Decision, m *ModelRef) {
 	if decision == nil || m == nil {
 		return
 	}
-	ref := config.ModelRef{
-		Model:    m.Model,
-		LoRAName: m.LoRA,
-		Weight:   m.Weight,
-	}
-	if m.Reasoning != nil {
-		ref.UseReasoning = m.Reasoning
-	}
-	if m.Effort != "" {
-		ref.ReasoningEffort = m.Effort
-	}
-	if m.Mode != "" {
-		ref.ReasoningMode = m.Mode
-	}
+	ref := dslModelRefToConfig(m)
 	decision.ModelRefs = append(decision.ModelRefs, ref)
 
 	// Populate model_config for route-local model metadata fields.
@@ -140,21 +127,7 @@ func (c *Compiler) compileCandidateIteration(iter *CandidateIterationDecl) confi
 		Source:   iter.Source,
 	}
 	for _, model := range iter.Models {
-		ref := config.ModelRef{
-			Model:    model.Model,
-			LoRAName: model.LoRA,
-			Weight:   model.Weight,
-		}
-		if model.Reasoning != nil {
-			ref.UseReasoning = model.Reasoning
-		}
-		if model.Effort != "" {
-			ref.ReasoningEffort = model.Effort
-		}
-		if model.Mode != "" {
-			ref.ReasoningMode = model.Mode
-		}
-		compiled.Models = append(compiled.Models, ref)
+		compiled.Models = append(compiled.Models, dslModelRefToConfig(model))
 	}
 	for _, output := range iter.Outputs {
 		compiled.Outputs = append(compiled.Outputs, config.CandidateIterationOutputConfig{
@@ -273,4 +246,26 @@ func compileComposerObj(ov ObjectValue) config.RuleCombination {
 		}
 	}
 	return rc
+}
+
+func dslModelRefToConfig(m *ModelRef) config.ModelRef {
+	if m == nil {
+		return config.ModelRef{}
+	}
+	ref := config.ModelRef{
+		Model:               m.Model,
+		LoRAName:            m.LoRA,
+		Weight:              m.Weight,
+		MaxCompletionTokens: m.MaxCompletionTokens,
+	}
+	if m.Reasoning != nil {
+		ref.UseReasoning = m.Reasoning
+	}
+	if m.Effort != "" {
+		ref.ReasoningEffort = m.Effort
+	}
+	if m.Mode != "" {
+		ref.ReasoningMode = m.Mode
+	}
+	return ref
 }

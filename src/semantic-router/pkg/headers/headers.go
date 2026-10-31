@@ -454,12 +454,22 @@ const (
 
 // Retired Looper hop headers. Looper hops run in process with their context
 // typed, so nothing reads these; the Router still drops them from client
-// requests so that no client can pose as a hop.
+// requests so that no client can pose as a hop or supply a completion ceiling.
 const (
 	VSRLooperRequest   = "x-vsr-looper-request"
 	VSRLooperIteration = "x-vsr-looper-iteration"
 	VSRLooperDecision  = "x-vsr-looper-decision"
 	VSRFusionDepth     = "x-vsr-fusion-depth"
+
+	// VSRLooperClientMaxOutputTokens is the retired name of the client
+	// completion-token ceiling. Hops carry that ceiling on routing.Hop.
+	//nolint:gosec
+	VSRLooperClientMaxOutputTokens = "x-vsr-looper-client-max-output-tokens"
+
+	// VSRLooperStageMaxOutputTokens is the retired name of the algorithm-stage
+	// completion-token ceiling. Hops carry that ceiling on routing.Hop.
+	//nolint:gosec
+	VSRLooperStageMaxOutputTokens = "x-vsr-looper-stage-max-output-tokens"
 )
 
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)
