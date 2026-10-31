@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -954,6 +956,51 @@ func TestReconcileHPA(t *testing.T) {
 
 	if hpa.Spec.MaxReplicas != 10 {
 		t.Errorf("expected maxReplicas 10, got %d", hpa.Spec.MaxReplicas)
+	}
+}
+
+type clientWithGetError struct {
+	client.Client
+	err error
+}
+
+func (c *clientWithGetError) Get(context.Context, types.NamespacedName, client.Object, ...client.GetOption) error {
+	return c.err
+}
+
+func TestDisabledOptionalResourcesPropagateGetErrors(t *testing.T) {
+	getErr := errors.New("API unavailable")
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+	}
+
+	tests := []struct {
+		name      string
+		reconcile func(*SemanticRouterReconciler, *vllmv1alpha1.SemanticRouter) error
+	}{
+		{
+			name: "HPA",
+			reconcile: func(r *SemanticRouterReconciler, sr *vllmv1alpha1.SemanticRouter) error {
+				return r.reconcileHPA(context.Background(), sr)
+			},
+		},
+		{
+			name: "Ingress",
+			reconcile: func(r *SemanticRouterReconciler, sr *vllmv1alpha1.SemanticRouter) error {
+				return r.reconcileIngress(context.Background(), sr)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &SemanticRouterReconciler{
+				Client: &clientWithGetError{err: getErr},
+			}
+			if err := tt.reconcile(r, sr); !errors.Is(err, getErr) {
+				t.Fatalf("expected Get error %v, got %v", getErr, err)
+			}
+		})
 	}
 }
 

@@ -210,10 +210,13 @@ func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1a
 	if sr.Spec.Autoscaling.Enabled == nil || !*sr.Spec.Autoscaling.Enabled {
 		hpa := &autoscalingv2.HorizontalPodAutoscaler{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, hpa)
-		if err == nil {
-			return r.Delete(ctx, hpa)
+		if errors.IsNotFound(err) {
+			return nil
 		}
-		return nil
+		if err != nil {
+			return err
+		}
+		return r.Delete(ctx, hpa)
 	}
 
 	hpa := r.generateHPA(sr)
@@ -246,10 +249,13 @@ func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vll
 	if sr.Spec.Ingress.Enabled == nil || !*sr.Spec.Ingress.Enabled {
 		ing := &networkingv1.Ingress{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, ing)
-		if err == nil {
-			return r.Delete(ctx, ing)
+		if errors.IsNotFound(err) {
+			return nil
 		}
-		return nil
+		if err != nil {
+			return err
+		}
+		return r.Delete(ctx, ing)
 	}
 
 	ing := r.generateIngress(sr)
