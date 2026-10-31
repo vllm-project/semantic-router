@@ -20,6 +20,7 @@ const PhaseLoadingModelDeployments = "loading_model_deployments"
 // TotalModels then count them, and during the model download phases they
 // count the downloaded models instead.
 type State struct {
+	InstanceID        string                   `json:"instance_id,omitempty"`
 	Phase             string                   `json:"phase"`
 	Ready             bool                     `json:"ready"`
 	Message           string                   `json:"message,omitempty"`
@@ -59,7 +60,7 @@ type EmbeddingProviderStatus struct {
 
 // StatusWriter persists startup state so the dashboard (or other consumers)
 // can track router startup progress. Implementations include FileWriter
-// (local JSON file) and RedisWriter (shared key in Redis).
+// (local JSON file) and RedisWriter (expiring per-instance records in Redis).
 type StatusWriter interface {
 	Write(state State) error
 }

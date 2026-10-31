@@ -2,6 +2,7 @@ package routerruntime
 
 import (
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -79,6 +80,7 @@ type StatusReport struct {
 }
 
 type localStartupWriter struct {
+	mu       sync.Mutex
 	registry *Registry
 	writer   startupstatus.StatusWriter
 }
@@ -111,7 +113,14 @@ func (r *Registry) StartupStatusWriter(writer startupstatus.StatusWriter) startu
 	return &localStartupWriter{registry: r, writer: writer}
 }
 
+// InstanceID identifies this process incarnation across local and persisted status.
+func (r *Registry) InstanceID() string { return r.instanceID }
+
 func (w *localStartupWriter) Write(state startupstatus.State) error {
+	// Preserve the same observation order locally and in the external publisher.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	state.InstanceID = w.registry.InstanceID()
 	snapshot := cloneStartupState(state)
 	w.registry.mu.Lock()
 	observedAt := time.Now().UTC()
