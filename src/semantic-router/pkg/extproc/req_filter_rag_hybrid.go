@@ -265,6 +265,8 @@ func (r *OpenAIRouter) retrieveFromBackend(traceCtx context.Context, ctx *Reques
 		return r.retrieveFromMCP(traceCtx, ctx, backendConfig)
 	case "openai":
 		return r.retrieveFromOpenAI(traceCtx, ctx, backendConfig)
+	case "vectorstore":
+		return r.retrieveFromVectorStore(traceCtx, ctx, backendConfig)
 	default:
 		return "", fmt.Errorf("unknown backend: %s", backendConfig.Backend)
 	}
