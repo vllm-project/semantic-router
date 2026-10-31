@@ -132,7 +132,7 @@ func (r *OpenAIRouter) queryRouterReplayDatasetRecords(
 	var records []routerreplay.RoutingRecord
 	total := 0
 	for _, reader := range r.routerReplayReaders() {
-		page, supported, err := reader.QueryPage(
+		page, err := reader.QueryPage(
 			filters.storageFilters(),
 			routerReplayDatasetMaxRecords+1,
 			0,
@@ -140,14 +140,6 @@ func (r *OpenAIRouter) queryRouterReplayDatasetRecords(
 		)
 		if err != nil {
 			return nil, err
-		}
-		if !supported {
-			all, listErr := reader.ListRecords()
-			if listErr != nil {
-				return nil, listErr
-			}
-			page.Records = filterRouterReplayRecords(all, filters)
-			page.Total = len(page.Records)
 		}
 		records = append(records, page.Records...)
 		total += page.Total

@@ -470,6 +470,7 @@ type Enricher interface {
 type Storage interface {
 	Writer
 	Reader
+	QueryReader
 	Enricher
 	io.Closer
 }
