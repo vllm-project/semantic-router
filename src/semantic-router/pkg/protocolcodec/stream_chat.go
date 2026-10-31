@@ -82,6 +82,11 @@ type chatChunkWire struct {
 	// Mistral reports a stream transport marker alongside chunks.
 	// It is transport metadata, not response content.
 	P *string `json:"p,omitempty"`
+	// Perplexity Sonar chunks carry model source citations and search
+	// results at the top level. Neither has a neutral slot, so both are
+	// dropped with a diagnostic instead of failing the strict decode.
+	Citations     json.RawMessage `json:"citations,omitempty"`
+	SearchResults json.RawMessage `json:"search_results,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -403,6 +408,20 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			&diagnostics,
 			"stream.moderation",
 			"moderation metadata has no protocol-neutral representation",
+		)
+	}
+	if jsonFieldPresent(chunk.Citations) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.citations",
+			"provider source citations have no protocol-neutral representation",
+		)
+	}
+	if jsonFieldPresent(chunk.SearchResults) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.search_results",
+			"provider search results have no protocol-neutral representation",
 		)
 	}
 	if chunk.Usage != nil {
