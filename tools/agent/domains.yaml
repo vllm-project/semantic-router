@@ -663,6 +663,7 @@ domains:
       - bench/router_flow/**
       - tools/make/tooling.mk
     checks: [make test-router-flow-bench]
+    verify: [make test-router-flow-evalscope]
     verifications: [bench-tools]
 
   agent-crew-bench:

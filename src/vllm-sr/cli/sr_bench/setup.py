@@ -9,10 +9,20 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .router_flow_gpqa import BENCHMARK, EVALSCOPE_REVISION, EVALSCOPE_VERSION
+
 GRADER_BASE_IMAGE = "docker.io/library/python:3.12-slim-bookworm"
 
 # Harness and task versions are part of sr-bench 1.0, never a moving branch.
 PACKAGES = {
+    BENCHMARK: {
+        "env": "GPQA_EVALSCOPE",
+        "module": "evalscope",
+        "version": EVALSCOPE_VERSION,
+        "repo": "https://github.com/modelscope/evalscope.git",
+        "revision": EVALSCOPE_REVISION,
+        "python": "3.12",
+    },
     "tau3": {
         "env": "TAU3",
         "module": "tau2",
@@ -256,7 +266,7 @@ def setup(benchmark="all", install=False, build_sandbox=False):
     )
 
     names = list(COUNTS) if benchmark == "all" else [benchmark]
-    if any(name not in COUNTS for name in names):
+    if any(name not in COUNTS and name not in PACKAGES for name in names):
         raise ValueError("Unknown benchmark")
     result = []
     for name in names:

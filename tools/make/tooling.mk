@@ -54,11 +54,27 @@ test-reasoning-bench: bench-test-deps ## Test reasoning-mode config patches and 
 	@"$(AGENT_PYTHON)" -m pytest -q bench/reasoning
 
 test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope helpers without a remote host
-	@"$(AGENT_PYTHON)" -m pytest -q bench/router_flow
+	@"$(AGENT_PYTHON)" -m pytest -q bench/router_flow --ignore=bench/router_flow/real_eval/test_evalscope_gpqa_contracts.py
+
+ROUTER_FLOW_EVALSCOPE_ROOT := $(CURDIR)/.venv/sr-bench/harnesses/router-flow-gpqa-evalscope
+ROUTER_FLOW_EVALSCOPE_PYTHON := $(ROUTER_FLOW_EVALSCOPE_ROOT)/.venv/bin/python
+
+router-flow-evalscope-deps: $(HARNESS_VENV_DEPS)
+	@PATH="$(AGENT_VENV)/bin:$$PATH" PYTHONPATH="$(CURDIR)/src/vllm-sr" SR_BENCH_HOME="$(CURDIR)/.venv/sr-bench" \
+		"$(AGENT_PYTHON)" -c 'from cli.sr_bench.setup import setup; setup(benchmark="router-flow-gpqa-evalscope", install=True)'
+	@PATH="$(AGENT_VENV)/bin:$$PATH" uv pip install --quiet --python "$(ROUTER_FLOW_EVALSCOPE_PYTHON)" \
+		-r tools/agent/requirements.txt -r src/vllm-sr/requirements.txt
+	@PATH="$(AGENT_VENV)/bin:$$PATH" uv pip freeze --python "$(ROUTER_FLOW_EVALSCOPE_PYTHON)" \
+		> "$(ROUTER_FLOW_EVALSCOPE_ROOT)/.sr-bench-dependencies.txt"
+
+test-router-flow-evalscope: router-flow-evalscope-deps ## Exercise native GPQA through the real sr-bench bridge without models or datasets
+	@PYTHONPATH="$(CURDIR):$(CURDIR)/src/vllm-sr" SR_BENCH_HOME="$(CURDIR)/.venv/sr-bench" \
+		SR_BENCH_TEST_BASE_PYTHON="$(AGENT_PYTHON)" \
+		"$(ROUTER_FLOW_EVALSCOPE_PYTHON)" -m pytest -q -s bench/router_flow/real_eval/test_evalscope_gpqa_contracts.py
 
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-router-flow-evalscope test-agent-crew ## Test every registered bench/ research tool
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench router-flow-evalscope-deps test-router-flow-evalscope test-agent-crew test-bench-tools

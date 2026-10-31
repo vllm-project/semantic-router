@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 from .contracts import digest
+from .router_flow_gpqa import BENCHMARK
 
 
 def call(messages, role="subject", extra_body=None):
@@ -513,7 +514,13 @@ def main():
 
 def _main(request):
     benchmark = request["case"]["benchmark"]
-    if benchmark == "tau3":
+    if benchmark == BENCHMARK:
+        from .evalscope_gpqa_worker import (  # noqa: PLC0415
+            execute,
+        )
+
+        result = execute(request=request, bridge=call)
+    elif benchmark == "tau3":
         result = _tau3(request)
     elif benchmark == "livecodebench":
         result = _lcb(request)
