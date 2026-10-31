@@ -436,14 +436,17 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         for key, members in groups.items():
             first = members[0]
             layout = self._layout_of(first)
-            row = Row(
-                [entry.question for entry in members],
-                (
-                    [part.cut(layout.max_len) for part in parts]
-                    if first.question.truncate
-                    else parts
-                ),
-            )
+            row = Row([entry.question for entry in members], parts)
+            if first.question.truncate:
+                # Only the parts the row reads get its layout's window: the
+                # others stay at the router window, as they would on any row.
+                read = row.read_roles()
+                row.parts = [
+                    part.cut(
+                        layout.max_len if part.role in read else self.layout.max_len
+                    )
+                    for part in parts
+                ]
             if key[0] == ROUTER:
                 assert first.router is not None
                 _, adapters = self.router.router_adapters(first.router.id)

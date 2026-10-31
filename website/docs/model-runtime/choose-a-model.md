@@ -35,7 +35,7 @@ models. The Vela 1.0 specialists remain built in, and naming them restores
 them. Each is a 307M encoder that runs well on a CPU: on 16 cores the median
 Vela Domain request takes about 12 ms
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
-Most read up to 32,768 tokens; vela3-fast reads 32,768 for a decision and 8,192 per window for a router question or a span. Each model card and
+Most read up to 32,768 tokens; vela3-fast reads 32,768 for a decision or an evidence span and 8,192 per window for a router question or another span. Each model card and
 `GET /v1/models` list the limits.
 
 These input limits do not guarantee latency. Complete long-input embeddings
@@ -146,7 +146,8 @@ routing stages can make additional calls.
 - **Memory:** the deployment holds about 7 GB once loaded. Give the Router
   12 GiB, the Helm chart's default limit; less can be killed for memory while
   the model loads.
-- **Input:** ordinary routing judgments may truncate to one 8,192-token window.
+- **Input:** ordinary routing judgments may truncate to one 8,192-token window,
+  and evidence spans to one 32,768-token window.
   Prompt guard, safety, PII and hallucination require complete input;
   window scans extend coverage up to the scan budget. Incomplete coverage
   produces an error or unknown result. See [Long inputs](./reference.md#long-inputs).

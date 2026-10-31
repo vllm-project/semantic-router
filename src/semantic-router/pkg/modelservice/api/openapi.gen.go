@@ -1071,7 +1071,8 @@ type ModelLimits struct {
 	MinOptions    *int `json:"min_options,omitempty"`
 
 	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
-	// CPU (one forward) and the scan budget on a GPU.
+	// CPU (one forward) and the scan budget on a GPU. A Vela 3.0 evidence span question reads its route's
+	// 32,768-token window instead.
 	TruncateTokens *int `json:"truncate_tokens,omitempty"`
 
 	// ValidatedInputTokens The length the model was validated at: each question's cap unless the request asks for long context
@@ -1183,8 +1184,9 @@ type Question struct {
 
 	// Overflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
 	// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-	// both kinds share their model inputs unless one has to be read in windows.
+	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+	// evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+	// unless one has to be read in windows.
 	Overflow *QuestionOverflow `json:"overflow,omitempty"`
 
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
@@ -1216,8 +1218,9 @@ type QuestionHead string
 
 // QuestionOverflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
 // than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-// both kinds share their model inputs unless one has to be read in windows.
+// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+// evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+// unless one has to be read in windows.
 type QuestionOverflow string
 
 // QuestionRate Track questions: updates per second over the whole video, 1 (16-second windows at 2 frames per

@@ -348,6 +348,26 @@ def test_truncating_spans_read_their_route_window(model) -> None:
     assert read == {"evidence": 512, "names": 256}
 
 
+def test_evidence_truncation_cuts_unread_parts_to_the_router_window(model) -> None:
+    # The unread answer at the evidence window would leave the context no room.
+    state = {
+        "user": "what dose",
+        "context": "paracetamol dose " * 400,
+        "answer": "take two " * 400,
+    }
+    question = {
+        "type": "span",
+        "overflow": "truncate",
+        "over": "context",
+        "criteria": {"evidence": None},
+    }
+    plan = model.plan(state, {"evidence": question})
+    assert plan.errors == {}
+    row = plan.rows["evidence"].row
+    assert len(row.part("context").ids) == 512
+    assert len(row.part("answer").ids) == 256
+
+
 def test_deadline_answers_every_question(model) -> None:
     plan = model.plan(STATE, {"q": {"type": "noul", "instructions": "Is it urgent?"}})
     expired = model.finish_surface(
