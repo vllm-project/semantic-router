@@ -94,6 +94,25 @@ def test_cpu_key_masks_match_the_dense_masks_bit_for_bit(package, monkeypatch) -
     assert torch.equal(found[module.num_layers], expected[module.num_layers])
 
 
+@pytest.mark.parametrize("width", [1057, 1089, 1121, 2100])
+def test_cpu_local_attention_chunks_match_one_dense_call(width) -> None:
+    # A tail of 33 to 97 queries after a 1,024-query chunk, and a full second
+    # chunk with a short tail, at the chunk size vela3-fast runs.
+    torch.manual_seed(width)
+    query, key, value = (torch.randn(2, 2, width, 64) for _ in range(3))
+    valid = torch.ones(2, width, dtype=torch.bool)
+    valid[1, width - 300 :] = False
+    dense = additive_masks(valid, 2, width, 64, torch.float32)[SLIDING]
+    minimum = torch.finfo(torch.float32).min
+    key_mask = torch.where(valid, 0.0, minimum)[:, None, None, :]
+    kernels = reference_kernels("cpu")
+    expected = kernels("sdpa")(
+        query, key, value, dense, scale=0.125, is_causal=False, enable_gqa=False
+    )
+    found = ultrabert.local_attention(kernels, query, key, value, key_mask, 64, 0.125)
+    assert torch.equal(found, expected)
+
+
 def test_tokens_past_the_local_window_reach_a_token_only_through_global_layers(
     package,
 ) -> None:

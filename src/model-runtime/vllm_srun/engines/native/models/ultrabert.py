@@ -43,6 +43,10 @@ MODEL_TYPE = "ultrabert"
 # Queries per CPU SDPA call of a local layer on padded rows: each call builds
 # its own ``[rows, 1, LOCAL_QUERIES, width]`` slice of the dense mask.
 LOCAL_QUERIES = 1024
+# The CPU SDPA kernel blocks queries one way from this many queries on and
+# another way below, which changes the bits, so no chunk of a longer row is
+# shorter: a short tail joins the chunk before it.
+SDPA_QUERY_BLOCKS = 768
 # cos / sin per rope theta for each grid width of a layout.
 Rotary = dict[int, dict[float, tuple[torch.Tensor, torch.Tensor]]]
 
@@ -113,15 +117,18 @@ def local_attention(
     """Local attention of padded ``[rows, heads, width, dim]`` rows in query chunks.
 
     Every chunk reads all keys with its rows of the dense additive mask, built
-    from ``key_mask`` (``[rows, 1, 1, width]``), so each query's output is the
-    one a single call over the whole ``[width, width]`` mask returns.
+    from ``key_mask`` (``[rows, 1, 1, width]``), and holds at least
+    ``SDPA_QUERY_BLOCKS`` queries when the row does, so each query's output is
+    the one a single call over the whole ``[width, width]`` mask returns.
     """
     rows, width = key_mask.shape[0], query.shape[2]
     keys = torch.arange(width, device=query.device)
     minimum = torch.finfo(key_mask.dtype).min
     out = torch.empty_like(query)
-    for start in range(0, width, LOCAL_QUERIES):
-        stop = min(width, start + LOCAL_QUERIES)
+    starts = list(range(0, width, LOCAL_QUERIES))
+    if len(starts) > 1 and width - starts[-1] < SDPA_QUERY_BLOCKS:
+        starts.pop()
+    for start, stop in zip(starts, [*starts[1:], width], strict=True):
         # Only keys in [first, last) lie within the window of some chunk query.
         first, last = max(0, start - window), min(width, stop + window)
         far = (keys[None, first:last] - keys[start:stop, None]).abs() > window
