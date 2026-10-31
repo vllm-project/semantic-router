@@ -2,6 +2,8 @@ import importlib
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,6 +15,22 @@ core = importlib.import_module("cli.core")
 runtime_stack = importlib.import_module("cli.runtime_stack")
 runtime_service_status = importlib.import_module("cli.runtime_service_status")
 storage_backends = importlib.import_module("cli.storage_backends")
+
+
+@pytest.mark.parametrize("tty", [True, False])
+def test_setup_wait_only_advertises_ctrl_c_for_a_tty(monkeypatch, tmp_path, tty):
+    info = MagicMock()
+    monkeypatch.setattr(core, "log", SimpleNamespace(info=info))
+    monkeypatch.setattr(
+        core, "sys", SimpleNamespace(stdin=SimpleNamespace(isatty=lambda: tty))
+    )
+    monkeypatch.setattr(core, "container_status", lambda _name: "running")
+    monkeypatch.setattr(core, "wait_for_pending_activation", lambda *_a, **_kw: None)
+
+    assert not core._wait_for_setup_activation(
+        tmp_path / "runtime-config.yaml", runtime_stack.resolve_runtime_stack()
+    )
+    assert ("Ctrl-C stops waiting" in info.call_args_list[0].args[0]) is tty
 
 
 def test_check_envoy_status_uses_ready_probe_when_available(monkeypatch):

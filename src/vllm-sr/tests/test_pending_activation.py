@@ -38,10 +38,12 @@ def test_the_heartbeat_covers_the_block(tmp_path):
     heartbeat = pending_activation.heartbeat_file(config)
 
     with pending_activation.serve_heartbeat(config, interval=0.01):
-        assert json.loads(heartbeat.read_text()) == {
-            "pid": os.getpid(),
-            "state": "starting",
-        }
+        published = json.loads(heartbeat.read_text())
+        assert published["pid"] == os.getpid()
+        assert published["state"] == "starting"
+        assert published.get("start_ticks") == pending_activation.process_start_ticks(
+            os.getpid()
+        )
         first = heartbeat.stat().st_mtime_ns
         deadline = time.monotonic() + 5
         while heartbeat.stat().st_mtime_ns == first and time.monotonic() < deadline:
@@ -107,6 +109,25 @@ def test_a_dashboard_that_exits_ends_the_wait(tmp_path):
             dashboard_running=lambda: False,
             interval=0,
         )
+
+
+def test_waiting_state_is_published_after_sigterm_handler_is_ready(tmp_path):
+    observed = []
+
+    def on_waiting():
+        observed.append(signal.getsignal(signal.SIGTERM))
+
+    with pytest.raises(RuntimeError, match="The Dashboard exited during setup"):
+        pending_activation.wait_for_pending_activation(
+            tmp_path / "runtime-config.yaml",
+            dashboard_running=lambda: False,
+            interval=0,
+            on_waiting=on_waiting,
+        )
+
+    assert len(observed) == 1
+    assert observed[0] is not signal.SIG_DFL
+    assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
 
 
 def test_the_lock_is_free_while_released_and_held_again_after(tmp_path):
@@ -200,8 +221,9 @@ def test_serve_starts_the_router_once_setup_is_activated(
 
     monkeypatch.setattr(core, "container_start_vllm_sr", start)
 
-    def wait(config, *, dashboard_running):
+    def wait(config, *, dashboard_running, on_waiting):
         assert dashboard_running()
+        on_waiting()
         # The Dashboard sees a CLI that waits to apply the activation.
         heartbeat = pending_activation.heartbeat_file(config)
         assert json.loads(heartbeat.read_text())["state"] == "waiting"

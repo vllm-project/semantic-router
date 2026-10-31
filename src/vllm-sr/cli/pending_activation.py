@@ -71,6 +71,21 @@ def heartbeat_file(runtime_config: str | Path) -> Path:
     return Path(runtime_config).with_suffix(HEARTBEAT_SUFFIX)
 
 
+def process_start_ticks(pid: int) -> int | None:
+    """Linux process start time, used to distinguish a reused PID."""
+
+    try:
+        fields = (
+            Path(f"/proc/{pid}/stat")
+            .read_text(encoding="utf-8")
+            .rsplit(") ", 1)[1]
+            .split()
+        )
+        return int(fields[19])
+    except (IndexError, OSError, ValueError):
+        return None
+
+
 def record_file(runtime_config: str | Path) -> Path:
     return Path(runtime_config).with_suffix(RECORD_SUFFIX)
 
@@ -172,6 +187,7 @@ def wait_for_pending_activation(
     *,
     dashboard_running: Callable[[], bool],
     interval: float = HEARTBEAT_SECONDS,
+    on_waiting: Callable[[], None] | None = None,
 ) -> PendingActivation | None:
     """Wait until the Dashboard records an activation.
 
@@ -184,6 +200,8 @@ def wait_for_pending_activation(
 
     previous = signal.signal(signal.SIGTERM, stop)
     try:
+        if on_waiting is not None:
+            on_waiting()
         while True:
             pending = read_pending_activation(runtime_config)
             if pending is not None:
@@ -201,7 +219,9 @@ def wait_for_pending_activation(
 
 def _beat(path: Path, state: str) -> None:
     staged = path.with_name(f".{path.name}.tmp")
-    staged.write_text(
-        json.dumps({"pid": os.getpid(), "state": state}), encoding="utf-8"
-    )
+    record = {"pid": os.getpid(), "state": state}
+    start_ticks = process_start_ticks(os.getpid())
+    if start_ticks is not None:
+        record["start_ticks"] = start_ticks
+    staged.write_text(json.dumps(record), encoding="utf-8")
     os.replace(staged, path)
