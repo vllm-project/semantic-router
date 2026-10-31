@@ -24171,8 +24171,53 @@
                                       }
                                     }
                                   },
+                                  "snapshot_identity": {
+                                    "type": "string"
+                                  },
                                   "strategy": {
                                     "type": "string"
+                                  },
+                                  "success_estimates": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "object",
+                                      "properties": {
+                                        "calibration_version": {
+                                          "type": "string"
+                                        },
+                                        "coverage": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        },
+                                        "evidence_scope": {
+                                          "type": "string"
+                                        },
+                                        "fallback_reason": {
+                                          "type": "string"
+                                        },
+                                        "freshness_seconds": {
+                                          "type": "integer"
+                                        },
+                                        "outcome": {
+                                          "type": "string"
+                                        },
+                                        "probability": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        },
+                                        "sample_count": {
+                                          "type": "integer"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        },
+                                        "uncertainty": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      }
+                                    }
                                   }
                                 }
                               },
@@ -28922,8 +28967,53 @@
                                 }
                               }
                             },
+                            "snapshot_identity": {
+                              "type": "string"
+                            },
                             "strategy": {
                               "type": "string"
+                            },
+                            "success_estimates": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                  "calibration_version": {
+                                    "type": "string"
+                                  },
+                                  "coverage": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "evidence_scope": {
+                                    "type": "string"
+                                  },
+                                  "fallback_reason": {
+                                    "type": "string"
+                                  },
+                                  "freshness_seconds": {
+                                    "type": "integer"
+                                  },
+                                  "outcome": {
+                                    "type": "string"
+                                  },
+                                  "probability": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "sample_count": {
+                                    "type": "integer"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "uncertainty": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  }
+                                }
+                              }
                             }
                           }
                         },
