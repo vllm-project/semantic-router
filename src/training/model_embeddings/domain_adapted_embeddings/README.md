@@ -59,5 +59,5 @@ deployment decision and requires end-to-end evaluation.
 ## Reference
 
 The mining approach is based on
-[“Distilling an LLM's Wisdom: A Framework for Creating Domain Adapted Financial
-Embedding Models”](https://arxiv.org/abs/2512.08088).
+[“Adaptation of Embedding Models to Financial Filings via LLM
+Distillation”](https://arxiv.org/abs/2512.08088).
