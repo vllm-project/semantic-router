@@ -1132,6 +1132,12 @@ surfaces count values. Without a reference the runtime checks
 determinism and well-formed answers and reports `golden: unverified`. A
 failed model does not stop the others; `/health` reports the process
 degraded and the router treats only that model's deployments as unavailable.
+An unexpected model scheduler worker failure closes that model's admission,
+fails every outstanding job (including work being planned), and marks the model
+degraded before answering those jobs. Subsequent requests receive `not_ready`.
+It uses the same clean-restart policy as a device fault, even if all affected
+clients have disconnected; with `exit_on_device_error` disabled, other models
+continue serving while the failed model remains unavailable.
 A device fault during serving exits the process so the supervisor restarts it
 with a clean device context. The accelerator decides what is one (on CUDA and
 ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
