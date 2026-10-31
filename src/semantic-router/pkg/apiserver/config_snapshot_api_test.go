@@ -75,14 +75,19 @@ func newSnapshotAPIServer(t *testing.T, reject error) (*ClassificationAPIServer,
 }
 
 // watchAndApply plays the file watcher: once the persisted document changes,
-// it hands that document to the lifecycle.
+// it hands that document to the lifecycle. The API returns once the runtime
+// serves the document, before the lifecycle has recorded it in the history,
+// so the test's cleanup waits for the watcher before removing its directory.
 func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) {
 	t.Helper()
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	stop, done := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() { close(stop); <-done })
 	go func() {
+		defer close(done)
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
 			data, readErr := os.ReadFile(path)
@@ -97,7 +102,11 @@ func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) {
 				})
 				return
 			}
-			time.Sleep(time.Millisecond)
+			select {
+			case <-stop:
+				return
+			case <-time.After(time.Millisecond):
+			}
 		}
 	}()
 }
