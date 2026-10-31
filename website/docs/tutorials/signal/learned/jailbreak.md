@@ -78,9 +78,11 @@ contract; callers supplying flat text remain responsible for its scope.
 
 ### Token windows for a local classifier
 
-The default prompt guard, Vela 2.0 0.3B, reads each text whole, up to its
-8,192-token input, and takes no window
-([Choose a model](../../../model-runtime/choose-a-model.md#vela-20)). When the
+The default prompt guard, vela3-fast, takes no window
+([Choose a model](../../../model-runtime/choose-a-model.md#built-in-signals)).
+It reads each text whole, in 8,192-token inputs with 512 tokens of overlap, up
+to its scan budget: 32,768 tokens on a CPU and 262,144 on a GPU
+([Long inputs](../../../model-runtime/reference.md#long-inputs)). When the
 module runs Vela 1.0 Guard, it scans each text piece in 512-token windows with
 255 content tokens of overlap, within that model's document budget: 32,768
 tokens including special tokens. This applies only when no recipe model binding
