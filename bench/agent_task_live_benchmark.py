@@ -1977,7 +1977,19 @@ def request_headers(args: argparse.Namespace, session_id: str) -> dict[str, str]
     if args.api_key:
         headers["Authorization"] = f"Bearer {args.api_key}"
     headers.update(parse_extra_headers(args.extra_header))
+    apply_required_debug_header(headers, args)
     return headers
+
+
+def apply_required_debug_header(
+    headers: dict[str, str], args: argparse.Namespace
+) -> None:
+    if not getattr(args, "require_router_diagnostics", False):
+        return
+    for name in headers:
+        if name.lower() == "x-vsr-debug":
+            return
+    headers["x-vsr-debug"] = "true"
 
 
 def build_messages(task: TaskSpec, turn_index: int) -> list[dict[str, Any]]:
