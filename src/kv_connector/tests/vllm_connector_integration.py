@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,13 +15,67 @@ import torch
 from src.training.kv_mapper.artifact import CompatibilitySpec, Manifest, write_artifact
 
 if importlib.util.find_spec("vllm"):
+    from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
     from vllm.config.kv_transfer import KVTransferConfig
     from vllm.distributed.kv_transfer.kv_connector.factory import KVConnectorFactory
     from vllm.distributed.kv_transfer.kv_connector.v1.base import KVConnectorRole
 
+    from src.kv_connector.vllm_metrics import MapperPromMetrics
+
 
 @unittest.skipUnless(importlib.util.find_spec("vllm"), "vLLM is not installed")
 class VllmConnectorTests(unittest.TestCase):
+    def test_metrics_count_successful_tokens_and_completed_mapping_only(self):
+        registry = CollectorRegistry()
+        metrics = MapperPromMetrics(
+            SimpleNamespace(kv_transfer_config=None),
+            {
+                kind: partial(kind, registry=registry)
+                for kind in (Counter, Gauge, Histogram)
+            },
+            ["engine"],
+            {0: ["0"]},
+        )
+        metrics.observe(
+            {
+                "loads": [
+                    {
+                        "status": "applied",
+                        "tokens": 128,
+                        "bytes": 100,
+                        "fetch_seconds": 0.1,
+                        "map_seconds": 0.2,
+                    },
+                    {
+                        "status": "fallback_reprefill",
+                        "tokens": 0,
+                        "bytes": 100,
+                        "fetch_seconds": 0.1,
+                        "map_seconds": 0,
+                    },
+                ]
+            }
+        )
+        self.assertEqual(
+            registry.get_sample_value(
+                "vllm:kv_mapper_map_load_seconds_count", {"engine": "0"}
+            ),
+            1,
+        )
+        self.assertEqual(
+            registry.get_sample_value(
+                "vllm:kv_mapper_loads_total",
+                {"engine": "0", "status": "fallback_reprefill"},
+            ),
+            1,
+        )
+        self.assertEqual(
+            registry.get_sample_value(
+                "vllm:kv_mapper_tokens_saved_total", {"engine": "0"}
+            ),
+            128,
+        )
+
     def test_factory_loads_plugin_and_fail_closed_prefill(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
@@ -91,6 +146,10 @@ class VllmConnectorTests(unittest.TestCase):
             unsafe_retry = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNone(unsafe_retry.artifact)
             config.use_v2_model_runner = False
+            config.scheduler_config = SimpleNamespace(async_scheduling=True)
+            unsafe_async = cls(config, KVConnectorRole.SCHEDULER, None)
+            self.assertIsNone(unsafe_async.artifact)
+            config.scheduler_config.async_scheduling = False
             connector = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNotNone(connector.artifact)
             self.assertEqual(connector.get_num_new_matched_tokens(None, 0), (0, False))

@@ -122,6 +122,7 @@ func (s *routingSession) ResponseHeaders(header routing.Header, endOfStream bool
 	v := &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{Headers: extprocHeaderMap(header), EndOfStream: endOfStream},
 	}
+	captureUpstreamEndpointAddress(s.ctx, v.ResponseHeaders.GetHeaders(), nil)
 	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
 		return s.router.responseHeadersReply(v, s.ctx)
 	}, func(response *ext_proc.ProcessingResponse) {
