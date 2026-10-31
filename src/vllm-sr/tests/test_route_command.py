@@ -247,6 +247,121 @@ def test_recipe_learning_fetch_uses_authenticated_management_endpoint(
     assert authorizations == ["Bearer management-token"]
 
 
+def test_recipe_learning_fetch_pages_past_the_api_cap(monkeypatch) -> None:
+    pages: list[dict[str, Any]] = []
+
+    class _Response:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self.status_code = 200
+            self.ok = True
+            self.headers: dict[str, str] = {}
+            self._payload = payload
+            self.text = json.dumps(payload)
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def _fake_request(method: str, url: str, **kwargs: Any) -> _Response:
+        params = kwargs["params"]
+        pages.append(params)
+        offset, limit = int(params["offset"]), int(params["limit"])
+        available = max(0, min(limit, 230 - offset))
+        data = [{"id": f"r{offset + i}"} for i in range(available)]
+        return _Response({"object": "router_replay.list", "data": data})
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    payload = fetch_replay_payload("http://router.example:8080", 1000, 1)
+
+    assert [p["offset"] for p in pages] == ["0", "100", "200"]
+    assert len(payload["data"]) == 230
+
+
+class _ReplayAPI:
+    """Newest-first replay list that stores one new record after the first page."""
+
+    class _Response:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self.status_code = 200
+            self.ok = True
+            self.headers: dict[str, str] = {}
+            self._payload = payload
+            self.text = json.dumps(payload)
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def __init__(self, records: list[dict[str, Any]]) -> None:
+        self.records = records
+        self.calls = 0
+
+    def __call__(self, method: str, url: str, **kwargs: Any) -> _Response:
+        params = kwargs["params"]
+        offset = int(params.get("offset", 0))
+        page = self.records[offset : offset + int(params["limit"])]
+        self.calls += 1
+        if self.calls == 1:
+            self.records.insert(0, {"id": "arrived-between-pages"})
+        return self._Response({"object": "router_replay.list", "data": page})
+
+
+def test_recipe_learning_fetch_keeps_a_shifted_record_once(monkeypatch) -> None:
+    api = _ReplayAPI([{"id": f"r{i}"} for i in range(300)])
+    monkeypatch.setattr("cli.router_management_client.requests.request", api)
+
+    payload = fetch_replay_payload("http://router.example:8080", 1000, 1)
+
+    ids = [record["id"] for record in payload["data"]]
+    assert len(ids) == len(set(ids)) == 300
+    assert "arrived-between-pages" not in ids
+
+
+def test_recipe_learning_value_per_success_reads_every_run(monkeypatch) -> None:
+    records = []
+    for model, successes, cost in (("cheap", 120, 0.05), ("strong", 150, 0.75)):
+        for i in range(200):
+            records.append(
+                {
+                    "id": f"{model}-{i}",
+                    "conversation_id": f"{model}-{i}",
+                    "decision": "code",
+                    "selected_model": model,
+                    "actual_cost": cost,
+                    "outcomes": [
+                        {
+                            "target": "model",
+                            "verdict": "good_fit" if i < successes else "failed",
+                        }
+                    ],
+                }
+            )
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request", _ReplayAPI(records)
+    )
+
+    result = CliRunner().invoke(
+        optimize,
+        [
+            "recipe-learning",
+            "--endpoint",
+            "http://router.example:8080",
+            "--value-per-success",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    artifact = json.loads(result.stdout)
+    runs = artifact["metrics"]["runs"]
+    assert artifact["metrics"]["records"] == 400
+    assert runs["labeled_runs"] == 400
+    (rec,) = runs["per_decision"]["code"]["recommendations"]
+    assert rec["model"] == "cheap" and rec["confident"]
+    (finding,) = [f for f in artifact["findings"] if f["type"] == "default_model"]
+    assert finding["evidence"]["recommended_model"] == "cheap"
+
+
 def test_recipe_learning_accepts_api_root_without_duplicating_it(
     monkeypatch,
 ) -> None:

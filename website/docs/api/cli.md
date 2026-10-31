@@ -1071,10 +1071,11 @@ Analyze replay and outcomes to produce recipe-learning artifacts.
 | `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080, with VLLM_SR_PORT_OFFSET added to the port, when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
 | `--cases-file FILE` | Optional eval cases JSON with replay_id/request_id plus expected_decision or expected_model. |
 | `--recipe-file FILE` | Optional current recipe YAML used to materialize complete candidate recipe variants. |
-| `--limit INTEGER` | Replay records to fetch from the endpoint.  [default: 100] |
+| `--limit INTEGER` | Replay records to fetch from the endpoint, in pages of 100. Defaults to 100, or with --value-per-success to every record up to 100000, so runs are not cut short. |
 | `--output-dir DIRECTORY` | Directory for metrics/findings/patch/seed-pack artifacts. |
 | `--json` | Print the full recipe-learning artifact. Default: false. |
 | `--report-only` | Compute metrics and findings without generating recipe patches. Default: false. |
+| `--value-per-success FLOAT` | Value of one successful run (an agent task whose outcome was reported), in the replay cost currency. Repeat to compare several. Enables default-model recommendations from run outcomes and realized run cost. May be repeated. |
 | `--timeout INTEGER` | HTTP request timeout in seconds.  [default: 15] |
 | `--help` | Show this message and exit. Default: false. |
 
