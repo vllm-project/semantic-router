@@ -357,6 +357,7 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 			result.InputCacheWrite1h = llmprotocol.TokenCount{}
 		}
 	}
+	refreshInputTotal(&result)
 	if err := deriveUsageTotal(&result); err != nil {
 		return llmprotocol.Usage{}, err
 	}
@@ -364,6 +365,33 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		return llmprotocol.Usage{}, err
 	}
 	return result, nil
+}
+
+// refreshInputTotal re-derives the input total from its buckets after a
+// partial update merged beside retained evidence. Anthropic's message delta
+// updates individual input buckets without a total, so the running total
+// must follow the merged buckets; usage with unknown buckets keeps its
+// declared total, and totals that already match stay untouched.
+func refreshInputTotal(usage *llmprotocol.Usage) {
+	parts := []llmprotocol.TokenCount{usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite}
+	var sum int64
+	for _, part := range parts {
+		if part.Value == nil || *part.Value < 0 {
+			return
+		}
+		if *part.Value > math.MaxInt64-sum {
+			return
+		}
+		sum += *part.Value
+	}
+	if usage.InputTotal.Value != nil && *usage.InputTotal.Value == sum {
+		return
+	}
+	provenance := usage.InputTotal.Provenance
+	if provenance == "" {
+		provenance = llmprotocol.UsageDerived
+	}
+	usage.InputTotal = llmprotocol.TokenCount{Value: llmprotocol.Int64(sum), Provenance: provenance}
 }
 
 func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
