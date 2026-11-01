@@ -65,23 +65,17 @@ func TestToolSelectionPluginValidate_StickyEnabledUnderDisabledPlugin_Err(t *tes
 	}
 }
 
-// TestToolSelectionPluginValidate_StickyEnabledRejectedInPhase1 covers the
-// maintainer-flagged silent-no-op hazard (issue #3347 phase 1 / sub-issue
-// #3392): sticky.enabled: true must be rejected outright, not accepted and
-// then never actually activated by any request path.
-func TestToolSelectionPluginValidate_StickyEnabledRejectedInPhase1(t *testing.T) {
+// The plugin validator owns sticky bounds only. Whether a decision and store
+// can serve sticky selection needs the whole configuration and is covered by
+// ValidateStickyToolSelectionSupport.
+func TestToolSelectionPluginValidate_StickyEnabledChecksBoundsOnly(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: true},
 	}
-
-	err := c.Validate()
-	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
-	}
-	if err.Error() != ErrToolSelectionStickyUnsupported.Error() {
-		t.Fatalf("error = %q, want %q", err.Error(), ErrToolSelectionStickyUnsupported.Error())
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid sticky bounds must pass the plugin validator, got %v", err)
 	}
 }
 
@@ -119,22 +113,16 @@ func TestToolSelectionPluginValidate_StickyMaxToolsExplicitZero_Err(t *testing.T
 	}
 }
 
-// TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValueBeforePhaseGate
-// covers the same unset-vs-explicit-zero distinction as before
-// (EffectiveMaxNewToolsPerTurn must not silently default an explicit 0),
-// but Validate() itself now rejects sticky.enabled: true regardless — the
-// phase-support gate runs after bounds validation, so an otherwise-valid
-// explicit 0 still surfaces ErrToolSelectionStickyUnsupported, not nil.
-func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValueBeforePhaseGate(t *testing.T) {
+// An explicit max_new_tools_per_turn: 0 is valid (reuse and pinning only) and
+// must not be silently replaced by the default.
+func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValue(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxNewToolsPerTurn: intPtr(0)},
 	}
-
-	err := c.Validate()
-	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
 	}
 	if got := c.Sticky.EffectiveMaxNewToolsPerTurn(); got != 0 {
 		t.Fatalf("effective max_new_tools_per_turn = %d, want 0 (explicit, not defaulted)", got)
@@ -158,8 +146,7 @@ func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnExceedsMaxTools_Err
 
 func TestToolSelectionPluginValidate_StickyPinCalledToolsExplicitFalse_OK(t *testing.T) {
 	// Enabled: false here — this test is about EffectivePinCalledTools()'s
-	// explicit-false handling, not about phase-1 runtime support, so it
-	// must not trip ErrToolSelectionStickyUnsupported.
+	// explicit-false handling, not about runtime support.
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
@@ -206,11 +193,9 @@ func TestToolSelectionPluginValidate_StickyDisabledInvalidBounds_Err(t *testing.
 	}
 }
 
-// TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1
-// covers the full admission path, not just the isolated Validate() call:
-// a decision whose tool_selection plugin enables sticky must be rejected
-// by validateConfigContracts, with decision context in the error.
-func TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1(t *testing.T) {
+// A sticky decision without the trusted facts that let the runtime recheck
+// reused tools is rejected on the full admission path, with decision context.
+func TestToolSelectionPluginConfigContracts_StickyWithoutTrustedFactsRejected(t *testing.T) {
 	payload := MustStructuredPayload(&ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,

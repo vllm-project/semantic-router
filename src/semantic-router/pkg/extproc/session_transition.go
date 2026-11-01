@@ -19,6 +19,7 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 	ctx.AuthenticatedPrincipal = authHeaderUserID(ctx)
+	ctx.AuthenticatedTenant = authHeaderTenantID(ctx)
 
 	pinnedSessionID := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID))
 	if state := ctx.ResponseObjectState; state != nil {
@@ -86,6 +87,7 @@ func populatePinnedSessionFromHeaders(ctx *RequestContext) {
 		return
 	}
 	ctx.AuthenticatedPrincipal = authHeaderUserID(ctx)
+	ctx.AuthenticatedTenant = authHeaderTenantID(ctx)
 	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
 		ctx.SessionID = sid
 		ctx.SessionProvenance = SessionProvenanceHeader
