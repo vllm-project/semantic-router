@@ -61,15 +61,442 @@ coverage:
     tools: 100.0
     multi_turn: 100.0
 decisions:
-- id: balance_recovery
+- id: balance_long_context
   expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
+  expected_decision: long_context
+  expected_algorithm: static
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Recovery: an earlier answer that the user says was wrong goes to reasoning; the correction question
-    and the user feedback judgment must agree.'
+  objective: 'Long context: an input of 200K tokens or more goes to long_context before any other lane, including an
+    image or declared tools.'
+  variants:
+  - id: balance_long__over_240k_text_guard__boundary_orchestration_tools_collision
+    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    query: 'Break this into independent workstreams: list the supplied inventory items by room, then use the inventory
+      lookup tool to fill in their listed owners. Combine the room lists into a short handover note.'
+    padding:
+      text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.                                                                                                                                   |'
+      repeat: 4500
+      placement: after
+    tools:
+    - type: function
+      function:
+        name: lookup_inventory
+        description: Look up one item in the supplied long-context inventory.
+    tags:
+    - language:en
+    - stress:long-input
+    - context:over-240k
+    - shape:tools
+    - tools
+    - orchestration-words
+    - collision
+    - priority
+    expected_signals:
+      context:
+      - long_input
+  - id: balance_long__over_240k_image_guard__image_at_first_over_240k_token
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual finding.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 960001
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Conservative image context boundary check '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - supported
+    - context:240001
+    - tools
+    - shape:tools
+    - priority
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      context:
+      - long_input
+  - id: balance_long_context__long_report
+    query: Summarize the staffing changes in the reports above in five bullet points.
+    padding:
+      text: 'The quarterly report lists revenue, costs and staffing for each regional office, with notes on hiring, attrition
+        and budget changes. '
+      repeat: 10000
+      placement: before
+    expected_signals:
+      context:
+      - long_input
+    tags:
+    - language:en
+    - stress:long-input
+- id: balance_vision
+  expected_recipe: balance
+  expected_decision: vision
+  expected_algorithm: static
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Vision: a request that carries an image goes to vision, whatever its effort, tools or task.'
+  variants:
+  - id: balance_agentic__image_and_lookup
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Inspect the dashboard image and use the lookup function for the selected service.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tools:
+    - type: function
+      function:
+        name: lookup_service
+        description: Look up one service record.
+    tags:
+    - language:en
+    - shape:messages
+    - shape:tools
+    - tools
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      conversation:
+      - has_image
+      - has_tools
+      decision:
+      - task:agentic
+  - id: balance_long__image_tools__image_tools_in_30k_60k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
+      and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded status
+          of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      conversation:
+      - has_image
+  - id: balance_long__image_tools__image_tools_in_60k_120k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
+      and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 300000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded status
+          of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      conversation:
+      - has_image
+  - id: balance_long__image_tools__image_tools_in_120k_240k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
+      and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded status
+          of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      conversation:
+      - has_image
+  - id: balance_hard__image_tradeoffs
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Analyze the tradeoffs from first principles in this architecture image.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - deliberate
+    - collision
+    - priority
+    expected_signals:
+      conversation:
+      - has_image
+      projection:
+      - effort_high
+  - id: balance_fast__diagram_summary
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect them.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      conversation:
+      - has_image
+      projection:
+      - effort_off
+  - id: balance_fast__diagram_summary_zh
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 请用一句话说明图中从左到右的方框名称以及箭头的连接顺序。
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:zh
+    - shape:messages
+    - multimodal
+    - image
+    - paraphrase
+    expected_signals:
+      conversation:
+      - has_image
+      projection:
+      - effort_off
+  - id: balance_long__image__image_in_30k_60k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    expected_signals:
+      conversation:
+      - has_image
+  - id: balance_long__image__image_in_60k_120k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 300000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    expected_signals:
+      conversation:
+      - has_image
+  - id: balance_long__image__image_in_120k_240k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    expected_signals:
+      conversation:
+      - has_image
+  - id: balance_vision__screenshot_question
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: What does this screenshot show?
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    expected_signals:
+      conversation:
+      - has_image
+    tags:
+    - language:en
+    - shape:messages
+  - id: balance_vision__chinese_document_image
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 请读一下这张图片里的表格，并总结要点。
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    expected_signals:
+      conversation:
+      - has_image
+    tags:
+    - language:zh
+    - shape:messages
+- id: balance_recovery
+  expected_recipe: balance
+  expected_decision: recovery
+  expected_algorithm: static
+  expected_plugins:
+  - request_params
+  plugin_match: exact
+  objective: 'Recovery: an earlier answer that the user says was wrong; the correction question and the user feedback
+    judgment must agree.'
   variants:
   - id: balance_recovery__wrong_calculation
     messages:
@@ -368,12 +795,13 @@ decisions:
       - wrong_answer
 - id: balance_agentic
   expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
+  expected_decision: agentic
+  expected_algorithm: static
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Agentic: an active tool loop, or declared tools that the request needs, goes to reasoning.'
+  objective: 'Agentic: an active tool loop, a forced tool call, or declared tools the request needs, unless tool_choice
+    is none.'
   variants:
   - id: balance_agentic__tool_result_turn
     messages:
@@ -515,170 +943,65 @@ decisions:
       - has_tools
       - tool_required
     notes: A forced tool call (tool_choice naming a function) is tool work, whatever the text asks.
-  - id: balance_agentic__image_and_lookup
+  - id: balance_agentic__correction_inside_tool_loop
     messages:
     - role: user
-      content:
-      - type: text
-        text: Inspect the dashboard image and use the lookup function for the selected service.
-      - type: image_fixture
-        fixture: mom_v1_architecture
+      content: Fix the premium discount in pricing.py and run the tests.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_1
+        type: function
+        function:
+          name: run_command
+          arguments: '{"command": "python3 -m unittest -v"}'
+    - role: tool
+      tool_call_id: call_1
+      content: "FAILED (failures=1)\nAssertionError: 10.0 != 90.0"
+    - role: assistant
+      content: I changed the rate to 0.9 for premium customers; the tests should pass now.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_2
+        type: function
+        function:
+          name: run_command
+          arguments: '{"command": "python3 -m unittest -v"}'
+    - role: tool
+      tool_call_id: call_2
+      content: "FAILED (failures=1)\nAssertionError: 10.0 != 90.0"
+    - role: user
+      content: That's wrong, the test still fails. Your fix didn't work, check it again.
     tools:
     - type: function
       function:
-        name: lookup_service
-        description: Look up one service record.
+        name: run_command
+        description: Run a shell command in the workspace
+        parameters:
+          type: object
+          properties:
+            command:
+              type: string
+          required:
+          - command
     tags:
     - language:en
+    - multi-turn
     - shape:messages
     - shape:tools
-    - tools
-    - multimodal
-    - image
-    - positive
+    - negative
+    - collision
     expected_signals:
       conversation:
-      - has_tools
+      - tool_loop
+      - has_prior_answer
       decision:
-      - task:agentic
-  - id: balance_long__over_240k_text_guard__boundary_orchestration_tools_collision
-    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
-      result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: 'Break this into independent workstreams: list the supplied inventory items by room, then use the inventory
-      lookup tool to fill in their listed owners. Combine the room lists into a short handover note.'
-    padding:
-      text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.                                                                                                                                   |'
-      repeat: 4500
-      placement: after
-    tools:
-    - type: function
-      function:
-        name: lookup_inventory
-        description: Look up one item in the supplied long-context inventory.
-    tags:
-    - language:en
-    - stress:long-input
-    - context:over-240k
-    - shape:tools
-    - tools
-    - orchestration-words
-    - collision
-    - priority
-  - id: balance_long__image_tools__image_tools_in_30k_60k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 160000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
-          status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_long__image_tools__image_tools_in_60k_120k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 300000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
-          status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_long__image_tools__image_tools_in_120k_240k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
-          status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
+      - correction
+      user_feedback:
+      - wrong_answer
+    notes: A correction typed while a tool loop is active stays with agentic, although every other recovery condition
+      holds; recovery applies outside tool loops.
   - id: balance_long__tool_loop__tool_result_after_long_record
     display_prompt: Check every item in this long inventory record with the lookup tool, then report the unavailable
       ones.
@@ -727,23 +1050,14 @@ decisions:
       - tool_loop
 - id: balance_facts
   expected_recipe: balance
-  expected_decision: medium
-  expected_algorithm: multi_factor
+  expected_decision: facts
+  expected_algorithm: static
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Facts: answers that depend on facts most people would look up stay on medium, at low reasoning cost.'
+  objective: 'Facts: an answer that depends on facts most people would look up, for a facts, analysis or writing task
+    below maximum effort.'
   variants:
-  - id: balance_facts__nobel_laureate
-    query: Who won the Nobel Prize in Literature in 1998?
-    tags:
-    - language:en
-    - positive
-    expected_signals:
-      projection:
-      - effort_medium
-    notes: On Vela 2.0 0.8B the precise-facts answer stays below 0.8 for this well-known prize; effort keeps it on
-      medium.
   - id: balance_facts__census_figure
     query: What was the population of Tokyo in the 2020 census?
     tags:
@@ -791,12 +1105,12 @@ decisions:
       - task:facts
 - id: balance_frontier
   expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
+  expected_decision: frontier
+  expected_algorithm: decision
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Frontier: research-level requests, at maximum effort, go to reasoning.'
+  objective: 'Frontier: research-level requests at maximum effort; the decision model chooses one of the assigned models.'
   variants:
   - id: balance_frontier__ising_duality
     query: In a 2D ferromagnetic Ising model on a square lattice, derive the exact critical temperature via the
@@ -867,14 +1181,25 @@ decisions:
       - effort_max
       decision:
       - difficulty
+  - id: balance_frontier__group_classification
+    query: Let G be a finite group of order p^2 q^2 for distinct primes p, q. Determine all such G that are not solvable,
+      or prove none exist, with a complete proof.
+    expected_signals:
+      projection:
+      - effort_max
+      decision:
+      - difficulty
+      - task:stem
+    tags:
+    - language:en
 - id: balance_code
   expected_recipe: balance
-  expected_decision: medium
-  expected_algorithm: multi_factor
+  expected_decision: code
+  expected_algorithm: static
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Code: code that needs some reasoning stays on medium.'
+  objective: 'Code: a code task at medium or high effort.'
   variants:
   - id: balance_code__lru_cache
     query: Implement an LRU cache in Java with O(1) get and put, and explain the invariants.
@@ -927,14 +1252,88 @@ decisions:
       - task:code
       projection:
       - effort_high
+  - id: balance_code__interval_merge
+    query: Write a Go function that merges overlapping intervals and returns them sorted. Include tests.
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_medium
+    tags:
+    - language:en
+  - id: balance_code__chinese_quicksort
+    query: 用 Python 写一个快速排序，并解释时间复杂度。
+    expected_signals:
+      decision:
+      - task:code
+    tags:
+    - language:zh
+  - id: balance_standard__tcp
+    query: Explain how TCP congestion control works.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_medium
+    notes: On Vela 2.0 0.8B explaining a network protocol is a code task at medium effort.
+  - id: balance_standard__tcp_zh
+    query: 解释一下 TCP 拥塞控制是如何工作的。
+    tags:
+    - language:zh
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_medium
+    notes: On Vela 2.0 0.8B explaining a network protocol is a code task at medium effort.
+  - id: balance_standard__correction_without_answer
+    query: Your previous recommendation to expose the admin port publicly is wrong; correct it and propose a safer configuration.
+    tags:
+    - class:negative
+    - collision
+    - demo
+    - language:en
+    - recovery
+    notes: Correction wording without an earlier answer in the conversation is not recovery; on Vela 2.0 0.8B the request
+      is a code task at medium effort.
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_medium
+  - id: balance_fast__clarification_follow_up
+    messages:
+    - role: user
+      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example: process
+        A has 2 events, B has 0, and C has 1.'
+    - role: assistant
+      content: The vector clock has one event counter for each process.
+    - role: user
+      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example: process
+        A has 2 events, B has 0, and C has 1.'
+    tags:
+    - language:en
+    - multi_turn
+    - recovery
+    - positive
+    expected_signals:
+      decision:
+      - task:code
+      projection:
+      - effort_medium
+    notes: On Vela 2.0 0.8B explaining the vector-clock entries is a code task at medium effort.
 - id: balance_hard
   expected_recipe: balance
-  expected_decision: reasoning
+  expected_decision: hard
   expected_algorithm: multi_factor
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Hard: high effort, or a STEM problem that needs multi-step reasoning, goes to reasoning.'
+  objective: 'Hard: high effort, or a STEM problem rated multi-step, outside code and exact facts.'
   variants:
   - id: balance_hard__proof_zh
     query: 证明：任意两个连续整数的乘积是偶数，并推广到三个连续整数的乘积能被 6 整除。
@@ -1003,25 +1402,6 @@ decisions:
     tags:
     - language:en
     - positive
-    expected_signals:
-      projection:
-      - effort_high
-  - id: balance_hard__image_tradeoffs
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Analyze the tradeoffs from first principles in this architecture image.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - deliberate
-    - collision
-    - priority
     expected_signals:
       projection:
       - effort_high
@@ -1098,41 +1478,78 @@ decisions:
       - effort_high
     notes: A request to analyze trade-offs and a root cause carefully is high effort even when the answer should be
       short.
+  - id: balance_hard__irrational_root
+    query: Prove that the square root of 2 is irrational.
+    expected_signals:
+      projection:
+      - effort_high
+      decision:
+      - difficulty
+      - needs:deliberation
+      - task:stem
+    tags:
+    - language:en
+  - id: balance_hard__classic_proof
+    query: Prove that there are infinitely many prime numbers.
+    expected_signals:
+      projection:
+      - effort_high
+      decision:
+      - difficulty
+      - needs:deliberation
+      - task:stem
+    tags:
+    - language:en
+  - id: balance_hard__probability
+    query: A bag has 3 red and 5 blue balls. You draw 3 without replacement. What is the probability that exactly two are
+      red? Show the steps.
+    expected_signals:
+      projection:
+      - effort_high
+    tags:
+    - language:en
+  - id: balance_hard__agentic_without_tools
+    query: Plan and execute a migration of our PostgreSQL database to a new cluster, run the commands, verify replication,
+      and roll back if checks fail.
+    expected_signals:
+      projection:
+      - effort_high
+    tags:
+    - language:en
+    - class:negative
+    notes: Without declared tools the request is planned in text, not routed to the agent lane.
+  - id: balance_frontier__open_conjecture
+    query: 'Prove or disprove: for every n >= 1 there is a prime between n^2 and (n+1)^2.'
+    expected_signals:
+      projection:
+      - effort_high
+      decision:
+      - difficulty
+      - task:stem
+    tags:
+    - language:en
+    notes: On Vela 2.0 0.8B the effort estimate for this open conjecture is high, not max.
+  - id: balance_standard__sky_physics
+    query: Why is the sky blue? Explain the physics.
+    expected_signals:
+      decision:
+      - task:stem
+      - difficulty
+      projection:
+      - effort_high
+    tags:
+    - language:en
+    - collision
+    notes: On Vela 2.0 0.8B this physics question is a STEM problem rated multi-step, at high effort.
 - id: balance_standard
   expected_recipe: balance
-  expected_decision: medium
+  expected_decision: standard
   expected_algorithm: multi_factor
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Standard: requests that need some reasoning stay on medium.'
+  objective: 'Standard: medium effort outside code and exact facts.'
   variants:
-  - id: balance_standard__tcp
-    query: Explain how TCP congestion control works.
-    tags:
-    - language:en
-    - positive
-    expected_signals:
-      projection:
-      - effort_medium
-  - id: balance_standard__tcp_zh
-    query: 解释一下 TCP 拥塞控制是如何工作的。
-    tags:
-    - language:zh
-    - positive
-  - id: balance_standard__correction_without_answer
-    query: Your previous recommendation to expose the admin port publicly is wrong; correct it and propose a safer
-      configuration.
-    tags:
-    - class:negative
-    - collision
-    - demo
-    - language:en
-    - recovery
-    notes: Correction wording without an earlier answer in the conversation is not recovery.
-    expected_signals:
-      projection:
-      - effort_medium
   - id: balance_long__deliberate__long_deliberate_context
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
@@ -1146,25 +1563,6 @@ decisions:
     - deliberate
     - stress:long-input
     - collision
-  - id: balance_fast__clarification_follow_up
-    messages:
-    - role: user
-      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example:
-        process A has 2 events, B has 0, and C has 1.'
-    - role: assistant
-      content: The vector clock has one event counter for each process.
-    - role: user
-      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example:
-        process A has 2 events, B has 0, and C has 1.'
-    tags:
-    - language:en
-    - multi_turn
-    - recovery
-    - positive
-    expected_signals:
-      projection:
-      - effort_medium
-    notes: On Vela 2.0 0.8B explaining the vector-clock entries is a medium-effort request.
   - id: balance_fast__correction_without_answer_es
     query: La respuesta es incorrecta; corrige la respuesta e inténtalo de nuevo.
     tags:
@@ -1209,52 +1607,38 @@ decisions:
       - effort_medium
     notes: Correction wording without an earlier answer is not recovery; on Vela 2.0 0.8B the Decision Balance effort
       estimate for it is medium.
-  - id: balance_long__over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
-      finding.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 960001
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Conservative image context boundary check '
-      - type: image_fixture
-        fixture: mom_v1_architecture
+  - id: balance_facts__nobel_laureate
+    query: Who won the Nobel Prize in Literature in 1998?
     tags:
     - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - supported
-    - context:240001
-    - tools
-    - shape:tools
-    - priority
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
+    - positive
     expected_signals:
       projection:
       - effort_medium
-    notes: On Vela 2.0 0.8B the Decision Balance effort estimate for this image request with a long record is medium.
+    notes: On Vela 2.0 0.8B the precise-facts answer stays below 0.8 for this well-known prize, so the request is not a
+      facts lane request; its medium effort selects standard.
+  - id: balance_standard__compound_interest
+    query: How much will 1,000 dollars grow to in 5 years at 4% interest compounded yearly?
+    expected_signals:
+      projection:
+      - effort_medium
+    tags:
+    - language:en
+  - id: balance_standard__chinese_api_comparison
+    query: 解释一下 REST 和 GraphQL 的区别，各适合什么场景。
+    expected_signals:
+      projection:
+      - effort_medium
+    tags:
+    - language:zh
 - id: balance_fast
   expected_recipe: balance
-  expected_decision: simple
-  expected_algorithm: multi_factor
+  expected_decision: fast
+  expected_algorithm: static
   expected_plugins:
   - request_params
   plugin_match: exact
-  objective: 'Fast: requests that need no reasoning go to simple.'
+  objective: 'Fast: requests that need no reasoning, positively identified by the effort estimate.'
   variants:
   - id: balance_fast__greeting
     query: hi
@@ -1348,41 +1732,6 @@ decisions:
       conversation:
       - has_prior_answer
     notes: A satisfied follow-up is not a correction.
-  - id: balance_fast__diagram_summary
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - positive
-    expected_signals:
-      projection:
-      - effort_off
-  - id: balance_fast__diagram_summary_zh
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 请用一句话说明图中从左到右的方框名称以及箭头的连接顺序。
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:zh
-    - shape:messages
-    - multimodal
-    - image
-    - paraphrase
-    expected_signals:
-      projection:
-      - effort_off
   - id: balance_fast__brief_definition
     query: Answer briefly with a short definition of a readiness probe.
     tags:
@@ -1623,93 +1972,6 @@ decisions:
     - shape:messages
     - stress:long-input
     - capability
-  - id: balance_long__image__image_in_30k_60k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 160000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_long__image__image_in_60k_120k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 300000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_long__image__image_in_120k_240k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
   - id: balance_long__text_from_120k_to_240k__tools_in_120k_240k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
       result.
@@ -1842,6 +2104,50 @@ decisions:
       - effort_off
     notes: On Vela 2.0 0.8B the long record lowers the effort estimate, and the Decision Balance policy reads this as
       a direct summary.
+  - id: balance_fast__personal_data
+    query: Hi, I'm Dana Lee (dana.lee@example.com, +1 415 555 0100). Please draft a two-sentence out-of-office reply for
+      me.
+    tags:
+    - language:en
+    - signal:pii
+    notes: Personal data changes no route; the replay data policy keeps this request's content out of Replay.
+  - id: balance_fast__french_capital
+    query: What is the capital of France?
+    tags:
+    - language:en
+    - class:negative
+  - id: balance_fast__german_capital
+    query: Was ist die Hauptstadt von Deutschland?
+    tags:
+    - language:de
+    - class:negative
+  - id: balance_agentic__weather_tool
+    messages:
+    - role: user
+      content: What's the weather in Paris right now?
+    tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Current weather for a city
+        parameters:
+          type: object
+          properties:
+            city:
+              type: string
+          required:
+          - city
+    expected_signals:
+      conversation:
+      - has_tools
+      projection:
+      - effort_off
+    tags:
+    - language:en
+    - shape:tools
+    - shape:messages
+    notes: On Vela 2.0 0.8B the request reads as chat at no effort, and neither tool question reaches its threshold; fast
+      answers it, and its model can still call the declared tool.
 - id: speed_fast
   expected_recipe: speed
   expected_decision: fast
