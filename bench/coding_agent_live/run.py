@@ -64,6 +64,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="router",
         help="Key Claude Code sends; the Router checks it only when auth is on",
     )
+    parser.add_argument(
+        "--agent-kwarg",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Harbor Claude Code option, for example reasoning_effort=xhigh or "
+        "append_system_prompt=...; repeatable",
+    )
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--jobs-dir", type=Path, default=Path("jobs"))
@@ -113,6 +121,7 @@ def harbor_command(args: argparse.Namespace) -> list[str]:
         args.model,
         "--ak",
         f"version={args.claude_code_version}",
+        *[part for kwarg in args.agent_kwarg for part in ("--ak", kwarg)],
         "--ae",
         f"ANTHROPIC_BASE_URL={args.router_url}",
         "--ae",

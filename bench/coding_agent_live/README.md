@@ -58,6 +58,9 @@ aliases and its subagent default, and each defaults to `--model`. Claude Code's
 Explore agent uses the haiku alias. An empty value leaves that variable unset,
 so a subagent inherits its parent's model. `--claude-code-version` pins the
 release, and `--dry-run` prints the Harbor command and the mapping.
+`--agent-kwarg KEY=VALUE`, repeatable, passes an option of Harbor's Claude Code
+agent, for example `reasoning_effort=xhigh` to pin the effort Claude Code sends,
+or `append_system_prompt=...`.
 
 The report prints one JSON row per trial and a final summary with the pass
 count, the trials that ended on an API error, Harbor's exceptions, and the

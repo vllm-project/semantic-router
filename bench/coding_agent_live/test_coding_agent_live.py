@@ -73,6 +73,26 @@ def test_command_pins_the_version_and_maps_each_alias_to_an_entrypoint():
     }
 
 
+def test_agent_kwargs_reach_harbor_as_agent_options():
+    args = run.parse_args(
+        [
+            "--dataset=tasks",
+            "--router-url=http://172.17.0.1:8899",
+            "--model=vllm-sr/parent",
+            "--job-name=lane",
+            "--agent-kwarg=reasoning_effort=xhigh",
+            "--agent-kwarg=append_system_prompt=Delegate one subtask.",
+        ]
+    )
+    command = run.harbor_command(args)
+    options = [command[i + 1] for i, part in enumerate(command) if part == "--ak"]
+    assert options == [
+        "version=2.1.304",
+        "reasoning_effort=xhigh",
+        "append_system_prompt=Delegate one subtask.",
+    ]
+
+
 def test_lane_env_overrides_harbors_single_model_aliases_in_the_container():
     # Harbor sets every alias and the subagent default to the run's model.
     harbor_env = {
