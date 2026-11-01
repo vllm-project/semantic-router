@@ -48,13 +48,20 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices) || wire.hasDeepSeekDecorations()
 	if needsReencode {
 		canonicalBody = nil
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
 	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
+}
+
+func (wire chatResponseWire) hasDeepSeekDecorations() bool {
+	if wire.Usage == nil {
+		return false
+	}
+	return wire.Usage.PromptCacheHitTokens != nil || wire.Usage.PromptCacheMissTokens != nil
 }
 
 func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
@@ -174,6 +181,8 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "is_byok":                                              wire.IsBYOK != nil,
 		prefix + "cost_details":                                         wire.CostDetails != nil,
 		prefix + "server_tool_use":                                      wire.ServerToolUse != nil,
+		prefix + "prompt_cache_hit_tokens":                              wire.PromptCacheHitTokens != nil,
+		prefix + "prompt_cache_miss_tokens":                             wire.PromptCacheMissTokens != nil,
 	}
 }
 
@@ -263,10 +272,27 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 		OutputTotal:     authoritative(wire.CompletionTokens),
 		Total:           authoritative(wire.TotalTokens),
 	}
+	var cachedTokens *int64
+	var cacheWriteTokens *int64
+	var createdCacheTokens *int64
+	var cacheCreationTokens *int64
 	if wire.PromptTokensDetails != nil {
-		details := wire.PromptTokensDetails
-		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
+		cachedTokens = wire.PromptTokensDetails.CachedTokens
+		cacheWriteTokens = wire.PromptTokensDetails.CacheWriteTokens
+		createdCacheTokens = wire.PromptTokensDetails.CreatedCacheTokens
+		cacheCreationTokens = wire.PromptTokensDetails.CacheCreationTokens
+	}
+	if cachedTokens == nil {
+		cachedTokens = wire.PromptCacheHitTokens
+	}
+	if cachedTokens != nil || cacheWriteTokens != nil || createdCacheTokens != nil || cacheCreationTokens != nil {
+		if err := decodeInputCacheUsage(&usage, cachedTokens, cacheWriteTokens, createdCacheTokens, cacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
+		}
+	}
+	if usage.InputUncached.Value == nil && wire.PromptCacheMissTokens != nil {
+		if *wire.PromptCacheMissTokens >= 0 && *wire.PromptCacheMissTokens <= wire.PromptTokens {
+			usage.InputUncached = authoritative(*wire.PromptCacheMissTokens)
 		}
 	}
 	if wire.CompletionTokensDetails != nil {

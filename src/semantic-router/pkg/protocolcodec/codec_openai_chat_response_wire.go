@@ -209,6 +209,10 @@ type chatUsageWire struct {
 	IsBYOK        *bool                            `json:"is_byok,omitempty"`
 	CostDetails   *chatOpenRouterCostDetailsWire   `json:"cost_details,omitempty"`
 	ServerToolUse *chatOpenRouterServerToolUseWire `json:"server_tool_use,omitempty"`
+	// DeepSeek caching extensions report cache hits and misses directly on the
+	// usage object.
+	PromptCacheHitTokens  *int64 `json:"prompt_cache_hit_tokens,omitempty"`
+	PromptCacheMissTokens *int64 `json:"prompt_cache_miss_tokens,omitempty"`
 }
 
 type chatOpenRouterCostDetailsWire struct {
