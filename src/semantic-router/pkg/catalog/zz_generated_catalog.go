@@ -101897,8 +101897,9 @@ const builtInCatalogJSON = `{
       "description": "StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.",
       "display_name": "Step 5 Preview",
       "distribution": {
-        "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
-        "type": "proprietary_api"
+        "license": "StepFun Model License 1.0",
+        "source": "https://huggingface.co/stepfun-ai/Step-5-Preview",
+        "type": "open_weights"
       },
       "family": "step-5",
       "id": "stepfun/step-5-preview",
@@ -101927,7 +101928,7 @@ const builtInCatalogJSON = `{
       "reasoning_family": "step-3.7",
       "released_at": "2026-09-18",
       "tags": [
-        "proprietary",
+        "open_weights",
         "reasoning",
         "multimodal",
         "agentic",
@@ -101936,9 +101937,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "StepFun",
-        "source": "https://www.stepfun.com/step-5-preview",
+        "source": "https://huggingface.co/stepfun-ai/Step-5-Preview",
         "status": "claimed",
-        "verified_at": "2026-09-24"
+        "verified_at": "2026-10-18"
       }
     },
     {
