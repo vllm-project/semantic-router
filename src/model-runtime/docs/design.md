@@ -783,7 +783,9 @@ costs its budget, not its length, and fails the questions that read it whole
 with `scan_budget_exceeded`; the other questions read its first tokens, which
 are all any truncation keeps of a part they do not read. A question with
 `overflow: truncate` reads only a part's first `limits.truncate_tokens` (one
-input on a CPU, its row one forward over what fits). The model's answer to a
+input on a CPU, its row one forward over what fits), and a Vela 3.0 evidence
+span question its route's 32,768-token window of the parts it reads, the
+others still cut to the router's. The model's answer to a
 question depends on the questions beside it in a sequence, so questions of
 both kinds share their rows as before unless a row has to be read in windows;
 only then does each kind get rows of its own. The router truncates its
