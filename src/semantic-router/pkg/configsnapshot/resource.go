@@ -6,8 +6,10 @@ import "sort"
 type Kind string
 
 const (
-	// KindSecret is a credential that clusters or listeners use. A snapshot
-	// records where the values come from, never the values.
+	// KindSecret is a credential that clusters, listeners or protected
+	// entrypoints use, named after its owner (cluster/, listener/ or
+	// entrypoint/) so that owners of different kinds never share a name. A
+	// snapshot records where the values come from, never the values.
 	KindSecret Kind = "secret"
 	// KindRuntimeModel is a model the model runtime serves for the Router
 	// (global.model_catalog.deployments).

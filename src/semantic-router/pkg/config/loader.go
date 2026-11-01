@@ -236,11 +236,25 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	return cfg, nil
 }
 
+// ValidateRawFields runs the checks the loader applies to a document before it
+// decodes it: fields the Router rejects by their presence, such as removed
+// fields or entrypoints[].client_auth, even when they are null. Decoding into
+// the canonical types drops a null field, so a component that decodes a
+// document itself and writes it back runs this check on the original bytes.
+func ValidateRawFields(data []byte) error {
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return err
+	}
+	return validateAndNormalizeRawConfig(raw)
+}
+
 func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
 		rejectRemovedEntrypointFields,
+		checkRawClientAuth,
 		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,

@@ -7,6 +7,8 @@ import (
 	"io"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // Reject unknown setup fields before canonical transport can discard them.
@@ -16,6 +18,10 @@ func decodeStrictSetupConfig(data []byte) (setupConfigFile, error) {
 	var cfg setupConfigFile
 	if len(bytes.TrimSpace(data)) == 0 {
 		return cfg, nil
+	}
+	// Fields the Router rejects by presence would vanish here when null.
+	if err := routerconfig.ValidateRawFields(data); err != nil {
+		return cfg, err
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
