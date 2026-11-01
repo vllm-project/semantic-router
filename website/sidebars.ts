@@ -444,6 +444,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/router-flow-workflows',
             'proposals/agent-based-routing',
+            'proposals/coding-agents',
             'proposals/deliberation-algorithms',
             'proposals/agentic-memory',
             'proposals/agentic-rag',
