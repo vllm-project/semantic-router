@@ -64,11 +64,12 @@ type responsesOutputContentKey struct {
 }
 
 type responsesDecodedContentLifecycle struct {
-	kind        string
-	text        strings.Builder
-	annotations []responsesAnnotationWire
-	textDone    bool
-	partDone    bool
+	explicitPartStart bool
+	kind              string
+	text              strings.Builder
+	annotations       []responsesAnnotationWire
+	textDone          bool
+	partDone          bool
 }
 
 type responsesStreamEncoder struct {
@@ -384,8 +385,13 @@ func (decoder *responsesStreamDecoder) validateResponsesEventItemType(wire respo
 	}
 	expected := ""
 	switch wire.Type {
-	case "response.content_part.added", "response.content_part.done",
-		"response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added",
+	case "response.content_part.added", "response.content_part.done":
+		part, err := interpretResponsesContentPart(wire.Part)
+		if err != nil {
+			return err
+		}
+		expected = part.itemType
+	case "response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added",
 		"response.refusal.delta", "response.refusal.done":
 		expected = "message"
 	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done",
