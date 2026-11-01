@@ -6,12 +6,17 @@ import sys
 from pathlib import Path
 
 import torch
-from jailbreak_provenance import emit_training_manifests
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import TrainingArguments
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from training_args_compat import create_training_arguments
+if __package__:
+    from ..training_args_compat import create_training_arguments
+    from .jailbreak_provenance import emit_training_manifests
+else:
+    from jailbreak_provenance import emit_training_manifests
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from training_args_compat import create_training_arguments
 
 
 def split_training_data(sample_data: list[dict]) -> tuple[list[dict], list[dict]]:
