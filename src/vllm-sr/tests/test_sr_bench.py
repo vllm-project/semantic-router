@@ -7,6 +7,8 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
 
 import pytest
 import requests
@@ -14,6 +16,7 @@ from cli.sr_bench import adapters
 from cli.sr_bench.contracts import SESSION_AWARE, STATELESS, catalog, digest, plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.grading import basic_grade
+from cli.sr_bench.legacy_mmlu import normalize_records
 from cli.sr_bench.offline import export_training, regrade, replay
 from cli.sr_bench.report import compare, make_report
 from cli.sr_bench.service import PREFIX, Server
@@ -1162,6 +1165,66 @@ def test_registered_adapter_preflights_all_cases_and_executes_shared_client(
     assert rows[1]["queue_wait_s"] > rows[0]["queue_wait_s"]
     assert rows[0]["started_at"] <= rows[0]["finished_at"]
     assert metric["selected_models"] == {"model": 2}
+
+
+@pytest.mark.parametrize(
+    "scenario", ["complete", "truncated", "reasoning_only", "unknown_usage", "budget"]
+)
+def test_legacy_mmlu_uses_shared_execution_and_diagnostic_reporting(
+    tmp_path: Path, target: ThreadingHTTPServer, scenario: str
+) -> None:
+    payload: dict[str, Any] = manifest(target)
+    payload["cases"] = normalize_records(
+        [
+            {
+                "question_id": 17,
+                "question": "Choose the second option.",
+                "options": ["First", "Second", "Third"],
+                "answer": "B",
+                "category": "science",
+            }
+        ]
+    )
+    target.answer = "Answer: B\nAnswer: A"
+    target.truncated = scenario == "truncated"
+    if scenario == "reasoning_only":
+        target.answer = ""
+    elif scenario == "unknown_usage":
+        target.usage_events = []
+        payload["cost_policy"] = "capability_only"
+    elif scenario == "budget":
+        payload["limits"]["max_cost_usd"] = 1e-12
+    store = Store(tmp_path)
+    run = Engine(store).start(payload)
+    assert wait_run(store=store, run_id=run["id"])["status"] == (
+        "failed" if scenario == "budget" else "completed"
+    )
+    result = store.results(run["id"])[0]
+    metric = make_report(store=store, run_id=run["id"])["summary"]["targets"][0]
+    assert metric["sr_bench_score"] is None
+    assert "extension diagnostic" in metric["score_scope"]
+    assert metric["total"] == 1
+    if scenario == "budget":
+        assert target.requests == []
+        assert store.calls(run["id"]) == []
+        assert "budget" in result["error"]
+        return
+    assert len(target.requests) == len(store.calls(run["id"])) == 1
+    assert target.requests[0]["messages"] == payload["cases"][0]["messages"]
+    assert result["correct"] is (scenario in {"complete", "unknown_usage"})
+    if scenario == "truncated":
+        assert result["details"]["quality_failure"] == "output_limit"
+    elif scenario == "reasoning_only":
+        assert result["answer"] is None
+    else:
+        assert result["answer"] == "B"
+        assert result["details"]["grader_version"] == "bench-mmlu-pro-plain-v1"
+    if scenario == "unknown_usage":
+        assert metric["cost_usd"] is None
+        assert metric["total_spend_usd"] is None
+    else:
+        assert metric["tokens"]["output_tokens"] == 3
+        assert metric["total_spend_usd"] == pytest.approx(18.2 / 1_000_000)
 
 
 def test_evidence_pages_are_bounded_and_call_detail_is_run_scoped(tmp_path, target):
