@@ -2204,12 +2204,13 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le, model))",
+              "expr": "histogram_quantile(0.95, sum(rate(llm_model_first_response_observation_seconds_bucket[5m])) by (le, model))",
               "legendFormat": "{{model}}",
               "refId": "A"
             }
           ],
-          "title": "TTFT (Time to First Token) by Model - P95",
+          "description": "P95 time from request-body processing to the first observed streaming chunk or nonstreaming response headers. Includes routing and may precede a content token; not a uniform backend time-to-first-token measurement.",
+          "title": "First Response Observation by Model - P95",
           "type": "timeseries"
         },
         {
@@ -2293,12 +2294,13 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le, model))",
+              "expr": "histogram_quantile(0.95, sum(rate(llm_model_response_duration_per_output_token_seconds_bucket[5m])) by (le, model))",
               "legendFormat": "{{model}}",
               "refId": "A"
             }
           ],
-          "title": "TPOT (Time per Output Token) by Model - P95",
+          "description": "P95 of per-response duration / reported output-token count, for responses with output tokens. Includes routing and first-response wait; not decode inter-token latency or a token-weighted aggregate.",
+          "title": "Response Duration per Output Token by Model - P95",
           "type": "timeseries"
         },
         {
