@@ -112,13 +112,14 @@ type ModelSwitchGateConfig struct {
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.
 type MLSelectionConfig struct {
-	ModelsPath   string         `yaml:"models_path,omitempty"`
-	ModelType    string         `yaml:"model_type,omitempty"`
-	EmbeddingDim int            `yaml:"embedding_dim,omitempty"`
-	KNN          MLKNNConfig    `yaml:"knn,omitempty"`
-	KMeans       MLKMeansConfig `yaml:"kmeans,omitempty"`
-	SVM          MLSVMConfig    `yaml:"svm,omitempty"`
-	MLP          MLMLPConfig    `yaml:"mlp,omitempty"`
+	ModelsPath   string             `yaml:"models_path,omitempty"`
+	ModelType    string             `yaml:"model_type,omitempty"`
+	EmbeddingDim int                `yaml:"embedding_dim,omitempty"`
+	KNN          MLKNNConfig        `yaml:"knn,omitempty"`
+	KMeans       MLKMeansConfig     `yaml:"kmeans,omitempty"`
+	SVM          MLSVMConfig        `yaml:"svm,omitempty"`
+	MLP          MLMLPConfig        `yaml:"mlp,omitempty"`
+	HierShrink   MLHierShrinkConfig `yaml:"hiershrink,omitempty"`
 }
 
 type MLKNNConfig struct {
@@ -140,6 +141,10 @@ type MLSVMConfig struct {
 
 type MLMLPConfig struct {
 	Device         string `yaml:"device,omitempty"`
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
+type MLHierShrinkConfig struct {
 	PretrainedPath string `yaml:"pretrained_path,omitempty"`
 }
 
