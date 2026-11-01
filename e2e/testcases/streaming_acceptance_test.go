@@ -123,6 +123,7 @@ func TestStreamingCacheRequiresActualSSEReplay(t *testing.T) {
 }
 
 func TestStreamingKeywordRoutingRequiresEveryProbe(t *testing.T) {
+	withoutWritePause(t)
 	for _, tc := range []struct {
 		name       string
 		decisions  []string
