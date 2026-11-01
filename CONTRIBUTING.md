@@ -187,6 +187,9 @@ of truth for schemas, test selection, or public documentation.
 
 ## Submit a pull request
 
+Contributors without repository write access may have at most six open pull
+requests at a time, including drafts.
+
 1. Link the change to an accepted issue with exactly one `wg/*` owner.
 2. Create a focused branch and make one coherent change.
 3. Update tests, examples, and public docs for behavior the user can observe.
