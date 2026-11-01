@@ -6,6 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -98,6 +101,64 @@ func TestOwnedRemoteEmbeddingIndependentReferencesAndFailedCandidate(t *testing.
 	vector, err = secondProvider.Embed(context.Background(), "query")
 	if err != nil || len(vector) != 2 || vector[1] != 1 {
 		t.Fatalf("second = %v, %v", vector, err)
+	}
+}
+
+func TestOwnedRemoteEmbeddingAddressWithPort(t *testing.T) {
+	var path atomic.Value
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path.Store(r.URL.Path)
+		var request struct {
+			Input []string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			return
+		}
+		data := make([]map[string]interface{}, len(request.Input))
+		for i := range data {
+			data[i] = map[string]interface{}{"index": i, "embedding": []float64{1, 0}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+	}))
+	defer server.Close()
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, address, path string
+	}{
+		{name: "absolute URL ignores port", address: server.URL + "/v1", path: "/v1/embeddings"},
+		{name: "bare host joins port", address: u.Hostname(), path: "/embeddings"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.EmbeddingConfig.ModelType = "remote"
+			cfg.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
+			cfg.EmbeddingConfig.TargetDimension = 2
+			cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "active", Candidates: []string{"candidate"}}}
+			cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "service", Contract: "embedding.v1", Adapter: "openai_compatible"}}
+			cfg.ModelDeployments = map[string]config.ModelDeployment{"service": {Provider: "http", ExternalModel: "embedder"}}
+			cfg.ExternalModels = []config.ExternalModelConfig{{Name: "embedder", ModelName: "first", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: tc.address, Port: port}}}
+			prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, serving.New(nil, binding.NewPool()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer prepared.Close()
+			provider, _ := prepared.Default()
+			vector, err := provider.Embed(context.Background(), "query")
+			if err != nil || len(vector) != 2 || vector[0] != 1 {
+				t.Fatalf("embed = %v, %v", vector, err)
+			}
+			if got := path.Load(); got != tc.path {
+				t.Fatalf("request path = %v, want %s", got, tc.path)
+			}
+		})
 	}
 }
 

@@ -142,11 +142,13 @@ func prepareExplicitEmbedding(ctx context.Context, cfg *config.RouterConfig, run
 	if external == nil {
 		return nil, fmt.Errorf("embedding external_model %q is unavailable", spec.Deployment.ExternalModel)
 	}
+	// An absolute address already carries its scheme and port; port applies
+	// only to a bare host.
 	address := external.ModelEndpoint.Address
-	if external.ModelEndpoint.Port > 0 {
-		address = net.JoinHostPort(address, strconv.Itoa(external.ModelEndpoint.Port))
-	}
 	if !strings.Contains(address, "://") {
+		if external.ModelEndpoint.Port > 0 {
+			address = net.JoinHostPort(address, strconv.Itoa(external.ModelEndpoint.Port))
+		}
 		protocol := external.ModelEndpoint.Protocol
 		if protocol == "" {
 			protocol = "http"
