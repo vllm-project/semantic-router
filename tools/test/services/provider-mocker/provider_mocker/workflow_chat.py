@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .chat_request import ChatMessage, ChatRequest
+
+if TYPE_CHECKING:
+    from fastapi.responses import Response
 
 ChatContains = Callable[[ChatRequest, str], bool]
 ChatHasToolResult = Callable[[ChatRequest], bool]
@@ -17,7 +20,7 @@ BuildChatUsage = Callable[[ChatRequest, str], dict]
 BuildChatResponse = Callable[[ChatRequest, str, dict, int], dict]
 MockChatToolResponse = Callable[[ChatRequest, int], dict[str, Any]]
 GenerateChatStream = Callable[..., Iterator[str]]
-GenerateChatToolStream = Callable[[ChatRequest, int], Iterator[str]]
+GenerateChatToolStream = Callable[..., Iterator[str]]
 
 
 class ChatControlHelpers:
@@ -44,8 +47,12 @@ class ChatControlHelpers:
 
 
 def mock_chat_control_response(
-    req: ChatRequest, created_ts: int, helpers: ChatControlHelpers
-) -> Any | None:
+    req: ChatRequest,
+    created_ts: int,
+    helpers: ChatControlHelpers,
+    *,
+    complete: bool = True,
+) -> Response | dict[str, Any] | None:
     if helpers.chat_contains(req, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
@@ -67,17 +74,25 @@ def mock_chat_control_response(
         response = helpers.build_chat_response(req, content, usage, created_ts)
         if req.stream:
             return StreamingResponse(
-                helpers.generate_chat_stream(req, response, content, usage, created_ts),
+                helpers.generate_chat_stream(
+                    req, response, content, usage, created_ts, complete=complete
+                ),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return response
     if helpers.chat_requests_mock_tool(req):
         if req.stream:
             return StreamingResponse(
-                helpers.generate_chat_tool_stream(req, created_ts),
+                helpers.generate_chat_tool_stream(req, created_ts, complete=complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return helpers.mock_chat_tool_response(req, created_ts)
     return None

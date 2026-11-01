@@ -10,6 +10,7 @@ import threading
 import time
 from contextlib import contextmanager, suppress
 from http import HTTPStatus
+from typing import Any
 
 import requests
 
@@ -19,6 +20,7 @@ from .activity import CallActivity
 from .adapters import get_adapter
 from .contracts import SESSION_AWARE, digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
+from .fault_contract import fault_matches_schedule
 from .native_output import capacity as native_capacity
 from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
@@ -49,6 +51,7 @@ class Context:
         self.deadline = min(deadline, time.monotonic() + self.limits["case_timeout_s"])
         self.calls = []
         self.call_slots = 0
+        self.subject_call_slots = 0
         self.quality_failure = None
         self.artifact_dir = (
             self.store.root / "runs" / run_id / case["id"] / target["id"]
@@ -142,6 +145,9 @@ class Context:
                 self.engine.reserved.get(self.run_id, 0) + reservation
             )
             self.call_slots += 1
+            call_index = self.subject_call_slots
+            if role == "subject":
+                self.subject_call_slots += 1
         limits = {
             **self.limits,
             "total_timeout_s": min(
@@ -177,6 +183,24 @@ class Context:
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
+        task_schedules = (
+            self.manifest.get("fault_schedules")
+            or self.manifest.get("fault_schedule")
+            or {}
+        )
+        case_schedule = (
+            self.case.get("fault_schedule") or task_schedules.get(self.case["id"]) or []
+        )
+        scheduled_fault = None
+        fault_schedule_id = None
+        fault_session_id = None
+        if role == "subject" and case_schedule:
+            fault_schedule_id = self.case["id"]
+            fault_session_id = f"{self.run_id}:{self.target['id']}:{self.case['id']}"
+            for item in case_schedule:
+                if isinstance(item, dict) and item.get("call_index") == call_index:
+                    scheduled_fault = item
+                    break
         try:
             result = chat(
                 selected,
@@ -188,12 +212,21 @@ class Context:
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
                 session_id=session_id,
+                fault_schedule_id=fault_schedule_id,
+                fault_session_id=fault_session_id,
+                fault_call_index=call_index if fault_schedule_id is not None else None,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
                     else {}
                 ),
             )
+            if result.get("fault_injected") is True and not fault_matches_schedule(
+                observed=result.get("injected_fault"), scheduled=scheduled_fault
+            ):
+                raise CallFailure(
+                    "Provider fault receipt differs from the schedule", result
+                )
             if (
                 self.manifest["cost_policy"] == "require_priced"
                 and result.get("cost_usd") is None
@@ -213,6 +246,9 @@ class Context:
                     "Auxiliary model output was truncated; grading is incomplete",
                     result,
                 )
+            if scheduled_fault is not None:
+                result["scheduled_fault"] = scheduled_fault
+                result["call_index"] = call_index
             self.store.finish_call(call_id, "completed", result)
             call_record.update(result)
             with self.engine.lock:
@@ -224,10 +260,14 @@ class Context:
                 self.quality_failure = "output_limit"
             return result
         except CallFailure as exc:
+            if scheduled_fault is not None:
+                exc.partial["scheduled_fault"] = scheduled_fault
+                exc.partial["call_index"] = call_index
+            exc.partial.setdefault("error", str(exc))
             self.store.finish_call(
                 call_id,
                 "cancelled" if self.cancelled() else "failed",
-                {**exc.partial, "error": str(exc)},
+                exc.partial,
             )
             call_record.update(exc.partial)
             with self.engine.lock:
@@ -495,8 +535,31 @@ class Engine:
                     }
                     self.first_failures[run_id] = failure
                     self.store.event(run_id, "failure_observed", failure)
-            # Fail closed: no new cases are dispatched after a transport/harness failure.
-            cancel.set()
+            # An injection receipt alone does not explain why the call failed.
+            failing_call: dict[str, Any] = (
+                exc.partial if isinstance(exc, CallFailure) else {}
+            )
+            injected_fault = failing_call.get("injected_fault")
+            scheduled_fault = failing_call.get("scheduled_fault")
+            response_status = failing_call.get("response_status")
+            is_expected_fault = (
+                failing_call.get("fault_injected") is True
+                and fault_matches_schedule(
+                    observed=injected_fault, scheduled=scheduled_fault
+                )
+                and isinstance(response_status, int)
+                and (
+                    injected_fault.get("status") == response_status
+                    or (
+                        injected_fault.get("stream_cut_short") is True
+                        and HTTPStatus.OK
+                        <= response_status
+                        < HTTPStatus.MULTIPLE_CHOICES
+                    )
+                )
+            )
+            if not is_expected_fault:
+                cancel.set()
 
     def _completed_case(self, ctx, result, started):
         if ctx.quality_failure:

@@ -67,6 +67,38 @@ becomes zero or evidence of savings. **Quality only** (`capability_only`) disabl
 USD-budget stopping; request/case/run time, call and output limits still apply.
 Known spend is recorded, but missing prices or usage do not support savings claims.
 
+## Fault experiments
+
+Use the provider mocker to inject failures into named tasks. Add a schedule to the
+manifest using the prepared case's ID; call indices start at zero:
+
+```yaml
+fault_schedules:
+  task-with-fault:
+    - call_index: 2
+      status: 503
+```
+
+Entries can instead specify a delay in seconds (`delay`) or an incomplete response
+(`stream_cut_short: true`). Configure the same task mapping on the mocker through
+`PROVIDER_MOCKER_FAULT_SCHEDULE` or `POST /debug/fault-schedule`; the run manifest
+does not install upstream configuration.
+
+Scheduled subject tasks send a schedule ID and a run/target/case-specific counter
+ID, plus the subject request's call index. A retry of that request does not
+consume another scheduled fault; its response retains any receipt from the first
+attempt. Other tasks and judge/simulator calls do not receive those identifiers.
+The report separates `scheduled_fault` from an observed injection receipt and
+groups outcomes under `fault_summary`. An injection receipt for a delay or a
+different HTTP status does not excuse an unexpected failure.
+Receipts retain the model and parameters observed at the provider. An omitted
+Router selection remains unknown, rather than becoming the requested entrypoint.
+
+Use identical fault schedules for paired comparisons. Changing a run-level
+schedule changes the evaluation protocol, even when the prepared dataset is
+unchanged. These experiments measure test-service behavior, not production
+provider reliability.
+
 ## Native output capacity
 
 Set `output_policy: native` to explore each model's available output capacity

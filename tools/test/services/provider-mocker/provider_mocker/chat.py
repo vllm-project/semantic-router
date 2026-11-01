@@ -1,11 +1,12 @@
-"""Native Chat Completions HTTP boundary and fixture selection."""
+from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 
 from . import ollama_fixture, openrouter_fixture, vllm_fixture, workflow_chat
@@ -23,6 +24,10 @@ from .chat_wire import (
     generate_chat_stream,
     generate_chat_tool_stream,
     mock_chat_tool_response,
+)
+from .fault_schedule import (
+    apply_response_fault,
+    request_fault,
 )
 from .provider_boundary import (
     SESSION_HEADER,
@@ -89,12 +94,19 @@ _chat_control = workflow_chat.ChatControlHelpers(
 )
 
 
-def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
-    return workflow_chat.mock_chat_control_response(req, created_ts, _chat_control)
+def mock_chat_control_response(
+    req: ChatRequest,
+    created_ts: int,
+    *,
+    complete: bool = True,
+) -> Response | dict[str, Any] | None:
+    return workflow_chat.mock_chat_control_response(
+        req=req, created_ts=created_ts, helpers=_chat_control, complete=complete
+    )
 
 
-@router.post("/v1/chat/completions")
-async def chat_completions(request: Request):
+@router.post("/v1/chat/completions", response_model=None)
+async def chat_completions(request: Request) -> Response | dict[str, Any]:
     raw_body = await request.body()
     body, error_response = await parse_provider_request(
         request, "openai_chat_completions"
@@ -112,6 +124,42 @@ async def chat_completions(request: Request):
         detail = error.errors(include_url=False)[0]
         field = ".".join(str(part) for part in detail.get("loc", ())) or None
         return invalid_request_response(detail["msg"], field)
+
+    execution = request_fault(request)
+    fault = execution.fault if execution is not None else None
+    if fault is not None:
+        if fault.delay and fault.delay > 0:
+            await asyncio.sleep(fault.delay)
+        if fault.status is not None:
+            return apply_response_fault(
+                response=JSONResponse(
+                    status_code=fault.status,
+                    content={
+                        "error": {
+                            "message": f"fault schedule injected {fault.status}",
+                            "type": "fault_schedule_injected",
+                            "param": None,
+                            "code": f"fault_{fault.status}",
+                        }
+                    },
+                ),
+                fault=fault,
+                execution=execution,
+                provider_model=req.model,
+            )
+
+    return apply_response_fault(
+        response=await _chat_reply(request=request, req=req),
+        fault=fault,
+        execution=execution,
+        provider_model=req.model,
+    )
+
+
+async def _chat_reply(
+    *, request: Request, req: ChatRequest
+) -> Response | dict[str, Any]:
+    is_complete = not chat_contains(req, "__mock_incomplete_stream__")
 
     await apply_fixture_delay()
     created_ts = int(time.time())
@@ -134,7 +182,10 @@ async def chat_completions(request: Request):
             return StreamingResponse(
                 openrouter_fixture.streamed_reply(req, created_ts),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return openrouter_fixture.buffered_reply(req, created_ts)
     vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
@@ -149,7 +200,10 @@ async def chat_completions(request: Request):
             return StreamingResponse(
                 vllm_fixture.streamed_reply(req, created_ts, vllm_stop),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return vllm_fixture.buffered_reply(req, created_ts, vllm_stop)
     if req.tools and chat_contains(req, ollama_fixture.MARKER):
@@ -157,7 +211,10 @@ async def chat_completions(request: Request):
             return StreamingResponse(
                 ollama_fixture.streamed_tool_call(req, created_ts),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return ollama_fixture.buffered_tool_call(req, created_ts)
     if (
@@ -180,12 +237,17 @@ async def chat_completions(request: Request):
     if req.tools and chat_contains(req, "__mock_responses_custom_tool__"):
         if req.stream:
             return StreamingResponse(
-                generate_chat_custom_tool_stream(req, created_ts),
+                generate_chat_custom_tool_stream(req, created_ts, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return build_chat_custom_tool_response(req, created_ts)
-    control_response = mock_chat_control_response(req, created_ts)
+    control_response = mock_chat_control_response(
+        req=req, created_ts=created_ts, complete=is_complete
+    )
     if control_response is not None:
         return control_response
 
@@ -210,7 +272,10 @@ async def chat_completions(request: Request):
         return StreamingResponse(
             generate_chat_midstream_error(req, response, created_ts),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
         )
 
     return StreamingResponse(
@@ -220,7 +285,7 @@ async def chat_completions(request: Request):
             content,
             usage,
             created_ts,
-            complete=not chat_contains(req, "__mock_incomplete_stream__"),
+            complete=is_complete,
         ),
         media_type="text/event-stream",
         headers={
