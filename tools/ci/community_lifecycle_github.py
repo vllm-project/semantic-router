@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 from community_lifecycle_policy import (
     ACCEPTED,
@@ -214,38 +214,114 @@ def sync_issue_kind_event(client: GitHubClient, event: dict[str, Any]) -> None:
     add_labels(client, repo, number, plan.add_labels)
 
 
+PENDING_ACCEPTANCE_QUERY = """
+  query ($owner: String!, $repo: String!, $label: String!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      issues(first: 50, after: $cursor, labels: [$label]) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          number
+          comments(last: 100) {
+            totalCount
+            nodes { body author { login } }
+          }
+        }
+      }
+    }
+  }
+"""
+ISSUE_COMMENTS_QUERY = """
+  query ($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      issue(number: $number) {
+        comments(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes { body author { login } }
+        }
+      }
+    }
+  }
+"""
+
+
+def repository_query(
+    client: GitHubClient, repo: str, query: str, **variables: Any
+) -> dict[str, Any]:
+    owner, name = repo.split("/", 1)
+    result = client.request(
+        "graphql",
+        method="POST",
+        payload={
+            "query": query,
+            "variables": {"owner": owner, "repo": name, **variables},
+        },
+    )
+    repository = ((result or {}).get("data") or {}).get("repository")
+    if repository is None:
+        raise RuntimeError(
+            "The GitHub GraphQL response did not include the repository."
+        )
+    return repository
+
+
+def issue_comments(
+    client: GitHubClient, repo: str, number: int
+) -> list[dict[str, Any]]:
+    """Read every comment of one issue whose thread outgrew the queue query."""
+
+    comments: list[dict[str, Any]] = []
+    cursor: str | None = None
+    while True:
+        issue = repository_query(
+            client, repo, ISSUE_COMMENTS_QUERY, number=number, cursor=cursor
+        ).get("issue")
+        page = (issue or {}).get("comments") or {}
+        comments.extend(page.get("nodes") or [])
+        page_info = page.get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            return comments
+        cursor = page_info["endCursor"]
+
+
 def acceptance_candidates(client: GitHubClient, repo: str) -> dict[int, set[str]]:
-    """List issue numbers and actors for every current exact ``/accept`` comment."""
+    """Map each ``needs-acceptance`` issue with an exact ``/accept`` to its actors.
+
+    Only issues still waiting for acceptance can change, so the queue is read
+    from the label instead of scanning every comment in the repository.
+    """
 
     candidates: dict[int, set[str]] = {}
-    page = 1
+    cursor: str | None = None
     while True:
-        comments = (
-            client.request(
-                f"repos/{repo}/issues/comments?sort=created&direction=asc"
-                f"&per_page={API_PAGE_SIZE}&page={page}"
-            )
-            or []
+        issues = (
+            repository_query(
+                client,
+                repo,
+                PENDING_ACCEPTANCE_QUERY,
+                label=NEEDS_ACCEPTANCE,
+                cursor=cursor,
+            ).get("issues")
+            or {}
         )
-        for comment in comments:
-            if comment.get("body") != "/accept":
-                continue
-            path = urlparse(comment.get("issue_url") or "").path.rstrip("/")
-            try:
-                number = int(path.rsplit("/", 1)[-1])
-            except (ValueError, IndexError):
-                print(
-                    "::warning::Ignored an exact `/accept` comment without an issue URL."
-                )
-                continue
-            actors = candidates.setdefault(number, set())
-            actor = (comment.get("user") or {}).get("login")
-            if actor:
-                actors.add(actor)
-        if len(comments) < API_PAGE_SIZE:
-            break
-        page += 1
-    return candidates
+        for issue in issues.get("nodes") or []:
+            number = int(issue["number"])
+            thread = issue.get("comments") or {}
+            comments = thread.get("nodes") or []
+            if (thread.get("totalCount") or 0) > len(comments):
+                comments = issue_comments(client, repo, number)
+            accepts = [
+                comment for comment in comments if comment.get("body") == "/accept"
+            ]
+            if accepts:
+                candidates[number] = {
+                    login
+                    for comment in accepts
+                    if (login := (comment.get("author") or {}).get("login"))
+                }
+        page_info = issues.get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            return candidates
+        cursor = page_info["endCursor"]
 
 
 def acceptance_actor_can_manage(
@@ -331,15 +407,67 @@ def reconciliation_failure_message(error: BaseException) -> str:
     return str(error) or "A GitHub API request failed."
 
 
-def reconcile_issue_acceptance(client: GitHubClient, repo: str) -> None:
-    """Reconcile all issues with a current exact ``/accept`` comment."""
+def current_accept_decision(
+    client: GitHubClient, repo: str, event: dict[str, Any]
+) -> tuple[int, str | None] | None:
+    """Return the commented issue and author if its comment still reads ``/accept``.
+
+    The event payload is a snapshot, so the comment is read again by id: an edit
+    or a deletion before the job runs withdraws the decision.
+    """
+
+    number = (event.get("issue") or {}).get("number")
+    comment_id = (event.get("comment") or {}).get("id")
+    if number is None or comment_id is None:
+        return None
+    comment = client.request(
+        f"repos/{repo}/issues/comments/{comment_id}", ignore_not_found=True
+    )
+    if not comment or comment.get("body") != "/accept":
+        print(
+            f"::notice title=Issue #{number} not read from the event::"
+            "The `/accept` comment was edited or deleted before the job ran."
+        )
+        return None
+    return int(number), (comment.get("user") or {}).get("login")
+
+
+def reconcile_issue_acceptance(
+    client: GitHubClient,
+    repo: str,
+    *,
+    event: dict[str, Any] | None = None,
+) -> None:
+    """Reconcile the commented issue and every pending ``/accept`` candidate.
+
+    The commented issue is added only while its comment still reads ``/accept``,
+    even when its ``needs-acceptance`` label is missing. If that comment cannot
+    be read, the issue is left alone, the queue is still processed, and the job
+    fails afterwards.
+    """
 
     candidates = acceptance_candidates(client, repo)
     permission_cache: dict[str, bool] = {}
     results = {"accepted": 0, "synchronized": 0, "skipped": 0}
     failures = 0
 
-    print(f"::notice::Discovered {len(candidates)} issue acceptance candidate(s).")
+    if event is not None:
+        try:
+            decision = current_accept_decision(client, repo, event)
+        except (Exception, SystemExit) as error:
+            failures += 1
+            print(
+                "::error title=Triggering comment check failed::"
+                f"{reconciliation_failure_message(error)}"
+            )
+        else:
+            if decision:
+                event_issue, event_actor = decision
+                event_actors = candidates.setdefault(event_issue, set())
+                if event_actor:
+                    event_actors.add(event_actor)
+
+    print(f"::notice::Discovered {len(candidates)} pending acceptance candidate(s).")
     for number, actors in sorted(candidates.items()):
         try:
             result = reconcile_acceptance_candidate(
@@ -368,14 +496,14 @@ def reconcile_issue_acceptance(client: GitHubClient, repo: str) -> None:
 
 
 def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
-    """Reconcile repository acceptance after an exact ``/accept`` event."""
+    """Reconcile the commented issue and the pending queue after ``/accept``."""
 
     command = (event.get("comment") or {}).get("body") or ""
     if command != "/accept":
         print("::error::The acceptance command must be exactly `/accept`.")
         raise SystemExit(1)
 
-    reconcile_issue_acceptance(client, repository_name(event))
+    reconcile_issue_acceptance(client, repository_name(event), event=event)
 
 
 PULL_REQUEST_QUERY = """
