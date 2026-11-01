@@ -7,9 +7,16 @@ queue_rules:
     merge_conditions:
       - base = main
       - check-success = PR Gate
-    merge_method: squash
+    # merge-batch merges the queue's own batch PR - built on the latest
+    # main, so GitHub's "require branches to be up to date" protection is
+    # satisfied without disabling it (#5674). Requires mergify[bot] in the
+    # branch-protection bypass list ("bypass the required pull requests").
+    merge_method: merge-batch
     update_method: merge
-    batch_size: 1
+    # A batch of several pull requests shares one qualification run on the
+    # latest base and merges through the batch PR; squash merges of the
+    # original branches would be refused while they are behind (#5674).
+    batch_size: 5
     # Above 0, Mergify checks each pull request on a draft pull request
     # instead of merging main into its branch. tools/ci/manual_ci.py runs
     # those drafts without a new /ci run (#5581).
