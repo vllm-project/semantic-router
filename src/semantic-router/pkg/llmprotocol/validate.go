@@ -97,6 +97,9 @@ func validateRequestIdentity(request Request, limits Limits) error {
 	if exceeds(request.PromptCacheKey, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "prompt_cache_key_limit", "prompt_cache_key exceeds the configured limit", nil)
 	}
+	if exceeds(request.ConversationID, limits.IdentifierBytes) {
+		return NewError(ErrorInvalidRequest, "conversation_id_limit", "conversation ID exceeds the configured limit", nil)
+	}
 	if request.PreviousResponseID != "" && request.ConversationID != "" {
 		return NewError(
 			ErrorInvalidRequest,
