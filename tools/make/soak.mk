@@ -29,6 +29,11 @@ build-soak:
 	@mkdir -p bin
 	@cd e2e && go build -o ../bin/soak ./cmd/soak
 
+test-fault-proxy: $(HARNESS_VENV_DEPS) ## Test the fault proxy without a running stack
+	@"$(AGENT_PYTHON)" -m pytest -q bench/test_openai_fault_proxy.py
+
+.PHONY: test-fault-proxy
+
 soak-test: ## Vet and unit-test the soak harness (no running stack required)
 soak-test:
 	@$(LOG_TARGET)

@@ -319,6 +319,7 @@ class SelectionTests(unittest.TestCase):
             "tools/test/services/provider-mocker/tests/test_fixture_latency.py": "mock-provider",
             "bench/test_agentic_routing_experiment.py": "learning-tools",
             "bench/test_openai_fault_proxy.py": "soak-tools",
+            "bench/looper_tts/test_contracts.py": "bench-tools",
         }
         for path, expected in cases.items():
             self.assertIn(expected, classify([path]).selected_jobs)
