@@ -30,12 +30,13 @@ func (engine *Engine) EncodeResponseStream(
 	if encodeResponseStreamErr != nil {
 		return nil, nil, encodeResponseStreamErr
 	}
+	diagnostics := projectReasoningContinuity(context.Source, format, pair.buffered.Capabilities(), &response)
 	if err := llmprotocol.RequireCapabilities(
 		format,
 		pair.buffered.Capabilities(),
 		llmprotocol.RequiredResponseCapabilities(response),
 	); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	context.PublicModel = response.Model
 	context.ResponseID = response.ID
@@ -48,7 +49,6 @@ func (engine *Engine) EncodeResponseStream(
 		return nil, nil, encodeResponseStreamErr
 	}
 	var body bytes.Buffer
-	var diagnostics llmprotocol.Diagnostics
 	for _, event := range events {
 		frames, eventDiagnostics, pushErr := encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.policy.Limits.Diagnostics)

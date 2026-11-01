@@ -132,6 +132,12 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
         for name, file in zip(names, listed, strict=True):
             files[name] = file
         for question_id in entry.get("ids") or ():
+            owner = router_tasks.get(str(question_id))
+            if owner is not None and owner[0] != task:
+                raise PackageError(
+                    f"{CONFIG_FILE}: router.task_adapters question ID "
+                    f"{str(question_id)!r} is declared by both {owner[0]!r} and {task!r}"
+                )
             router_tasks[str(question_id)] = (task, tuple(names))
     return Roster(span, evidence, span_set, tasks, router, router_tasks), files
 

@@ -33,6 +33,29 @@ TRANSIENT_GH_ERRORS = (
     "503 Service Unavailable",
     "504 Gateway Timeout",
 )
+# GitHub answers 502 when one page of this query computes mergeStateStatus for
+# 100 pull requests, which is what gh pr list requests for a limit above 50.
+PULL_REQUEST_PAGE_SIZE = 25
+PULL_REQUEST_QUERY = """
+query($owner: String!, $name: String!, $size: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(
+      states: OPEN, first: $size, after: $cursor,
+      orderBy: {field: CREATED_AT, direction: DESC}
+    ) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title url isDraft createdAt updatedAt
+        reviewDecision mergeStateStatus headRefName baseRefName
+        author { login }
+        milestone { title }
+        labels(first: 50) { nodes { name } }
+        assignees(first: 20) { nodes { login } }
+      }
+    }
+  }
+}
+"""
 
 
 def load_policy() -> dict[str, Any]:
@@ -110,13 +133,44 @@ def attach_pr_status_rollups(prs: list[dict[str, Any]]) -> None:
         pr["statusCheckRollup"] = (details or {}).get("statusCheckRollup") or []
 
 
+def list_open_pull_requests(limit: int) -> list[dict[str, Any]]:
+    """Return open pull requests newest first, one small page per request."""
+
+    pull_requests: list[dict[str, Any]] = []
+    cursor: str | None = None
+    while len(pull_requests) < limit:
+        args = [
+            "api",
+            "graphql",
+            "-F",
+            "owner={owner}",
+            "-F",
+            "name={repo}",
+            "-F",
+            f"size={min(PULL_REQUEST_PAGE_SIZE, limit - len(pull_requests))}",
+            "-f",
+            f"query={PULL_REQUEST_QUERY}",
+        ]
+        if cursor:
+            args += ["-f", f"cursor={cursor}"]
+        page = gh_json(args)["data"]["repository"]["pullRequests"]
+        for node in page["nodes"]:
+            node["labels"] = node["labels"]["nodes"]
+            node["assignees"] = node["assignees"]["nodes"]
+            pull_requests.append(node)
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        cursor = page["pageInfo"]["endCursor"]
+    return pull_requests
+
+
 def fetch_github_state(
     policy: dict[str, Any],
     issue_limit_override: int | None = None,
     pr_limit_override: int | None = None,
 ) -> dict[str, Any]:
     issue_limit = str(issue_limit_override or policy.get("default_issue_limit", 100))
-    pr_limit = str(pr_limit_override or policy.get("default_pr_limit", 50))
+    pr_limit = pr_limit_override or policy.get("default_pr_limit", 50)
     issues = gh_json(
         [
             "issue",
@@ -129,21 +183,7 @@ def fetch_github_state(
             "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url",
         ]
     )
-    prs = (
-        gh_json(
-            [
-                "pr",
-                "list",
-                "--state",
-                "open",
-                "--limit",
-                pr_limit,
-                "--json",
-                "number,title,labels,milestone,assignees,createdAt,updatedAt,author,url,isDraft,reviewDecision,mergeStateStatus,headRefName,baseRefName",
-            ]
-        )
-        or []
-    )
+    prs = list_open_pull_requests(int(pr_limit))
     attach_pr_status_rollups(prs)
     milestones = gh_json(["api", "repos/{owner}/{repo}/milestones?state=open"])
     labels = gh_json(["label", "list", "--json", "name,description,color"])
