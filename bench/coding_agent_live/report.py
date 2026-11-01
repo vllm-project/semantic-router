@@ -7,7 +7,8 @@ messages Claude Code printed, and the Router's replay records for that session:
 calls and tokens per selected model, split into main agent and subagent calls
 when the records carry agent identity, response statuses, and protection
 actions. Replay records come from the management API, filtered by the session
-id, which the Router takes from ``x-claude-code-session-id``.
+id, which the Router takes from ``x-claude-code-session-id``. A run Harbor cut
+off before its result event still joins replay through its init event.
 """
 
 from __future__ import annotations
@@ -39,6 +40,20 @@ def last_result_event(lines: Iterable[str]) -> dict[str, Any]:
         if event.get("type") == "result":
             found = event
     return found
+
+
+def init_session_id(lines: Iterable[str]) -> str | None:
+    """The session id of Claude Code's init event, which every run prints first."""
+    for line in lines:
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("subtype") == "init":
+            return event.get("session_id")
+    return None
 
 
 def api_errors(lines: Iterable[str]) -> list[str]:
@@ -125,7 +140,7 @@ def trial_row(
         "trial": result.get("trial_name") or trial_dir.name,
         "reward": rewards.get("reward"),
         "exception": exception.get("exception_type"),
-        "session_id": event.get("session_id"),
+        "session_id": event.get("session_id") or init_session_id(lines),
         "terminal_reason": event.get("terminal_reason"),
         "turns": event.get("num_turns"),
         "minutes": round((event.get("duration_ms") or 0) / 60000, 1),

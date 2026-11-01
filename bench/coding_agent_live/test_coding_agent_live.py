@@ -246,6 +246,35 @@ def test_trial_row_keeps_the_reward_after_a_timeout_and_joins_replay(tmp_path):
     assert row["router"]["calls"] == {"all:big": 1}
 
 
+def test_run_killed_before_its_result_event_still_joins_replay(tmp_path):
+    # Harbor kills Claude Code on its timeout, so the stream has no result event.
+    trial = _write_trial(
+        tmp_path,
+        "fix-git__def",
+        {
+            "task_name": "fix-git",
+            "verifier_result": {"rewards": {"reward": 0}},
+            "exception_info": {"exception_type": "AgentTimeoutError"},
+        },
+        [
+            json.dumps({"type": "system", "subtype": "init", "session_id": SESSION}),
+            json.dumps(
+                {"type": "system", "subtype": "thinking_tokens", "session_id": "x"}
+            ),
+        ],
+    )
+    asked = []
+
+    def replays(session_id):
+        asked.append(session_id)
+        return [{"selected_model": "big", "total_tokens": 10, "response_status": 200}]
+
+    row = report.trial_row(trial, replays)
+    assert (row["session_id"], row["terminal_reason"]) == (SESSION, None)
+    assert asked == [SESSION]
+    assert row["router"]["calls"] == {"all:big": 1}
+
+
 def test_run_that_ends_on_an_api_error_is_counted(tmp_path):
     message = "API Error: 400 translation would lose tool_result.is_error"
     _write_trial(
