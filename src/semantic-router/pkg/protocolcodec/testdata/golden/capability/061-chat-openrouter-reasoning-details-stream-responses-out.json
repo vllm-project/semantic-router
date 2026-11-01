@@ -1,0 +1,273 @@
+{
+  "cases": [
+    {
+      "name": "openrouter_gemini_recorded_tool_turn",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "gen-openrouter-1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": true,
+                  "status": "in_progress",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 0,
+                "type": "response.created"
+              },
+              "event": "response.created"
+            },
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "gen-openrouter-1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": true,
+                  "status": "in_progress",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 1,
+                "type": "response.in_progress"
+              },
+              "event": "response.in_progress"
+            },
+            {
+              "data": {
+                "item": {
+                  "id": "item_4b8abe746dedebe24ff91fb6",
+                  "status": "in_progress",
+                  "summary": [],
+                  "type": "reasoning"
+                },
+                "output_index": 0,
+                "sequence_number": 2,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "delta": "The user is asking for the current weather in Paris and explicitly requests to",
+                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "output_index": 0,
+                "sequence_number": 3,
+                "type": "response.reasoning_text.delta"
+              },
+              "event": "response.reasoning_text.delta"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "delta": " use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "output_index": 0,
+                "sequence_number": 4,
+                "type": "response.reasoning_text.delta"
+              },
+              "event": "response.reasoning_text.delta"
+            },
+            {
+              "data": {
+                "item": {
+                  "arguments": "",
+                  "call_id": "call_2",
+                  "id": "item_0aa2f5f05ce975eae264a2d9",
+                  "name": "get_weather",
+                  "status": "in_progress",
+                  "type": "function_call"
+                },
+                "output_index": 1,
+                "sequence_number": 5,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "delta": "{\"city\":\"Paris\"}",
+                "item_id": "item_0aa2f5f05ce975eae264a2d9",
+                "output_index": 1,
+                "sequence_number": 6,
+                "type": "response.function_call_arguments.delta"
+              },
+              "event": "response.function_call_arguments.delta"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "output_index": 0,
+                "sequence_number": 7,
+                "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                "type": "response.reasoning_text.done"
+              },
+              "event": "response.reasoning_text.done"
+            },
+            {
+              "data": {
+                "item": {
+                  "content": [
+                    {
+                      "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                      "type": "reasoning_text"
+                    }
+                  ],
+                  "id": "item_4b8abe746dedebe24ff91fb6",
+                  "status": "completed",
+                  "summary": [],
+                  "type": "reasoning"
+                },
+                "output_index": 0,
+                "sequence_number": 8,
+                "type": "response.output_item.done"
+              },
+              "event": "response.output_item.done"
+            },
+            {
+              "data": {
+                "arguments": "{\"city\":\"Paris\"}",
+                "item_id": "item_0aa2f5f05ce975eae264a2d9",
+                "name": "get_weather",
+                "output_index": 1,
+                "sequence_number": 9,
+                "type": "response.function_call_arguments.done"
+              },
+              "event": "response.function_call_arguments.done"
+            },
+            {
+              "data": {
+                "item": {
+                  "arguments": "{\"city\":\"Paris\"}",
+                  "call_id": "call_2",
+                  "id": "item_0aa2f5f05ce975eae264a2d9",
+                  "name": "get_weather",
+                  "status": "completed",
+                  "type": "function_call"
+                },
+                "output_index": 1,
+                "sequence_number": 10,
+                "type": "response.output_item.done"
+              },
+              "event": "response.output_item.done"
+            },
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "gen-openrouter-1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [
+                    {
+                      "content": [
+                        {
+                          "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                          "type": "reasoning_text"
+                        }
+                      ],
+                      "id": "item_4b8abe746dedebe24ff91fb6",
+                      "status": "completed",
+                      "summary": [],
+                      "type": "reasoning"
+                    },
+                    {
+                      "arguments": "{\"city\":\"Paris\"}",
+                      "call_id": "call_2",
+                      "id": "item_0aa2f5f05ce975eae264a2d9",
+                      "name": "get_weather",
+                      "status": "completed",
+                      "type": "function_call"
+                    }
+                  ],
+                  "parallel_tool_calls": true,
+                  "status": "completed",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null,
+                  "usage": {
+                    "input_tokens": 59,
+                    "input_tokens_details": {
+                      "cache_write_tokens": 0,
+                      "cached_tokens": 0
+                    },
+                    "output_tokens": 53,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 37
+                    },
+                    "total_tokens": 112
+                  }
+                },
+                "sequence_number": 11,
+                "type": "response.completed"
+              },
+              "event": "response.completed"
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "stream.provider",
+            "action": "dropped"
+          },
+          {
+            "field": "reasoning_details",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.completion_tokens_details.image_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.cost",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.cost_details",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.is_byok",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.prompt_tokens_details.video_tokens",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}
