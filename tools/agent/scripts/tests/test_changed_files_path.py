@@ -187,6 +187,7 @@ class ImpactTests(unittest.TestCase):
                 "model-runtime",
                 "bench-tools",
                 "training",
+                "training-locks",
                 "onnx-artifacts",
                 "mock-provider",
                 "learning-tools",
