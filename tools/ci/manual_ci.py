@@ -27,6 +27,7 @@ SCOPES = frozenset(
 )
 SHA = re.compile(r"[0-9a-f]{40}")
 PINNED_REVISION_COUNT = 3
+MERGE_PARENT_COUNT = 2
 NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
 AUTHORIZATION_LIMIT = 65536
@@ -183,7 +184,8 @@ def source_identity(client, repo: str, number: int) -> dict:
             reason="revision",
         )
     # The PR API's base.sha can lag behind the test merge commit. Read the
-    # actual target ref, then require one coherent base/head/merge revision.
+    # actual target ref, then require that the merge commit has a valid head
+    # and a base that is either the current main tip or an ancestor of main.
     base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
     if (
         base_ref.get("ref") != "refs/heads/main"
@@ -192,14 +194,18 @@ def source_identity(client, repo: str, number: int) -> dict:
         raise ManualCIError(
             "The current main revision is unavailable.", reason="revision"
         )
+    current_main = base_ref.get("object", {}).get("sha")
     result = {
         "head_sha": pull.get("head", {}).get("sha"),
-        "base_sha": base_ref.get("object", {}).get("sha"),
         "source_sha": pull.get("merge_commit_sha"),
     }
-    if any(
-        not isinstance(value, str) or not SHA.fullmatch(value)
-        for value in result.values()
+    if (
+        not isinstance(current_main, str)
+        or not SHA.fullmatch(current_main)
+        or any(
+            not isinstance(value, str) or not SHA.fullmatch(value)
+            for value in result.values()
+        )
     ):
         raise ManualCIError(
             "The current PR merge revision is unavailable; resolve conflicts first.",
@@ -209,14 +215,31 @@ def source_identity(client, repo: str, number: int) -> dict:
     parents = commit.get("parents")
     if (
         not isinstance(parents, list)
+        or len(parents) != MERGE_PARENT_COUNT
         or any(not isinstance(parent, dict) for parent in parents)
-        or [parent.get("sha") for parent in parents]
-        != [result["base_sha"], result["head_sha"]]
+        or parents[1].get("sha") != result["head_sha"]
+        or not isinstance(parents[0].get("sha"), str)
+        or not SHA.fullmatch(parents[0]["sha"])
     ):
         raise ManualCIError(
             "The PR merge revision changed or is still being prepared; wait for its Plan job.",
             reason="revision",
         )
+    merge_base = parents[0]["sha"]
+    if merge_base != current_main:
+        comparison = client.request(
+            f"repos/{repo}/compare/{merge_base}...{current_main}"
+        )
+        if comparison.get("merge_base_commit", {}).get("sha") != merge_base:
+            raise ManualCIError(
+                "The PR merge revision changed or is still being prepared; wait for its Plan job.",
+                reason="revision",
+            )
+    result = {
+        "head_sha": result["head_sha"],
+        "base_sha": merge_base,
+        "source_sha": result["source_sha"],
+    }
     return result
 
 
@@ -300,10 +323,16 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
         digest = hashlib.sha256(
             json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
+        if plan.get("plan_sha256") != digest:
+            continue
         if (
             plan.get("source_sha") == identity["source_sha"]
             and plan.get("base_sha") == identity["base_sha"]
-            and plan.get("plan_sha256") == digest
+        ):
+            return plan
+        if (
+            run.get("head_sha") == identity["head_sha"]
+            and plan.get("base_sha") != identity["base_sha"]
         ):
             return plan
     return None
@@ -446,7 +475,8 @@ def matching_authorization(
         or record.get("pr_number") != number
         or record.get("pr_run_id") != run["id"]
         or record.get("pr_run_created_at") != run["created_at"]
-        or any(record.get(key) != value for key, value in identity.items())
+        or record.get("head_sha") != identity["head_sha"]
+        or run.get("head_sha") != identity["head_sha"]
     ):
         return False
     comment = unchanged_comment(client, repo, number, int(record["comment_id"]))
@@ -455,7 +485,18 @@ def matching_authorization(
         command
         and command["scopes"] == record.get("scopes")
         and command["full"] == record.get("full")
-        and (not command["pinned"] or command["pinned"] == list(identity.values()))
+        and (
+            not command["pinned"]
+            or (
+                command["pinned"]
+                == [
+                    record.get("head_sha"),
+                    record.get("base_sha"),
+                    record.get("source_sha"),
+                ]
+                and command["pinned"] == list(identity.values())
+            )
+        )
         and comment.get("user", {}).get("login") == record.get("actor")
         and comment["created_at"] == record.get("comment_created_at")
         and timestamp(comment["created_at"]) >= timestamp(run["created_at"])
@@ -489,12 +530,39 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
         return dict(NO_AUTHORIZATION)
     repo, number = os.environ["GITHUB_REPOSITORY"], int(event["number"])
     identity = source_identity(client, repo, number)
+    head_sha = event.get("pull_request", {}).get("head", {}).get("sha")
     if (
-        identity["source_sha"] != source
-        or identity["base_sha"] != base
-        or identity["head_sha"]
-        != event.get("pull_request", {}).get("head", {}).get("sha")
+        identity["head_sha"] != head_sha
+        or not isinstance(source, str)
+        or not SHA.fullmatch(source)
+        or not isinstance(base, str)
+        or not SHA.fullmatch(base)
     ):
+        return dict(NO_AUTHORIZATION)
+    if source == identity["source_sha"] and base == identity["base_sha"]:
+        pass
+    elif base != identity["base_sha"]:
+        commit = client.request(f"repos/{repo}/git/commits/{source}")
+        parents = commit.get("parents") if isinstance(commit, dict) else None
+        if (
+            not isinstance(parents, list)
+            or len(parents) != MERGE_PARENT_COUNT
+            or any(not isinstance(parent, dict) for parent in parents)
+            or parents[1].get("sha") != head_sha
+            or parents[0].get("sha") != base
+        ):
+            return dict(NO_AUTHORIZATION)
+        base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+        current_main = (
+            base_ref.get("object", {}).get("sha")
+            if isinstance(base_ref, dict)
+            else None
+        )
+        if base != current_main:
+            comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
+            if comparison.get("merge_base_commit", {}).get("sha") != base:
+                return dict(NO_AUTHORIZATION)
+    else:
         return dict(NO_AUTHORIZATION)
     run_id = int(os.environ["GITHUB_RUN_ID"])
     run = client.request(f"repos/{repo}/actions/runs/{run_id}")
