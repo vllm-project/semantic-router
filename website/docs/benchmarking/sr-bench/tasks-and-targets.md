@@ -137,6 +137,126 @@ complete browsing or human exposure history, or absence of upstream contaminatio
 Reports retain that limitation and identify explicit retest families; these
 options do not introduce a new unseen-only scoring aggregate.
 
+## Legacy plain reasoning diagnostics
+
+The opt-in `legacy-*` adapters preserve the registered plain-prompt reasoning
+configurations from `bench/reasoning`. They use the native formatters, answer
+extraction and boolean correctness rules at a fixed source revision. They are
+separate from the published benchmark protocols and do not change their weights.
+Each configuration has its own benchmark ID and report entry.
+
+| Native configuration | Source dataset and configuration | Native source splits |
+| --- | --- | --- |
+| `arc`, `arc-easy`, `arc-challenge` | `allenai/ai2_arc`, `ARC-Easy` and/or `ARC-Challenge` | `test` |
+| `gpqa-main`, `gpqa-extended`, `gpqa-diamond` | `Idavidrein/gpqa`, `gpqa_main`, `gpqa_extended`, `gpqa_diamond` respectively | `train` |
+| `gsm8k` | `gsm8k`, `main` | `test` |
+| `aqua-rat` | `aqua_rat` | `test` |
+| `drop` | `ucinlp/drop` | `validation` |
+| `strategyqa` | `ChilleD/StrategyQA` | `test` |
+| `sciq` | `sciq` | `test` |
+| `openbookqa` | `openbookqa` | `test` |
+| `truthfulqa` | `truthful_qa`, `multiple_choice` | `validation` |
+| `commonsenseqa` | `commonsense_qa` | `train`, then `validation` |
+| `hellaswag` | `hellaswag` | `train`, then `validation` |
+
+The exporter accepts `gpqa` as an alias for `gpqa-main`; both produce
+`legacy-gpqa-main` cases. Add the `legacy-` prefix to any other configuration
+above to get its benchmark ID. MMLU-Pro has its separate legacy diagnostic.
+MATH, OpenMathReasoning, explicit-CoT/XC and reasoning-mode evaluation are not part
+of this catalog. Existing runners and plots remain available.
+
+Install the optional environment on the preparation host and execution worker:
+
+```bash
+vllm-sr benchmark setup --benchmark legacy-reasoning --install
+```
+
+This installs a pinned native library and dependency lock in its own Python 3.12
+environment. It does not download datasets or call models. Default `setup` does
+not install this environment. The base CLI and Dashboard environment do not
+import or install the native reasoning dependencies. Override its location with
+`SR_BENCH_LEGACY_REASONING_ROOT` and `SR_BENCH_LEGACY_REASONING_PYTHON` when needed.
+
+Supply authorized local JSONL records in the native source schema. A bundle
+maps the native dataset, configuration and split to each file. Paths are relative
+to the bundle. Each entry needs a declared revision; the exporter also hashes
+the exact file bytes. It records local provenance, not a verified upstream
+download. Gated datasets still require the operator's access approval and source
+records. The exporter never attempts a network fallback.
+
+For a synthetic GSM8K fixture, save this as `gsm8k.jsonl`:
+
+```json
+{"question":"There are two pairs of socks. How many socks are there?","answer":"Two times two is four. #### 4"}
+```
+
+Save its bundle as `sources.json`:
+
+```json
+{
+  "version": 1,
+  "kind": "fixture",
+  "sources": [
+    {
+      "dataset": "gsm8k",
+      "configuration": "main",
+      "split": "test",
+      "path": "gsm8k.jsonl",
+      "revision": "synthetic-fixture-v1"
+    }
+  ]
+}
+```
+
+Use `"kind": "local-import"` for an authorized dataset snapshot, retaining its
+access and license records separately. Omit `configuration` for source calls
+without one. ARC's combined configuration needs both source entries; CommonsenseQA
+and HellaSwag need both native splits even when sampling.
+
+Start with an ordinary JSON run template containing targets and limits, but no
+`cases` or `dataset`. Export a complete run manifest and review its plan:
+
+```bash
+python -m cli.sr_bench.legacy_reasoning_export \
+  --dataset gsm8k --source-bundle sources.json \
+  --manifest run-template.json --output legacy-run.json \
+  --seed 42 --samples-per-category 1
+vllm-sr benchmark plan --manifest legacy-run.json
+```
+
+The exporter preserves native order and sampling, including GPQA's seeded choice
+shuffle and SciQ's fixed choice order. Repeat `--category` to pass native category
+filters. Omitting `--samples-per-category` keeps every native-selected question,
+within the export bounds of 64 MiB of source/output data and 50,000 cases. The
+export fails rather than silently truncating.
+
+Native IDs, source digests, selection parameters, protocol and dependency lock
+are frozen in the manifest. Some native IDs are assigned after sampling, so
+case IDs also bind the source and selection. These are selection-bound
+identities, not cross-seed task equivalence or exposure-history evidence.
+Reference answers, solutions and native metadata stay inside the private
+`answer` field. The output file is owner-readable and refuses overwrite.
+
+Run the exported manifest through the ordinary service:
+
+```bash
+vllm-sr benchmark run --manifest legacy-run.json
+```
+
+Model requests use the same streaming transport, journal, limits and accounting
+as other sr-bench tasks. Native grading sees only the completed visible final
+string. It does not recover hidden reasoning, send judge requests or retry model
+calls. An output-limit response remains a failed quality outcome, and reports
+retain every planned case after transport or native-grader failures.
+
+Use only `smoke` or `quick`. Neither the seed nor the native source split
+establishes a holdout; `standard` is rejected. Native grading quirks remain
+visible: for example, `Answer: AB` against an index reference raises the native
+`TypeError` and leaves a failed case with its call and harness log.
+`make test-sr-bench-legacy-reasoning` exercises all configurations on synthetic
+records through a real local HTTP server and isolated workers. This fixture
+coverage is not model-quality or full native-corpus qualification.
+
 ## Register targets
 
 Register operator-owned targets for Dashboard:
