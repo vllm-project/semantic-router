@@ -196,7 +196,14 @@ class Router:
             thresholds.update(overrides["thresholds_by_set"])
             buckets = overrides["pii_buckets"]
         if route.label_set == "pii":
-            bucket = next(b for b in buckets if target_tokens <= b["max_tokens"])
+            bucket = next(
+                (b for b in buckets if target_tokens <= b["max_tokens"]),
+                None,
+            )
+            if bucket is None:
+                raise ValueError(
+                    f"no PII threshold bucket covers {target_tokens} tokens"
+                )
             return float(bucket["threshold"]), temperature
         if route.label_set in ("halu", "toxic"):
             return float(thresholds[route.label_set]), temperature
@@ -204,8 +211,17 @@ class Router:
             evidence = span[EVIDENCE]
             if evidence.get("buckets"):
                 bucket = next(
-                    b for b in evidence["buckets"] if target_tokens <= b["max_tokens"]
+                    (
+                        b
+                        for b in evidence["buckets"]
+                        if target_tokens <= b["max_tokens"]
+                    ),
+                    None,
                 )
+                if bucket is None:
+                    raise ValueError(
+                        f"no evidence threshold bucket covers {target_tokens} tokens"
+                    )
                 return float(bucket["threshold"]), 1.0
             return float(evidence["threshold"]), 1.0
         if route.head == "relation":

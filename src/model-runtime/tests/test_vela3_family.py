@@ -16,6 +16,7 @@ from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.engines.native.models.lora import LoRALinear
 from vllm_srun.errors import PackageError
 from vllm_srun.families.vela2.encoder_layout import EncoderSequence
+from vllm_srun.families.vela2.raw import RawRow, RawSpan
 from vllm_srun.families.vela3 import routing
 from vllm_srun.families.vela3.family import (
     GOLDEN_QUESTIONS,
@@ -202,6 +203,51 @@ def test_folded_lora_scaling_answers_bit_for_bit(package, model, monkeypatch) ->
     assert ask(model, GOLDEN_STATE, GOLDEN_QUESTIONS) == ask(
         unfolded, GOLDEN_STATE, GOLDEN_QUESTIONS
     )
+
+
+def test_pii_threshold_missing_bucket_raises_value_error(model) -> None:
+    route = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set="pii",
+        evidence=False,
+        relation_wording=False,
+        text="PII",
+        labels=(("email", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span["pii_buckets"]
+    try:
+        model.router.span["pii_buckets"] = [
+            {"name": "short", "max_tokens": 1, "threshold": 0.35}
+        ]
+        with pytest.raises(ValueError, match="no PII threshold bucket covers"):
+            model.router.span_threshold(route, 2)
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
+def test_evidence_threshold_missing_bucket_raises_value_error(model) -> None:
+    route = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set="evidence",
+        evidence=True,
+        relation_wording=False,
+        text="evidence",
+        labels=(("evidence", ""),),
+        window=128,
+    )
+
+    evidence = model.router.span["evidence"]
+    original_buckets = evidence["buckets"]
+    try:
+        evidence["buckets"] = [{"name": "short", "max_tokens": 1, "threshold": 0.5}]
+        with pytest.raises(ValueError, match="no evidence threshold bucket covers"):
+            model.router.span_threshold(route, 2)
+    finally:
+        evidence["buckets"] = original_buckets
 
 
 def test_span_thresholds_follow_the_route(model) -> None:
@@ -421,3 +467,77 @@ def test_runtime_serves_the_package(package) -> None:
         assert np.isfinite(response["answers"]["q"]["noul"])
     finally:
         runtime.stop()
+
+
+def test_pii_missing_threshold_bucket_returns_invalid_model_output(model) -> None:
+    request = model.reader.read(
+        STATE,
+        {"pii": {"preset": "pii", "over": "user"}},
+    )
+    assert len(request.asked) == 1
+    asked = request.asked[0]
+
+    assert asked.question.type == "span"
+    assert asked.route is not None
+    assert asked.route.label_set == "pii"
+    assert asked.route.head == "span_set"
+
+    overrides = model.router.span["set_adapter"]
+    original_buckets = overrides["pii_buckets"]
+
+    try:
+        overrides["pii_buckets"] = [
+            {"name": "short", "max_tokens": 1, "threshold": 0.35}
+        ]
+
+        raw = RawRow(
+            span=RawSpan(
+                labels=[],
+                offsets=np.empty((0, 2), dtype=np.int32),
+                logits=np.empty((0, 0), dtype=np.float64),
+            ),
+            tokens={"user": 2},
+        )
+        response = {"answers": {}}
+
+        model.answerer.answer(
+            asked,
+            logits=None,
+            raw=raw,
+            state=request.state,
+            response=response,
+        )
+
+        assert response["answers"]["pii"] == {
+            "type": "span",
+            "error": "invalid_model_output",
+        }
+    finally:
+        overrides["pii_buckets"] = original_buckets
+
+
+def test_pii_threshold_selects_matching_bucket(model):
+    route = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set="pii",
+        evidence=False,
+        relation_wording=False,
+        text="PII",
+        labels=(("email", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span["pii_buckets"]
+
+    try:
+        model.router.span["pii_buckets"] = [
+            {"name": "short", "max_tokens": 2, "threshold": 0.35},
+            {"name": "long", "max_tokens": 10, "threshold": 0.55},
+        ]
+
+        threshold, _ = model.router.span_threshold(route, 3)
+
+        assert threshold == 0.55
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
