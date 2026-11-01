@@ -320,6 +320,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	}
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
+	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel, dispatch.effectiveBackendModel())
 	r.applyDecisionHeaderMutations(state, ctx)
 	// Body-stage model and path mutations can change the Envoy route selected
 	// during headers. Apply the same cache policy to every provider dispatch,
