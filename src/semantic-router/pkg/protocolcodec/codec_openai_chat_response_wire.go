@@ -43,6 +43,11 @@ type chatResponseWire struct {
 	// Cerebras reports serving timing metadata on every response. It is
 	// provider timing metadata, not output content.
 	TimeInfo json.RawMessage `json:"time_info,omitempty"`
+	// Perplexity Sonar responses carry model source citations and search
+	// results at the top level. Neither has a neutral slot here, so both are
+	// dropped with a diagnostic instead of failing the strict decode.
+	Citations     json.RawMessage `json:"citations,omitempty"`
+	SearchResults json.RawMessage `json:"search_results,omitempty"`
 }
 
 // hasTimeInfo reports Cerebras's top-level serving timing metadata.
@@ -52,7 +57,23 @@ func (wire chatResponseWire) hasTimeInfo() bool {
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
 func (wire chatResponseWire) hasUsageBreakdown() bool {
-	return len(wire.UsageBreakdown) > 0 && !bytes.Equal(bytes.TrimSpace(wire.UsageBreakdown), []byte("null"))
+	return jsonFieldPresent(wire.UsageBreakdown)
+}
+
+// jsonFieldPresent reports a raw JSON field that carries a value rather than
+// being absent or null.
+func jsonFieldPresent(raw json.RawMessage) bool {
+	return len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+// hasCitations reports Perplexity's top-level source citations.
+func (wire chatResponseWire) hasCitations() bool {
+	return jsonFieldPresent(wire.Citations)
+}
+
+// hasSearchResults reports Perplexity's top-level search results.
+func (wire chatResponseWire) hasSearchResults() bool {
+	return jsonFieldPresent(wire.SearchResults)
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response

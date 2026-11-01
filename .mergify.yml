@@ -10,6 +10,10 @@ queue_rules:
     merge_method: squash
     update_method: merge
     batch_size: 1
+    # Above 0, Mergify checks each pull request on a draft pull request
+    # instead of merging main into its branch. tools/ci/manual_ci.py runs
+    # those drafts without a new /ci run (#5581).
+    max_checks_retries: 1
 
 merge_queue:
   max_parallel_checks: 1

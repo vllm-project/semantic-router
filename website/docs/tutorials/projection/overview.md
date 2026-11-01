@@ -130,5 +130,7 @@ under **Config > Projections**.
   families. Evaluate weights and mapping bands together on labeled traffic.
 - Cycles between derived scores are rejected during validation.
 - See the
-  [`balance` recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
-  for an end-to-end example.
+  [`feedback` recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml)
+  for an end-to-end example of scores and mappings, and
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+  for a partition.
