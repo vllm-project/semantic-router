@@ -82,17 +82,20 @@ func (r *OpenAIRouter) processRequestTrailers(
 	stream ext_proc.ExternalProcessor_ProcessServer,
 	ctx *RequestContext,
 ) error {
+	if ctx.streamedBodyRejected {
+		return nil
+	}
 	body := ctx.StreamedBody
 	if body == nil && ctx.fullDuplexHold != nil {
 		// The request ended without a body chunk (HTTP/2 headers, then trailers).
 		// The body stage rejects its empty body, which never decodes, instead of
 		// the request going out on the client's own route.
 		body = newStreamedBodyHandler(r, ctx)
+		ctx.StreamedBody = body
 	}
 	if body != nil {
-		ctx.StreamedBody = nil
 		response, err := body.finishAtTrailers()
-		body.Release()
+		releaseStreamedBody(ctx)
 		immediate, err := r.sendRequestBodyResult(stream, response, err, ctx)
 		if err != nil || immediate {
 			return err
