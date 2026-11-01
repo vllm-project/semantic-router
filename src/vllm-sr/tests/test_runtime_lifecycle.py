@@ -127,6 +127,35 @@ def test_runtime_example_retains_automatic_model_for_default_routing(capsys):
     assert '"model": "vllm-sr/auto"' in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("quiet_engine", [False, True])
+@pytest.mark.parametrize("dashboard_disabled", [False, True])
+@pytest.mark.parametrize("port_offset", [0, 200])
+def test_runtime_summary_grafana_access_matches_dashboard_availability(
+    monkeypatch, capsys, quiet_engine, dashboard_disabled, port_offset
+):
+    monkeypatch.setattr(runtime_lifecycle, "quiet_logs", lambda: quiet_engine)
+    layout = resolve_runtime_stack(port_offset=port_offset)
+
+    runtime_lifecycle.log_runtime_summary(
+        [{"port": 8899, "systemone": {"models": ["vllm-sr/test"]}}],
+        layout,
+        dashboard_disabled=dashboard_disabled,
+        enable_observability=True,
+        config={"global": {"router": {"enabled": not quiet_engine}}},
+    )
+
+    grafana_line = next(
+        line for line in capsys.readouterr().out.splitlines() if "Grafana" in line
+    )
+    assert "admin/admin" not in grafana_line
+    assert layout.grafana_url not in grafana_line
+    if dashboard_disabled:
+        assert "--dashboard" in grafana_line
+        assert "http://" not in grafana_line
+    else:
+        assert f"http://localhost:{8700 + port_offset}/monitoring" in grafana_line
+
+
 def test_router_startup_diagnostics_use_stderr(capsys):
     runtime_lifecycle._print_matching_lines(
         '2026-01-01 router ready caller="startup"\nordinary line'

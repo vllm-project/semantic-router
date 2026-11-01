@@ -157,7 +157,7 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
 
     if config_type == "router":
         # Router now reads canonical config.yaml directly.
-        echo(Path(config_path).read_text(), nl=False)
+        echo(Path(config_path).read_text(encoding="utf-8"), nl=False)
 
     elif config_type == "envoy":
         # Generate envoy config
@@ -174,7 +174,7 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
             )
 
             # Read and print
-            with open(temp_path) as f:
+            with open(temp_path, encoding="utf-8") as f:
                 echo(f.read(), nl=False)
 
             # Clean up

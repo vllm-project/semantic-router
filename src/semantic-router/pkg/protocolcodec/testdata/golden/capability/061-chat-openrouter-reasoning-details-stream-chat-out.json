@@ -1,0 +1,240 @@
+{
+  "cases": [
+    {
+      "name": "openrouter_gemini_recorded_tool_turn",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_details": [
+                        {
+                          "format": "google-gemini-v1",
+                          "index": 0,
+                          "text": "The user is asking for the current weather in Paris and explicitly requests to",
+                          "type": "reasoning.text"
+                        }
+                      ]
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_content": "The user is asking for the current weather in Paris and explicitly requests to"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_details": [
+                        {
+                          "format": "google-gemini-v1",
+                          "index": 0,
+                          "text": " use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                          "type": "reasoning.text"
+                        }
+                      ]
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_content": " use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`."
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_details": [
+                        {
+                          "data": "c2lnbmF0dXJl",
+                          "format": "google-gemini-v1",
+                          "id": "call_2",
+                          "index": 0,
+                          "type": "reasoning.encrypted"
+                        }
+                      ]
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "name": "get_weather"
+                          },
+                          "id": "call_2",
+                          "index": 0,
+                          "type": "function"
+                        }
+                      ]
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": "{\"city\":\"Paris\"}",
+                            "name": "get_weather"
+                          },
+                          "id": "call_2",
+                          "index": 0,
+                          "type": "function"
+                        }
+                      ]
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {},
+                    "finish_reason": "tool_calls",
+                    "index": 0
+                  }
+                ],
+                "id": "gen-openrouter-1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": "[DONE]",
+              "event": ""
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "stream.provider",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.completion_tokens_details.image_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.cost",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.cost_details",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.is_byok",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.usage.prompt_tokens_details.video_tokens",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}
