@@ -46,6 +46,9 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 	if rule.TimeoutMs < 0 || rule.TimeoutMs > MaxDecisionTimeoutMs {
 		return fmt.Errorf("timeout_ms must be within [1, %d] when set", MaxDecisionTimeoutMs)
 	}
+	if rule.PriorUserTurns < 0 || rule.PriorUserTurns > MaxDecisionPriorUserTurns {
+		return fmt.Errorf("prior_user_turns must be within [0, %d]", MaxDecisionPriorUserTurns)
+	}
 	if err := validateDecisionQuestion(rule.Question); err != nil {
 		return fmt.Errorf("question: %w", err)
 	}
