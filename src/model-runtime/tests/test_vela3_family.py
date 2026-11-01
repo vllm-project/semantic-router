@@ -6,6 +6,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -394,6 +395,61 @@ def test_calls_never_share_a_forward_and_batch_by_length() -> None:
         item(30, first),
     ]
     assert batches(items) == [[0, 2], [5], [1, 3], [4]]
+
+
+def test_merged_batches_share_equal_calls_across_requests_only(model) -> None:
+    questions = {
+        "custom": {"type": "noul", "instructions": "Is the request urgent?"},
+        "toxic": {"type": "span", "criteria": {"Violence": None}, "over": "user"},
+        "described": {"type": "span", "criteria": {"drug": "a medicine"}},
+    }
+    first = model.plan(STATE, questions).items
+    other = {**STATE, "user": STATE["user"].replace("Tom Baker", "Ann Smith")}
+    second = model.plan(other, questions).items
+    # Two span questions of one request run on one adapter, as two calls.
+    assert batches(first, merged=True) == batches(first)
+    items = first + second
+    owners = [0] * len(first) + [1] * len(second)
+    assert all(len({owners[i] for i in group}) == 1 for group in batches(items))
+    merged = batches(items, merged=True)
+    assert all(len({owners[i] for i in group}) == 2 for group in merged)
+    assert len(merged) == len(batches(first))
+    alone = model.run(items)
+    together = model.networks.run(items, merged=True)
+    for (logits, spans), (merged_logits, merged_spans) in zip(
+        alone, together, strict=True
+    ):
+        for row, merged_row in zip(logits, merged_logits, strict=True):
+            np.testing.assert_allclose(merged_row, row, atol=1e-5)
+        if spans is not None:
+            np.testing.assert_allclose(merged_spans, spans, atol=1e-5)
+
+
+@pytest.mark.parametrize(("device", "merged"), [("cpu", False), ("cuda", True)])
+def test_only_gpus_share_forwards_between_requests(
+    model, monkeypatch, device, merged
+) -> None:
+    seen: list[bool] = []
+
+    def run(items, merged: bool = False):
+        seen.append(merged)
+        return []
+
+    monkeypatch.setattr(model.networks, "run", run)
+    monkeypatch.setattr(model.engine_model, "device", SimpleNamespace(type=device))
+    model.run_approximate([])
+    assert seen == [merged]
+
+
+def test_merged_forwards_keep_one_length_class() -> None:
+    def item(length: int) -> Vela3Item:
+        sequence = EncoderSequence(list(range(length)), [])
+        return Vela3Item(sequence, Call("router", 4096, rows=8))
+
+    # One item per request: a long row would pad the short ones to its length.
+    items = [item(10), item(200), item(12)]
+    assert batches(items) == [[0], [1], [2]]
+    assert batches(items, merged=True) == [[0, 2], [1]]
 
 
 def test_routing_regexes_are_the_released_ones() -> None:
