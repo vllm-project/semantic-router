@@ -120,6 +120,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `candidates` _string array_ | List of candidate phrases or examples |  |  |
+| `image_candidates` _string array_ | ImageCandidates are example phrases scored against the image side of a<br />multimodal request. Read only by the local path, like Candidates; a<br />rule with none keeps text-only scoring. |  | Optional: \{\} <br /> |
 
 #### ComplexityModelConfig
 
