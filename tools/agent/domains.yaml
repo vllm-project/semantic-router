@@ -674,6 +674,15 @@ domains:
     checks: [make test-agent-crew]
     verifications: [bench-tools]
 
+  coding-agent-live-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/coding_agent_live/**
+      - bench/README.md
+      - tools/make/tooling.mk
+    checks: [make test-coding-agent-live]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
