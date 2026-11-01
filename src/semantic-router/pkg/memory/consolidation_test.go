@@ -1,10 +1,19 @@
 package memory
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+var (
+	_ atomicGroupReplacer = (*InMemoryStore)(nil)
+	_ atomicGroupReplacer = (*CachingStore)(nil)
+	_ atomicGroupReplacer = (*ValkeyStore)(nil)
+	_ atomicGroupReplacer = (*scriptMemoryStore)(nil)
 )
 
 func TestGroupBySimilarity(t *testing.T) {
@@ -101,4 +110,264 @@ func TestMaxImportance(t *testing.T) {
 		{Importance: 0.5},
 	}
 	assert.InDelta(t, 0.9, maxImportance(group), 0.01)
+}
+
+func TestConsolidateUserDoesNotMergeAcrossProjects(t *testing.T) {
+	// Exact-head style repro: near-identical content in two projects must stay
+	// project-scoped. Before the fix, both originals were deleted and the
+	// replacement had ProjectID == "".
+	contentA := "User prefers morning standups for the alpha roadmap"
+	contentB := "User prefers morning standups for the alpha project plan"
+	store := newScriptMemoryStore(
+		&Memory{
+			ID: "proj-a", UserID: "user-1", ProjectID: "project-a",
+			Type: MemoryTypeSemantic, Content: contentA, CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "proj-b", UserID: "user-1", ProjectID: "project-b",
+			Type: MemoryTypeSemantic, Content: contentB, CreatedAt: time.Now(),
+		},
+	)
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+	require.Equal(t, 0, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	byID := map[string]*Memory{}
+	for _, mem := range store.memories {
+		byID[mem.ID] = mem
+	}
+	require.Equal(t, "project-a", byID["proj-a"].ProjectID)
+	require.Equal(t, "project-b", byID["proj-b"].ProjectID)
+}
+
+func TestConsolidateUserDoesNotMergeAcrossTypes(t *testing.T) {
+	content := "Deploy payment-service with npm build then docker push"
+	store := newScriptMemoryStore(
+		&Memory{
+			ID: "sem", UserID: "user-1", ProjectID: "shared",
+			Type: MemoryTypeSemantic, Content: content + " semantic note", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "proc", UserID: "user-1", ProjectID: "shared",
+			Type: MemoryTypeProcedural, Content: content + " procedural steps", CreatedAt: time.Now(),
+		},
+	)
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Len(t, store.memories, 2)
+}
+
+func TestConsolidateUserPreservesProjectOnMerge(t *testing.T) {
+	store := newScriptMemoryStore(
+		&Memory{
+			ID: "a1", UserID: "user-1", ProjectID: "project-a",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "a2", UserID: "user-1", ProjectID: "project-a",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "b1", UserID: "user-1", ProjectID: "project-b",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "b2", UserID: "user-1", ProjectID: "project-b",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now(),
+		},
+	)
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 2, merged)
+	require.Equal(t, 4, deleted)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	projects := map[string]int{}
+	for _, mem := range store.memories {
+		require.NotEmpty(t, mem.ProjectID)
+		require.Equal(t, MemoryTypeSemantic, mem.Type)
+		require.Equal(t, "consolidation", mem.Source)
+		projects[mem.ProjectID]++
+	}
+	require.Equal(t, 1, projects["project-a"])
+	require.Equal(t, 1, projects["project-b"])
+}
+
+func TestConsolidateUserSkipsMergeWhenSourceDeletedAfterList(t *testing.T) {
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.afterList = func() {
+		require.NoError(t, store.Forget(context.Background(), "a"))
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 1)
+	require.Equal(t, "b", store.memories[0].ID)
+	require.NotContains(t, store.memories[0].Content, "alpha beta gamma\n")
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+	}
+}
+
+func TestConsolidateUserSkipsMergeWhenSourceUpdatedAfterList(t *testing.T) {
+	updated := "budget is now 20000 dollars after the revision"
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.afterList = func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, mem := range store.memories {
+			if mem.ID == "a" {
+				mem.Content = updated
+				mem.UpdatedAt = time.Now()
+			}
+		}
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+	require.Equal(t, 0, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+		if mem.ID == "a" {
+			require.Equal(t, updated, mem.Content)
+		}
+	}
+}
+
+func TestConsolidateUserSkipsMergeWhenSourceChangesBeforeAtomicReplacement(t *testing.T) {
+	updated := "budget is now 20000 dollars after the revision"
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.beforeGroupReplace = func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, mem := range store.memories {
+			if mem.ID == "a" {
+				mem.Content = updated
+				mem.UpdatedAt = time.Now()
+			}
+		}
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+	require.Equal(t, 0, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+		if mem.ID == "a" {
+			require.Equal(t, updated, mem.Content)
+		}
+	}
+}
+
+func TestConsolidateUserDoesNotKeepPartialMergeWhenSourceChangesBeforeAtomicReplacement(t *testing.T) {
+	updated := "budget is now 20000 dollars after the revision"
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.beforeGroupReplace = func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, mem := range store.memories {
+			if mem.ID == "b" {
+				mem.Content = updated
+				mem.UpdatedAt = time.Now()
+			}
+		}
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+	require.Equal(t, 0, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	byID := map[string]*Memory{}
+	for _, mem := range store.memories {
+		byID[mem.ID] = mem
+	}
+	require.Contains(t, byID, "a")
+	require.Equal(t, updated, byID["b"].Content)
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+	}
+}
+
+func TestInMemoryReplaceCurrentGroupLeavesAllSourcesWhenOneChanged(t *testing.T) {
+	store := NewInMemoryStore()
+	createdAt := time.Unix(1_700_000_000, 0).UTC()
+	originalA := &Memory{
+		ID: "a", UserID: "user-1", Type: MemoryTypeSemantic,
+		Content: "alpha beta gamma", CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	originalB := &Memory{
+		ID: "b", UserID: "user-1", Type: MemoryTypeSemantic,
+		Content: "alpha beta gamma delta", CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	store.memories[originalA.ID] = originalA
+	store.memories[originalB.ID] = originalB
+	versions := []memoryVersion{versionOf(originalA), versionOf(originalB)}
+	store.memories[originalB.ID] = &Memory{
+		ID: "b", UserID: "user-1", Type: MemoryTypeSemantic,
+		Content: "budget is now 20000 dollars", CreatedAt: createdAt, UpdatedAt: createdAt.Add(time.Second),
+	}
+
+	replaced, deleted, err := store.replaceCurrentGroup(context.Background(), versions, &Memory{
+		ID: "summary", UserID: "user-1", Type: MemoryTypeSemantic,
+		Content: "alpha beta gamma\nalpha beta gamma delta", Embedding: []float32{1},
+	})
+	require.NoError(t, err)
+	require.False(t, replaced)
+	require.Zero(t, deleted)
+	require.Len(t, store.memories, 2)
+	require.Equal(t, "alpha beta gamma", store.memories["a"].Content)
+	require.Equal(t, "budget is now 20000 dollars", store.memories["b"].Content)
+	_, summaryExists := store.memories["summary"]
+	require.False(t, summaryExists)
 }
