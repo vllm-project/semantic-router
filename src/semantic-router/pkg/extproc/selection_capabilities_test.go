@@ -117,6 +117,29 @@ func TestCapabilitiesRejectEmptyAndInsufficientPoolsBeforeScoring(t *testing.T) 
 	}
 }
 
+func TestCapabilityExclusionRecordsStableReasonMetric(t *testing.T) {
+	selection.InitializeMetrics()
+	router, decision, _ := capabilityRankingTestRouter(t, config.APIFormatOpenAI, 80)
+	request := testNeutralRequest("virtual", "draw a cat")
+	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
+	ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
+	ctx.VSRSelectedDecision = decision
+	_, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
+		DecisionName:    decision.Name,
+		CandidateModels: decision.ModelRefs,
+	}, decision.Algorithm, ctx)
+	if err != nil {
+		t.Fatalf("selection failed: %v", err)
+	}
+	metric := selection.ModelEligibilityExclusionTotal.WithLabelValues(
+		decision.Name,
+		string(selection.EligibilityReasonUnsupportedProtocol),
+	)
+	if testutil.ToFloat64(metric) == 0 {
+		t.Fatal("expected unsupported protocol exclusion metric")
+	}
+}
+
 func TestCapabilitiesFinalValidationDoesNotRerouteOrRescore(t *testing.T) {
 	router, decision, counter := capabilityRankingTestRouter(t, config.APIFormatOpenAI, 80)
 	request := testNeutralRequest("virtual", "hello")
