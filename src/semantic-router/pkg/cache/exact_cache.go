@@ -60,3 +60,12 @@ func parseExactTimingFields(fields map[string]string) (time.Time, time.Time) {
 	}
 	return storedAt, expiresAt
 }
+
+// exactLookupResultFromTimestamps rejects a known-expired exact entry while
+// preserving the existing no-expiration behavior for zero expiry timestamps.
+func exactLookupResultFromTimestamps(responseBody []byte, storedAt, expiresAt time.Time) LookupResult {
+	if !expiresAt.IsZero() && !time.Now().Before(expiresAt) {
+		return LookupResult{}
+	}
+	return lookupResultFromTimestamps(responseBody, 1.0, storedAt, expiresAt)
+}
