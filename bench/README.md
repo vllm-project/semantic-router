@@ -20,6 +20,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
 | Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
+| How much agent load does a CPU KV tier or session-aware replica placement add at a fixed latency limit? | [`agent_kv_tier/`](agent_kv_tier/README.md) |
 | How fast does Router Memory cover a new user, and how often is the retrieved memory wrong? | [`memory_coldstart/`](#router-memory-cold-start) |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
 | Does grounding-aware fusion help on DRACO? | [`grounded_fusion/`](grounded_fusion/README.md) |
@@ -195,6 +196,7 @@ The related tools are intentionally separate:
 | `agent_task_live_benchmark.py` | Score maintained smoke or long-horizon tasks and their tool transitions |
 | `agent_session_replay.py` | Replay the coding-agent session in `data/coding_agent_session.v1.json`, with its tool catalog and tool result, and record the model chosen for each turn |
 | `cache_token_probe.py` | Repeat a session prefix and classify cached-token reporting as missing, zero, or positive |
+| `agent_kv_tier/` | Replay production agent sessions against a GPU prefix cache, an LMCache CPU tier, and two replicas under different placement policies |
 | `openai_fault_proxy.py` | Inject controlled upstream failures, plus optional fixed and jittered response latency, for recovery tests |
 | `session_routing_branch_image_probe.py` | Record diagnostics from a reviewed branch image |
 | `session_routing_branch_image_benchmark.py` | Assemble the diagnostic, live, failure, task, and cache summaries |
