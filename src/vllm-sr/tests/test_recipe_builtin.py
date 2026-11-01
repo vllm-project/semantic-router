@@ -10,6 +10,7 @@ from cli.builtin_recipes import list_builtin_recipes
 from cli.commands.runtime_kb import _resolve_kb_source_root
 from cli.commands.runtime_support import resolve_effective_config_path
 from cli.config_translator import translate_config_to_helm_values
+from cli.decision_model import decision_model_deployment
 from cli.main import main as cli
 from cli.model_bundle import model_bundle_digest
 from cli.parser import parse_user_config
@@ -53,6 +54,14 @@ def _inputs(tmp_path: Path, recipe_name: str = "balance"):
     source.write_text(yaml.safe_dump(providers, sort_keys=False))
     binding_file.write_text(yaml.safe_dump(bindings))
     return source, binding_file, bindings
+
+
+def _bundle_decision_model_block():
+    catalog = builtin_recipes._bundle("mom-v1", "latest")[1]["global"]["model_catalog"]
+    return {
+        "deployments": catalog["deployments"],
+        "system": {"decision_model": catalog["system"]["decision_model"]},
+    }
 
 
 def _init(source, bindings, output, extra=(), recipe_name="balance"):
@@ -139,6 +148,8 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
         "ttl_seconds": 604800,
         "async_writes": False,
     }
+    assert document["global"]["model_catalog"] == _bundle_decision_model_block()
+    assert decision_model_deployment(document)["artifact"] == "vllm-sr/Vela-2.0-0.8B"
     assert "data_policy" not in document["recipes"][0]["routing"]
     assert (
         parse_user_config(str(output), log_summary=False).global_["router"]["learning"]
@@ -286,6 +297,37 @@ def test_init_preserves_authored_learning_and_unrelated_global(tmp_path, authore
     )
 
 
+@pytest.mark.parametrize(
+    "authored",
+    [
+        {
+            "deployments": {
+                "judge": {"provider": "model_runtime", "artifact": "vllm-sr/vela3-fast"}
+            },
+            "system": {"decision_model": {"deployment": "judge"}},
+        },
+        {
+            "deployments": {
+                "primary": {
+                    "provider": "model_runtime",
+                    "artifact": "vllm-sr/Vela-2.0-0.3B",
+                }
+            }
+        },
+    ],
+    ids=["explicit-binding", "default-key-deployment"],
+)
+def test_init_keeps_an_authored_decision_model_whole(tmp_path, authored):
+    source, bindings, _ = _inputs(tmp_path)
+    document = yaml.safe_load(source.read_text())
+    document["global"] = {"model_catalog": authored}
+    source.write_text(yaml.safe_dump(document))
+    output = tmp_path / "initialized.yaml"
+    result = _init(source, bindings, output)
+    assert result.exit_code == 0, result.output
+    assert yaml.safe_load(output.read_text())["global"]["model_catalog"] == authored
+
+
 def test_init_second_recipe_keeps_existing_learning_settings(tmp_path):
     source, bindings, _ = _inputs(tmp_path)
     first = tmp_path / "balance.yaml"
@@ -391,7 +433,10 @@ def test_init_preserves_config_relative_kb_assets(tmp_path):
     assert result.exit_code == 0, result.output
     assert _resolve_kb_source_root(sibling, "private-kb") == kb_root.resolve()
     resolved_global = yaml.safe_load(sibling.read_text())["global"]
-    assert resolved_global["model_catalog"] == document["global"]["model_catalog"]
+    assert resolved_global["model_catalog"] == {
+        **document["global"]["model_catalog"],
+        **_bundle_decision_model_block(),
+    }
     assert set(resolved_global) == {"model_catalog", "router", "services"}
     assert resolved_global["services"]["router_replay"]["store_backend"] == "postgres"
     assert resolved_global["router"]["learning"]["protection"]["enabled"] is True

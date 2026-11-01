@@ -8,16 +8,14 @@ import (
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 const (
-	routerReplayAggregatePath          = routerReplayAPIBasePath + "/aggregate"
-	routerReplayDefaultListLimit       = 20
-	routerReplayMaxListLimit           = 100
-	routerReplayMaxImmediateResponseMB = 4 * 1024 * 1024
+	routerReplayAggregatePath    = routerReplayAPIBasePath + "/aggregate"
+	routerReplayDefaultListLimit = 20
+	routerReplayMaxListLimit     = 100
 )
 
 type routerReplayFilters struct {
@@ -104,7 +102,7 @@ func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string)
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
-	return r.createRouterReplayJSONResponse(200, payload)
+	return r.createJSONResponse(200, payload)
 }
 
 func sortRouterReplayRecords(records []routerreplay.RoutingRecord) []routerreplay.RoutingRecord {
@@ -129,7 +127,7 @@ func (r *OpenAIRouter) handleRouterReplayRecordAPI(method string, replayID strin
 	if !ok {
 		return r.createErrorResponse(404, "replay record not found")
 	}
-	return r.createRouterReplayJSONResponse(200, record)
+	return r.createJSONResponse(200, record)
 }
 
 func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.RoutingRecord, bool) {
@@ -342,21 +340,4 @@ func buildRouterReplayListPayload(
 		payload.NextOffset = &nextOffset
 	}
 	return payload
-}
-
-func (r *OpenAIRouter) createRouterReplayJSONResponse(
-	statusCode int,
-	data interface{},
-) *ext_proc.ProcessingResponse {
-	response := r.createJSONResponse(statusCode, data)
-	if response == nil {
-		return nil
-	}
-	if proto.Size(response) <= routerReplayMaxImmediateResponseMB {
-		return response
-	}
-	return r.createErrorResponse(
-		413,
-		"router replay response exceeds the ext-proc message size limit; retry with a smaller page or reduce captured replay body bytes",
-	)
 }
