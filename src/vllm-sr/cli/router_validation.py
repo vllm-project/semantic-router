@@ -190,6 +190,7 @@ def validate_with_endpoint(
     return RouterVerdict(
         source=source,
         valid=bool(payload.get("valid")),
+        error=_diagnostic_error(payload.get("errors")),
         warnings=_warnings(payload.get("warnings")),
     )
 
@@ -203,6 +204,19 @@ def _report(stdout: str) -> dict | None:
         if isinstance(report, dict) and "valid" in report:
             return report
     return None
+
+
+def _diagnostic_error(raw: object) -> str:
+    """Join field-addressable validate errors from an HTTP 200 diagnostic body."""
+
+    if not isinstance(raw, list):
+        return ""
+    messages = [
+        str(item.get("message") or "")
+        for item in raw
+        if isinstance(item, dict) and item.get("message")
+    ]
+    return "; ".join(message for message in messages if message)
 
 
 def _warnings(raw: object) -> tuple[RouterWarning, ...]:

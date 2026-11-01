@@ -1,0 +1,22 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    model: m1
+  models:
+    - name: m1
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+          api_key: super-secret-value
+          api_key_env: MY_API_KEY
+routing:
+  modelCards:
+    - name: m1
+  decisions:
+    - name: d1
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      modelRefs:
+        - model: m1
+          use_reasoning: false
