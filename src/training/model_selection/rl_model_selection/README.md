@@ -21,21 +21,60 @@ dataset before drawing conclusions about routing quality.
 
 ## Setup
 
+This directory is a uv project (`pyproject.toml` and `uv.lock`). Create the
+environment from the lock:
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+cd src/training/model_selection/rl_model_selection
+uv sync --locked
+```
+
+`pyproject.toml` bounds the packages these scripts import: `torch`,
+`torch-geometric`, `transformers`, `trl`, `numpy`, `tqdm`, and `pyyaml`.
+`uv.lock` pins the exact versions. `requirements.txt` stays for anyone who
+installs with pip. Names in that file that these scripts do not import,
+including `torch-sparse` and `torch-scatter`, are not part of the lock.
+
+`trl` is installed, but current releases no longer export `PPOConfig` or
+`PPOTrainer` from `trl`. `train_router_r1.py` catches that import error and
+uses its custom training loop. Changing that import is outside this lock.
+
+The lock was created with uv 0.13.0 on macOS 26.7.1 (Darwin arm64) using
+CPython 3.12.15. It covers Python 3.10 and newer. Torch is the default PyPI
+build, with no extra index. On Linux that wheel is the CUDA build: it still
+imports on a machine with no GPU, and `torch.cuda.is_available()` is false
+there. On macOS Apple Silicon the wheel is the CPU/MPS build. A smaller
+CPU-only Linux wheel is the pip index noted in
+`src/training/model_selection/ml_model_selection/requirements.txt`. Choosing
+CPU, CUDA, or ROCm from uv is [issue 5026](https://github.com/vllm-project/semantic-router/issues/5026)
+and is not configured in this project.
+
+There are no tests in this directory. Confirm the scripts start from the
+repository root:
+
+```bash
+uv run --project src/training/model_selection/rl_model_selection \
+  python src/training/model_selection/rl_model_selection/train_router_r1.py --help
+
+uv run --project src/training/model_selection/rl_model_selection \
+  python src/training/model_selection/rl_model_selection/train_gmtrouter.py --help
+
+uv run --project src/training/model_selection/rl_model_selection \
+  python src/training/model_selection/rl_model_selection/router_r1_server.py --help
+
+uv run --project src/training/model_selection/rl_model_selection \
+  python src/training/model_selection/rl_model_selection/automix_verifier.py --help
 ```
 
 Review the selected config and data paths, then run a trainer from this
 directory:
 
 ```bash
-python train_router_r1.py \
+uv run python train_router_r1.py \
   --config configs/router_r1_config.yaml \
   --output_dir checkpoints/router_r1
 
-python train_gmtrouter.py \
+uv run python train_gmtrouter.py \
   --config configs/gmtrouter_config.yaml \
   --data_path data/interactions.json \
   --output_dir checkpoints/gmtrouter
@@ -51,8 +90,8 @@ semantic-router. They expose the prototype decision or verification output for
 manual inspection:
 
 ```bash
-python router_r1_server.py --model microsoft/phi-2 --port 8888
-python automix_verifier.py --model microsoft/phi-2 --port 8889
+uv run python router_r1_server.py --model microsoft/phi-2 --port 8888
+uv run python automix_verifier.py --model microsoft/phi-2 --port 8889
 ```
 
 Use each script's `--test` flag for a local demonstration without starting the
