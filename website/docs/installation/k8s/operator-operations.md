@@ -105,6 +105,18 @@ kubectl get service,endpoints -n <backend-namespace>
 kubectl describe inferenceservice <name> -n <backend-namespace>
 ```
 
+When a declared KServe or Llama Stack discovery dependency is unavailable, the
+Operator reports a `Degraded` condition and keeps the last successfully
+published Router configuration. It retries discovery with controller backoff;
+once the dependency is available, the configuration is regenerated.
+
+Inspect the dependency name and discovery condition with:
+
+```bash
+kubectl get semanticrouter <name> -n <router-namespace> \
+  -o jsonpath='{.status.conditions}'
+```
+
 ### Gateway mode has no route
 
 The Operator does not create an `HTTPRoute`. For ordinary Gateway HTTP
