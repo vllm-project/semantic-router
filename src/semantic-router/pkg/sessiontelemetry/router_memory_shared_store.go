@@ -253,49 +253,32 @@ func loadSharedRouterSessionSnapshotMode(sessionID string, now time.Time, hydrat
 	snapshot.SwitchTimestamps = cloneInt64Slice(snapshot.SwitchTimestamps)
 	if hydrate {
 		hydrateRouterSessionSnapshot(snapshot)
+		if live, ok := localRouterSessionSnapshot(sessionID, now); ok {
+			return live, true
+		}
 	}
 	return snapshot, true
 }
 
 func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
+	if snapshot.SessionID == "" {
+		return
+	}
 	s := globalRouterSessionMemory
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if st := s.sessions[snapshot.SessionID]; st != nil &&
-		(st.outcomeWindowSize > 0 || snapshot.OutcomeWindowSize > 0) {
+	now := s.nowFn()
+	if now.IsZero() {
+		now = time.Now()
+	}
+	s.evictExpiredLocked(now)
+	if st := s.sessions[snapshot.SessionID]; st != nil {
+		merged := mergeRouterSessionSnapshots(snapshot, snapshotFromSessionState(st, now))
+		applyRouterSessionSnapshot(st, merged)
 		return
 	}
-	modelTurns := cloneIntMap(snapshot.ModelTurns)
-	if modelTurns == nil {
-		modelTurns = make(map[string]int)
-	}
-	s.sessions[snapshot.SessionID] = &routerSessionState{
-		sessionID:                       snapshot.SessionID,
-		userID:                          snapshot.UserID,
-		currentModel:                    snapshot.CurrentModel,
-		currentCandidate:                cloneSessionCandidate(snapshot.CurrentCandidate),
-		lastSeen:                        snapshot.LastSeen,
-		lastSwitchAt:                    snapshot.LastSwitchAt,
-		switchTimestamps:                cloneInt64Slice(snapshot.SwitchTimestamps),
-		outcomeWindowSize:               snapshot.OutcomeWindowSize,
-		outcomeWindowTTL:                time.Duration(snapshot.OutcomeWindowTTLSeconds) * time.Second,
-		turnCount:                       snapshot.TurnCount,
-		switchCount:                     snapshot.SwitchCount,
-		modelTurns:                      modelTurns,
-		cumulativePrompt:                snapshot.CumulativePromptTokens,
-		cumulativeCached:                snapshot.CumulativeCachedTokens,
-		cumulativeCacheWrite:            snapshot.CumulativeCacheWriteTokens,
-		cumulativeEstimatedCached:       snapshot.CumulativeEstimatedCachedTokens,
-		cumulativeCompletion:            snapshot.CumulativeCompletionTokens,
-		cumulativeCost:                  snapshot.CumulativeCost,
-		cumulativeEstimatedCacheSavings: snapshot.CumulativeEstimatedCacheSavings,
-		activeToolLoop:                  snapshot.ActiveToolLoop,
-		lastDecisionName:                snapshot.LastDecisionName,
-		lastDecisionReason:              snapshot.LastDecisionReason,
-		lastCacheAccountingSource:       snapshot.LastCacheAccountingSource,
-		lastPolicy:                      clonePolicyMap(snapshot.LastPolicy),
-		recentOutcomes:                  cloneTurnOutcomes(snapshot.RecentOutcomes),
-	}
+	st := s.sessionLocked(snapshot.SessionID)
+	applyRouterSessionSnapshot(st, snapshot)
 }
 
 func (s *redisRouterSessionStore) Load(sessionID string) (RouterSessionSnapshot, bool, error) {
