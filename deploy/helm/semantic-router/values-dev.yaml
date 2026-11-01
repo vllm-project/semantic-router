@@ -7,7 +7,7 @@ image:
 
 resources:
   limits:
-    memory: "8Gi"
+    memory: "12Gi"
     cpu: "2"
   requests:
     memory: "2Gi"
@@ -16,7 +16,7 @@ resources:
 persistence:
   enabled: true
   storageClassName: ""
-  size: 5Gi
+  size: 10Gi
 
 dashboard:
   enabled: true
