@@ -106,17 +106,21 @@ policy that fits your harness's model calls:
 
 | Public model | Recipe | Decisions |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | **Balance**: reasoning effort only where a request needs it | `simple`, `medium`, `reasoning` |
+| `vllm-sr/mom-v1-blend` | **Balance**: reasoning effort only where a request needs it | `long_context`, `vision`, `recovery`, `agentic`, `facts`, `frontier`, `code`, `hard`, `standard`, `fast` |
 | `vllm-sr/mom-v1-lite` | **Cost**: economical serving with targeted escalation | `economy`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-flash` | **Speed**: responsive conversation and streaming | `fast`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-ultra` | **Accuracy**: strong answers and explicit orchestration | `simple`, `reasoning`, `review`, `agent` |
 | `vllm-sr/mom-v1-vault` | **Vault**: processing within your private deployment | `private`, `sensitive`, `guard` |
 
-Balance asks the router's decision model five routing questions in one call:
-the kind of work, how much reasoning it needs, whether exact facts matter, what
-a good answer needs, and whether the user is correcting an earlier answer. An
-effort score from those answers selects `simple`, `medium` or `reasoning`;
-corrections and tool work go to `reasoning`, and exact facts stay on `medium`.
+Balance is the Decision Balance policy. It asks the router's decision model six
+routing questions in one call: the kind of work, how much reasoning it needs,
+whether exact facts matter, what a good answer needs, whether the user is
+correcting an earlier answer, and whether the user asks to call a tool now.
+Every lane is its own decision, with its own pool and reasoning effort: long
+inputs and images have their own lanes, corrections go to `recovery`, tool work
+to `agentic` and exact facts to `facts`, and an effort score from the answers
+selects `frontier`, `code`, `hard`, `standard` or `fast`. In `frontier` the
+decision model also chooses which of the assigned models answers.
 Speed, Cost, Accuracy and Vault also route on named decision-model questions:
 whether the user asks to call a tool, whether the request is a hard problem,
 whether it reports a wrong answer, who should do the work (one assistant,
@@ -152,8 +156,9 @@ vllm-sr serve
 Open **Models** in the Dashboard to connect and verify inference endpoints.
 Choose a **Recipe**, assign models to its backend decisions, and publish a
 **Mixture-of-Model** entrypoint. Single-model decisions need at least one
-qualified model; Accuracy's `review` and `agent` need two distinct workers.
-Vault's `guard` needs no backend assignment.
+qualified model; Accuracy's `review` and `agent` need two distinct workers, and
+Balance's `frontier` needs two distinct models. Vault's `guard` needs no
+backend assignment.
 
 Declare capabilities and input/output limits, and supply the relevant quality
 index at the assigned reasoning effort. **Preview** shows the signals, decision,
