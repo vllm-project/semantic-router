@@ -342,7 +342,7 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 		sources = append(sources, m.Source)
 	}
 	assert.Contains(t, sources, "conversation")
-	assert.Contains(t, sources, "session_window")
+	assert.Contains(t, sources, sessionChunkSource)
 }
 
 func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
@@ -378,7 +378,7 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 
 	sessionChunks := 0
 	for _, m := range results.Memories {
-		if m.Source == "session_window" {
+		if m.Source == sessionChunkSource {
 			sessionChunks++
 		}
 	}
