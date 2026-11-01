@@ -325,3 +325,58 @@ func TestRouterSessionMemoryRecordsTieredCacheWriteUsage(t *testing.T) {
 		t.Fatalf("cache write tokens = %d, want 400", snapshot.CumulativeCacheWriteTokens)
 	}
 }
+
+func TestRouterSessionMemoryEvictionScanThrottled(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	t.Cleanup(ResetRouterSessionMemoryForTesting)
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	s.evictExpiredLocked(base)
+	s.sessions["stale"] = &routerSessionState{sessionID: "stale", lastSeen: base.Add(-2 * routerMemoryTTL)}
+	s.evictExpiredLocked(base.Add(evictInterval / 2))
+	_, present := s.sessions["stale"]
+	s.mu.Unlock()
+	if !present {
+		t.Fatal("sweep must be skipped within evictInterval of the last sweep")
+	}
+
+	s.mu.Lock()
+	s.evictExpiredLocked(base.Add(evictInterval + time.Second))
+	_, present = s.sessions["stale"]
+	s.mu.Unlock()
+	if present {
+		t.Fatal("sweep must run once evictInterval has elapsed")
+	}
+}
+
+func TestRouterSessionMemoryExpiredSessionStartsFreshBeforeSweep(t *testing.T) {
+	ResetForTesting()
+	t.Cleanup(ResetForTesting)
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	RecordSessionDecision(SessionDecisionParams{SessionID: "s", SelectedModel: "model-a", Timestamp: base})
+	RecordSessionUsage(SessionUsageParams{SessionID: "s", Model: "model-a", PromptTokens: 10, Timestamp: base})
+
+	// The session returns after its TTL, inside the throttle window of a sweep
+	// that ran just before the entry expired.
+	returned := base.Add(routerMemoryTTL + time.Second)
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	s.lastEvict = returned.Add(-time.Second)
+	s.mu.Unlock()
+	RecordSessionDecision(SessionDecisionParams{SessionID: "s", SelectedModel: "model-b", Timestamp: returned})
+
+	snapshot, ok := GetRouterSessionSnapshot("s", returned)
+	if !ok {
+		t.Fatal("expected the returning session to be recorded")
+	}
+	if snapshot.SwitchCount != 0 || snapshot.TurnCount != 1 || snapshot.CumulativePromptTokens != 0 {
+		t.Fatalf("expired session must start fresh: switches=%d turns=%d prompt=%d",
+			snapshot.SwitchCount, snapshot.TurnCount, snapshot.CumulativePromptTokens)
+	}
+	if len(snapshot.ModelTurns) != 1 || snapshot.ModelTurns["model-b"] != 1 {
+		t.Fatalf("expired session must not keep old model turns: %v", snapshot.ModelTurns)
+	}
+}
