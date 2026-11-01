@@ -674,6 +674,14 @@ domains:
     checks: [make test-agent-crew]
     verifications: [bench-tools]
 
+  agent-run-replay-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_run_replay/**
+      - tools/make/tooling.mk
+    checks: [make test-agent-run-replay-bench]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
