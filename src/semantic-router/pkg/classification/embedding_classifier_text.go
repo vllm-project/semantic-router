@@ -12,10 +12,16 @@ import (
 // Classify performs Embedding similarity classification on the given text.
 // Returns the single best matching rule. Wraps ClassifyAll internally.
 func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
-	matched, err := c.ClassifyAll(text)
+	return c.ClassifyWithContext(context.Background(), text)
+}
+
+// ClassifyWithContext preserves the caller lifecycle for single-rule fallback.
+func (c *EmbeddingClassifier) ClassifyWithContext(ctx context.Context, text string) (string, float64, error) {
+	result, err := c.ClassifyDetailedWithContext(ctx, text)
 	if err != nil {
 		return "", 0.0, err
 	}
+	matched := c.sortAndLimitMatches(result.Matches)
 	if len(matched) == 0 {
 		return "", 0.0, nil
 	}
