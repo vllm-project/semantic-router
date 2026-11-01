@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
@@ -141,6 +143,35 @@ type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+	// GatewayCredential names the trusted authentication result header that
+	// carries a dedicated credential for trusted upstream gateways.
+	GatewayCredential GatewayCredentialConfig `yaml:"gateway_credential,omitempty"`
+}
+
+// GatewayCredentialConfig declares the dedicated downstream-gateway credential
+// a deployment authenticator attaches to an authenticated request. The Router
+// trusts it exactly as it trusts the identity headers: the gateway in front
+// removes client-supplied copies, and a standalone listener drops them unless
+// it trusts identity headers. The value is forwarded only to a backend_ref
+// marked trusted_gateway, under that backend's auth header, and never to any
+// other upstream. Disabled by default.
+type GatewayCredentialConfig struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+	// Header is the request header the authenticator sets; default
+	// x-vsr-gateway-credential.
+	Header string `yaml:"header,omitempty"`
+}
+
+// DefaultGatewayCredentialHeader is the header read when the contract is
+// enabled without a header name.
+const DefaultGatewayCredentialHeader = "x-vsr-gateway-credential" // #nosec G101 -- header name, not a credential
+
+// GetHeader returns the configured header name, lowercased, or the default.
+func (c GatewayCredentialConfig) GetHeader() string {
+	if header := strings.ToLower(strings.TrimSpace(c.Header)); header != "" {
+		return header
+	}
+	return DefaultGatewayCredentialHeader
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.

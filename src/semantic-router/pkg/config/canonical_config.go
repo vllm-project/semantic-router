@@ -230,6 +230,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalFallback(canonical); err != nil {
 		return err
 	}
+	if err := validateCanonicalTrustedGateways(canonical); err != nil {
+		return err
+	}
 	modelsByName, err := canonicalModelCardIndex(canonical.Routing)
 	if err != nil {
 		return err
@@ -245,6 +248,34 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		return err
 	}
 	return validateCanonicalDecisions(canonical.Routing.Decisions, aliases, modelsByName)
+}
+
+// validateCanonicalTrustedGateways checks every backend_ref that opts into
+// the request's trusted gateway credential: the authz contract that supplies
+// the credential must be enabled, and the backend must not also carry a
+// static key, which would otherwise stand in silently for a missing one.
+func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
+	enabled := canonical.Global != nil && canonical.Global.Services.Authz.GatewayCredential.Enabled
+	for _, model := range canonical.Providers.Models {
+		for index, backend := range model.BackendRefs {
+			if !backend.TrustedGateway {
+				continue
+			}
+			if !enabled {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%d].trusted_gateway requires global.services.authz.gateway_credential.enabled: true",
+					model.Name, index,
+				)
+			}
+			if backend.APIKey != "" || backend.APIKeyEnv != "" {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%d].trusted_gateway cannot combine with api_key or api_key_env: the request supplies the credential",
+					model.Name, index,
+				)
+			}
+		}
+	}
+	return nil
 }
 
 func validateCanonicalVersion(canonical *CanonicalConfig) error {
