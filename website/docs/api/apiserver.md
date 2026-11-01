@@ -147,7 +147,39 @@ capability, or quorum. `RequiredDependenciesUnobserved` must not be treated as
 ready. HTTP `200` means the status document was retrieved, not that traffic can
 be served. The existing `/health`, `/ready`, and `/startup-status` contracts are
 unchanged; this endpoint does not replace their deployment probes. Fleet
-aggregation, per-replica persistence/TTL, and probe wiring remain separate work.
+aggregation and probe wiring remain separate work.
+
+### Redis startup persistence
+
+With `global.services.startup_status.store_backend: redis`, the Router publishes
+`vllm-sr:startup-status:<instance_id>` using the same opaque process identity as
+`/api/v1/status`. `/startup-status` includes that identity too. A restart creates
+a new identity, so an old process cannot overwrite its replacement's record.
+
+Records expire after 30 seconds; the publisher refreshes the last observation
+every 10 seconds. Heartbeats preserve `updated_at`, which identifies the last
+startup observation, not the last Redis refresh. They establish process presence,
+not dependency health or request readiness. Shutdown stops the heartbeat, and
+crashed or stopped processes disappear within the remaining TTL.
+
+Redis may be unavailable at startup or lose connectivity later. The publisher
+retains only its latest observation and retries on the next heartbeat. Local
+`/ready` and `/startup-status` continue using in-process state during an outage.
+External readers must treat a missing, expired, or unreadable record as unknown.
+
+Consumers of Redis must select an explicit instance ID and require a positive
+TTL. The Go `startupstatus.LoadFromRedis(client, instanceID)` helper checks both
+the expiry and the payload identity. The former unscoped key
+`vllm-sr:startup-status` is no longer written or read; it may remain from an older
+version and must not be used as a fallback. Existing single-instance Router and
+Dashboard HTTP status clients continue using the same endpoints.
+
+An API server embedded without a runtime registry cannot infer which Redis
+record belongs to it. With Redis configured, that legacy path now returns
+unknown (`503`) instead of substituting shared Redis or file state. Embedders
+must supply a runtime registry. File-only startup status behavior is unchanged.
+This slice does not enumerate replicas, compute fleet readiness, or change
+deployment probes.
 
 ## Inspect signals without an inference call
 
