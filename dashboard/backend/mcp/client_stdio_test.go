@@ -99,7 +99,7 @@ func newStdioCloseTestClient(t *testing.T, mode string) (*Client, *os.Process) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = instance.Disconnect() })
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), preconditionBudget)
 	defer cancel()
 	if connectErr := instance.Connect(ctx); connectErr != nil {
 		t.Fatal(connectErr)

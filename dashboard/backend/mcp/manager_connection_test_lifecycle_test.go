@@ -52,7 +52,7 @@ func TestManagerCloseWaitsForConnectionTests(t *testing.T) {
 	for range 2 {
 		select {
 		case <-started:
-		case <-time.After(3 * time.Second):
+		case <-time.After(preconditionBudget):
 			t.Fatal("connection test did not start")
 		}
 	}
