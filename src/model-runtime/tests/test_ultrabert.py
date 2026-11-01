@@ -9,6 +9,7 @@ import torch
 from vllm_srun.accel.kernels import reference_kernels
 from vllm_srun.engines.native import models
 from vllm_srun.engines.native.adapters import load_adapter_network, module_name
+from vllm_srun.engines.native.models import ultrabert
 from vllm_srun.engines.native.models.modernbert import FULL, SLIDING
 from vllm_srun.engines.native.models.ultrabert import additive_masks
 from vllm_srun.engines.native.weights import load_backbone
@@ -110,6 +111,26 @@ def test_packed_rows_match_padded_rows(package) -> None:
             alone = module(row[None])[0]
             assert torch.allclose(packed[start : start + len(row)], alone, atol=1e-5)
             start += len(row)
+
+
+def test_long_padded_rows_attend_without_dense_masks(package, monkeypatch) -> None:
+    module = backbone(package)
+    torch.manual_seed(3)
+    # Three query blocks; the short row leaves queries whose local keys are all padding.
+    ids = torch.randint(1, 300, (3, 300))
+    mask = (torch.arange(300)[None] < torch.tensor([[300], [170], [5]])).long()
+    with torch.no_grad():
+        dense = module(ids, mask)
+        monkeypatch.setitem(ultrabert.BLOCKS_FROM, "cpu", 256)
+        layout = module.padded(mask, 3, 300, "cpu")
+        assert set(layout.groups[0].masks) == {FULL}
+        assert layout.groups[0].band is not None
+        blocked = module(ids, mask)
+        unpadded = module(ids[:1])
+    assert not blocked.isnan().any()
+    real = mask.bool()
+    assert torch.allclose(blocked[real], dense[real], atol=1e-5)
+    assert torch.allclose(unpadded[0], dense[0], atol=1e-5)
 
 
 def test_adapter_network_shares_the_backbones_weights(package) -> None:
