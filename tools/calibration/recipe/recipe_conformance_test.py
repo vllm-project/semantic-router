@@ -318,8 +318,10 @@ class RecipeConformanceTest(unittest.TestCase):
             recipe_conformance.DEFAULT_RECIPE_ROOT
         )
         by_name = {recipe.name: recipe for recipe in inventory}
+        self.assertEqual(by_name["gb10"].required_devices, ("cuda:0",))
         self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
         self.assertEqual(by_name["decision-balance"].required_devices, ("rocm",))
+        hardware = {recipe.name for recipe in inventory if recipe.required_devices}
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -333,13 +335,17 @@ class RecipeConformanceTest(unittest.TestCase):
                 for shard in matrix["include"]
                 for name in shard["recipes"].split(",")
             }
-            self.assertEqual(planned, set(by_name) - {"decision-balance", "vela-amd"})
+            self.assertEqual(planned, set(by_name) - hardware)
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
                 [
-                    {"recipe": "decision-balance", "required_devices": ["rocm"]},
-                    {"recipe": "vela-amd", "required_devices": ["rocm:0"]},
+                    {
+                        "recipe": recipe.name,
+                        "required_devices": list(recipe.required_devices),
+                    }
+                    for recipe in inventory
+                    if recipe.required_devices
                 ],
             )
 

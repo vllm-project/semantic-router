@@ -1,0 +1,49 @@
+schema_version: v1
+name: gb10
+description: >
+  Backend-independent Preview checks for the GB10 Kai recipe. One probe
+  covers each decision and the automatic entrypoint. These probes do not
+  call a generation backend and are not a CUDA qualification.
+routing_assets:
+  yaml: config/recipes/gb10/config.yaml
+  dsl: config/recipes/gb10/recipe.dsl
+router_eval_endpoint: /api/v1/routing/preview
+evaluation:
+  request_timeout_seconds: 300
+  concurrency: 1
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 66.7
+  min_projection_assertion_percent: 100.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages]
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
+decisions:
+  - id: external_code
+    expected_decision: external_code
+    expected_algorithm: static
+    expected_alias: external/generation
+    variants:
+      - id: code_multistep
+        query: >-
+          Write a Python function that merges two sorted lists, then prove
+          its running time step by step.
+        expected_signals:
+          decision: [gb10_domain:code, gb10_reasoning, gb10_difficulty]
+        tags: [language:en, shape:text]
+  - id: local_generation
+    expected_decision: local_generation
+    expected_algorithm: static
+    expected_alias: local/generation
+    variants:
+      - id: short_math
+        messages:
+          - role: user
+            content: What is two plus two?
+        expected_signals:
+          decision: [gb10_domain:math]
+        tags: [language:en, shape:messages]

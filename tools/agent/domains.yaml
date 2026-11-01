@@ -513,6 +513,15 @@ domains:
     checks: []
     verifications: [quality]
 
+  gb10-qualification:
+    owner: deployment
+    paths:
+      - tools/qualification/gb10/**
+    # Static checks only. The live profile runs on a GB10 host and is not a
+    # CPU or Kind verification. Its receipt id stays out of the CPU inventory.
+    checks: [make gb10-qualification-static]
+    verifications: [quality]
+
   maintained-recipes:
     owner: router-core
     paths:

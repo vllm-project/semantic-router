@@ -17,7 +17,12 @@ It does **not** download a language model or start a vLLM server.
 ## Prerequisites
 
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
-- an x86-64 host when using the current Semantic Router CUDA image;
+- an x86-64 host when using the current published Semantic Router CUDA image.
+  A GB10 qualification run instead sets `VLLM_SR_IMAGE` to a digest-pinned
+  ARM64 CUDA image and runs `python3 tools/qualification/gb10/qualification.py`.
+  That profile covers one Kai 0.6B configuration. Other models, other GPUs,
+  Kubernetes GPU serving, and a general ARM64+CUDA claim stay unqualified.
+  A local `latest` tag is a development image, not the qualification artifact;
 - a GPU of compute capability 7.0 or newer (Volta and later) for the Router
   image, the oldest architecture its PyTorch build (CUDA 12.8) includes;
 - an NVIDIA driver, and GPU passthrough into the Router container for the
@@ -188,6 +193,17 @@ Pin a digest when deployments require an immutable image identity. If the
 Router shares a GPU with vLLM, measure memory and latency under representative
 concurrency; moving small, batch-one signal models to CUDA does not always improve end-to-end
 latency.
+
+CUDA execution of Router-side models is still unvalidated as a general NVIDIA
+claim, and this page does not change `CUDAAccelerator.validated`. The GB10
+profile records one host: architecture `linux/arm64`, the GB10 device, the
+image digest, Kai's golden status, the routed local and external requests,
+and separate resource measurements. Run it with the published ARM64 digest:
+
+```bash
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda@sha256:<digest> \
+  python3 tools/qualification/gb10/qualification.py
+```
 
 ## Verify the routed path
 
