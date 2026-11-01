@@ -205,6 +205,7 @@ const (
 	// Values: KVTransferStatusApplied, KVTransferStatusFallbackReprefill, or
 	// KVTransferStatusUnsupported. Absent ⇒ treat as unsupported (safe default).
 	VSRKVTransferStatus = "x-vsr-kv-transfer-status"
+	VSRKVTransferReason = "x-vsr-kv-transfer-reason"
 
 	// KVTransferStatus* are valid values for VSRKVTransferStatus.
 	KVTransferStatusApplied           = "applied"

@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -93,6 +94,10 @@ const (
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
+	KVTransferAttempted       bool
+	KVTransferOutcomeRecorded bool
+	KVSourceCacheID           string
+	KVSourceIdentity          *kvtransfer.ModelIdentity
 	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
 	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.

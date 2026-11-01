@@ -78,6 +78,10 @@ def _validate(snapshot: SourceSnapshot) -> None:
                 raise ValueError("source KV layers must have equal shape and dtype")
 
 
+class SnapshotExpiredError(ValueError):
+    """The immutable source snapshot has passed its TTL."""
+
+
 class LocalSnapshotStore:
     """Atomic local transport for a single trusted machine and tenant scope."""
 
@@ -159,7 +163,7 @@ class LocalSnapshotStore:
             expires_at = float(metadata["expires_at"])
             if expires_at <= (time.time() if now is None else now):
                 path.unlink(missing_ok=True)
-                raise ValueError("source snapshot expired")
+                raise SnapshotExpiredError("source snapshot expired")
             layer_count = int(metadata["layer_count"])
             expected = {"token_ids"} | {
                 f"layer.{layer}.{channel}"

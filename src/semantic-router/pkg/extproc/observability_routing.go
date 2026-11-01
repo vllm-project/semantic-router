@@ -173,6 +173,7 @@ func observeAlgorithmSelection(ctx *RequestContext, span trace.Span, model strin
 // Process owns these spans. A response header is not the end of a streamed
 // provider request, and cancellation/error paths may never receive a body.
 func finishRequestTrace(ctx *RequestContext, err error) {
+	recordKVTransferOutcome(ctx, "unsupported", "no_result")
 	if ctx == nil {
 		return
 	}

@@ -21,6 +21,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		return looperResp, nil
 	}
 
+	observeKVTransferResponse(ctx, v.ResponseHeaders.GetHeaders())
 	outcome := evaluateResponseHeaderOutcome(v, ctx)
 	if ctx != nil {
 		// Persist the upstream status so the later response-body cache-write

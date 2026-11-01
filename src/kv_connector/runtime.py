@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
-from safetensors import safe_open
 
 from src.training.kv_mapper.artifact import (
-    WEIGHTS_FILE,
     CompatibilitySpec,
     Manifest,
     read_artifact,
@@ -23,12 +21,16 @@ _KV_TENSOR_RANK = 3
 class MapperArtifact:
     path: Path
     manifest: Manifest
+    _weights: dict[str, torch.Tensor] = field(repr=False, compare=False)
+    _device_weights: dict[torch.device, dict[str, torch.Tensor]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     @classmethod
     def open(cls, path: Path, deployment: CompatibilitySpec) -> MapperArtifact:
         """Check the entire artifact before vLLM can advertise a cache hit."""
         # read_artifact verifies checksums and applies the shared validate_artifact contract.
-        manifest, _ = read_artifact(path)
+        manifest, tensors = read_artifact(path)
         verify_compatibility(manifest, deployment)
         if not manifest.rope_stripped_on_keys:
             raise ValueError("connector requires pre-RoPE key mapping")
@@ -38,7 +40,11 @@ class MapperArtifact:
         ):
             raise ValueError("full-head connector currently requires TP=1")
 
-        return cls(path=path, manifest=manifest)
+        return cls(
+            path=path,
+            manifest=manifest,
+            _weights={name: torch.from_numpy(value) for name, value in tensors.items()},
+        )
 
     def apply_layer(
         self,
@@ -72,16 +78,20 @@ class MapperArtifact:
         if any(part.shape[0] != tokens for part in parts):
             raise ValueError("source layers have different token counts")
         x = torch.cat([part.reshape(tokens, width) for part in parts], dim=-1)
-        with safe_open(
-            self.path / WEIGHTS_FILE, framework="pt", device="cpu"
-        ) as weights:
-            w = weights.get_tensor(f"target.{target_layer}.{channel}.W")
-            b = weights.get_tensor(f"target.{target_layer}.{channel}.b")
+        target_device = torch.device(device)
+        if target_device.type == "cuda" and target_device.index is None:
+            target_device = torch.device("cuda", torch.cuda.current_device())
+        if target_device not in self._device_weights:
+            self._device_weights[target_device] = {
+                name: tensor.to(device=target_device)
+                for name, tensor in self._weights.items()
+            }
+        weights = self._device_weights[target_device]
+        w = weights[f"target.{target_layer}.{channel}.W"]
+        b = weights[f"target.{target_layer}.{channel}.b"]
         # The fitting run solves in float64; accumulate in float32 at serving time.
-        y = x.to(device=device, dtype=torch.float32) @ w.to(
-            device=device, dtype=torch.float32
-        )
-        y += b.to(device=device, dtype=torch.float32)
+        y = x.to(device=target_device, dtype=torch.float32) @ w
+        y += b
         return y.to(dtype=dtype).reshape(
             tokens,
             self.manifest.compatibility.num_kv_heads,

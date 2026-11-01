@@ -180,6 +180,7 @@ and inference pool; clients should not depend on them.
 | Header | Description |
 | ------ | ----------- |
 | `x-vsr-kv-transfer-status` | `applied`, `fallback_reprefill`, or `unsupported`. Absent ⇒ `unsupported`. |
+| `x-vsr-kv-transfer-reason` | Completed connector result, such as `loaded`, `snapshot_missing`, `snapshot_expired`, or `load_failed`. |
 
 ## Cost headers
 
