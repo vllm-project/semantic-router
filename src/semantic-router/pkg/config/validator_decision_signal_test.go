@@ -230,6 +230,14 @@ func TestDecisionSelectorContract(t *testing.T) {
 	if err := validateDecisionSelectorConfig("d", refs, ok); err != nil {
 		t.Fatalf("a selector without a deployment asks the decision model: %v", err)
 	}
+	modelFree := &AlgorithmConfig{Type: DecisionAlgorithmDecision, Decision: &DecisionSelectionConfig{Instructions: "Which?"}}
+	if err := validateDecisionSelectorConfig("d", nil, modelFree); err != nil {
+		t.Fatalf("a model-free built-in Recipe receives its candidates through assignments: %v", err)
+	}
+	modelFree.Decision.Candidates = map[string]string{"large": "Best quality"}
+	if err := validateDecisionSelectorConfig("d", nil, modelFree); err == nil {
+		t.Fatal("candidates must name assigned modelRefs")
+	}
 	cases := map[string]func(*AlgorithmConfig) []ModelRef{
 		"blank deployment":  func(a *AlgorithmConfig) []ModelRef { a.Decision.Deployment = " "; return refs },
 		"padded deployment": func(a *AlgorithmConfig) []ModelRef { a.Decision.Deployment = " decider"; return refs },
