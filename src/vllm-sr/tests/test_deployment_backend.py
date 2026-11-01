@@ -134,7 +134,14 @@ class TestContainerBackend:
         )
         ContainerBackend().teardown()
         assert called
-        acquire_lock.assert_called_once_with(runtime="docker", stack_name="vllm-sr")
+        acquire_lock.assert_called_once_with(
+            runtime="docker",
+            stack_name="vllm-sr",
+            command="vllm-sr stop",
+            state="stopping",
+            heartbeat_path=None,
+            take_over_waiting=True,
+        )
         lifecycle_lock.__enter__.assert_called_once_with()
         lifecycle_lock.__exit__.assert_called_once()
 
