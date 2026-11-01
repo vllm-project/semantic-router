@@ -998,6 +998,11 @@ positions, each layer at its own rope base) with adapter networks over it.
 | Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
 | Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
 
+A string state is one user part as it is, even when it parses as JSON
+(`vela3_encoder._parts`), so span offsets index the text the caller sent; only
+a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
+a JSON object as that object.
+
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
 The engine builds each one as an adapter network (`BackboneSpec.adapters`):
