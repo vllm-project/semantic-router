@@ -30,7 +30,7 @@ func apiModelDiagnosticRoutes() []apiRoute {
 		managedRoute(EndpointMetadata{Path: path + "/label-scores", Method: http.MethodPost, Description: "Inspect independent label scores using the prepared operating point when configured"}, policy, (*ClassificationAPIServer).handleModelDiagnosticScores, strictJSONBodyFor[ModelTextDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticScoresResult]](http.StatusOK, "Independent scores, operating policy and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
 		managedRoute(EndpointMetadata{Path: path + "/tokens", Method: http.MethodPost, Description: "Inspect prepared token spans with original UTF-8 byte offsets and complete configured window scanning"}, policy, (*ClassificationAPIServer).handleModelDiagnosticTokens, strictJSONBodyFor[ModelTextDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticTokensResult]](http.StatusOK, "Token spans and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
 		managedRoute(EndpointMetadata{Path: path + "/embeddings", Method: http.MethodPost, Description: "Run the explicitly selected prepared embedding binding at its published representation"}, policy, (*ClassificationAPIServer).handleModelDiagnosticEmbedding, strictJSONBodyFor[ModelTextDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]](http.StatusOK, "Embedding vector and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
-		managedRoute(EndpointMetadata{Path: path + "/rerank", Method: http.MethodPost, Description: "Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs)"}, policy, (*ClassificationAPIServer).handleModelDiagnosticRerank, strictJSONBodyFor[ModelRerankDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticRerankResult]](http.StatusOK, "Relevance logits in input order and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
+		managedRoute(EndpointMetadata{Path: path + "/rerank", Method: http.MethodPost, Description: "Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs)"}, policy, (*ClassificationAPIServer).handleModelDiagnosticRerank, strictJSONBodyFor[ModelRerankDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticRerankResult]](http.StatusOK, "Typed relevance scores in input order and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
 	}
 }
 
@@ -184,7 +184,11 @@ func (s *ClassificationAPIServer) handleModelDiagnosticRerank(w http.ResponseWri
 		s.writeModelDiagnosticError(w, err)
 		return
 	}
-	out := ModelDiagnosticRerankResult{Scores: result.Result.Scores, ScoreType: "relevance_logit", Inputs: make([]*ModelDiagnosticInputUsage, len(result.Result.Inputs))}
+	out := ModelDiagnosticRerankResult{Scores: result.Result.Scores, ScoreType: result.Result.Semantics().Unit, Inputs: make([]*ModelDiagnosticInputUsage, len(result.Result.Inputs))}
+	if result.Result.Decision != nil {
+		out.Coverage = result.Result.Decision.Coverage
+		out.InputTokens = &result.Result.Decision.InputTokens
+	}
 	for i := range result.Result.Inputs {
 		out.Inputs[i] = diagnosticInput(&result.Result.Inputs[i])
 	}

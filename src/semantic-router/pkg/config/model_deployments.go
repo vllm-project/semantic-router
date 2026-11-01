@@ -243,9 +243,15 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
 	if decl.Contract == DecisionTaskContract {
-		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
+		allowed := name == RAGRerankerConsumer || name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
 		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
 			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
+		}
+		if name == RAGRerankerConsumer {
+			if decl.Adapter != "" {
+				return fmt.Errorf("decision RAG relevance uses the shared runtime; remove adapter")
+			}
+			return deployment.ValidateDecisionInput(decl.Deployment)
 		}
 		return nil
 	}

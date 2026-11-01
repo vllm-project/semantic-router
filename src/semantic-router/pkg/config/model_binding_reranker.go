@@ -3,8 +3,9 @@ package config
 import "fmt"
 
 const (
-	RAGRerankerConsumer     = "rag.reranker"
-	RelevanceScoresContract = "relevance_scores.v1"
+	RAGRerankerConsumer      = "rag.reranker"
+	RelevanceScoresContract  = "relevance_scores.v1"
+	MaxDecisionRAGCandidates = 32
 )
 
 // PairScorerSelection is fixed during loading. Zero selects the actual full
