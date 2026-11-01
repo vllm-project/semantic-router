@@ -10,6 +10,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
@@ -193,6 +194,7 @@ func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int
 }
 
 func recordIngressProtocolError(ctx *RequestContext, err error) {
+	logProtocolRejection(ctx, err, "ingress")
 	model := ""
 	if ctx != nil {
 		model = ctx.RequestModel
@@ -476,4 +478,22 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 		response.Headers.SetHeaders,
 		newHeaderValueOption("content-type", value),
 	)
+}
+
+// logProtocolRejection records why the Router refused a request. The client's
+// 400 is otherwise the only trace: the request never reaches replay. Only the
+// protocol error's own message is logged, never the request body.
+func logProtocolRejection(ctx *RequestContext, err error, stage string) {
+	fields := map[string]interface{}{"stage": stage}
+	if ctx != nil {
+		fields["request_id"] = ctx.RequestID
+		fields["model"] = ctx.RequestModel
+	}
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) {
+		fields["code"] = protocolError.Code
+		fields["category"] = string(protocolError.Category)
+		fields["message"] = protocolError.Message
+	}
+	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", fields)
 }
