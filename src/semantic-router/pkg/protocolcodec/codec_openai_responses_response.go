@@ -553,6 +553,9 @@ func (OpenAIResponsesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenRouter {
+		return decodeOpenRouterTransportError(body, policy, llmprotocol.OpenAIResponsesV1)
+	}
 	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIResponsesV1)
 }
 
