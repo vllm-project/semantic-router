@@ -278,3 +278,94 @@ func TestNoulDefaultPredicate(t *testing.T) {
 		t.Fatal("default timeout")
 	}
 }
+
+func TestDefaultDecisionDeploymentInputValidation(t *testing.T) {
+	t.Run("question fallback to default decision deployment rejects invalid input", func(t *testing.T) {
+		cfg := decisionSignalConfig()
+		cfg.DecisionModel = "decider"
+		cfg.DecisionRules[0].Deployment = ""
+		decider := cfg.ModelDeployments["decider"]
+		decider.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
+		cfg.ModelDeployments["decider"] = decider
+
+		err := validateDecisionSignalContracts(cfg)
+		if err == nil {
+			t.Fatal("expected error for default decision deployment with reject overflow and max_tokens, got nil")
+		}
+		if !strings.Contains(err.Error(), "decision models never truncate") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("question fallback to default decision deployment accepts window overflow", func(t *testing.T) {
+		cfg := decisionSignalConfig()
+		cfg.DecisionModel = "decider"
+		cfg.DecisionRules[0].Deployment = ""
+		decider := cfg.ModelDeployments["decider"]
+		decider.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "window"}
+		cfg.ModelDeployments["decider"] = decider
+
+		if err := validateDecisionSignalContracts(cfg); err != nil {
+			t.Fatalf("expected valid config, got: %v", err)
+		}
+	})
+
+	t.Run("selector fallback to default decision deployment rejects invalid input", func(t *testing.T) {
+		cfg := decisionSignalConfig()
+		cfg.DecisionModel = "decider"
+		decider := cfg.ModelDeployments["decider"]
+		decider.Input = ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}
+		cfg.ModelDeployments["decider"] = decider
+		cfg.Decisions = []Decision{{
+			Name: "select-model",
+			Algorithm: &AlgorithmConfig{
+				Type:     DecisionAlgorithmDecision,
+				Decision: &DecisionSelectionConfig{Deployment: ""},
+			},
+		}}
+
+		err := validateDecisionSignalContracts(cfg)
+		if err == nil {
+			t.Fatal("expected error for selector fallback with invalid input, got nil")
+		}
+		if !strings.Contains(err.Error(), "decision models never truncate") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("parse YAML reproduction from issue 5277", func(t *testing.T) {
+		raw := []byte(`
+version: v0.3
+providers:
+  defaults:
+    model: m
+  models:
+    - name: m
+      backend_refs:
+        - name: b
+          endpoint: localhost:8000
+          protocol: http
+global:
+  model_catalog:
+    system:
+      decision_model: {deployment: decider}
+    deployments:
+      decider:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        input: {max_tokens: 32768, overflow: reject}
+routing:
+  signals:
+    decision:
+      - name: hard
+        question: {type: noul, instructions: "Hard?"}
+`)
+		_, err := ParseYAMLBytes(raw)
+		if err == nil {
+			t.Fatal("expected config load failure for default decision deployment with reject input budget, got nil")
+		}
+		if !strings.Contains(err.Error(), "decision models never truncate") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
