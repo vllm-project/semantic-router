@@ -102,6 +102,34 @@
       unit: proportion
       direction: higher_is_better
       range: [0, 1]
+- id: harbor/terminal-bench@4.0.0
+  display_name: Terminal-Bench 4.0
+  domain: agentic_systems
+  source: https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the 2.1 default index component.
+  metrics:
+    - id: resolved
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: sunblaze-ucb/cybergym@1.0.0
+  display_name: CyberGym
+  domain: cybersecurity
+  source: https://github.com/sunblaze-ucb/cybergym
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published CyberGym vulnerability-reproduction success rate with the agent and context budget retained on the evaluation record.
+  metrics:
+    - id: success_rate
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
 - id: swe-bench/pro@1.0.0
   display_name: SWE-bench Pro
   domain: software_engineering
