@@ -43,6 +43,10 @@ type RouterSessionSnapshot struct {
 	TurnCount   int
 	SwitchCount int
 	ModelTurns  map[string]int
+	// UserTurnCount counts committed requests outside a tool loop, so it moves
+	// with user input rather than with tool hops or client-side history edits.
+	UserTurnCount       int `json:"user_turn_count,omitempty"`
+	LastReleaseUserTurn int `json:"last_release_user_turn,omitempty"`
 
 	CumulativePromptTokens          int64
 	CumulativeCachedTokens          int64
@@ -72,6 +76,8 @@ type SessionDecisionParams struct {
 	DecisionName      string
 	TurnIndex         int
 	ActiveToolLoop    bool
+	UserTurn          bool
+	Released          bool
 	Policy            map[string]interface{}
 	Timestamp         time.Time
 }
@@ -109,6 +115,9 @@ type routerSessionState struct {
 	turnCount   int
 	switchCount int
 	modelTurns  map[string]int
+
+	userTurnCount       int
+	lastReleaseUserTurn int
 
 	cumulativePrompt                int64
 	cumulativeCached                int64
@@ -193,6 +202,12 @@ func RecordSessionDecision(p SessionDecisionParams) {
 		st.turnCount++
 	}
 	st.modelTurns[p.SelectedModel]++
+	if p.UserTurn {
+		st.userTurnCount++
+		if p.Released {
+			st.lastReleaseUserTurn = st.userTurnCount
+		}
+	}
 	st.activeToolLoop = p.ActiveToolLoop
 	st.lastDecisionName = p.DecisionName
 	if p.Policy != nil {
@@ -296,6 +311,8 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
 		ModelTurns:                      cloneIntMap(st.modelTurns),
+		UserTurnCount:                   st.userTurnCount,
+		LastReleaseUserTurn:             st.lastReleaseUserTurn,
 		CumulativePromptTokens:          st.cumulativePrompt,
 		CumulativeCachedTokens:          st.cumulativeCached,
 		CumulativeCacheWriteTokens:      st.cumulativeCacheWrite,

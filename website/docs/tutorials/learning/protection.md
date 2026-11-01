@@ -61,15 +61,16 @@ components otherwise default to enabled when the master switch is enabled.
 
 | Scope | What is protected | What can re-route |
 | --- | --- | --- |
-| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`. |
-| `session` | Turns sharing one `x-session-id`. | Idle timeout or a decision with `adaptations.mode: bypass`. |
+| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`, or an explicit release. |
+| `session` | Turns sharing one `x-session-id`. | Idle timeout, a decision with `adaptations.mode: bypass`, or an explicit release. |
 
 Use `conversation` when each agent run should be independently routed. Use
 `session` when one session-level model choice should remain stable across
 multiple user-initiated runs. In `conversation` scope, a changed decision resets
 minimum-turn and continuity-cost preferences. In `session` scope, a changed
 decision or conversation alone does not release an eligible current model;
-idle timeout, bypass, candidate exclusion, or qualified rescue can release it.
+idle timeout, bypass, candidate exclusion, qualified rescue, or an explicit
+release can release it.
 Neither scope can retain a previous model outside the admitted candidate set.
 
 If the configured identity headers are missing, protection fails open and
@@ -96,6 +97,55 @@ Claude Code sends `x-claude-code-agent-id` only on subagent requests, so the
 main agent keeps its session key and each subagent gets its own. A subagent is
 held on the model chosen for its first request, under the same rules as a
 session. Without `agent`, protection behaves as before.
+
+### Explicit release
+
+A harness that knows its task has changed phase can ask for a fresh decision
+without starting a new session. It sends the release header on one request;
+protection releases the hold on that request's key, runs the recipe again and
+holds whatever the recipe selects. The session ID does not change, so Replay
+and run-level reporting keep one run. The recipe can select the same model
+again: a release asks for a new decision, not for a different model.
+
+```yaml
+protection:
+  release:
+    enabled: true                        # default
+    header: x-vsr-protection-release     # default
+    min_user_turns_between: 2            # default; 0 removes the limit
+```
+
+Any non-empty value requests a release. The release applies only to the
+request's protection key: with an `agent` header configured, releasing one
+subagent leaves the main agent and other subagents held. The router removes the
+header before the request reaches a backend, whether or not release is enabled,
+so config load rejects a name that is an identity header, an authentication or
+framing header, or another `x-vsr-` control header.
+
+A release is honored only when all of these hold:
+
+- The key already holds a model. A new session or a new agent gets a normal
+  first decision instead.
+- The request is at a portable turn boundary, with no active tool loop and no
+  nonportable context. Otherwise the reason is `release_not_at_turn_boundary`.
+- At least `min_user_turns_between` user turns have passed since the last
+  honored release on the key. A user turn is a request outside a tool loop;
+  tool hops do not count. Otherwise the reason is `release_interval`.
+- `release.enabled` is not `false`. Otherwise the reason is `release_disabled`.
+
+A refused release keeps the current hold and reports its reason in
+`x-vsr-protocol-warnings`. It does not use up the interval. An honored release
+skips the held-model shortcut and rescue. With the progress gate enabled, the
+gate's evidence, cooldown and oscillation rules do not suppress it; the
+interval replaces them, and the gate trace records `bypassed_by_release`. Hard
+candidate eligibility still applies. Replay records the action
+`release_switch` with the previous and selected model. Under the decision's
+`protection.mode: observe`, routing is unchanged and the verdict is recorded
+for session and conversation keys. Observe mode does not hold agent keys, so a
+release on an agent key records nothing there.
+
+Claude Code cannot send this header on a single request, because
+`ANTHROPIC_CUSTOM_HEADERS` applies to every request in a session.
 
 ## Guards
 

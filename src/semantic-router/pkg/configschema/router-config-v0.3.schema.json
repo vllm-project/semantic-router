@@ -6568,6 +6568,26 @@
         },
         "tuning": {
           "$ref": "#/$defs/RouterLearningProtectionTuning"
+        },
+        "release": {
+          "$ref": "#/$defs/RouterLearningProtectionReleaseConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningProtectionReleaseConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "min_user_turns_between": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false,
