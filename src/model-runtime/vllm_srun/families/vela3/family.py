@@ -51,8 +51,10 @@ from .package import (
     BACKBONE_FILE,
     ENCODER,
     LORA_TARGETS,
+    VELA3V_ENCODER,
     Vela3Package,
     member_of,
+    member_of_vision,
     verify,
 )
 from .request import DECISION, ROUTER, Asked, Read, Reader, text
@@ -156,14 +158,22 @@ class Vela3Family(ModelFamily):
     def descriptor(cls) -> dict[str, Any]:
         return {
             "surfaces": sorted(cls.surfaces),
-            "formats": [ENCODER],
+            "formats": [ENCODER, VELA3V_ENCODER],
             "question_types": list(QUESTION_TYPES),
         }
 
     def detect(self, package: PackageRef) -> bool:
-        return member_of(package.root) is not None
+        return (
+            member_of(package.root) is not None
+            or member_of_vision(package.root) is not None
+        )
 
     def verify(self, package: PackageRef) -> VerifiedPackage:
+        if member_of_vision(package.root) is not None:
+            raise PackageError(
+                f"{package.repo_id or package.root.name}: the {VELA3V_ENCODER} image"
+                " package is recognized, but the image serving path is not implemented"
+            )
         known = builtin.lookup(package.repo_id) if package.repo_id else None
         pinned = (
             known if known is not None and known.revision == package.revision else None

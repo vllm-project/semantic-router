@@ -39,5 +39,6 @@
   "vllm-sr/d3-nano": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
   "vllm-sr/d3-turbo": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
   "vllm-sr/d3-ultra": "2f9a5e5e1e3a1e2c06ea62787186f379af17d5e8",
-  "vllm-sr/vela3-fast": "7cbefd4b92b57234bd0ffb9872451e81abcdac79"
+  "vllm-sr/vela3-fast": "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
+  "vllm-sr/vela3-fast-vision": "1e13154c1c2137654c79c4a08b912f0085bf9fe8"
 }
