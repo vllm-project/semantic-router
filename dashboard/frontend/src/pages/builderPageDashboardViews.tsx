@@ -438,9 +438,15 @@ const EntityListView: React.FC<EntityListViewProps> = ({
       <div className={styles.entityListGrid}>
         {items.map((item) => (
           <div
-            key={item.name}
+            key={`${item.type}:${item.name}`}
             className={styles.entityListCard}
-            onClick={() => onSelect({ kind, name: item.name })}
+            onClick={() =>
+              onSelect(
+                kind === 'signal'
+                  ? { kind, name: item.name, signalType: item.type }
+                  : { kind, name: item.name },
+              )
+            }
             style={{ '--entity-accent': meta.color } as React.CSSProperties}
           >
             <div className={styles.entityListCardHeader}>
