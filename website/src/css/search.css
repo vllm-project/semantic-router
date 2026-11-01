@@ -126,13 +126,13 @@ html[data-theme='dark'],
 /* ------------------------------------------------------------------ *
  * Navbar placement
  *
- * shell.css hides `.navbar__items--right` below 1340px, which would take the
+ * shell.css hides `.navbar__items--right` below 997px, which would take the
  * search control with it on every tablet and phone. Restore the container —
  * and only the container — so search stays reachable; the README treats mobile
  * as first class. Everything else in that group stays hidden as before.
  * ------------------------------------------------------------------ */
 
-@media (max-width: 1180px) {
+@media (max-width: 1339px) {
   /* Icon-only square once the navbar gets tight. ⌘K still works everywhere. */
   .site-search-trigger {
     min-width: 0;
@@ -154,17 +154,17 @@ html[data-theme='dark'],
     gap: 0.45rem;
   }
 
-  /* Keep search + theme toggle reachable; hide the rest of the right group. */
-  .navbar__inner .navbar__items--right > :not([class*='navbarSearchContainer_']):not(.navbar-color-mode-toggle) {
-    display: none;
-  }
-
   .navbar__inner .navbar-color-mode-toggle {
     margin-left: 0;
   }
 }
 
 @media (max-width: 996px) {
+  /* Keep search + theme toggle reachable; hide the rest of the right group. */
+  .navbar__inner .navbar__items--right > :not([class*='navbarSearchContainer_']):not(.navbar-color-mode-toggle) {
+    display: none;
+  }
+
   /*
    * Docusaurus absolutely pins search to the navbar edge below 996px. Keep
    * search + theme toggle in normal flow instead so the toggle stays at the

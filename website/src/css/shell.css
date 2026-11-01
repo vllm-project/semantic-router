@@ -171,15 +171,10 @@
 
 html[data-route-kind="home"] .nav-docs-only,
 html[data-route-kind="page"] .nav-docs-only,
-html[data-route-kind="blog"] .nav-docs-only {
-  display: none;
-}
-
-/* Docusaurus puts the className on the dropdown's inner link, so the rule above
- * leaves the dropdown wrapper (and its width) in the navbar. Hide the wrapper. */
-html[data-route-kind="home"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only),
-html[data-route-kind="page"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only),
-html[data-route-kind="blog"] .site-root .navbar__inner .navbar__items--right > .navbar__item:has(> .nav-docs-only) {
+html[data-route-kind="blog"] .nav-docs-only,
+html[data-route-kind="home"] .navbar__item:has(> .nav-docs-only),
+html[data-route-kind="page"] .navbar__item:has(> .nav-docs-only),
+html[data-route-kind="blog"] .navbar__item:has(> .nav-docs-only) {
   display: none;
 }
 
@@ -230,19 +225,30 @@ html[data-route-kind="blog"] .site-root .navbar__inner .navbar__items--right > .
   text-transform: none;
 }
 
-/* Keep desktop row visible down to 996px collapse point. The locale dropdown
- * is dropped here so the right group fits beside the primary links; it stays
- * available in the collapsed navigation. */
+/* The version label can be long ("Latest (unreleased)"). Let that dropdown
+ * shrink and truncate instead of pushing the right group over the left nav. */
+.navbar__items--right > .navbar__item:has(> .nav-docs-only) {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.navbar__items--right > .navbar__item.dropdown > .nav-docs-only {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Below 1340px the locale dropdown shows only its icon, and below 1100px there
+ * is no room for it next to the version label: it moves to the collapsed menu. */
 @media (min-width: 997px) and (max-width: 1339px) {
-  .site-root .navbar__inner .navbar__items--right > .navbar__item.navbar__link {
-    display: inline-flex;
+  .navbar__items--right > .navbar__item.dropdown > .nav-locale {
+    font-size: 0;
   }
+}
 
-  .site-root .navbar__inner .navbar__items--right > .navbar__item.dropdown {
-    display: inline-flex;
-  }
-
-  .site-root .navbar__inner .navbar__items--right > .navbar__item.dropdown:has(> .nav-locale) {
+@media (min-width: 997px) and (max-width: 1099px) {
+  .navbar__items--right > .navbar__item:has(> .nav-locale) {
     display: none;
   }
 }
