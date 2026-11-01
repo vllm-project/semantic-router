@@ -17,7 +17,7 @@ or extproc mode:
 | --- | --- | --- |
 | `vllm-sr` | `cpu` (default) | amd64, arm64 |
 | `vllm-sr-rocm` | `rocm` | amd64 |
-| `vllm-sr-cuda` | `cuda` | amd64 |
+| `vllm-sr-cuda` | `cuda` | amd64, arm64 |
 
 For one release, `vllm-sr` is also published as `extproc` and `vllm-sr-rocm`
 as `extproc-rocm`, with the same digests, for deployments that still name the
