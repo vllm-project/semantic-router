@@ -1713,6 +1713,13 @@ components:
         enable_shared_context:
           type: boolean
           description: Whether a multi-question decision request computes its shared state once.
+        max_model_len:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: |
+            The most input tokens one question of a Decision model may have, as configured; null keeps the
+            package's limit. The limit the model applies is the card's `limits.max_input_tokens`.
     GoldenStatus:
       type: object
       required: [status]
