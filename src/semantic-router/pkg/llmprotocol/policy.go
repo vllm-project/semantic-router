@@ -14,6 +14,16 @@ const (
 	LossyAllowWithDiagnostic LossyPolicy = "allow_with_diagnostic"
 )
 
+// LossyFieldToolResultError names the Anthropic tool-result failure flag, which
+// OpenAI request formats cannot carry.
+const LossyFieldToolResultError = "tool_result.is_error"
+
+// OptInLossyFields lists the losses an operator may accept while every other
+// lossy translation keeps failing closed.
+func OptInLossyFields() []string {
+	return []string{LossyFieldToolResultError}
+}
+
 type MissingIDPolicy string
 
 const (
@@ -70,6 +80,9 @@ type Policy struct {
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when
 	// the target wire format can carry a matched stop sequence.
 	ProviderStopSequences bool
+	// AllowedLossyFields are translated with a diagnostic even under
+	// LossyReject. Entries come from OptInLossyFields.
+	AllowedLossyFields []string
 }
 
 type Limits struct {
