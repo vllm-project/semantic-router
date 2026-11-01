@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -195,11 +196,14 @@ type looperRecord struct {
 
 // looperCall is one request a backend received, with the headers the
 // fixtures set (the decision's header mutation, and one the client sends).
+// askedGzip, kept out of the record, is whether the request accepted a gzip
+// reply.
 type looperCall struct {
-	Route  string            `json:"route"`
-	Model  string            `json:"model"`
-	Header map[string]string `json:"header,omitempty"`
-	Body   json.RawMessage   `json:"body"`
+	Route     string            `json:"route"`
+	Model     string            `json:"model"`
+	Header    map[string]string `json:"header,omitempty"`
+	Body      json.RawMessage   `json:"body"`
+	askedGzip bool
 }
 
 type looperReply struct {
@@ -210,7 +214,8 @@ type looperReply struct {
 }
 
 // looperBackend answers every model from a script that depends only on the
-// request, and records each request.
+// request, and records each request. Like a provider that honors
+// Accept-Encoding, it gzips a buffered reply to a request that accepts gzip.
 type looperBackend struct {
 	failing []string
 	slow    time.Duration
@@ -235,7 +240,10 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	call := looperCall{Route: r.Header.Get("X-Selected-Model"), Model: req.Model, Body: canonicalJSON(raw)}
+	call := looperCall{
+		Route: r.Header.Get("X-Selected-Model"), Model: req.Model, Body: canonicalJSON(raw),
+		askedGzip: acceptsGzip(strings.Join(r.Header.Values("Accept-Encoding"), ", ")),
+	}
 	for name, values := range r.Header {
 		if name = strings.ToLower(name); strings.HasPrefix(name, "x-fixture-") {
 			if call.Header == nil {
@@ -256,7 +264,11 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	for _, failing := range b.failing {
 		if req.Model == failing {
-			http.Error(w, `{"error":{"message":"overloaded","type":"server_error"}}`, http.StatusServiceUnavailable)
+			// The headers and body http.Error writes.
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			writeScriptedBody(w, http.StatusServiceUnavailable,
+				[]byte(`{"error":{"message":"overloaded","type":"server_error"}}`+"\n"), call.askedGzip)
 			return
 		}
 	}
@@ -270,7 +282,7 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeScriptedStream(w, req.Model, content)
 		return
 	}
-	writeScriptedCompletion(w, req.Model, content, req.Logprobs, len(req.Messages))
+	writeScriptedCompletion(w, req.Model, content, req.Logprobs, len(req.Messages), call.askedGzip)
 }
 
 // scriptedAnswer is a model's answer: the judge returns its analysis, or its
@@ -297,7 +309,7 @@ func scriptedLogprob(model string) float64 {
 	return -0.05
 }
 
-func writeScriptedCompletion(w http.ResponseWriter, model, content string, logprobs bool, messages int) {
+func writeScriptedCompletion(w http.ResponseWriter, model, content string, logprobs bool, messages int, gzipReply bool) {
 	choice := map[string]any{
 		"index": 0, "message": map[string]any{"role": "assistant", "content": content}, "finish_reason": "stop",
 	}
@@ -318,6 +330,20 @@ func writeScriptedCompletion(w http.ResponseWriter, model, content string, logpr
 		"usage":   map[string]any{"prompt_tokens": 10 * messages, "completion_tokens": 5, "total_tokens": 10*messages + 5},
 	})
 	w.Header().Set("Content-Type", "application/json")
+	writeScriptedBody(w, http.StatusOK, body, gzipReply)
+}
+
+// writeScriptedBody writes a buffered reply, gzip-encoded when gzipReply.
+func writeScriptedBody(w http.ResponseWriter, status int, body []byte, gzipReply bool) {
+	if gzipReply {
+		var encoded bytes.Buffer
+		writer := gzip.NewWriter(&encoded)
+		_, _ = writer.Write(body)
+		_ = writer.Close()
+		body = encoded.Bytes()
+		w.Header().Set("Content-Encoding", "gzip")
+	}
+	w.WriteHeader(status)
 	_, _ = w.Write(body)
 }
 
@@ -566,6 +592,26 @@ func encodeLooperRecord(t *testing.T, record looperRecord) []byte {
 	return append(data, '\n')
 }
 
+// assertLooperReplyEncodings holds each backend call to the encoding
+// negotiation: a buffered hop asks for gzip, since the Router reads the reply
+// itself, while a streamed hop and the client's own call, whose client did not
+// ask for gzip, keep identity. The goldens are unchanged by the gzip replies.
+func assertLooperReplyEncodings(t *testing.T, adapter string, calls []looperCall) {
+	t.Helper()
+	for _, call := range calls {
+		var body struct {
+			Stream bool `json:"stream"`
+		}
+		if err := json.Unmarshal(call.Body, &body); err != nil {
+			t.Fatalf("%s: decode the call to %s: %v", adapter, call.Route, err)
+		}
+		want := !body.Stream && call.Header["x-fixture-client"] == ""
+		if call.askedGzip != want {
+			t.Errorf("%s: the call to %s asked for gzip = %t, want %t", adapter, call.Route, call.askedGzip, want)
+		}
+	}
+}
+
 // TestLooperEquivalence holds every Looper algorithm, through both adapters,
 // to the record of the loopback path.
 func TestLooperEquivalence(t *testing.T) {
@@ -575,7 +621,9 @@ func TestLooperEquivalence(t *testing.T) {
 			harness := newLooperHarness(t, fixture)
 			records := map[string][]byte{}
 			for _, adapter := range []string{"extproc", "sessions"} {
-				records[adapter] = encodeLooperRecord(t, harness.serve(t, looperAdapters[adapter](harness.router), fixture.request))
+				record := harness.serve(t, looperAdapters[adapter](harness.router), fixture.request)
+				assertLooperReplyEncodings(t, adapter, record.Calls)
+				records[adapter] = encodeLooperRecord(t, record)
 			}
 			if *updateLooperGolden {
 				if err := os.MkdirAll(looperGoldenDir, 0o755); err != nil {
