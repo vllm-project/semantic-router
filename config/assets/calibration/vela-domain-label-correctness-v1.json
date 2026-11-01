@@ -1,0 +1,627 @@
+{
+  "artifact_id": "sha256:9bc6cfca7875dfd6319cb39fdd6dec4d1d82d762b96c74f53b2ec96a1939f7c4",
+  "artifact_schema_version": "signal-calibration-artifact/v1",
+  "dataset": {
+    "digest": "sha256:0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
+    "name": "TIGER-Lab/MMLU-Pro",
+    "version": "b189ec765aa7ed75c8acfea42df31fdae71f97be"
+  },
+  "failure_slices": {
+    "by_category": {
+      "biology": {
+        "accuracy": 0.75457875,
+        "brier_calibrated": 0.15219563,
+        "coverage": 0.97069597,
+        "mean_calibrated": 0.65332215,
+        "n_items": 273
+      },
+      "business": {
+        "accuracy": 0.57239057,
+        "brier_calibrated": 0.2537768,
+        "coverage": 0.8989899,
+        "mean_calibrated": 0.52873404,
+        "n_items": 297
+      },
+      "chemistry": {
+        "accuracy": 0.81465517,
+        "brier_calibrated": 0.12010002,
+        "coverage": 0.99353448,
+        "mean_calibrated": 0.71905186,
+        "n_items": 464
+      },
+      "computer science": {
+        "accuracy": 0.69863014,
+        "brier_calibrated": 0.20385254,
+        "coverage": 0.95890411,
+        "mean_calibrated": 0.62899105,
+        "n_items": 73
+      },
+      "economics": {
+        "accuracy": 0.56281407,
+        "brier_calibrated": 0.20716204,
+        "coverage": 0.97487437,
+        "mean_calibrated": 0.57907436,
+        "n_items": 199
+      },
+      "engineering": {
+        "accuracy": 0.27088036,
+        "brier_calibrated": 0.3444832,
+        "coverage": 0.96839729,
+        "mean_calibrated": 0.60412581,
+        "n_items": 443
+      },
+      "math": {
+        "accuracy": 0.7877551,
+        "brier_calibrated": 0.17293908,
+        "coverage": 0.9755102,
+        "mean_calibrated": 0.64761239,
+        "n_items": 245
+      },
+      "physics": {
+        "accuracy": 0.69333333,
+        "brier_calibrated": 0.21816147,
+        "coverage": 0.98888889,
+        "mean_calibrated": 0.64714009,
+        "n_items": 450
+      },
+      "psychology": {
+        "accuracy": 0.58108108,
+        "brier_calibrated": 0.2280535,
+        "coverage": 0.91891892,
+        "mean_calibrated": 0.5382578,
+        "n_items": 148
+      }
+    }
+  },
+  "family": "domain",
+  "mapping": {
+    "fitted_on": "calibration",
+    "knots": [
+      [
+        0.3226420693099499,
+        0.0
+      ],
+      [
+        0.4216260104566007,
+        0.24324324324324326
+      ],
+      [
+        0.47330471873283386,
+        0.25
+      ],
+      [
+        0.5026693688498602,
+        0.3111111111111111
+      ],
+      [
+        0.5809645029001458,
+        0.313953488372093
+      ],
+      [
+        0.6462163925170898,
+        0.4
+      ],
+      [
+        0.7073942044246122,
+        0.42138364779874216
+      ],
+      [
+        0.7861838590885911,
+        0.42857142857142855
+      ],
+      [
+        0.863804613814062,
+        0.5265306122448979
+      ],
+      [
+        0.9225649962371046,
+        0.5340909090909091
+      ],
+      [
+        0.9488735249582326,
+        0.6226415094339622
+      ],
+      [
+        0.9634659432229542,
+        0.6349206349206349
+      ],
+      [
+        0.972338390621272,
+        0.6363636363636364
+      ],
+      [
+        0.9748358258179256,
+        0.6428571428571429
+      ],
+      [
+        0.97605781853199,
+        0.65
+      ],
+      [
+        0.9836010685182893,
+        0.654320987654321
+      ],
+      [
+        0.9919250706146503,
+        0.7103448275862069
+      ],
+      [
+        0.994253580386822,
+        0.7692307692307693
+      ],
+      [
+        0.9972349393307863,
+        0.7914572864321608
+      ],
+      [
+        0.9991595963637034,
+        0.8222222222222222
+      ],
+      [
+        0.9993901989039253,
+        0.8235294117647058
+      ],
+      [
+        0.9995355147123337,
+        0.83
+      ],
+      [
+        0.999682553716608,
+        0.8378378378378378
+      ],
+      [
+        0.9997339405511555,
+        0.8421052631578947
+      ],
+      [
+        0.9998032663549695,
+        0.875
+      ],
+      [
+        0.999906793884609,
+        0.8757763975155279
+      ],
+      [
+        0.9999722972208139,
+        0.8775510204081632
+      ],
+      [
+        0.9999887545903524,
+        0.8888888888888888
+      ],
+      [
+        0.9999923706054688,
+        1.0
+      ]
+    ],
+    "method": "isotonic"
+  },
+  "metrics": {
+    "calibration": {
+      "calibrated": {
+        "accuracy": 0.63422053,
+        "brier": 0.20074608,
+        "ece_10": 0.0115025,
+        "mean_prediction": 0.63685618,
+        "n_items": 2630,
+        "reliability_bins": [
+          {
+            "count": 10,
+            "index": 0,
+            "lower": 0.0,
+            "mean_prediction": 0.02977271,
+            "observed_frequency": 0.2,
+            "upper": 0.1
+          },
+          {
+            "count": 9,
+            "index": 1,
+            "lower": 0.1,
+            "mean_prediction": 0.15182635,
+            "observed_frequency": 0.22222222,
+            "upper": 0.2
+          },
+          {
+            "count": 47,
+            "index": 2,
+            "lower": 0.2,
+            "mean_prediction": 0.25258623,
+            "observed_frequency": 0.31914894,
+            "upper": 0.3
+          },
+          {
+            "count": 214,
+            "index": 3,
+            "lower": 0.3,
+            "mean_prediction": 0.33082623,
+            "observed_frequency": 0.30373832,
+            "upper": 0.4
+          },
+          {
+            "count": 343,
+            "index": 4,
+            "lower": 0.4,
+            "mean_prediction": 0.43674746,
+            "observed_frequency": 0.4548105,
+            "upper": 0.5
+          },
+          {
+            "count": 366,
+            "index": 5,
+            "lower": 0.5,
+            "mean_prediction": 0.53804054,
+            "observed_frequency": 0.52185792,
+            "upper": 0.6
+          },
+          {
+            "count": 572,
+            "index": 6,
+            "lower": 0.6,
+            "mean_prediction": 0.64780306,
+            "observed_frequency": 0.64685315,
+            "upper": 0.7
+          },
+          {
+            "count": 359,
+            "index": 7,
+            "lower": 0.7,
+            "mean_prediction": 0.76515587,
+            "observed_frequency": 0.7632312,
+            "upper": 0.8
+          },
+          {
+            "count": 706,
+            "index": 8,
+            "lower": 0.8,
+            "mean_prediction": 0.84261584,
+            "observed_frequency": 0.83569405,
+            "upper": 0.9
+          },
+          {
+            "count": 4,
+            "index": 9,
+            "lower": 0.9,
+            "mean_prediction": 0.93772894,
+            "observed_frequency": 0.75,
+            "upper": 1.0
+          }
+        ]
+      },
+      "raw": {
+        "accuracy": 0.63422053,
+        "brier": 0.2765035,
+        "ece_10": 0.26364685,
+        "mean_prediction": 0.89786739,
+        "n_items": 2630,
+        "reliability_bins": [
+          {
+            "count": 0,
+            "index": 0,
+            "lower": 0.0,
+            "mean_prediction": 0.0,
+            "observed_frequency": 0.0,
+            "upper": 0.1
+          },
+          {
+            "count": 0,
+            "index": 1,
+            "lower": 0.1,
+            "mean_prediction": 0.0,
+            "observed_frequency": 0.0,
+            "upper": 0.2
+          },
+          {
+            "count": 2,
+            "index": 2,
+            "lower": 0.2,
+            "mean_prediction": 0.29847953,
+            "observed_frequency": 0.0,
+            "upper": 0.3
+          },
+          {
+            "count": 15,
+            "index": 3,
+            "lower": 0.3,
+            "mean_prediction": 0.35598543,
+            "observed_frequency": 0.2,
+            "upper": 0.4
+          },
+          {
+            "count": 54,
+            "index": 4,
+            "lower": 0.4,
+            "mean_prediction": 0.46018642,
+            "observed_frequency": 0.33333333,
+            "upper": 0.5
+          },
+          {
+            "count": 143,
+            "index": 5,
+            "lower": 0.5,
+            "mean_prediction": 0.55333484,
+            "observed_frequency": 0.30769231,
+            "upper": 0.6
+          },
+          {
+            "count": 135,
+            "index": 6,
+            "lower": 0.6,
+            "mean_prediction": 0.64776965,
+            "observed_frequency": 0.37777778,
+            "upper": 0.7
+          },
+          {
+            "count": 176,
+            "index": 7,
+            "lower": 0.7,
+            "mean_prediction": 0.74660566,
+            "observed_frequency": 0.42045455,
+            "upper": 0.8
+          },
+          {
+            "count": 267,
+            "index": 8,
+            "lower": 0.8,
+            "mean_prediction": 0.85472852,
+            "observed_frequency": 0.51685393,
+            "upper": 0.9
+          },
+          {
+            "count": 1838,
+            "index": 9,
+            "lower": 0.9,
+            "mean_prediction": 0.98172662,
+            "observed_frequency": 0.72905332,
+            "upper": 1.0
+          }
+        ]
+      }
+    },
+    "held_out": {
+      "calibrated": {
+        "accuracy": 0.62808642,
+        "brier": 0.21437296,
+        "ece_10": 0.03313721,
+        "mean_prediction": 0.62783608,
+        "n_items": 2592,
+        "reliability_bins": [
+          {
+            "count": 5,
+            "index": 0,
+            "lower": 0.0,
+            "mean_prediction": 0.03687269,
+            "observed_frequency": 0.4,
+            "upper": 0.1
+          },
+          {
+            "count": 14,
+            "index": 1,
+            "lower": 0.1,
+            "mean_prediction": 0.16362414,
+            "observed_frequency": 0.28571429,
+            "upper": 0.2
+          },
+          {
+            "count": 65,
+            "index": 2,
+            "lower": 0.2,
+            "mean_prediction": 0.25616943,
+            "observed_frequency": 0.24615385,
+            "upper": 0.3
+          },
+          {
+            "count": 210,
+            "index": 3,
+            "lower": 0.3,
+            "mean_prediction": 0.33316189,
+            "observed_frequency": 0.41428571,
+            "upper": 0.4
+          },
+          {
+            "count": 369,
+            "index": 4,
+            "lower": 0.4,
+            "mean_prediction": 0.43363782,
+            "observed_frequency": 0.47696477,
+            "upper": 0.5
+          },
+          {
+            "count": 368,
+            "index": 5,
+            "lower": 0.5,
+            "mean_prediction": 0.53909275,
+            "observed_frequency": 0.53804348,
+            "upper": 0.6
+          },
+          {
+            "count": 548,
+            "index": 6,
+            "lower": 0.6,
+            "mean_prediction": 0.6502498,
+            "observed_frequency": 0.66240876,
+            "upper": 0.7
+          },
+          {
+            "count": 386,
+            "index": 7,
+            "lower": 0.7,
+            "mean_prediction": 0.76060941,
+            "observed_frequency": 0.7357513,
+            "upper": 0.8
+          },
+          {
+            "count": 621,
+            "index": 8,
+            "lower": 0.8,
+            "mean_prediction": 0.84378264,
+            "observed_frequency": 0.79227053,
+            "upper": 0.9
+          },
+          {
+            "count": 6,
+            "index": 9,
+            "lower": 0.9,
+            "mean_prediction": 0.99023199,
+            "observed_frequency": 1.0,
+            "upper": 1.0
+          }
+        ]
+      },
+      "raw": {
+        "accuracy": 0.62808642,
+        "brier": 0.28634163,
+        "ece_10": 0.26282241,
+        "mean_prediction": 0.89090883,
+        "n_items": 2592,
+        "reliability_bins": [
+          {
+            "count": 0,
+            "index": 0,
+            "lower": 0.0,
+            "mean_prediction": 0.0,
+            "observed_frequency": 0.0,
+            "upper": 0.1
+          },
+          {
+            "count": 0,
+            "index": 1,
+            "lower": 0.1,
+            "mean_prediction": 0.0,
+            "observed_frequency": 0.0,
+            "upper": 0.2
+          },
+          {
+            "count": 1,
+            "index": 2,
+            "lower": 0.2,
+            "mean_prediction": 0.24740106,
+            "observed_frequency": 0.0,
+            "upper": 0.3
+          },
+          {
+            "count": 15,
+            "index": 3,
+            "lower": 0.3,
+            "mean_prediction": 0.37375745,
+            "observed_frequency": 0.2,
+            "upper": 0.4
+          },
+          {
+            "count": 70,
+            "index": 4,
+            "lower": 0.4,
+            "mean_prediction": 0.45676733,
+            "observed_frequency": 0.27142857,
+            "upper": 0.5
+          },
+          {
+            "count": 130,
+            "index": 5,
+            "lower": 0.5,
+            "mean_prediction": 0.5452789,
+            "observed_frequency": 0.43846154,
+            "upper": 0.6
+          },
+          {
+            "count": 161,
+            "index": 6,
+            "lower": 0.6,
+            "mean_prediction": 0.64648887,
+            "observed_frequency": 0.45962733,
+            "upper": 0.7
+          },
+          {
+            "count": 201,
+            "index": 7,
+            "lower": 0.7,
+            "mean_prediction": 0.75308371,
+            "observed_frequency": 0.46268657,
+            "upper": 0.8
+          },
+          {
+            "count": 256,
+            "index": 8,
+            "lower": 0.8,
+            "mean_prediction": 0.85583933,
+            "observed_frequency": 0.49609375,
+            "upper": 0.9
+          },
+          {
+            "count": 1758,
+            "index": 9,
+            "lower": 0.9,
+            "mean_prediction": 0.98178189,
+            "observed_frequency": 0.71387941,
+            "upper": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "model": {
+    "id": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+    "labels": [
+      "biology",
+      "business",
+      "chemistry",
+      "computer science",
+      "economics",
+      "engineering",
+      "health",
+      "history",
+      "law",
+      "math",
+      "other",
+      "philosophy",
+      "physics",
+      "psychology"
+    ],
+    "model_sha256": "ce836f431e224e2c8134b5b8be60236bccaf5eb900c848701bf99c65a950f826",
+    "revision": "736c049c8710e16011c0216ff1bd79c5a1c399db"
+  },
+  "name": "vela-domain-label-correctness-v1",
+  "operating_point": {
+    "accuracy_95_ci": [
+      0.62187588,
+      0.65941677
+    ],
+    "accuracy_when_matched": 0.64086193,
+    "calibrated_threshold": 0.30555586,
+    "coverage": 0.96682099,
+    "coverage_95_ci": [
+      0.95920555,
+      0.97305473
+    ],
+    "matched": 2506,
+    "threshold": 0.5
+  },
+  "outcome": "The top domain label equals the question's MMLU-Pro category",
+  "population": "MMLU-Pro test questions whose src does not start with ori_mmlu, split into calibration and held_out by the first byte of sha256(question_id)",
+  "rollback_identity": "uncalibrated-domain-probability",
+  "scale": "label_correctness/v1",
+  "source": {
+    "manifest_sha256": "sha256:b90925605508cb6fa1a25b5bce66f22ae9ceeb6aa3abc3633441d2b81fedc3ea",
+    "splits": {
+      "calibration": {
+        "path": "calibration.json",
+        "sha256": "sha256:c41a4a030212ae30218c8262ee3f9b477037137f20fa3d73ef5b355494661636"
+      },
+      "held_out": {
+        "path": "held_out.json",
+        "sha256": "sha256:67769c5dd2bdecd03f480c1c48132c9f0f1a36906ad240ff2c137ba29983efea"
+      }
+    }
+  },
+  "split_counts": {
+    "calibration": 2630,
+    "held_out": 2592
+  },
+  "status": "calibrated",
+  "unsupported_regions": [
+    "health: no held-out rows",
+    "history: no held-out rows",
+    "law: no held-out rows",
+    "other: no held-out rows",
+    "philosophy: no held-out rows"
+  ]
+}

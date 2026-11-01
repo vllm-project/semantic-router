@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
@@ -62,6 +63,10 @@ type Classifier struct {
 	piiInference               PIIInference
 	keywordClassifier          *KeywordClassifier
 	keywordEmbeddingClassifier *EmbeddingClassifier
+
+	// domainCalibration maps domain scores onto the declared calibrated scale
+	// once the runtime serves the category model it was fitted on.
+	domainCalibration *decision.ScoreCalibration
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
