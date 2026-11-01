@@ -34,6 +34,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"moderation":                                             len(wire.Moderation) > 0,
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
+		"citations":                                              wire.hasCitations(),
+		"search_results":                                         wire.hasSearchResults(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
@@ -45,8 +47,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// provider, native finish reason and accounting decorations were dropped
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
-	// not be replayed. DeepSeek caching tokens must also be scrubbed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || wire.hasDeepSeekDecorations()
+	// not be replayed.
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices) || wire.hasDeepSeekDecorations()
 	if needsReencode {
 		canonicalBody = nil
 	}

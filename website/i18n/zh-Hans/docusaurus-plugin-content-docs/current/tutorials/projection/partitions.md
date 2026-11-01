@@ -102,4 +102,4 @@ PROJECTION partition balance_intent_partition {
 - 需要可复用的命名档位，例如 `balance_reasoning`；那属于映射，而不是分区
 
 分区不做额外模型调用；它们协调成员信号已产生的结果。配置的默认值是路由回退，不是默认值实际匹配的证据。完整示例见
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)。
+[`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。

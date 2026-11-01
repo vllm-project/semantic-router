@@ -139,4 +139,4 @@ ROUTE reasoning_deep {
 - 尚未先定义该映射应读取的分数
 
 映射不做模型或存储调用；它们转换请求上已计算的分数。阈值仍继承其输入信号的不确定性和校准。完整端到端示例见
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)。
+[`config/recipes/feedback/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml)。
