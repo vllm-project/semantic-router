@@ -10,6 +10,8 @@
   },
   "cases": [
     {"name": "choices", "patch": {"choices": [{"index": 0, "message": {"role": "assistant", "content": "alternate"}, "finish_reason": "stop"}]}},
+    {"name": "citations", "patch": {"citations": ["https://example.com/source"]}},
+    {"name": "search_results", "patch": {"search_results": [{"title": "Source", "url": "https://example.com/source"}]}},
     {"name": "created", "patch": {"created": 101}},
     {"name": "do_remote_decode", "patch": {"do_remote_decode": false}},
     {"name": "do_remote_prefill", "patch": {"do_remote_prefill": false}},

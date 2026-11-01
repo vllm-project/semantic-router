@@ -235,6 +235,12 @@ func (r *OpenAIRouter) buildLooperRequest(
 	if _, err := r.applyDispatchRequestParams(request, reqCtx); err != nil {
 		return nil, r.createErrorResponse(400, "Invalid request parameter policy")
 	}
+	if carriesReasoningContinuity(request, nil) {
+		return nil, r.recordLooperFailure(
+			reqCtx, request.Model, decision, 400,
+			"Looper cannot represent the request semantics", "looper_reasoning_continuity_unsupported",
+		)
+	}
 	engine, err := r.protocolEngine()
 	if err == nil {
 		var encoded protocolcodec.RequestResult
@@ -279,6 +285,18 @@ func (r *OpenAIRouter) buildLooperRequest(
 		reqCtx, request.Model, decision, 400,
 		"Looper cannot represent the request semantics", "looper_request_unsupported",
 	)
+}
+
+// carriesReasoningContinuity reports whether a request history or a reply holds
+// typed reasoning continuity blocks. Internal Looper calls are built from
+// openai-go parameters, which drop the blocks, so a tool turn would reach the
+// provider without the state it needs; those paths refuse instead.
+func carriesReasoningContinuity(request *llmprotocol.Request, response *llmprotocol.Response) bool {
+	if request != nil && llmprotocol.RequiredCapabilities(*request).Supports(llmprotocol.CapabilityReasoningContinuity) {
+		return true
+	}
+	return response != nil &&
+		llmprotocol.RequiredResponseCapabilities(*response).Supports(llmprotocol.CapabilityReasoningContinuity)
 }
 
 func (r *OpenAIRouter) recordSuccessfulLooperExecution(
