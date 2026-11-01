@@ -29,6 +29,7 @@ type streamState struct {
 	contentBlocks         map[streamContentKey]bool
 	contentKinds          map[streamContentKey]llmprotocol.ContentKind
 	reasoningScopes       map[streamContentKey]llmprotocol.ReasoningScope
+	reasoningDetails      map[streamContentKey]llmprotocol.ReasoningDetail
 	itemTextBytes         map[streamContentKey]int
 	itemTextRunes         map[streamContentKey]int64
 	itemCitations         map[streamContentKey]int
@@ -165,6 +166,7 @@ func (state *streamState) ensureCollections() {
 		state.contentBlocks = make(map[streamContentKey]bool)
 		state.contentKinds = make(map[streamContentKey]llmprotocol.ContentKind)
 		state.reasoningScopes = make(map[streamContentKey]llmprotocol.ReasoningScope)
+		state.reasoningDetails = make(map[streamContentKey]llmprotocol.ReasoningDetail)
 		state.itemTextBytes = make(map[streamContentKey]int)
 		state.itemTextRunes = make(map[streamContentKey]int64)
 		state.itemCitations = make(map[streamContentKey]int)
@@ -406,6 +408,27 @@ func (state *streamState) observeContentKind(key streamContentKey, kind llmproto
 }
 
 func (state *streamState) observeReasoningScope(key streamContentKey, event llmprotocol.Event) error {
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		if event.Content.Kind != llmprotocol.ContentReasoning || event.Delta != "" || event.Content.Text != "" || event.Content.Signature != "" || event.Content.Reasoning != "" {
+			return invalidProviderResponse("invalid_reasoning_detail", "Upstream continuity delta contains unrelated fields")
+		}
+		detail := *event.Content.ReasoningDetail
+		if current, found := state.reasoningDetails[key]; found {
+			merged, err := llmprotocol.MergeReasoningDetail(current, detail)
+			if err != nil {
+				return invalidProviderResponse("reasoning_detail_identity_mismatch", "Upstream reasoning detail changed identity or type")
+			}
+			detail = merged
+		}
+		if err := llmprotocol.ValidateReasoningDetail(detail, state.policy.Limits); err != nil {
+			return invalidProviderResponse("invalid_reasoning_detail", "Upstream reasoning detail is invalid or exceeds the configured limit")
+		}
+		state.reasoningDetails[key] = detail
+		return nil
+	}
+	if _, found := state.reasoningDetails[key]; found {
+		return invalidProviderResponse("stream_content_kind_mismatch", "Upstream stream changed a continuity block to plain text")
+	}
 	if event.Content == nil || event.Content.Kind != llmprotocol.ContentReasoning || event.Content.Reasoning == "" {
 		return nil
 	}
