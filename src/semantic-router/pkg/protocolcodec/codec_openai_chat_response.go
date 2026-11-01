@@ -46,15 +46,25 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// A same-format encode may replay the response byte-for-byte. OpenRouter's
 	// provider, native finish reason and accounting decorations were dropped
 	// from the neutral response, so render it again instead of leaking them.
-	// LiteLLM's provider_specific_fields are similarly non-canonical and must
-	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
+	// LiteLLM's provider_specific_fields and the flat usage detail fields are
+	// similarly non-canonical and must not be replayed.
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() ||
+		wire.hasFlatUsageDetails() || chatChoicesHaveReasoningDetails(wire.Choices)
 	if needsReencode {
 		canonicalBody = nil
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
 	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
+}
+
+// hasFlatUsageDetails reports the flat cached/reasoning detail fields some
+// cumulative-usage providers emit beside the canonical nested objects. They are
+// decode-only compatibility input: the neutral response keeps their counts in
+// the canonical buckets, so replaying the original body would hand a client
+// that reads nested details a flat shape it cannot use.
+func (wire chatResponseWire) hasFlatUsageDetails() bool {
+	return wire.Usage != nil && (wire.Usage.CachedTokens != nil || wire.Usage.ReasoningTokens != nil)
 }
 
 func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
@@ -252,6 +262,14 @@ func decodeChatTokenLogprobs(wire *chatLogprobsWire) []llmprotocol.TokenLogprob 
 }
 
 func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
+	promptDetails := wire.PromptTokensDetails
+	if promptDetails == nil && wire.CachedTokens != nil {
+		promptDetails = &chatPromptTokensDetailsWire{CachedTokens: wire.CachedTokens}
+	}
+	completionDetails := wire.CompletionTokensDetails
+	if completionDetails == nil && wire.ReasoningTokens != nil {
+		completionDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: *wire.ReasoningTokens}
+	}
 	usage := llmprotocol.Usage{
 		State:           llmprotocol.UsageAvailable,
 		InputUncached:   unknownCount(),
@@ -263,14 +281,14 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 		OutputTotal:     authoritative(wire.CompletionTokens),
 		Total:           authoritative(wire.TotalTokens),
 	}
-	if wire.PromptTokensDetails != nil {
-		details := wire.PromptTokensDetails
+	if promptDetails != nil {
+		details := promptDetails
 		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
 		}
 	}
-	if wire.CompletionTokensDetails != nil {
-		reasoning := wire.CompletionTokensDetails.ReasoningTokens
+	if completionDetails != nil {
+		reasoning := completionDetails.ReasoningTokens
 		other := wire.CompletionTokens - reasoning
 		if reasoning < 0 || wire.CompletionTokens < reasoning {
 			other = -1
