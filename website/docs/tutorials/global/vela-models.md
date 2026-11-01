@@ -32,6 +32,7 @@ Halu is the Router's specialist hallucination detector, and Omni serves its
 multimodal embeddings; see [Check answers against context](../../model-runtime/guides/hallucination.md)
 and [Images and audio](../../model-runtime/guides/multimodal.md).
 See the [Vela 1.0 release announcement](/blog/vela-models) for the full family.
+See [Vela 3.0](#vela-30) for the current routing-model family.
 
 ## What Problem Does It Solve?
 
@@ -129,10 +130,38 @@ and [matched instruction comparison](https://huggingface.co/vllm-sr/Vela-1.0-Omn
 for measurement identities, all tasks and regressions. These panels do not
 establish full multilingual or image coverage, latency, or memory performance.
 
+## Vela 3.0
+
+[Vela 3.0](https://huggingface.co/collections/vllm-sr/vela-30-6ad1c430eb1718eb4754edcd)
+is the current routing-model family: six open models, 0.3B to 27B, that answer
+the router's decisions and return the spans you name in one call. The default
+router, **vela3-fast**, is a 380M UltraBERT encoder (0.4B with the adapter a
+question runs on) that answers the built-in Domain, Guard, Safety, FactCheck,
+Feedback and Modality signals, with PII and hallucination span presets, and
+reads up to 32K tokens for a decision (8,192 per window for router questions
+and most spans; evidence spans read one window up to 32K).
+
+| Model | Size | Best for |
+| --- | ---: | --- |
+| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | The default router: decisions and spans per question, English, up to 32K tokens |
+| [vela3-fast-vision](https://huggingface.co/vllm-sr/vela3-fast-vision) | 0.3B | Images on CPU: image decisions, region pointing, OCR check, image hallucination spans |
+| [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | Small GPUs, low latency, multilingual |
+| [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | A balance of accuracy and speed |
+| [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | High-accuracy routing |
+| [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | The reference model |
+
+The 0.4B is the backbone plus the adapter a question runs on; the deployment
+loads its adapters, 1.5B parameters, about 7 GB.
+The model runtime serves **vela3-fast** today; the other four sizes and
+vela3-fast-vision run through their own packages for now.
+See the [Vela 3.0 launch announcement](/blog/vela-3-0-name-it-vela-finds-it) for
+benchmarks and the fast-vision package.
+
 ## Defaults and input budgets
 
 With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
-Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
+Feedback, Modality and hallucination signals run on **vela3-fast** (Vela 3.0),
+with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#built-in-signals)).
 Semantic Embedding and the Reranker use Vela 1.0. The built-in Vela 1.0
 Hazard deployment is an explicit specialist binding; its presence in the
 catalog does not enable a Safety-to-Hazard cascade. Naming a Vela 1.0 task
@@ -156,8 +185,9 @@ silently shortened.
 
 ## Configuration
 
-Every Vela model runs in the [model runtime](../../model-runtime/overview.md),
-so the defaults need no configuration. The following excerpt binds Domain to
+Every Vela model the Router serves runs in the
+[model runtime](../../model-runtime/overview.md), so the defaults need no
+configuration. The following excerpt binds Domain to
 an explicit CPU deployment with a 32K budget. Apply it to an existing
 configuration containing providers, signals and decisions.
 
