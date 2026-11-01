@@ -1686,7 +1686,7 @@ components:
     EngineArgs:
       type: object
       description: How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
-      required: [max_num_seqs, max_num_batched_tokens, batch_window_ms, dtype, enable_shared_context]
+      required: [max_num_seqs, max_num_batched_tokens, batch_window_ms, dtype, enable_shared_context, flash_attention_3]
       properties:
         max_num_seqs:
           type: integer
@@ -1713,6 +1713,11 @@ components:
         enable_shared_context:
           type: boolean
           description: Whether a multi-question decision request computes its shared state once.
+        flash_attention_3:
+          type: boolean
+          description: |
+            Whether state-once branched attention uses FlashAttention-3. Off unless set. Hopper
+            (compute capability 9.x) with flash_attn_interface only; other devices refuse to load.
     GoldenStatus:
       type: object
       required: [status]

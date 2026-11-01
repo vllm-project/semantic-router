@@ -21652,6 +21652,9 @@
                               "enable_shared_context": {
                                 "type": "boolean"
                               },
+                              "flash_attention_3": {
+                                "type": "boolean"
+                              },
                               "max_num_batched_tokens": {
                                 "type": "integer"
                               },
@@ -21664,7 +21667,8 @@
                               "max_num_batched_tokens",
                               "batch_window_ms",
                               "dtype",
-                              "enable_shared_context"
+                              "enable_shared_context",
+                              "flash_attention_3"
                             ]
                           },
                           "family": {

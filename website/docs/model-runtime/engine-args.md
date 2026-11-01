@@ -18,6 +18,7 @@ runtime's default.
 | `--batch-window-ms` | `batch_window_ms` | `2.0` | How long the scheduler waits after the first request to collect more. |
 | `--dtype` | `dtype` | `auto` | Precision the model computes in: `auto`, `float32`, `bfloat16` or `float16`. |
 | `--enable-shared-context`, `--no-enable-shared-context` | `enable_shared_context` | the model family's | Compute the shared state of a multi-question decision request once. |
+| `--flash-attention-3`, `--no-flash-attention-3` | `flash_attention_3` | off | Run state-once branched attention with FlashAttention-3 on Hopper. Head sizes outside 64–256 refuse to load. |
 
 ## Batching
 
@@ -173,6 +174,24 @@ by default, at its published precision:
   1.5–1.7× faster with no decision changed. The copy sits next to the weights the
   readiness check runs: 1.32 GB for the three layer stacks of one Decision 1.0
   encoder.
+
+## FlashAttention-3 on Hopper
+
+`--flash-attention-3` runs the variable-length attention of a state-once
+Decision model with FlashAttention-3. It is off unless you set it. On an H200,
+long states were about 1.15× to 1.28× faster. Across 204 questions, including
+30K and 60K states, one near tie changed and score agreement was 98.4%, which
+is why BF16 Decision 3.0 does not take it by default
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-flash-attention-3.md)).
+
+It needs a Hopper GPU (compute capability 9.x), `flash_attn_interface` in
+the process, and an attention head size from 64 to 256. The CUDA image does
+not install that package. Setting the argument on any other device, or on a
+model whose head size is outside that range, refuses to load. A call it
+cannot run does not fall back to FlashAttention-2. It leaves the other
+approximate kernels off. FP32 calls stay on the reference attention. With
+the argument left off, Ampere, ROCm and CPU forwards stay on FlashAttention-2
+or the reference.
 
 ## Set them
 

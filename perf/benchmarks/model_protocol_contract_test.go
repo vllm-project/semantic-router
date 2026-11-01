@@ -21,12 +21,13 @@ func TestModelProtocolSeparatesExecutionSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	mutations := map[string]func(*modelservice.ModelCard){
-		"engine":         func(c *modelservice.ModelCard) { c.Engine = "onnx" },
-		"batch size":     func(c *modelservice.ModelCard) { c.EngineArgs.MaxNumSeqs++ },
-		"batch tokens":   func(c *modelservice.ModelCard) { c.EngineArgs.MaxNumBatchedTokens++ },
-		"batch window":   func(c *modelservice.ModelCard) { c.EngineArgs.BatchWindowMS++ },
-		"precision":      func(c *modelservice.ModelCard) { c.EngineArgs.Dtype = "bfloat16" },
-		"shared context": func(c *modelservice.ModelCard) { c.EngineArgs.EnableSharedContext = false },
+		"engine":            func(c *modelservice.ModelCard) { c.Engine = "onnx" },
+		"batch size":        func(c *modelservice.ModelCard) { c.EngineArgs.MaxNumSeqs++ },
+		"batch tokens":      func(c *modelservice.ModelCard) { c.EngineArgs.MaxNumBatchedTokens++ },
+		"batch window":      func(c *modelservice.ModelCard) { c.EngineArgs.BatchWindowMS++ },
+		"precision":         func(c *modelservice.ModelCard) { c.EngineArgs.Dtype = "bfloat16" },
+		"shared context":    func(c *modelservice.ModelCard) { c.EngineArgs.EnableSharedContext = false },
+		"flash attention 3": func(c *modelservice.ModelCard) { c.EngineArgs.FlashAttention3 = true },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {

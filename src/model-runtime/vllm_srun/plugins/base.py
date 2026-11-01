@@ -332,7 +332,9 @@ class EngineOptions:
     the copy the policy consents to on its device. ``cpu_neighbors`` names
     the engines of the process's other CPU models (``auto`` where only loading
     can tell): threads an engine leaves spinning after a run slow another
-    engine's next forward on those cores.
+    engine's next forward on those cores. ``flash_attention_3`` opts state-once
+    branched attention into FlashAttention-3 on Hopper. It is off by default
+    and does not consent to the device's other approximate kernels.
     """
 
     graphs: bool = True
@@ -340,6 +342,7 @@ class EngineOptions:
     exact_kernels_only: bool = True
     merge_lora: bool = False
     reduced_precision: bool = False
+    flash_attention_3: bool = False
     threads: int | None = None
     cpu_neighbors: frozenset[str] = frozenset()
     extra: dict[str, Any] = field(default_factory=dict)
