@@ -165,7 +165,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"safety_identifier", "service_tier", "status", "temperature", "text", "tool_choice",
 				"tools", "top_logprobs", "top_p", "truncation", "usage", "user",
 			),
-			extensions: fields("billing", "conversation_id", "frequency_penalty", "presence_penalty", "store", "tool_usage"),
+			extensions: fields("billing", "conversation_id", "ec_transfer_params", "frequency_penalty", "input_messages", "kv_transfer_params", "output_messages", "presence_penalty", "store", "tool_usage"),
 		},
 		{
 			name: "Anthropic Messages",
