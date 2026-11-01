@@ -234,14 +234,17 @@ and process deadlines. This can take longer to finish than two concurrent jobs.
 | Live shard | Exact source and recipes | Variant weight |
 | --- | --- | ---: |
 | `standalone-0` | Standalone `multi-objective` | 129 |
-| `standalone-1` | Standalone `balance`, `knowledge` | 87 |
-| `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 100 |
-| `built-in-latest-0` | Built-in latest `mom-v1` | 346 |
+| `standalone-1` | Standalone `balance`, `knowledge` | 91 |
+| `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 103 |
+| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 21–32 (366 total) |
 
 All eight recipes remain. Weights count authored probe variants, not measured
 seconds. The heavy built-in recipe remains alone: its historical median job
 time was 35.02 minutes, versus 4.85–7.48 minutes for standalone recipe jobs in
-the sampled complete runs. Inventory and report aggregation add two jobs.
+the sampled complete runs. With Vela 2.0 0.8B as its decision model, its
+`evaluation.shards: 16` splits the probes into 16 jobs of similar estimated
+read cost, and the report merges them. Inventory and report aggregation add two
+jobs.
 
 ## Historical resource evidence
 

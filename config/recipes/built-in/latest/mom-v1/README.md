@@ -7,7 +7,7 @@ publish one API entrypoint.
 
 | Recipe | Goal | Decisions |
 | --- | --- | --- |
-| **Balance** | Reasoning effort only where a request needs it | `simple`, `medium`, `reasoning` |
+| **Balance** | Reasoning effort only where a request needs it | `long_context`, `vision`, `recovery`, `agentic`, `facts`, `frontier`, `code`, `hard`, `standard`, `fast` |
 | **Speed** | Fast interaction and efficient streaming | `fast`, `tools`, `reasoning` |
 | **Cost** | Lower serving cost with targeted escalation | `economy`, `tools`, `reasoning` |
 | **Accuracy** | Strong answers and deliberate use of multiple models | `simple`, `reasoning`, `review`, `agent` |
@@ -16,17 +16,16 @@ publish one API entrypoint.
 ## Model details
 
 MoM V1 is a family of routing policies. Policy version **4.0** keeps the
-decision names above and the existing public model IDs. Its recipes ship with
-vLLM Semantic Router; you supply the generation backends.
+existing public model IDs and the decision names of Speed, Cost, Accuracy and
+Vault; Balance's decisions are the lanes of the Decision Balance policy. Its
+recipes ship with vLLM Semantic Router; you supply the generation backends.
 
-Balance runs the [Decision Balance](../../../decision-balance/README.md) policy
-over the models you assign: the router's decision model answers its routing
-questions in one call per request. Speed, Cost, Accuracy and Vault use
-embedding, complexity, keyword and classifier signals. Their embedding and
-complexity rules use rule-level settings to keep all declared candidate texts
-for scoring instead of compressing them to a global bank limit. Task prototypes
-cover both direct operations and work that requires design, diagnosis, proof,
-or synthesis.
+Every recipe routes on named questions to the router's decision model. The
+questions a recipe asks about a request travel in one call, and each decision
+reads the answers to named questions plus request facts such as declared tools,
+an active tool loop or an earlier assistant answer. No recipe uses keyword,
+embedding, complexity or classifier signals. The bundle declares Vela 2.0 0.8B
+as its decision model; see [Requirements](#requirements).
 
 ## Intended use
 
@@ -36,86 +35,161 @@ private deployment. Each recipe can use a different set of connected models.
 
 ## Routing behavior
 
-A concise answer can still require hard reasoning. Speed, Cost and Accuracy
-retain learned hard-task routing when the requested answer is brief. Hard tasks
-with client tools use the reasoning pool, with tool capabilities still enforced
-when selecting a model.
+Each recipe's questions read the start of the latest user message. Answers are
+probabilities; a question matches at the threshold shown. Request facts come
+from the request itself: `has_tools` (tool definitions), `tool_required` and
+`tool_disabled` (`tool_choice`), `tool_loop` (an active client tool loop) and
+`flow` (a resumed Accuracy workflow).
 
-Cost and Accuracy recognize explicit requests to repair an incorrect answer,
-recommendation, or explanation. Feedback classification requires an earlier
-assistant reply. Without an earlier reply, explicit correction wording can
-still route to reasoning. Quoted corrections, negated repair requests, and
-style edits alone do not qualify.
+**Balance** is the Decision Balance policy: it spends reasoning only where a
+request needs it. In one call, the router's decision model answers six
+questions about the latest user message: the kind of work (`task`), how much
+reasoning a strong expert needs (`difficulty`, 0 to 4), whether a correct
+answer depends on facts most people would look up (`precise_facts`), what a
+good answer needs (`needs`: deliberation, tools, verification, long output,
+creativity), whether the user says the previous answer was wrong
+(`correction`) and whether the user asks to call a tool now (`tool_use`). The
+effort score `0.3 × difficulty + 0.35 × P(deliberation) + 0.1 ×
+P(verification) − 0.35 × brief request` is banded into off (below 0.4), medium
+(below 0.675), high (below 1.15) and max.
 
-**Balance** spends reasoning only where a request needs it. In one call, the
-router's decision model answers five questions about the latest user message:
-the kind of work (`task`), how much reasoning a strong expert needs
-(`difficulty`, 0 to 4), whether a correct answer depends on facts most people
-would look up (`precise_facts`), what a good answer needs (`needs`:
-deliberation, tools, verification, long output, creativity) and whether the
-user says the previous answer was wrong (`correction`). The effort score
-`0.3 × difficulty + 0.35 × P(deliberation) + 0.1 × P(verification) − 0.35 ×
-brief request` is banded into off (below 0.4), medium (below 0.675), high
-(below 1.15) and max.
+Every lane of the policy is its own decision, with its own pool and the
+reasoning effort you assign to it. Decisions, highest priority first:
 
-The three decisions group Decision Balance's eight lanes by the reasoning
-effort each lane runs at, so one assignment per decision covers them:
+| Decision | When | Algorithm | Assign |
+| --- | --- | --- | --- |
+| `long_context` | An input of 200K tokens or more | `static` | A model with a 1M-token context window, at high effort |
+| `vision` | The request carries an image | `static` | A model strong on documents and screenshots, at medium effort |
+| `recovery` | An earlier answer exists, no tool loop is active, and both the correction question (0.6) and the user feedback judgment say it was wrong | `static` | A stronger model, of another family where possible, at maximum effort |
+| `agentic` | An active tool loop, or declared tools that the request needs (an agentic task, tools needed at 0.5, `tool_use` at 0.4 or `tool_choice: required`), unless `tool_choice` is `none` | `static` | The strongest agent, at high effort |
+| `facts` | Facts most people would look up (`precise_facts` at 0.8) for a facts, analysis or writing task, below max effort | `static` | The model that hallucinates least, at low effort |
+| `frontier` | Max effort | `decision` | Two or more strong models, at maximum or extra-high effort |
+| `code` | A code task at medium or high effort | `static` | The strongest coder, at medium effort |
+| `hard` | High effort, or a STEM task rated multi-step (`difficulty` 2 or more) | `multi_factor` | Reasoning models at extra-high effort |
+| `standard` | Medium effort, and every request whose routing answers are unknown | `multi_factor` | Reasoning models at medium effort |
+| `fast` | Everything else | `static` | An efficient model with thinking off |
 
-| Decision | Lanes, highest priority first | Assign |
-| --- | --- | --- |
-| `reasoning` | **recovery**: an earlier answer exists, no tool loop is active, and both the correction question and the user feedback judgment say it was wrong. **agentic**: an active tool loop, or declared tools that the request needs, unless `tool_choice` is `none`. **frontier**: max effort. **hard**: high effort, except code and exact facts, or a STEM problem rated multi-step | Strong reasoning models that support tools, at high effort or above |
-| `simple` | **fast**: effort off, except exact facts | Efficient models with thinking off |
-| `medium` | **facts**: facts most people would look up, for a facts, analysis or writing task. **code**: a code task at medium or high effort. **standard**: medium effort. Also every request whose routing answers are unknown | Balanced models at medium effort |
+`static` takes the first eligible model of the pool. `hard` and `standard`
+weigh quality on the `vllm-sr/reasoning@1.0.0` index (0.25), cost (0.4),
+latency per output token (0.1) and current load (0.25), and take the cheapest
+candidate when none has a quality record. `frontier` loads no second decision
+model: the decision model that answered the request's questions also chooses
+one of the frontier models from their descriptions, so describe what each one
+is strongest at.
 
-Decision Balance runs each lane at its own effort on named models: recovery at
-maximum effort, frontier at maximum or extra-high, hard at extra-high, agentic
-at high, code and standard at medium, facts at low and fast with thinking off.
-Here each decision runs at the effort you assign, so frontier and recovery use
-the reasoning pool's effort and facts the medium pool's. To tune every lane
-separately, use the standalone Decision Balance recipe, or split a decision in
-a copy of this recipe.
+An image or a long input selects its lane before effort does, so a hard
+question about an image goes to `vision`; candidate checks still keep only the
+pool's models that accept the image and the context. A brief-answer request
+lowers the effort score, but a STEM problem rated multi-step stays on `hard`.
+Correction wording without an earlier answer stays on effort routing.
 
-Images and long inputs use the same decisions: candidate checks keep only the
-pool's models that accept them, so a hard question about an image still goes
-to `reasoning`. A brief-answer request lowers the effort score, but a STEM
-problem rated multi-step stays on `reasoning`. Correction wording without an
-earlier answer stays on effort routing.
+Balance has no guard decision; contain prompt attacks with Vault. The prompt
+guard and safety checks read the whole input, and on a CPU Vela 2.0 0.8B reads
+at most 65,536 tokens of it. A jailbreak rule matches content it did not read,
+so a guard would refuse every long input there.
+
+The policy was measured on three open models. To reproduce it, assign them as
+follows:
+
+| Decisions | Models and effort |
+| --- | --- |
+| `long_context`, `agentic` | `zai/glm-5.3-flash`, high |
+| `recovery` | `zai/glm-5.3-flash`, max |
+| `facts` | `zai/glm-5.3-flash`, low |
+| `frontier` | `zai/glm-5.3-flash`, max, and `qwen/qwen3.8-flash-next`, xhigh |
+| `code` | `qwen/qwen3.8-flash-next`, medium |
+| `hard` | `qwen/qwen3.8-flash-next` and `qwen/qwen3.8-27b`, xhigh |
+| `standard` | `qwen/qwen3.8-flash-next` and `qwen/qwen3.8-27b`, medium |
+| `vision` | `qwen/qwen3.8-27b`, medium |
+| `fast` | `qwen/qwen3.8-27b`, thinking off |
+
+Their relative costs per output token are 4.35, 1.99 and 1.00, in GPU-seconds
+measured on AMD Instinct MI325X at 32 concurrent requests with each model on
+its own replica (GLM on four GPUs, Flash-Next on two, the 27B on one). The
+effort rules follow per-effort measurements on public benchmark samples. On
+GPQA Diamond, medium effort lost 8 to 15 points against extra-high on both
+Qwen models, so hard STEM runs at extra-high. On LiveCodeBench, Flash-Next at
+medium effort solved more problems than either Qwen model at extra-high, with
+less than half the output tokens, so code has its own lane. With thinking off,
+both Qwen models lost 27 to 40 points on multiple-choice knowledge and STEM
+questions, so `fast` keeps only requests whose effort score stays below 0.4.
+The 0.675 boundary, the STEM difficulty of 2 and the code lane were chosen
+together by repeated cross-validation on those samples, with Vela 2.0 4B as
+the decision model.
+
+The Qwen3.8 models take top-level `reasoning_effort` with
+`chat_template_kwargs.enable_thinking` (`false` for thinking off); GLM-5.3-Flash
+always thinks and takes `chat_template_kwargs.reasoning_effort`. On AMD GPUs
+with vLLM 0.31, serve Qwen3.8-27B with `--attention-backend TRITON_ATTN`: the
+default backend decodes its 256-wide attention heads without KV splitting, so
+its cost per output token grows with input length and passes Flash-Next's from
+about 8K tokens. Serve GLM-5.3-Flash with the sparse-attention indexer fix of
+[vllm-project/vllm#59412](https://github.com/vllm-project/vllm/pull/59412)
+until a release includes it; without it, answers that depend on more than
+about 2K tokens of prompt and reasoning silently degrade.
 
 **Speed** favors first-token latency for ordinary conversation and tools, and
-per-token latency for reasoning. Lightweight semantic and request-shape signals
-keep routing overhead small.
+per-token latency for reasoning. **Cost** keeps requests on one model and
+prefers the lowest estimated request cost within each decision's quality band.
+They ask the same questions, and Cost adds two:
 
-**Cost** keeps requests on one model. Its base selector prefers the lowest
-estimated request cost within the decision's quality band, with stronger pools
-for reasoning and active tool use. After an assistant answer, correctness
-feedback or a direct request to correct the result can escalate answer recovery.
-A self-contained error report with an instruction to repair it also qualifies.
-Repetition or a formatting edit alone does not establish that an answer was wrong.
+| Question | Matches at | Decides |
+| --- | --- | --- |
+| `tool_use` | 0.4 | The user asks to call a tool or function now: `tools`, when the request declares tools and `tool_choice` is not `none`. Explaining or quoting a tool instruction does not count. |
+| `depth` | 0.6 | A hard problem that needs investigation or careful multi-step reasoning: `reasoning`, which outranks `tools`. If the question goes unanswered, the request also goes to `reasoning`, so an outage never lowers quality. |
+| `correction` (Cost) | 0.6 | The user reports a wrong answer or result and asks for a corrected one: `reasoning`. |
+| `quoted` (Cost) | 0.5 | The message gives text to translate, quote, define or explain: a correction inside such text does not escalate. |
 
-**Accuracy** normally uses one strong model. An explicit request to obtain fresh
-independent assessments selects `review`, which compares two responses and
-synthesizes them. Comparing already supplied opinions stays on one model.
-An explicit request to delegate work to multiple workers selects `agent`, with
-at most three steps and two workers in parallel. A request for only one worker
-does not authorize fan-out; independence alone does not establish multiple
-workers. Breaking a task into workstreams alone also stays on one model. The
-router plans the internal stages and combines results; users need
-not name those stages. Describing, translating, or prohibiting a workflow does
-not authorize execution. Long context or a subject label does not trigger fan-out.
-A client-owned tool loop stays on the single-model reasoning path.
+`tools` also takes an active tool loop and `tool_choice: required`; everything
+else goes to `fast` or `economy`.
 
-**Vault** uses separate pools for ordinary and sensitive requests. `guard`
-contains detected prompt attacks before calling a backend. Safety and Hazard
-route content risks to `sensitive`, where the assigned model can provide help,
-explain risky material, or refuse harmful assistance. Hazard uses its published
-per-category operating point independently of the binary Safety verdict.
-Personal action guidance also uses `sensitive` when a relevant domain accompanies
-an explicit request or consequential intent. An explicit personal action request
-can also qualify when both consequential and supportive intent exceed
-informational intent and at least one of those intent signals is strong. This path
-allows assistance when the domain label is incomplete. Definitions and quoted
-requests alone do not establish that intent;
-content-risk protection still applies.
+**Accuracy** normally uses one strong model:
+
+| Question | Matches at | Decides |
+| --- | --- | --- |
+| `mode` (one, workers, experts) | 0.7 | `workers`: the user asks for several workers or agents that each run part of the work, which selects `agent`. `experts`: the user asks several models or experts to answer the same question independently, which selects `review`. One assistant comparing hypotheses, splitting work into workstreams, planning only or limited to one worker is `one`. |
+| `depth` | 0.6 | A hard problem that needs investigation or careful multi-step reasoning: `reasoning`. |
+| `verification` | 0.7 | The user asks to fact-check, verify or source an answer: `reasoning`. |
+| `stakes` | 0.6 | A health, legal, business or economic question where a wrong answer could cause serious harm: `reasoning`. |
+| `correction` | 0.6 | The user reports a wrong answer and asks for a corrected one: `reasoning`. |
+| `quoted` | 0.7 | Text to translate, quote, define or explain: none of the questions above escalates it. |
+
+`agent` and `review` never run during a client tool loop or a required tool
+call; those requests go to `reasoning`. A resumed workflow (`flow`) continues on
+`agent`.
+`agent` runs at most three steps with two workers in parallel; `review`
+compares two independent responses and synthesizes them. An unanswered `depth`
+question sends the request to `reasoning`; an unanswered `mode` never fans out.
+
+**Vault** uses separate pools for ordinary and sensitive requests:
+
+| Signal | Matches at | Decides |
+| --- | --- | --- |
+| Prompt guard (built-in) | 0.75 | A prompt attack anywhere in the conversation: `guard` responds immediately without calling a backend. |
+| `attack` | 0.9 | The latest message tells the assistant to ignore its rules or reveal its hidden instructions: `guard`. Quoted text that the user asks to analyze does not count. |
+| PII (built-in) | any identifier | Personal identifiers anywhere in the conversation, including earlier turns: `sensitive`. A ZIP code or an age on its own does not count; an IP address does. |
+| `confidential` | 0.5 | Confidential or internal material, such as private code, internal documents or a non-public deal, or a request to keep the data on site: `sensitive`. |
+| `personal_data` | 0.5 | Personal data about a specific person, including the person's nationality, religion or political view: `sensitive`. Quoted contact details still count. |
+| `risk` | 0.5 | A risk of harm to the user or someone else, such as suicidal thoughts or a request to hurt someone: `sensitive`, where the assigned model can help or refuse. |
+| `personal_advice` | 0.5 | Advice on the user's own health, legal, financial or emotional situation: `sensitive`. |
+
+Everything else goes to `private`. The prompt guard and PII judgments read the
+whole conversation; the named questions read the start of the latest message.
+
+The PII check favors recall. On a labelled set of 28 real identifiers and 30
+look-alikes, Vela 2.0 0.8B's PII check found 26 of the identifiers, including
+public IP addresses and names with street addresses. It missed a passport
+number and a Chinese ID number, which the `personal_data` question caught
+(0.62 and 0.94). It raised 14 false alarms, on networking terms such as
+"private IP address", an email format example, times and city names. Those
+requests take the sensitive pool. A ZIP code or an age does not count on its
+own, because alone it does not identify a person, and the check read plain
+numbers as both ("17" as a ZIP code at 0.80, "25" as an age at 0.66). With a
+name or an ID beside them, the request still counts through the name or ID.
+An IP address does count alone: allowing it too would remove 5 false alarms
+but miss "My home IP address is 73.12.4.5".
+If any of them goes unanswered, Vault fails the request closed rather than
+guessing.
 
 Built-in initialization enables conversation protection for single-model routes.
 Send stable `x-session-id` and `x-conversation-id` headers to keep an eligible
@@ -134,17 +208,19 @@ also bypass adaptation.
 
 ## Requirements
 
-Assign at least one qualified model to each single-model decision and at least
-two distinct worker models to Accuracy's `review` and `agent`. Vault's `guard`
-responds immediately and needs no model assignment.
+Assign at least one qualified model to each single-model decision, at least
+two distinct worker models to Accuracy's `review` and `agent`, and at least
+two distinct models to Balance's `frontier`. Vault's `guard` responds
+immediately and needs no model assignment.
 
 Models must declare their capabilities, context window, and maximum output
-limit. Images and long inputs use the same decisions as other work; candidate
-checks enforce their requirements after routing signals complete. Vault's
-triage budget applies before these candidate checks. Missing metadata or an
-insufficient eligible pool produces an explicit error.
+limit. Outside Balance's `vision` and `long_context`, images and long inputs
+use the same decisions as other work; candidate checks enforce their
+requirements after routing signals complete. Vault's triage budget applies
+before these candidate checks. Missing metadata or an insufficient eligible
+pool produces an explicit error.
 
-Single-model decisions compare the catalog's versioned `general`, `reasoning`,
+Multi-factor decisions compare the catalog's versioned `general`, `reasoning`,
 or `agentic` quality index at the assigned reasoning effort. Custom models need
 relevant benchmark evidence. Cost comparisons require comparable configured
 prices; latency comparisons use observations from real requests.
@@ -155,44 +231,64 @@ calls use declared stage budgets and are checked again before dispatch.
 Accuracy's `agent` gives its planner, workers, and final synthesis 4,096 tokens
 per call, matching its request default.
 
-Balance's questions name no deployment, so the router's default decision model
-answers them, and the questions that one request stage asks a model travel in
-one call. A new configuration uses Vela 2.0 0.3B on the CPU. To answer them
-with a larger decision model, point `global.model_catalog.system.decision_model`
-at a deployment of it, as
-[Decision Balance](../../../decision-balance/config.yaml) does with Vela 2.0 4B
-on ROCm. See [Choose a model](https://vllm-sr.ai/docs/model-runtime/choose-a-model)
-for sizes and hardware.
+The bundle declares its decision model: a `primary` deployment of
+`vllm-sr/Vela-2.0-0.8B` with no fixed device, named by
+`global.model_catalog.system.decision_model`. With no device the router uses a
+GPU where one exists and the CPU otherwise. `vllm-sr recipe builtin init`
+copies this deployment and binding into a configuration that binds no decision
+model. A configuration that already binds one, or that declares a `primary`
+deployment, keeps it; a configuration saved by Dashboard setup declares
+vela3-fast as `primary`. Balance asks a `score` question that vela3-fast cannot
+answer, so a Balance configuration on vela3-fast stops at router startup. To use
+the model the probes were calibrated on, set:
 
-Vault uses the default logical `hazard` deployment for its category classifier.
-It loads only when used. Override that deployment for qualified accelerator
-execution while retaining the model's `operating_point.json`. Verify the sensitive
-pool on help-seeking, benign analysis, and harmful requests; a general quality
-score does not certify responsible answers.
+```yaml
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.8B
+    system:
+      decision_model:
+        deployment: primary
+```
 
-The default Vela Guard, PII, and Hazard tasks each accept at most 32,768 input
-tokens for triage, including the conversation text evaluated by that task.
-Their tokenizers can differ from the backend's tokenizer. Exceeding a triage
-budget fails closed before backend context checks or dispatch; assigning a
-backend with a larger context window does not raise this limit. Preview returns
-HTTP 503 with `signal_errors` and no selected model. The maintained Vault
-long-input probes stay within this budget and retain their routing assertions.
+On a CPU the decision call is slow. Measured through the router with its
+container limited to 4 CPUs and one request at a time, a short message takes
+about 4 seconds at the median and 6 seconds at the 90th percentile; a long
+input takes about 75 seconds, because the model reads 16,384 tokens of it.
+On one AMD Instinct MI300X, with four requests in flight, routing Balance's
+probes took 0.25 seconds at the median and at most 2.4 seconds, long inputs
+included. Serve the decision model on a GPU for live traffic: set
+`device: rocm` or `device: cuda` on the deployment to require one. A smaller
+model, such as `vllm-sr/Vela-2.0-0.3B` in `artifact`, answers faster; re-run the
+probes after any change. See
+[Choose a model](https://vllm-sr.ai/docs/model-runtime/choose-a-model) for sizes
+and hardware.
 
-The default Hazard deployment runs on CPU. Long inputs can make triage slow
-even within the supported budget; measure Preview latency for your traffic and
-qualify an accelerated Hazard deployment when needed.
+Every recipe's questions read the start of the latest user message, up to the
+decision model's input limit (16,384 tokens for Vela 2.0 0.8B): put the request
+before a long attachment. Vault's prompt guard and PII judgments read the whole
+conversation, up to the decision model's scan budget; content past it was not
+read, and Vault fails such a request closed with HTTP 503 and `signal_errors`
+before any backend is called.
+
+When a question goes unanswered, Preview lists it under `signal_errors`, and the
+router counts it in `vsr_model_runtime_unknown_answers_total` by deployment and
+reason, so a decision-model outage is visible.
 
 ## Data handling and safety
 
-Vault routes personal identifiers to its sensitive pool. Detected nationality,
-religion and political affiliation require an explicit personal attribute or profile context
-in the current request; quoted personal records also qualify.
+Vault routes personal identifiers to its sensitive pool. A nationality,
+religion or political view counts when it belongs to a specific person; general
+groups and ideas do not, and quoted personal records still qualify.
 
 Every Vault path disables client tools, strips tool history, and disables Router
 memory, response caching, and learning adaptation. It also
 suppresses new Responses object writes. Replay capture is configured separately
 and is enabled by default as described below. These restrictions apply regardless of
-the Guard, Safety, Hazard, and PII verdicts; unavailable triage fails closed.
+the prompt guard, PII and question verdicts; an unanswered one fails closed.
 
 Assign every Vault backend to infrastructure that meets your privacy
 requirements. The recipe does not establish physical placement, change provider
@@ -217,7 +313,9 @@ in `global.services.router_replay.postgres`.
 - To disable capture for a decision, set its `router_replay` plugin to
   `configuration: {enabled: false}`. There is no recipe-level Replay override.
 - Set `capture_personal_data: false` globally or in the decision plugin to omit
-  content when PII is detected or its status is unknown.
+  content when PII is detected or its status is unknown. Balance declares no
+  PII rule, so with that setting its records keep no request or response
+  content.
 
 Vault's other data-handling restrictions still apply. Replay settings do not
 change provider retention or delete previously captured conversations. See the
@@ -235,10 +333,14 @@ and publish an entrypoint. Use **Preview** to inspect signals, decisions, and
 candidate selection. Then send a real request through the entrypoint to verify
 backend execution and latency.
 
-When upgrading to policy 4.0, Balance keeps its three decisions, but the
-decision model now selects them, and tool loops and requests that need their
-declared tools move to `reasoning`, so give that pool models that support
-tools. Speed, Cost, Accuracy and Vault keep their decisions. Since policy 3.0,
+When upgrading to policy 4.0, Speed, Cost, Accuracy and Vault keep their
+decisions, but the decision model now selects them: named questions replace the
+keyword, embedding, complexity and classifier signals, and Vault no longer
+loads a separate content-risk classifier. Balance's three decisions become its
+ten lanes: give the former `reasoning` pool to `recovery`, `agentic`,
+`frontier` and `hard`, the `medium` pool to `facts`, `code` and `standard`, and
+the `simple` pool to `fast`, then assign `long_context` and `vision`, a second
+model to `frontier`, and the effort each lane runs at. Since policy 3.0,
 content risk in Vault selects a responsible private model instead of a fixed
 denial, and prompt attacks still receive an immediate response. Existing
 published versions and their assignments remain unchanged.
@@ -251,36 +353,34 @@ Validate routing behavior and actual backend eligibility against your deployment
 a correct decision alone does not prove that an assigned model can serve it.
 See the [conformance guide](../../../CONFORMANCE.md) for commands.
 
-Balance's probes cover its three decisions and all eight lanes with the default
-Vela 2.0 0.3B, so CPU conformance exercises the whole policy. Re-run them with
-the decision model you deploy.
-
-For local task difficulty in Speed, Cost and Accuracy, the score is the
-hard-prototype score minus the
-easy-prototype score. A margin above `hard_above: 0.025` selects hard; a margin
-below `easy_below: -0.08` selects easy. Scores between the boundaries, including
-either boundary itself, remain medium. Keeping the easy boundary farther from
-zero requires stronger evidence before choosing the cheapest or simplest pool.
-
-Calibrate candidate phrases and both boundaries together on representative
-easy, ordinary, and demanding requests in your supported languages. Adjust the
-hard and easy sides separately, checking unnecessary escalation as well as
-premature downgrading. Freeze the chosen configuration before evaluating fresh
-requests, and keep any requests used to choose a boundary in the calibration
-results. Use Preview to verify actual signal scores, routing, and latency.
+The probes are calibrated on Vela 2.0 0.8B: through the router, with its
+container limited to 4 CPUs, all 366 reach their expected decision. Re-run them with the
+decision model you deploy. Because the decision model reads long inputs slowly
+on a CPU, CI splits the bundle's probes into 16 jobs of similar cost
+(`evaluation.shards` in `probes.yaml`) and merges their reports.
 
 ## Limitations
 
 Quality bands compare the assigned pool; they do not guarantee answer accuracy.
-Balance's routing depends on the decision model's answers. Its questions read
-the beginning of the latest user message, so a very long input is judged by its
-first tokens: put the request before a long attachment. The default Vela 2.0
-0.3B rates some plain explanations as multi-step, reads some copy tasks on a
-supplied record as fact lookups, and can miss the tool need of a request that
-comes with a long record.
+Routing depends on the decision model's answers, and some sit close to their
+thresholds on Vela 2.0 0.8B: a request to summarize a due diligence report
+scores just above the `confidential` threshold, and a correction wrapped in a
+translation request scores just above `quoted`. Validate representative
+traffic, and prefer a larger decision model where routing errors are costly.
 Context accounting includes conversation history and output reserves but remains
 an estimate rather than a provider-tokenizer guarantee. Learned signals can
 misclassify requests, so validate representative traffic before rollout.
+
+Balance's effort boundaries and its code lane were chosen with Vela 2.0 4B on
+60 to 150 questions per benchmark; other workloads can need other thresholds.
+Its difficulty score separates everyday from multi-step requests well, but the
+boundary between high and max effort is coarse, and on Vela 2.0 0.8B some
+requests fall on the other side of a boundary (the probes note where). With two
+candidates, each `multi_factor` factor favors one of them outright, so small
+load differences can switch the model. `long_context` reads the Router's token
+estimate, about four bytes per token for prose until provider usage from
+requests with at least 4 KiB of text calibrates it; for English prose it
+counted 1.2 to 1.5 times a backend's tokens.
 
 Knowledge-base retrieval, reranking, caching, and memory can be added for
 applications that need them. These reusable recipes require no knowledge base

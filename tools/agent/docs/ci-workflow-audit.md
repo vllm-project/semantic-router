@@ -145,9 +145,9 @@ teardown failure stops the remaining profiles in that worker instead of reusing
 an untrusted cluster. Ordinary independent failures still preserve successful
 sibling evidence. This shares setup, not a live cluster across profiles.
 
-Recipe grouping uses three balanced standalone shards and a separate built-in
-`mom-v1` shard. Current standalone variant weights are 129, 87, and 100; the
-built-in shard has 346. Inventory and result aggregation remain separate jobs.
+Recipe grouping uses three balanced standalone shards and 16 built-in
+`mom-v1` probe shards. Current standalone variant weights are 129, 91, and 103;
+the built-in recipe has 366 probes, split by estimated read cost. Inventory and result aggregation remain separate jobs.
 The report adapter reconstructs the same source-aware matrix and rejects a
 missing image receipt or missing required probe. None of these reductions
 means runner-minutes should fall in the same proportion as worker count.

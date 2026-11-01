@@ -177,7 +177,6 @@
                   "usage": {
                     "input_tokens": 3,
                     "input_tokens_details": {
-                      "cache_write_tokens": null,
                       "cached_tokens": 1
                     },
                     "output_tokens": 2,

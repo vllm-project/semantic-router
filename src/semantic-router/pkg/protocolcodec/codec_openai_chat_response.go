@@ -34,6 +34,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"moderation":                                             len(wire.Moderation) > 0,
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
+		"citations":                                              wire.hasCitations(),
+		"search_results":                                         wire.hasSearchResults(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
@@ -46,7 +48,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields and the flat usage detail fields are
 	// similarly non-canonical and must not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || wire.hasFlatUsageDetails()
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() ||
+		wire.hasFlatUsageDetails() || chatChoicesHaveReasoningDetails(wire.Choices)
 	if needsReencode {
 		canonicalBody = nil
 	}

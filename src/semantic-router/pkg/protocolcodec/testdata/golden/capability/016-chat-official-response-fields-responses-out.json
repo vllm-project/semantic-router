@@ -38,7 +38,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -48,6 +47,116 @@
             "total_tokens": 3
           }
         }
+      }
+    },
+    {
+      "name": "citations",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "chatcmpl_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_778767bae4047c000ddcae9a",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "citations",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "search_results",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "chatcmpl_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_778767bae4047c000ddcae9a",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cached_tokens": null
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "search_results",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -88,7 +197,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -138,7 +246,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -194,7 +301,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -250,7 +356,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -310,7 +415,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -360,7 +464,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -410,7 +513,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -466,7 +568,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -516,7 +617,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -566,7 +666,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -622,7 +721,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -672,7 +770,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -722,7 +819,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -772,7 +868,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -822,7 +917,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -872,7 +966,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -928,7 +1021,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -984,7 +1076,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -1040,7 +1131,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -1096,7 +1186,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -1152,7 +1241,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -1202,7 +1290,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -1302,7 +1389,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
@@ -1352,7 +1438,6 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cache_write_tokens": null,
               "cached_tokens": null
             },
             "output_tokens": 1,
