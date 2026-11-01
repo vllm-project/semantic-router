@@ -388,14 +388,11 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 	if wire.OutputTokensDetails != nil {
 		reasoning = wire.OutputTokensDetails.ReasoningTokens
 	}
-	other := int64(-1)
-	if reasoning >= 0 && wire.OutputTokens >= reasoning {
-		other = wire.OutputTokens - reasoning
-	}
+	outputReasoning, outputOther := splitOutputUsage(wire.OutputTokens, reasoning, llmprotocol.UsageAuthoritative)
 	usage := llmprotocol.Usage{
 		State:         llmprotocol.UsageAvailable,
 		InputUncached: unknownCount(), InputCacheRead: unknownCount(), InputCacheWrite: unknownCount(),
-		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
+		OutputReasoning: outputReasoning, OutputOther: outputOther,
 		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: authoritative(wire.TotalTokens),
 	}
 	if wire.InputTokensDetails != nil {
