@@ -16,6 +16,7 @@ import (
 // ContrastiveJailbreakResult holds the analysis outcome for a single rule.
 type ContrastiveJailbreakResult struct {
 	MaxScore       float32 // Highest contrastive score across analysed messages
+	ExplicitMatch  bool    // Whether any message matched a configured explicit hard-block pattern
 	WorstMessage   string  // The message that produced MaxScore
 	WorstMsgIndex  int     // Index of that message in the input slice
 	JailbreakSim   float32 // max_sim(worstMsg, jailbreak_kb) for the worst message
@@ -107,18 +108,12 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		TotalMessages: len(messages),
 	}
 
-	// Search every bounded chunk before starting embedding inference. Explicit
-	// patterns are deterministic policy and can terminate the scan immediately,
-	// which also keeps long-context containment probes inexpensive.
-	for i, msg := range messages {
+	// Explicit patterns are deterministic policy matches. Record them separately
+	// from the contrastive score, which must be calculated independently.
+	for _, msg := range messages {
 		if c.matchesExplicitJailbreak(msg) {
-			result.MaxScore = 1
-			result.WorstMessage = msg
-			result.WorstMsgIndex = i
-			result.JailbreakSim = 1
-			result.BenignSim = 0
-			result.ProcessingTime = time.Since(start)
-			return result
+			result.ExplicitMatch = true
+			break
 		}
 	}
 

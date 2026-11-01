@@ -26,6 +26,10 @@ func TestServedLabelsRejectVocabulariesTheConsumersCannotUse(t *testing.T) {
 			_, err := jailbreakMappingFromLabels([]string{"benign", JailbreakClassificationErrorType})
 			return err
 		},
+		"jailbreak explicit-pattern sentinel": func() error {
+			_, err := jailbreakMappingFromLabels([]string{"benign", JailbreakExplicitPatternType})
+			return err
+		},
 	} {
 		if build() == nil {
 			t.Fatalf("%s: accepted", name)
