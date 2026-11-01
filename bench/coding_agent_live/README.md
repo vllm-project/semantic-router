@@ -54,10 +54,11 @@ python bench/coding_agent_live/report.py jobs/lane-1 \
 
 `--model` is the Router model name of the main agent. `--opus-model`,
 `--sonnet-model`, `--haiku-model` and `--subagent-model` map Claude Code's tier
-aliases and its subagent default, and each defaults to `--model`. Claude Code's
-Explore agent uses the haiku alias. An empty value leaves that variable unset,
-so a subagent inherits its parent's model. `--claude-code-version` pins the
-release, and `--dry-run` prints the Harbor command and the mapping.
+aliases and its subagent default, and each defaults to `--model`. In Claude
+Code 2.1.304 the general-purpose agent takes the subagent default and the
+Explore agent keeps its parent's model. An empty value leaves that variable
+unset, so a subagent inherits its parent's model. `--claude-code-version`
+pins the release, and `--dry-run` prints the Harbor command and the mapping.
 `--agent-kwarg KEY=VALUE`, repeatable, passes an option of Harbor's Claude Code
 agent, for example `reasoning_effort=xhigh` to pin the effort Claude Code sends,
 or `append_system_prompt=...`.
