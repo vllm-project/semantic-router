@@ -48,7 +48,8 @@ def download_test_set(domain: str) -> str:
     if not HF_AVAILABLE:
         raise ImportError(
             "huggingface_hub is required to download test sets. "
-            "Install with: pip install huggingface_hub"
+            "Install with: uv sync --project "
+            "src/training/model_embeddings/cache_embeddings --locked"
         )
 
     # Map domain to filename

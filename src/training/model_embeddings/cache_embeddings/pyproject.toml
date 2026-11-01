@@ -1,0 +1,24 @@
+[project]
+name = "vllm-sr-cache-embeddings"
+version = "0.0.0"
+description = "Environment for the semantic-cache embedding training scripts under src/training/model_embeddings/cache_embeddings"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "huggingface_hub>=0.20,<2",
+    "numpy>=1.24,<3",
+    "peft>=0.10,<1",
+    "pyyaml>=6.0,<7",
+    "scikit-learn>=1.4,<2",
+    "sentence-transformers>=2.2,<7",
+    "torch>=2.2,<3",
+    "tqdm>=4.60,<5",
+    "transformers>=4.40,<6",
+]
+
+[project.optional-dependencies]
+# generate_training_data.py drives a local vLLM generation server; the rest of
+# the area never imports vllm, so it stays out of the base environment.
+generation = ["vllm>=0.8,<1"]
+
+[tool.uv]
+package = false
