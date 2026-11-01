@@ -16,6 +16,14 @@ from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
+from .grading import (
+    BINARY_RESULT,
+    WEIGHTED_RUBRIC_RESULT,
+    ResultKind,
+    frozen_result_kind,
+    require_binary_results,
+    validate_result,
+)
 from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
@@ -249,10 +257,20 @@ def metric(
     *,
     planned_case_ids: Collection[str] | None = None,
     session_mode: str = STATELESS,
+    result_kinds: dict[str, ResultKind] | None = None,
 ) -> dict[str, Any]:
+    result_kinds = result_kinds or {}
+    weighted = WEIGHTED_RUBRIC_RESULT in result_kinds.values()
     completed = [r for r in results if r["status"] == "completed"]
-    scored = [r for r in completed if isinstance(r.get("correct"), bool)]
-    correct = sum(r["correct"] for r in scored)
+    scored: list[dict[str, Any]] = []
+    for row in completed:
+        kind = result_kinds.get(row.get("benchmark", ""), BINARY_RESULT)
+        if kind == WEIGHTED_RUBRIC_RESULT:
+            validate_result(kind=kind, result=row)
+            scored.append(row)
+        elif isinstance(row.get("correct"), bool):
+            scored.append(row)
+    correct = None if weighted else sum(r["correct"] for r in scored)
     subject = [c for c in calls if c["role"] == "subject"]
     overhead = [c for c in calls if c["role"] != "subject"]
     receipted_cases = {c["case_id"] for c in subject if c.get("case_id")}
@@ -284,7 +302,7 @@ def metric(
         if r.get("latency_s") is not None
     ]
     known = sum(c["cost_usd"] for c in subject if _known_cost(c.get("cost_usd")))
-    return {
+    result = {
         "id": target_id,
         "total": total,
         "completed": len(completed),
@@ -292,11 +310,15 @@ def metric(
         "pending": total - len(results),
         "scored": len(scored),
         "correct": correct,
-        "accuracy": correct / total if total else None,
-        "accuracy_denominator": "all_planned_cases; failures and unanswered count as incorrect",
+        "accuracy": correct / total if not weighted and total else None,
+        "accuracy_denominator": (
+            "binary accuracy is unavailable for weighted or mixed cohorts"
+            if weighted
+            else "all_planned_cases; failures and unanswered count as incorrect"
+        ),
         "complete": len(completed) == total and len(scored) == total,
         "output_diagnostics": output_diagnostics(results, subject, total),
-        "accuracy_ci95": wilson(correct, total),
+        "accuracy_ci95": None if weighted else wilson(correct, total),
         "cost_usd": sum_cost(subject) if cost_complete else None,
         "cache_neutral_cost_usd": (
             sum(c["cache_neutral_cost_usd"] for c in subject)
@@ -348,6 +370,77 @@ def metric(
         ),
         "request_time_sum_s": sum(c.get("latency_s", 0) for c in subject),
     }
+    if weighted:
+        result["result_kind"] = (
+            "mixed"
+            if BINARY_RESULT in result_kinds.values()
+            else WEIGHTED_RUBRIC_RESULT
+        )
+        result["continuity"]["switched_accuracy"] = None
+        result["continuity"]["unswitched_accuracy"] = None
+    return result
+
+
+def _rubric_cohort(
+    cases: list[dict[str, Any]], results: list[dict[str, Any]]
+) -> dict[str, Any]:
+    planned = {case["id"] for case in cases}
+    rows = [row for row in results if row["case_id"] in planned]
+    graded = [row for row in rows if row["status"] == "completed"]
+    for row in graded:
+        validate_result(kind=WEIGHTED_RUBRIC_RESULT, result=row)
+    complete = bool(planned) and len(graded) == len(planned)
+    return {
+        "planned": len(planned),
+        "graded": len(graded),
+        "failed": sum(row["status"] == "failed" for row in rows),
+        "cancelled": sum(row["status"] in {"cancelled", "interrupted"} for row in rows),
+        "pending": len(planned)
+        - len(rows)
+        + sum(row["status"] in {"queued", "running"} for row in rows),
+        "complete": complete,
+        "mean_normalized": mean(row["score"] for row in graded) if complete else None,
+        **{
+            "mean_"
+            + key: (
+                mean(row["details"]["rubric"][key] for row in graded)
+                if complete
+                else None
+            )
+            for key in ("total", "positive_earned", "negative_penalty")
+        },
+        "frac_with_any_penalty": (
+            mean(row["details"]["rubric"]["n_negative_triggered"] > 0 for row in graded)
+            if complete
+            else None
+        ),
+    }
+
+
+def weighted_rubric_report(
+    cases: list[dict[str, Any]], results: list[dict[str, Any]]
+) -> dict[str, Any]:
+    domains: dict[str, list[dict[str, Any]]] = {}
+    case_domains: dict[str, str] = {}
+    domain_results: dict[str, list[dict[str, Any]]] = {}
+    for case in cases:
+        domain = str(case.get("metadata", {}).get("stratum", "unknown"))
+        domains.setdefault(domain, []).append(case)
+        case_domains[case["id"]] = domain
+    for result in results:
+        if result["case_id"] in case_domains:
+            domain_results.setdefault(case_domains[result["case_id"]], []).append(
+                result
+            )
+    return {
+        "version": WEIGHTED_RUBRIC_RESULT,
+        "denominator": "all_planned_cases; incomplete cohorts have no aggregate quality",
+        **_rubric_cohort(cases=cases, results=results),
+        "per_domain": {
+            domain: _rubric_cohort(cases=group, results=domain_results.get(domain, []))
+            for domain, group in sorted(domains.items())
+        },
+    }
 
 
 def make_report(store, run_id):
@@ -368,6 +461,13 @@ def make_report(store, run_id):
         }
         rows = [r for r in results if r["target_id"] == target["id"]]
         tcalls = [c for c in calls if c["target_id"] == target["id"]]
+        kinds = {
+            c["benchmark"]: frozen_result_kind(
+                manifest=manifest, benchmark=c["benchmark"]
+            )
+            for c in manifest["cases"]
+            if c["id"] in selected_ids
+        }
         session_mode: str = (
             target.get("session_mode", STATELESS)
             if manifest["mode"] == "live"
@@ -381,6 +481,7 @@ def make_report(store, run_id):
                 len(selected_ids),
                 planned_case_ids=selected_ids,
                 session_mode=session_mode,
+                result_kinds={} if manifest["mode"] == "preview" else kinds,
             )
         )
         for benchmark in sorted({c["benchmark"] for c in manifest["cases"]}):
@@ -402,9 +503,24 @@ def make_report(store, run_id):
                         len(ids),
                         planned_case_ids=ids,
                         session_mode=session_mode,
+                        result_kinds=(
+                            {}
+                            if manifest["mode"] == "preview"
+                            else {benchmark: kinds[benchmark]}
+                        ),
                     ),
                 }
             )
+            if (
+                kinds[benchmark] == WEIGHTED_RUBRIC_RESULT
+                and manifest["mode"] != "preview"
+            ):
+                benchmarks[-1]["weighted_rubric"] = weighted_rubric_report(
+                    cases=[c for c in manifest["cases"] if c["id"] in ids],
+                    results=rows,
+                )
+                if len(kinds) == 1:
+                    metrics[-1]["weighted_rubric"] = benchmarks[-1]["weighted_rubric"]
     selected_ids = {cell["case_id"] for cell in cells}
     present = {c["benchmark"] for c in manifest["cases"] if c["id"] in selected_ids}
     weights = manifest["benchmark_weights"]
@@ -420,6 +536,8 @@ def make_report(store, run_id):
         macro = (
             sum(weights[row["benchmark"]] * row["accuracy"] for row in rows)
             / weight_sum
+            if all(row["accuracy"] is not None for row in rows)
+            else None
         )
         item["macro_accuracy"] = macro
         item["sr_bench_score"] = (
@@ -429,12 +547,16 @@ def make_report(store, run_id):
         )
         item["score_scope"] = (
             (
-                "full sr-bench 1.0"
-                if target_full_suite
+                "weighted-rubric diagnostic; no combined accuracy"
+                if any("weighted_rubric" in row for row in rows)
                 else (
-                    "extension diagnostic; normalized adapter weights"
-                    if extension_subset
-                    else "selected benchmark subset; renormalized fixed weights"
+                    "full sr-bench 1.0"
+                    if target_full_suite
+                    else (
+                        "extension diagnostic; normalized adapter weights"
+                        if extension_subset
+                        else "selected benchmark subset; renormalized fixed weights"
+                    )
                 )
             )
             + f"; profile={manifest['profile']}"
@@ -512,6 +634,10 @@ def make_report(store, run_id):
         "Self-hosted token-equivalent cost is not a measured hardware invoice.",
         "Wilson intervals describe case uncertainty; they do not account for source contamination or tuning selection.",
     ]
+    if any("weighted_rubric" in benchmark for benchmark in benchmarks):
+        limitations.append(
+            "Weighted rubric diagnostics retain signed totals and penalties. Missing or failed grades are not zero; aggregate quality requires every planned grade. Binary accuracy, Wilson intervals and a combined sr-bench score do not describe these cohorts."
+        )
     if manifest["mode"] == "replay":
         limitations.append(
             "Offline single-selection replay reuses saved answers, token counts and latencies. It makes zero model requests and is not a formal live score or measured routing performance."
@@ -618,6 +744,11 @@ def make_report(store, run_id):
             "dataset": manifest.get("dataset"),
             "sampling": manifest["sampling"],
             "adapter_versions": manifest.get("adapter_versions", {}),
+            **(
+                {"result_kinds": manifest["result_kinds"]}
+                if manifest.get("result_kinds")
+                else {}
+            ),
             "custom_subset": custom_subset,
             "target_profiles": [
                 {
@@ -650,6 +781,7 @@ def _comparison_protocol(baseline, candidate):
         "benchmark_options",
         "benchmark_weights",
         "adapter_versions",
+        "result_kinds",
         "mode",
         "limits",
     ):
@@ -726,6 +858,7 @@ class ComparisonValidator:
         self.store = store
         self.baseline = baseline
         bm = baseline["manifest"]
+        require_binary_results(manifest=bm, operation="Comparison")
         if baseline["status"] not in COMPARABLE_STATUSES or bm["mode"] != "live":
             raise ValueError("Baseline must be a completed or failed live run")
         self.singles = [t for t in bm["targets"] if t["kind"] == "single"]
@@ -778,6 +911,7 @@ class ComparisonValidator:
         return by_target
 
     def validate(self, candidate):
+        require_binary_results(manifest=candidate["manifest"], operation="Comparison")
         if self.baseline["id"] == candidate["id"]:
             raise ValueError("Choose two distinct runs for comparison")
         _comparison_protocol(self.baseline["manifest"], candidate["manifest"])

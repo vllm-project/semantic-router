@@ -175,12 +175,25 @@ def mom_usage(
         except ValueError as exc:
             raise CallFailure("Invalid MoM usage receipt") from exc
         if (
-            receipt.get("version") != 1
+            not isinstance(receipt, dict)
+            or type(receipt.get("version")) is not int
+            or receipt["version"] != 1
             or not isinstance(receipt.get("complete"), bool)
             or not isinstance(receipt.get("calls"), list)
         ):
             raise CallFailure("Invalid MoM usage receipt contract")
         calls = receipt["calls"]
+        if not calls and not receipt["complete"]:
+            # The Router emits this sentinel when no complete call trace is available.
+            return {
+                "usage": None,
+                "cost_usd": None,
+                "model_usage": [],
+                "inference_call_count": None,
+                "usage_complete": False,
+                "cache_read_reported": None,
+                "cache_write_reported": None,
+            }
         if not 1 <= len(calls) <= MAX_RECEIPT_CALLS:
             raise CallFailure("Invalid MoM inference call count")
         breakdown = []

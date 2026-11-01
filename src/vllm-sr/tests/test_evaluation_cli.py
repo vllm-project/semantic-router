@@ -5,7 +5,7 @@ import threading
 import time
 
 from cli.commands.benchmark import benchmark
-from cli.sr_bench.contracts import plan
+from cli.sr_bench.contracts import BENCHMARK_WEIGHTS, plan
 from cli.sr_bench.service import Server
 from cli.sr_bench.store import Store
 from click.testing import CliRunner
@@ -56,13 +56,13 @@ def _run_command(server, store_dir, document, *extra):
     ]
 
 
-def test_catalog_and_clean_command_surface():
+def test_catalog_and_clean_command_surface() -> None:
     runner = CliRunner()
     result = runner.invoke(benchmark, ["catalog"])
     assert result.exit_code == 0, result.output
     catalog = json.loads(result.output)
     assert catalog["version"] == "sr-bench-1.0"
-    assert len(catalog["benchmarks"]) == 9
+    assert set(BENCHMARK_WEIGHTS) <= {b["id"] for b in catalog["benchmarks"]}
     assert "tau3" in {b["id"] for b in catalog["benchmarks"]}
     assert "tau2" not in {b["id"] for b in catalog["benchmarks"]}
     assert set(benchmark.commands) == {

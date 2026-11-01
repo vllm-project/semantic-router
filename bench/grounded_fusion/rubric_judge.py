@@ -17,66 +17,28 @@ of the final answer).
 from __future__ import annotations
 
 import json
-import re
-from dataclasses import dataclass, field
+
+from cli.sr_bench.draco_rubric import (
+    DEFAULT_BATCH_SIZE,
+    MAX_ANSWER_CHARS,
+    CriterionVerdict,
+    RubricScore,
+    aggregate,
+    decode_verdicts,
+    judge_messages,
+)
 
 from .datasets import DracoCriterion, DracoRubric
 from .llm_client import ChatClient
-
-_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
-
-
-@dataclass
-class CriterionVerdict:
-    id: str
-    matched: bool
-    weight: float
-    section_title: str
-    is_negative: bool
-    evidence: str = ""
-
-
-@dataclass
-class RubricScore:
-    total: float
-    max_positive: float
-    positive_earned: float
-    negative_penalty: float  # <= 0; sum of negative weights that were triggered
-    per_section: dict[str, float] = field(default_factory=dict)
-    verdicts: list[CriterionVerdict] = field(default_factory=list)
-
-    @property
-    def normalized(self) -> float:
-        """Total clamped to [0,1] against the positive ceiling (penalties can push <0)."""
-        if self.max_positive <= 0:
-            return 0.0
-        return max(0.0, min(1.0, self.total / self.max_positive))
-
-    @property
-    def n_negative_triggered(self) -> int:
-        return sum(1 for v in self.verdicts if v.is_negative and v.matched)
-
-
-_SYSTEM = (
-    "You are a strict grader. You are given a QUESTION, an ANSWER, and a list of "
-    "RUBRIC CRITERIA. For each criterion decide whether the ANSWER exhibits or "
-    "satisfies what the criterion's requirement describes. A criterion may describe "
-    "a GOOD property (reward) or a BAD behavior (penalty); in BOTH cases return "
-    "matched=true if and only if the ANSWER actually does what the requirement "
-    "describes. Judge only what the answer states; do not reward omissions. Return "
-    "ONLY a JSON array, one object per criterion: "
-    '[{"id": "<criterion id>", "matched": true|false, "evidence": "<=15 words"}]. '
-    "No prose, no markdown fences."
-)
 
 
 class RubricJudge:
     def __init__(
         self,
         client: ChatClient,
-        batch_size: int = 8,
-        max_answer_chars: int = 24000,
-    ):
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        max_answer_chars: int = MAX_ANSWER_CHARS,
+    ) -> None:
         self.client = client
         self.batch_size = batch_size
         self.max_answer_chars = max_answer_chars
@@ -105,15 +67,8 @@ class RubricJudge:
     def _judge_batch(
         self, problem: str, answer: str, batch: list[DracoCriterion]
     ) -> dict[str, dict]:
-        crit_lines = "\n".join(f'- id="{c.id}": {c.requirement}' for c in batch)
-        user = (
-            f"QUESTION:\n{problem}\n\n"
-            f"ANSWER:\n{answer}\n\n"
-            f"RUBRIC CRITERIA ({len(batch)}):\n{crit_lines}\n\n"
-            "Return the JSON array now."
-        )
         res = self.client.chat(
-            [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user}],
+            messages=judge_messages(problem=problem, answer=answer, batch=batch),
             extra_body={
                 "think": False
             },  # ask Qwen3 to skip thinking; ignored by others
@@ -124,12 +79,8 @@ class RubricJudge:
     def _parse(content: str) -> dict[str, dict]:
         if not content:
             return {}
-        text = content.strip()
-        if not text.startswith("["):
-            m = _JSON_ARRAY_RE.search(text)
-            text = m.group(0) if m else "[]"
         try:
-            arr = json.loads(text)
+            arr = decode_verdicts(content)
         except json.JSONDecodeError:
             return {}
         out: dict[str, dict] = {}
@@ -142,24 +93,4 @@ class RubricJudge:
     def _aggregate(
         rubric: DracoRubric, verdicts: list[CriterionVerdict]
     ) -> RubricScore:
-        total = sum(v.weight for v in verdicts if v.matched)
-        positive_earned = sum(
-            v.weight for v in verdicts if v.matched and not v.is_negative
-        )
-        negative_penalty = sum(
-            v.weight for v in verdicts if v.matched and v.is_negative
-        )
-        per_section: dict[str, float] = {}
-        for v in verdicts:
-            if v.matched:
-                per_section[v.section_title] = (
-                    per_section.get(v.section_title, 0.0) + v.weight
-                )
-        return RubricScore(
-            total=total,
-            max_positive=rubric.max_positive_score,
-            positive_earned=positive_earned,
-            negative_penalty=negative_penalty,
-            per_section=per_section,
-            verdicts=verdicts,
-        )
+        return aggregate(rubric=rubric, verdicts=verdicts)
