@@ -526,6 +526,21 @@ domains:
     verify: [make recipe-conformance-live-cpu-all]
     verifications: [recipe-conformance]
 
+  # The model, pins and thresholds the built-in signals use by default decide
+  # what every recipe and E2E profile reads. #5512 changed them without these
+  # lanes and broke the balance recipe (#5592) and two CPU E2E lanes (#5594).
+  default-signal-models:
+    owner: model-runtime
+    paths:
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/canonical_operating_points.go
+      - src/semantic-router/pkg/config/model_runtime_implicit.go
+      - src/semantic-router/pkg/config/registry.go
+      - src/model-runtime/vllm_srun/registry/releases.generated.json
+      - src/model-runtime/vllm_srun/registry/tables/**
+    checks: []
+    verifications: [recipe-conformance, e2e.envoy-ai-gateway, e2e.vela-halu]
+
   memory:
     owner: router-core
     paths:
@@ -1055,6 +1070,19 @@ profiles:
       - src/semantic-router/pkg/classification/contrastive_preference_classifier.go
       - src/semantic-router/pkg/classification/contrastive_preference_embeddings.go
       - src/semantic-router/pkg/classification/contrastive_preference_scoring.go
+      - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
+      - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
+  preference-external-routing:
+    display_name: Preference External Routing
+    owner: e2e
+    coverage_role: preference-external-routing
+    selection: pr
+    paths:
+      - e2e/profiles/preference-external-routing/**
+      - e2e/testcases/preference_external_routing.go
+      - e2e/testcases/testdata/preference_external_routing_cases.json
+      - src/semantic-router/pkg/classification/preference_classifier.go
+      - src/semantic-router/pkg/classification/preference_classifier_external.go
       - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
       - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
   external-gateway-responses:

@@ -170,6 +170,9 @@ func decodeAnthropicUsage(wire anthropicUsageWire, policy llmprotocol.Policy, di
 }
 
 func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredResponseCapabilities(response)); err != nil {
+		return nil, nil, err
+	}
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {
