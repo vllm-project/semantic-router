@@ -114,7 +114,7 @@ func completeRetentionTestResponse(t *testing.T, router *OpenAIRouter, ctx *Requ
 	t.Helper()
 	switch path {
 	case "buffered":
-		response := router.handleNonStreamingResponseBody(extProcResponseFixture(ctx.TargetFormat), ctx, 0)
+		response := router.handleNonStreamingResponseBody(extProcResponseFixture(ctx.TargetFormat), ctx, 0, false)
 		if response.GetResponseBody() == nil {
 			t.Fatal("buffered generation did not complete")
 		}
