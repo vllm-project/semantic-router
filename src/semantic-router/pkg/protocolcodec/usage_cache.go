@@ -28,13 +28,6 @@ func decodeInputCacheUsage(usage *llmprotocol.Usage, cached, written *int64, ali
 	return nil
 }
 
-func optionalAuthoritative(value *int64) llmprotocol.TokenCount {
-	if value == nil {
-		return unknownCount()
-	}
-	return authoritative(*value)
-}
-
 func decodeAnthropicCacheCreationTiers(
 	creation *anthropicCacheCreationUsageWire,
 	aggregate int64,
