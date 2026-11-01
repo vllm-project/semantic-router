@@ -123,6 +123,7 @@ instead of being silently dropped.
 | `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
+| Deferred tool loading (`tools[].defer_loading`) | Not supported | Not supported | Not supported |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
@@ -151,6 +152,13 @@ change history are rejected. Anthropic `cache_control` boundaries are omitted
 when the selected backend uses Responses, which cannot represent them. The
 prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
 `dropped` diagnostic for `cache_control`.
+
+`tools[].defer_loading` is rejected for every backend format, Messages
+included, because honoring it needs the backend's tool search. Claude Code marks
+some tools with it on its first call. It retries without the field, and then
+sends every tool definition on every call for the rest of the run instead of
+loading some on demand. So each session starts with one or two rejected calls
+and carries the larger tool list afterwards.
 
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
