@@ -72,6 +72,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Harbor Claude Code option, for example reasoning_effort=xhigh or "
         "append_system_prompt=...; repeatable",
     )
+    parser.add_argument(
+        "--agent-env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Environment variable for Claude Code in the task container, for "
+        "example CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; repeatable",
+    )
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--jobs-dir", type=Path, default=Path("jobs"))
@@ -126,6 +134,7 @@ def harbor_command(args: argparse.Namespace) -> list[str]:
         f"ANTHROPIC_BASE_URL={args.router_url}",
         "--ae",
         f"ANTHROPIC_API_KEY={args.api_key}",
+        *[part for env in args.agent_env for part in ("--ae", env)],
         "-k",
         str(args.attempts),
         "-n",

@@ -93,6 +93,25 @@ def test_agent_kwargs_reach_harbor_as_agent_options():
     ]
 
 
+def test_agent_env_reaches_harbor_as_agent_environment():
+    args = run.parse_args(
+        [
+            "--dataset=tasks",
+            "--router-url=http://172.17.0.1:8899",
+            "--model=vllm-sr/parent",
+            "--job-name=lane",
+            "--agent-env=CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1",
+        ]
+    )
+    command = run.harbor_command(args)
+    env = [command[i + 1] for i, part in enumerate(command) if part == "--ae"]
+    assert env == [
+        "ANTHROPIC_BASE_URL=http://172.17.0.1:8899",
+        "ANTHROPIC_API_KEY=router",
+        "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1",
+    ]
+
+
 def test_lane_env_overrides_harbors_single_model_aliases_in_the_container():
     # Harbor sets every alias and the subagent default to the run's model.
     harbor_env = {

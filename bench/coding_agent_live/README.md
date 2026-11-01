@@ -61,6 +61,10 @@ release, and `--dry-run` prints the Harbor command and the mapping.
 `--agent-kwarg KEY=VALUE`, repeatable, passes an option of Harbor's Claude Code
 agent, for example `reasoning_effort=xhigh` to pin the effort Claude Code sends,
 or `append_system_prompt=...`.
+`--agent-env KEY=VALUE`, also repeatable, sets an environment variable for
+Claude Code in the task container. Claude Code 2.1.304 starts Agent subagents in
+the background and a print-mode run can end before they report, so subagent
+runs pass `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`.
 
 The report prints one JSON row per trial and a final summary with the pass
 count, the trials that ended on an API error, Harbor's exceptions, and the
