@@ -48,7 +48,7 @@ from .models.branch import (
     static_layout,
 )
 from .models.forest import ForestShape
-from .models.lora import attach
+from .models.lora import attach, fold_scaling
 from .models.packed import Packed, packed_unavailable
 from .models.qwen3_5 import noncausal_masks, rope_index
 from .models.tree import Tree
@@ -127,6 +127,13 @@ class NativeEngineModel(EngineModel):
             if reduced_kind is None
             else unavailable(reduced_kind, self.device, device_info.bf16)
         )
+        # An encoder's LoRA layers drop their scaling multiply (exact; a decoder's GPU fast path
+        # takes lean LoRA instead). Before the views, which copy the factors.
+        folded = (
+            sum(fold_scaling(module) for module in self.stacks().values())
+            if spec.encoder
+            else 0
+        )
         # Views are taken before the linears are laid out: they copy nn.Linear layers.
         self.reduced: dict[str | None, nn.Module] = (
             {}
@@ -150,7 +157,7 @@ class NativeEngineModel(EngineModel):
                 layer.unscaled_product &= self.kernels.allow_approximate
             elif isinstance(layer, quantized.NVFP4Linear):
                 nvfp4.append(layer)
-        self.fast: dict[str, Any] = {}
+        self.fast: dict[str, Any] = {"lora_folded": folded} if folded else {}
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
