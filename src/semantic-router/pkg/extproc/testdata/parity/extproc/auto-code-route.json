@@ -6,9 +6,11 @@
           "removeHeaders": [
             "x-vsr-fusion-depth",
             "x-vsr-internal-auth",
+            "x-vsr-looper-client-max-output-tokens",
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",
             "x-vsr-looper-request",
+            "x-vsr-looper-stage-max-output-tokens",
             "x-vsr-selected-recipe"
           ],
           "setHeaders": [

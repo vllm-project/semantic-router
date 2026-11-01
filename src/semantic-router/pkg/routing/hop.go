@@ -24,6 +24,12 @@ type Hop struct {
 	// field by field: the request-graph step's layer. Nil keeps the
 	// decision's.
 	Fallback *fallback.FallbackOverride
+	// ClientMaxOutputTokens is the original client completion-token ceiling.
+	// Nil means the client omitted one. Only the Router sets this.
+	ClientMaxOutputTokens *int64
+	// StageMaxOutputTokens is this hop's authored algorithm or stage ceiling.
+	// Nil means the hop has no separate stage ceiling.
+	StageMaxOutputTokens *int64
 }
 
 type hopKey struct{}

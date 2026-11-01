@@ -25282,6 +25282,16 @@
                               "decision_tier": {
                                 "type": "integer"
                               },
+                              "effective_max_output_tokens": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "effective_max_output_tokens_fallback": {
+                                "type": "string"
+                              },
+                              "effective_max_output_tokens_source": {
+                                "type": "string"
+                              },
                               "fusion_quorum": {
                                 "nullable": true,
                                 "type": "object",
@@ -25364,6 +25374,16 @@
                                         },
                                         "discarded": {
                                           "type": "boolean"
+                                        },
+                                        "effective_max_output_tokens": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
+                                        "effective_max_output_tokens_fallback": {
+                                          "type": "string"
+                                        },
+                                        "effective_max_output_tokens_source": {
+                                          "type": "string"
                                         },
                                         "estimated_cost": {
                                           "nullable": true,
@@ -25626,6 +25646,10 @@
                                         "LoRAName": {
                                           "type": "string"
                                         },
+                                        "MaxCompletionTokens": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "Model": {
                                           "type": "string"
                                         },
@@ -25650,6 +25674,7 @@
                                         "Model",
                                         "LoRAName",
                                         "Weight",
+                                        "MaxCompletionTokens",
                                         "UseReasoning",
                                         "ReasoningDescription",
                                         "ReasoningMode",
@@ -25681,6 +25706,10 @@
                                                   "LoRAName": {
                                                     "type": "string"
                                                   },
+                                                  "MaxCompletionTokens": {
+                                                    "nullable": true,
+                                                    "type": "integer"
+                                                  },
                                                   "Model": {
                                                     "type": "string"
                                                   },
@@ -25705,6 +25734,7 @@
                                                   "Model",
                                                   "LoRAName",
                                                   "Weight",
+                                                  "MaxCompletionTokens",
                                                   "UseReasoning",
                                                   "ReasoningDescription",
                                                   "ReasoningMode",
@@ -30033,6 +30063,16 @@
                         "decision_tier": {
                           "type": "integer"
                         },
+                        "effective_max_output_tokens": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "effective_max_output_tokens_fallback": {
+                          "type": "string"
+                        },
+                        "effective_max_output_tokens_source": {
+                          "type": "string"
+                        },
                         "fusion_quorum": {
                           "nullable": true,
                           "type": "object",
@@ -30115,6 +30155,16 @@
                                   },
                                   "discarded": {
                                     "type": "boolean"
+                                  },
+                                  "effective_max_output_tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  },
+                                  "effective_max_output_tokens_fallback": {
+                                    "type": "string"
+                                  },
+                                  "effective_max_output_tokens_source": {
+                                    "type": "string"
                                   },
                                   "estimated_cost": {
                                     "nullable": true,
@@ -30377,6 +30427,10 @@
                                   "LoRAName": {
                                     "type": "string"
                                   },
+                                  "MaxCompletionTokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  },
                                   "Model": {
                                     "type": "string"
                                   },
@@ -30401,6 +30455,7 @@
                                   "Model",
                                   "LoRAName",
                                   "Weight",
+                                  "MaxCompletionTokens",
                                   "UseReasoning",
                                   "ReasoningDescription",
                                   "ReasoningMode",
@@ -30432,6 +30487,10 @@
                                             "LoRAName": {
                                               "type": "string"
                                             },
+                                            "MaxCompletionTokens": {
+                                              "nullable": true,
+                                              "type": "integer"
+                                            },
                                             "Model": {
                                               "type": "string"
                                             },
@@ -30456,6 +30515,7 @@
                                             "Model",
                                             "LoRAName",
                                             "Weight",
+                                            "MaxCompletionTokens",
                                             "UseReasoning",
                                             "ReasoningDescription",
                                             "ReasoningMode",
@@ -40684,6 +40744,10 @@
                               "LoRAName": {
                                 "type": "string"
                               },
+                              "MaxCompletionTokens": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
                               "Model": {
                                 "type": "string"
                               },
@@ -40708,6 +40772,7 @@
                               "Model",
                               "LoRAName",
                               "Weight",
+                              "MaxCompletionTokens",
                               "UseReasoning",
                               "ReasoningDescription",
                               "ReasoningMode",
@@ -40739,6 +40804,10 @@
                                         "LoRAName": {
                                           "type": "string"
                                         },
+                                        "MaxCompletionTokens": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "Model": {
                                           "type": "string"
                                         },
@@ -40763,6 +40832,7 @@
                                         "Model",
                                         "LoRAName",
                                         "Weight",
+                                        "MaxCompletionTokens",
                                         "UseReasoning",
                                         "ReasoningDescription",
                                         "ReasoningMode",
@@ -44242,6 +44312,10 @@
                                   "LoRAName": {
                                     "type": "string"
                                   },
+                                  "MaxCompletionTokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  },
                                   "Model": {
                                     "type": "string"
                                   },
@@ -44266,6 +44340,7 @@
                                   "Model",
                                   "LoRAName",
                                   "Weight",
+                                  "MaxCompletionTokens",
                                   "UseReasoning",
                                   "ReasoningDescription",
                                   "ReasoningMode",
@@ -44297,6 +44372,10 @@
                                             "LoRAName": {
                                               "type": "string"
                                             },
+                                            "MaxCompletionTokens": {
+                                              "nullable": true,
+                                              "type": "integer"
+                                            },
                                             "Model": {
                                               "type": "string"
                                             },
@@ -44321,6 +44400,7 @@
                                             "Model",
                                             "LoRAName",
                                             "Weight",
+                                            "MaxCompletionTokens",
                                             "UseReasoning",
                                             "ReasoningDescription",
                                             "ReasoningMode",

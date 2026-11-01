@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -429,6 +430,17 @@ type RequestContext struct {
 	Hop             *routing.Hop          // The routing context of a hop served in process
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+
+	// Output-token limit composition. ClientMaxOutputTokens is the immutable
+	// ingress snapshot, or the bound carried on an in-process Looper hop. A
+	// missing snapshot means the client omitted a limit. AlgorithmStage is the
+	// authored Looper stage bound. Ledger is reserved for #2861.
+	ClientMaxOutputTokens            *int64
+	AlgorithmStageMaxOutputTokens    *int64
+	OutputTokenLedger                outputtokens.Contributor
+	EffectiveMaxOutputTokens         *int64
+	EffectiveMaxOutputTokensSource   string
+	EffectiveMaxOutputTokensFallback string
 
 	// ListenerModels, when set, are the only request models the listener the
 	// client request arrived on accepts.
