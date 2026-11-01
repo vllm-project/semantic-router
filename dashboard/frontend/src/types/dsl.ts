@@ -53,7 +53,13 @@ export type BoolExprNode =
   | { type: 'and'; left: BoolExprNode; right: BoolExprNode; pos: ASTPosition }
   | { type: 'or'; left: BoolExprNode; right: BoolExprNode; pos: ASTPosition }
   | { type: 'not'; expr: BoolExprNode; pos: ASTPosition }
-  | { type: 'signal_ref'; signalType: string; signalName: string; pos: ASTPosition }
+  | {
+      type: 'signal_ref'
+      signalType: string
+      signalName: string
+      fields?: DSLFieldObject
+      pos: ASTPosition
+    }
 
 export interface ASTSignalDecl {
   signalType: string

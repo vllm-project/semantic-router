@@ -650,7 +650,7 @@ export function serializeBoolExpr(expr: BoolExprNode | null): string {
   const type = expr.type
   switch (type) {
     case 'signal_ref':
-      return `${expr.signalType}(${quoteDSLString(expr.signalName)})`
+      return formatSignalRef(expr.signalType, expr.signalName, expr.fields)
     case 'and':
       return `${serializeBoolExpr(expr.left)} AND ${serializeBoolExpr(expr.right)}`
     case 'or':
@@ -663,6 +663,45 @@ export function serializeBoolExpr(expr: BoolExprNode | null): string {
     default:
       return ''
   }
+}
+
+// Signal fields follow the name: classifier("risk", label: "unsafe", predicate: { gte: 0.5 }).
+export function formatSignalRef(
+  signalType: string,
+  signalName: string,
+  fields: DSLFieldObject = {},
+): string {
+  return `${signalType}(${[quoteDSLString(signalName), ...inlineFieldEntries(fields)].join(', ')})`
+}
+
+function inlineFieldEntries(fields: DSLFieldObject): string[] {
+  return Object.entries(fields).flatMap(([key, value]) =>
+    value === undefined || value === null ? [] : [`${key}: ${serializeInlineValue(value)}`],
+  )
+}
+
+function serializeInlineValue(value: DSLFieldValue): string {
+  if (Array.isArray(value)) return `[${value.map(serializeInlineValue).join(', ')}]`
+  if (isDSLFieldObject(value)) {
+    const entries = inlineFieldEntries(value)
+    return entries.length > 0 ? `{ ${entries.join(', ')} }` : '{}'
+  }
+  if (typeof value === 'number') return formatDslNumber(value)
+  return typeof value === 'string' ? quoteDSLString(value) : String(value)
+}
+
+// The DSL lexer has no exponent form (1e-7 is written as 0.0000001) and reads a
+// number without a point as int64, so whole numbers beyond that range keep ".0".
+function formatDslNumber(value: number): string {
+  const [mantissa, exponent] = String(value).split('e')
+  const floatSuffix = Math.abs(value) >= 2 ** 63 ? '.0' : ''
+  if (exponent === undefined) return mantissa + floatSuffix
+  const sign = value < 0 ? '-' : ''
+  const digits = mantissa.replace(/[-.]/g, '')
+  const integerDigits = Number(exponent) + 1
+  return integerDigits > 0
+    ? sign + digits.padEnd(integerDigits, '0') + floatSuffix
+    : `${sign}0.${'0'.repeat(-integerDigits)}${digits}`
 }
 
 function isDSLFieldObject(value: DSLFieldValue): value is DSLFieldObject {
