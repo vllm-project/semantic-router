@@ -27,9 +27,9 @@ import ThemedImage from '@theme/ThemedImage';
 
 为 agent harness 提供稳定的模型 API。vLLM Semantic Router 在 OpenAI 或 Anthropic 兼容端点背后，通过显式策略选择或组合模型。模型与策略可以演进，无需重写 harness 集成。
 
-应用也可以直接调用 [System One](model-runtime/quickstart) 获取类型化判断。Router 与
+应用也可以直接调用 [System One](/zh-hans/docs/next/model-runtime/quickstart) 获取类型化判断。Router 与
 Engine 模式共享 Frontend 和模型运行时，配方增加可选的路由层。模块边界与副本池见
-[组件架构](overview/component-architecture)。
+[组件架构](/zh-hans/docs/next/overview/component-architecture)。
 
 ## 为什么需要路由？
 
@@ -50,12 +50,12 @@ Harness 负责任务循环、工具执行与任务状态；Router 负责每次�
 
 ## 从这里开始
 
-- 完成[快速开始](/zh-Hans/docs/installation)。
-- [连接 agent harness](installation/agent-harness)。
-- 浏览[使用场景](overview/use-cases)。
-- 阅读[系统概览](overview/semantic-router-overview)和[路由流水线](overview/signal-driven-decisions)。
-- 用[入口与配方](tutorials/global/entrypoints-and-recipes)构建虚拟模型。
-- 比较[部署选项](installation/deployment-options)。
+- 完成[快速开始](/zh-hans/docs/next/installation)。
+- [连接 agent harness](/zh-hans/docs/next/installation/agent-harness)。
+- 浏览[使用场景](/zh-hans/docs/next/overview/use-cases)。
+- 阅读[系统概览](/zh-hans/docs/next/overview/semantic-router-overview)和[路由流水线](/zh-hans/docs/next/overview/signal-driven-decisions)。
+- 用[入口与配方](/zh-hans/docs/next/tutorials/global/entrypoints-and-recipes)构建虚拟模型。
+- 比较[部署选项](/zh-hans/docs/next/installation/deployment-options)。
 
 ## 项目
 
