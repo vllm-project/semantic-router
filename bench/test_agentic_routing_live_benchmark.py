@@ -397,3 +397,60 @@ def test_baseline_namespace_drops_previous_response_id_by_default(tmp_path):
 
     assert baseline_args.base_url == "http://direct/v1"
     assert baseline_args.include_previous_response_id is False
+
+
+def test_require_router_diagnostics_sends_debug_header():
+    live = load_live_module()
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    args = make_args("http://unused/v1", Path("."), require_router_diagnostics=True)
+    live.apply_required_debug_header(headers, args)
+    assert headers["x-vsr-debug"] == "true"
+
+
+def test_require_router_diagnostics_keeps_explicit_debug_override():
+    live = load_live_module()
+    headers = {"X-VSR-Debug": "false"}
+    args = make_args("http://unused/v1", Path("."), require_router_diagnostics=True)
+    live.apply_required_debug_header(headers, args)
+    assert headers == {"X-VSR-Debug": "false"}
+
+
+def test_run_benchmark_headers_include_debug_when_diagnostics_required(tmp_path):
+    live = load_live_module()
+    captured = {}
+
+    def fake_post_json(url, body, headers, timeout):
+        captured.update(headers)
+        return {
+            "status": 200,
+            "latency_ms": 1.0,
+            "headers": {
+                "x-vsr-selected-model": "small",
+                "x-vsr-selected-decision": "agentic",
+                "x-vsr-session-phase": "user_turn",
+                "x-vsr-selected-confidence": "0.1",
+                "x-vsr-replay-id": "replay",
+                "x-vsr-context-token-count": "3",
+            },
+            "json": {"id": "resp_1", "model": "small", "usage": {}},
+            "error": "",
+        }
+
+    original = live.post_json
+    live.post_json = fake_post_json
+    try:
+        args = make_args(
+            "http://unused/v1",
+            tmp_path,
+            sessions=1,
+            turns=1,
+            scenario="balanced",
+            require_router_diagnostics=True,
+        )
+        live.run_benchmark(args)
+    finally:
+        live.post_json = original
+    assert captured.get("x-vsr-debug") == "true"
