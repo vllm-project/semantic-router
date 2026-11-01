@@ -75,6 +75,16 @@ GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% a
 τ³ 10%. It requires all nine complete benchmarks. A subset macro result retains
 its subset label and is not the full score.
 
+The opt-in `router-flow-gpqa-evalscope` smoke diagnostic has its own frozen
+adapter version. It applies EvalScope 1.8.1's grader to completed final answers,
+while sr-bench retains streaming, no retries and output-limit failures.
+Its accuracy still divides by all planned cases, including failed and
+undispatched cases. Reports label it an extension diagnostic and leave
+`sr_bench_score` null. This is not unchanged native benchmark parity.
+Retain the frozen manifest for the native source and suite digests, choice
+order, sampling and any smaller-prefix disclosure; the report's plan and case
+hashes identify that manifest. Public reference scores are not included.
+
 Paired comparison selects the strongest observed single model by the same
 aggregate over identical cases and records that selection.
 Exact weighted-quality ties prefer the single with the lowest complete known
