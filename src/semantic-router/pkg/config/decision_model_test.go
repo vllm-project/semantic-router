@@ -52,7 +52,7 @@ func selectedDecisionYAML(artifact, system string) string {
 func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 	cfg := mustParseDecisionModel(t, withDecisionQuestion(builtInSignalsYAML("")))
 	name, resource, ok, err := cfg.DecisionModelDeployment()
-	if err != nil || !ok || name != "primary" || resource.Artifact != "vllm-sr/Vela-2.0-0.3B" {
+	if err != nil || !ok || name != "primary" || resource.Artifact != "vllm-sr/vela3-fast" {
 		t.Fatalf("default %s %+v %v", name, resource, err)
 	}
 	for _, consumer := range []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "hallucination_detector"} {

@@ -73,7 +73,7 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 		Messages:    buildTrajectoryMessages(turns),
 		Routes:      buildTrajectoryRoutes(records),
 	}
-	return r.createRouterReplayJSONResponse(200, payload)
+	return r.createJSONResponse(200, payload)
 }
 
 // filterTrajectoryRecordsBySession returns records captured for one logical session.

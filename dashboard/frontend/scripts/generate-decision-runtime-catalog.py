@@ -203,6 +203,25 @@ def backend_projection(data):
                 "question_types": kinds,
             }
         )
+    vela3_kinds = list(
+        ast.literal_eval(
+            assignment(RUNTIME / "families/vela3/family.py", "QUESTION_TYPES")
+        )
+    )
+    for entry in assignment(RUNTIME / "registry/tables/vela3.py", "MODELS").elts:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "_vela"
+        ):
+            raise ValueError("Vela release entries require an updated task projection")
+        models.append(
+            {
+                "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
+                "family": "vela3",
+                "question_types": vela3_kinds,
+            }
+        )
     return {"models": models}
 
 

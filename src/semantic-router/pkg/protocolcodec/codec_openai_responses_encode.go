@@ -8,6 +8,9 @@ import (
 )
 
 func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.OpenAIResponsesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
@@ -31,6 +34,9 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
 				"messages[].output_config.effort", "Responses cannot apply Anthropic per-message effort")
 		}
+	}
+	if hasParticipantNames(request) {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Responses has no participant names")
 	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,

@@ -91,9 +91,9 @@ inventory:
           - microsoft/phi-4-mini-flash-reasoning
       - publisher: MiniMax
         representative_models:
+          - minimax/minimax-m3.1-flash
           - minimax/minimax-m3
           - minimax/minimax-m2.7
-          - minimax/minimax-m2.5
       - publisher: Mistral AI
         representative_models:
           - mistral/mistral-small-4
