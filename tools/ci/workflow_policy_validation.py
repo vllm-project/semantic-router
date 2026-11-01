@@ -544,6 +544,11 @@ def validate_mergify_contract(errors: list[str]) -> None:
         )
         if any(f"check-success = {context}" in serialized for context in obsolete):
             errors.append(f".mergify.yml: {section} retains compatibility contexts")
+    if not default_rule.get("max_checks_retries"):
+        errors.append(
+            ".mergify.yml: the default queue rule must set max_checks_retries "
+            "above 0, or Mergify checks in place and the queue waits for /ci run"
+        )
     pull_request_rules = data.get("pull_request_rules", [])
     queue_rules = [
         rule

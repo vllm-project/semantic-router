@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import json
 import os
 import shutil
 import subprocess
@@ -15,6 +16,13 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 ORIGINS = "https://dashboard.example.com,https://dashboard.example.net:8443"
 ENV_NAME = "GF_LIVE_ALLOWED_ORIGINS"
+# Retired in https://github.com/vllm-project/semantic-router/commit/20aefb64154e9e4d7e3dad784ff492ebf1d49a65;
+# the router no longer exports these families.
+RETIRED_FAMILIES: tuple[str, ...] = (
+    "llm_model_error_rate_windowed",
+    "llm_model_queue_depth_estimated",
+    "llm_model_utilization_percentage",
+)
 
 
 def run(*command: str, **kwargs) -> str:
@@ -41,6 +49,16 @@ def grafana_env(rendered: str) -> dict:
     )
     # Kubernetes defaults an omitted EnvVar.value to the empty string.
     return {item["name"]: item.get("value", "") for item in container["env"]}
+
+
+def dashboard_expressions(panels: list[dict]) -> list[str]:
+    expressions: list[str] = []
+    for panel in panels:
+        expressions += [
+            target["expr"] for target in panel.get("targets", []) if "expr" in target
+        ]
+        expressions += dashboard_expressions(panel.get("panels", []))
+    return expressions
 
 
 class HelmGrafanaLiveTests(unittest.TestCase):
@@ -263,6 +281,29 @@ class OpenShiftGrafanaLiveTests(unittest.TestCase):
                 for doc in yaml.safe_load_all(rendered)
             )
         )
+
+
+class StaticGrafanaDashboardTests(unittest.TestCase):
+    def test_dashboards_do_not_query_retired_metric_families(self) -> None:
+        for platform in ("kubernetes", "openshift"):
+            with self.subTest(platform=platform):
+                path = (
+                    ROOT
+                    / "deploy"
+                    / platform
+                    / "observability/grafana/configmap-dashboard.yaml"
+                )
+                configmap = yaml.safe_load(path.read_text())
+                for name, raw in configmap["data"].items():
+                    expressions = "\n".join(
+                        dashboard_expressions(json.loads(raw)["panels"])
+                    )
+                    found = [
+                        family for family in RETIRED_FAMILIES if family in expressions
+                    ]
+                    self.assertEqual(
+                        found, [], f"{platform} {name} queries retired families"
+                    )
 
 
 if __name__ == "__main__":

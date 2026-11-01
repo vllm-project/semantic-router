@@ -1346,6 +1346,30 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
+  - catalog: minimax/minimax-m3.1-flash
+    relationship: first_party
+    id: MiniMax-M3.1-Flash
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    reasoning_modes:
+    - adaptive
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      completion_per_1m: 0.6
+      cached_input_per_1m: 0.015
+    restrictions:
+      context_window_size: 1000000
+      max_output_tokens: 524288
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - service_tier
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-10-23'
+      source: https://platform.minimax.io/docs/api-reference/text-openai-api
   - catalog: minimax/minimax-m2.5
     relationship: first_party
     id: MiniMax-M2.5
@@ -3200,6 +3224,22 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct
+  - catalog: minimax/minimax-m3.1-flash
+    relationship: self_hosted
+    id: MiniMaxAI/MiniMax-M3.1-Flash
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    reasoning_modes:
+    - adaptive
+    restrictions:
+      minimum_vllm_version: 0.33.0
+      nightly_required: true
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-10-23'
+      source: https://github.com/vllm-project/vllm/blob/eff8a5689681ea9db3c6390e5e4415d6dca42431/recipes/models/MiniMaxAI/MiniMax-M3.1-Flash.yaml
   - catalog: minimax/minimax-m2.5
     relationship: self_hosted
     id: MiniMaxAI/MiniMax-M2.5
@@ -4468,6 +4508,19 @@ reasoning_families:
   modes:
   - enabled
   default_mode: enabled
+- id: minimax-m3.1-flash
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  default: max
+  modes:
+  - adaptive
+  default_mode: adaptive
 - id: minimax-m3
   type: reasoning_mode
   parameter: thinking_mode
@@ -6749,6 +6802,51 @@ models:
   - open_weights
   - reasoning
   - dense
+- id: minimax/minimax-m3.1-flash
+  display_name: MiniMax M3.1 Flash
+  description: Open-weight multimodal MiniMax model for coding and agentic workloads with tunable reasoning depth.
+  kind: physical
+  publisher: MiniMax
+  presentation:
+    logo: package:minimax
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash
+    license: MiniMax-Community-License
+  family: minimax-m3.1
+  reasoning_family: minimax-m3.1-flash
+  parameter_size: 428B (23B active)
+  revision: 262ae6830934f3512211081b8a3f16425b93a239
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: MiniMax
+    status: claimed
+    verified_at: '2026-10-27'
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-10-19'
 - id: minimax/minimax-m3
   display_name: MiniMax M3
   description: Native multimodal open-weight MiniMax model with million-token context.
@@ -9969,6 +10067,40 @@ benchmarks:
     description: Independently measured Terminal-Bench 2.1 result for the named model variant and reasoning effort.
   metrics:
   - id: resolved
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: harbor/terminal-bench@4.0.0
+  display_name: Terminal-Bench 4.0
+  domain: agentic_systems
+  source: https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0
+  default_profile: published-agent
+  profiles:
+  - id: published-agent
+    display_name: Published agent
+    description: Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the
+      2.1 default index component.
+  metrics:
+  - id: resolved
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: sunblaze-ucb/cybergym@1.0.0
+  display_name: CyberGym
+  domain: cybersecurity
+  source: https://github.com/sunblaze-ucb/cybergym
+  default_profile: published-agent
+  profiles:
+  - id: published-agent
+    display_name: Published agent
+    description: Vendor-published CyberGym vulnerability-reproduction success rate with the agent and context budget retained
+      on the evaluation record.
+  metrics:
+  - id: success_rate
     unit: proportion
     direction: higher_is_better
     range:
@@ -23205,6 +23337,107 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-automation-bench@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    tasks: 600
+  metrics:
+    score: 0.628
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-deep-swe@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    agent: mini-SWE-agent
+    agent_version: 2.4.5
+    context_window: 512K
+  metrics:
+    resolved: 0.737
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: text-only
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    questions: 2158
+    tools: false
+  metrics:
+    accuracy: 0.434
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-terminal-bench@4.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    agent: Codex
+    agent_version: 0.149.1
+  metrics:
+    resolved: 0.381
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-cybergym@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: sunblaze-ucb/cybergym@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    agent: Claude Code
+    agent_version: 2.1.263
+    context_window: 1M
+  metrics:
+    success_rate: 0.822
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: independent/minimax-m3-aa-briefcase@1.0.0
   model: minimax/minimax-m3
