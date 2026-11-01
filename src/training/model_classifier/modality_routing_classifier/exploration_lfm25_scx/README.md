@@ -56,5 +56,6 @@ audit refuses predictions it cannot tie to the rows it scores them on.
 
 ## Tests
 
-`pip install pytest`, then run `pytest` in the parent directory. The tests use fake
-encoders and pipelines, so they need no GPU, model download or network.
+From the parent directory, run `uv sync --locked --group dev`, then
+`uv run --group dev pytest`. The tests use fake encoders and pipelines, so they
+need no GPU, model download or network.
