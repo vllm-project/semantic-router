@@ -1693,6 +1693,15 @@ class PluginConfig(BaseModel):
         return data
 
 
+class RouterLearningSuccessConfig(BaseModel):
+    """Observe-path success-estimate controls for Router Learning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: Optional[Literal["request_completion"]] = None
+    stale_after_seconds: Optional[int] = Field(default=None, ge=0)
+
+
 class DecisionLearningAdaptationConfig(BaseModel):
     """Decision-local control for Router Learning adaptation."""
 
@@ -1700,6 +1709,7 @@ class DecisionLearningAdaptationConfig(BaseModel):
 
     mode: Optional[Literal["apply", "observe", "bypass"]] = None
     candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+    success: Optional[RouterLearningSuccessConfig] = None
 
 
 class DecisionLearningProtectionConfig(BaseModel):
@@ -1749,6 +1759,7 @@ class RouterLearningAdaptationConfig(BaseModel):
     enabled: Optional[StrictBool] = None
     strategy: Optional[Literal["routing_sampling"]] = None
     candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+    success: Optional[RouterLearningSuccessConfig] = None
 
 
 class RouterLearningIdentityHeadersConfig(BaseModel):
