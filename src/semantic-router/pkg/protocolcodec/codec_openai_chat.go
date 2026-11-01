@@ -54,7 +54,7 @@ type chatRequestWire struct {
 	ReasoningBudget      *int64                 `json:"reasoning_budget_tokens,omitempty"`
 	Stream               bool                   `json:"stream,omitempty"`
 	StreamOptions        *chatStreamOptionsWire `json:"stream_options,omitempty"`
-	Metadata             map[string]string      `json:"metadata,omitempty"`
+	Metadata             map[string]any         `json:"metadata,omitempty"`
 	Store                *bool                  `json:"store,omitempty"`
 	User                 string                 `json:"user,omitempty"`
 	PromptCacheKey       string                 `json:"prompt_cache_key,omitempty"`
@@ -272,7 +272,7 @@ func validateChatRequestWire(wire chatRequestWire) error {
 
 func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 	request := llmprotocol.Request{
-		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
+		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: coerceWireMetadata(wire.Metadata),
 		EndUserID: wire.User, Store: wire.Store,
 		ParallelToolCalls: wire.ParallelToolCalls, CandidateCount: wire.CandidateCount,
 		ReasoningEffort: wire.ReasoningEffort, ReasoningBudgetTokens: wire.ReasoningBudget,
