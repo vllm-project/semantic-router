@@ -24,6 +24,7 @@ import (
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
+	preferenceexternalrouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-external-routing"
 	preferencerouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
@@ -110,6 +111,7 @@ func init() {
 	register("routing-errors", func() framework.Profile { return routingerrors.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("preference-external-routing", func() framework.Profile { return preferenceexternalrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },

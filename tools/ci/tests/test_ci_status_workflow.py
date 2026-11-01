@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 
+import workflow_policy_validation  # noqa: E402
 from validate_workflows import load_workflows  # noqa: E402
 from workflow_policy_validation import (  # noqa: E402
     validate_gate_transport,
+    validate_mergify_contract,
     validate_pr_contract,
     validate_publisher_bootstrap,
     validate_status_publisher,
@@ -30,6 +36,18 @@ class CIStatusWorkflowTests(unittest.TestCase):
         errors: list[str] = []
         validate_pr_contract(self.workflows, errors)
         self.assertEqual(errors, [])
+
+    def test_queue_checks_on_drafts_that_need_no_new_ci_request(self) -> None:
+        errors: list[str] = []
+        validate_mergify_contract(errors)
+        self.assertEqual(errors, [])
+        config = yaml.safe_load((ROOT / ".mergify.yml").read_text(encoding="utf-8"))
+        del config["queue_rules"][0]["max_checks_retries"]
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / ".mergify.yml").write_text(yaml.safe_dump(config))
+            with mock.patch.object(workflow_policy_validation, "REPO_ROOT", Path(root)):
+                validate_mergify_contract(errors)
+        self.assertTrue(any("max_checks_retries" in error for error in errors), errors)
 
     def test_publisher_checkout_cannot_use_the_observed_pr_head(self) -> None:
         checkout = self.publisher.jobs["publish"]["steps"][0]
