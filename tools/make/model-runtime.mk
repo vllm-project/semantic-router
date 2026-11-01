@@ -5,7 +5,7 @@
 MODEL_RUNTIME_DIR := src/model-runtime
 MODEL_RUNTIME_OPENAPI := $(MODEL_RUNTIME_DIR)/vllm_srun/api/openapi.yaml
 MODEL_RUNTIME_PYTHON ?= $(AGENT_PYTHON)
-MODEL_RUNTIME_TORCH ?= torch==2.10.0
+MODEL_RUNTIME_TORCH ?= torch==2.14.1
 MODEL_RUNTIME_TORCH_INDEX ?= https://download.pytorch.org/whl/cpu
 MODEL_RUNTIME_CLIENT_DIR := src/semantic-router/pkg/modelservice/api
 OAPI_CODEGEN_VERSION ?= v2.4.1
