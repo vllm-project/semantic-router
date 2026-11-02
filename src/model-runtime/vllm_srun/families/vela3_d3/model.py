@@ -91,6 +91,7 @@ def with_spans(
     """``plan`` (None: no base question) with the span questions' items, or errors, in request order."""
     items: list[Item] = list(plan.items) if plan is not None else []
     errors = dict(plan.errors) if plan is not None else {}
+    complete = set(plan.complete_inputs) if plan is not None else set()
     for question_id, question in asked.items():
         try:
             if refuse is not None:
@@ -107,11 +108,24 @@ def with_spans(
             )
         except QuestionError as exc:
             errors[question_id] = question_error("span", exc)
+        else:
+            if question.get("require_full_input") is True:
+                complete.add(question_id)
     if plan is None:
         return RequestPlan(
-            question_ids=order, items=items, errors=errors, input_tokens=0
+            question_ids=order,
+            items=items,
+            errors=errors,
+            input_tokens=0,
+            complete_inputs=frozenset(complete),
         )
-    return replace(plan, question_ids=order, items=items, errors=errors)
+    return replace(
+        plan,
+        question_ids=order,
+        items=items,
+        errors=errors,
+        complete_inputs=frozenset(complete),
+    )
 
 
 def span_batches(

@@ -95,6 +95,7 @@ def test_thresholds_follow_the_label_set_and_the_route() -> None:
         ({"type": "span", "criteria": [f"l{i}" for i in range(256)]}, "1 to 255"),
         ({"type": "span"}, "criteria"),
         ({"type": "span", "criteria": ["a"], "instructions": 3}, "string"),
+        ({"type": "span", "criteria": ["a"], "require_full_input": "yes"}, "boolean"),
     ],
 )
 def test_malformed_span_questions_are_refused(question, message) -> None:
@@ -278,6 +279,26 @@ def test_span_answers_follow_the_contract(runtime) -> None:
     assert 0 < whole["probability"] < 1
     assert body["answers"]["all"]["type"] == "noul"
     assert body["answers"]["all"]["noul"] == body["answers"]["none"]["noul"] > 0
+
+
+def test_a_span_question_that_requires_its_full_input_reads_it_completely(
+    runtime,
+) -> None:
+    question = {"type": "span", "criteria": {"dose": "an amount"}}
+    status, body = call(
+        runtime,
+        {
+            "state": STATE,
+            "questions": {
+                "full": {**question, "require_full_input": True},
+                "plain": question,
+            },
+        },
+    )
+    assert status == 200
+    assert body["answers"]["full"]["input_coverage"] == "complete"
+    assert "input_coverage" not in body["answers"]["plain"]
+    assert body["spans"]["full"] == body["spans"]["plain"]
 
 
 def test_each_route_runs_its_adapter_under_the_noncausal_mask(
