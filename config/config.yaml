@@ -2070,9 +2070,11 @@ global:
     skip_processing:
       enabled: false
     # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
-    # of rejecting them. The only supported entry is tool_result.is_error, the
-    # Anthropic failed tool call flag that OpenAI Chat and Responses backends
-    # cannot carry. Empty keeps every lossy translation failing closed.
+    # of rejecting them. tool_result.is_error omits the Anthropic failed tool
+    # call flag that OpenAI Chat and Responses backends cannot carry, and
+    # messages[].role sends Anthropic system messages inside the conversation to
+    # those backends as user text, for chat templates that accept a system
+    # message only first. Empty keeps every lossy translation failing closed.
     allow_lossy_translation: []
     model_selection:
       method: hybrid
