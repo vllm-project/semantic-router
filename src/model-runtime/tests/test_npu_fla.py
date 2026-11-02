@@ -62,13 +62,14 @@ def test_chunk_registers_approximate_where_measured(fake_wrapper, monkeypatch):
     assert kernels.select("chunk_gated_delta_rule").source == "torch-reference"
 
 
-def test_chunk_stays_off_by_default(fake_wrapper):
+def test_chunk_stays_off_by_default(fake_wrapper, monkeypatch):
     """No opt-in: the slot is not registered, even where measured with the wrapper present.
 
     The quantized d3 packages consent to approximate kernels by default
     (``DtypePolicy.approximate_kernels``) but have no accuracy record for this
     combination -- the opt-in keeps the slot off for them too.
     """
+    monkeypatch.delenv("FLA_NPU_APPROXIMATE", raising=False)
     accelerator = NPUAccelerator()
     kernels = accelerator.kernels(DEVICE)
     kernels.allow_approximate = True
