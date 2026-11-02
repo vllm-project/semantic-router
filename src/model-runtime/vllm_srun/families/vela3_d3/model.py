@@ -64,6 +64,12 @@ class SpanSetup:
 SPAN_IMAGES = "span questions read text only on this model"
 
 
+def refuse_blank(state: Any) -> None:
+    """Refuse a blank text state, as the other Vela families do (``vela2.request.read_state``)."""
+    if isinstance(state, str) and not state.strip():
+        raise ValueError("state must not be empty or whitespace")
+
+
 def split_spans(questions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """The request's span questions, and the others (the base's)."""
     asked = {
@@ -160,6 +166,7 @@ class GatedDecisions(Decision3Model):
     def plan(
         self, state: Any, questions: dict[str, Any], scan: int | None = None
     ) -> RequestPlan[Item]:
+        refuse_blank(state)
         if not isinstance(questions, dict):
             return super().plan(state, questions, scan)
         asked, rest = split_spans(questions)
@@ -189,6 +196,7 @@ class GatedDecisions(Decision3Model):
         images: list[Any],
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
+        refuse_blank(state)
         if not isinstance(questions, dict):
             return super().plan_images(state, questions, images, videos)
         asked, rest = split_spans(questions)
@@ -290,6 +298,7 @@ class TurboDecisions(StateOnceModel):
     def plan(
         self, state: Any, questions: dict[str, Any], scan: int | None = None
     ) -> RequestPlan[Item]:
+        refuse_blank(state)
         if not isinstance(questions, dict):
             return super().plan(state, questions, scan)
         asked, rest = split_spans(questions)
@@ -332,6 +341,7 @@ class TurboDecisions(StateOnceModel):
         images: list[Any],
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
+        refuse_blank(state)
         if not isinstance(questions, dict):
             return super().plan_images(state, questions, images, videos)
         asked, rest = split_spans(questions)

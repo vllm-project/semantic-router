@@ -184,6 +184,15 @@ def test_span_questions_run_beside_turbo_decisions_but_refuse_images(
     assert "x" in imaged["answers"] and "error" not in imaged["answers"]["x"]
 
 
+def test_a_blank_state_is_refused_as_the_other_vela_families_refuse_it(
+    runtimes,
+) -> None:
+    span = {"type": "span", "criteria": ["thing"]}
+    for state, questions in ((" ", {"x": NOUL}), ("\n\t ", {"s": span})):
+        status, body = call(runtimes[0], {"state": state, "questions": questions})
+        assert (status, body["error"]["code"]) == (400, "invalid_request")
+
+
 def test_the_opt_in_key_is_stripped_for_the_base(runtimes) -> None:
     vela, d3 = runtimes
     questions = {"care": {**NOUL, "decision_adapter": True}}

@@ -137,9 +137,9 @@ def test_refuses_a_base_that_fails_its_own_manifest(written, tmp_path) -> None:
         family(root).verify(PackageRef(root))
 
 
-def test_a_pinned_entry_holds_files_identity_and_base(written, monkeypatch) -> None:
-    verified = family(written).verify(PackageRef(written))
-    details = verified.details["package"]
+def pin(root: Path, monkeypatch) -> builtin.BuiltinModel:
+    """Register root's verified files, identity and base as a built-in entry."""
+    verified = family(root).verify(PackageRef(root))
     entry = builtin.BuiltinModel(
         repo_id="vllm-sr/vela3-fixture",
         revision="a" * 40,
@@ -150,13 +150,18 @@ def test_a_pinned_entry_holds_files_identity_and_base(written, monkeypatch) -> N
         backbone="qwen3_5_text",
         min_device_memory_gib=1,
         base=(fixture.BASE_REPO, FAKE_BASE_REVISION),
-        files=dict(details.files),
+        files=dict(verified.details["package"].files),
     )
     monkeypatch.setattr(
         builtin, "lookup", lambda repo: entry if repo == entry.repo_id else None
     )
+    return entry
+
+
+def test_a_pinned_entry_holds_files_identity_and_base(written, monkeypatch) -> None:
+    entry = pin(written, monkeypatch)
     ref = PackageRef(written, entry.repo_id, entry.revision)
-    assert family(written).verify(ref).model_sha256 == verified.model_sha256
+    assert family(written).verify(ref).model_sha256 == entry.model_sha256
     for wrong in (
         replace(entry, model_sha256="0" * 64),
         replace(entry, base=(fixture.BASE_REPO, "b" * 40)),
@@ -165,3 +170,19 @@ def test_a_pinned_entry_holds_files_identity_and_base(written, monkeypatch) -> N
         monkeypatch.setattr(builtin, "lookup", lambda repo, e=wrong: e)
         with pytest.raises(PackageError):
             family(written).verify(ref)
+
+
+def test_a_pinned_download_needs_no_sha256sums(written, tmp_path, monkeypatch) -> None:
+    # A pinned revision downloads only the files its entry lists.
+    root = copy(written, tmp_path)
+    entry = pin(root, monkeypatch)
+    (root / "SHA256SUMS").unlink()
+    ref = PackageRef(root, entry.repo_id, entry.revision)
+    assert family(root).verify(ref).model_sha256 == entry.model_sha256
+
+
+def test_an_unpinned_package_needs_sha256sums(written, tmp_path) -> None:
+    root = copy(written, tmp_path)
+    (root / "SHA256SUMS").unlink()
+    with pytest.raises(PackageError, match="SHA256SUMS"):
+        family(root).verify(PackageRef(root))

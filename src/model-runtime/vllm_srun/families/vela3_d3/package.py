@@ -9,8 +9,9 @@ the router questions and the label definition cache. An adapter file holds
 FP32 factors ``layers.<i>.<module>.A`` (rank x in) and ``.B`` (out x rank)
 and names its rank, alpha and first layer in its metadata.
 
-Every file the family loads must match the package's ``SHA256SUMS`` and, for a
-pinned revision, the built-in table's digests; bundled Python is never read.
+Every file the family loads must match the built-in table's digests for a
+pinned revision, whose download holds only those files, and otherwise the
+package's ``SHA256SUMS``; bundled Python is never read.
 Image inputs are out of scope, so the image-halu adapter and head are neither
 loaded nor checked. The identity is the SHA-256 of the loaded weight files'
 digests and the base's identity.
@@ -214,12 +215,13 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         )
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
-    sums = _sums(root)
-    mismatched = sorted(
-        name for name, digest in files.items() if sums.get(name) != digest
-    )
-    if mismatched:
-        raise PackageError(f"files differ from {SUMS_FILE}: {mismatched[:5]}")
+    else:
+        sums = _sums(root)
+        mismatched = sorted(
+            name for name, digest in files.items() if sums.get(name) != digest
+        )
+        if mismatched:
+            raise PackageError(f"files differ from {SUMS_FILE}: {mismatched[:5]}")
     config = read_json(root / "config.json", mapping=True)
     if config.get("model_type") != "qwen3_5":
         raise PackageError("config.json does not describe a Qwen3.5 model")
