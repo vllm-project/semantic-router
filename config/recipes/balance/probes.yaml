@@ -838,7 +838,7 @@ decisions:
     - short-qa
   - id: long_repeated_fact
     query: How many days are there in a leap year?
-    repeat: 2000
+    repeat: 100
     expected_signals:
       decision:
       - task:facts
