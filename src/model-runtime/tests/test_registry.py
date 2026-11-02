@@ -144,7 +144,8 @@ def test_every_family_has_a_table_and_lookups_cover_them():
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
     assert {model.repo_id for model in builtin.all_models("vela3_d3")} == {
-        "vllm-sr/vela3-lite"
+        "vllm-sr/vela3-lite",
+        "vllm-sr/vela3-mini",
     }
     assert all(model.base is not None for model in builtin.all_models("vela3_d3"))
     assert {model.repo_id for model in builtin.all_models("decision3")} == {

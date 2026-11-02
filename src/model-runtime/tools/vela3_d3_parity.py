@@ -103,7 +103,8 @@ SPANS = [
 def generate(package: Path, count: int, seed: int) -> list[dict[str, Any]]:
     trained = json.loads((package / "router_questions.json").read_text())
     config = json.loads((package / "vela3_config.json").read_text())
-    hazards = trained["hazard_nouls"]
+    # vela3-lite answers hazard: Nouls on its own adapter; the other sizes ship none.
+    hazards = trained.get("hazard_nouls") or {"labels": {}}
     span_sets = config["span"]["router_label_sets"]
     router = []
     for question_id, entry in trained["trained_questions"].items():
@@ -130,7 +131,8 @@ def generate(package: Path, count: int, seed: int) -> list[dict[str, Any]]:
             questions[f"q{len(questions)}"] = q
         for question_id, q in rng.sample(router, rng.randint(1, 4)):
             questions[question_id] = q
-        for label in rng.sample(sorted(hazards["labels"]), rng.randint(0, 2)):
+        labels = sorted(hazards["labels"])
+        for label in rng.sample(labels, min(len(labels), rng.randint(0, 2))):
             text = hazards["labels"][label]
             questions[f"hazard:{label}"] = {
                 **hazards["question"],
