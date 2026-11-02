@@ -15,6 +15,8 @@ adapter and head; relation questions on the relation adapter and head; open
 entity labels on the NER adapter and head. The questions follow the runtime's
 contract: ``over`` names the target part, ``threshold`` overrides the
 package's, and answers are ``spans`` with each span's mean word probability.
+The windows read the whole target, so a question that sets
+``require_full_input`` reads its input completely.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from typing import Any
 import numpy as np
 
 from ...errors import QuestionError
+from ...systemone import require_full_input
 from ..decision3.family import Item
 from ..decision3.prompt import render
 from ..vela2.words import _WORD
@@ -35,7 +38,16 @@ from .decode import decode, evidence_spans
 WINDOW, STRIDE, MAX_TARGET = 1800, 1536, 2048
 MAX_LABELS = 255
 FIELDS = frozenset(
-    {"type", "instructions", "criteria", "labels", "threshold", "head", "over"}
+    {
+        "type",
+        "instructions",
+        "criteria",
+        "labels",
+        "threshold",
+        "head",
+        "over",
+        "require_full_input",
+    }
 )
 RELATION = re.compile(
     r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
@@ -370,6 +382,7 @@ def plan_question(
     unknown = sorted(set(question) - FIELDS)
     if unknown:
         raise invalid(f"span questions do not take {unknown}")
+    require_full_input(question)
     if question.get("head") not in (None, "router"):
         raise invalid("this model has no broad span head")
     parts = parts_of(state)
