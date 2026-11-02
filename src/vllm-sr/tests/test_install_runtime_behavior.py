@@ -190,6 +190,7 @@ def test_first_launch_returns_while_serve_waits_for_setup() -> None:
     assert "AUTO_LAUNCH_RAN=1" in out
     assert "SERVE_STILL_RUNNING=1" in out
     assert "keeps waiting in the background" in out
+    assert "vllm-sr stop (ends the background setup wait)" in out
 
     invocations = [
         line.strip()

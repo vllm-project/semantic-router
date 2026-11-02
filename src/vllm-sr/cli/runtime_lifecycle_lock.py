@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import signal
 import stat
 import time
 from contextlib import suppress
@@ -16,10 +18,13 @@ except ImportError:  # pragma: no cover - native Windows local serve is unsuppor
     fcntl = None  # type: ignore[assignment]
 
 from cli.consts import SUPPORTED_CONTAINER_RUNTIMES
+from cli.pending_activation import HEARTBEAT_SECONDS, SERVE_WAITING, process_start_ticks
 from cli.runtime_stack import normalize_stack_name
 
 _PRIVATE_DIRECTORY_MODE = 0o700
 _PRIVATE_FILE_MODE = 0o600
+_TAKEOVER_TIMEOUT_SECONDS = 5.0
+_MAX_OWNER_BYTES = 4096
 
 
 class RuntimeLifecycleLockError(RuntimeError):
@@ -49,6 +54,7 @@ class RuntimeLifecycleLock:
         self._closed = True
         try:
             if fcntl is not None:
+                os.ftruncate(self._lock_fd, 0)
                 fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
         finally:
             try:
@@ -63,6 +69,10 @@ def acquire_runtime_lifecycle_lock(
     stack_name: str,
     timeout_seconds: float = 0.0,
     lock_root: str | Path | None = None,
+    command: str = "vllm-sr lifecycle",
+    state: str = "active",
+    heartbeat_path: str | Path | None = None,
+    take_over_waiting: bool = False,
 ) -> RuntimeLifecycleLock:
     """Acquire the host-wide mutation lock for one local runtime stack."""
 
@@ -119,7 +129,19 @@ def acquire_runtime_lifecycle_lock(
             timeout_seconds=timeout_seconds,
             runtime=normalized_runtime,
             stack_name=normalized_stack,
+            take_over_waiting=take_over_waiting,
         )
+        owner = {
+            "pid": os.getpid(),
+            "command": command,
+            "state": state,
+            "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "start_ticks": process_start_ticks(os.getpid()),
+            "heartbeat_path": str(heartbeat_path) if heartbeat_path else None,
+        }
+        encoded = json.dumps(owner).encode("utf-8")
+        os.ftruncate(lock_fd, 0)
+        os.pwrite(lock_fd, encoded, 0)
         return RuntimeLifecycleLock(
             runtime=normalized_runtime,
             stack_name=normalized_stack,
@@ -140,20 +162,127 @@ def _acquire_file_lock(
     timeout_seconds: float,
     runtime: str,
     stack_name: str,
+    take_over_waiting: bool,
 ) -> None:
     deadline = time.monotonic() + timeout_seconds
+    attempted_takeover = False
     while True:
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return
         except BlockingIOError as error:
+            if take_over_waiting and not attempted_takeover:
+                attempted_takeover = True
+                if _stop_waiting_holder(lock_fd):
+                    deadline = time.monotonic() + _TAKEOVER_TIMEOUT_SECONDS
+                    continue
             if time.monotonic() >= deadline:
                 raise RuntimeLifecycleLockError(
                     f"Stack {stack_name!r} on {runtime} has another lifecycle "
-                    "operation in progress; wait for it to finish or interrupt "
-                    "the active serve command, then retry."
+                    f"operation in progress. {_holder_message(lock_fd)}"
                 ) from error
             time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
+
+def _read_owner(lock_fd: int) -> dict | None:
+    try:
+        owner = json.loads(os.pread(lock_fd, _MAX_OWNER_BYTES, 0))
+    except (OSError, ValueError):
+        return None
+    return owner if isinstance(owner, dict) else None
+
+
+def _waiting_heartbeat(owner: dict) -> bool:
+    path = owner.get("heartbeat_path")
+    pid = owner.get("pid")
+    start_ticks = owner.get("start_ticks")
+    if not isinstance(path, str) or not Path(path).is_absolute():
+        return False
+    if not isinstance(pid, int) or not isinstance(start_ticks, int):
+        return False
+    if process_start_ticks(pid) != start_ticks:
+        return False
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            info = os.fstat(fd)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or info.st_size > _MAX_OWNER_BYTES
+                or time.time() - info.st_mtime > 3 * HEARTBEAT_SECONDS
+            ):
+                return False
+            heartbeat = json.loads(os.read(fd, _MAX_OWNER_BYTES))
+        finally:
+            os.close(fd)
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(heartbeat, dict)
+        and heartbeat.get("state") == SERVE_WAITING
+        and heartbeat.get("pid") == pid
+        and heartbeat.get("start_ticks") == start_ticks
+    )
+
+
+def _is_serve_process(pid: int) -> bool:
+    try:
+        args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    return (
+        any(Path(os.fsdecode(arg)).name == "vllm-sr" for arg in args)
+        and b"serve" in args
+    )
+
+
+def _stop_waiting_holder(lock_fd: int) -> bool:
+    owner = _read_owner(lock_fd)
+    if (
+        owner is None
+        or owner.get("command") != "vllm-sr serve"
+        or not _waiting_heartbeat(owner)
+    ):
+        return False
+    pid = owner["pid"]
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        return False
+    try:
+        pidfd = os.pidfd_open(pid)
+        try:
+            if (
+                process_start_ticks(pid) != owner["start_ticks"]
+                or not _is_serve_process(pid)
+                or not _waiting_heartbeat(owner)
+            ):
+                return False
+            signal.pidfd_send_signal(pidfd, signal.SIGTERM)
+            return True
+        finally:
+            os.close(pidfd)
+    except OSError:
+        return False
+
+
+def _holder_message(lock_fd: int) -> str:
+    owner = _read_owner(lock_fd)
+    if owner is None:
+        return "Wait for the holder to finish, then retry."
+    pid = owner.get("pid")
+    command = owner.get("command")
+    started_at = owner.get("started_at")
+    if (
+        not isinstance(pid, int)
+        or not isinstance(command, str)
+        or not isinstance(started_at, str)
+    ):
+        return "Wait for the holder to finish, then retry."
+    state = SERVE_WAITING if _waiting_heartbeat(owner) else owner.get("state", "active")
+    return (
+        f"Holder: pid {pid}, command {command!r}, state {state}, "
+        f"started {started_at}. Run `kill -TERM {pid}` to end it, then retry."
+    )
 
 
 def _default_lock_directory() -> Path:
