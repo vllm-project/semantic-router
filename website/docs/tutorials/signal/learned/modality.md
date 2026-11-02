@@ -50,8 +50,8 @@ reference.
 
 The detector is off by default, so these rules match only with a
 `modality_detector` block. With `method: classifier` and no
-`classifier.model_path`, it runs Vela 2.0 0.3B, whose calibrated
-`confidence_threshold` is 0.51:
+`classifier.model_path`, it runs **vela3-fast** (Vela 3.0), whose calibrated
+`confidence_threshold` is 0.63:
 
 ```yaml
 global:
@@ -60,7 +60,7 @@ global:
       modality_detector:
         enabled: true
         method: classifier
-        confidence_threshold: 0.51
+        confidence_threshold: 0.63
 ```
 
 Without the block, the Router logs `modality_detector_disabled` when it loads

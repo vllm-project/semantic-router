@@ -438,7 +438,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: domain_code_complex
-      description: 'Hard software work (domain: code, difficulty 2.5 or more) goes to the strongest technical
+      description: 'Hard software work (domain: code, difficulty 1.75 or more) goes to the strongest technical
         models.'
       priority: 255
       tier: 3
@@ -452,7 +452,7 @@ routing:
           - type: decision
             name: difficulty
             predicate:
-              gte: 2.5
+              gte: 1.75
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: false
@@ -465,7 +465,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: domain_code
-      description: 'Other software work that needs some reasoning (domain: code, difficulty 1 to 2.5)
+      description: 'Other software work that needs some reasoning (domain: code, difficulty 1 to 1.75)
         goes to the code model.'
       priority: 250
       tier: 3
@@ -483,7 +483,7 @@ routing:
               - type: decision
                 name: difficulty
                 predicate:
-                  gte: 2.5
+                  gte: 1.75
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -546,7 +546,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: complex_general
-      description: Any other request that needs deep reasoning (difficulty 2.5 or more, domain not code
+      description: Any other request that needs deep reasoning (difficulty 1.75 or more, domain not code
         or math_science) goes to the stronger models.
       priority: 190
       tier: 4
@@ -557,7 +557,7 @@ routing:
           - type: decision
             name: difficulty
             predicate:
-              gte: 2.5
+              gte: 1.75
           - operator: NOT
             conditions:
               - type: decision
@@ -580,7 +580,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: medium_general
-      description: Any other request that needs some reasoning (difficulty 1 to 2.5) goes to the medium
+      description: Any other request that needs some reasoning (difficulty 1 to 1.75) goes to the medium
         model.
       priority: 150
       tier: 5
@@ -595,7 +595,7 @@ routing:
               - type: decision
                 name: difficulty
                 predicate:
-                  gte: 2.5
+                  gte: 1.75
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
