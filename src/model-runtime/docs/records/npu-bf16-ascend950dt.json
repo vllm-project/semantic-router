@@ -1,0 +1,23 @@
+{
+ "schema": "npu-bf16-ascend950dt/1",
+ "record": "npu-bf16-ascend950dt.md",
+ "date": "2026-10-16",
+ "device": "Ascend 950DT (driver 25.6.rc1, CANN 9.1.0)",
+ "stack": "torch 2.10.0+cpu / torch_npu 2.10.0.post4",
+ "runtime": "main 7313c646c (accelerator #4827, references #4850)",
+ "dtype_argument": "--dtype bfloat16 (held bf16 weights, reference kernels; --dtype auto keeps the published fp32 precision)",
+ "readiness_under_bf16": "unverified (golden references are recorded at --dtype auto); determinism and well-formedness still checked",
+ "corpus": "30 office-domain prompts, frozen, md5-pinned; four-signal decisions schema (665 input tokens p50) on Vela 2.0 0.3B; /v1/classify (195 tokens) on Vela 1.0 Domain",
+ "throughput": {
+  "unit": "requests/s",
+  "vela2_0_3b": {"float32": {"c4": 82.6, "c8": 84.8, "c16": 89.7, "fwd_p50_ms_c8": 46.1}, "bfloat16": {"c4": 211.0, "c8": 214.1, "c16": 246.6, "fwd_p50_ms_c8": 15.9}},
+  "vela1_domain": {"float32": {"c8": 1417.4, "c16": 1349.4, "fwd_p50_ms_c8": 5}, "bfloat16": {"c8": 1420.2, "c16": 1400.2, "fwd_p50_ms_c8": 5}}
+ },
+ "accuracy_diff_fp32_vs_bf16": {
+  "tolerance": 0.02,
+  "method": "offline per-request comparison of the same 30 requests (not a readiness check)",
+  "vela2_0_3b": {"label_flips": 0, "numeric_leaves": 1410, "max_abs_delta": 0.0376, "over_tolerance": 11, "over_tolerance_pct": 0.8, "where": "fact_check/jailbreak confidences"},
+  "vela1_domain": {"label_flips": 0, "numeric_leaves": 420, "max_abs_delta": 0.0734, "over_tolerance": 18, "over_tolerance_pct": 4.3, "where": "class probabilities"}
+ },
+ "raw_answers": "per-request answers stayed on the measurement host; regenerate the drift table from the frozen corpus + the serve commands in the record"
+}

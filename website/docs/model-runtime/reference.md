@@ -447,7 +447,8 @@ questions do not take ['colour']`; the other questions are answered as usual.
 `reason` is a fixed word, such as `question_malformed` or `box_unsupported`, that
 never carries request data. A Choice or Score may omit `instructions` (the
 model chooses the best matching option), and so may a Noul whose criteria
-describe an outcome. A request in which no question is valid is answered 400
+describe an outcome. Vela 3.0 reads a Noul by its instructions alone and
+answers one that describes `false` or `true` with `invalid_question`. A request in which no question is valid is answered 400
 `invalid_request`, with each question's reason in the message and the first
 one's `reason` and `question`.
 
