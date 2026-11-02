@@ -15,7 +15,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.8B
+        artifact: vllm-sr/vela3-lite
     system:
       decision_model:
         deployment: primary
@@ -174,7 +174,7 @@ routing:
           type: noul
           instructions: Does the user ask for sources, citations or a fact check of the answer?
         predicate:
-          gte: 0.6
+          gte: 0.4
   decisions:
     - name: omni
       description: Image-bearing follow-ups go to the visual-language model.
