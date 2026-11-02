@@ -215,7 +215,7 @@ func (c *Client) callModel(
 	// Parse response based on streaming mode
 	var result *ModelResponse
 	if streaming {
-		result, err = c.parseStreamingResponse(respBody, target.Name)
+		result, err = c.parseStreamingResponse(respBody, target.Name, options.candidateRequest.protocolPolicy())
 	} else {
 		result, err = c.parseNonStreamingResponse(respBody, target.Name)
 	}
@@ -290,7 +290,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 }
 
 // parseStreamingResponse parses SSE streaming response
-func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelResponse, error) {
+func (c *Client) parseStreamingResponse(body []byte, modelName string, policy llmprotocol.Policy) (*ModelResponse, error) {
 	result := &ModelResponse{
 		Raw:         body,
 		Model:       modelName,
@@ -299,7 +299,7 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 
 	// Validate the same stream lifecycle used by the provider boundary before
 	// any algorithm can treat a partial or failed stream as a successful answer.
-	events, err := decodeModelStream(body, modelName)
+	events, err := decodeModelStream(body, modelName, policy)
 	if err != nil {
 		return nil, err
 	}

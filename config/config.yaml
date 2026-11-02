@@ -2074,6 +2074,11 @@ global:
     # Anthropic failed tool call flag that OpenAI Chat and Responses backends
     # cannot carry. Empty keeps every lossy translation failing closed.
     allow_lossy_translation: []
+    # Tool name and description limits in UTF-8 bytes. 0 keeps the default
+    # (256 and 16384). Maximums are 1024 and 1048576.
+    protocol_limits:
+      tool_name_bytes: 0
+      tool_description_bytes: 0
     model_selection:
       method: hybrid
       enabled: true

@@ -94,13 +94,11 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 }
 
 // protocolEngineFor serves callers that hold only the registry and the
-// accepted losses, such as detached work that must not capture the router.
-func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []string) (*protocolcodec.Engine, error) {
+// configured policy, such as detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry, policy llmprotocol.Policy) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
-	policy := llmprotocol.DefaultPolicy()
-	policy.AllowedLossyFields = allowedLossyFields
 	return protocolcodec.NewEngine(registry, policy)
 }
 
@@ -113,11 +111,8 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
-	policy := llmprotocol.DefaultPolicy()
+	policy := r.Config.ProtocolPolicy()
 	policy.ResponseVendor = vendor
-	if r.Config != nil {
-		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
-	}
 	return protocolcodec.NewEngine(registry, policy)
 }
 

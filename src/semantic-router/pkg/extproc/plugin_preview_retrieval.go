@@ -9,7 +9,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 var _ pluginruntime.RetrievalPreviewRuntime = (*OpenAIRouter)(nil)
@@ -24,7 +23,10 @@ func (r *OpenAIRouter) PreviewRAG(ctx context.Context, input pluginruntime.RAGPr
 		return pluginruntime.RAGPreviewResponse{}, err
 	}
 	format := previewRequestFormat(input.Format)
-	engine := protocolcodec.NewBuiltinEngine()
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return pluginruntime.RAGPreviewResponse{}, err
+	}
 	request, envelope, _, err := engine.DecodeRequestForMutation(format, input.RequestBody)
 	if err != nil {
 		return pluginruntime.RAGPreviewResponse{}, fmt.Errorf("invalid request_body: %w", err)
@@ -91,7 +93,10 @@ func (r *OpenAIRouter) PreviewTools(ctx context.Context, input pluginruntime.Too
 		return pluginruntime.ToolsPreviewResponse{}, err
 	}
 	format := previewRequestFormat(input.Format)
-	engine := protocolcodec.NewBuiltinEngine()
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return pluginruntime.ToolsPreviewResponse{}, err
+	}
 	request, envelope, _, err := engine.DecodeRequestForMutation(format, input.RequestBody)
 	if err != nil {
 		return pluginruntime.ToolsPreviewResponse{}, fmt.Errorf("invalid request_body: %w", err)
