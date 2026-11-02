@@ -5,7 +5,14 @@ The CUDA image ships FLA but not causal-conv1d. Requiring both to register
 implements its convolution itself; on CUDA it is already approximate and
 requires family consent. Registration therefore needs FLA, not an installed
 causal-conv1d. An optional causal-conv1d installation is also approximate on
-CUDA, so non-consenting models keep the reference convolution.
+CUDA, so non-consenting models select the reference convolution.
+
+The [direct convolution record](cuda-causal-conv1d-exactness.md) separately
+supports that exactness classification. The A/B experiment below already
+applies the classification in both variants: its non-consenting models compare
+reference against reference, not causal-conv1d against reference. It therefore
+does not establish whether causal-conv1d is bit-exact or measure the pre-PR
+behavior of hosts that have the package installed.
 
 This record compares the two proposals in
 [issue #5616](https://github.com/vllm-project/semantic-router/issues/5616):
@@ -60,8 +67,11 @@ comparison summaries and every timing sample.
 | d3-edge | 0 / 0 | bitwise identical | 5/5 for CPU, CPU AVX2, sm_89 and ROCm |
 | d3-NVFP4 | 64 / 64 | bitwise identical | no reference for this revision |
 
-All golden outputs are deterministic. Vela 2.0 and d3-edge retain exact kernel
-selection, including the reference convolution. The d3 golden requests include
+All golden outputs are deterministic. Both measured variants select the
+reference convolution for Vela 2.0 and d3-edge. This is unchanged for the
+standard image without causal-conv1d; an exact/non-consenting host with the
+package installed changes from causal-conv1d to reference after this PR.
+The d3 golden requests include
 both text and image inputs. d3-NVFP4 is compared directly with A; its revision
 has no recorded golden reference. GB10 has no qualified sm_121 reference, so
 runtime readiness remains `unverified` even where the explicit comparisons

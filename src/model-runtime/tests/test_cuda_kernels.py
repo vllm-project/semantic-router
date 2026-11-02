@@ -103,7 +103,8 @@ def fla_kernels(request, monkeypatch, fused_module):
 
 @pytest.mark.parametrize("arch", ["sm_70", "sm_75", "sm_89", "sm_121"])
 def test_exact_kernels_keep_the_reference_convolution(fla_kernels, arch):
-    # causal-conv1d differs from the reference by a BF16 ulp on CUDA.
+    # Numerical evidence: docs/records/cuda-causal-conv1d-exactness.md.
+    # This test enforces selection policy; its stubs do not prove exactness.
     kernels = cuda.CUDAAccelerator().kernels(device(arch))
     assert kernels.select("causal_conv1d").source == "torch-reference"
     assert not kernels.has("gdn_prep")

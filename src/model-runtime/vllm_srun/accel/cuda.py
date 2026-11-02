@@ -5,8 +5,9 @@ element-wise kernels (``triton_gfx942``) as approximate kernels, which run
 only for a family that consents to them. Their RMSNorm sums follow ATen's ROCm reduction
 order, not CUDA's, so they differ from the eager ops by rounding
 (``docs/records/cuda-fused-approximate.md``). causal-conv1d is approximate here
-too: on CUDA it differs from the reference convolution by a BF16 ulp, so the
-exact kernels keep the reference and only a consenting family takes it.
+too: direct comparisons find non-bit-exact outputs on CUDA
+(``docs/records/cuda-causal-conv1d-exactness.md``), so exact kernels select
+the reference even when causal-conv1d is installed.
 The fused gated-delta prep (``gdn_prep``) requires FLA, but not an installed
 causal-conv1d: it implements the convolution itself and is approximate on CUDA
 (``docs/records/cuda-gdn-prep-without-causal-conv1d.md``).
