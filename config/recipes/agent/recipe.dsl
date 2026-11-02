@@ -21,20 +21,20 @@ SIGNAL decision confidential {
 
 SIGNAL decision personal_data {
   description: "The message contains personal data about a person."
-  question: { instructions: "Does the message contain personal data about a person, such as a name with an email address, phone number, street address or ID number?", type: "noul" }
+  question: { instructions: "Does the message contain personal data, such as an email address, a phone number, a street or delivery address, or a government ID or social security number? A city or country alone is not personal data.", type: "noul" }
   predicate: { gte: 0.5 }
 }
 
 SIGNAL decision domain {
   description: "The field the request belongs to."
   question: { choices: [{ description: "Law, contracts, compliance, medicine or health", key: "legal_health" }, { description: "Software: writing, debugging, refactoring or designing code and software systems", key: "code" }, { description: "Mathematics, calculations, physics, chemistry, biology or scientific research", key: "math_science" }, { description: "Business, pricing, markets, strategy or product management", key: "business" }, { description: "Anything else: general knowledge, everyday questions, writing or personal topics", key: "general" }], instructions: "Which field does this request belong to?", type: "choice" }
-  predicate: { gte: 0.4 }
+  predicate: { gte: 0.6 }
 }
 
 SIGNAL decision difficulty {
   description: "How much reasoning a strong expert needs, from 0 (none) to 4 (research level)."
   question: { instructions: "How much reasoning does a strong expert need to answer this request well?", levels: ["Answer immediately, with no thinking", "A little thought, one or two simple steps", "Multi-step reasoning or a careful check", "Deep expert reasoning on a hard problem", "Research-level work on an open or frontier problem"], type: "score" }
-  predicate: { gte: 1 }
+  predicate: { gte: 0.85 }
 }
 
 # =============================================================================
@@ -142,7 +142,7 @@ ROUTE local_privacy_policy (description = "Private material or a request to keep
   }
 }
 
-ROUTE simple_math_fast_path (description = "Math and science that needs almost no reasoning (domain: math_science, difficulty below 1) stays on the local model.", on_unknown = "no_match") {
+ROUTE simple_math_fast_path (description = "Math and science that needs almost no reasoning (domain: math_science, difficulty below 0.85) stays on the local model.", on_unknown = "no_match") {
   PRIORITY 300
   TIER 2
   WHEN decision("domain", label: "math_science") AND NOT decision("difficulty")
@@ -169,10 +169,10 @@ ROUTE domain_legal_health (description = "Law and health (domain: legal_health) 
   }
 }
 
-ROUTE domain_code_complex (description = "Hard software work (domain: code, difficulty 1.75 or more) goes to the strongest technical models.", on_unknown = "no_match") {
+ROUTE domain_code_complex (description = "Hard software work (domain: code, difficulty 1.6 or more) goes to the strongest technical models.", on_unknown = "no_match") {
   PRIORITY 255
   TIER 3
-  WHEN decision("domain", label: "code") AND decision("difficulty", predicate: { gte: 1.75 })
+  WHEN decision("domain", label: "code") AND decision("difficulty", predicate: { gte: 1.6 })
   MODEL "google/gemini-3.1-pro" (reasoning = false),
         "openai/gpt5.4" (reasoning = false)
   PLUGIN router_replay {
@@ -182,10 +182,10 @@ ROUTE domain_code_complex (description = "Hard software work (domain: code, diff
   }
 }
 
-ROUTE domain_code (description = "Other software work that needs some reasoning (domain: code, difficulty 1 to 1.75) goes to the code model.", on_unknown = "no_match") {
+ROUTE domain_code (description = "Other software work that needs some reasoning (domain: code, difficulty 0.85 to 1.6) goes to the code model.", on_unknown = "no_match") {
   PRIORITY 250
   TIER 3
-  WHEN decision("domain", label: "code") AND decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 1.75 })
+  WHEN decision("domain", label: "code") AND decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 1.6 })
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false),
         "google/gemini-3.1-pro" (reasoning = false)
   PLUGIN router_replay {
@@ -195,7 +195,7 @@ ROUTE domain_code (description = "Other software work that needs some reasoning 
   }
 }
 
-ROUTE domain_stem_research (description = "Math and science that needs reasoning (domain: math_science, difficulty 1 or more) goes to the STEM and research models.", on_unknown = "no_match") {
+ROUTE domain_stem_research (description = "Math and science that needs reasoning (domain: math_science, difficulty 0.85 or more) goes to the STEM and research models.", on_unknown = "no_match") {
   PRIORITY 240
   TIER 3
   WHEN decision("domain", label: "math_science") AND decision("difficulty") AND NOT decision("domain", label: "code")
@@ -220,10 +220,10 @@ ROUTE domain_business (description = "Business and product questions (domain: bu
   }
 }
 
-ROUTE complex_general (description = "Any other request that needs deep reasoning (difficulty 1.75 or more, domain not code or math_science) goes to the stronger models.", on_unknown = "no_match") {
+ROUTE complex_general (description = "Any other request that needs deep reasoning (difficulty 1.6 or more, domain not code or math_science) goes to the stronger models.", on_unknown = "no_match") {
   PRIORITY 190
   TIER 4
-  WHEN decision("difficulty", predicate: { gte: 1.75 }) AND NOT decision("domain", label: "code") AND NOT decision("domain", label: "math_science")
+  WHEN decision("difficulty", predicate: { gte: 1.6 }) AND NOT decision("domain", label: "code") AND NOT decision("domain", label: "math_science")
   MODEL "google/gemini-3.1-pro" (reasoning = false),
         "openai/gpt5.4" (reasoning = false)
   PLUGIN router_replay {
@@ -233,10 +233,10 @@ ROUTE complex_general (description = "Any other request that needs deep reasonin
   }
 }
 
-ROUTE medium_general (description = "Any other request that needs some reasoning (difficulty 1 to 1.75) goes to the medium model.", on_unknown = "no_match") {
+ROUTE medium_general (description = "Any other request that needs some reasoning (difficulty 0.85 to 1.6) goes to the medium model.", on_unknown = "no_match") {
   PRIORITY 150
   TIER 5
-  WHEN decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 1.75 })
+  WHEN decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 1.6 })
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
 }
 
