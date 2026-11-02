@@ -210,4 +210,4 @@ routing:
 分数可以按任意顺序声明。运行时按拓扑顺序评估它们，以便依赖总是在被依赖者之前解析。环会在配置校验时被拒绝。
 
 分数不做额外模型调用，也不会自行持久化内容；它们组合请求上已有的信号结果。权重不会自动校准异构输入，因此请在带标签的流量上评估完整分数和映射。完整示例见
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)。
+[`config/recipes/feedback/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml)。
