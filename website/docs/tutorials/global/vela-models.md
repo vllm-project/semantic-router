@@ -152,8 +152,9 @@ and most spans; evidence spans read one window up to 32K).
 
 The 0.4B is the backbone plus the adapter a question runs on; the deployment
 loads its adapters, 1.5B parameters, about 7 GB.
-The model runtime serves **vela3-fast** today; the other four sizes and
-vela3-fast-vision run through their own packages for now.
+The model runtime serves **vela3-fast** and the four larger sizes
+([Choose a model](../../model-runtime/choose-a-model.md)); vela3-fast-vision
+runs through its own package for now.
 See the [Vela 3.0 launch announcement](/blog/vela-3-0-name-it-vela-finds-it) for
 benchmarks and the fast-vision package.
 

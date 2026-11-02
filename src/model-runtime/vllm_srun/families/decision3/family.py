@@ -406,11 +406,8 @@ class Decision3Family(ModelFamily):
             dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
             modalities=modalities,
         )
-        model_class = Decision3Model
+        model_class = self._model_class(decision)
         if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
-            from .state_once import StateOnceModel
-
-            model_class = StateOnceModel
             # A state-once model counts each state once in usage.input_tokens, and that count of one request
             # is capped at the context length (max_request_tokens).
             info = replace(
@@ -430,6 +427,14 @@ class Decision3Family(ModelFamily):
             video_settings,
             video_token,
         )
+
+    def _model_class(self, decision: dict[str, Any]) -> type[Decision3Model]:
+        """``Decision3Model``, or ``StateOnceModel`` for a package whose layout is state-once."""
+        if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
+            from .state_once import StateOnceModel
+
+            return StateOnceModel
+        return Decision3Model
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         requests = builtin.golden(
