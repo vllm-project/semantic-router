@@ -86,6 +86,7 @@ vllm_srun = [
   "registry/golden_answers*.json",
   "registry/kernel_choices.json",
   "testing/data/*.jinja",
+  "testing/data/*.json",
 ]
 
 [tool.mypy]

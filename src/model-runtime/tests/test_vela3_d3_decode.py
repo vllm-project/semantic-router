@@ -84,6 +84,25 @@ def test_every_cjk_character_is_its_own_unit() -> None:
     ]
 
 
+def test_the_released_decoders_recorded_outputs() -> None:
+    import json
+    from importlib.resources import files
+
+    recorded = json.loads(
+        files("vllm_srun.testing").joinpath("data/vela3_decode_cases.json").read_text("utf-8")
+    )["decode"]
+    assert len(recorded) == 42
+    for case in recorded:
+        got = decode(
+            np.asarray(case["probabilities"]),
+            np.asarray(case["offsets"]),
+            case["names"],
+            case["text"],
+            case["threshold"],
+        )
+        assert got == case["spans"], case["text"]
+
+
 def test_the_unit_class_starts_its_compatibility_block_at_u_f900() -> None:
     # U+E000 lies between U+8C48 and U+F900: not CJK to the released decoder, so a URL unit runs through it.
     text = "https://a.example/xy"
