@@ -4,11 +4,17 @@ With Triton on an Ampere or newer GPU it adds the ROCm build's fused
 element-wise kernels (``triton_gfx942``) as approximate kernels, which run
 only for a family that consents to them. Their RMSNorm sums follow ATen's ROCm reduction
 order, not CUDA's, so they differ from the eager ops by rounding
-(``docs/records/cuda-fused-approximate.md``).
+(``docs/records/cuda-fused-approximate.md``). causal-conv1d is approximate here
+too: on CUDA it differs from the reference convolution by a BF16 ulp, so the
+exact kernels keep the reference and only a consenting family takes it.
+The fused gated-delta prep (``gdn_prep``) requires FLA, but not an installed
+causal-conv1d: it implements the convolution itself and is approximate on CUDA
+(``docs/records/cuda-gdn-prep-without-causal-conv1d.md``).
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import torch
@@ -37,6 +43,10 @@ class CUDAAccelerator(GPUAccelerator):
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = super().kernels(device)
+        kernels.available["causal_conv1d"] = [
+            replace(kernel, exact=False) if kernel.source == "causal-conv1d" else kernel
+            for kernel in kernels.available.get("causal_conv1d", [])
+        ]
         capability = (device.arch or "").removeprefix("sm_")
         if (
             not capability.isdigit()
@@ -48,10 +58,7 @@ class CUDAAccelerator(GPUAccelerator):
         from .rocm import FUSED, FUSED_GATED_DELTA
 
         names = list(FUSED)
-        if (
-            kernels.select("causal_conv1d").source == "causal-conv1d"
-            and kernels.select("chunk_gated_delta_rule").source == "fla"
-        ):
+        if kernels.select("chunk_gated_delta_rule").source == "fla":
             names += FUSED_GATED_DELTA
         for name in names:
             kernels.register(

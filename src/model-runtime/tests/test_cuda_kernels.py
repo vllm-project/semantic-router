@@ -26,6 +26,10 @@ def fused_module(monkeypatch):
         "_optional",
         lambda module, attribute: "3.6.0" if module == "triton" else None,
     )
+    # Neither causal-conv1d nor FLA, whatever the test environment installs.
+    from vllm_srun.accel import gpu
+
+    monkeypatch.setattr(gpu, "_optional", lambda module, attribute: None)
     return module
 
 
@@ -51,7 +55,7 @@ def test_allowed_approximate_kernels_select_the_fused_kernels(fused_module):
     kernels = cuda.CUDAAccelerator().kernels(device("sm_100"))
     kernels.allow_approximate = True
     assert fused_sources(kernels) == set(FUSED)
-    # gated-delta prep reproduces causal-conv1d, so it needs causal-conv1d and FLA
+    # Without FLA, the fused gated-delta layers cannot run.
     assert not kernels.has("gdn_prep")
 
 
@@ -66,6 +70,59 @@ def test_the_receipt_lists_only_the_kernels_the_model_may_select(fused_module):
     assert "add_rmsnorm" not in kernels.describe()
     kernels.allow_approximate = True
     assert kernels.describe()["add_rmsnorm"] == "triton-gfx942"
+
+
+@pytest.fixture(
+    params=[False, True], ids=["without-causal-conv1d", "with-causal-conv1d"]
+)
+def fla_kernels(request, monkeypatch, fused_module):
+    """FLA is installed; causal-conv1d is optional, as on CUDA hosts."""
+    from vllm_srun.accel import gpu
+
+    def conv(x, weight, bias=None, activation=None):
+        return x
+
+    def delta(
+        q,
+        k,
+        v,
+        g=None,
+        beta=None,
+        initial_state=None,
+        output_final_state=False,
+        use_qk_l2norm_in_kernel=False,
+    ):
+        return v, None
+
+    found = {"fla.ops.gated_delta_rule": delta}
+    if request.param:
+        found["causal_conv1d"] = conv
+    monkeypatch.setattr(gpu, "_optional", lambda module, attribute: found.get(module))
+    return request.param
+
+
+@pytest.mark.parametrize("arch", ["sm_70", "sm_75", "sm_89", "sm_121"])
+def test_exact_kernels_keep_the_reference_convolution(fla_kernels, arch):
+    # causal-conv1d differs from the reference by a BF16 ulp on CUDA.
+    kernels = cuda.CUDAAccelerator().kernels(device(arch))
+    assert kernels.select("causal_conv1d").source == "torch-reference"
+    assert not kernels.has("gdn_prep")
+    assert kernels.select("chunk_gated_delta_rule").source == "fla"
+
+
+def test_consenting_families_get_fused_prep_without_requiring_causal_conv1d(
+    fla_kernels,
+):
+    kernels = cuda.CUDAAccelerator().kernels(device("sm_121"))
+    kernels.allow_approximate = True
+    assert kernels.select("causal_conv1d").source == (
+        "causal-conv1d" if fla_kernels else "torch-reference"
+    )
+    assert kernels.select("gdn_prep").source == "triton-gfx942"
+    # Fused kernels still require Ampere, independently of causal-conv1d.
+    turing = cuda.CUDAAccelerator().kernels(device("sm_75"))
+    turing.allow_approximate = True
+    assert not turing.has("gdn_prep")
 
 
 @pytest.mark.parametrize("consents", [False, True])
