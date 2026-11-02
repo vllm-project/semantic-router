@@ -18,7 +18,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.8B
+        artifact: vllm-sr/vela3-lite
     system:
       decision_model:
         deployment: primary
@@ -222,7 +222,7 @@ routing:
             - Deep expert reasoning on a hard problem
             - Research-level work on an open or frontier problem
         predicate:
-          gte: 1.5
+          gte: 1.25
   decisions:
     - name: omni
       description: Understand image-bearing requests with the dedicated visual-language model.
@@ -238,7 +238,7 @@ routing:
         type: static
     - name: accuracy_workflow
       description: 'Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty
-        1.5 or more) run as a bounded parallel workflow.'
+        1.25 or more) run as a bounded parallel workflow.'
       priority: 100
       rules:
         operator: AND
@@ -292,7 +292,7 @@ routing:
         type: static
     - name: accuracy_deliberation
       description: 'Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step
-        reasoning (accuracy_difficulty 1.5 or more) get independent frontier perspectives.'
+        reasoning (accuracy_difficulty 1.25 or more) get independent frontier perspectives.'
       priority: 90
       rules:
         operator: AND
