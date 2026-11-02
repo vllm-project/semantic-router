@@ -1,0 +1,103 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      # general-expert, not a profile-specific name: the shared AIGatewayRoute
+      # in deploy/kubernetes/ai-gateway/aigw-resources/ matches x-ai-eg-model
+      # exactly against six names (math-, science-, social-, humanities-, law-
+      # and general-expert). A model outside that list has no route, so every
+      # request 404s at the gateway while the router itself stays healthy.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: general-expert
+    signals:
+      # Examples/threshold are irrelevant here: the external path sends only
+      # each rule's name and description to the LLM and lets it pick, so
+      # there is nothing for a local similarity threshold to gate.
+      preferences:
+        - name: terse_answers
+          description: Users who prefer short, direct responses with no elaboration.
+        - name: detailed_answers
+          description: Users who want thorough, step-by-step explanations with reasoning.
+    decisions:
+      - name: terse_preference_routing
+        description: Route requests whose preference signal matches terse_answers.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: preference
+              name: terse_answers
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: detailed_preference_routing
+        description: Route requests whose preference signal matches detailed_answers.
+        priority: 90
+        rules:
+          operator: AND
+          conditions:
+            - type: preference
+              name: detailed_answers
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route for requests matching no preference rule.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      # use_contrastive: false switches the preference classifier onto the
+      # external path below instead of local embedding similarity - the one
+      # thing this profile exists to exercise.
+      modules:
+        classifier:
+          preference:
+            use_contrastive: false
+      external:
+        - name: e2e-preference-external
+          llm_provider: openai
+          model_role: preference
+          llm_endpoint:
+            address: mock-preference-llm.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_model_name: e2e-preference-external
+          llm_timeout_seconds: 5
+          access_key: e2e-preference-key
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
+
+resources:
+  # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
+  # and the helm wait burns its full 60m timeout. Matches the other isolated
+  # profiles' headroom even though this one skips the embedding model.
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 250m

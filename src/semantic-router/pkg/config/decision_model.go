@@ -13,7 +13,8 @@ type DecisionModelBinding struct {
 
 const (
 	DefaultDecisionDeployment = "primary"
-	DefaultDecisionModel      = "Vela-2.0-0.3B"
+	DefaultDecisionModel      = DecisionModelVela3Fast
+	DecisionModelVela3Fast    = "vela3-fast"
 	DecisionModelVela2_03B    = "Vela-2.0-0.3B"
 	DecisionModelVela2_08B    = "Vela-2.0-0.8B"
 	DecisionModelVela2_4B     = "Vela-2.0-4B"
@@ -120,7 +121,7 @@ func (c *RouterConfig) DecisionModelSpec() DecisionModelSpec {
 	if err != nil && (c == nil || c.DecisionModel == "") {
 		// Directly constructed module configurations still expose their normal
 		// built-in defaults. This does not manufacture a runtime deployment.
-		deployment, _ = ImplicitModelRuntimeDeployment(Vela2SignalModel, true)
+		deployment, _ = ImplicitModelRuntimeDeployment(Vela3SignalModel, true)
 	}
 	return decisionModelSpec(name, deployment)
 }

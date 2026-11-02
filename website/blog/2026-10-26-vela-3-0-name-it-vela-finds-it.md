@@ -437,9 +437,7 @@ The [Vela 3.0 Studio](https://huggingface.co/spaces/vllm-sr/vela3-studio) runs t
 
 ## In vLLM Semantic Router
 
-Vela 2.0 plugs into the router as a `model_runtime` deployment: one deployment answers the built-in signals and the decision and span questions a recipe defines, in one call (see `config/fragments/signal/decision/vela2-labels-spans.yaml` and [Choose a model](/docs/next/model-runtime/choose-a-model)). Vela 3.0 keeps the `system_one` question format, but the router's model runtime does not load the Vela 3.0 packages yet. For now they run through their own packages, as shown above.
-
-{/* TODO(Adam): Vela 3.0 is not a model-id swap today. The runtime's vela2 family detects only Vela 2.0 members (src/model-runtime/vllm_srun/families/vela2/family.py, member_of), and there is no vela3 family; the d3 bases (d3-lite, d3-mini, d3-flash, d3-turbo) are in the decision3 registry, but the Vela 3.0 adapters and the UltraBERT encoder are not. Replace this paragraph with the config fragment and the e2e profile once a vela3 family lands. */}
+vela3-fast is the router's default decision model. It plugs in as a `model_runtime` deployment, as Vela 2.0 did: one deployment answers the built-in signals and the decision and span questions a recipe defines, in one call, and the model runtime runs the package's backbone and adapters itself, with the package's own answers on a CPU, bit for bit (see `config/fragments/signal/decision/vela3-labels-spans.yaml` and [Choose a model](/docs/next/model-runtime/choose-a-model)). The other Vela 3.0 sizes and vela3-fast-vision run through their own packages for now, as shown above.
 
 ## Towards open foundation routing models
 

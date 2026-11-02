@@ -1,3 +1,7 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -60,7 +64,7 @@ def test_aggregate_summary_lines_include_recipe_owned_routing():
 
 def _write_config(tmp_path, text: str):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(text)
+    config_path.write_text(text, encoding="utf-8")
     return config_path
 
 
@@ -589,3 +593,106 @@ routing: {{}}
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
+
+
+def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
+    config_content = (
+        "version: v0.3\n"
+        "# Description: Router configuration — Decision & Latency Profile “experimental”\n"
+        "# Comment: 模型配置\n"
+        "listeners: []\n"
+        "providers:\n"
+        "  defaults:\n"
+        "    model: local-model\n"
+        "  models:\n"
+        "    - name: local-model\n"
+        "      api_format: openai\n"
+        "      backend_refs:\n"
+        "        - provider: vllm\n"
+        "          base_url: http://127.0.0.1:8000/v1\n"
+        "          api_key_env: TEST_API_KEY\n"
+        "routing: {}\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(config_content, encoding="utf-8")
+
+    project_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        f"{project_root}{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else str(project_root)
+    )
+    env["LC_ALL"] = "C"
+    env["LANG"] = "C"
+    env["PYTHONUTF8"] = "0"
+    env["PYTHONCOERCECLOCALE"] = "0"
+    env["PYTHONIOENCODING"] = "utf-8"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cli.main",
+            "config",
+            "validate",
+            "--config",
+            str(config_path),
+        ],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "Configuration is valid" in result.stdout
+
+    router_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cli.main",
+            "config",
+            "router",
+            "--config",
+            str(config_path),
+        ],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert (
+        router_result.returncode == 0
+    ), f"STDOUT:\n{router_result.stdout}\nSTDERR:\n{router_result.stderr}"
+    assert router_result.stdout == config_content
+
+    # Verify runtime_support env resolution also works under ASCII locale
+    test_script = (
+        "import sys\n"
+        "from cli.commands.runtime_support import config_env_references, required_config_env_references\n"
+        f"refs = config_env_references(r'{config_path}')\n"
+        f"req_refs = required_config_env_references(r'{config_path}')\n"
+        "assert 'TEST_API_KEY' in refs, f'Expected TEST_API_KEY in refs: {refs}'\n"
+        "assert 'TEST_API_KEY' in req_refs, f'Expected TEST_API_KEY in req_refs: {req_refs}'\n"
+        "print('RUNTIME_SUPPORT_OK')\n"
+    )
+    support_result = subprocess.run(
+        [sys.executable, "-c", test_script],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert (
+        support_result.returncode == 0
+    ), f"STDOUT:\n{support_result.stdout}\nSTDERR:\n{support_result.stderr}"
+    assert "RUNTIME_SUPPORT_OK" in support_result.stdout
