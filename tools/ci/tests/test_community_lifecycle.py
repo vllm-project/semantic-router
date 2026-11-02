@@ -734,6 +734,67 @@ class PullRequestReconciliationTests(unittest.TestCase):
             ],
         )
 
+    def test_skipped_review_signals_reconcile_live_admission_and_approval(self) -> None:
+        for event_name, conclusion, decision, accepted, state in (
+            ("pull_request_review", "skipped", "APPROVED", True, "pr/merge-ready"),
+            (
+                "pull_request_review",
+                "skipped",
+                "REVIEW_REQUIRED",
+                True,
+                "pr/needs-review",
+            ),
+            (
+                "pull_request_review",
+                "skipped",
+                "CHANGES_REQUESTED",
+                True,
+                "pr/needs-author",
+            ),
+            ("pull_request_review", "skipped", "APPROVED", False, "pr/blocked"),
+            ("pull_request_review", "failure", "APPROVED", True, "pr/blocked"),
+            ("pull_request_review", "cancelled", "APPROVED", True, "pr/blocked"),
+            ("pull_request", "skipped", "APPROVED", True, "pr/blocked"),
+            ("pull_request", "failure", "APPROVED", True, "pr/blocked"),
+            ("pull_request", "success", "APPROVED", True, "pr/merge-ready"),
+        ):
+            with self.subTest(
+                event=event_name,
+                conclusion=conclusion,
+                decision=decision,
+                accepted=accepted,
+            ):
+                pull_request = self.pull_request(
+                    state="open",
+                    labels=labels("wg/mom-routing"),
+                    signals={
+                        "review_decision": decision,
+                        "merge_state": "CLEAN",
+                        "checks_state": "SUCCESS",
+                    },
+                )
+                issue = self.accepted_issue()
+                if not accepted:
+                    issue["labels"] = labels("needs-acceptance", "wg/mom-routing")
+                client = FakePullRequestApi([pull_request], [issue])
+
+                community_lifecycle_github.sync_pull_request_event(
+                    client,
+                    {
+                        "repository": {"full_name": self.REPO},
+                        "workflow_run": {
+                            "event": event_name,
+                            "conclusion": conclusion,
+                            "pull_requests": [{"number": 7}],
+                        },
+                    },
+                )
+
+                self.assertEqual(
+                    client.added & set(community_lifecycle.PR_STATE_LABELS), {state}
+                )
+                self.assertIn(("GET", f"repos/{self.REPO}/issues/5"), client.requests)
+
     def test_release_blocker_label_follows_the_linked_issue(self) -> None:
         blocker = community_lifecycle_github.RELEASE_BLOCKER
         signals = {
