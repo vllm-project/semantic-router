@@ -284,6 +284,7 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 		return llmprotocol.OutputItem{}, err
 	}
 	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
+		"output.async":             len(item.Async) > 0,
 		"output.caller":            len(item.Caller) > 0,
 		"output.encrypted_content": len(item.EncryptedContent) > 0,
 		"output.namespace":         item.Namespace != "",
