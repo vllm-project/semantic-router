@@ -2,18 +2,19 @@
 
     python3 tools/vela3_d3_parity.py generate --package DIR --count N [--seed 0] --output REQUESTS.jsonl
     PACKAGE_PYTHON tools/vela3_d3_parity.py reference --package DIR --base DIR --requests REQUESTS.jsonl \
-        --output REFERENCE.jsonl
+        --output REFERENCE.jsonl [--device cpu|cuda:0]
     python3 tools/vela3_d3_parity.py compare --package DIR --base DIR --requests REQUESTS.jsonl \
-        --reference REFERENCE.jsonl --output OUT.json
+        --reference REFERENCE.jsonl --output OUT.json [--device cpu|cuda:0]
 
 ``reference`` answers each request with the package's ``Vela3MiniModel.system_one`` over the pinned d3 base
 (``--base``: its snapshot), imported from the package directory by this tool only; run it with an environment
-that has the package's requirements (``transformers==5.17.0``, ``accelerate``), on CPU. The runtime never
-imports package code. ``compare`` serves the package through the vela3_d3 family and the native engine on CPU,
-answers every request alone (its released split), and compares per question: Choice arg-max and probabilities,
-Noul probabilities, Score probabilities; for span questions the set of (label, start, end), each span's
-probability (the package's ``score``) and the applied threshold; per request the input tokens. Errors compare
-by code. The bar: decisions and span sets identical, max |dp| <= 1e-4.
+that has the package's requirements (``transformers==5.17.0``, ``accelerate``), on the same device class as
+``compare``. The runtime never imports package code. ``compare`` serves the package through the vela3_d3
+family and the native engine, answers every request alone (its released split), and compares per question:
+Choice arg-max and probabilities, Noul probabilities, Score probabilities; for span questions the set of
+(label, start, end), each span's probability (the package's ``score``) and the applied threshold; per request
+the input tokens. Errors compare by code. The bar: decisions and span sets identical, max |dp| <= 1e-4 on
+CPU, <= 0.02 on GPUs.
 
 ``generate`` builds N seeded requests over every path the family routes: ordinary Choice, Noul and Score
 questions (adapters off), every trained router question (the decision adapter and the task adapters),
@@ -31,7 +32,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-BAR = 1e-4
+CPU_BAR, GPU_BAR = 1e-4, 0.02
 PROMPTS = [
     "Paint me a watercolour of a lighthouse on a cliff at sunset.",
     "Write a Python function that merges two sorted lists and explain its running time.",
@@ -176,7 +177,7 @@ def package_question(question: dict[str, Any]) -> dict[str, Any]:
 
 
 def reference(
-    package: Path, base: Path, requests: list[dict[str, Any]]
+    package: Path, base: Path, requests: list[dict[str, Any]], device: str
 ) -> list[dict[str, Any]]:
     import importlib.util
 
@@ -188,7 +189,7 @@ def reference(
     sys.modules["modeling_vela3"] = module
     spec.loader.exec_module(module)
     model = module.Vela3MiniModel.from_pretrained(
-        str(package), base_path=str(base), device="cpu"
+        str(package), base_path=str(base), device=device
     )
     out = []
     for request in requests:
@@ -201,7 +202,7 @@ def reference(
 
 
 def runtime_answers(
-    package: Path, base: Path, requests: list[dict[str, Any]]
+    package: Path, base: Path, requests: list[dict[str, Any]], device: str
 ) -> list[dict[str, Any]]:
     import asyncio
 
@@ -210,7 +211,8 @@ def runtime_answers(
 
     runtime = Runtime(
         ServeConfig(
-            models=(ModelConfig(model=str(package), device="cpu"),), base_path=str(base)
+            models=(ModelConfig(model=str(package), device=device),),
+            base_path=str(base),
         )
     )
     runtime.start(background=False)
@@ -266,7 +268,7 @@ def compare_question(
     }
 
 
-def compare(requests, theirs, ours) -> dict[str, Any]:
+def compare(requests, theirs, ours, bar: float) -> dict[str, Any]:
     rows, worst, different, tokens, changed = [], 0.0, 0, 0, 0
     exact = 0
     for index, (request, want, got) in enumerate(
@@ -279,7 +281,7 @@ def compare(requests, theirs, ours) -> dict[str, Any]:
             worst = max(worst, row["dp"])
             exact += row["dp"] == 0.0
             changed += not row["same"]
-            different += (not row["same"]) or row["dp"] > BAR
+            different += (not row["same"]) or row["dp"] > bar
             rows.append({"request": index, "question": key, **row})
     questions = sum(len(r["questions"]) for r in requests)
     return {
@@ -290,7 +292,7 @@ def compare(requests, theirs, ours) -> dict[str, Any]:
         "outside_bar": different,
         "decisions_or_span_sets_changed": changed,
         "input_token_mismatches": tokens,
-        "bar": BAR,
+        "bar": bar,
         "rows": rows,
     }
 
@@ -313,20 +315,30 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=40)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--device", default="cpu", help="cpu, cuda:0 or rocm:0 (both sides)"
+    )
     args = parser.parse_args()
     if args.command == "generate":
         write_jsonl(args.output, generate(args.package, args.count, args.seed))
         return
     requests = read_jsonl(args.requests)
     if args.command == "reference":
-        write_jsonl(args.output, reference(args.package, args.base, requests))
+        # The package's runtime names every GPU torch device "cuda".
+        device = (
+            "cuda:" + args.device.split(":", 1)[1]
+            if args.device.startswith("rocm:")
+            else args.device
+        )
+        write_jsonl(args.output, reference(args.package, args.base, requests, device))
         return
-    ours = runtime_answers(args.package, args.base, requests)
+    bar = CPU_BAR if args.device == "cpu" else GPU_BAR
+    ours = runtime_answers(args.package, args.base, requests, args.device)
     write_jsonl(args.output.with_suffix(".answers.jsonl"), ours)
-    report = compare(requests, read_jsonl(args.reference), ours)
+    report = compare(requests, read_jsonl(args.reference), ours, bar)
     args.output.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n")
     print(json.dumps({k: v for k, v in report.items() if k != "rows"}, indent=1))
-    for row in [r for r in report["rows"] if not r["same"] or r["dp"] > BAR][:10]:
+    for row in [r for r in report["rows"] if not r["same"] or r["dp"] > bar][:10]:
         print(row)
 
 
