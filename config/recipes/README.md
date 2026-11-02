@@ -16,8 +16,7 @@ start those inference backends.
 | --- | --- |
 | [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
 | [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
-| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
-| [Decision Balance](decision-balance/README.md) | One decision-model call per request sets the reasoning effort and model across GLM-5.3-Flash and two Qwen3.8 models; MoM V1 Balance runs the same policy over the models you assign. |
+| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs, routed on four named decision-model questions. |
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
@@ -27,7 +26,9 @@ start those inference backends.
 The [built-in virtual model catalog](built-in/README.md) is a separate
 distribution surface. Its [MoM V1 Model
 Card](built-in/latest/mom-v1/README.md) describes the virtual models bundled
-with `vllm-sr`.
+with `vllm-sr`. MoM V1 Balance is the Decision Balance policy: one
+decision-model call per request selects one of its ten lanes and the reasoning
+effort of the models you assign to it.
 
 ## Use a recipe
 
