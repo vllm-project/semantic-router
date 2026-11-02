@@ -185,7 +185,16 @@ func (r *OpenAIRouter) respondRoutingRejected(
 	if r.Config != nil {
 		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
-	r.startRouterReplay(ctx, originalModel, "", "")
+	// The matched decision is known even when selection rejects the request:
+	// pass its name so the per-decision recorder is resolved. An empty name
+	// would fall back to the global recorder, which does not exist when only
+	// per-decision router_replay plugins are configured, and the rejection
+	// would leave no trace at all.
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
+	}
+	r.startRouterReplay(ctx, originalModel, "", decisionName)
 	r.updateRouterReplayStatus(ctx, status, false)
 	if immediate := resp.GetImmediateResponse(); immediate != nil {
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
