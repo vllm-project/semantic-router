@@ -2,7 +2,7 @@ name: Community
 
 on:
   pull_request:
-    types: [opened, reopened, edited, ready_for_review, converted_to_draft]
+    types: [opened, reopened, synchronize, edited, ready_for_review, converted_to_draft]
     branches: [main]
   pull_request_review:
     types: [submitted, dismissed]

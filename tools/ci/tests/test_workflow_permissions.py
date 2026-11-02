@@ -15,6 +15,7 @@ from validate_workflows import (  # noqa: E402
     Workflow,
     validate_local_call,
 )
+from workflow_policy_validation import validate_community_contract  # noqa: E402
 
 
 def workflow(name: str, data: dict[str, object]) -> Workflow:
@@ -127,6 +128,25 @@ class CommunityLabelSyncConcurrencyTests(unittest.TestCase):
         self.assertFalse(sweep_concurrency["cancel-in-progress"])
 
 
+class CommunityIntakeTriggerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        path = REPO_ROOT / ".github" / "workflows" / "community.yml"
+        self.community = workflow(
+            "community.yml", yaml.safe_load(path.read_text(encoding="utf-8"))
+        )
+
+    def test_head_synchronization_retriggers_intake_checks(self) -> None:
+        errors: list[str] = []
+        validate_community_contract({"community.yml": self.community}, errors)
+        self.assertEqual(errors, [])
+
+    def test_policy_rejects_missing_synchronization_event(self) -> None:
+        self.community.events["pull_request"]["types"].remove("synchronize")
+        errors: list[str] = []
+        validate_community_contract({"community.yml": self.community}, errors)
+        self.assertTrue(any("must include synchronize" in error for error in errors))
+
+
 class CommunityValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         path = REPO_ROOT / ".github" / "workflows" / "community.yml"
@@ -187,7 +207,7 @@ class CommunityValidationTests(unittest.TestCase):
         self.assertEqual(
             events["pull_request_review"]["types"], ["submitted", "dismissed"]
         )
-        self.assertNotIn("synchronize", events["pull_request"]["types"])
+        self.assertIn("synchronize", events["pull_request"]["types"])
         self.assertIn("edited", events["pull_request"]["types"])
         path = REPO_ROOT / ".github" / "workflows" / "community-labels.yml"
         sync = yaml.safe_load(path.read_text(encoding="utf-8"))

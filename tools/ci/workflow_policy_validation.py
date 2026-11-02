@@ -268,10 +268,18 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         for word in ("docker/login-action", "push: true")
     ):
         errors.append("shared image producer must not authenticate or publish")
+
+
+def validate_community_contract(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
     community = workflows.get("community.yml")
     trigger = community.events.get("pull_request", {}) if community else {}
-    if "synchronize" in (trigger or {}).get("types", []):
-        errors.append("community metadata must not repeat on every synchronization")
+    if "synchronize" not in (trigger or {}).get("types", []):
+        errors.append(
+            "community.yml pull_request trigger must include synchronize so intake "
+            "checks rerun when a PR head changes"
+        )
 
 
 def validate_main_publishers(
@@ -575,6 +583,7 @@ def validate_workflow_policies(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
     validate_pr_contract(workflows, errors)
+    validate_community_contract(workflows, errors)
     validate_main_publishers(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
