@@ -21,7 +21,7 @@ func DecisionTaskCatalogHandler(configPath, upstream string, providers ...router
 		transport.provider = providers[0]
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			decisionModelError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Task discovery requires GET")
 			return
 		}
