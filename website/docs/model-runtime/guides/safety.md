@@ -51,18 +51,18 @@ routing:
         - model: safety-capable-model
 ```
 
-Without overrides, prompt guard and safety use the default Vela 2.0 judgment
+Without overrides, prompt guard and safety use the default vela3-fast judgment
 deployment. The Vela 1.0 Guard and Safety specialists are explicit alternatives
 with their own input windows and calibrated thresholds. Re-evaluate rule
 thresholds when changing models, and distinguish the model input limit from
-its complete-scan budget. See [Choose a model](../choose-a-model#vela-20).
+its complete-scan budget. See [Choose a model](../choose-a-model#built-in-signals).
 
 ## Choose a model and where it runs
 
 | Feature | Native-head binding | Native-head contract | Model |
 | --- | --- | --- | --- |
-| Jailbreak | `prompt_guard` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B` (or `vllm-sr/Vela-1.0-Encoder-307M-Guard`) |
-| Safety rule `<name>` | `safety.<name>` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B` (or `vllm-sr/Vela-1.0-Encoder-307M-Safety`) |
+| Jailbreak | `prompt_guard` | `label_distribution.v1` | `vllm-sr/vela3-fast` (or `vllm-sr/Vela-1.0-Encoder-307M-Guard`) |
+| Safety rule `<name>` | `safety.<name>` | `label_distribution.v1` | `vllm-sr/vela3-fast` (or `vllm-sr/Vela-1.0-Encoder-307M-Safety`) |
 | Explicit hazard cascade of rule `<name>` | `safety.<name>.hazard` | `label_scores.v1` | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` |
 
 For generic judgment tasks, an explicit `decision.v1` binding uses the

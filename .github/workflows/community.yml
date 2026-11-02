@@ -23,6 +23,9 @@ jobs:
       || (github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.user.type != 'Bot')
+    concurrency:
+      group: community-title-format-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,11 +40,14 @@ jobs:
 
   linked-issue:
     name: Check linked accepted issue
+    # Review events only signal the trusted label-sync workflow.
     if: >-
-      (github.event_name == 'pull_request'
-      || github.event_name == 'pull_request_review')
+      github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.user.type != 'Bot'
+    concurrency:
+      group: community-linked-issue-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read

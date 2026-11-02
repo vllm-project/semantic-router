@@ -34,8 +34,10 @@ type routerLearningIdentityDiagnostics struct {
 	scope         string
 	sessionHeader string
 	convoHeader   string
+	agentHeader   string
 	session       routerLearningIdentityPart
 	conversation  routerLearningIdentityPart
+	agent         routerLearningIdentityPart
 	memoryKeyHash string
 }
 
@@ -61,14 +63,15 @@ func newProtectionPolicy(
 	policy.Scope = scope
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		nil,
-		newRouterLearningIdentityDiagnostics(
-			scope,
-			cfg.HeaderName("session"),
-			cfg.HeaderName("conversation"),
-			strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
-			strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
-			"",
-		),
+		newRouterLearningIdentityDiagnostics(routerLearningIdentity{
+			scope:              scope,
+			sessionHeader:      cfg.HeaderName("session"),
+			conversationHeader: cfg.HeaderName("conversation"),
+			agentHeader:        cfg.HeaderName("agent"),
+			sessionID:          strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
+			conversationID:     strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
+			agentID:            strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
+		}),
 	)
 	return policy
 }
@@ -90,14 +93,7 @@ func protectionPolicyFromSelectionResult(
 	policy.Reason = protectionLearningReason(trace, identity.scope, proposalModel, finalModel)
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		trace,
-		newRouterLearningIdentityDiagnostics(
-			identity.scope,
-			identity.sessionHeader,
-			identity.conversationHeader,
-			identity.sessionID,
-			identity.conversationID,
-			identity.memoryKey,
-		),
+		newRouterLearningIdentityDiagnostics(identity),
 	)
 	policy.Details.Protection.baseModel = baseModel
 	policy.Details.Protection.proposalModel = proposalModel
@@ -286,23 +282,21 @@ func (d *routerLearningProtectionDiagnostics) toPolicyMap() map[string]interface
 	return out
 }
 
-func newRouterLearningIdentityDiagnostics(
-	scope string,
-	sessionHeader string,
-	conversationHeader string,
-	sessionID string,
-	conversationID string,
-	memoryKey string,
-) routerLearningIdentityDiagnostics {
-	conversationRequired := scope == config.RouterLearningScopeConversation
-	return routerLearningIdentityDiagnostics{
-		scope:         scope,
-		sessionHeader: sessionHeader,
-		convoHeader:   conversationHeader,
-		session:       newRouterLearningIdentityPart(sessionHeader, sessionID, true),
-		conversation:  newRouterLearningIdentityPart(conversationHeader, conversationID, conversationRequired),
-		memoryKeyHash: shortLearningIdentityHash(memoryKey),
+func newRouterLearningIdentityDiagnostics(identity routerLearningIdentity) routerLearningIdentityDiagnostics {
+	conversationRequired := identity.scope == config.RouterLearningScopeConversation
+	diagnostics := routerLearningIdentityDiagnostics{
+		scope:         identity.scope,
+		sessionHeader: identity.sessionHeader,
+		convoHeader:   identity.conversationHeader,
+		agentHeader:   identity.agentHeader,
+		session:       newRouterLearningIdentityPart(identity.sessionHeader, identity.sessionID, true),
+		conversation:  newRouterLearningIdentityPart(identity.conversationHeader, identity.conversationID, conversationRequired),
+		memoryKeyHash: shortLearningIdentityHash(identity.memoryKey),
 	}
+	if identity.agentHeader != "" {
+		diagnostics.agent = newRouterLearningIdentityPart(identity.agentHeader, identity.agentID, false)
+	}
+	return diagnostics
 }
 
 func newRouterLearningIdentityPart(
@@ -326,14 +320,19 @@ func newRouterLearningIdentityPart(
 }
 
 func (d routerLearningIdentityDiagnostics) toPolicyMap() map[string]interface{} {
+	headers := map[string]interface{}{
+		"session":      d.sessionHeader,
+		"conversation": d.convoHeader,
+	}
 	identity := map[string]interface{}{
-		"scope": d.scope,
-		"headers": map[string]interface{}{
-			"session":      d.sessionHeader,
-			"conversation": d.convoHeader,
-		},
+		"scope":        d.scope,
+		"headers":      headers,
 		"session":      d.session.toMap(),
 		"conversation": d.conversation.toMap(),
+	}
+	if d.agentHeader != "" {
+		headers["agent"] = d.agentHeader
+		identity["agent"] = d.agent.toMap()
 	}
 	if d.memoryKeyHash != "" {
 		identity["memory_key_hash"] = d.memoryKeyHash
