@@ -573,6 +573,98 @@
      "type": "noul"
     }
    },
+   "npu": {
+    "difficulty": {
+     "confidence": 0.6818449684338312,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.20280531369865903,
+      "1": 0.7878966456225542,
+      "2": 0.009298040678786758
+     },
+     "score": 0.8064927269801277,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9948938529421235,
+     "probabilities": {
+      "code": 0.9965959019614158,
+      "math": 0.00286171207861819,
+      "other": 0.0005423859599659775
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4790536350755315,
+     "probabilities": {
+      "blue": 0.06556930967053336,
+      "green": 0.3028845112018601,
+      "other": 0.6092902263066486,
+      "red": 0.022255952820957936
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.08118975847073079,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.3924027681350708,
+     "type": "noul"
+    }
+   },
+   "npu:Ascend950DT": {
+    "difficulty": {
+     "confidence": 0.6818449684338312,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.20280531369865903,
+      "1": 0.7878966456225542,
+      "2": 0.009298040678786758
+     },
+     "score": 0.8064927269801277,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9948938529421235,
+     "probabilities": {
+      "code": 0.9965959019614158,
+      "math": 0.00286171207861819,
+      "other": 0.0005423859599659775
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4790536350755315,
+     "probabilities": {
+      "blue": 0.06556930967053336,
+      "green": 0.3028845112018601,
+      "other": 0.6092902263066486,
+      "red": 0.022255952820957936
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.08118975847073079,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.3924027681350708,
+     "type": "noul"
+    }
+   },
    "rocm": {
     "difficulty": {
      "confidence": 0.48985309907326846,
