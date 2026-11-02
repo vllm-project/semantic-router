@@ -37,7 +37,7 @@ func (r *OpenAIRouter) handleRouterReplayJudgeTasksAPI(
 	if err != nil {
 		return r.createErrorResponse(400, err.Error())
 	}
-	return r.createRouterReplayJSONResponse(200, tasks)
+	return r.createJSONResponse(200, tasks)
 }
 
 // judgeTaskTexts reads the text behind each example's digests. The input is the
