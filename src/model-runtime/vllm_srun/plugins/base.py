@@ -425,7 +425,9 @@ class ForwardBatch:
     mask, the computation a branched forward reproduces (never packed).
     ``adapter`` switches one of the backbone's gated adapters on for this
     forward, on the rows it names (``AdapterGate``; never packed, shared or
-    with images).
+    with images). ``noncausal`` runs the padded text rows under the noncausal
+    full-attention mask whatever the backbone's own layout (a state-once
+    backbone with the whole prompt as one block).
     """
 
     input_ids: torch.Tensor
@@ -438,6 +440,7 @@ class ForwardBatch:
     packed: bool = False
     states: list[int] | None = None
     adapter: AdapterGate | None = None
+    noncausal: bool = False
 
 
 @dataclass

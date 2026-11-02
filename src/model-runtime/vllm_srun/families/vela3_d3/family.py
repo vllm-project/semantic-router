@@ -28,7 +28,7 @@ from ..decision3.family import Decision3Family, Decision3Model
 from ..decision3.package import STATE_ONCE_MODES
 from . import package as pkg
 from .gates import Gates
-from .model import GatedDecisions
+from .model import GatedDecisions, TurboDecisions
 
 
 class Vela3D3Family(ModelFamily):
@@ -117,8 +117,10 @@ class Vela3D3Family(ModelFamily):
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
     ) -> LoadedModel[Any, Any]:
         details: pkg.Vela3D3Package = package.details["package"]
-        model = _GatedBase(self.options).load(details.base_package, spec, engine_model)
-        assert isinstance(model, GatedDecisions)
+        loader = _GatedBase(self.options)
+        loader.replays = (details.vela3.get("decisions") or {}).get("attention")
+        model = loader.load(details.base_package, spec, engine_model)
+        assert isinstance(model, GatedDecisions | TurboDecisions)
         model.gates = Gates.from_config(
             details.vela3, details.router_questions, details.adapters
         )
@@ -135,11 +137,24 @@ class Vela3D3Family(ModelFamily):
 
 
 class _GatedBase(Decision3Family):
-    """The base's ``decision3`` loading, building the gated model."""
+    """The base's ``decision3`` loading, building the gated model.
+
+    ``replays`` is the package's ``decisions.attention``: how a state-once
+    base answers its gated rows again (only ``noncausal``, vela3-turbo's, is
+    served).
+    """
+
+    replays: str | None = None
 
     def _model_class(self, decision: dict[str, Any]) -> type[Decision3Model]:
-        if decision.get("attention_mode", "causal") in STATE_ONCE_MODES:
+        if decision.get("attention_mode", "causal") not in STATE_ONCE_MODES:
+            return GatedDecisions
+        if self.replays != NONCAUSAL_REPLAYS:
             raise PackageError(
-                "vela3/3 packages over a state-once base (vela3-turbo) are not servable yet"
+                f"a state-once base needs decisions.attention {NONCAUSAL_REPLAYS!r}; "
+                f"the package declares {self.replays!r}"
             )
-        return GatedDecisions
+        return TurboDecisions
+
+
+NONCAUSAL_REPLAYS = "noncausal"

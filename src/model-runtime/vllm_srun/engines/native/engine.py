@@ -844,6 +844,13 @@ class NativeEngineModel(EngineModel):
                 raise ValueError(f"the model has no gated adapter {adapter.name!r}")
             if batch.shared_prefix or batch.packed or batch.images is not None:
                 raise ValueError("an adapter gate runs padded text rows only")
+        if batch.noncausal and (
+            batch.shared_prefix
+            or batch.packed
+            or batch.images is not None
+            or batch.states is not None
+        ):
+            raise ValueError("a noncausal forward runs padded text rows only")
 
         def run() -> ForwardOutput:
             with self.gate.on(adapter):
@@ -866,15 +873,15 @@ class NativeEngineModel(EngineModel):
         with torch.inference_mode(), self.autocast():
             if batch.images is not None:
                 hidden = self._forward_images(batch, input_ids, attention_mask, padded)
-            elif self.graphs is not None:
+            elif self.graphs is not None and not batch.noncausal:
                 hidden = self.graphs(input_ids, attention_mask, batch.lengths)
-            elif self.masks is not None:
+            elif self.masks is not None and not batch.noncausal:
                 hidden = self.backbone(
                     input_ids,
                     attention_mask,
                     masks=self.masks.build(attention_mask, padded),
                 )
-            elif self.noncausal:
+            elif self.noncausal or batch.noncausal:
                 full, linear = noncausal_masks(attention_mask, padded)
                 hidden = self.backbone(
                     input_ids, attention_mask, masks={"full": full, "linear": linear}
