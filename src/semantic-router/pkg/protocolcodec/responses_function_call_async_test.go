@@ -27,6 +27,22 @@ func TestResponsesFunctionCallAsyncDecodesAsDroppedMetadata(t *testing.T) {
 	}
 }
 
+// custom_tool_call carries the same official field.
+func TestResponsesCustomToolCallAsyncDecodesAsDroppedMetadata(t *testing.T) {
+	body := `{"id":"resp_1","object":"response","created_at":1,"model":"m","status":"completed","output":[` +
+		`{"type":"custom_tool_call","id":"ctc_1","call_id":"call_1","name":"apply_patch","input":"diff","async":null,"status":"completed"}]}`
+	response, _, diagnostics, err := (OpenAIResponsesCodec{}).DecodeResponse([]byte(body), llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if call := response.Output[0].Content[0].ToolCall; call == nil || call.Name != "apply_patch" {
+		t.Fatalf("tool call = %+v", call)
+	}
+	if !hasDiagnostic(diagnostics, "output.async", llmprotocol.DiagnosticDropped) {
+		t.Fatalf("diagnostics = %+v, want output.async dropped", diagnostics)
+	}
+}
+
 func TestResponsesFunctionCallAsyncDecodesInAStream(t *testing.T) {
 	added := `{"arguments":"","call_id":"call_1","name":"bash","type":"function_call","id":"fc_1","async":null,"caller":null,"namespace":null,"status":"in_progress"}`
 	stream := []byte("event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"m\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +

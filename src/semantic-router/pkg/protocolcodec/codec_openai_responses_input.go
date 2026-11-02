@@ -140,7 +140,7 @@ func responsesItemAllowedFields(itemType string) []string {
 	case "function_call_output":
 		return []string{"call_id", "caller", "id", "name", "namespace", "output", "status", "type"}
 	case "custom_tool_call":
-		return []string{"call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
+		return []string{"async", "call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
 	case "custom_tool_call_output":
 		return []string{"call_id", "caller", "id", "output", "status", "type"}
 	case "reasoning":
