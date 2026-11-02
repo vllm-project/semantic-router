@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 
@@ -96,7 +95,11 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		configData, err := decodeYAMLTaggedBody[canonicalConfigTransport](r.Body)
+		rawBody, ok := readLimitedMutationBody(w, r)
+		if !ok {
+			return
+		}
+		configData, err := decodeYAMLTaggedBytes[canonicalConfigTransport](rawBody)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
@@ -228,9 +231,8 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		rawPatch, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		rawPatch, ok := readLimitedMutationBody(w, r)
+		if !ok {
 			return
 		}
 		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
@@ -269,7 +271,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, false)
+		// Ordinary runtime failures restore the previous file. A restart-required
+		// result stays saved for `vllm-sr serve`, same as the other config writers.
+		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 		if applyErr != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -58,9 +57,8 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		rawBody, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+		rawBody, ok := readLimitedMutationBody(w, r)
+		if !ok {
 			return
 		}
 		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)

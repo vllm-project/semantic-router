@@ -4626,7 +4626,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.deploy",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -4655,7 +4655,7 @@
         "x-vllm-sr-resource-owner": "config",
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -4810,7 +4810,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.global_raw.update",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       },
       "put": {
@@ -4838,7 +4838,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.global_raw.update",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -4868,7 +4868,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.global.update",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       },
       "put": {
@@ -4896,7 +4896,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.global.update",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -4926,7 +4926,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.rollback",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -4984,7 +4984,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.update",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       },
       "put": {
@@ -5012,7 +5012,7 @@
         "x-vllm-sr-audit-mode": "required",
         "x-vllm-sr-audit-action": "config.update",
         "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
