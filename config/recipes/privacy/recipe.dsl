@@ -21,7 +21,7 @@ SIGNAL decision confidential {
 
 SIGNAL decision personal_data {
   description: "The message contains personal data about a person."
-  question: { instructions: "Does the message contain personal data about a person, such as a name with an email address, phone number, street address or ID number?", type: "noul" }
+  question: { instructions: "Does the message contain personal data, such as an email address, a phone number, a street or delivery address, or a government ID or social security number? A city or country alone is not personal data.", type: "noul" }
   predicate: { gte: 0.5 }
 }
 
