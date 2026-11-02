@@ -1,11 +1,13 @@
 """Installed Recipe discovery and explicit binding need no live Router."""
 
+import copy
+import io
 import json
 from pathlib import Path
 
 import pytest
 import yaml
-from cli import builtin_recipes, storage_backends
+from cli import builtin_recipes, builtin_recipes_json, storage_backends
 from cli.builtin_recipes import list_builtin_recipes
 from cli.commands.runtime_kb import _resolve_kb_source_root
 from cli.commands.runtime_support import resolve_effective_config_path
@@ -483,6 +485,7 @@ def test_vault_init_needs_no_backend_assignment_for_immediate_guard(tmp_path):
     )
     assert required["minimum_candidates"] == 0
     assert required["algorithm"] is None
+    assert required["description"] == guard["description"]
 
 
 def test_immediate_guard_rejects_unused_backend_assignments(tmp_path):
@@ -567,3 +570,85 @@ def test_init_preserves_rule_prototype_overrides_and_operator_global(
     assert yaml.safe_load(output.read_text())["global"] == operator["global"]
     assert source.read_bytes() == original
     assert document["recipes"][0]["routing"]["decisions"][0]["modelRefs"] == []
+
+
+def _compose(source, refs, model_names, config=None):
+    return builtin_recipes.compose_builtin_recipe(
+        "balance",
+        bundle="mom-v1",
+        config=config or builtin_recipes.load_provider_config(source),
+        config_path=source,
+        bindings=refs,
+        model_names=model_names,
+    )
+
+
+def test_compose_publishes_aliases_like_init_without_writing(tmp_path):
+    source, bindings, refs = _inputs(tmp_path)
+    config = builtin_recipes.load_provider_config(source)
+    original = copy.deepcopy(config)
+    composed = _compose(source, refs, ["my/balance", "balance"], config)
+    assert config == original
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "bindings.yaml",
+        "providers.yaml",
+    ]
+    assert composed["entrypoints"] == [
+        {"model_names": ["my/balance", "balance"], "recipe": "balance"}
+    ]
+
+    output = tmp_path / "config.yaml"
+    assert _init(source, bindings, output).exit_code == 0
+    assert yaml.safe_load(output.read_text()) == {
+        **composed,
+        "entrypoints": [{"model_names": ["my/balance"], "recipe": "balance"}],
+    }
+
+
+def test_compose_rejects_an_alias_that_names_a_backend_model(tmp_path):
+    source, _, refs = _inputs(tmp_path)
+    with pytest.raises(
+        ValueError,
+        match="Entrypoint model 'model-a' conflicts with a configured backend model",
+    ):
+        _compose(source, refs, ["my/balance", "model-a"])
+
+
+def test_compose_refuses_a_recipe_the_config_already_contains(tmp_path):
+    source, _, refs = _inputs(tmp_path)
+    config = builtin_recipes.load_provider_config(source)
+    config["recipes"] = [{"name": "balance"}]
+    with pytest.raises(ValueError, match="Config already contains recipe 'balance'"):
+        _compose(source, refs, ["my/balance"], config)
+
+
+def test_json_interface_lists_composes_and_reports_rejections(
+    tmp_path, monkeypatch, capsys
+):
+    assert builtin_recipes_json.main(["list"]) == 0
+    assert json.loads(capsys.readouterr().out) == list_builtin_recipes()
+
+    source, _, refs = _inputs(tmp_path, "vault")
+    request = {
+        "config_path": str(source),
+        "bundle": "mom-v1",
+        "recipe": "vault",
+        "bindings": {name: models for name, models in refs.items() if models},
+        "model_names": ["my/vault", "vault"],
+    }
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request)))
+    assert builtin_recipes_json.main(["compose"]) == 0
+    composed = json.loads(capsys.readouterr().out)
+    assert composed["entrypoints"] == [
+        {"model_names": ["my/vault", "vault"], "recipe": "vault"}
+    ]
+
+    request["bindings"]["private"] = [{"model": "invented"}]
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request)))
+    assert (
+        builtin_recipes_json.main(["compose"])
+        == builtin_recipes_json.REJECTED_EXIT_CODE
+    )
+    assert capsys.readouterr().out.strip() == (
+        "Decision 'private' references unconfigured provider models: ['invented']"
+    )
