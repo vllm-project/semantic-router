@@ -140,9 +140,11 @@ removing either would discard a conversation turn or cache boundary.
 For an Anthropic Messages client using a Chat Completions or Responses backend,
 `thinking.type: adaptive` uses the backend model's default reasoning behavior;
 `output_config.effort` is retained. `thinking.display: omitted` removes reasoning
-from the translated response, including streaming output. Explicit
-`thinking.type: disabled` requires a configured reasoning family and an
-effective backend reasoning-off control. Unsupported controls fail with a typed
+from the translated response, including streaming output. `summarized` and
+`updates` (which Claude Code sends) reach only Messages backends and are rejected
+for these backends. Explicit `thinking.type: disabled` requires a configured
+reasoning family and an effective backend reasoning-off control. Unsupported
+controls fail with a typed
 request error. A `context_management` edit of `clear_thinking_20251015` with
 `keep: all` has no effect and is omitted for these backends; edits that would
 change history are rejected. Anthropic `cache_control` boundaries are omitted

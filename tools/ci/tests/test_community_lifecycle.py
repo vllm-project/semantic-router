@@ -603,6 +603,7 @@ class FakePullRequestApi:
         self.pull_requests = {int(item["number"]): item for item in pull_requests}
         self.issues = {int(item["number"]): item for item in (issues or [])}
         self.listings = listings or {}
+        self.requests: list[tuple[str, str]] = []
         self.fetched: list[int] = []
         self.added: set[str] = set()
         self.removed: set[str] = set()
@@ -615,6 +616,7 @@ class FakePullRequestApi:
         payload=None,
         ignore_not_found: bool = False,
     ):
+        self.requests.append((method, endpoint))
         if endpoint == "graphql":
             return self.graphql(payload)
         if "?" in endpoint:
@@ -636,21 +638,14 @@ class FakePullRequestApi:
 
     def graphql(self, payload):
         pull_request = self.pull_requests[payload["variables"]["number"]]
-        if "closingIssuesReferences" in payload["query"]:
-            nodes = [{"number": number} for number in pull_request.get("closes", ())]
-            return {
-                "data": {
-                    "repository": {
-                        "pullRequest": {"closingIssuesReferences": {"nodes": nodes}}
-                    }
-                }
-            }
+        nodes = [{"number": number} for number in pull_request.get("closes", ())]
         signals = pull_request.get("signals", {})
         rollup = {"state": signals.get("checks_state")}
         return {
             "data": {
                 "repository": {
                     "pullRequest": {
+                        "closingIssuesReferences": {"nodes": nodes},
                         "reviewDecision": signals.get("review_decision"),
                         "mergeStateStatus": signals.get("merge_state"),
                         "commits": {
@@ -715,6 +710,70 @@ class PullRequestReconciliationTests(unittest.TestCase):
         community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
 
         self.assertEqual(client.added, {"pr/merge-ready"})
+
+    def test_synchronized_pull_request_costs_three_reads_and_no_writes(self) -> None:
+        pull_request = self.pull_request(
+            state="open",
+            labels=labels("pr/merge-ready", "wg/mom-routing"),
+            signals={
+                "review_decision": "APPROVED",
+                "merge_state": "CLEAN",
+                "checks_state": "SUCCESS",
+            },
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(
+            client.requests,
+            [
+                ("GET", f"repos/{self.REPO}/pulls/7"),
+                ("POST", "graphql"),
+                ("GET", f"repos/{self.REPO}/issues/5"),
+            ],
+        )
+
+    def test_release_blocker_label_follows_the_linked_issue(self) -> None:
+        blocker = community_lifecycle_github.RELEASE_BLOCKER
+        signals = {
+            "review_decision": "APPROVED",
+            "merge_state": "CLEAN",
+            "checks_state": "SUCCESS",
+        }
+        blocking_issue = self.accepted_issue()
+        blocking_issue["labels"] = labels("accepted", "wg/mom-routing", blocker)
+        cases = [
+            (
+                labels("pr/merge-ready", "wg/mom-routing"),
+                blocking_issue,
+                {blocker},
+                set(),
+            ),
+            (
+                labels("pr/merge-ready", "wg/mom-routing", blocker),
+                blocking_issue,
+                set(),
+                set(),
+            ),
+            (
+                labels("pr/merge-ready", "wg/mom-routing", blocker),
+                self.accepted_issue(),
+                set(),
+                {blocker},
+            ),
+        ]
+        for current, issue, added, removed in cases:
+            with self.subTest(current=current, added=added, removed=removed):
+                pull_request = self.pull_request(
+                    state="open", labels=current, signals=signals
+                )
+                client = FakePullRequestApi([pull_request], [issue])
+
+                community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+                self.assertEqual(client.added, added)
+                self.assertEqual(client.removed, removed)
 
     def closed_listing(self, label: str, page: int = 1) -> str:
         return (

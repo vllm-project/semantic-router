@@ -22,126 +22,98 @@ func maintainedRecipeEngine(t *testing.T, name string) *DecisionEngine {
 	return NewDecisionEngine(cfg.KeywordRules, cfg.EmbeddingRules, cfg.Categories, cfg.Decisions, config.RoutingStrategyPriority)
 }
 
-func TestBalanceTaskIntentPolicy(t *testing.T) {
+func TestBalanceQuestionPolicy(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "balance")
-	tests := []evaluateSignalsCase{
+	lanes := []struct{ label, lane string }{
+		{"legal", "premium_legal"},
+		{"proof", "formal_math_proof"},
+		{"argument", "reasoning_deep"},
+		{"systems", "complex_specialist"},
+		{"science", "complex_specialist"},
+		{"code", "medium_code_general"},
+		{"health", "verified_health"},
+		{"explain", "medium_explainer"},
+		{"creative", "medium_creative"},
+		{"facts", "fast_qa"},
+		{"chat", "simple_general"},
+	}
+	var tests []evaluateSignalsCase
+	for _, l := range lanes {
+		tests = append(tests, evaluateSignalsCase{
+			name:             "task " + l.label + " picks " + l.lane,
+			signals:          &SignalMatches{DecisionRules: []string{"task:" + l.label}},
+			expectedDecision: l.lane,
+		})
+	}
+	unknown := map[string]string{}
+	for _, name := range []string{"task", "verification", "correction", "clarify"} {
+		unknown["decision:"+name] = "decision_rejected"
+	}
+	tests = append(tests, []evaluateSignalsCase{
 		{
-			name: "health semantics retain verification when topic is uncertain",
-			signals: &SignalMatches{
-				DomainRules:     []string{"other"},
-				EmbeddingRules:  []string{"health_guidance"},
-				KeywordRules:    []string{"verification_markers", "reference_heavy_markers"},
-				ContextRules:    []string{"short_context"},
-				ProjectionRules: []string{"balance_simple", "verification_required"},
-			},
-			expectedDecision: "verified_health",
+			name:             "an explanation with a source request is verified",
+			signals:          &SignalMatches{DecisionRules: []string{"task:explain", "verification"}},
+			expectedDecision: "verified_explainer",
 		},
 		{
-			name: "health semantics alone do not request verification",
-			signals: &SignalMatches{
-				EmbeddingRules: []string{"health_guidance"},
-			},
+			name:             "a source request alone picks no lane",
+			signals:          &SignalMatches{DecisionRules: []string{"verification"}},
 			expectedDecision: "casual_chat",
 		},
 		{
-			name: "health correction keeps recovery priority",
+			name:             "a correction needs an earlier answer",
+			signals:          &SignalMatches{DecisionRules: []string{"task:code", "correction"}},
+			expectedDecision: "medium_code_general",
+		},
+		{
+			name: "a correction after an answer outranks the code lane",
 			signals: &SignalMatches{
-				EmbeddingRules:    []string{"health_guidance"},
-				KeywordRules:      []string{"verification_markers"},
-				UserFeedbackRules: []string{"wrong_answer"},
-				ProjectionRules:   []string{"verification_required", "feedback_correction_verified"},
+				ConversationRules: []string{"has_prior_answer"},
+				DecisionRules:     []string{"task:code", "correction"},
 			},
 			expectedDecision: "feedback_wrong_answer_verified",
 		},
 		{
-			name: "short health source request keeps verification",
+			name: "the legal lane outranks a correction",
 			signals: &SignalMatches{
-				DomainRules:     []string{"health"},
-				KeywordRules:    []string{"verification_markers"},
-				ProjectionRules: []string{"balance_simple"},
-			},
-			expectedDecision: "verified_health",
-		},
-		{
-			name: "architecture domain and semantic intent",
-			signals: &SignalMatches{
-				DomainRules:    []string{"computer science"},
-				EmbeddingRules: []string{"architecture_design"},
-			},
-			expectedDecision: "complex_specialist",
-		},
-		{
-			name: "architecture language and semantic intent survive topic uncertainty",
-			signals: &SignalMatches{
-				DomainRules:    []string{"business"},
-				KeywordRules:   []string{"architecture_markers"},
-				EmbeddingRules: []string{"architecture_design"},
-			},
-			expectedDecision: "complex_specialist",
-		},
-		{
-			name: "tradeoffs alone do not establish systems design",
-			signals: &SignalMatches{
-				DomainRules:  []string{"business"},
-				KeywordRules: []string{"architecture_markers"},
-			},
-			expectedDecision: "casual_chat",
-		},
-		{
-			name: "normative argument does not require medium difficulty",
-			signals: &SignalMatches{
-				DomainRules:     []string{"law"},
-				KeywordRules:    []string{"normative_topic_markers", "argument_request_markers"},
-				ProjectionRules: []string{"balance_simple"},
-			},
-			expectedDecision: "reasoning_deep",
-		},
-		{
-			name: "actual legal risk retains priority",
-			signals: &SignalMatches{
-				DomainRules:     []string{"law"},
-				KeywordRules:    []string{"normative_topic_markers", "argument_request_markers", "legal_risk_markers"},
-				ComplexityRules: []string{"legal_risk:hard"},
+				ConversationRules: []string{"has_prior_answer"},
+				DecisionRules:     []string{"task:legal", "correction"},
 			},
 			expectedDecision: "premium_legal",
 		},
 		{
-			name: "explicit explanation and sources survive unnamed topic",
+			name: "a clarification after an answer outranks the explainer lane",
 			signals: &SignalMatches{
-				DomainRules:     []string{"other"},
-				KeywordRules:    []string{"explanation_request_markers", "verification_markers"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_prior_answer"},
+				DecisionRules:     []string{"task:explain", "clarify"},
 			},
-			expectedDecision: "verified_explainer",
+			expectedDecision: "feedback_need_clarification",
 		},
 		{
-			name: "ordinary explanation needs no redundant effort gate",
+			name: "a clarification that is also a correction recovers",
 			signals: &SignalMatches{
-				DomainRules:     []string{"psychology"},
-				KeywordRules:    []string{"explanation_request_markers"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_prior_answer"},
+				DecisionRules:     []string{"task:chat", "clarify", "correction"},
 			},
-			expectedDecision: "medium_explainer",
+			expectedDecision: "feedback_wrong_answer_verified",
 		},
 		{
-			name: "fictional drafting is a task",
+			name: "an image goes to the visual lane whatever the task",
 			signals: &SignalMatches{
-				KeywordRules:    []string{"drafting_action_markers", "creative_form_markers"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_image"},
+				DecisionRules:     []string{"task:legal"},
 			},
-			expectedDecision: "medium_creative",
+			expectedDecision: "omni",
 		},
 		{
-			name: "tone without drafting does not establish creative work",
+			name: "unknown answers fall back",
 			signals: &SignalMatches{
-				KeywordRules:    []string{"personal_tone_markers"},
-				ContextRules:    []string{"short_context"},
-				StructureRules:  []string{"low_question_density"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_prior_answer"},
+				SignalErrors:      unknown,
 			},
-			expectedDecision: "simple_general",
+			expectedDecision: "casual_chat",
 		},
-	}
+	}...)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)

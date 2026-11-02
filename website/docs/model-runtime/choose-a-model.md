@@ -119,8 +119,9 @@ a question runs on; its ten adapters carry their own top layers and heads, so
 the deployment loads 1.5B parameters) answers `choice` and `noul` questions on its decision backbone, the
 router's built-in questions on trained adapters, and `span` questions on span
 adapters routed by label set and wording (personal data, unsupported claims,
-evidence, relations, entities), with the `pii` and `halu` presets. A `set`
-question takes one of its trained router texts; it answers no `score`
+evidence, relations, entities), with the `pii` and `halu` presets. A `noul`
+question is read by its instructions alone, so one that describes `false` or
+`true` is invalid. A `set` question takes one of its trained router texts; it answers no `score`
 questions. Its answers match the package's own runtime bit for bit on a CPU
 ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela3-parity.md)).
 The larger Vela 3.0 sizes are not served yet.
