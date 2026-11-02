@@ -23,10 +23,15 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldToolDeferLoading names a tool's request to be loaded on demand
+// through the provider's tool search. Accepting the loss sends the tool with its
+// full definition, as a backend without tool search would see it.
+const LossyFieldToolDeferLoading = "tools.defer_loading"
+
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldToolDeferLoading}
 }
 
 type MissingIDPolicy string
