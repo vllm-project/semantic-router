@@ -255,7 +255,9 @@ func validateDecisionSelectorConfig(decisionName string, modelRefs []ModelRef, a
 	if cfg.TimeoutMs < 0 || cfg.TimeoutMs > MaxDecisionTimeoutMs {
 		return fmt.Errorf("%s: timeout_ms must be within [1, %d] when set", path, MaxDecisionTimeoutMs)
 	}
-	if len(modelRefs) < MinDecisionChoices || len(modelRefs) > MaxDecisionChoices {
+	// A model-free built-in Recipe asset receives its candidates through
+	// assignments; the choice range applies once they are bound.
+	if len(modelRefs) > 0 && (len(modelRefs) < MinDecisionChoices || len(modelRefs) > MaxDecisionChoices) {
 		return fmt.Errorf("%s: needs %d..%d modelRefs to choose from", path, MinDecisionChoices, MaxDecisionChoices)
 	}
 	models := make(map[string]struct{}, len(modelRefs))
