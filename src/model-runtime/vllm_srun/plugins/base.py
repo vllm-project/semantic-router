@@ -223,6 +223,31 @@ class AdapterSpec:
 
 
 @dataclass(frozen=True)
+class GatedAdapterSpec:
+    """A gated LoRA adapter on the backbone's own Linears, switched on per forward (``ForwardBatch.adapter``).
+
+    ``weight_file`` holds FP32 factors ``<module>.A`` (rank x in) and
+    ``<module>.B`` (out x rank), modules named as in the backbone. With the
+    adapter on, a wrapped Linear returns
+    ``base(x) + ((x.float() @ A.T) @ B.T * (alpha / rank)).to(base(x).dtype)``
+    on the gated rows and ``base(x)`` itself on every other row; with every
+    adapter off it is the base computation, bit for bit.
+    """
+
+    weight_file: Path
+    rank: int
+    alpha: float
+
+
+@dataclass(frozen=True)
+class AdapterGate:
+    """Which gated adapter a forward runs (``GatedAdapterSpec``), on which rows (None: every row)."""
+
+    name: str
+    rows: tuple[bool, ...] | None = None
+
+
+@dataclass(frozen=True)
 class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
@@ -231,6 +256,8 @@ class BackboneSpec:
     adapter networks over the backbone (``AdapterSpec``), selected the same
     way and never sharing a name with a branch. ``quantized`` names the linear
     layers the checkpoint holds as int4, FP8 or NVFP4 weights (``quantization.py``).
+    ``gated`` names gated LoRA adapters on the backbone's own Linears
+    (``GatedAdapterSpec``), one of which a forward may switch on.
     """
 
     model_type: str
@@ -241,6 +268,7 @@ class BackboneSpec:
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
     quantized: QuantizedWeights | None = None
     adapters: Mapping[str, AdapterSpec] = field(default_factory=dict)
+    gated: Mapping[str, GatedAdapterSpec] = field(default_factory=dict)
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
@@ -395,6 +423,9 @@ class ForwardBatch:
     real tokens are its state block, for a backbone with a state-once layout
     (``BranchBatch``): each row then runs alone under the backbone's state-once
     mask, the computation a branched forward reproduces (never packed).
+    ``adapter`` switches one of the backbone's gated adapters on for this
+    forward, on the rows it names (``AdapterGate``; never packed, shared or
+    with images).
     """
 
     input_ids: torch.Tensor
@@ -406,6 +437,7 @@ class ForwardBatch:
     images: ImageInputs | None = None
     packed: bool = False
     states: list[int] | None = None
+    adapter: AdapterGate | None = None
 
 
 @dataclass
