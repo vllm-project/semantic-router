@@ -132,7 +132,11 @@ ownership lock whose previous model is outside the admitted pool returns
 `503` instead of transferring ownership or forcing that model. Router-owned
 Responses history becomes portable after the router has expanded it into the
 complete stateless request; its retained `previous_response_id` alone does not
-create a lock. An active tool loop still does. Unknown response IDs fail during
+create a lock. An active tool loop does while the conversation remains on the
+decision that admitted the loop. When classification moves to a different
+decision, that lock releases and the new decision routes from its own
+candidates; the transfer is traced as `decision_drift`. Opaque provider state
+stays bound to the model that created it. Unknown response IDs fail during
 history lookup, before selection.
 
 ## Progress Gate
