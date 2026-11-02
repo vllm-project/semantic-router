@@ -13,12 +13,12 @@ v_heads=32, GDN 128-wide k16/v32, chunk 64):
 | arm | isolated chunk call | served d3-mini forward (c1 p50) |
 | --- | --- | --- |
 | reference (`kernels.chunk_gated_delta_rule_ref`) | 107.1 ms | 2,914 ms |
-| fla-npu Ascend C (`flash_gated_delta_rule`) | **0.42 ms** | **77.5 / 79.8 ms** |
+| fla-npu Ascend C (`flash_gated_delta_rule`) | **0.42 ms** | **77.5 ms** (repeat run 79.2 ms) |
 
 Parity arm: the CUDA production path (H20, serving the FLA chunk) on the same
 corpus and shape measures **107.3 ms** — the NPU path is 28% faster at equal
 footing. The slot is the model's dominant term: the e2e difference
-(2,914.7 − 79.8 = 2,834.9 ms) is entirely the chunk replacement (97% of the
+(2,914.7 − 77.5 = 2,837.2 ms) is entirely the chunk replacement (97% of the
 baseline forward).
 
 fla-npu (https://github.com/flashserve/flash-linear-attention-npu) ships the
@@ -65,10 +65,19 @@ its own model — is the long-term path.
 - Approximate slot (`exact=False`), SoC-gated to `Ascend950DT` (the
   `MEASURED` set), bf16-only (other dtypes fall back to the reference), the
   wrapper loaded from the installed `fla_npu` package or `FLA_NPU_EXAMPLES`.
+- **Off by default everywhere**: the label-diff above is BF16-only, and the
+  quantized d3 packages consent to approximate kernels
+  (`DtypePolicy.approximate_kernels`) without an accuracy record for this
+  combination — so registration additionally requires the explicit
+  `FLA_NPU_APPROXIMATE` opt-in. The default flips only when the quantized d3
+  accuracy record lands (the quantized package is validated as its own model).
 - The released BF16 packages are unchanged (receipt shows the reference
-  kernels); a consenting package gets the full win.
-- Unit tests (`tests/test_npu_fla.py`) run the registry and consent gate
-  without a device.
+  kernels); an opted-in, consenting package gets the full win.
+- The tree, branch and packed layouts keep the per-segment padded path: the
+  bound kernel takes no `cu_seqlens` (the fla-npu wrapper's varlen support is
+  unmeasured), so only the layout these measurements ran is affected.
+- Unit tests (`tests/test_npu_fla.py`) run the registry, opt-in and consent
+  gates, the initial_state handoff and the varlen check without a device.
 
 ## Reproduction
 

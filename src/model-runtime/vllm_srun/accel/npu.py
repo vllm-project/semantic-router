@@ -75,10 +75,12 @@ class NPUAccelerator(Accelerator):
             for name, fn in npu_fused.available_wrappers().items():
                 kernels.register(Kernel(name, fn, "torch-npu-fused", exact=True))
         # The fla-npu Ascend C chunk: approximate (1-2 bf16 ulp, two equally
-        # correct rounding paths), registered only where measured and selected
-        # only under the family's approximate consent -- the released BF16
-        # decision packages keep exact kernels (the record's label-diff).
-        if device.arch in npu_fla.MEASURED:
+        # correct rounding paths). Off by default everywhere: the released
+        # BF16 decision packages keep exact kernels, and the quantized d3
+        # accuracy record for this combination is pending -- registration
+        # needs the FLA_NPU_APPROXIMATE opt-in on top of the measured SoC and
+        # the family's approximate consent (the record's consent verdict).
+        if device.arch in npu_fla.MEASURED and npu_fla.opted_in():
             wrapper = npu_fla.available_wrapper()
             if wrapper is not None:
                 kernels.register(

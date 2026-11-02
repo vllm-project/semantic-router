@@ -8,9 +8,12 @@ Measured on Ascend 950DT
 flips 4 of 60 requests (row agreement 93.3%), every flip on a borderline leaf
 (two-option probability gap <= 0.02), the two flip directions opposite; the
 divergence does not compound across the 24 GDN layers (measured growth 0.96x)
-and does not grow with sequence length. The slot therefore registers
-approximate and selects only under ``DtypePolicy.approximate_kernels`` -- the
-released BF16 decision packages keep exact kernels and are unchanged.
+and does not grow with sequence length. The slot registers approximate, and
+stays off by default everywhere: the released BF16 decision packages keep
+exact kernels, and the quantized d3 accuracy record for this combination is
+pending (the quantized package is validated as its own model) -- registering
+the slot requires the explicit ``FLA_NPU_APPROXIMATE`` opt-in on top of the
+family's ``DtypePolicy.approximate_kernels`` consent.
 
 fla-npu (https://github.com/flashserve/flash-linear-attention-npu) ships the
 Ascend C GDN ops vllm-ascend binds for Qwen3.5. Its README documents the
@@ -23,8 +26,8 @@ reference kernels.
 
 from __future__ import annotations
 
+import importlib.util
 import os
-import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -36,7 +39,20 @@ from .kernels import chunk_gated_delta_rule_ref
 # rocm.py precedent of exact/approximate only where measured.
 MEASURED = frozenset({"Ascend950DT"})
 
+# The default-off gate: approximate kernels change answers (the record's
+# 93.3% row agreement), so the slot registers only on an explicit opt-in --
+# the engine-argument-stays-off-by-default rule of the model runtime's
+# AGENTS.md, at the accelerator where the family's consent alone cannot
+# distinguish the measured BF16 combination from the unmeasured quantized one.
+_OPT_IN = "FLA_NPU_APPROXIMATE"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
 _CACHE: dict[str, Callable[..., Any] | None] = {}
+
+
+def opted_in() -> bool:
+    """Whether the approximate fla-npu slot is explicitly opted in (off by default)."""
+    return os.environ.get(_OPT_IN, "").strip().lower() in _TRUTHY
 
 
 def _load_wrapper() -> Callable[..., Any] | None:
@@ -50,15 +66,22 @@ def _load_wrapper() -> Callable[..., Any] | None:
     except ImportError:
         pass
     path = os.environ.get("FLA_NPU_EXAMPLES")
-    if path:
-        sys.path.insert(0, path)
-        try:
-            from flash_gated_delta_rule import flash_gated_delta_rule
-
-            return flash_gated_delta_rule
-        except ImportError:
-            pass
-    return None
+    if not path:
+        return None
+    # Load the wrapper file in isolation: no sys.path mutation, no module
+    # namespace of its own beyond the load.
+    spec = importlib.util.spec_from_file_location(
+        "fla_npu_examples.flash_gated_delta_rule",
+        os.path.join(path, "flash_gated_delta_rule.py"),
+    )
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except (ImportError, OSError):
+        return None
+    return getattr(module, "flash_gated_delta_rule", None)
 
 
 def available_wrapper() -> Callable[..., Any] | None:
