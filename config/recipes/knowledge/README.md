@@ -8,7 +8,7 @@ evidence is seeded from MMLU domain results: subjects where the larger model
 gains the most escalate, and the others stay local. The router's decision
 model names each question's subject in one call, and the routing decisions
 read that answer. The recipe declares the decision model it was calibrated
-with, Vela 2.0 0.8B. Replace the subject split with an organization's own
+with, vela3-lite (Vela 3.0 0.8B). Replace the subject split with an organization's own
 benchmarks and feedback.
 
 ## Model details
@@ -65,11 +65,16 @@ needs no knowledge-base or keyword fallback.
 
 ## Calibration notes
 
-On the maintained probes with Vela 2.0 0.8B, every domain question gets its
-intended subject. The escalating answers have probability 0.85 or more; the
-lowest local answer is engineering for an ideal-transformer question (0.64,
-against physics at 0.33), and both of those subjects stay local. A
-zero-determinant question about a data table is read as mathematics (0.88).
+On the maintained probes with vela3-lite, every domain question gets its
+intended subject. The escalating answers have probability 0.96 or more; the
+lowest local answer is engineering for an ideal-transformer question (0.88,
+against physics at 0.10), and both of those subjects stay local. A
+zero-determinant question about a data table is read as mathematics (0.99).
+With `health` described as health, medicine, anatomy and nutrition, "Which
+blood cells are primarily responsible for transporting oxygen?" was read as
+biology (0.84). `health` now names the human body, its anatomy, blood and
+organs, and `biology` names organisms, cells and organelles, genetics and
+evolution; the question reads as health (0.97).
 
 Earlier versions matched questions against a knowledge base of MMLU examples;
 on the same probes it mislabelled 6 of 15 domain questions, for example a
@@ -79,20 +84,20 @@ matrix question as physics.
 
 - Reachable OpenAI-compatible endpoints for the local, frontier, and visual aliases.
 - The decision model for the subject question. The recipe declares it as the
-  `primary` deployment of Vela 2.0 0.8B, which
+  `primary` deployment of vela3-lite, which
   `global.model_catalog.system.decision_model` names. The deployment sets no
   device, so the model runtime uses a GPU when the router has one and the CPU
   otherwise.
   In the CPU conformance run, with the router limited to 4 CPUs and 4
-  requests in flight, the median request took 9.8 s and the 95th
-  percentile 10.0 s.
+  requests in flight, the median request took 8.9 s and the 95th
+  percentile 9.9 s.
   Serve it on a GPU for live traffic. With no device set, the runtime uses a
   GPU when the router has one; set `device: rocm` or `device: cuda` on the
-  `primary` deployment to require one. For a smaller model, change its
-  `artifact` (for example to `vllm-sr/Vela-2.0-0.3B`) or point
+  `primary` deployment to require one. To use another decision model, change
+  its `artifact` or point
   `global.model_catalog.system.decision_model.deployment` at another
   deployment, and rerun the probes, because the threshold was calibrated on
-  the 0.8B.
+  vela3-lite.
 - Production benchmark or feedback data before using the subject split for a
   materially different workload.
 
@@ -120,7 +125,7 @@ Mixture-of-Model Entrypoint.
 The 16 probes cover each escalation and local subject, a general-knowledge
 question, a boundary question, and an image. They validate route selection
 without generating model responses, and CPU conformance runs them with the
-declared Vela 2.0 0.8B, which reaches the expected decision for all 16. See
+declared vela3-lite, which reaches the expected decision for all 16. See
 [`probes.yaml`](probes.yaml) and the [conformance guide](../CONFORMANCE.md).
 
 ## Limitations
