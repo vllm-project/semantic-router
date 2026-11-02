@@ -48,6 +48,7 @@ def test_qwen35_fused_layers_and_graphs_without_causal_conv1d(monkeypatch):
             assert torch.isfinite(eager).all()
             for _ in range(2):
                 assert torch.equal(eager, graphs(ids, mask, lengths))
+    assert not any(layer._fused_failed for layer in module.layers)
     receipt = graphs.receipt()
     assert receipt["failed"] == 0
     assert receipt["replays"] > 0
