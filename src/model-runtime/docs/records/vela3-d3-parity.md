@@ -1,4 +1,4 @@
-# Vela 3.0 d3-size parity (vela3-lite, vela3-mini, vela3-flash)
+# Vela 3.0 d3-size parity
 
 The `vela3_d3` family against vela3-lite's own runtime (`modeling_vela3.py`,
 `Vela3MiniModel.system_one`) on CPU. Every span question and every question
@@ -104,9 +104,30 @@ As on vela3-mini, every change is an open-label span question without a
 description, which vela3-flash's package defines with its base and grafted
 LM head (`definitions.writer` `grafted_head`; #5703). No decision changes.
 
+## vela3-turbo (GPU)
+
+`vllm-sr/vela3-turbo` `ce95e6d9` over `vllm-sr/d3-turbo` `da17b5d0` (a 26B
+base, 72 GiB) on a GPU, as d3-turbo's own records are measured: one NVIDIA
+RTX PRO 6000 Blackwell Workstation Edition (96 GB, sm_120) with PyTorch
+2.10.0+cu128 on both sides, the same request generator (290 questions) and
+`--device cuda:0` (bar: max |dp| <= 0.02). The package's runtime took 77 s,
+the runtime 65 s.
+
+| Questions | Count | Identical values | Changed | Largest difference |
+| --- | --- | --- | --- | --- |
+| Gated (router and task adapters; noncausal replays) | 106 | 58 | 0 | 0.018 |
+| Adapters off (d3-turbo's state-once path) | 105 | 0 | 0 | 0.015 |
+| Span | 79 | 79 | 0 | 0 |
+
+Every question is within the bar, no decision or span set changes and every
+request's input tokens agree. vela3-turbo writes no label definitions, so its
+open-label span questions are identical too. The runtime runs a gated model
+eager on GPUs, where the package's runtime takes its own GPU kernels; the
+gated rows' largest difference, 0.018, is the closest to the bar.
+
 ## Not measured
 
-- vela3-turbo.
+- vela3-lite, vela3-mini and vela3-flash on GPUs; vela3-turbo on CPU.
 - Golden answers: none are recorded, since this host does not reproduce the
   generic `cpu` references of the d3 bases. Record them on the host class
   the d3 references come from.
