@@ -129,6 +129,15 @@ func (m *PolicyMux) LookupRoutePolicy(method, path string) (RoutePolicy, RouteLo
 			return policy, RouteFound
 		}
 	}
+	// Like net/http method patterns, HEAD inherits GET unless an explicit
+	// HEAD policy was found above. Preserve all GET authorization metadata.
+	if method == http.MethodHead {
+		for _, policy := range contract.Policies {
+			if policy.Method == http.MethodGet {
+				return policy, RouteFound
+			}
+		}
+	}
 	if method == http.MethodOptions {
 		return RoutePolicy{
 			Method:        http.MethodOptions,

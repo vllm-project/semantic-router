@@ -100,7 +100,7 @@ func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, dep
 }
 
 // sharedDeploymentName names the implicit deployment of a shared built-in
-// model on a device: "@Vela-2.0-0.3B" on CPU, "@Vela-2.0-0.3B/auto" elsewhere.
+// model on a device: "@vela3-fast" on CPU, "@vela3-fast/auto" elsewhere.
 func sharedDeploymentName(spec *ModelSpec, device string) string {
 	name := ImplicitDeploymentPrefix + strings.TrimPrefix(spec.LocalPath, "models/")
 	if device != "cpu" {
@@ -151,6 +151,7 @@ func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment,
 // registry model; earlier aliases have Vela 1.0 replacements.
 func servedBuiltIn(spec *ModelSpec) bool {
 	return strings.HasPrefix(spec.RepoID, "vllm-sr/Vela-1.0-") || strings.HasPrefix(spec.RepoID, "vllm-sr/Vela-2.0-") ||
+		strings.HasPrefix(spec.RepoID, "vllm-sr/vela3-") ||
 		spec.RepoID == "Qwen/Qwen3-Embedding-0.6B"
 }
 

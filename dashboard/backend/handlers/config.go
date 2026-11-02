@@ -13,7 +13,7 @@ import (
 // ConfigHandler reads and serves the config as JSON from the local config file.
 func ConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -43,7 +43,7 @@ func ConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 // and decompile it into DSL via WASM.
 func ConfigYAMLHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -193,7 +193,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 // router-owned defaults plus any current config.yaml global overrides.
 func RouterDefaultsHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
