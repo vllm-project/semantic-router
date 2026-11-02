@@ -10,6 +10,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
@@ -406,6 +407,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		protocolError := immediateProtocolError(status)
 		if ctx.ImmediateProtocolError != nil {
 			protocolError = ctx.ImmediateProtocolError
+			logProtocolRejection(ctx, protocolError, status)
 		}
 		if body, encodeErr := engine.EncodeError(format, protocolError); encodeErr == nil {
 			immediate.Body = body
@@ -476,4 +478,20 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 		response.Headers.SetHeaders,
 		newHeaderValueOption("content-type", value),
 	)
+}
+
+// logProtocolRejection records why the Router refused a request. Every refusal
+// that carries a protocol error leaves through encodeImmediateResponseForClient,
+// and the client's error body is otherwise the only trace: the request never
+// reaches replay. Only the protocol error's own message is logged, never the
+// request body.
+func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
+	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      ctx.RequestModel,
+		"status":     status,
+		"code":       protocolError.Code,
+		"category":   string(protocolError.Category),
+		"message":    protocolError.Message,
+	})
 }
