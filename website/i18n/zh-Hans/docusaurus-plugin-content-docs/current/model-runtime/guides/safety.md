@@ -5,7 +5,7 @@ description: 用 Vela Guard 检测越狱和提示词注入，用 Vela Safety、S
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/model-runtime/guides/safety.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
