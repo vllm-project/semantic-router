@@ -453,7 +453,6 @@ func dispatchWireError(err error, ctx *RequestContext, reason string) error {
 		if ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
 		}
-		logProtocolRejection(ctx, err, "dispatch")
 		return err
 	}
 	return status.Errorf(codes.Internal, "%s: %v", reason, err)

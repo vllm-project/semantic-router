@@ -194,7 +194,6 @@ func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int
 }
 
 func recordIngressProtocolError(ctx *RequestContext, err error) {
-	logProtocolRejection(ctx, err, "ingress")
 	model := ""
 	if ctx != nil {
 		model = ctx.RequestModel
@@ -408,6 +407,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		protocolError := immediateProtocolError(status)
 		if ctx.ImmediateProtocolError != nil {
 			protocolError = ctx.ImmediateProtocolError
+			logProtocolRejection(ctx, protocolError, status)
 		}
 		if body, encodeErr := engine.EncodeError(format, protocolError); encodeErr == nil {
 			immediate.Body = body
@@ -480,20 +480,18 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 	)
 }
 
-// logProtocolRejection records why the Router refused a request. The client's
-// 400 is otherwise the only trace: the request never reaches replay. Only the
-// protocol error's own message is logged, never the request body.
-func logProtocolRejection(ctx *RequestContext, err error, stage string) {
-	fields := map[string]interface{}{"stage": stage}
-	if ctx != nil {
-		fields["request_id"] = ctx.RequestID
-		fields["model"] = ctx.RequestModel
-	}
-	var protocolError *llmprotocol.ProtocolError
-	if errors.As(err, &protocolError) {
-		fields["code"] = protocolError.Code
-		fields["category"] = string(protocolError.Category)
-		fields["message"] = protocolError.Message
-	}
-	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", fields)
+// logProtocolRejection records why the Router refused a request. Every refusal
+// that carries a protocol error leaves through encodeImmediateResponseForClient,
+// and the client's error body is otherwise the only trace: the request never
+// reaches replay. Only the protocol error's own message is logged, never the
+// request body.
+func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
+	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      ctx.RequestModel,
+		"status":     status,
+		"code":       protocolError.Code,
+		"category":   string(protocolError.Category),
+		"message":    protocolError.Message,
+	})
 }
