@@ -1,4 +1,4 @@
-# Vela 3.0 d3-size parity (vela3-lite)
+# Vela 3.0 d3-size parity (vela3-lite, vela3-mini)
 
 The `vela3_d3` family against vela3-lite's own runtime (`modeling_vela3.py`,
 `Vela3MiniModel.system_one`) on CPU. Every span question and every question
@@ -65,9 +65,31 @@ not the cause: the runtime's kernel and Transformers' agree bit for bit at
 differ from the recorded `cpu` reference (13 of 16 numbers equal, the
 largest difference 0.172), the host class #5273 and #5274 describe.
 
+## vela3-mini
+
+`vllm-sr/vela3-mini` `bbc0206e` over `vllm-sr/d3-mini` `566da0ea`, the same
+host and environments, `generate --count 40 --seed 0` (no `hazard:` Nouls:
+vela3-mini ships no hazard adapter; opt-in questions run its opt-in adapter).
+The package's runtime took 2,239 s, the runtime 794 s.
+
+| Questions | Count | Identical values | Changed | Largest difference |
+| --- | --- | --- | --- | --- |
+| Gated (router, task, opt-in adapters) | 106 | 66 | 0 | 0.0075 |
+| Adapters off | 105 | 61 | 0 | 0.0044 |
+| Span, labels with descriptions or a label set | 41 | 41 | 0 | 0 |
+| Span, open labels without a description | 38 | 26 | 20 | 0.156 |
+
+Every change is a span question whose open labels have no description:
+vela3-mini's package writes a definition for each with its base
+(`definitions.writer` `base`), which changes the option lines, the NER
+threshold (with definitions, not names only) and so the spans. The runtime
+runs these labels by name until the definition writers land. Every other
+span question is identical, and no decision changes; the decision
+differences are this host's, as for vela3-lite.
+
 ## Not measured
 
-- vela3-mini, vela3-flash and vela3-turbo.
+- vela3-flash and vela3-turbo.
 - Golden answers: none are recorded, since this host does not reproduce the
   generic `cpu` references of the d3 bases. Record them on the host class
   the d3 references come from.
