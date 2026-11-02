@@ -8,6 +8,109 @@ from .chat_wire import build_chat_usage
 
 MARKER = "__mock_openrouter_reply__"
 ANSWER = "OpenRouter fixture answer"
+REASONING_MARKER = "__mock_openrouter_reply_reasoning__"
+REASONING_TEXT = "Look up the result. Use the lookup tool."
+OPAQUE_DATA = "opaque-continuity-fixture"
+TOOL_CALL = {
+    "id": "openrouter-call-1",
+    "type": "function",
+    "function": {"name": "lookup", "arguments": "{}"},
+}
+# A buffered reply covers every documented variant.
+REASONING_DETAILS = [
+    {
+        "type": "reasoning.summary",
+        "summary": "Look up the result.",
+        "id": None,
+        "format": "openai-responses-v1",
+        "index": 0,
+    },
+    {
+        "type": "reasoning.text",
+        "text": " Use the lookup tool.",
+        "signature": "fixture-signature",
+        "id": "reasoning-1",
+        "format": "anthropic-claude-v1",
+        "index": 1,
+    },
+    {
+        "type": "reasoning.encrypted",
+        "data": OPAQUE_DATA,
+        "id": "reasoning-2",
+        "format": "openai-responses-v1",
+        "index": 2,
+    },
+    {
+        "type": "reasoning.server_tool_call",
+        "tool_name": "openrouter:web_search",
+        "arguments": '{"query":"result"}',
+        "result": '{"status":"ok"}',
+        "tool_call_id": None,
+        "id": "server-tool-1",
+        "format": "unknown",
+        "index": 3,
+    },
+]
+# A stream follows recorded Gemini traffic: text fragments, then the
+# encrypted signature for the tool call under the same index. Every delta
+# carries the plain reasoning text as well.
+STREAMED_FRAGMENTS = [
+    (
+        "Look up the result.",
+        {
+            "type": "reasoning.text",
+            "text": "Look up the result.",
+            "format": "google-gemini-v1",
+            "index": 0,
+        },
+    ),
+    (
+        " Use the lookup tool.",
+        {
+            "type": "reasoning.text",
+            "text": " Use the lookup tool.",
+            "format": "google-gemini-v1",
+            "index": 0,
+        },
+    ),
+    (
+        "",
+        {
+            "type": "reasoning.encrypted",
+            "data": OPAQUE_DATA,
+            "id": TOOL_CALL["id"],
+            "format": "google-gemini-v1",
+            "index": 0,
+        },
+    ),
+]
+# What a client returns after concatenating the fragments of each block.
+STREAMED_DETAILS = [
+    {
+        "type": "reasoning.text",
+        "text": REASONING_TEXT,
+        "format": "google-gemini-v1",
+        "index": 0,
+    },
+    STREAMED_FRAGMENTS[2][1],
+]
+
+
+def reasoning_turn(req: ChatRequest) -> bool:
+    return any(
+        isinstance(message.content, str) and REASONING_MARKER in message.content
+        for message in req.messages
+    )
+
+
+def reasoning_follow_up_valid(req: ChatRequest) -> bool:
+    expected = STREAMED_DETAILS if req.stream else REASONING_DETAILS
+    return any(
+        message.role == "assistant"
+        and getattr(message, "reasoning_details", None) == expected
+        and message.tool_calls == [TOOL_CALL]
+        for message in req.messages
+    )
 
 
 def _usage(req: ChatRequest) -> dict:
@@ -29,7 +132,7 @@ def _usage(req: ChatRequest) -> dict:
 
 
 def buffered_reply(req: ChatRequest, created_ts: int) -> dict:
-    return {
+    reply = {
         "id": "gen-mock-openrouter-1",
         "object": "chat.completion",
         "created": created_ts,
@@ -45,6 +148,21 @@ def buffered_reply(req: ChatRequest, created_ts: int) -> dict:
         ],
         "usage": _usage(req),
     }
+    if reasoning_turn(req) and not any(
+        message.role == "tool" for message in req.messages
+    ):
+        reply["choices"][0].update(
+            message={
+                "role": "assistant",
+                "content": None,
+                "reasoning": REASONING_TEXT,
+                "reasoning_details": REASONING_DETAILS,
+                "tool_calls": [TOOL_CALL],
+            },
+            finish_reason="tool_calls",
+            native_finish_reason="tool_calls",
+        )
+    return reply
 
 
 def streamed_reply(req: ChatRequest, created_ts: int) -> Iterator[str]:
@@ -55,6 +173,43 @@ def streamed_reply(req: ChatRequest, created_ts: int) -> Iterator[str]:
         "model": req.model,
         "provider": "OpenRouter fixture upstream",
     }
+    if reasoning_turn(req) and not any(
+        message.role == "tool" for message in req.messages
+    ):
+        for text, detail in STREAMED_FRAGMENTS:
+            yield "data: " + json.dumps(
+                {
+                    **base,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"reasoning": text, "reasoning_details": [detail]},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            ) + "\n\n"
+        yield "data: " + json.dumps(
+            {
+                **base,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"tool_calls": [{"index": 0, **TOOL_CALL}]},
+                        "finish_reason": None,
+                    }
+                ],
+            }
+        ) + "\n\n"
+        yield "data: " + json.dumps(
+            {
+                **base,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}],
+                "usage": _usage(req),
+            }
+        ) + "\n\n"
+        yield "data: [DONE]\n\n"
+        return
     for delta, finish, usage in (
         ({"content": ANSWER}, None, None),
         ({}, "stop", None),

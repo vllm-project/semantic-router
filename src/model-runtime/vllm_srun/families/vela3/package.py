@@ -37,6 +37,11 @@ LORA_TARGETS = (
     "up_proj",
     "down_proj",
 )
+# The vela3-fast-vision image package: a sibling format with its own config
+# file, recognized so pointing the runtime at its snapshot reports the missing
+# serving path instead of an unknown package.
+VELA3V_ENCODER = "vela3v-encoder/1"
+VELA3V_CONFIG_FILE = "vela3v_config.json"
 
 
 def member_of(root: Path) -> str | None:
@@ -48,6 +53,19 @@ def member_of(root: Path) -> str | None:
     if not isinstance(config, dict):
         return None
     return ENCODER if config.get("format") == ENCODER else None
+
+
+def member_of_vision(root: Path) -> str | None:
+    """The image package's format, read from its ``vela3v_config.json`` only."""
+    try:
+        config = json.loads(
+            (Path(root) / VELA3V_CONFIG_FILE).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    return VELA3V_ENCODER if config.get("format") == VELA3V_ENCODER else None
 
 
 @dataclass(frozen=True)
@@ -132,6 +150,12 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
         for name, file in zip(names, listed, strict=True):
             files[name] = file
         for question_id in entry.get("ids") or ():
+            owner = router_tasks.get(str(question_id))
+            if owner is not None and owner[0] != task:
+                raise PackageError(
+                    f"{CONFIG_FILE}: router.task_adapters question ID "
+                    f"{str(question_id)!r} is declared by both {owner[0]!r} and {task!r}"
+                )
             router_tasks[str(question_id)] = (task, tuple(names))
     return Roster(span, evidence, span_set, tasks, router, router_tasks), files
 

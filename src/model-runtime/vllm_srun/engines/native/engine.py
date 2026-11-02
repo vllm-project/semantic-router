@@ -48,7 +48,7 @@ from .models.branch import (
     static_layout,
 )
 from .models.forest import ForestShape
-from .models.lora import attach
+from .models.lora import attach, fold_scaling
 from .models.packed import Packed, packed_unavailable
 from .models.qwen3_5 import noncausal_masks, rope_index
 from .models.tree import Tree
@@ -127,6 +127,13 @@ class NativeEngineModel(EngineModel):
             if reduced_kind is None
             else unavailable(reduced_kind, self.device, device_info.bf16)
         )
+        # An encoder's LoRA layers drop their scaling multiply (exact; a decoder's GPU fast path
+        # takes lean LoRA instead). Before the views, which copy the factors.
+        folded = (
+            sum(fold_scaling(module) for module in self.stacks().values())
+            if spec.encoder
+            else 0
+        )
         # Views are taken before the linears are laid out: they copy nn.Linear layers.
         self.reduced: dict[str | None, nn.Module] = (
             {}
@@ -150,18 +157,23 @@ class NativeEngineModel(EngineModel):
                 layer.unscaled_product &= self.kernels.allow_approximate
             elif isinstance(layer, quantized.NVFP4Linear):
                 nvfp4.append(layer)
-        self.fast: dict[str, Any] = {}
+        self.fast: dict[str, Any] = {"lora_folded": folded} if folded else {}
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
                 lay_out_linears(module, self.linear.fn)
-        # Packed linears, contiguous GeGLU, norms and unpadded attention grids
-        # (``packed(uniform=True)``) compute each row the same in any batch.
+        self._cpu_threads = options.threads or torch.get_num_threads()
+        # Contiguous GeGLU, norms and unpadded uniform attention grids
+        # (``packed(uniform=True)``) compute each row the same in any batch;
+        # whether the packed linears do depends on the oneDNN build, the
+        # product shape and the thread count, so it is measured on this
+        # model's own layers (``onednn.invariant``) rather than assumed.
         self.batch_invariant = (
             spec.encoder
             and self.device.type == "cpu"
             and self.linear.variant == onednn.PACKED
             and self.kernels.select("geglu").variant == CONTIGUOUS
+            and self._packed_invariant()
         )
         for module in (
             *self.stacks().values(),
@@ -172,7 +184,6 @@ class NativeEngineModel(EngineModel):
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
         self.branch_graphs: fast.Graphs | None = None
-        self._cpu_threads = options.threads or torch.get_num_threads()
         self.threads_resolver = (
             adaptive_threads.AdaptiveThreads(
                 self._cpu_threads, serve=adaptive_threads.serving_enabled()
@@ -1093,6 +1104,11 @@ class NativeEngineModel(EngineModel):
         return [
             layer for module in self._modules() for layer in quantized.layers(module)
         ]
+
+    def _packed_invariant(self) -> bool:
+        """Whether this model's packed linears pass ``onednn.invariant`` at the count its forwards use."""
+        adaptive_threads.CpuTeam.apply(self._cpu_threads)
+        return onednn.invariant(self._packed())
 
     def _packed(self) -> list[onednn.PackedLinear]:
         return [

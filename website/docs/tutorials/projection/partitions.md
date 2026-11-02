@@ -98,5 +98,5 @@ Do not use partitions when:
 
 Partitions make no additional model calls; they coordinate results produced by
 their member signals. A configured default is a routing fallback, not evidence
-that the default actually matched. See a complete example in the
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).
+that the default actually matched. See a complete example in
+[`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).
