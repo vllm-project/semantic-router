@@ -9,8 +9,9 @@ UltraBERT backbone in ``model.safetensors``. An adapter whose file the package
 does not ship routes off, as the released runtime does. The family loads the
 two configs, the router questions, the tokenizer and the weights; every loaded
 byte must match the built-in table's digest for a pinned revision and the
-package's ``SHA256SUMS``; bundled Python is never read. The identity is the
-SHA-256 of the weight files' digests.
+package's ``SHA256SUMS``; bundled Python is never read. ``config.json``
+names the eight markers by distinct token IDs inside the backbone's
+vocabulary. The identity is the SHA-256 of the weight files' digests.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from typing import Any
 
 from ...errors import PackageError
 from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
+from ..vela2.encoder_layout import MARKERS
 
 ENCODER = "vela3-encoder/1"
 CONFIG_FILE = "vela3_config.json"
@@ -37,6 +39,11 @@ LORA_TARGETS = (
     "up_proj",
     "down_proj",
 )
+# The vela3-fast-vision image package: a sibling format with its own config
+# file, recognized so pointing the runtime at its snapshot reports the missing
+# serving path instead of an unknown package.
+VELA3V_ENCODER = "vela3v-encoder/1"
+VELA3V_CONFIG_FILE = "vela3v_config.json"
 
 
 def member_of(root: Path) -> str | None:
@@ -48,6 +55,19 @@ def member_of(root: Path) -> str | None:
     if not isinstance(config, dict):
         return None
     return ENCODER if config.get("format") == ENCODER else None
+
+
+def member_of_vision(root: Path) -> str | None:
+    """The image package's format, read from its ``vela3v_config.json`` only."""
+    try:
+        config = json.loads(
+            (Path(root) / VELA3V_CONFIG_FILE).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    return VELA3V_ENCODER if config.get("format") == VELA3V_ENCODER else None
 
 
 @dataclass(frozen=True)
@@ -206,6 +226,29 @@ def _sums(root: Path) -> dict[str, str]:
     return sums
 
 
+def _check_markers(config: dict[str, Any]) -> None:
+    """Every marker a distinct row of the backbone's embedding table, so no input indexes past it."""
+    vocab = config.get("vocab_size")
+    if type(vocab) is not int or vocab <= 0:
+        raise PackageError("config.json: vocab_size must be a positive integer")
+    markers = config["decision"].get("marker_ids")
+    if not isinstance(markers, dict) or set(markers) != set(MARKERS):
+        raise PackageError(
+            f"config.json: decision.marker_ids must name the markers {list(MARKERS)}"
+        )
+    wrong = sorted(
+        name
+        for name, value in markers.items()
+        if type(value) is not int or not 0 <= value < vocab
+    )
+    if wrong:
+        raise PackageError(
+            f"config.json: decision.marker_ids {wrong} are not token IDs below vocab_size {vocab}"
+        )
+    if len(set(markers.values())) != len(markers):
+        raise PackageError("config.json: decision.marker_ids must be distinct")
+
+
 def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
     """Check every loaded file; ``expected`` is the built-in table's digests for a pinned revision."""
     root = Path(root)
@@ -233,10 +276,13 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
     if mismatched:
         raise PackageError(f"files differ from {SUMS_FILE}: {mismatched[:5]}")
     config = read_json(root / "config.json", mapping=True)
-    if config.get("model_type") != "ultrabert" or "decision" not in config:
+    if config.get("model_type") != "ultrabert" or not isinstance(
+        config.get("decision"), dict
+    ):
         raise PackageError(
             "config.json does not describe the UltraBERT decision backbone"
         )
+    _check_markers(config)
     questions = read_json(root / "router_questions.json", mapping=True).get("questions")
     if not isinstance(questions, dict):
         raise PackageError("router_questions.json lists no router questions")
