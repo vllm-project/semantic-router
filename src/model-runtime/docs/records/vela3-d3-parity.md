@@ -1,4 +1,4 @@
-# Vela 3.0 d3-size parity (vela3-lite, vela3-mini)
+# Vela 3.0 d3-size parity (vela3-lite, vela3-mini, vela3-flash)
 
 The `vela3_d3` family against vela3-lite's own runtime (`modeling_vela3.py`,
 `Vela3MiniModel.system_one`) on CPU. Every span question and every question
@@ -87,9 +87,26 @@ runs these labels by name until the definition writers land. Every other
 span question is identical, and no decision changes; the decision
 differences are this host's, as for vela3-lite.
 
+## vela3-flash
+
+`vllm-sr/vela3-flash` `af48828d` over `vllm-sr/d3-flash` `8b35c853`, the same
+host, environments and request generator (290 questions). The package's
+runtime took 2,279 s, the runtime 1,052 s.
+
+| Questions | Count | Identical values | Changed | Largest difference |
+| --- | --- | --- | --- | --- |
+| Gated (router and task adapters) | 106 | 67 | 0 | 0.011 |
+| Adapters off | 105 | 61 | 0 | 0.0043 |
+| Span, labels with descriptions or a label set | 41 | 41 | 0 | 0 |
+| Span, open labels without a description | 38 | 27 | 20 | 0.213 |
+
+As on vela3-mini, every change is an open-label span question without a
+description, which vela3-flash's package defines with its base and grafted
+LM head (`definitions.writer` `grafted_head`; #5703). No decision changes.
+
 ## Not measured
 
-- vela3-flash and vela3-turbo.
+- vela3-turbo.
 - Golden answers: none are recorded, since this host does not reproduce the
   generic `cpu` references of the d3 bases. Record them on the host class
   the d3 references come from.
