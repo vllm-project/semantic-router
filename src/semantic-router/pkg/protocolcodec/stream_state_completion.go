@@ -339,6 +339,14 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 	if current.State == llmprotocol.UsageAvailable && update.State == llmprotocol.UsageUnavailable {
 		return llmprotocol.Usage{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "usage_evidence_decreased", "upstream streaming usage evidence became unavailable", nil)
 	}
+	if sameInputTotal(current, update) {
+		// vLLM's Messages stream counts the whole prompt as uncached input in
+		// message_start and splits it into cache reads and writes in
+		// message_delta. The total is unchanged, so the later split replaces
+		// the earlier one instead of reading as a decrease.
+		current.InputUncached, current.InputCacheRead, current.InputCacheWrite = update.InputUncached, update.InputCacheRead, update.InputCacheWrite
+		current.InputCacheWrite5m, current.InputCacheWrite1h = update.InputCacheWrite5m, update.InputCacheWrite1h
+	}
 	currentCounts := usageCounts(current)
 	updateCounts := usageCounts(update)
 	merged := make([]llmprotocol.TokenCount, len(currentCounts))
@@ -364,6 +372,11 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		return llmprotocol.Usage{}, err
 	}
 	return result, nil
+}
+
+func sameInputTotal(current, update llmprotocol.Usage) bool {
+	return current.InputTotal.Value != nil && update.InputTotal.Value != nil &&
+		update.InputUncached.Value != nil && *current.InputTotal.Value == *update.InputTotal.Value
 }
 
 func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
