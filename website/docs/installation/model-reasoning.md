@@ -120,6 +120,15 @@ for that Model. `reasoning_mode` must agree with `use_reasoning`. Omit an effort
 to use the family default, or set `providers.defaults.reasoning_effort` when
 one valid deployment-wide default should take precedence.
 
+A `modelRefs` entry without `use_reasoning` counts as `use_reasoning: false`.
+For a Model with a family, the decision's choice replaces the client's: the
+backend receives reasoning off when `use_reasoning` is false, even if the
+client asked for thinking, and the decision's or the family's effort when it is
+true, whatever effort the client sent. This holds on Chat, Responses and
+Messages backends alike. One exception: an Anthropic client that turns thinking
+off explicitly keeps it off on a Chat or Responses backend. A pass-through
+Model keeps the client's reasoning fields as sent.
+
 On an `api_format: anthropic` backend, `enabled` thinking needs a
 `budget_tokens` value. When the client sent none, an `enabled` mode reaches the
 backend as `thinking.type: adaptive` with `output_config.effort` set to the

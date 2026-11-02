@@ -128,10 +128,13 @@ func explicitAnthropicReasoningDisabled(ctx *RequestContext, dispatch *providerD
 		dispatch.targetFormat != llmprotocol.AnthropicMessagesV1
 }
 
-func preserveExplicitAnthropicReasoning(request *llmprotocol.Request, target llmprotocol.WireFormat) bool {
+// preserveExplicitAnthropicReasoningOff keeps an Anthropic client's explicit
+// thinking-off on a Chat or Responses backend, as the Chat path does. Adaptive
+// thinking leaves the choice to the decision on every backend format.
+func preserveExplicitAnthropicReasoningOff(request *llmprotocol.Request, target llmprotocol.WireFormat) bool {
 	return request != nil && request.Trusted.SourceFormat == llmprotocol.AnthropicMessagesV1 &&
 		target != llmprotocol.AnthropicMessagesV1 &&
-		(request.ReasoningMode == llmprotocol.ReasoningModeAdaptive || request.ReasoningMode == llmprotocol.ReasoningModeDisabled)
+		request.ReasoningMode == llmprotocol.ReasoningModeDisabled
 }
 
 func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat) protocolcodec.ResponseMutation {
