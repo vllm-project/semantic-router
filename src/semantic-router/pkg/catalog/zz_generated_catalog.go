@@ -104395,7 +104395,7 @@ const builtInCatalogJSON = `{
         "tools",
         "multimodal"
       ],
-      "description": "Spends reasoning only where a request needs it; one decision-model call per request selects the reasoning, medium, or simple pool.",
+      "description": "Spends reasoning only where a request needs it; one decision-model call per request selects one of ten lanes, from thinking off to maximum effort.",
       "display_name": "MoM V1 Blend",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -104427,8 +104427,50 @@ const builtInCatalogJSON = `{
       "roles": [
         {
           "minimum_candidates": 1,
-          "name": "reasoning",
+          "name": "long_context",
           "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "long_context"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "vision",
+          "recommended_pool": [
+            "zai/glm-5.3-flash"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "vision"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "recovery",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "agentic",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
             "deepseek/deepseek-v4-flash",
             "deepseek/deepseek-v4-pro",
             "zai/glm-5.1"
@@ -104442,8 +104484,9 @@ const builtInCatalogJSON = `{
         },
         {
           "minimum_candidates": 1,
-          "name": "simple",
+          "name": "facts",
           "recommended_pool": [
+            "zai/glm-5.3-flash",
             "deepseek/deepseek-v4-flash",
             "deepseek/deepseek-v4-pro",
             "zai/glm-5.1"
@@ -104454,8 +104497,65 @@ const builtInCatalogJSON = `{
           ]
         },
         {
+          "minimum_candidates": 2,
+          "name": "frontier",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
           "minimum_candidates": 1,
-          "name": "medium",
+          "name": "code",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "hard",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "standard",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "fast",
           "recommended_pool": [
             "deepseek/deepseek-v4-flash",
             "deepseek/deepseek-v4-pro",
@@ -104475,7 +104575,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
+        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104565,7 +104665,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
+        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104658,7 +104758,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
+        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104770,7 +104870,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
+        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104840,7 +104940,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:257aa66d5a5ddac49bb9afbe424374f6c773fd0840fcf671e8799c79baba923a",
+        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }

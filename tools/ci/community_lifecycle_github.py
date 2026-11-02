@@ -520,11 +520,18 @@ def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None
     pull_requests = run.get("pull_requests") or check_suite.get("pull_requests") or []
     if not pull_requests:
         return
+    # Review-only Community runs skip validation and still carry fresh review
+    # signals. Reconciliation independently validates the current linked issues.
+    review_signal = (
+        run.get("event") == "pull_request_review" and run.get("conclusion") == "skipped"
+    )
     sync_pull_request(
         client,
         repository_name(event),
         int(pull_requests[0]["number"]),
-        validation_succeeded=(run.get("conclusion") == "success" if run else True),
+        validation_succeeded=(
+            not run or run.get("conclusion") == "success" or review_signal
+        ),
     )
 
 
