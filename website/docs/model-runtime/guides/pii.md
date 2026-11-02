@@ -38,9 +38,9 @@ routing:
         - model: private-model
 ```
 
-Without an override, the Router uses the default Vela 2.0 deployment for PII.
+Without an override, the Router uses the default vela3-fast deployment for PII.
 Its input limits and coverage differ from the Vela 1.0 specialist below; see
-[Choose a model](../choose-a-model#vela-20). Rule thresholds are explicit
+[Choose a model](../choose-a-model#built-in-signals). Rule thresholds are explicit
 policy: calibrate this example's value for the model you select.
 
 The Vela 1.0 binding below scans up to 32,768 tokens in overlapping 512-token

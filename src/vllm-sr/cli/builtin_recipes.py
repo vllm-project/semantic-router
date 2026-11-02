@@ -11,6 +11,7 @@ import yaml
 
 from cli.catalog_provider_projection import validate_provider_model_configuration
 from cli.commands.runtime_kb import validate_kb_source_output_location
+from cli.decision_model import DEFAULT_DECISION_MODEL, configured_decision_model
 from cli.model_bundle import MODEL_BUNDLE_FILES
 from cli.model_catalog import (
     DEFAULT_CHANNEL,
@@ -101,10 +102,39 @@ def export_builtin_bundle(
     }
 
 
+def _bundle_decision_model(
+    candidate: dict[str, Any], bundle_document: dict[str, Any]
+) -> dict[str, Any]:
+    """Return the bundle's decision model for a configuration that binds none.
+
+    A binding, or a deployment under the key that an omitted binding selects,
+    is the operator's choice and stays whole: merging the two resources would
+    produce a deployment neither side declared.
+    """
+    bundle_catalog = (bundle_document.get("global") or {}).get("model_catalog") or {}
+    if "decision_model" not in (bundle_catalog.get("system") or {}):
+        return {}
+    key = configured_decision_model(bundle_document)
+    catalog = (candidate.get("global") or {}).get("model_catalog") or {}
+    deployments = catalog.get("deployments") or {}
+    if (
+        "decision_model" in (catalog.get("system") or {})
+        or DEFAULT_DECISION_MODEL in deployments
+        or key in deployments
+    ):
+        return {}
+    selected: dict[str, Any] = {}
+    deployment = (bundle_catalog.get("deployments") or {}).get(key)
+    if deployment is not None:
+        selected["deployments"] = {key: deployment}
+    selected["system"] = {"decision_model": bundle_catalog["system"]["decision_model"]}
+    return selected
+
+
 def apply_builtin_runtime_defaults(
     candidate: dict[str, Any], bundle_document: dict[str, Any]
 ) -> None:
-    """Fill omitted learning and replay settings; authored leaves win.
+    """Fill omitted learning, replay and decision-model settings; authored ones win.
 
     These are configuration-wide defaults, materialized during initialization.
     Runtime parsing does not infer policy from built-in recipe names.
@@ -115,6 +145,9 @@ def apply_builtin_runtime_defaults(
         value = bundle_global.get(section, {}).get(setting)
         if value is not None:
             defaults.setdefault(section, {})[setting] = value
+    decision_model = _bundle_decision_model(candidate, bundle_document)
+    if decision_model:
+        defaults["model_catalog"] = decision_model
     if not defaults:
         return
 

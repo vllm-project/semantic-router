@@ -378,31 +378,47 @@ def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
     reconcile_issue_acceptance(client, repository_name(event))
 
 
-def linked_issues_for_pull_request(
-    client: GitHubClient, repo: str, pull_request: dict[str, Any]
-) -> list[dict[str, Any]]:
-    owner, name = repo.split("/", 1)
-    number = int(pull_request["number"])
-    query = """
-      query ($owner: String!, $repo: String!, $number: Int!) {
-        repository(owner: $owner, name: $repo) {
-          pullRequest(number: $number) {
-            closingIssuesReferences(first: 20) { nodes { number } }
-          }
+PULL_REQUEST_QUERY = """
+  query ($owner: String!, $repo: String!, $number: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        reviewDecision
+        mergeStateStatus
+        closingIssuesReferences(first: 20) { nodes { number } }
+        commits(last: 1) {
+          nodes { commit { statusCheckRollup { state } } }
         }
       }
-    """
+    }
+  }
+"""
+
+
+def pull_request_graph(client: GitHubClient, repo: str, number: int) -> dict[str, Any]:
+    """Read the closing references and review signals of one pull request."""
+
+    owner, name = repo.split("/", 1)
     result = client.request(
         "graphql",
         method="POST",
         payload={
-            "query": query,
+            "query": PULL_REQUEST_QUERY,
             "variables": {"owner": owner, "repo": name, "number": number},
         },
     )
     repository = ((result or {}).get("data") or {}).get("repository") or {}
-    pull_request_data = repository.get("pullRequest") or {}
-    closing_references = pull_request_data.get("closingIssuesReferences") or {}
+    return repository.get("pullRequest") or {}
+
+
+def linked_issues_for_pull_request(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if graph is None:
+        graph = pull_request_graph(client, repo, int(pull_request["number"]))
+    closing_references = graph.get("closingIssuesReferences") or {}
     nodes = closing_references.get("nodes") or []
     issue_numbers = {int(node["number"]) for node in nodes}
     issue_numbers.update(
@@ -423,39 +439,13 @@ def linked_issues_for_pull_request(
     return issues
 
 
-def pull_request_signals(
-    client: GitHubClient, repo: str, number: int
-) -> dict[str, str | None]:
-    owner, name = repo.split("/", 1)
-    query = """
-      query ($owner: String!, $repo: String!, $number: Int!) {
-        repository(owner: $owner, name: $repo) {
-          pullRequest(number: $number) {
-            reviewDecision
-            mergeStateStatus
-            commits(last: 1) {
-              nodes { commit { statusCheckRollup { state } } }
-            }
-          }
-        }
-      }
-    """
-    result = client.request(
-        "graphql",
-        method="POST",
-        payload={
-            "query": query,
-            "variables": {"owner": owner, "repo": name, "number": number},
-        },
-    )
-    repository = ((result or {}).get("data") or {}).get("repository") or {}
-    pull_request = repository.get("pullRequest") or {}
-    commits = (pull_request.get("commits") or {}).get("nodes") or []
+def pull_request_signals(graph: dict[str, Any]) -> dict[str, str | None]:
+    commits = (graph.get("commits") or {}).get("nodes") or []
     commit = (commits[-1] if commits else {}).get("commit") or {}
     rollup = commit.get("statusCheckRollup") or {}
     return {
-        "review_decision": pull_request.get("reviewDecision"),
-        "merge_state": pull_request.get("mergeStateStatus"),
+        "review_decision": graph.get("reviewDecision"),
+        "merge_state": graph.get("mergeStateStatus"),
         "checks_state": rollup.get("state"),
     }
 
@@ -486,8 +476,9 @@ def sync_pull_request(
     pull_request = client.request(f"repos/{repo}/pulls/{number}", ignore_not_found=True)
     if not pull_request:
         return
-    linked = linked_issues_for_pull_request(client, repo, pull_request)
-    signals = pull_request_signals(client, repo, number)
+    graph = pull_request_graph(client, repo, number)
+    linked = linked_issues_for_pull_request(client, repo, pull_request, graph)
+    signals = pull_request_signals(graph)
     evaluation = evaluate_pull_request(
         pull_request,
         linked,
@@ -511,8 +502,8 @@ def sync_pull_request(
     else:
         remove.add(RELEASE_BLOCKER)
 
-    remove_labels(client, repo, number, remove)
-    add_labels(client, repo, number, add)
+    remove_labels(client, repo, number, remove & current_labels)
+    add_labels(client, repo, number, add - current_labels)
     current_milestone = pull_request.get("milestone") or {}
     current_milestone_number = current_milestone.get("number")
     if current_milestone_number != evaluation.milestone_number:

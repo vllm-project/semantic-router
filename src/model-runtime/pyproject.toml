@@ -62,6 +62,7 @@ decision3 = "vllm_srun.families.decision3.family:Decision3Family"
 multimodal_embedding = "vllm_srun.families.multimodal_embedding.family:MultimodalEmbeddingFamily"
 task_heads = "vllm_srun.families.task_heads.family:TaskHeadsFamily"
 vela2 = "vllm_srun.families.vela2.family:Vela2Family"
+vela3 = "vllm_srun.families.vela3.family:Vela3Family"
 
 [project.entry-points."vllm_srun.engines"]
 native = "vllm_srun.engines.native.engine:NativeEngine"
