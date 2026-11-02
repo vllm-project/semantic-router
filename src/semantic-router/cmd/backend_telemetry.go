@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry/sglang"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry/vllm"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
@@ -19,8 +20,10 @@ var backendTelemetryStore = backendtelemetry.NewStore(0)
 // metrics from.
 func backendTelemetryRegistry() *backendtelemetry.Registry {
 	registry := backendtelemetry.NewRegistry()
-	if err := vllm.Register(registry); err != nil {
-		panic(err) // a duplicate registration is a programming error
+	for _, register := range []func(*backendtelemetry.Registry) error{vllm.Register, sglang.Register} {
+		if err := register(registry); err != nil {
+			panic(err) // a duplicate registration is a programming error
+		}
 	}
 	return registry
 }

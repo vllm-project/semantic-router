@@ -93,6 +93,15 @@ func TestBackendTelemetryCollectsFromEngineBackends(t *testing.T) {
 	}
 }
 
+func TestBackendTelemetryRegistryReadsSGLang(t *testing.T) {
+	registry := backendTelemetryRegistry()
+	for _, engine := range []backendtelemetry.Engine{backendtelemetry.EngineVLLM, backendtelemetry.EngineSGLang} {
+		if !registry.Has(engine) {
+			t.Fatalf("no adapter for %s", engine)
+		}
+	}
+}
+
 func TestBackendTelemetryDisabledCollectsNothing(t *testing.T) {
 	scraped := make(chan struct{}, 1)
 	engine := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

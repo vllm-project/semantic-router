@@ -287,7 +287,10 @@ exactly as `least_request`, so a replica is never preferred because its load
 is unknown. A replica its engine reports unhealthy is skipped, but health
 checks and outlier ejection still decide which replicas are in rotation.
 
-The vLLM engine is supported today. Behind Envoy, `load_aware` balances as
+The vLLM and SGLang engines are supported today. For SGLang the Router reads
+`sglang:num_queue_reqs`, `sglang:num_running_reqs`, and `sglang:token_usage`
+from `/metrics`, which SGLang serves when started with `--enable-metrics`, and
+counts each data-parallel rank once. Behind Envoy, `load_aware` balances as
 `least_request` because Envoy does not read engine telemetry. The
 `llm_upstream_load_aware_picks_total` metric counts picks by whether
 telemetry or a fallback made them, and `llm_backend_telemetry_scrapes_total`
