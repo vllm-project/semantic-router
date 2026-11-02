@@ -1,0 +1,59 @@
+{
+  "comment": "Recorded aggregates for the fla-npu chunk on Ascend 950DT, backing docs/records/npu-fla-chunk-ascend950dt.md. The raw 60-answer corpus and the golden-check run lived on the measurement host, which is no longer available; this file reconstructs the published aggregates from the record. The rerun tracked in the linked issue supersedes and extends it (per-request table and the npu golden-check entry).",
+  "issue": "https://github.com/vllm-project/semantic-router/issues/5698",
+  "pull_request": "https://github.com/vllm-project/semantic-router/pull/5498",
+  "date": "2026-10-28",
+  "hardware": "Huawei Ascend 950DT",
+  "cann": "9.1",
+  "model": "vllm-sr/d3-mini",
+  "corpus": "office label-diff, 60 requests",
+  "label_diff": {
+    "requests": 60,
+    "flipped_requests": 4,
+    "row_agreement": 0.9333,
+    "flips": [
+      {
+        "leaf": "fact_check",
+        "type": "choice",
+        "count": 2,
+        "direction": "toward NO_FACT_CHECK_NEEDED"
+      },
+      {
+        "leaf": "jailbreak",
+        "type": "choice",
+        "count": 2,
+        "direction": "toward jailbreak"
+      }
+    ],
+    "measured_two_option_margins": [0.008, 0.019],
+    "notes": "One leaf per flipped request (2 prompts x 2 runs, deterministic); every flipped leaf has a two-option probability gap <= 0.02 and leaves with larger margins do not move; the two flip directions are opposite, consistent with a random walk rather than a systematic bias. The two fused implementations (triton-FLA and Ascend C) agree with each other on all 60; the NPU reference implementation agrees with the CUDA production recordings on all 60."
+  },
+  "chunk_probe": {
+    "chunk_reference_latency_ms": 107.1,
+    "chunk_flanpu_latency_ms": 0.42,
+    "e2e_forward_reference_ms": 2914.7,
+    "e2e_forward_flanpu_ms": 77.5,
+    "e2e_forward_flanpu_repeat_ms": 79.2,
+    "cuda_h20_parity_ms": 107.3,
+    "notes": "Single-request d3-mini forward, chunk term isolated by single-point synchronous timing; the chunk term is 97% of the baseline forward."
+  },
+  "divergence_probe": {
+    "per_call_max_abs_diff": 0.00390625,
+    "per_call_max_abs_diff_note": "2^-8, the reported BF16 GDN rounding floor (arxiv 2609.04098); single-call divergence does not grow with sequence length (T=200..500 all <= 3.9e-3)",
+    "injection_growth_per_layer": 0.96,
+    "layers": 24,
+    "fp64_truth_max_ulp": 1,
+    "fp64_truth_max_ulp_note": "both implementations sit at max 1 ulp from the fp64 reference: two equally-correct rounding paths, not a wrong kernel"
+  },
+  "g_distribution_probe": {
+    "calls": 1944,
+    "g_min": -729.37,
+    "g_max": 0.0,
+    "beta_min": 2.6e-11,
+    "beta_max": 1.0,
+    "notes": "The measured d3-mini decay range; why the CANN ops-transformer chunk_gated_delta_rule (hard constraint g in [-1, 0]) cannot serve this model, and why clamping would break long-range forgetting."
+  },
+  "gates": {
+    "consent": "93.3% row agreement < the 99% bar: the released BF16 d3 packages keep exact kernels; the slot lands default-off behind the FLA_NPU_APPROXIMATE opt-in, to flip only when the quantized d3 accuracy record lands"
+  }
+}
