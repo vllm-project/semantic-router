@@ -36,8 +36,8 @@ func sessionAwareReleaseContext(release, toolLoop bool) *SelectionContext {
 			MemoryTurnCount: 3, MemorySwitchCount: 4,
 			HistoryTokens: 4096, ContextTokens: 8192,
 			CacheWarmth: 1, CacheWarmthOK: true,
-			ActiveToolLoop:   toolLoop,
-			ReleaseRequested: release,
+			ActiveToolLoop: toolLoop,
+			ReleaseHonored: release,
 		},
 	}
 }

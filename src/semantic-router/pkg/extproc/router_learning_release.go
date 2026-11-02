@@ -14,6 +14,10 @@ const (
 	protectionReleaseReasonNotBoundary = "release_not_at_turn_boundary"
 	protectionReleaseReasonInterval    = "release_interval"
 	protectionReleaseReasonNotApplied  = "release_not_applied"
+	protectionReleaseReasonObserveOnly = "release_observe_only"
+	protectionReleaseReasonKeptCurrent = "release_kept_current"
+	protectionReleaseReasonBypass      = "protection_bypassed"
+	protectionReleaseReasonOff         = "protection_disabled"
 
 	switchGateReasonRelease = "bypassed_by_release"
 )
@@ -27,6 +31,32 @@ type protectionReleaseVerdict struct {
 	selectedModel string
 }
 
+// requestedProtectionRelease returns the unresolved verdict for a request that
+// carries the release header.
+func requestedProtectionRelease(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (protectionReleaseVerdict, bool) {
+	header := cfg.Release.EffectiveHeader()
+	// Looper hops re-enter with the client's headers; one release must not
+	// fire once per hop.
+	if ctx == nil || ctx.Hop != nil || strings.TrimSpace(headerValueCI(ctx, header)) == "" {
+		return protectionReleaseVerdict{}, false
+	}
+	return protectionReleaseVerdict{requested: true, header: header}, true
+}
+
+// unavailableProtectionRelease refuses a release on a request that protection
+// does not evaluate, so the client still learns why it was ignored.
+func unavailableProtectionRelease(ctx *RequestContext, cfg config.RouterLearningProtectionConfig, reason string) protectionReleaseVerdict {
+	verdict, ok := requestedProtectionRelease(ctx, cfg)
+	if !ok {
+		return protectionReleaseVerdict{}
+	}
+	verdict.reason = reason
+	if !cfg.Release.EffectiveEnabled() {
+		verdict.reason = protectionReleaseReasonDisabled
+	}
+	return verdict
+}
+
 // evaluateProtectionRelease decides whether this request's release header can
 // release the hold on its protection key. It reads session memory but never
 // writes it: the interval is consumed only when the decision commits.
@@ -34,14 +64,12 @@ func evaluateProtectionRelease(
 	ctx *RequestContext,
 	cfg config.RouterLearningProtectionConfig,
 	session *selection.AgenticSessionContext,
+	mode string,
 ) protectionReleaseVerdict {
-	header := cfg.Release.EffectiveHeader()
-	// Looper hops re-enter with the client's headers; one release must not
-	// fire once per hop.
-	if ctx == nil || ctx.Hop != nil || strings.TrimSpace(headerValueCI(ctx, header)) == "" {
-		return protectionReleaseVerdict{}
+	verdict, ok := requestedProtectionRelease(ctx, cfg)
+	if !ok {
+		return verdict
 	}
-	verdict := protectionReleaseVerdict{requested: true, header: header}
 	if !cfg.Release.EffectiveEnabled() {
 		verdict.reason = protectionReleaseReasonDisabled
 		return verdict
@@ -60,6 +88,10 @@ func evaluateProtectionRelease(
 	last := session.MemoryLastReleaseUserTurn
 	if last > 0 && session.MemoryUserTurnCount+1-last < cfg.Release.EffectiveMinUserTurnsBetween() {
 		verdict.reason = protectionReleaseReasonInterval
+		return verdict
+	}
+	if mode != config.DecisionAdaptationModeApply {
+		verdict.reason = protectionReleaseReasonObserveOnly
 		return verdict
 	}
 	verdict.honored = true
@@ -106,26 +138,29 @@ func (v protectionReleaseVerdict) toPolicyMap() map[string]interface{} {
 }
 
 // applyProtectionReleasePolicy records the verdict on the decision's policy and
-// marks an applied release as such. In apply mode a release counts as applied
-// only when the decision carries the released learning context; fallbacks and
-// failed selections keep their own action.
-func applyProtectionReleasePolicy(ctx *RequestContext, decision *routerLearningDecision, verdict protectionReleaseVerdict, mode string) {
+// marks an applied release as such. A release counts as applied only when the
+// decision carries the released learning context; fallbacks and failed
+// selections keep their own action. A release that re-selects the held model
+// still consumes the interval but is not a switch.
+func applyProtectionReleasePolicy(ctx *RequestContext, decision *routerLearningDecision, verdict protectionReleaseVerdict) {
 	if decision == nil || !verdict.requested || decision.policy.Empty() {
 		return
 	}
-	if verdict.honored && mode == config.DecisionAdaptationModeApply {
+	if verdict.honored {
 		session := agenticSessionFromContext(decision.selectionContext)
-		if session != nil && session.ReleaseRequested {
+		if session != nil && session.ReleaseHonored {
+			verdict.selectedModel = selectedModelName(decision.selectionResult)
 			decision.policy.Action = routerLearningActionReleaseSwitch
 			decision.policy.Reason = protectionReleaseReasonHonored
+			if verdict.selectedModel == verdict.previousModel {
+				decision.policy.Action = routerLearningActionHoldCurrent
+				decision.policy.Reason = protectionReleaseReasonKeptCurrent
+			}
 		} else {
 			verdict.honored = false
 			verdict.reason = protectionReleaseReasonNotApplied
 			recordProtectionReleaseWarning(ctx, verdict)
 		}
-	}
-	if verdict.honored {
-		verdict.selectedModel = selectedModelName(decision.selectionResult)
 	}
 	if decision.policy.Details.Protection == nil {
 		decision.policy.Details.Protection = newRouterLearningProtectionDiagnostics(nil, routerLearningIdentityDiagnostics{})

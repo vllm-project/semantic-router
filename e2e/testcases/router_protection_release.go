@@ -103,6 +103,13 @@ func runProtectionExplicitRelease(ctx context.Context, public, management, token
 		rel == nil || !rel.Honored || rel.PreviousModel != a || rel.SelectedModel != b {
 		return fmt.Errorf("release not applied: %+v release=%+v", released, rel)
 	}
+	newHold, _, err := turn("session-gate-seed", false)
+	if err != nil {
+		return err
+	}
+	if newHold.SelectedModel != b || newHold.Learning.Protection.Action == "release_switch" || newHold.Learning.Protection.Release != nil {
+		return fmt.Errorf("plain turn after release did not hold %q: %+v", b, newHold)
+	}
 	refused, headers, err := turn("session-gate-seed", true)
 	if err != nil {
 		return err
@@ -116,7 +123,7 @@ func runProtectionExplicitRelease(ctx context.Context, public, management, token
 	if rel := refused.Learning.Protection.Release; rel == nil || rel.Honored || rel.Reason != "release_interval" {
 		return fmt.Errorf("refused release replay = %+v", rel)
 	}
-	for _, record := range []releaseReplayRecord{seed, held, released, refused} {
+	for _, record := range []releaseReplayRecord{seed, held, released, newHold, refused} {
 		if record.SessionID != sid {
 			return fmt.Errorf("release split the run: record %s has session %q, want %q", record.ID, record.SessionID, sid)
 		}

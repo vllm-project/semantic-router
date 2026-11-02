@@ -26,7 +26,11 @@ from cli.commands.recipe_learning import (
     fetch_replay_payload,
     normalize_replay_payload,
 )
-from cli.commands.recipe_learning_metrics import record_switched
+from cli.commands.recipe_learning_metrics import (
+    DecisionMetrics,
+    record_switched,
+    update_protection_metrics,
+)
 from cli.commands.route import (
     _parse_messages_json,
     _prompt_to_messages,
@@ -301,6 +305,21 @@ def test_recipe_learning_switch_metric_uses_learning_switch_action() -> None:
     }
 
     assert record_switched(record) is True
+
+
+def test_recipe_learning_counts_release_switch_as_switch() -> None:
+    record = {
+        "original_model": "auto",
+        "selected_model": "qwen/qwen3.6-rocm",
+        "learning": {"protection": {"action": "release_switch"}},
+    }
+    metrics = DecisionMetrics()
+
+    update_protection_metrics(metrics, record["learning"]["protection"], "r1")
+
+    assert record_switched(record) is True
+    assert metrics.allows == 1
+    assert metrics.rescues == 0
 
 
 def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pack() -> (

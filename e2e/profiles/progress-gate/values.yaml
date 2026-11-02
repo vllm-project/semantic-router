@@ -88,7 +88,7 @@ config:
               cooldown_seconds: 10
               max_switches_per_window: 2
           release:
-            min_user_turns_between: 2
+            min_user_turns_between: 3
     services:
       management_api:
         auth:

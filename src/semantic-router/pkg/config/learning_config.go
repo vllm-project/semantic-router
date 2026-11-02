@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+)
 
 const (
 	// RouterLearningScopeConversation protects one agent conversation while
@@ -31,7 +35,6 @@ const (
 	routerLearningDefaultSessionHeader      = "x-session-id"
 	routerLearningDefaultConversationHeader = "x-conversation-id"
 
-	DefaultProtectionReleaseHeader              = "x-vsr-protection-release"
 	defaultProtectionReleaseMinUserTurnsBetween = 2
 )
 
@@ -245,7 +248,7 @@ func (cfg RouterLearningProtectionReleaseConfig) EffectiveHeader() string {
 			return value
 		}
 	}
-	return DefaultProtectionReleaseHeader
+	return headers.VSRProtectionRelease
 }
 
 func (cfg RouterLearningProtectionReleaseConfig) EffectiveMinUserTurnsBetween() int {

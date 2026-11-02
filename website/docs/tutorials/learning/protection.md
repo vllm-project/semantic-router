@@ -119,8 +119,8 @@ Any non-empty value requests a release. The release applies only to the
 request's protection key: with an `agent` header configured, releasing one
 subagent leaves the main agent and other subagents held. The router removes the
 header before the request reaches a backend, whether or not release is enabled,
-so config load rejects a name that is an identity header, an authentication or
-framing header, or another `x-vsr-` control header.
+so config load accepts only an `x-` header name, and rejects an identity header,
+`x-api-key`, or another `x-vsr-` control header.
 
 A release is honored only when all of these hold:
 
@@ -132,6 +132,11 @@ A release is honored only when all of these hold:
   honored release on the key. A user turn is a request outside a tool loop;
   tool hops do not count. Otherwise the reason is `release_interval`.
 - `release.enabled` is not `false`. Otherwise the reason is `release_disabled`.
+- Protection runs in `apply` mode for the request. A decision with
+  `adaptations.mode: bypass` reports `protection_bypassed`; a request where
+  protection is off reports `protection_disabled`, or `missing_identity` when
+  the identity headers are absent; `protection.mode: observe` reports
+  `release_observe_only`.
 
 A refused release keeps the current hold and reports its reason in
 `x-vsr-protocol-warnings`. It does not use up the interval. An honored release
@@ -139,13 +144,18 @@ skips the held-model shortcut and rescue. With the progress gate enabled, the
 gate's evidence, cooldown and oscillation rules do not suppress it; the
 interval replaces them, and the gate trace records `bypassed_by_release`. Hard
 candidate eligibility still applies. Replay records the action
-`release_switch` with the previous and selected model. Under the decision's
-`protection.mode: observe`, routing is unchanged and the verdict is recorded
-for session and conversation keys. Observe mode does not hold agent keys, so a
-release on an agent key records nothing there.
+`release_switch` with the previous and selected model. When the recipe selects
+the held model again, the release still uses up the interval, and Replay
+records `hold_current` with the reason `release_kept_current`. Under the
+decision's `protection.mode: observe`, routing is unchanged and the release is
+recorded as not honored, without using up the interval.
 
-Claude Code cannot send this header on a single request, because
-`ANTHROPIC_CUSTOM_HEADERS` applies to every request in a session.
+:::warning
+Do not put the release header in Claude Code's `ANTHROPIC_CUSTOM_HEADERS`.
+That setting is fixed at startup and sent on every request, so every request
+would ask for a release. Protection would then re-decide every
+`min_user_turns_between` user turns, which effectively turns the hold off.
+:::
 
 ## Guards
 

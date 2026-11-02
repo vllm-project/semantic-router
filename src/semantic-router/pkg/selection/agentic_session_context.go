@@ -43,9 +43,9 @@ type AgenticSessionContext struct {
 	LastDecisionName            string
 	LastDecisionReason          string
 
-	// ReleaseRequested marks a client release that protection has accepted;
+	// ReleaseHonored marks a client release that protection has accepted;
 	// the selector treats it as a continuity boundary.
-	ReleaseRequested bool
+	ReleaseHonored bool
 
 	HistoryTokens int
 	ContextTokens int

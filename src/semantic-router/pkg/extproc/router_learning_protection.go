@@ -134,7 +134,7 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 	var release protectionReleaseVerdict
 	defer func() {
 		if err == nil {
-			applyProtectionReleasePolicy(input.ctx, &out, release, preflight.mode)
+			applyProtectionReleasePolicy(input.ctx, &out, release)
 		}
 	}()
 	baseResult := firstNonNilSelectionResult(proposal.selectionResult, input.baseResult)
@@ -154,18 +154,26 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		}
 		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
 		decision.policy = preflight.policy
+		release = unavailableProtectionRelease(input.ctx, preflight.config, protectionReleaseReasonBypass)
+		recordProtectionReleaseWarning(input.ctx, release)
 		return decision, nil
 	}
 	if !preflight.enabled {
+		reason := protectionReleaseReasonOff
+		if preflight.policy.Reason == "missing_identity" {
+			reason = preflight.policy.Reason
+		}
+		release = unavailableProtectionRelease(input.ctx, preflight.config, reason)
+		recordProtectionReleaseWarning(input.ctx, release)
 		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
 		decision.policy = preflight.policy
 		return decision, nil
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
-	release = evaluateProtectionRelease(input.ctx, preflight.config, learningCtx.AgenticSession)
+	release = evaluateProtectionRelease(input.ctx, preflight.config, learningCtx.AgenticSession, preflight.mode)
 	recordProtectionReleaseWarning(input.ctx, release)
 	if release.honored {
-		learningCtx.AgenticSession.ReleaseRequested = true
+		learningCtx.AgenticSession.ReleaseHonored = true
 	}
 	if progressGateConfig(preflight.config.Tuning).Enabled {
 		learningCtx = r.progressEligibleContext(input.ctx, learningCtx)
@@ -506,7 +514,7 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	}
 	// A client release replaces the evidence and oscillation rules with its own
 	// user-turn interval; hard eligibility above still applies.
-	if hardReason == "" && learningCtx.AgenticSession != nil && learningCtx.AgenticSession.ReleaseRequested {
+	if hardReason == "" && learningCtx.AgenticSession != nil && learningCtx.AgenticSession.ReleaseHonored {
 		trace.Decision, trace.Reason = selection.GateDecisionSwitch, switchGateReasonRelease
 		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
 		return

@@ -29,7 +29,7 @@ func stageAgenticSessionDecision(
 	previousModel := ctx.PreviousModel
 	if selCtx.AgenticSession != nil {
 		activeToolLoop = selCtx.AgenticSession.ActiveToolLoop
-		released = selCtx.AgenticSession.ReleaseRequested
+		released = selCtx.AgenticSession.ReleaseHonored
 		previousModel = selCtx.AgenticSession.PreviousModel
 	}
 	ctx.pendingSessionDecision = &sessiontelemetry.SessionDecisionParams{

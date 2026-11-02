@@ -130,8 +130,29 @@ func TestProtectionReleaseScopedToAgent(t *testing.T) {
 	if model, _ := h.send(releaseRequest{agent: "agent-a", proposal: "cheap", release: true}); model != "cheap" {
 		t.Fatalf("agent release did not reselect: %q", model)
 	}
+	if model, _ := h.send(releaseRequest{agent: "agent-a", proposal: "frontier"}); model != "cheap" {
+		t.Fatalf("released agent did not hold its new model: %q", model)
+	}
 	if model, _ := h.send(releaseRequest{proposal: "cheap"}); model != "frontier" {
 		t.Fatalf("main agent lost its hold after a subagent release: %q", model)
+	}
+}
+
+func TestProtectionReleaseOfHeldModelIsNotASwitch(t *testing.T) {
+	h := newReleaseHarness(t, routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession))
+	h.send(releaseRequest{proposal: "frontier"})
+	model, ctx := h.send(releaseRequest{proposal: "frontier", release: true})
+	if model != "frontier" {
+		t.Fatalf("release re-selected %q", model)
+	}
+	if ctx.VSRLearningPolicy.Action != routerLearningActionHoldCurrent || ctx.VSRLearningPolicy.Reason != "release_kept_current" {
+		t.Fatalf("policy = %s/%s", ctx.VSRLearningPolicy.Action, ctx.VSRLearningPolicy.Reason)
+	}
+	if block := releaseBlock(t, ctx); block["honored"] != true || block["selected_model"] != "frontier" {
+		t.Fatalf("release block = %#v", block)
+	}
+	if model, _ := h.send(releaseRequest{proposal: "cheap", release: true}); model != "frontier" {
+		t.Fatalf("same-model release did not consume the interval: %q", model)
 	}
 }
 
@@ -192,10 +213,35 @@ func TestProtectionReleaseIgnoredWithoutHold(t *testing.T) {
 	if model != "frontier" || len(releaseWarnings(ctx)) != 0 || releaseBlock(t, ctx) != nil {
 		t.Fatalf("new session release: model=%q warnings=%v block=%#v", model, releaseWarnings(ctx), releaseBlock(t, ctx))
 	}
+}
+
+func TestProtectionReleaseReportedWhenProtectionSkipped(t *testing.T) {
+	h := newReleaseHarness(t, routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession))
+	h.send(releaseRequest{proposal: "frontier"})
 	bypass := &config.Decision{Name: "choice", Adaptations: config.DecisionAdaptationsConfig{Mode: config.DecisionAdaptationModeBypass}}
-	_, ctx = h.send(releaseRequest{proposal: "cheap", release: true, decision: bypass})
-	if len(releaseWarnings(ctx)) != 0 || releaseBlock(t, ctx) != nil {
-		t.Fatalf("bypass release: warnings=%v block=%#v", releaseWarnings(ctx), releaseBlock(t, ctx))
+	_, ctx := h.send(releaseRequest{proposal: "cheap", release: true, decision: bypass})
+	if warnings := releaseWarnings(ctx); len(warnings) != 1 || warnings[0] != "protection_bypassed" {
+		t.Fatalf("bypass warnings = %v", warnings)
+	}
+	if block := releaseBlock(t, ctx); block["honored"] != false || block["reason"] != "protection_bypassed" {
+		t.Fatalf("bypass release block = %#v", block)
+	}
+
+	cfg := routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession)
+	cfg.RouterLearning.Protection.Enabled = extprocBoolPtr(false)
+	h = newReleaseHarness(t, cfg)
+	_, ctx = h.send(releaseRequest{proposal: "cheap", release: true})
+	if warnings := releaseWarnings(ctx); len(warnings) != 1 || warnings[0] != "protection_disabled" {
+		t.Fatalf("protection-off warnings = %v", warnings)
+	}
+
+	cfg = routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession)
+	cfg.RouterLearning.Protection.Enabled = extprocBoolPtr(false)
+	cfg.RouterLearning.Protection.Release.Enabled = extprocBoolPtr(false)
+	h = newReleaseHarness(t, cfg)
+	_, ctx = h.send(releaseRequest{proposal: "cheap", release: true})
+	if warnings := releaseWarnings(ctx); len(warnings) != 1 || warnings[0] != "release_disabled" {
+		t.Fatalf("release-off warnings = %v", warnings)
 	}
 }
 
@@ -238,8 +284,12 @@ func TestProtectionReleaseObserveModeRecordsOnly(t *testing.T) {
 	if ctx.VSRLearningPolicy.Action == routerLearningActionReleaseSwitch {
 		t.Fatalf("observe mode applied a release: %s", ctx.VSRLearningPolicy.Action)
 	}
-	if block := releaseBlock(t, ctx); block["honored"] != true {
+	block := releaseBlock(t, ctx)
+	if block["honored"] != false || block["reason"] != "release_observe_only" || block["selected_model"] != nil {
 		t.Fatalf("observe release block = %#v", block)
+	}
+	if warnings := releaseWarnings(ctx); len(warnings) != 1 || warnings[0] != "release_observe_only" {
+		t.Fatalf("observe warnings = %v", warnings)
 	}
 	snapshot, _ := sessiontelemetry.GetRouterSessionSnapshot(ctx.VSRLearningSessionID, time.Now())
 	if snapshot.LastReleaseUserTurn != 0 {
@@ -250,11 +300,11 @@ func TestProtectionReleaseObserveModeRecordsOnly(t *testing.T) {
 func TestProtectionReleaseIgnoredOnLooperHop(t *testing.T) {
 	session := &selection.AgenticSessionContext{PreviousModel: "frontier"}
 	ctx := &RequestContext{Headers: map[string]string{releaseTestHeader: "1"}}
-	if verdict := evaluateProtectionRelease(ctx, config.RouterLearningProtectionConfig{}, session); !verdict.honored {
+	if verdict := evaluateProtectionRelease(ctx, config.RouterLearningProtectionConfig{}, session, config.DecisionAdaptationModeApply); !verdict.honored {
 		t.Fatalf("client request release not honored: %+v", verdict)
 	}
 	ctx.Hop = &routing.Hop{}
-	if verdict := evaluateProtectionRelease(ctx, config.RouterLearningProtectionConfig{}, session); verdict.requested {
+	if verdict := evaluateProtectionRelease(ctx, config.RouterLearningProtectionConfig{}, session, config.DecisionAdaptationModeApply); verdict.requested {
 		t.Fatalf("looper hop requested a release: %+v", verdict)
 	}
 }

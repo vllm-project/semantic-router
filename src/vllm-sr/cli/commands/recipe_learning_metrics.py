@@ -207,7 +207,7 @@ def update_protection_metrics(
     if action == "hold_current":
         metrics.holds += 1
         append_support(metrics, "holds", replay_id)
-    elif action in {"allow_switch", "rescue_switch"}:
+    elif action in {"allow_switch", "rescue_switch", "release_switch"}:
         metrics.allows += 1
         if action == "rescue_switch":
             metrics.rescues += 1
@@ -399,7 +399,7 @@ def record_switched(record: dict[str, Any]) -> bool:
         protection = learning.get("protection")
         if isinstance(protection, dict):
             action = str(protection.get("action") or "")
-            if action in {"allow_switch", "rescue_switch"}:
+            if action in {"allow_switch", "rescue_switch", "release_switch"}:
                 return True
             if action in {"establish_baseline", "hold_current", "bypass"}:
                 return False

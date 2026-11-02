@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
@@ -389,7 +391,7 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 	}
 	header := release.EffectiveHeader()
 	if protectionReleaseHeaderReserved(header) {
-		return fmt.Errorf("%s.header %q is reserved; the router removes this header before the backend", field, header)
+		return fmt.Errorf("%s.header %q is reserved; use an x- header the router can remove before the backend", field, header)
 	}
 	for _, identity := range []string{"session", "conversation", "agent"} {
 		if strings.EqualFold(header, cfg.HeaderName(identity)) {
@@ -403,12 +405,10 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 }
 
 // protectionReleaseHeaderReserved rejects names whose removal before the backend
-// would break authentication, framing or router control headers.
+// would break a standard header, authentication or a router control header.
 func protectionReleaseHeaderReserved(header string) bool {
-	switch header {
-	case "authorization", "proxy-authorization", "api-key", "x-api-key",
-		"anthropic-version", "content-type", "content-length", "host":
+	if !strings.HasPrefix(header, "x-") || header == "x-api-key" {
 		return true
 	}
-	return strings.HasPrefix(header, "x-vsr-") && header != DefaultProtectionReleaseHeader
+	return strings.HasPrefix(header, "x-vsr-") && header != headers.VSRProtectionRelease
 }
