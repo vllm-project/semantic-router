@@ -66,6 +66,9 @@ or `append_system_prompt=...`.
 Claude Code in the task container. Claude Code 2.1.304 starts Agent subagents in
 the background and a print-mode run can end before they report, so subagent
 runs pass `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`.
+`--agent-timeout-multiplier` passes Harbor's agent timeout multiplier, for
+hardware slower than the task limits assume. Keep it the same for every arm
+that is compared.
 
 The report prints one JSON row per trial and a final summary with the pass
 count, the trials that ended on an API error, Harbor's exceptions, and the

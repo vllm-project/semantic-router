@@ -80,6 +80,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Environment variable for Claude Code in the task container, for "
         "example CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; repeatable",
     )
+    parser.add_argument(
+        "--agent-timeout-multiplier",
+        type=float,
+        help="Harbor agent timeout multiplier, one value for every arm of a "
+        "comparison; Harbor's default 1.0 when omitted",
+    )
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--jobs-dir", type=Path, default=Path("jobs"))
@@ -144,6 +150,8 @@ def harbor_command(args: argparse.Namespace) -> list[str]:
         "--job-name",
         args.job_name,
     ]
+    if args.agent_timeout_multiplier is not None:
+        command += ["--agent-timeout-multiplier", str(args.agent_timeout_multiplier)]
     for task in args.task:
         command += ["-i", task]
     return command

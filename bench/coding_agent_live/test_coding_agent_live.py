@@ -112,6 +112,22 @@ def test_agent_env_reaches_harbor_as_agent_environment():
     ]
 
 
+def test_agent_timeout_multiplier_reaches_harbor_only_when_set():
+    base = [
+        "--dataset=tasks",
+        "--router-url=http://172.17.0.1:8899",
+        "--model=vllm-sr/parent",
+        "--job-name=lane",
+    ]
+    command = run.harbor_command(run.parse_args(base))
+    assert "--agent-timeout-multiplier" not in command
+    command = run.harbor_command(
+        run.parse_args([*base, "--agent-timeout-multiplier=2"])
+    )
+    index = command.index("--agent-timeout-multiplier")
+    assert command[index + 1] == "2.0"
+
+
 def test_lane_env_overrides_harbors_single_model_aliases_in_the_container():
     # Harbor sets every alias and the subagent default to the run's model.
     harbor_env = {
