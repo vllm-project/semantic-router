@@ -78,7 +78,7 @@ spec:
       memory: 3Gi
     limits:
       cpu: 3000m
-      memory: 6Gi
+      memory: 12Gi
 
   # ====================
   # Semantic Router Configuration
@@ -101,7 +101,7 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
-      threshold: "0.75"
+      threshold: "0.88"
 
     # Classifiers
     classifier:

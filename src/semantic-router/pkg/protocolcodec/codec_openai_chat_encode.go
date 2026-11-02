@@ -116,7 +116,7 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 
 func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) error {
 	for _, instruction := range request.Instructions {
-		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content})
+		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content, Name: instruction.Name})
 		if err != nil {
 			return err
 		}
@@ -157,6 +157,7 @@ func isChatToolCallOnlyMessage(message chatMessageWire) bool {
 		message.Refusal == nil &&
 		message.Reasoning == nil &&
 		message.AlternateReasoning == nil &&
+		len(message.ReasoningDetails) == 0 &&
 		message.Audio == nil &&
 		message.LegacyFunctionCall == nil &&
 		message.ToolCallID == "" &&
@@ -197,6 +198,9 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		return chatMessageWire{}, err
 	}
 	wire := chatMessageWire{ID: message.ID, Role: role}
+	if message.Name != "" {
+		wire.Name, _ = json.Marshal(message.Name)
+	}
 	state := chatMessageEncodingState{wire: &wire, parts: make([]chatContentWire, 0, len(message.Content))}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
@@ -230,6 +234,10 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentRefusal:
 		return appendChatTextField(&state.wire.Refusal, content)
 	case llmprotocol.ContentReasoning:
+		if content.ReasoningDetail != nil {
+			state.wire.ReasoningDetails = append(state.wire.ReasoningDetails, encodeChatReasoningDetail(*content.ReasoningDetail))
+			return nil
+		}
 		return appendChatTextField(&state.wire.Reasoning, content)
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)

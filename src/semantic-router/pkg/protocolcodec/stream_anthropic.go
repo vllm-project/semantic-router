@@ -461,6 +461,9 @@ func (decoder *anthropicStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 }
 
 func (encoder *anthropicStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredEventCapabilities(event)); err != nil {
+		return nil, nil, err
+	}
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
 	}

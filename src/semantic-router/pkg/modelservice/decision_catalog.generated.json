@@ -232,6 +232,15 @@
         "set",
         "span"
       ]
+    },
+    {
+      "id": "vllm-sr/vela3-fast",
+      "family": "vela3",
+      "question_types": [
+        "choice",
+        "noul",
+        "span"
+      ]
     }
   ]
 }
