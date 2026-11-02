@@ -15,6 +15,7 @@ from typing import Any
 from ...errors import PackageError
 from ...plugins.base import (
     EngineModel,
+    GatedAdapterSpec,
     LoadedModel,
     ModelFamily,
     ModelSpec,
@@ -23,8 +24,11 @@ from ...plugins.base import (
 )
 from ...registry import builtin
 from ...registry.resolve import download
-from ..decision3.family import Decision3Family
+from ..decision3.family import Decision3Family, Decision3Model
+from ..decision3.package import STATE_ONCE_MODES
 from . import package as pkg
+from .gates import Gates
+from .model import GatedDecisions
 
 
 class Vela3D3Family(ModelFamily):
@@ -94,9 +98,48 @@ class Vela3D3Family(ModelFamily):
         )
 
     def describe(self, package: VerifiedPackage) -> ModelSpec:
-        raise PackageError("vela3/3 packages are not servable yet")
+        """The base's own spec with every text adapter as a gated adapter on its Linears."""
+        details: pkg.Vela3D3Package = package.details["package"]
+        spec = Decision3Family(self.options).describe(details.base_package)
+        gated = {
+            name: GatedAdapterSpec(
+                details.root / adapter.file, adapter.rank, adapter.alpha
+            )
+            for name, adapter in details.adapters.items()
+        }
+        return replace(
+            spec,
+            name=package.model_name,
+            backbone=replace(spec.backbone, gated=gated),
+        )
 
     def load(
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
     ) -> LoadedModel[Any, Any]:
-        raise PackageError("vela3/3 packages are not servable yet")
+        details: pkg.Vela3D3Package = package.details["package"]
+        model = _GatedBase(self.options).load(details.base_package, spec, engine_model)
+        assert isinstance(model, GatedDecisions)
+        model.gates = Gates.from_config(
+            details.vela3, details.router_questions, details.adapters
+        )
+        model.info = replace(
+            model.info,
+            id=package.model_name,
+            family=self.name,
+            repo=package.ref.repo_id,
+            revision=package.ref.revision,
+            model_sha256=package.model_sha256,
+            manifest_sha256=package.manifest_sha256,
+        )
+        return model
+
+
+class _GatedBase(Decision3Family):
+    """The base's ``decision3`` loading, building the gated model."""
+
+    def _model_class(self, decision: dict[str, Any]) -> type[Decision3Model]:
+        if decision.get("attention_mode", "causal") in STATE_ONCE_MODES:
+            raise PackageError(
+                "vela3/3 packages over a state-once base (vela3-turbo) are not servable yet"
+            )
+        return GatedDecisions
