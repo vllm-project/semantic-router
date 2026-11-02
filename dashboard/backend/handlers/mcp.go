@@ -75,7 +75,7 @@ func (h *MCPHandler) ListServersHandler() http.HandlerFunc {
 			return
 		}
 
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -318,7 +318,7 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 			return
 		}
 
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -402,7 +402,7 @@ func (h *MCPHandler) ListToolsHandler() http.HandlerFunc {
 			return
 		}
 
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
