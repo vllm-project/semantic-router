@@ -154,11 +154,9 @@ prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
 `dropped` diagnostic for `cache_control`.
 
 `tools[].defer_loading` is rejected for every backend format, Messages
-included, because honoring it needs the backend's tool search. Claude Code marks
-some tools with it on its first call. It retries without the field, and then
-sends every tool definition on every call for the rest of the run instead of
-loading some on demand. So each session starts with one or two rejected calls
-and carries the larger tool list afterwards.
+included, because honoring it needs the backend's tool search. Claude Code sets
+it on its first call, retries without it, and from then on sends every tool
+definition on every call instead of loading some on demand.
 
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
