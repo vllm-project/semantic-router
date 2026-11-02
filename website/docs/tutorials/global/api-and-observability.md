@@ -104,6 +104,8 @@ The `store_backend` field controls where response and conversation history is pe
 | `redis` | Survives router restart, shared across replicas | Production (default) |
 | `memory` | Lost on router restart | Local development only |
 
+The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
+
 ### Observability
 
 ```yaml
