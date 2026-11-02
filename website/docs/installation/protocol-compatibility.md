@@ -150,7 +150,18 @@ request error. A `context_management` edit of `clear_thinking_20251015` with
 change history are rejected. Anthropic `cache_control` boundaries are omitted
 when the selected backend uses Responses, which cannot represent them. The
 prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
-`dropped` diagnostic for `cache_control`.
+`dropped` diagnostic for `cache_control`. A `system` message inside `messages`,
+such as the environment section and the file change notices Claude Code
+inserts during a session, reaches these backends as a system message in the
+same place. Many open-model chat templates accept a system message only first:
+Qwen3.5 and later reject the request, and gpt-oss drops the text. For backends
+served with such a template, add `messages[].role` to
+`global.router.allow_lossy_translation`, described under
+[Validation and failure behavior](#validation-and-failure-behavior). The text
+then joins the user turn right before it, or becomes a user turn of its own
+after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
+diagnostic for `messages[].role`. Messages backends receive the message in
+place either way.
 
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
@@ -232,8 +243,8 @@ schema, streaming, tools, or error translation.
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
-  accepts only `tool_result.is_error`, and every other lossy translation still
-  fails closed.
+  also accepts `messages[].role` for system messages inside the conversation,
+  described above, and every other lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
