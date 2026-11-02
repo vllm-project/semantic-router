@@ -530,13 +530,22 @@ def log_runtime_summary(
         fields(
             (
                 ("Jaeger UI", stack_layout.jaeger_ui_url),
-                ("Grafana", f"{stack_layout.grafana_url} (admin/admin)"),
+                ("Grafana", _grafana_access_hint(stack_layout, dashboard_disabled)),
                 ("Prometheus", stack_layout.prometheus_url),
             )
         )
 
     _log_runtime_commands(dashboard_disabled, envoy=runs_envoy(gateway))
     _print_curl_example(listeners, stack_layout, config)
+
+
+def _grafana_access_hint(
+    stack_layout: RuntimeStackLayout, dashboard_disabled: bool
+) -> str:
+    """Grafana's browser assets are served through the Dashboard proxy."""
+    if dashboard_disabled:
+        return "Add --dashboard for browser access"
+    return f"{stack_layout.dashboard_url}/monitoring"
 
 
 def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
@@ -686,7 +695,9 @@ def _log_engine_ready(
     if not dashboard_disabled:
         extras.append(("Dashboard", stack_layout.dashboard_url))
     if enable_observability:
-        extras.append(("Grafana", f"{stack_layout.grafana_url} (admin/admin)"))
+        extras.append(
+            ("Grafana", _grafana_access_hint(stack_layout, dashboard_disabled))
+        )
     fields(extras)
     echo("Stop with: vllm-sr stop")
 
