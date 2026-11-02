@@ -1,16 +1,11 @@
-"""CUDA accelerator. Validated on NVIDIA GPUs (``docs/records/cuda-*.md``).
+"""CUDA accelerator (hardware records: ``docs/records/cuda-*.md``).
 
-With Triton on an Ampere or newer GPU it adds the ROCm build's fused
-element-wise kernels (``triton_gfx942``) as approximate kernels, which run
-only for a family that consents to them. Their RMSNorm sums follow ATen's ROCm reduction
-order, not CUDA's, so they differ from the eager ops by rounding
-(``docs/records/cuda-fused-approximate.md``). causal-conv1d is approximate here
-too: direct comparisons find non-bit-exact outputs on CUDA
-(``docs/records/cuda-causal-conv1d-exactness.md``), so exact kernels select
-the reference even when causal-conv1d is installed.
-The fused gated-delta prep (``gdn_prep``) requires FLA, but not an installed
-causal-conv1d: it implements the convolution itself and is approximate on CUDA
-(``docs/records/cuda-gdn-prep-without-causal-conv1d.md``).
+Fused Triton kernels require Ampere and family consent; gated-delta prep also
+needs FLA, but not causal-conv1d. Optional causal-conv1d is non-bit-exact on CUDA,
+so exact/non-consenting models select the reference convolution.
+
+Evidence under ``docs/records/``: ``cuda-fused-approximate.md``,
+``cuda-causal-conv1d-exactness.md`` and ``cuda-gdn-prep-without-causal-conv1d.md``.
 """
 
 from __future__ import annotations
