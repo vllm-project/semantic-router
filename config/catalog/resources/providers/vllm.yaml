@@ -259,6 +259,23 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct
+- catalog: minimax/minimax-m3.1-flash
+  relationship: self_hosted
+  id: MiniMaxAI/MiniMax-M3.1-Flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  reasoning_modes:
+  - adaptive
+  restrictions:
+    minimum_vllm_version: 0.33.0
+    # The linked recipe requires the minimax-m31-flash image, not a stable pip release.
+    nightly_required: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-10-23
+    source: https://github.com/vllm-project/vllm/blob/eff8a5689681ea9db3c6390e5e4415d6dca42431/recipes/models/MiniMaxAI/MiniMax-M3.1-Flash.yaml
 - catalog: minimax/minimax-m2.5
   relationship: self_hosted
   id: MiniMaxAI/MiniMax-M2.5
