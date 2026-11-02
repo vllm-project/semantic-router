@@ -1269,7 +1269,8 @@
           "items": {
             "type": "string",
             "enum": [
-              "tool_result.is_error"
+              "tool_result.is_error",
+              "reasoning.signature"
             ]
           },
           "type": "array"
