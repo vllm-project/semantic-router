@@ -31,7 +31,7 @@ Guard detects attempts to redirect instructions. Safety detects content risk;
 Hazard identifies its category. Use these models together when your application
 needs both prompt-attack protection and content policies. Shield is a separately
 trained model with the same `safe`/`unsafe` interface as Safety. Both are
-explicit specialists; the default decision deployment is Vela 2.0 0.3B, and [the Safety signal guide](../tutorials/signal/learned/safety.md#select-vela-shield)
+explicit specialists; the default decision deployment is vela3-fast, and [the Safety signal guide](../tutorials/signal/learned/safety.md#select-vela-shield)
 shows how to select Shield instead.
 
 Embedding and Reranker offer four encoder depths and five dimensions so you
