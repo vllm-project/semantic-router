@@ -12,7 +12,10 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import torch
+
 from ...errors import PackageError
+from ...heads.span import SpanHead
 from ...plugins.base import (
     EngineModel,
     GatedAdapterSpec,
@@ -28,7 +31,8 @@ from ..decision3.family import Decision3Family, Decision3Model
 from ..decision3.package import STATE_ONCE_MODES
 from . import package as pkg
 from .gates import Gates
-from .model import GatedDecisions, TurboDecisions
+from .model import GatedDecisions, SpanSetup, TurboDecisions
+from .spans import Policy, Renderer, SpanReader
 
 
 class Vela3D3Family(ModelFamily):
@@ -124,6 +128,17 @@ class Vela3D3Family(ModelFamily):
         model.gates = Gates.from_config(
             details.vela3, details.router_questions, details.adapters
         )
+        heads = {
+            route: _head(details.root / details.heads[name], engine_model.device)
+            for route, name in (("span", "span"), ("ner", "ner"), ("rel", "relation"))
+            if name in details.heads
+        }
+        model.span_setup = SpanSetup(
+            policy=Policy(details.vela3["span"], set(heads)),
+            renderer=Renderer(model.tokenizer, model.codes),
+            reader=SpanReader(engine_model, heads),
+            definitions=_names_only,
+        )
         model.info = replace(
             model.info,
             id=package.model_name,
@@ -132,8 +147,29 @@ class Vela3D3Family(ModelFamily):
             revision=package.ref.revision,
             model_sha256=package.model_sha256,
             manifest_sha256=package.manifest_sha256,
+            question_types=(*model.info.question_types, "span"),
         )
         return model
+
+
+def _head(path: Path, device: torch.device) -> SpanHead:
+    """A span head (``SpanHeadV2``) at the projection and slot count its file holds, FP32 on ``device``."""
+    from safetensors.torch import load_file
+
+    tensors = load_file(str(path))
+    hidden = tensors["wn.weight"].shape[0]
+    head = SpanHead(
+        hidden,
+        projection=tensors["K.weight"].shape[0],
+        slots=tensors["slot.weight"].shape[0],
+    )
+    head.load_state_dict(tensors, strict=True)
+    return head.to(device).float().eval()
+
+
+def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
+    """No definition writer: labels without a description run by name."""
+    return {}
 
 
 class _GatedBase(Decision3Family):

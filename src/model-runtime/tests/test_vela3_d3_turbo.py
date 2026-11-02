@@ -169,6 +169,21 @@ def test_a_noncausal_forward_reads_the_whole_prompt_on_a_state_once_backbone(
     assert not torch.equal(forward(False), want[:, -1])
 
 
+def test_span_questions_run_beside_turbo_decisions_but_refuse_images(
+    runtimes, png_url
+) -> None:
+    vela, d3 = runtimes
+    span = {"type": "span", "criteria": ["thing"]}
+    body = {"state": STATE, "questions": {"x": NOUL, "s": span}}
+    _, got = call(vela, body)
+    _, want = call(d3, {"state": STATE, "questions": {"x": NOUL}})
+    assert got["answers"]["x"] == want["answers"]["x"]
+    assert "s" in got["spans"]
+    _, imaged = call(vela, {**body, "images": [png_url(64, 64)]})
+    assert imaged["answers"]["s"]["error"] == "invalid_question"
+    assert "x" in imaged["answers"] and "error" not in imaged["answers"]["x"]
+
+
 def test_the_opt_in_key_is_stripped_for_the_base(runtimes) -> None:
     vela, d3 = runtimes
     questions = {"care": {**NOUL, "decision_adapter": True}}

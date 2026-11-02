@@ -19,11 +19,22 @@ from typing import Any
 
 import torch
 
-from ...plugins.base import AdapterGate, ForwardBatch, ImageInputs
+from ...errors import QuestionError, question_error
+from ...plugins.base import AdapterGate, Expired, ForwardBatch, ImageInputs, SurfacePlan
 from ...plugins.decisions import RequestPlan
 from ..decision3.family import BATCH_SIZE, Decision3Model, Item
 from ..decision3.state_once import StateOnceModel
 from .gates import Gates
+from .spans import (
+    Definitions,
+    Policy,
+    Renderer,
+    SpanItem,
+    SpanReader,
+    invalid,
+    plan_question,
+)
+from .spans import answer as span_answer
 
 
 @dataclass(frozen=True)
@@ -37,14 +48,127 @@ def adapter_of(item: Item) -> str | None:
     return item.adapter if isinstance(item, GatedItem) else None
 
 
+# ------------------------------------------------------------------ span questions
+
+
+@dataclass(frozen=True)
+class SpanSetup:
+    """What a model needs to plan and run span questions (``spans.py``)."""
+
+    policy: Policy
+    renderer: Renderer
+    reader: SpanReader
+    definitions: Definitions
+
+
+SPAN_IMAGES = "span questions read text only on this model"
+
+
+def split_spans(questions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The request's span questions, and the others (the base's)."""
+    asked = {
+        k: q
+        for k, q in questions.items()
+        if isinstance(q, dict) and q.get("type") == "span"
+    }
+    return asked, {k: q for k, q in questions.items() if k not in asked}
+
+
+def with_spans(
+    plan: RequestPlan[Item] | None,
+    state: Any,
+    asked: dict[str, Any],
+    order: list[str],
+    setup: SpanSetup,
+    refuse: str | None = None,
+) -> RequestPlan[Item]:
+    """``plan`` (None: no base question) with the span questions' items, or errors, in request order."""
+    items: list[Item] = list(plan.items) if plan is not None else []
+    errors = dict(plan.errors) if plan is not None else {}
+    for question_id, question in asked.items():
+        try:
+            if refuse is not None:
+                raise invalid(refuse)
+            items.append(
+                plan_question(
+                    question_id,
+                    question,
+                    state,
+                    setup.policy,
+                    setup.renderer,
+                    setup.definitions,
+                )
+            )
+        except QuestionError as exc:
+            errors[question_id] = question_error("span", exc)
+    if plan is None:
+        return RequestPlan(
+            question_ids=order, items=items, errors=errors, input_tokens=0
+        )
+    return replace(plan, question_ids=order, items=items, errors=errors)
+
+
+def span_batches(
+    items: list[Item], base: Callable[[list[Item]], list[list[int]]]
+) -> list[list[int]]:
+    """The base's batches of the other items, then each span question alone."""
+    rest = [i for i, item in enumerate(items) if not isinstance(item, SpanItem)]
+    batches = (
+        [[rest[j] for j in batch] for batch in base([items[i] for i in rest])]
+        if rest
+        else []
+    )
+    return batches + [[i] for i, item in enumerate(items) if isinstance(item, SpanItem)]
+
+
+def run_spans(
+    items: list[Item],
+    base: Callable[[list[Item]], list[Any]],
+    setup: SpanSetup,
+) -> list[Any]:
+    """The other items through ``base``; each span question through its windows and decoder."""
+    values: list[Any] = [None] * len(items)
+    rest = [i for i, item in enumerate(items) if not isinstance(item, SpanItem)]
+    if rest:
+        for index, value in zip(rest, base([items[i] for i in rest]), strict=True):
+            values[index] = value
+    for index, item in enumerate(items):
+        if isinstance(item, SpanItem):
+            values[index] = span_answer(item, *setup.reader.logits(item))
+    return values
+
+
+def finish_spans(
+    response: dict[str, Any], plan: SurfacePlan[Item], results: Any
+) -> dict[str, Any]:
+    """The span questions' ``spans`` and ``thresholds`` beside their answers."""
+    if isinstance(results, Expired):
+        return response
+    request: RequestPlan[Item] = plan.state
+    for index, item in enumerate(request.items):
+        if isinstance(item, SpanItem) and item.question_id not in request.errors:
+            value = results[index]
+            response.setdefault("spans", {})[item.question_id] = value["spans"]
+            response.setdefault("thresholds", {})[item.question_id] = value["threshold"]
+    return response
+
+
 class GatedDecisions(Decision3Model):
     gates: Gates
+    span_setup: SpanSetup
 
     def plan(
         self, state: Any, questions: dict[str, Any], scan: int | None = None
     ) -> RequestPlan[Item]:
         if not isinstance(questions, dict):
             return super().plan(state, questions, scan)
+        asked, rest = split_spans(questions)
+        plan = self._decisions(state, rest, scan) if rest else None
+        return with_spans(plan, state, asked, list(questions), self.span_setup)
+
+    def _decisions(
+        self, state: Any, questions: dict[str, Any], scan: int | None
+    ) -> RequestPlan[Item]:
         assigned = self.gates.assign(questions)
         plan = super().plan(state, Gates.strip(questions), scan)
         if not assigned:
@@ -65,8 +189,34 @@ class GatedDecisions(Decision3Model):
         images: list[Any],
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
-        stripped = Gates.strip(questions) if isinstance(questions, dict) else questions
-        return super().plan_images(state, stripped, images, videos)
+        if not isinstance(questions, dict):
+            return super().plan_images(state, questions, images, videos)
+        asked, rest = split_spans(questions)
+        plan = (
+            super().plan_images(state, Gates.strip(rest), images, videos)
+            if rest
+            else None
+        )
+        return with_spans(
+            plan, state, asked, list(questions), self.span_setup, SPAN_IMAGES
+        )
+
+    def exact_batches(self, items: list[Item]) -> list[list[int]]:
+        return span_batches(items, super().exact_batches)
+
+    def run(self, items: list[Item]) -> list[list[float] | None]:
+        return run_spans(items, super().run, self.span_setup)
+
+    def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
+        return run_spans(items, super().run_approximate, self.span_setup)
+
+    def answer(self, item: Any, values: Any) -> dict[str, Any]:
+        if isinstance(item, SpanItem):
+            return {"type": "noul", "noul": values["noul"]}
+        return super().answer(item, values)
+
+    def finish_surface(self, plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
+        return finish_spans(super().finish_surface(plan, results), plan, results)
 
     def _packs(self, items: list[Item]) -> bool:
         if any(adapter_of(item) is not None for item in items):
@@ -135,12 +285,20 @@ class TurboDecisions(StateOnceModel):
     """
 
     gates: Gates
+    span_setup: SpanSetup
 
     def plan(
         self, state: Any, questions: dict[str, Any], scan: int | None = None
     ) -> RequestPlan[Item]:
         if not isinstance(questions, dict):
             return super().plan(state, questions, scan)
+        asked, rest = split_spans(questions)
+        plan = self._decisions(state, rest, scan) if rest else None
+        return with_spans(plan, state, asked, list(questions), self.span_setup)
+
+    def _decisions(
+        self, state: Any, questions: dict[str, Any], scan: int | None
+    ) -> RequestPlan[Item]:
         plan = super().plan(state, Gates.strip(questions), scan)
         if any(
             isinstance(q, dict) and q.get("type") in BASE_ONLY_TYPES
@@ -174,10 +332,30 @@ class TurboDecisions(StateOnceModel):
         images: list[Any],
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
-        stripped = Gates.strip(questions) if isinstance(questions, dict) else questions
-        return super().plan_images(state, stripped, images, videos)
+        if not isinstance(questions, dict):
+            return super().plan_images(state, questions, images, videos)
+        asked, rest = split_spans(questions)
+        plan = (
+            super().plan_images(state, Gates.strip(rest), images, videos)
+            if rest
+            else None
+        )
+        return with_spans(
+            plan, state, asked, list(questions), self.span_setup, SPAN_IMAGES
+        )
+
+    def answer(self, item: Any, values: Any) -> dict[str, Any]:
+        if isinstance(item, SpanItem):
+            return {"type": "noul", "noul": values["noul"]}
+        return super().answer(item, values)
+
+    def finish_surface(self, plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
+        return finish_spans(super().finish_surface(plan, results), plan, results)
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
+        return span_batches(items, self._decision_batches)
+
+    def _decision_batches(self, items: list[Item]) -> list[list[int]]:
         """The state-once forwards of the request, then each adapter's replays, ``BATCH_SIZE`` per pass."""
         base = [i for i, item in enumerate(items) if adapter_of(item) is None]
         batches = (
@@ -196,17 +374,22 @@ class TurboDecisions(StateOnceModel):
         return batches
 
     def run(self, items: list[Item]) -> list[list[float] | None]:
-        return self._split(items, super().run)
+        base = super().run
+        return run_spans(items, lambda rows: self._split(rows, base), self.span_setup)
 
     def run_shared(
         self, items: list[Item], shared_prefix: int
     ) -> list[list[float] | None]:
-        return self._split(
-            items, lambda rows: super(TurboDecisions, self).run_shared(rows, 0)
+        base = super().run_shared
+        return run_spans(
+            items,
+            lambda rows: self._split(rows, lambda plain: base(plain, 0)),
+            self.span_setup,
         )
 
     def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
-        return self._split(items, super().run_approximate)
+        base = super().run_approximate
+        return run_spans(items, lambda rows: self._split(rows, base), self.span_setup)
 
     def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
         if any(adapter_of(item) is not None for item in items):
