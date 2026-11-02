@@ -74,6 +74,9 @@ harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain 
 		exit 1; \
 	fi
 
+# Pip treats a wheel whose bytes do not match the index hash as fatal and does
+# not retry it. A hosted runner can receive one bad copy, so try the download
+# again before failing the job.
 harness-venv-install: ## Install the repository check dependencies
 	@if ! "$(AGENT_PYTHON)" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then \
 		"$(AGENT_BOOTSTRAP_PYTHON)" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else "Error: %s needs Python 3.10 or newer, but %s is Python %d.%d.%d at %s. Set AGENT_BOOTSTRAP_PYTHON to a newer interpreter, for example AGENT_BOOTSTRAP_PYTHON=python3.12." % (tuple(sys.argv[1:]) + sys.version_info[:3] + (sys.executable,)))' "$(AGENT_VENV)" "$(AGENT_BOOTSTRAP_PYTHON)" || exit 1; \
@@ -83,7 +86,16 @@ harness-venv-install: ## Install the repository check dependencies
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
 		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
 		! cmp -s tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; then \
-		"$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt && \
+		attempt=1; \
+		while ! "$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt; do \
+			if [ "$$attempt" -ge 3 ]; then \
+				exit 1; \
+			fi; \
+			attempt=$$((attempt + 1)); \
+			echo "Harness dependency install failed; retrying ($$attempt/3)..."; \
+			"$(AGENT_PYTHON)" -m pip cache remove virtualenv >/dev/null 2>&1 || true; \
+			sleep $$((attempt * 2)); \
+		done; \
 		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" && \
 		cp tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; \
 	fi
@@ -98,6 +110,16 @@ harness-venv-install: ## Install the repository check dependencies
 harness-bootstrap: harness-venv-install ## Prepare the shared Python environment
 	@$(LOG_TARGET)
 	@echo "Harness Python tooling ready"
+
+# uv 0.13.1 accepts the committed training lockfiles (revision 3) without
+# rewriting them. Keep this pin until a newer uv is shown to do the same.
+TRAINING_LOCK_UV_VERSION ?= 0.13.1
+
+.PHONY: check-training-uv-lock
+check-training-uv-lock: harness-venv-install ## Fail when a training uv.lock is missing or stale
+	@"$(AGENT_PYTHON)" -c "import importlib.metadata as metadata; raise SystemExit(metadata.version('uv') != '$(TRAINING_LOCK_UV_VERSION)')" 2>/dev/null \
+		|| "$(AGENT_PYTHON)" -m pip install --quiet "uv==$(TRAINING_LOCK_UV_VERSION)"
+	@PATH="$(dir $(AGENT_PYTHON)):$$PATH" "$(AGENT_PYTHON)" -m unittest tools.ci.training_lock_contracts
 
 harness-node-bootstrap: $(HARNESS_VENV_DEPS) ## Provide cached Node when the host has none
 	@if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then \
