@@ -118,3 +118,13 @@ model bindings, classifier requirements, and replay retention before using it;
 its checked-in configuration records request and response data. Use the
 [recipe evaluation workflow](../benchmarking/agent-evaluation-loop) to test
 representative tasks before adopting a policy change.
+
+Decide reasoning in the decision as well. For a model with a reasoning family,
+such as a catalog model, the decision's `modelRefs` entry chooses whether the
+backend thinks and at what effort; the harness's own request does not. Claude
+Code asks for adaptive thinking with its effort setting on every call, but with
+`use_reasoning` left out the Router sends reasoning off, and with
+`use_reasoning: true` it sends the decision's `reasoning_effort`, or the
+family default when none is set, whatever effort the harness asked for. Set
+`use_reasoning: true` and the effort you want on the decisions behind an agent
+entrypoint. See [Model Reasoning](./model-reasoning#select-reasoning-in-a-decision).
