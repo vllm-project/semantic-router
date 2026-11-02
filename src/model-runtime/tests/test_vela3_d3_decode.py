@@ -89,7 +89,9 @@ def test_the_released_decoders_recorded_outputs() -> None:
     from importlib.resources import files
 
     recorded = json.loads(
-        files("vllm_srun.testing").joinpath("data/vela3_decode_cases.json").read_text("utf-8")
+        files("vllm_srun.testing")
+        .joinpath("data/vela3_decode_cases.json")
+        .read_text("utf-8")
     )["decode"]
     assert len(recorded) == 42
     for case in recorded:
