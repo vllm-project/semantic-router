@@ -164,7 +164,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   SIGNAL decision verification {
     description: "Whether the user asks to fact-check, verify or source an answer."
-    question: { choices: [{ description: "No: no check, verification or sources are requested", key: "false" }, { description: "Yes: the user asks for a fact check, verification, sources or evidence", key: "true" }], instructions: "Does the user ask the assistant to fact-check a claim, verify an answer, or back it with sources, citations or evidence?", type: "noul" }
+    question: { choices: [{ description: "No: no check, verification or sources are requested", key: "false" }, { description: "Yes: the user asks for a fact check, verification, sources or evidence", key: "true" }], instructions: "Does the user ask the assistant to fact-check a claim, verify an answer, or back it with sources, citations or evidence? A request for a mathematical or logical proof is not verification.", type: "noul" }
     predicate: { gte: 0.7 }
   }
 
@@ -413,19 +413,19 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   SIGNAL decision workflow {
     description: "Whether the request asks for a task carried out in stages, such as research, implement and validate, or by several agents."
     question: { choices: [{ description: "No: one answer, explanation, comparison, proof or plan, however careful, including exploring several approaches before answering", key: "false" }, { description: "Yes: a staged task to carry out, or work for several agents", key: "true" }], instructions: "Does the request ask the assistant to carry out a task in stages, such as researching or investigating (for example with a search tool), then implementing, applying or writing up the result, then testing or validating it, or ask for several agents to do the work?", type: "noul" }
-    predicate: { gte: 0.7 }
+    predicate: { gte: 0.88 }
   }
 
   SIGNAL decision mode {
     description: "Whether one assistant, several workers or several independent models should do the work."
-    question: { choices: [{ description: "One assistant, including when it compares competing hypotheses, explores several reasoning paths, splits the work into workstreams or steps, or fact-checks a claim; also when the user asks only for a plan", key: "one" }, { description: "Several workers or agents, asked for in the request, that each run part of the work", key: "workers" }, { description: "Several models or experts, asked for in the request, that each answer the same question independently", key: "experts" }], instructions: "Does the user ask for the work to be done by one assistant, by several workers or agents, or by several independent models or experts?", type: "choice" }
+    question: { choices: [{ description: "One assistant, the default when the request does not ask for several workers, agents, models or experts, including when it compares competing hypotheses, explores several reasoning paths, splits the work into workstreams or steps, fact-checks a claim or asks only for a plan", key: "one" }, { description: "Several workers or agents, asked for in the request, that each run a different part of the work", key: "workers" }, { description: "Several models or experts, asked for in the request, that each answer the same question independently so that their answers can be compared or reconciled", key: "experts" }], instructions: "Does the user ask for the work to be done by one assistant, by several workers or agents, or by several independent models or experts?", type: "choice" }
     predicate: { gte: 0.7 }
   }
 
   SIGNAL decision verification {
     description: "Whether the user asks to fact-check, verify or source an answer."
-    question: { choices: [{ description: "No: no check, verification or sources are requested", key: "false" }, { description: "Yes: the user asks for a fact check, verification, sources or evidence", key: "true" }], instructions: "Does the user ask the assistant to fact-check a claim, verify an answer, or back it with sources, citations or evidence?", type: "noul" }
-    predicate: { gte: 0.9 }
+    question: { choices: [{ description: "No: no check, verification or sources are requested", key: "false" }, { description: "Yes: the user asks for a fact check, verification, sources or evidence", key: "true" }], instructions: "Does the user ask the assistant to fact-check a claim, verify an answer, or back it with sources, citations or evidence? A request for a mathematical or logical proof is not verification.", type: "noul" }
+    predicate: { gte: 0.6 }
   }
 
   SIGNAL decision depth {
@@ -435,8 +435,8 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   }
 
   SIGNAL decision quoted {
-    description: "Whether the latest message gives text to translate, quote, define or explain rather than a request to act on."
-    question: { choices: [{ description: "No: the user asks the assistant to act or answer", key: "false" }, { description: "Yes: the text is material to translate, quote, define or explain", key: "true" }], instructions: "Does the latest message give a sentence or phrase to translate, quote, define or explain, rather than ask the assistant to act on it?", type: "noul" }
+    description: "Whether the latest message asks only to translate, define or explain quoted text, rather than to do the work it describes."
+    question: { choices: [{ description: "No: the user asks the assistant to act or answer, in any language", key: "false" }, { description: "Yes: the quoted text is only material to translate, define or explain", key: "true" }], instructions: "Does the latest message ask only to translate, define or explain a quoted word, phrase or sentence, rather than to do the work that the text describes?", type: "noul" }
     predicate: { gte: 0.5 }
   }
 
@@ -595,8 +595,8 @@ RECIPE privacy-first (description = "Keep every request local; named decision-mo
   }
 
   SIGNAL decision personal_data {
-    description: "Whether the message contains personal data about a specific person."
-    question: { choices: [{ description: "No: no specific person, or only general groups, languages or ideas", key: "false" }, { description: "Yes: personal data about a specific person", key: "true" }], instructions: "Does the message contain personal data about a specific person, such as a name, email address, phone number, street address, ID number, or the person's nationality, religion or political view?", type: "noul" }
+    description: "Whether the message contains personal data, such as a name, contact details or an address."
+    question: { choices: [{ description: "No: only general groups, cities, countries, languages or ideas", key: "false" }, { description: "Yes: personal data, such as a name, contact details or an address", key: "true" }], instructions: "Does the message contain personal data, such as a person's name, an email address, a phone number, a street or delivery address, a government ID or social security number, or a person's nationality, religion or political view? A city or country alone is not personal data.", type: "noul" }
     predicate: { gte: 0.5 }
   }
 

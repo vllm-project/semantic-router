@@ -212,11 +212,23 @@ decisions:
           decision: [deliberate]
         tags: [recipe:balanced, language:de, signal:keyword, stress:preference-conflict, projection]
       - id: long_context_reasoning
-        query: Analyze the tradeoffs in this long architecture context.
-        repeat: 1800
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the long architecture context:'
+          - role: assistant
+            content: I have the architecture context.
+          - role: user
+            content: Analyze the tradeoffs in that architecture context.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Architecture note: the order service writes to a primary database, publishes events to a queue, and serves reads from a regional cache. '
         expected_signals:
           context: [unified_balance_long_context]
-        tags: [recipe:balanced, language:en, signal:context, stress:long-input]
+        tags: [recipe:balanced, language:en, signal:context, stress:long-input, shape:messages]
       - id: dense_constraints
         query: >-
           The answer must contain exactly three options, must include at least
@@ -355,11 +367,23 @@ decisions:
           decision: [heavy]
         tags: [recipe:speed-first, language:de, signal:keyword, projection]
       - id: long_context_only
-        query: Background context for a latency-sensitive migration.
-        repeat: 1800
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the background context for the migration:'
+          - role: assistant
+            content: I have the migration context.
+          - role: user
+            content: Summarize that background context for a latency-sensitive migration.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Migration note: the billing service moves from one region to two regions and keeps its public API unchanged during the cutover. '
         expected_signals:
           context: [unified_speed_long_context]
-        tags: [recipe:speed-first, language:en, signal:context, stress:long-input]
+        tags: [recipe:speed-first, language:en, signal:context, stress:long-input, shape:messages]
       - id: ordered_heavy_work
         query: >-
           First inspect the incident, then produce a detailed architecture, and
@@ -431,11 +455,23 @@ decisions:
           decision: [depth]
         tags: [recipe:cost-first, language:de, signal:keyword, projection]
       - id: long_context_only
-        query: Local context that must be synthesized economically.
-        repeat: 1800
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the local context:'
+          - role: assistant
+            content: I have the local context.
+          - role: user
+            content: Synthesize that local context economically.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Local note: the inventory job reads the warehouse table each night, writes a summary file, and keeps one week of history on disk. '
         expected_signals:
           context: [unified_cost_long_context]
-        tags: [recipe:cost-first, language:en, signal:context, stress:long-input]
+        tags: [recipe:cost-first, language:en, signal:context, stress:long-input, shape:messages]
       - id: ordered_local_reasoning
         query: >-
           First identify the root cause, then reason step by step, and finally
@@ -642,11 +678,23 @@ decisions:
           decision: [depth]
         tags: [recipe:accuracy-first, language:en, shape:tools, looper:remom]
       - id: long_context_reasoning
-        query: Explore several approaches in this long system-design context, compare their failure modes and trade-offs, and synthesize the strongest rigorous solution.
-        repeat: 1800
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the system design document:'
+          - role: assistant
+            content: I have the design document.
+          - role: user
+            content: Explore several approaches for that system, compare their failure modes and trade-offs, and synthesize the strongest rigorous solution.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'System context: the order service writes to a primary database, publishes events to a queue, and serves reads from a regional cache. '
         expected_signals:
           decision: [depth]
-        tags: [recipe:accuracy-first, language:en, signal:context, stress:long-input]
+        tags: [recipe:accuracy-first, language:en, signal:context, stress:long-input, shape:messages]
       - id: hard_complexity
         query: >-
           Prove a difficult result by exploring multiple possible derivations
@@ -718,7 +766,7 @@ decisions:
             lte: 1
         tags: [recipe:accuracy-first, language:ja, signal:keyword, looper:fusion]
       - id: experts_de
-        query: Vergleiche unabhängige Analysen und löse die Meinungsverschiedenheiten auf.
+        query: Vergleiche unabhängige Analysen und Expertenmeinungen und löse die Meinungsverschiedenheiten auf.
         expected_signals:
           decision: [mode:experts]
         expected_signal_values:
