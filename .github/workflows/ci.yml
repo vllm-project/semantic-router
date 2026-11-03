@@ -355,7 +355,8 @@ jobs:
 
   gate:
     name: Gate
-    if: always()
+    # Reconcile failures while allowing cancelled runs to release concurrency.
+    if: ${{ !cancelled() }}
     needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator-source, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
