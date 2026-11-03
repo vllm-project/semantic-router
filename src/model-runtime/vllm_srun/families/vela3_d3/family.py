@@ -32,7 +32,7 @@ from ..decision3.package import STATE_ONCE_MODES
 from ..vela3.request import PRESETS
 from . import package as pkg
 from .gates import Gates
-from .model import GatedDecisions, SpanSetup, TurboDecisions, VelaPlanning
+from .model import GatedDecisions, SpanSetup, TurboDecisions, Vela3D3Model
 from .spans import ADAPTERS, Policy, Renderer, SpanReader
 
 
@@ -125,7 +125,7 @@ class Vela3D3Family(ModelFamily):
         model = Decision3Family(self.options).load(
             base, spec, engine_model, _model_class(details, base)
         )
-        assert isinstance(model, VelaPlanning)
+        assert isinstance(model, Vela3D3Model)
         heads = {
             route: _head(details.root / details.heads[name], engine_model.device)
             for route, name in ADAPTERS.items()

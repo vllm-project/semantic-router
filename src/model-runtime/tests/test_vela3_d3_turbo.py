@@ -241,5 +241,5 @@ def test_a_state_once_base_needs_noncausal_replays(written, tmp_path) -> None:
     path.write_text(json.dumps(config))
     fixture.write_sums(root)
     base = written.parent / f"{written.name}-base"
-    with pytest.raises(PackageError, match="decisions.attention 'noncausal'"):
+    with pytest.raises(PackageError, match=r"decisions\.attention 'noncausal'"):
         start_runtime(root, base_path=str(base))

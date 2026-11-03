@@ -50,6 +50,7 @@ from ...errors import (
     question_error,
 )
 from ...plugins.base import (
+    AdapterGate,
     BackboneSpec,
     DtypePolicy,
     EngineModel,
@@ -1156,7 +1157,10 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         images: ImageInputs | None,
         states: list[int] | None = None,
         packed: bool = False,
+        adapter: AdapterGate | None = None,
+        noncausal: bool = False,
     ) -> list[list[float] | None]:
+        """Each item's probabilities from one forward (``adapter`` and ``noncausal`` as ``ForwardBatch``'s)."""
         output = self.engine_model.forward(
             ForwardBatch(
                 input_ids=ids,
@@ -1167,6 +1171,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 images=images,
                 states=states,
                 packed=packed,
+                adapter=adapter,
+                noncausal=noncausal,
             )
         )
         return self._probabilities(items, output.query)
