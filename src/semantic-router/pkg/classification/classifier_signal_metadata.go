@@ -30,6 +30,7 @@ type RequestFacts struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+	ContextReserveTokens   int
 
 	// InputModality carries structural input-modality presence counts for the
 	// input_modality signal family.
