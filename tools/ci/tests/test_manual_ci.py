@@ -535,7 +535,7 @@ class ManualCITests(unittest.TestCase):
         self.assertEqual(self.github.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
 
         self.assertEqual(
-            self.resolve(source=new_merge, base=new_main),
+            self.resolve(source=MERGE, base=BASE),
             {"authorized": True, "scopes": ["affected"], "full": False},
         )
 
@@ -552,15 +552,15 @@ class ManualCITests(unittest.TestCase):
 
         record = self.authorize()
         self.assertEqual(record["head_sha"], HEAD)
-        self.assertEqual(record["source_sha"], new_merge)
-        self.assertEqual(record["base_sha"], new_main)
+        self.assertEqual(record["source_sha"], MERGE)
+        self.assertEqual(record["base_sha"], BASE)
         self.github.add_authorization(record)
 
         manual_ci.rerun(self.github, record)
         self.assertEqual(self.github.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
 
         self.assertEqual(
-            self.resolve(source=new_merge, base=new_main),
+            self.resolve(source=MERGE, base=BASE),
             {"authorized": True, "scopes": ["affected"], "full": False},
         )
 

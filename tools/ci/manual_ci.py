@@ -172,6 +172,27 @@ def timestamp(value: str) -> datetime:
         raise ManualCIError("Invalid authorization timestamp.") from None
 
 
+def main_contains(client, repo: str, base: str) -> bool:
+    """A planned base remains trusted when main advances without rewriting it."""
+    base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+    if (
+        not isinstance(base_ref, dict)
+        or base_ref.get("ref") != "refs/heads/main"
+        or base_ref.get("object", {}).get("type") != "commit"
+    ):
+        return False
+    current_main = base_ref.get("object", {}).get("sha")
+    if not isinstance(current_main, str) or not SHA.fullmatch(current_main):
+        return False
+    if current_main == base:
+        return True
+    comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
+    return bool(
+        isinstance(comparison, dict)
+        and comparison.get("merge_base_commit", {}).get("sha") == base
+    )
+
+
 def source_identity(client, repo: str, number: int) -> dict:
     pull = client.request(f"repos/{repo}/pulls/{number}")
     if (
@@ -226,15 +247,11 @@ def source_identity(client, repo: str, number: int) -> dict:
             reason="revision",
         )
     merge_base = parents[0]["sha"]
-    if merge_base != current_main:
-        comparison = client.request(
-            f"repos/{repo}/compare/{merge_base}...{current_main}"
+    if not main_contains(client, repo, merge_base):
+        raise ManualCIError(
+            "The PR merge revision changed or is still being prepared; wait for its Plan job.",
+            reason="revision",
         )
-        if comparison.get("merge_base_commit", {}).get("sha") != merge_base:
-            raise ManualCIError(
-                "The PR merge revision changed or is still being prepared; wait for its Plan job.",
-                reason="revision",
-            )
     result = {
         "head_sha": result["head_sha"],
         "base_sha": merge_base,
@@ -333,6 +350,7 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
         if (
             run.get("head_sha") == identity["head_sha"]
             and plan.get("base_sha") != identity["base_sha"]
+            and main_contains(client, repo, plan["base_sha"])
         ):
             return plan
     return None
@@ -369,10 +387,8 @@ def authorize(client, event: dict) -> dict | None:
     identity = source_identity(client, repo, number)
     head = client.request(f"repos/{repo}/pulls/{number}")["head"]
     if command["pinned"] and command["pinned"] != list(identity.values()):
-        raise ManualCIError(
-            "The requested head, base or merge SHA is no longer current.",
-            reason="expired",
-        )
+        # Verification against the planned run occurs once selected below.
+        pass
     query = urlencode(
         {"event": "pull_request", "head_sha": identity["head_sha"], "per_page": 20}
     )
@@ -405,11 +421,21 @@ def authorize(client, event: dict) -> dict | None:
         plan = plan_for_run(client, repo, run, identity)
         if plan is None:
             break
+        if command["pinned"] and command["pinned"] not in (
+            list(identity.values()),
+            [identity["head_sha"], plan["base_sha"], plan["source_sha"]],
+        ):
+            raise ManualCIError(
+                "The requested head, base or merge SHA is no longer current.",
+                reason="expired",
+            )
         return {
             "schema_version": 1,
             "repository": repo,
             "pr_number": number,
-            **identity,
+            "head_sha": identity["head_sha"],
+            "base_sha": plan["base_sha"],
+            "source_sha": plan["source_sha"],
             "pr_run_id": run["id"],
             "pr_run_created_at": run["created_at"],
             "plan_sha256": plan["plan_sha256"],
@@ -494,7 +520,6 @@ def matching_authorization(
                     record.get("base_sha"),
                     record.get("source_sha"),
                 ]
-                and command["pinned"] == list(identity.values())
             )
         )
         and comment.get("user", {}).get("login") == record.get("actor")
@@ -552,16 +577,8 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
             or parents[0].get("sha") != base
         ):
             return dict(NO_AUTHORIZATION)
-        base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
-        current_main = (
-            base_ref.get("object", {}).get("sha")
-            if isinstance(base_ref, dict)
-            else None
-        )
-        if base != current_main:
-            comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
-            if comparison.get("merge_base_commit", {}).get("sha") != base:
-                return dict(NO_AUTHORIZATION)
+        if not main_contains(client, repo, base):
+            return dict(NO_AUTHORIZATION)
     else:
         return dict(NO_AUTHORIZATION)
     run_id = int(os.environ["GITHUB_RUN_ID"])
@@ -585,9 +602,12 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
             record = read_artifact(
                 client, repo, artifact, "authorization.json", AUTHORIZATION_LIMIT
             )
-            if matching_authorization(
-                client, repo, number, run, identity, record
-            ) and trusted_controller(client, repo, record, artifact):
+            if (
+                matching_authorization(client, repo, number, run, identity, record)
+                and record.get("source_sha") == source
+                and record.get("base_sha") == base
+                and trusted_controller(client, repo, record, artifact)
+            ):
                 approved.append(record)
         except (ManualCIError, KeyError, TypeError, ValueError):
             continue  # Malformed or obsolete authorization never permits execution.
@@ -607,6 +627,11 @@ def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
     deadline = time.monotonic() + wait_seconds
     while True:
         identity = source_identity(client, repo, number)
+        if not main_contains(client, repo, record["base_sha"]):
+            raise ManualCIError(
+                "The PR revision or authorization changed; post a new /ci run request.",
+                reason="expired",
+            )
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
         if not matching_authorization(client, repo, number, run, identity, record):
             raise ManualCIError(

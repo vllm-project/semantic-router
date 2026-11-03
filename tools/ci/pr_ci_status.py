@@ -17,6 +17,7 @@ from manual_ci import (
     GitHubClient,
     ManualCIError,
     api_failure,
+    main_contains,
     read_artifact,
 )
 
@@ -509,7 +510,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         jobs = [job for job in jobs if job.get("id") not in publisher_ids]
         report = artifact(client, repo, run, "ci-gate", "gate.json", 256 * 1024)
         state = verdict(run, plan, report, jobs)
-        if state != "failure" and pull.get("merge_commit_sha") != plan["source_sha"]:
+        if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
     except (ManualCIError, KeyError, ValueError, TypeError):
         if not checks and not any(job.get("name") == "CI Execution" for job in jobs):
