@@ -53,7 +53,11 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 	identity := binding.ResourceIdentity{Artifact: cfg.BaseURL, Revision: cfg.Model, Provider: "http", Device: "external", Precision: "external", Execution: connector}
 	budget, gate := resourceAdmission(spec)
 	resource, err := r.Pool.Acquire(ctx, identity, budget, gate, func(context.Context) (io.Closer, error) {
-		return embedding.NewOpenAICompatibleProvider(cfg)
+		provider, loadErr := embedding.NewOpenAICompatibleProvider(cfg)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return provider, nil
 	})
 	if err != nil {
 		return nil, err

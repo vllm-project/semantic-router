@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -98,6 +99,21 @@ func TestOwnedRemoteEmbeddingIndependentReferencesAndFailedCandidate(t *testing.
 	vector, err = secondProvider.Embed(context.Background(), "query")
 	if err != nil || len(vector) != 2 || vector[1] != 1 {
 		t.Fatalf("second = %v, %v", vector, err)
+	}
+}
+
+func TestOwnedRemoteEmbeddingReturnsProviderConstructionError(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = "remote"
+	cfg.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
+	cfg.EmbeddingConfig.TargetDimension = 2
+	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "active", Candidates: []string{"candidate"}}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "service", Contract: "embedding.v1", Adapter: "openai_compatible"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"service": {Provider: "http", ExternalModel: "embedder"}}
+	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "embedder", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "http://127.0.0.1:8000"}}}
+	_, err := PrepareOwnedEmbeddings(context.Background(), cfg, serving.New(nil, binding.NewPool()))
+	if err == nil || !strings.Contains(err.Error(), "embedding endpoint model is required") {
+		t.Fatalf("construction error = %v", err)
 	}
 }
 
