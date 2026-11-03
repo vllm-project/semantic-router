@@ -1,35 +1,43 @@
-"""Decisions of the Vela 3.0 d3 sizes: the base's own model with gated adapter passes.
+"""Decisions and span questions of the Vela 3.0 d3 sizes over their base's own model.
 
-``GatedDecisions`` is the ``decision3`` model with each planned question
-marked with the adapter that answers it (``gates.Gates``). A forward whose
-rows all run with every adapter off is the base's forward, unchanged. A
-forward with gated rows runs once per adapter in the package's order over the
-same rows (the batch the base would run), the adapter on for its own rows
-only, and each row keeps its own adapter's pass; rows of no adapter keep the
-first pass, where every layer returns the base's values for them. Requests
-with images run with every adapter off, as the released runtime does, and
-rows with an adapter never pack.
+``Vela3D3Model`` is what every size adds to its base model: it plans span
+questions itself, marks each decision row with the adapter that answers it
+(``gates.Gates``) and runs a batch's items in ``partition`` order (the base's
+rows, then any replays, then the span questions).
+
+``GatedDecisions`` (vela3-lite, -mini, -flash) runs gated rows inside the
+base's own forward: a forward with gated rows runs once per adapter in the
+package's order over the same rows, the adapter on for its own rows only, and
+each row keeps its own adapter's pass; rows of no adapter keep the first pass,
+where every layer returns the base's values. A forward with every adapter off
+is the base's, unchanged, and gated rows never pack.
+
+``TurboDecisions`` (vela3-turbo) answers every row on d3-turbo's state-once
+path and then replays each gated row alone, noncausally, with its adapter on.
+Requests with images, videos or assets run with every adapter off, as the
+released runtime does.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, fields, replace
-from typing import Any, ClassVar, Literal, cast
+from typing import Any, ClassVar, NoReturn
 
 import torch
 
 from ...errors import QuestionError, question_error
 from ...plugins.base import AdapterGate, Expired, ImageInputs, SurfacePlan
 from ...plugins.decisions import RequestPlan, ResolvedDecision
-from ..decision3.family import BATCH_SIZE, Decision3Model, Item
+from ..decision3.family import Decision3Model, Item, passes
 from ..decision3.state_once import StateOnceModel
+from ..vela3_shared import invalid
 from .gates import Gates
 from .span_policy import Definitions, Policy
 from .span_read import SpanReader
 from .span_read import answer as span_answer
 from .span_render import Renderer
-from .spans import SpanItem, invalid, is_span, plan_question
+from .spans import SpanItem, is_span, plan_question
 
 
 @dataclass(frozen=True)
@@ -106,53 +114,43 @@ def with_spans(
     )
 
 
-def refuse_with_media(question_id: str, question: dict[str, Any]) -> SpanItem:
+def refuse_with_media(question_id: str, question: dict[str, Any]) -> NoReturn:
     """Span questions of a request with images, videos or assets: they read text only."""
     raise invalid(SPAN_IMAGES)
 
 
 @dataclass(frozen=True)
-class Lane:
-    """Which way a group of items runs: the base's batches, one adapter's noncausal replays, or span passes."""
+class Partition:
+    """A batch's items by how they run, in the order their forwards run."""
 
-    kind: Literal["base", "replay", "span"]
-    adapter: str | None = None
-
-
-BASE, SPAN = Lane("base"), Lane("span")
+    base: list[int]
+    replays: list[tuple[str, list[int]]]
+    spans: list[int]
 
 
-def lanes(items: list[Item], replays: bool) -> list[tuple[Lane, list[int]]]:
-    """The items' indices by lane, in the order their forwards run.
-
-    The base lane comes first, then (``replays``: vela3-turbo) each adapter's
-    replays in the package's pass order, then the span questions. Without
-    replays a gated row stays in the base lane, which gates it in its forward.
+def partition(items: list[Item], replay_gated: bool) -> Partition:
+    """The base's rows, then (``replay_gated``: vela3-turbo) each adapter's replays in the
+    package's pass order, then the span questions. Without replays a gated row stays among
+    the base's rows, whose forward gates it.
     """
-
-    def lane_of(item: Item) -> Lane:
-        if isinstance(item, SpanItem):
-            return SPAN
-        adapter = adapter_of(item)
-        return Lane("replay", adapter) if replays and adapter is not None else BASE
-
-    keys = [lane_of(item) for item in items]
-    order = [
-        BASE,
-        *(Lane("replay", name) for name in Gates.pass_order(k.adapter for k in keys)),
-        SPAN,
+    spans = [i for i, item in enumerate(items) if isinstance(item, SpanItem)]
+    replayed = {
+        i: adapter
+        for i, item in enumerate(items)
+        if replay_gated
+        and not isinstance(item, SpanItem)
+        and (adapter := adapter_of(item)) is not None
+    }
+    base = [
+        i
+        for i, item in enumerate(items)
+        if i not in replayed and not isinstance(item, SpanItem)
     ]
-    groups = [
-        (lane, [i for i, key in enumerate(keys) if key == lane]) for lane in order
+    replays = [
+        (name, [i for i, adapter in replayed.items() if adapter == name])
+        for name in Gates.pass_order(replayed.values())
     ]
-    return [(lane, rows) for lane, rows in groups if rows]
-
-
-def chunks(count: int) -> list[list[int]]:
-    """``range(count)`` in passes of ``BATCH_SIZE``."""
-    return [
-        list(range(s, min(s + BATCH_SIZE, count))) for s in range(0, count, BATCH_SIZE)
-    ]
+    return Partition(base, replays, spans)
 
 
 def finish_spans(
@@ -187,13 +185,13 @@ class Vela3D3Model(Decision3Model):
     the span questions itself and hands the others to the base without the
     package's ``decision_adapter`` key; ``_decisions`` says how a size marks its
     gated rows. Span questions with images, videos or assets fail alone
-    (``SPAN_IMAGES``). Running splits the items into ``lanes``; ``replays``
-    says whether gated rows run as their own noncausal replays.
+    (``SPAN_IMAGES``). Running splits the items with ``partition``;
+    ``replay_gated`` says whether gated rows run as their own noncausal replays.
     """
 
     gates: Gates
     span_setup: SpanSetup
-    replays: ClassVar[bool] = False
+    replay_gated: ClassVar[bool] = False
 
     def attach(self, gates: Gates, span_setup: SpanSetup) -> None:
         """Give the loaded base model the package's gates and span setup (``Vela3D3Family.load``)."""
@@ -291,56 +289,60 @@ class Vela3D3Model(Decision3Model):
         )
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
+        part = partition(items, self.replay_gated)
         batches: list[list[int]] = []
-        for lane, rows in lanes(items, self.replays):
-            if lane == BASE:
-                local = super().exact_batches([items[i] for i in rows])
-            elif lane == SPAN:
-                local = [[j] for j in range(len(rows))]
-            else:
-                local = chunks(len(rows))
-            batches += [[rows[j] for j in batch] for batch in local]
-        return batches
+        if part.base:
+            local = super().exact_batches([items[i] for i in part.base])
+            batches += [[part.base[j] for j in batch] for batch in local]
+        for _, rows in part.replays:
+            batches += [[rows[j] for j in batch] for batch in passes(len(rows))]
+        return batches + [[i] for i in part.spans]
 
     def run(self, items: list[Item]) -> list[list[float] | None]:
-        return self._run_lanes(items, super().run)
+        return self._run_partition(items, super().run)
 
     def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
-        return self._run_lanes(items, super().run_approximate)
+        return self._run_partition(items, super().run_approximate)
 
-    def _run_lanes(
+    def _run_partition(
         self, items: list[Item], base: Callable[[list[Item]], list[Any]]
     ) -> list[Any]:
-        """Each lane's items through ``base``, their replays or their span passes, in ``lanes`` order."""
+        """The base's rows through ``base``, then each adapter's replays, then each span question."""
+        part = partition(items, self.replay_gated)
         values: list[Any] = [None] * len(items)
-        for lane, rows in lanes(items, self.replays):
-            group = [items[i] for i in rows]
-            if lane == BASE:
-                found = base(group)
-            elif lane == SPAN:
-                reader = self.span_setup.reader
-                found = [
-                    span_answer(item, *reader.logits(item))
-                    for item in cast(list[SpanItem], group)
-                ]
-            else:
-                found = [
-                    value
-                    for chunk in chunks(len(group))
-                    for value in self._replay([group[j] for j in chunk], lane.adapter)
-                ]
+
+        def put(rows: list[int], found: list[Any]) -> None:
             for index, value in zip(rows, found, strict=True):
                 values[index] = value
+
+        if part.base:
+            put(part.base, base([items[i] for i in part.base]))
+        for adapter, rows in part.replays:
+            group = [items[i] for i in rows]
+            put(
+                rows,
+                [
+                    value
+                    for chunk in passes(len(group))
+                    for value in self._replay([group[j] for j in chunk], adapter)
+                ],
+            )
+        reader = self.span_setup.reader
+        spans = [items[i] for i in part.spans]
+        put(
+            part.spans,
+            [
+                span_answer(item, *reader.logits(item))
+                for item in spans
+                if isinstance(item, SpanItem)
+            ],
+        )
         return values
 
-    def _replay(
-        self, items: list[Item], adapter: str | None
-    ) -> list[list[float] | None]:
+    def _replay(self, items: list[Item], adapter: str) -> list[list[float] | None]:
         """One pass of full prompts under the noncausal mask, ``adapter`` on for every row."""
-        assert adapter is not None
         ids, mask, last = self._padded(items)
-        return Decision3Model._readout(
-            self,
+        return self._readout(
             items,
             ids,
             mask,
@@ -383,6 +385,7 @@ class GatedDecisions(Vela3D3Model):
         adapter: AdapterGate | None = None,
         noncausal: bool = False,
     ) -> list[list[float] | None]:
+        """The base's readout, once per adapter its rows name; a gate the caller sets runs as set."""
         adapters = [adapter_of(item) for item in items]
         order = Gates.pass_order(adapters)
         if not order or adapter is not None or noncausal:
@@ -427,7 +430,7 @@ class TurboDecisions(Vela3D3Model, StateOnceModel):
     questions take the base alone.
     """
 
-    replays = True
+    replay_gated = True
 
     def _decisions(
         self, state: Any, questions: dict[str, Any], scan: int | None
@@ -439,26 +442,27 @@ class TurboDecisions(Vela3D3Model, StateOnceModel):
         ):
             return plan
         assigned = self.gates.assign(questions)
-        replays = [
+        replay_items = [
             with_adapter(item, assigned[item.question_id], state=None, cost=None)
             for item in plan.items
             if item.question_id in assigned
             and item.media is None
             and item.readouts is None
         ]
-        if not replays:
+        if not replay_items:
             return plan
         return replace(
             plan,
-            items=[*plan.items, *replays],
-            input_tokens=plan.input_tokens + sum(len(item.ids) for item in replays),
+            items=[*plan.items, *replay_items],
+            input_tokens=plan.input_tokens
+            + sum(len(item.ids) for item in replay_items),
         )
 
     def run_shared(
         self, items: list[Item], shared_prefix: int
     ) -> list[list[float] | None]:
         base = super().run_shared
-        return self._run_lanes(items, lambda group: base(group, shared_prefix))
+        return self._run_partition(items, lambda group: base(group, shared_prefix))
 
     def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
         if any(adapter_of(item) is not None for item in items):

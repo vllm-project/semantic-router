@@ -575,10 +575,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         """Request order, eight questions per pass."""
-        return [
-            list(range(start, min(start + BATCH_SIZE, len(items))))
-            for start in range(0, len(items), BATCH_SIZE)
-        ]
+        return passes(len(items))
 
     # ------------------------------------------------------------------ planning
 
@@ -1294,6 +1291,14 @@ def _scaled(logits: torch.Tensor, temperatures: list[float]) -> torch.Tensor:
 
 def _bytes(tensor: torch.Tensor) -> int:
     return tensor.numel() * tensor.element_size()
+
+
+def passes(count: int) -> list[list[int]]:
+    """``range(count)`` in request order, ``BATCH_SIZE`` rows per pass."""
+    return [
+        list(range(start, min(start + BATCH_SIZE, count)))
+        for start in range(0, count, BATCH_SIZE)
+    ]
 
 
 def model_class_of(decision: dict[str, Any]) -> type[Decision3Model]:

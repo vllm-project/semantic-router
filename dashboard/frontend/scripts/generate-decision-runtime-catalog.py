@@ -158,6 +158,19 @@ def projection():
     return {"questionTypes": kinds, "models": models}
 
 
+def vela_entries(table):
+    """The ``_vela(...)`` release entries of a Vela table's ``MODELS``."""
+    entries = assignment(RUNTIME / f"registry/tables/{table}.py", "MODELS").elts
+    for entry in entries:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "_vela"
+        ):
+            raise ValueError("Vela release entries require an updated task projection")
+    return entries
+
+
 def backend_projection(data):
     """The shared semantic task resolver consumes the same native facts."""
     models = [
@@ -192,14 +205,7 @@ def backend_projection(data):
     organization = ast.literal_eval(
         assignment(RUNTIME / "registry/tables/common.py", "ORG")
     )
-    entries = assignment(RUNTIME / "registry/tables/vela2.py", "MODELS")
-    for entry in entries.elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    for entry in vela_entries("vela2"):
         size = ast.literal_eval(entry.args[0])
         models.append(
             {
@@ -213,13 +219,7 @@ def backend_projection(data):
             assignment(RUNTIME / "families/vela3/family.py", "QUESTION_TYPES")
         )
     )
-    for entry in assignment(RUNTIME / "registry/tables/vela3.py", "MODELS").elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    for entry in vela_entries("vela3"):
         # The vela3v image package answers none of the shared System One
         # question kinds - its image serving path is not implemented - so the
         # projection lists the text-encoder entries only; it gains its own
@@ -235,13 +235,7 @@ def backend_projection(data):
         )
     # The Vela 3.0 d3 sizes answer their base's System One kinds and span questions.
     d3_kinds = list(ast.literal_eval(descriptor_question_types("vela3_d3")))
-    for entry in assignment(RUNTIME / "registry/tables/vela3_d3.py", "MODELS").elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    for entry in vela_entries("vela3_d3"):
         models.append(
             {
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",

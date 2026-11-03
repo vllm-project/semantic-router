@@ -25,16 +25,15 @@ from ...errors import PackageError
 from ...registry.artifacts import (
     SUMS_FILE,
     named_files,
-    package_file,
     read_json,
     read_sums,
     safe_relative,
     sha256_json,
 )
 from ..vela2.encoder_layout import MARKERS
+from ..vela3_shared import CONFIG_FILE, config_file
 
 ENCODER = "vela3-encoder/1"
-CONFIG_FILE = "vela3_config.json"
 BACKBONE_FILE = "model.safetensors"
 COMMON_FILES = ("config.json", CONFIG_FILE, "router_questions.json", "tokenizer.json")
 LORA_TARGETS = (
@@ -115,7 +114,7 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     files: dict[str, str] = {}
 
     def take(name: str, value: Any, where: str) -> str | None:
-        file = package_file(value, f"{CONFIG_FILE}: {where}")
+        file = config_file(value, where)
         if file not in present:
             return None
         files[name] = file
@@ -149,8 +148,7 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
             for index in range(len(listed))
         ]
         if not all(
-            package_file(f, f"{CONFIG_FILE}: router.task_adapters.{task}") in present
-            for f in listed
+            config_file(f, f"router.task_adapters.{task}") in present for f in listed
         ):
             continue
         for name, file in zip(names, listed, strict=True):

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 from ...errors import PackageError
-from ..vela3_shared import RELATION_WORDING
+from ..vela3_shared import CONFIG_FILE, RELATION_WORDING
 
 # A route names the adapter it runs and the head that reads it.
 Route = Literal["span", "ner", "relation"]
@@ -76,9 +76,7 @@ class SpanConfig:
         try:
             return cls._parse(span)
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
-            raise PackageError(
-                f"vela3_config.json: span is malformed ({exc!r})"
-            ) from exc
+            raise PackageError(f"{CONFIG_FILE}: span is malformed ({exc!r})") from exc
 
     @classmethod
     def _parse(cls, span: dict[str, Any]) -> SpanConfig:
@@ -251,9 +249,9 @@ class Policy:
         config = self.config
         described = any(d for _, d in labels)
         if route == "ner":
-            if config.ner is None:
-                raise PackageError("vela3_config.json: span.ner names no thresholds")
+            # A NER route needs the NER head, which only a span.ner section (thresholds included) names.
             ner = config.ner
+            assert ner is not None
             return ner.threshold if described else ner.threshold_names_only
         if label_set == "pii":
             value = next(

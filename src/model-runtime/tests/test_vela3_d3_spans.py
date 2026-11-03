@@ -191,49 +191,20 @@ def test_windows_start_a_stride_apart_on_word_starts() -> None:
     assert span_render.windows(np.arange(100), 100) == [(0, 100)]
 
 
-class Capture(Renderer):
-    """A renderer that records what it is asked to render."""
-
-    def __init__(self):
-        super().__init__(None, [])
-        self.asked: list[tuple[str, list[tuple[str, str]]]] = []
-
-    def windows(self, parts, target, question, labels, refuse=None):
-        self.asked.append((question, labels))
-        return [Window((1, 2), (0,), ((0, 1),), ((1, 1),))], 1
+def no_definitions(names, only):
+    return {}
 
 
 def test_label_sets_take_their_trained_question_and_descriptions() -> None:
-    capture = Capture()
-    spans.plan_question(
-        "q",
-        {"type": "span", "criteria": ["EMAIL", "PERSON"]},
-        STATE,
-        policy(),
-        capture,
-        lambda n, o: {},
-        no_limit,
-    )
     schema = SPAN_CONFIG["schemas"]["pii"]
-    assert capture.asked == [
-        (
-            schema["question"],
-            [
-                ("EMAIL", schema["labels"]["EMAIL"]),
-                ("PERSON", schema["labels"]["PERSON"]),
-            ],
-        )
+    routed = policy().resolve([("EMAIL", ""), ("PERSON", "")], None, no_definitions)
+    assert (routed.label_set, routed.question) == ("pii", schema["question"])
+    assert routed.labels == [
+        ("EMAIL", schema["labels"]["EMAIL"]),
+        ("PERSON", schema["labels"]["PERSON"]),
     ]
-    spans.plan_question(
-        "q",
-        {"type": "span", "criteria": ["thing"]},
-        STATE,
-        policy(),
-        capture,
-        lambda n, o: {},
-        no_limit,
-    )
-    assert capture.asked[-1][0] == SPAN_CONFIG["default_question"]
+    open_labels = policy().resolve([("thing", "")], None, no_definitions)
+    assert open_labels.question == SPAN_CONFIG["default_question"]
 
 
 def test_open_labels_without_descriptions_leave_the_ner_head_unless_it_takes_names() -> (
@@ -241,25 +212,11 @@ def test_open_labels_without_descriptions_leave_the_ner_head_unless_it_takes_nam
 ):
     config = {**SPAN_CONFIG, "ner": {**SPAN_CONFIG["ner"], "names_only_route": "span"}}
     strict = Policy(SpanConfig.parse(config), {"span", "ner", "relation"})
-    asked = {"type": "span", "criteria": ["drug"]}
-    item = spans.plan_question(
-        "q", asked, STATE, strict, Capture(), lambda n, o: {}, no_limit
-    )
-    assert item.route == "span"
-    item = spans.plan_question(
-        "q", asked, STATE, policy(), Capture(), lambda n, o: {}, no_limit
-    )
-    assert item.route == "ner"
-    defined = spans.plan_question(
-        "q",
-        asked,
-        STATE,
-        strict,
-        Capture(),
-        lambda n, o: {"drug": "a medicine"},
-        no_limit,
-    )
-    assert defined.route == "ner"
+    drug = [("drug", "")]
+    assert strict.resolve(drug, None, no_definitions).route == "span"
+    assert policy().resolve(drug, None, no_definitions).route == "ner"
+    defined = strict.resolve(drug, None, lambda names, only: {"drug": "a medicine"})
+    assert (defined.route, defined.labels) == ("ner", [("drug", "a medicine")])
 
 
 def test_window_scores_average_per_word() -> None:

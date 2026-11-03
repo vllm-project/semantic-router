@@ -1,7 +1,7 @@
 """What both Vela 3.0 families (``vela3`` and the d3 sizes, ``vela3_d3``) read the same way.
 
-Model text, a question's threshold override, the trained presets and the
-wording that marks a relation question come from the same released code for
+The package description's name, model text, a question's threshold override,
+the trained presets and the wording that marks a relation question come from the same released code for
 every Vela 3.0 package, so the two families share them here rather than one
 importing the other's internals.
 """
@@ -14,7 +14,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..errors import INVALID_QUESTION, QuestionError
+from ..registry.artifacts import package_file
 
+# Both families' package description.
+CONFIG_FILE = "vela3_config.json"
 PRESETS = ("pii", "halu")
 # The fields a preset question keeps; its instructions and labels are the preset's.
 PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
@@ -25,8 +28,14 @@ RELATION_WORDING = re.compile(
 )
 
 
-def _invalid(message: str, reason: str | None = None) -> QuestionError:
+def invalid(message: str, reason: str | None = None) -> QuestionError:
+    """An ``invalid_question`` error with its ``reason``."""
     return QuestionError(INVALID_QUESTION, message, reason=reason)
+
+
+def config_file(value: Any, where: str) -> str:
+    """A file ``vela3_config.json`` names at ``where``, as a file of the package."""
+    return package_file(value, f"{CONFIG_FILE}: {where}")
 
 
 def text(value: Any) -> str:
@@ -46,7 +55,7 @@ def threshold_of(question: dict[str, Any]) -> float | None:
         or not isinstance(threshold, (int, float))
         or not 0.0 <= threshold <= 1.0
     ):
-        raise _invalid("threshold must be a number in [0, 1]")
+        raise invalid("threshold must be a number in [0, 1]")
     return float(threshold)
 
 
@@ -56,12 +65,12 @@ def expand_preset(
     """A preset question as the span question it names: the package's trained question and labels for it."""
     name = question["preset"]
     if name not in PRESETS or name not in schemas:
-        raise _invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
+        raise invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
     if set(question) - {"preset", "type", *PRESET_KEPT}:
         allowed = ", ".join(("preset", "type", *PRESET_KEPT))
-        raise _invalid(f"a preset question takes only {allowed}")
+        raise invalid(f"a preset question takes only {allowed}")
     if question.get("type") not in (None, "span"):
-        raise _invalid(f"preset {name} is a span question")
+        raise invalid(f"preset {name} is a span question")
     schema = schemas[name]
     return {
         "type": "span",

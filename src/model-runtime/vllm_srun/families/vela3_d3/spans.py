@@ -20,7 +20,7 @@ from typing import Any
 from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
 from ...systemone import listed_options, named_options, require_full_input
 from ..decision3.family import Item
-from ..vela3_shared import expand_preset, text, threshold_of
+from ..vela3_shared import expand_preset, invalid, text, threshold_of
 from .span_policy import Definitions, Policy, Route
 from .span_render import Renderer, Window
 
@@ -43,10 +43,6 @@ WINDOWED = "window"
 # scan budget on a CPU (4 x 8,192). It bounds one question's forwards on every size, whatever the
 # base's question cap (vela3-lite, -mini and -flash's bases allow 262,144 tokens).
 SPAN_TARGET_TOKENS = 32768
-
-
-def invalid(message: str, reason: str | None = None) -> QuestionError:
-    return QuestionError("invalid_question", message, reason)
 
 
 def is_span(question: Any) -> bool:

@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...errors import INVALID_QUESTION, QuestionError, question_error
+from ...errors import QuestionError, question_error
 from ...systemone import (
     content,
     listed_options,
@@ -31,7 +31,7 @@ from ...systemone import (
     require_full_input,
 )
 from ..vela2.request import Question, State, read_state, resolve_over
-from ..vela3_shared import expand_preset, text, threshold_of
+from ..vela3_shared import expand_preset, invalid, text, threshold_of
 from .routing import ROUTER_TYPES, Router, RouterQuestion, SpanRoute
 
 DECISION, ROUTER, SPAN = "decision", "router", "span"
@@ -43,10 +43,6 @@ SPAN_FIELDS = frozenset(
 SET_FIELDS = frozenset({"type", "instructions", "criteria", "labels", "threshold"})
 OVERFLOW = ("window", "truncate")
 NOUL_OPTIONS = (("no", ""), ("yes", ""))
-
-
-def _invalid(message: str, reason: str | None = None) -> QuestionError:
-    return QuestionError(INVALID_QUESTION, message, reason=reason)
 
 
 @dataclass(frozen=True)
@@ -101,7 +97,7 @@ class Reader:
                 request.asked.remove(asked)
                 request.errors[question.id] = question_error(
                     "set",
-                    _invalid(
+                    invalid(
                         f"a label answer {question.id}.<label> is another question's ID"
                     ),
                 )
@@ -110,7 +106,7 @@ class Reader:
     def question(self, question_id: str, question: Any, state: State | None) -> Asked:
         """One question and the path that answers it; ``QuestionError`` when it is invalid."""
         if not isinstance(question, dict):
-            raise _invalid("a question must be an object")
+            raise invalid("a question must be an object")
         if question.get("preset") is not None:
             return self._span(question_id, self._preset(question), state)
         kind = question.get("type")
@@ -120,34 +116,32 @@ class Reader:
             schema = self.router.router_question(question.get("instructions"))
             if schema is not None:
                 if schema.type != kind:
-                    raise _invalid(
+                    raise invalid(
                         f"this router question was trained as a {schema.type} question"
                     )
                 return self._router(question_id, question, schema, state)
         if kind in ("choice", "noul"):
             return self._decision(question_id, question)
         if kind == "set":
-            raise _invalid(
+            raise invalid(
                 "set questions take one of the trained router texts on this model",
                 "type_unsupported",
             )
-        raise _invalid(
-            f"type must be one of {list(QUESTION_TYPES)}", "type_unsupported"
-        )
+        raise invalid(f"type must be one of {list(QUESTION_TYPES)}", "type_unsupported")
 
     # -- decisions -----------------------------------------------------------
 
     def _decision(self, question_id: str, question: dict[str, Any]) -> Asked:
         parsed = read_question(question, extra_fields=FAMILY_FIELDS)
         if question.get("over") is not None:
-            raise _invalid("decision questions read the whole state; remove over")
+            raise invalid("decision questions read the whole state; remove over")
         if question.get("preset") is not None:
-            raise _invalid("this model defines only the pii and halu span presets")
+            raise invalid("this model defines only the pii and halu span presets")
         overflow = _overflow(question)
         instructions = question.get("instructions")
         if parsed.kind == "noul":
             if any(value is not None for value in parsed.criteria.values()):
-                raise _invalid(
+                raise invalid(
                     "this model reads only a noul question's instructions; remove the false and true descriptions"
                 )
             options: tuple[tuple[str, str], ...] = NOUL_OPTIONS
@@ -182,7 +176,7 @@ class Reader:
         state: State | None,
     ) -> Asked:
         if state is None:
-            raise _invalid("router questions need a text state or typed parts")
+            raise invalid("router questions need a text state or typed parts")
         kind = question["type"]
         given = question
         if question.get("criteria") is None and not question.get(
@@ -198,11 +192,11 @@ class Reader:
         if kind == "set":
             unknown = set(given) - SET_FIELDS - FAMILY_FIELDS
             if unknown:
-                raise _invalid(f"set questions do not take {sorted(unknown)}")
+                raise invalid(f"set questions do not take {sorted(unknown)}")
             criteria = given.get("criteria")
             if given.get("labels") is not None:
                 if criteria is not None:
-                    raise _invalid("use criteria or labels, not both")
+                    raise invalid("use criteria or labels, not both")
                 criteria = listed_options(given["labels"], "labels")
             criteria = named_options(criteria, minimum=1)
         else:
@@ -248,17 +242,17 @@ class Reader:
         self, question_id: str, question: dict[str, Any], state: State | None
     ) -> Asked:
         if state is None:
-            raise _invalid("span questions need a text state or typed parts")
+            raise invalid("span questions need a text state or typed parts")
         unknown = set(question) - SPAN_FIELDS - FAMILY_FIELDS
         if unknown:
-            raise _invalid(f"span questions do not take {sorted(unknown)}")
+            raise invalid(f"span questions do not take {sorted(unknown)}")
         head = question.get("head")
         if head not in (None, "router"):
-            raise _invalid("this model has no broad span head")
+            raise invalid("this model has no broad span head")
         criteria = question.get("criteria")
         if question.get("labels") is not None:
             if criteria is not None:
-                raise _invalid("use criteria or labels, not both")
+                raise invalid("use criteria or labels, not both")
             criteria = listed_options(question["labels"], "labels")
         if isinstance(criteria, list):
             criteria = {str(name): None for name in criteria}
@@ -274,7 +268,7 @@ class Reader:
         if question.get("over") is not None:
             over, span_range = resolve_over(question["over"], state)
             if isinstance(over, tuple):
-                raise _invalid("a span question reads one part")
+                raise invalid("a span question reads one part")
         else:
             roles = state.roles
             over, span_range = ("answer" if "answer" in roles else roles[-1]), None
@@ -302,5 +296,5 @@ class Reader:
 def _overflow(question: dict[str, Any]) -> str:
     overflow = question.get("overflow", "window")
     if overflow not in OVERFLOW:
-        raise _invalid(f"overflow must be one of {list(OVERFLOW)}")
+        raise invalid(f"overflow must be one of {list(OVERFLOW)}")
     return str(overflow)
