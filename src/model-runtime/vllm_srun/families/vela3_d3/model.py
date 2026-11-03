@@ -29,7 +29,7 @@ from .span_policy import Definitions, Policy
 from .span_read import SpanReader
 from .span_read import answer as span_answer
 from .span_render import Renderer
-from .spans import SpanItem, invalid, is_span, plan_question
+from .spans import SPAN_BUDGET, SpanItem, invalid, is_span, plan_question
 
 
 @dataclass(frozen=True)
@@ -73,37 +73,17 @@ def split_spans(questions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, An
 
 def with_spans(
     plan: RequestPlan[Item] | None,
-    state: Any,
     asked: dict[str, Any],
     order: list[str],
-    setup: SpanSetup,
-    length_error: Callable[[int], QuestionError | None],
-    refuse: str | None = None,
+    plan_span: Callable[[str, dict[str, Any]], SpanItem],
 ) -> RequestPlan[Item]:
-    """``plan`` (None: no base question) with the span questions' items, or errors, in request order.
-
-    Every window of a span question goes through the base's ``length_error``:
-    only the target part is windowed, so the other parts can still overflow it.
-    """
+    """``plan`` (None: no base question) with the span questions' items, or errors, in request order."""
     items: list[Item] = list(plan.items) if plan is not None else []
     errors = dict(plan.errors) if plan is not None else {}
     complete = set(plan.complete_inputs) if plan is not None else set()
     for question_id, question in asked.items():
         try:
-            if refuse is not None:
-                raise invalid(refuse)
-            item = plan_question(
-                question_id,
-                question,
-                state,
-                setup.policy,
-                setup.renderer,
-                setup.definitions,
-            )
-            refused = length_error(max(len(window.ids) for window in item.windows))
-            if refused is not None:
-                raise refused
-            items.append(item)
+            items.append(plan_span(question_id, question))
         except QuestionError as exc:
             errors[question_id] = question_error("span", exc)
         else:
@@ -124,6 +104,11 @@ def with_spans(
         errors=errors,
         complete_inputs=frozenset(complete),
     )
+
+
+def refuse_with_media(question_id: str, question: dict[str, Any]) -> SpanItem:
+    """Span questions of a request with images, videos or assets: they read text only."""
+    raise invalid(SPAN_IMAGES)
 
 
 @dataclass(frozen=True)
@@ -223,9 +208,25 @@ class Vela3D3Model(Decision3Model):
             return super().plan(state, questions, scan)
         asked, rest = split_spans(questions)
         plan = self._decisions(state, rest, scan) if rest else None
-        return with_spans(
-            plan, state, asked, list(questions), self.span_setup, self.length_error
-        )
+        return with_spans(plan, asked, list(questions), self._span_planner(state))
+
+    def _span_planner(self, state: Any) -> Callable[[str, dict[str, Any]], SpanItem]:
+        """Plans one span question over ``state`` with the package's span setup and the base's length check."""
+        setup = self.span_setup
+
+        def plan_span(question_id: str, question: dict[str, Any]) -> SpanItem:
+            return plan_question(
+                question_id,
+                question,
+                state,
+                setup.policy,
+                setup.renderer,
+                setup.definitions,
+                self.length_error,
+                max(SPAN_BUDGET, self.question_cap()[0]),
+            )
+
+        return plan_span
 
     def _base_plan(
         self, state: Any, questions: dict[str, Any], scan: int | None
@@ -262,15 +263,7 @@ class Vela3D3Model(Decision3Model):
             if rest
             else None
         )
-        return with_spans(
-            plan,
-            state,
-            asked,
-            list(questions),
-            self.span_setup,
-            self.length_error,
-            SPAN_IMAGES,
-        )
+        return with_spans(plan, asked, list(questions), refuse_with_media)
 
     def plan_resolved(self, request: ResolvedDecision) -> RequestPlan[Item]:
         """A request with assets or Box / track questions: the base's resolved planning for the
@@ -293,12 +286,9 @@ class Vela3D3Model(Decision3Model):
         media = request.images or request.videos or request.uses
         return with_spans(
             plan,
-            request.state,
             asked,
             list(request.questions),
-            self.span_setup,
-            self.length_error,
-            SPAN_IMAGES if media else None,
+            refuse_with_media if media else self._span_planner(request.state),
         )
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:

@@ -13,10 +13,11 @@ reads its input completely.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...errors import QuestionError
+from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
 from ...systemone import listed_options, named_options, require_full_input
 from ..decision3.family import Item
 from ..vela3_shared import expand_preset, text, threshold_of
@@ -38,6 +39,9 @@ FIELDS = frozenset(
 )
 # A span question reads its whole target, in windows: the one overflow it takes.
 WINDOWED = "window"
+# The most target tokens a span question reads in windows (at least one question prompt), as the
+# vela3 family's span budget: about 21 windows, which bounds one question's forwards.
+SPAN_BUDGET = 32768
 
 
 def invalid(message: str, reason: str | None = None) -> QuestionError:
@@ -98,6 +102,18 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     ]
 
 
+def over_budget(tokens: int, budget: int) -> QuestionError | None:
+    """Why a span target of ``tokens`` tokens is refused (over ``budget``), or None."""
+    if tokens <= budget:
+        return None
+    return QuestionError(
+        SCAN_BUDGET_EXCEEDED,
+        f"the span target has {tokens} tokens, over this model's span budget of {budget} tokens; "
+        "nothing was read",
+        "scan_budget",
+    )
+
+
 def plan_question(
     question_id: str,
     question: dict[str, Any],
@@ -105,8 +121,15 @@ def plan_question(
     policy: Policy,
     renderer: Renderer,
     definitions: Definitions,
+    length_error: Callable[[int], QuestionError | None],
+    budget: int = SPAN_BUDGET,
 ) -> SpanItem:
-    """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid."""
+    """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid.
+
+    The target may hold at most ``budget`` tokens (``scan_budget_exceeded``,
+    checked before it is laid out). Every window, whose other parts are not
+    windowed, must pass the base's ``length_error``.
+    """
     if "preset" in question:
         question = expand_preset(question, policy.config.schemas)
     unknown = sorted(set(question) - FIELDS)
@@ -131,7 +154,16 @@ def plan_question(
         raise invalid("span instructions must be a string")
     override = threshold_of(question)
     routed = policy.resolve(labels, instructions, definitions)
-    windows, count = renderer.windows(parts, target, routed.question, routed.labels)
+    windows, count = renderer.windows(
+        parts,
+        target,
+        routed.question,
+        routed.labels,
+        lambda tokens: over_budget(tokens, budget),
+    )
+    refused = length_error(max(len(window.ids) for window in windows))
+    if refused is not None:
+        raise refused
     threshold = (
         override
         if override is not None

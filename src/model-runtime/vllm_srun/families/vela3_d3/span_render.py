@@ -9,11 +9,14 @@ and end on word boundaries.
 
 from __future__ import annotations
 
+from bisect import bisect_left
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
+from ...errors import QuestionError
 from ..decision3.prompt import render
 from ..vela2.words import words_of
 
@@ -31,20 +34,32 @@ class Window:
 
 
 def windows(firsts: np.ndarray, count: int) -> list[tuple[int, int]]:
-    """Word-aligned token windows of at most ``WINDOW`` tokens, ``STRIDE`` apart."""
+    """Word-aligned token windows of at most ``WINDOW`` tokens, ``STRIDE`` apart.
+
+    A window ends at the last word start before ``WINDOW`` tokens (or the
+    target's end) and the next starts at the first word start ``STRIDE`` or
+    more tokens in, as the released planner does, in O(n log n).
+    """
     starts = sorted({int(x) for x in firsts})
     if not starts:
         return [(0, count)]
     out, a = [], starts[0]
     while True:
         limit = a + WINDOW
-        later = [s for s in starts if a < s < limit]
-        b = count if limit >= count else (max(later) if later else min(count, limit))
+        if limit >= count:
+            b = count
+        else:
+            last = bisect_left(starts, limit) - 1
+            b = starts[last] if last >= 0 and starts[last] > a else limit
         out.append((a, b))
         if b >= count:
             break
-        candidates = [s for s in starts if a + STRIDE <= s < b]
-        a = candidates[0] if candidates else b
+        following = bisect_left(starts, a + STRIDE)
+        a = (
+            starts[following]
+            if following < len(starts) and starts[following] < b
+            else b
+        )
     return out
 
 
@@ -122,11 +137,19 @@ class Renderer:
         target: str,
         question: str,
         labels: list[tuple[str, str]],
+        refuse: Callable[[int], QuestionError | None] = lambda count: None,
     ) -> tuple[list[Window], int]:
-        """The question's windows and its target's token count."""
+        """The question's windows and its target's token count.
+
+        ``refuse`` sees the target's token count before any window is
+        rendered; the error it returns fails the question.
+        """
         text = dict(parts)[target]
         encoding = self.tokenizer.encode(text, add_special_tokens=False)
         count = len(encoding.ids)
+        refused = refuse(count)
+        if refused is not None:
+            raise refused
         if count <= MAX_TARGET:
             return [self.window(parts, target, question, labels, text, 0)], count
         offsets = np.asarray(encoding.offsets, dtype=np.int64).reshape(-1, 2)

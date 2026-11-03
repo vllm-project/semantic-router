@@ -27,6 +27,10 @@ STATE = {
 SPAN_CONFIG = fixture.vela3_config({})["span"]
 
 
+def no_limit(length):
+    return None
+
+
 def policy(heads=("span", "ner", "relation")) -> Policy:
     return Policy(SpanConfig.parse(SPAN_CONFIG), set(heads))
 
@@ -104,7 +108,9 @@ def test_thresholds_follow_the_label_set_and_the_route() -> None:
 def test_malformed_span_questions_are_refused(question, message) -> None:
     renderer = Renderer(None, [])
     with pytest.raises(QuestionError, match=message):
-        spans.plan_question("q", question, STATE, policy(), renderer, lambda n, o: {})
+        spans.plan_question(
+            "q", question, STATE, policy(), renderer, lambda n, o: {}, no_limit
+        )
 
 
 def test_a_span_question_needs_text_parts() -> None:
@@ -192,7 +198,7 @@ class Capture(Renderer):
         super().__init__(None, [])
         self.asked: list[tuple[str, list[tuple[str, str]]]] = []
 
-    def windows(self, parts, target, question, labels):
+    def windows(self, parts, target, question, labels, refuse=None):
         self.asked.append((question, labels))
         return [Window((1, 2), (0,), ((0, 1),), ((1, 1),))], 1
 
@@ -206,6 +212,7 @@ def test_label_sets_take_their_trained_question_and_descriptions() -> None:
         policy(),
         capture,
         lambda n, o: {},
+        no_limit,
     )
     schema = SPAN_CONFIG["schemas"]["pii"]
     assert capture.asked == [
@@ -224,6 +231,7 @@ def test_label_sets_take_their_trained_question_and_descriptions() -> None:
         policy(),
         capture,
         lambda n, o: {},
+        no_limit,
     )
     assert capture.asked[-1][0] == SPAN_CONFIG["default_question"]
 
@@ -234,12 +242,22 @@ def test_open_labels_without_descriptions_leave_the_ner_head_unless_it_takes_nam
     config = {**SPAN_CONFIG, "ner": {**SPAN_CONFIG["ner"], "names_only_route": "span"}}
     strict = Policy(SpanConfig.parse(config), {"span", "ner", "relation"})
     asked = {"type": "span", "criteria": ["drug"]}
-    item = spans.plan_question("q", asked, STATE, strict, Capture(), lambda n, o: {})
+    item = spans.plan_question(
+        "q", asked, STATE, strict, Capture(), lambda n, o: {}, no_limit
+    )
     assert item.route == "span"
-    item = spans.plan_question("q", asked, STATE, policy(), Capture(), lambda n, o: {})
+    item = spans.plan_question(
+        "q", asked, STATE, policy(), Capture(), lambda n, o: {}, no_limit
+    )
     assert item.route == "ner"
     defined = spans.plan_question(
-        "q", asked, STATE, strict, Capture(), lambda n, o: {"drug": "a medicine"}
+        "q",
+        asked,
+        STATE,
+        strict,
+        Capture(),
+        lambda n, o: {"drug": "a medicine"},
+        no_limit,
     )
     assert defined.route == "ner"
 
@@ -462,6 +480,28 @@ def test_span_windows_go_through_the_base_length_check(runtime) -> None:
     assert body["answers"]["decision"]["error"] == "max_length_exceeded"
     assert "error" not in body["answers"]["over_user"]
     assert "over_user" in body["spans"]
+
+
+def test_a_span_target_over_the_span_budget_is_refused_before_it_runs(
+    runtime, model, monkeypatch
+) -> None:
+    forwards: list[object] = []
+    forward = model.engine_model.forward
+    monkeypatch.setattr(
+        model.engine_model,
+        "forward",
+        lambda batch: forwards.append(batch) or forward(batch),
+    )
+    state = {"user": "What is the dose?", "answer": " ".join(["alpha"] * 6000)}
+    questions = {"long": {"type": "span", "criteria": ["dose"], "over": "answer"}}
+    status, body = call(runtime, {"state": state, "questions": questions})
+    assert status == 200
+    refused = body["answers"]["long"]
+    assert (refused["error"], refused["reason"]) == (
+        "scan_budget_exceeded",
+        "scan_budget",
+    )
+    assert forwards == []
 
 
 def test_a_request_of_span_questions_only_is_answered(runtime) -> None:
