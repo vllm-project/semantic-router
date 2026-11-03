@@ -1039,7 +1039,10 @@ vela3-turbo (`decisions.attention` `noncausal`) answers every question on
 d3-turbo's state-once path first, then each gated question again as a
 replay row (its full prompt, noncausal, adapter on for the pass, eight rows
 per pass); the replay's answer replaces the base's and its tokens count in
-the usage. Requests with images take the base alone and refuse span
+the usage. Span passes add nothing to `usage.input_tokens` on any size, on
+purpose: the packages' runtime does not count them either, and every
+parity request's input tokens agree with it (the vela3 family counts its
+span windows). Requests with images take the base alone and refuse span
 questions. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
 its compatibility block at U+F900, unlike the word splitter's). Open labels

@@ -84,8 +84,11 @@ vela3-mini's package writes a definition for each with its base
 (`definitions.writer` `base`), which changes the option lines, the NER
 threshold (with definitions, not names only) and so the spans. The runtime
 runs these labels by name until the definition writers land. Every other
-span question is identical, and no decision changes; the decision
-differences are this host's, as for vela3-lite.
+span question is identical, and no decision changes. Unlike vela3-lite's,
+the gated rows here differ more than the adapters-off rows (0.0075 against
+0.0044), and the base-alone control ran only on vela3-lite's requests, so
+these gated differences are within the bar but not shown to be this host's
+alone.
 
 ## vela3-flash
 
@@ -103,6 +106,8 @@ runtime took 2,279 s, the runtime 1,052 s.
 As on vela3-mini, every change is an open-label span question without a
 description, which vela3-flash's package defines with its base and grafted
 LM head (`definitions.writer` `grafted_head`; #5703). No decision changes.
+As on vela3-mini, the gated rows differ more than the adapters-off rows
+(0.011 against 0.0043) and have no control of their own.
 
 ## vela3-turbo (GPU)
 
