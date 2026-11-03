@@ -82,6 +82,10 @@ def test_opt_in_rows_take_the_opt_in_adapter_or_the_decision_adapter() -> None:
         "attack": "decision",
     }
     assert with_optin.assign({"hazard:x": asked}) == {"hazard:x": "decision_optin"}
+    # A router question routed to a task adapter takes the opt-in adapter (the released decide).
+    assert with_optin.assign({"domain": asked}) == {"domain": "decision_optin"}
+    # Only true turns it on.
+    assert with_optin.assign({"custom": {**NOUL, "decision_adapter": "yes"}}) == {}
 
 
 def test_the_opt_in_key_never_reaches_the_base() -> None:
