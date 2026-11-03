@@ -170,7 +170,7 @@ func (c *ModalityDetectionConfig) validate(bound bool) error {
 
 func validateModalityDetectionMethod(method string) error {
 	if method == "" {
-		return fmt.Errorf("modality_detection.method is required: %q with confidence_threshold (0.51 for the default Vela 2.0 0.3B), "+
+		return fmt.Errorf("modality_detection.method is required: %q with confidence_threshold (0.63 for the default vela3-fast), "+
 			"%q with keywords, or %q with confidence_threshold, lower_threshold_ratio and a classifier or keywords",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid)
 	}
@@ -204,7 +204,7 @@ func (c *ModalityDetectionConfig) thresholdProblems(method string) []string {
 		problems = append(problems, fmt.Sprintf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold))
 	}
 	if (method == ModalityDetectionClassifier || method == ModalityDetectionHybrid) && c.ConfidenceThreshold == 0 {
-		problems = append(problems, fmt.Sprintf("modality_detection.confidence_threshold is required when method is %q (0.51 for the default Vela 2.0 0.3B)", method))
+		problems = append(problems, fmt.Sprintf("modality_detection.confidence_threshold is required when method is %q (0.63 for the default vela3-fast)", method))
 	}
 	if c.LowerThresholdRatio != 0 && (c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1) {
 		problems = append(problems, fmt.Sprintf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio))
