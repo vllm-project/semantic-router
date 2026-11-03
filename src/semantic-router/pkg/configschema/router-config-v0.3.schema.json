@@ -6511,6 +6511,9 @@
         "enabled": {
           "type": "boolean"
         },
+        "identity": {
+          "$ref": "#/$defs/RouterLearningIdentityConfig"
+        },
         "adaptation": {
           "$ref": "#/$defs/RouterLearningAdaptationConfig"
         },

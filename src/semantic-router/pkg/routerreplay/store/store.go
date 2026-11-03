@@ -293,6 +293,7 @@ type Record struct {
 	TurnIndex                int                    `json:"turn_index"`
 	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
 	ConversationID           string                 `json:"conversation_id,omitempty"`
+	AgentID                  string                 `json:"agent_id,omitempty"`
 	Recipe                   string                 `json:"recipe,omitempty"`
 	Decision                 string                 `json:"decision,omitempty"`
 	DecisionTier             int                    `json:"decision_tier"`

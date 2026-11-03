@@ -23,8 +23,8 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 	for _, record := range records {
 		route := trajectoryRoute{
 			RecordID: record.ID, Timestamp: record.Timestamp, TurnIndex: record.TurnIndex,
-			ConversationID: record.ConversationID,
-			Decision:       record.Decision, SelectedModel: record.SelectedModel,
+			ConversationID: record.ConversationID, AgentID: record.AgentID,
+			Decision: record.Decision, SelectedModel: record.SelectedModel,
 			SelectionMethod: record.SelectionMethod, LifecycleState: record.LifecycleState,
 			ResponseStatus: record.ResponseStatus, DurationMS: record.DurationMS,
 		}

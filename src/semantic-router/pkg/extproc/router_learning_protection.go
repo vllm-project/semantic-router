@@ -533,40 +533,36 @@ func (r *OpenAIRouter) protectionIdentity(
 	ctx *RequestContext,
 	cfg config.RouterLearningProtectionConfig,
 ) (routerLearningIdentity, bool) {
+	identity := r.ensureRequestIdentity(ctx)
 	scope := cfg.EffectiveScope()
-	sessionHeader := cfg.HeaderName("session")
-	conversationHeader := cfg.HeaderName("conversation")
-	agentHeader := cfg.HeaderName("agent")
-	sessionID := strings.TrimSpace(headerValueCI(ctx, sessionHeader))
-	conversationID := strings.TrimSpace(headerValueCI(ctx, conversationHeader))
-	agentID := ""
-	if agentHeader != "" {
-		agentID = strings.TrimSpace(headerValueCI(ctx, agentHeader))
+	headers := config.RouterLearningIdentityHeadersConfig{}
+	if r != nil && r.Config != nil {
+		headers = r.Config.RouterLearning.EffectiveIdentity().Headers
 	}
-	if sessionID == "" {
+	if identity.SessionID == "" {
 		return routerLearningIdentity{}, false
 	}
-	components := []string{sessionID}
+	components := []string{identity.SessionID}
 	if scope == config.RouterLearningScopeConversation {
-		if conversationID == "" {
+		if identity.ConversationID == "" {
 			return routerLearningIdentity{}, false
 		}
-		components = append(components, conversationID)
+		components = append(components, identity.ConversationID)
 	}
-	if agentID != "" {
+	if identity.AgentID != "" {
 		// The marker component gives agent keys a component count no session
 		// or conversation key has, so the two can never collide.
-		components = append(components, "agent", agentID)
+		components = append(components, "agent", identity.AgentID)
 	}
 	return routerLearningIdentity{
-		sessionID:          sessionID,
-		conversationID:     conversationID,
+		sessionID:          identity.SessionID,
+		conversationID:     identity.ConversationID,
 		memoryKey:          sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, components...),
 		scope:              scope,
-		sessionHeader:      sessionHeader,
-		conversationHeader: conversationHeader,
-		agentID:            agentID,
-		agentHeader:        agentHeader,
+		sessionHeader:      headers.SessionHeader(),
+		conversationHeader: headers.ConversationHeader(),
+		agentID:            identity.AgentID,
+		agentHeader:        headers.AgentHeader(),
 	}, true
 }
 

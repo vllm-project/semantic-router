@@ -24,6 +24,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
+	r.ensureRequestIdentity(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil

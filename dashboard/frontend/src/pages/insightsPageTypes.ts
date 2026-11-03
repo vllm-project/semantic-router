@@ -105,6 +105,7 @@ export interface InsightsRecord {
   timestamp: string
   request_id?: string
   session_id?: string
+  agent_id?: string
   turn_index: number
   recipe?: string
   decision?: string

@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	// RouterLearningScopeConversation protects one agent conversation while
@@ -37,6 +40,7 @@ const (
 // exploration and model switches for agent continuity.
 type RouterLearningConfig struct {
 	Enabled    bool                           `yaml:"enabled,omitempty"`
+	Identity   RouterLearningIdentityConfig   `yaml:"identity,omitempty"`
 	Adaptation RouterLearningAdaptationConfig `yaml:"adaptation,omitempty"`
 	Protection RouterLearningProtectionConfig `yaml:"protection,omitempty"`
 	StateStore RouterLearningStateStoreConfig `yaml:"state_store,omitempty"`
@@ -73,23 +77,22 @@ type RouterLearningProtectionConfig struct {
 	Tuning   RouterLearningProtectionTuning `yaml:"tuning,omitempty"`
 }
 
-// RouterLearningIdentityConfig declares where protection reads stable client
-// identity. The runtime uses the session and conversation keys, and the agent
-// key when one is configured.
+// RouterLearningIdentityConfig declares where the router reads stable client
+// identity. Protection, Replay, and previous-model observations all use it.
 type RouterLearningIdentityConfig struct {
 	Headers RouterLearningIdentityHeadersConfig `yaml:"headers,omitempty"`
 }
 
 // RouterLearningIdentityHeadersConfig is intentionally typed. The public
-// protection identity shape supports only the headers used by the protection
-// runtime; future identity needs should add typed fields instead of accepting
-// arbitrary header keys.
+// identity shape supports only these headers; future identity needs should
+// add typed fields instead of accepting arbitrary header keys.
 type RouterLearningIdentityHeadersConfig struct {
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
 	// Agent names an optional header that identifies one agent inside a
-	// session, such as a delegated subagent. Requests that carry it are held
-	// per agent; requests without it keep the session or conversation key.
+	// session, such as a delegated subagent. It has no default. Protection
+	// holds a named agent on its own model, and Replay plus previous-model
+	// observations use the same value even when protection is off.
 	Agent *string `yaml:"agent,omitempty"`
 }
 
@@ -223,27 +226,80 @@ func (cfg RouterLearningProtectionConfig) EffectiveScope() string {
 	return cfg.Scope
 }
 
+func (headers RouterLearningIdentityHeadersConfig) SessionHeader() string {
+	return configuredIdentityHeader(headers.Session, routerLearningDefaultSessionHeader)
+}
+
+func (headers RouterLearningIdentityHeadersConfig) ConversationHeader() string {
+	return configuredIdentityHeader(headers.Conversation, routerLearningDefaultConversationHeader)
+}
+
+func (headers RouterLearningIdentityHeadersConfig) AgentHeader() string {
+	return configuredIdentityHeader(headers.Agent, "")
+}
+
+func configuredIdentityHeader(value *string, fallback string) string {
+	if value != nil {
+		if trimmed := strings.TrimSpace(*value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return fallback
+}
+
+// EffectiveIdentity is the identity Replay, observations, and protection read.
+// learning.identity is canonical. learning.protection.identity remains an alias
+// for configs written before identity moved.
+func (cfg RouterLearningConfig) EffectiveIdentity() RouterLearningIdentityConfig {
+	if identityConfigured(cfg.Identity) {
+		return cfg.Identity
+	}
+	return cfg.Protection.Identity
+}
+
+func normalizeRouterLearningIdentity(cfg *RouterLearningConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	canonical := identityConfigured(cfg.Identity)
+	alias := identityConfigured(cfg.Protection.Identity)
+	if canonical && alias && !identityHeadersEqual(cfg.Identity.Headers, cfg.Protection.Identity.Headers) {
+		return fmt.Errorf("global.router.learning.identity conflicts with global.router.learning.protection.identity")
+	}
+	if !canonical && alias {
+		cfg.Identity = cfg.Protection.Identity
+	}
+	if identityConfigured(cfg.Identity) {
+		cfg.Protection.Identity = cfg.Identity
+	}
+	return nil
+}
+
+func identityConfigured(cfg RouterLearningIdentityConfig) bool {
+	return cfg.Headers.Session != nil || cfg.Headers.Conversation != nil || cfg.Headers.Agent != nil
+}
+
+func identityHeadersEqual(left, right RouterLearningIdentityHeadersConfig) bool {
+	return identityHeaderEqual(left.Session, right.Session) &&
+		identityHeaderEqual(left.Conversation, right.Conversation) &&
+		identityHeaderEqual(left.Agent, right.Agent)
+}
+
+func identityHeaderEqual(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return strings.TrimSpace(*left) == strings.TrimSpace(*right)
+}
+
 func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 	switch key {
 	case "session":
-		if cfg.Identity.Headers.Session != nil {
-			if value := strings.TrimSpace(*cfg.Identity.Headers.Session); value != "" {
-				return value
-			}
-		}
-		return routerLearningDefaultSessionHeader
+		return cfg.Identity.Headers.SessionHeader()
 	case "conversation":
-		if cfg.Identity.Headers.Conversation != nil {
-			if value := strings.TrimSpace(*cfg.Identity.Headers.Conversation); value != "" {
-				return value
-			}
-		}
-		return routerLearningDefaultConversationHeader
+		return cfg.Identity.Headers.ConversationHeader()
 	case "agent":
-		if cfg.Identity.Headers.Agent != nil {
-			return strings.TrimSpace(*cfg.Identity.Headers.Agent)
-		}
-		return ""
+		return cfg.Identity.Headers.AgentHeader()
 	default:
 		return ""
 	}

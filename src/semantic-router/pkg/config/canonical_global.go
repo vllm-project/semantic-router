@@ -270,6 +270,9 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 		return nil
 	}
 	applyCanonicalRouterGlobal(cfg, global.Router)
+	if err := normalizeRouterLearningIdentity(&cfg.RouterLearning); err != nil {
+		return err
+	}
 	applyCanonicalServiceGlobal(cfg, global.Services)
 	applyCanonicalStoreGlobal(cfg, global.Stores)
 	applyCanonicalIntegrationGlobal(cfg, global.Integrations)

@@ -137,9 +137,11 @@ func TestSelectionPathsWarmScopedPreflight(t *testing.T) {
 
 			// A new conversation releases conversation-scoped warmth, but not a
 			// session-scoped owner. Never suppress exploration using another CID.
-			ctx.Headers["x-conversation-id"] = "fresh-conversation"
-			input = router.buildSelectionContext(refs, "audit", "new topic", nil, "", nil, ctx)
-			_, _, _, _, err = router.applyRouterLearning(input, base, &refs[0], ctx)
+			// Identity is parsed once per request, so the next turn is a new context.
+			fresh := routerLearningRequestContext("audit-session", "fresh-conversation")
+			fresh.VSRSelectedDecision = ctx.VSRSelectedDecision
+			input = router.buildSelectionContext(refs, "audit", "new topic", nil, "", nil, fresh)
+			_, _, _, _, err = router.applyRouterLearning(input, base, &refs[0], fresh)
 			require.NoError(t, err)
 			wantCalls := 0
 			if scope == config.RouterLearningScopeConversation {

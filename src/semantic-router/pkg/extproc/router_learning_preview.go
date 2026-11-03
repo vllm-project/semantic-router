@@ -156,9 +156,9 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 	}
 	seed := int64(0)
 	if input.PreviewContext != nil {
-		cfg := r.Config.RouterLearning.Protection
-		ctx.Headers[cfg.HeaderName("session")] = strings.TrimSpace(input.PreviewContext.SessionID)
-		ctx.Headers[cfg.HeaderName("conversation")] = strings.TrimSpace(input.PreviewContext.ConversationID)
+		headers := r.Config.RouterLearning.EffectiveIdentity().Headers
+		ctx.Headers[headers.SessionHeader()] = strings.TrimSpace(input.PreviewContext.SessionID)
+		ctx.Headers[headers.ConversationHeader()] = strings.TrimSpace(input.PreviewContext.ConversationID)
 		ctx.SessionID = strings.TrimSpace(input.PreviewContext.SessionID)
 		if input.PreviewContext.SamplingSeed != nil {
 			seed = *input.PreviewContext.SamplingSeed

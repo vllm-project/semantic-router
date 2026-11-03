@@ -45,7 +45,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}
-	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
+	sessiontelemetry.RecordLastModel(modelObservationKey(ctx), ctx.RequestModel)
 	sessiontelemetry.RecordLastModel(promptCacheKeyStateKey(ctx), ctx.RequestModel)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 	// Routing ownership follows the dispatch identity; protocol telemetry keeps
@@ -128,12 +128,17 @@ func recordRouterSessionUsageFromContext(
 	pricing sessiontelemetry.TurnPricing,
 	accounting routerCacheAccounting,
 ) {
-	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" || requestBypassesRouting(ctx) {
+	if ctx == nil || ctx.RequestModel == "" || requestBypassesRouting(ctx) {
+		recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
+		return
+	}
+	observationKey := modelObservationKey(ctx)
+	if observationKey == "" {
 		recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
-		SessionID:                   routingSessionStateKey(ctx),
+		SessionID:                   observationKey,
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
