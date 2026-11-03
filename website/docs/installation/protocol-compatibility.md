@@ -313,3 +313,20 @@ web_search = "disabled"
 [features]
 multi_agent = false
 ```
+
+Point Codex at the Router through a model provider of your own rather than
+`openai_base_url`. The built-in `openai` provider opens a Responses WebSocket
+first, which the Router does not serve. Codex CLI 0.163.0 retries it for about
+six seconds at the start of every run before it sends the first turn over HTTP,
+and tries it again before later turns. A provider
+defined in `config.toml` uses HTTP from the start, since `supports_websockets`
+defaults to `false`:
+
+```toml
+model_provider = "vllm-sr"
+
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
+```
