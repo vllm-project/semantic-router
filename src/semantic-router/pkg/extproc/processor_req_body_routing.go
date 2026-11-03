@@ -584,6 +584,14 @@ func (r *OpenAIRouter) appendTrustedGatewayCredential(
 		)
 		return r.createErrorResponse(401, trustedGatewayCredentialMessage)
 	}
+	// The gateway receives the dedicated credential and no other: a client's
+	// own Authorization or key header does not travel beside it when the
+	// gateway authenticates on a different header.
+	for _, name := range config.CredentialCarrierHeaders() {
+		if !strings.EqualFold(name, providerAuth.Header) {
+			state.removeHeaders = append(state.removeHeaders, name)
+		}
+	}
 	value := credential
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + credential

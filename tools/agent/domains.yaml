@@ -895,6 +895,8 @@ profiles:
     default_local: true
     paths:
       - e2e/testcases/signal_routing_helpers.go
+      - e2e/testcases/trusted_gateway_credential.go
+      - src/semantic-router/pkg/extproc/gateway_credential*.go
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
       - e2e/pkg/**

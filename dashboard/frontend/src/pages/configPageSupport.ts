@@ -179,6 +179,9 @@ export interface BackendRefEntry {
   chat_path?: string
   api_key?: string
   api_key_env?: string
+  // The backend receives the request's deployment-injected gateway credential
+  // instead of a static key (global.services.authz.gateway_credential).
+  trusted_gateway?: boolean
 }
 
 export interface ModelReasoningConfig {

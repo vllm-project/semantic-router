@@ -1,6 +1,7 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
 import os
+import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -100,6 +101,35 @@ def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
         if key and value is not None:
             headers[str(key)] = str(value)
     return [{"key": key, "value": value} for key, value in sorted(headers.items())]
+
+
+DEFAULT_GATEWAY_CREDENTIAL_HEADER = "x-vsr-gateway-credential"
+
+
+def _gateway_credential_headers(user_config: UserConfig) -> list[str]:
+    """Name the gateway credential headers Envoy strips ahead of ext_proc.
+
+    The credential is an authenticator output, never a client input. The
+    default name is always stripped; a configured
+    global.services.authz.gateway_credential.header is stripped too.
+    """
+    configured = None
+    services = (user_config.global_ or {}).get("services")
+    authz = services.get("authz") if isinstance(services, dict) else None
+    credential = authz.get("gateway_credential") if isinstance(authz, dict) else None
+    if isinstance(credential, dict):
+        configured = credential.get("header")
+    names = [DEFAULT_GATEWAY_CREDENTIAL_HEADER]
+    if isinstance(configured, str) and configured.strip():
+        header = configured.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", header):
+            raise ValueError(
+                "global.services.authz.gateway_credential.header must be a "
+                f"plain header name, got {configured!r}"
+            )
+        if header not in names:
+            names.append(header)
+    return names
 
 
 def generate_envoy_config_from_user_config(
@@ -250,6 +280,7 @@ def generate_envoy_config_from_user_config(
         ),
         "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
+        "gateway_credential_headers": _gateway_credential_headers(user_config),
         "use_original_dst": False,  # Use static clusters for now
     }
     _check_decision_reliability(user_config)

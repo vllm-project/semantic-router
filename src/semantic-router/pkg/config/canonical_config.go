@@ -7,6 +7,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -255,7 +256,14 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 // the credential must be enabled, and the backend must not also carry a
 // static key, which would otherwise stand in silently for a missing one.
 func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
-	enabled := canonical.Global != nil && canonical.Global.Services.Authz.GatewayCredential.Enabled
+	enabled := false
+	if canonical.Global != nil {
+		authz := canonical.Global.Services.Authz
+		if err := validateGatewayCredentialHeader(authz.GatewayCredential, authz.Identity); err != nil {
+			return err
+		}
+		enabled = authz.GatewayCredential.Enabled
+	}
 	for _, model := range canonical.Providers.Models {
 		for index, backend := range model.BackendRefs {
 			if !backend.TrustedGateway {
@@ -274,6 +282,28 @@ func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
 				)
 			}
 		}
+	}
+	return nil
+}
+
+// validateGatewayCredentialHeader keeps the gateway credential off a header
+// that carries a client credential or an identity: the Router must never
+// forward a client's raw credential, nor read one authentication output as
+// another.
+func validateGatewayCredentialHeader(credential GatewayCredentialConfig, identity IdentityConfig) error {
+	header := credential.GetHeader()
+	reserved := IsShadowCredentialHeader(header)
+	for _, name := range []string{
+		identity.GetUserIDHeader(), identity.GetUserGroupsHeader(),
+		headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
+	} {
+		reserved = reserved || strings.EqualFold(header, strings.TrimSpace(name))
+	}
+	if reserved {
+		return fmt.Errorf(
+			"global.services.authz.gateway_credential.header %q carries a client credential or an identity; name a dedicated header the authenticator sets, such as %s",
+			header, DefaultGatewayCredentialHeader,
+		)
 	}
 	return nil
 }

@@ -235,6 +235,56 @@ func TestTrustedGatewayDispatchPresentsTheCredentialUnderTheProviderAuthHeader(t
 	}
 }
 
+func TestTrustedGatewayOnAnotherAuthHeaderDropsTheClientsAuthorization(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: claude-gateway
+      provider_model_id: claude-gateway
+      api_format: anthropic
+      backend_refs:
+        - name: gateway
+          provider: anthropic
+          endpoint: https://gateway.example/v1
+          trusted_gateway: true
+routing: {}
+global:
+  services:
+    authz:
+      gateway_credential:
+        enabled: true
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{Config: cfg, CredentialResolver: newTestCredentialResolver(cfg)}
+	state := &routeHeaderState{profile: gatewayCredentialProfile(t, router, "claude-gateway_gateway")}
+	ctx := &RequestContext{
+		Headers:           map[string]string{"authorization": "Bearer raw-client-token"},
+		gatewayCredential: "gw-key",
+	}
+	if response := router.appendProviderCredential(state, "claude-gateway", "claude-gateway_gateway", ctx); response != nil {
+		t.Fatalf("trusted gateway dispatch returned %#v", response)
+	}
+	if len(state.setHeaders) != 1 || !strings.EqualFold(state.setHeaders[0].GetHeader().GetKey(), "x-api-key") ||
+		string(state.setHeaders[0].GetHeader().GetRawValue()) != "gw-key" {
+		t.Fatalf("set headers = %#v, want x-api-key: gw-key", state.setHeaders)
+	}
+	removed := map[string]bool{}
+	for _, name := range state.removeHeaders {
+		removed[strings.ToLower(name)] = true
+	}
+	for _, want := range []string{"authorization", "api-key", "cookie"} {
+		if !removed[want] {
+			t.Fatalf("remove headers = %v, want the client's %s removed", state.removeHeaders, want)
+		}
+	}
+	if removed["x-api-key"] {
+		t.Fatalf("remove headers = %v drop the header that carries the credential", state.removeHeaders)
+	}
+}
+
 func TestTrustedGatewayDispatchFailsClosedWithoutTheCredential(t *testing.T) {
 	router := gatewayCredentialTestRouter(t, "")
 	profile := gatewayCredentialProfile(t, router, "gateway-model_gateway")

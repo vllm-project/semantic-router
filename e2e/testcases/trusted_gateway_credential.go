@@ -37,6 +37,24 @@ func init() {
 		Tags:        []string{"trusted-gateway", "security", "authz"},
 		Fn:          testTrustedGatewayCredential,
 	})
+	pkgtestcases.Register("trusted-gateway-credential-disabled", pkgtestcases.TestCase{
+		Description: "With the gateway credential contract off, a gateway credential header never reaches an upstream",
+		Tags:        []string{"trusted-gateway", "security", "authz"},
+		Fn:          testTrustedGatewayCredentialDisabled,
+	})
+}
+
+// testTrustedGatewayCredentialDisabled runs in a profile that leaves
+// global.services.authz.gateway_credential off. The request carries what an
+// authenticator would attach, a principal and a gateway credential; the
+// Router removes the reserved header, and the profile's provider-mocker
+// refuses any request that still carries it, so a 200 proves no upstream
+// received it.
+func testTrustedGatewayCredentialDisabled(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	return runChatCompletionsRequest(ctx, client, opts, map[string]string{ // #nosec G101 -- E2E fixture values
+		"x-authz-user-id":          "alice",
+		"x-vsr-gateway-credential": "gw-virtual-key-alice",
+	})
 }
 
 type trustedGatewayCase struct {
@@ -95,8 +113,8 @@ func testTrustedGatewayCredential(ctx context.Context, client *kubernetes.Client
 			wantRouterReject: true,
 		},
 		{
-			// Default-disabled: an ordinary backend keeps its static key, and
-			// the credential that alice carries never reaches it.
+			// An ordinary backend keeps its static key, and the credential
+			// that alice carries never reaches it.
 			name:          "static-key backend receives its own key, not the gateway credential",
 			model:         trustedGatewayStaticModel,
 			authorization: trustedGatewayAliceToken,

@@ -131,3 +131,36 @@ func TestGatewayCredentialHeaderIsLowercasedWithADefault(t *testing.T) {
 		t.Fatalf("configured header = %q", got)
 	}
 }
+
+func TestGatewayCredentialHeaderRejectsClientCredentialAndIdentityHeaders(t *testing.T) {
+	for _, header := range []string{
+		"Authorization", "proxy-authorization", "api-key", "X-Api-Key", "x-goog-api-key", "x-user-openai-key",
+		"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id", "x-auth-request-user",
+	} {
+		_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: gateway-model
+      provider_model_id: gateway-model
+      api_format: openai
+      backend_refs:
+        - name: gateway
+          provider: openai-compatible
+          endpoint: https://gateway.example/v1
+          trusted_gateway: true
+routing: {}
+global:
+  services:
+    authz:
+      identity:
+        user_id_header: x-auth-request-user
+      gateway_credential:
+        enabled: true
+        header: ` + header + `
+`))
+		if err == nil || !strings.Contains(err.Error(), "carries a client credential or an identity") {
+			t.Fatalf("header %q: error = %v, want the reserved header rejection", header, err)
+		}
+	}
+}

@@ -32,6 +32,10 @@ func ServingInvoker(cfg *config.RouterConfig, listener string, router Router, lo
 	}
 }
 
+// errTrustedGatewayUnsupported refuses a backend marked trusted_gateway: it
+// takes only the request's gateway credential, never the endpoint's api_key.
+var errTrustedGatewayUnsupported = errors.New("trusted gateway backend requires the request's gateway credential, which System One dispatch does not carry")
+
 // BackendInvoker binds one generation's provider aliases to its retained local
 // runtimes or upstream set. No unknown alias may fall through to a Chat default.
 func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, remote *upstream.Set) Invoke {
@@ -56,6 +60,12 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 		profile, err := cfg.GetProviderProfileForEndpoint(endpointName)
 		if err != nil {
 			return 0, nil, err
+		}
+		if profile.TrustedGateway {
+			// A trusted gateway accepts only the client request's gateway
+			// credential, which System One dispatch does not carry; fail
+			// before dispatch instead of sending the call without one.
+			return 0, nil, errTrustedGatewayUnsupported
 		}
 		protocol := "vllm-sr/systemone@1"
 		if model.APIFormat != config.APIFormatSystemOne {
