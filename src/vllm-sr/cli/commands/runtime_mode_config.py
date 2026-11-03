@@ -8,8 +8,11 @@ import click
 
 from cli.bootstrap import build_bootstrap_config
 from cli.decision_model import configured_decision_model, decision_model_deployment
-from cli.model_revision import resolve_model_revision
+from cli.model_revision import builtin_releases, resolve_model_revision
+from cli.utils import get_logger
 from cli.validator_decision_model import engine_args_error, public_model_name
+
+log = get_logger(__name__)
 
 MODE_HELP = """
 \b
@@ -30,8 +33,8 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model, placement and engine options override saved
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
 settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
 and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
@@ -100,6 +103,31 @@ def validate_model_options(
         **engine_args,
     }
     return {key: value for key, value in values.items() if value is not None} or None
+
+
+def _warn_off_release(artifact, revision):
+    """Name this CLI's release pin when a saved revision keeps a model off it.
+
+    A saved revision outlives upgrades by design, including one an older CLI
+    resolved from the Hub before it pinned the model.
+    """
+    pin = next(
+        (
+            pin
+            for name, pin in builtin_releases().items()
+            if name.lower() == artifact.lower()
+        ),
+        None,
+    )
+    if pin and revision != pin:
+        log.warning(
+            "%s is served at revision %s, saved in this configuration; this vllm-sr "
+            "pins %s. Serve with --revision %s to switch.",
+            artifact,
+            revision[:12],
+            pin[:12],
+            pin[:12],
+        )
 
 
 def _placements(resource, options, platform, available_devices, authored):
@@ -209,6 +237,8 @@ def apply_instance_options(
             resource.pop("revision", None)
         else:
             resource["revision"] = revision
+            if "revision" not in options:
+                _warn_off_release(resource["artifact"], revision)
         deployments[key] = resource
         catalog.setdefault("system", {})["decision_model"] = {"deployment": key}
     if setup and engine:

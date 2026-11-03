@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 自定义评测
 description: 通过一个规范 evaluation 分区添加版本化基准定义、模型关联记录和路由指数。
 translation:

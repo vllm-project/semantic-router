@@ -237,6 +237,7 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	statusCode = errorResponseStatusCode(statusCode)
 	errorType := "invalid_request_error"
 	if statusCode >= 500 {
 		errorType = "api_error"

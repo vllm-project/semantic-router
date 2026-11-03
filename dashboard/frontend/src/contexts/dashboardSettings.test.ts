@@ -10,10 +10,6 @@ const readySettings = {
   platform: 'rocm',
   envoyUrl: 'http://envoy',
   routerEvalEndpoint: 'http://router/api/v1/routing/preview',
-  srBenchAvailable: true,
-  srBenchUnavailableReason: '',
-  mlPipelineAvailable: true,
-  mlPipelineUnavailableReason: '',
 }
 
 describe('decodeDashboardSettings', () => {
@@ -24,10 +20,8 @@ describe('decodeDashboardSettings', () => {
   it.each([
     ['legacy readonly-only response', { readonlyMode: false }],
     ['missing split capability', { ...readySettings, runtimeConfigWritable: undefined }],
-    ['missing Evaluation availability', { ...readySettings, srBenchAvailable: undefined }],
-    ['missing ML pipeline availability', { ...readySettings, mlPipelineAvailable: undefined }],
-    ['wrong ML pipeline reason type', { ...readySettings, mlPipelineUnavailableReason: null }],
-    ['wrong Evaluation reason type', { ...readySettings, srBenchUnavailableReason: null }],
+    ['missing setup mode', { ...readySettings, setupMode: undefined }],
+    ['wrong platform type', { ...readySettings, platform: null }],
     ['array payload', []],
   ])('rejects %s instead of inferring authority', (_label, payload) => {
     expect(() => decodeDashboardSettings(payload)).toThrow()

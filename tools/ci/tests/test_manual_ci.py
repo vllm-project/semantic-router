@@ -652,7 +652,7 @@ class ManualCIWorkflowTests(unittest.TestCase):
                 "contents": "read",
                 "actions": "read",
                 "issues": "write",
-                "pull-requests": "read",
+                "pull-requests": "write",
             },
         )
         rerun = self.workflow["jobs"]["rerun"]
@@ -663,7 +663,7 @@ class ManualCIWorkflowTests(unittest.TestCase):
                 "contents": "read",
                 "actions": "write",
                 "issues": "write",
-                "pull-requests": "read",
+                "pull-requests": "write",
             },
         )
         self.assertEqual(rerun["if"], "needs.authorize.outputs.authorized == 'true'")
@@ -674,7 +674,7 @@ class ManualCIWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("labeled", workflow["on"]["pull_request"]["types"])
         self.assertNotIn("unlabeled", workflow["on"]["pull_request"]["types"])
-        self.assertEqual(workflow["jobs"]["pr-gate"]["if"], "always()")
+        self.assertEqual(workflow["jobs"]["pr-gate"]["if"], "${{ !cancelled() }}")
 
     def test_artifact_feedback_fallback_cannot_replace_handler_rejections(self):
         for job in self.workflow["jobs"].values():

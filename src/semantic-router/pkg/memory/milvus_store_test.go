@@ -5,6 +5,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -923,6 +924,59 @@ func TestMilvusStore_ForgetByScope_MissingUserID(t *testing.T) {
 	err := store.ForgetByScope(ctx, MemoryScope{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "user ID is required")
+}
+
+func TestMilvusStore_ForgetByScope_ProjectID_ReturnsDeleteErrors(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+	deleteErr := errors.New("permanent test delete error")
+
+	mockClient.QueryFunc = func(
+		ctx context.Context,
+		coll string,
+		parts []string,
+		expr string,
+		out []string,
+		opts ...client.SearchQueryOptionFunc,
+	) (client.ResultSet, error) {
+		return []entity.Column{
+			entity.NewColumnVarChar("id", []string{"mem-1", "mem-2"}),
+			entity.NewColumnVarChar("metadata", []string{
+				`{"project_id":"p"}`,
+				`{"project_id":"p"}`,
+			}),
+		}, nil
+	}
+
+	attemptedIDs := make(map[string]bool)
+
+	mockClient.DeleteFunc = func(
+		ctx context.Context,
+		coll string,
+		part string,
+		expr string,
+	) error {
+		switch expr {
+		case `id == "mem-1"`:
+			attemptedIDs["mem-1"] = true
+			return deleteErr
+		case `id == "mem-2"`:
+			attemptedIDs["mem-2"] = true
+			return nil
+		default:
+			return fmt.Errorf("unexpected delete expression: %s", expr)
+		}
+	}
+
+	err := store.ForgetByScope(ctx, MemoryScope{
+		UserID:    "u",
+		ProjectID: "p",
+	})
+
+	require.Error(t, err, "ForgetByScope must report individual deletion failures")
+	assert.ErrorIs(t, err, deleteErr)
+	assert.True(t, attemptedIDs["mem-1"], "must attempt the failing deletion")
+	assert.True(t, attemptedIDs["mem-2"], "must continue to the next deletion")
 }
 
 func TestMilvusStore_Update_Success(t *testing.T) {

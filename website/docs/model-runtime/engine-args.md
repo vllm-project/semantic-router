@@ -148,6 +148,14 @@ accuracy-neutral and a switch elsewhere:
 - **Decision 1.0 and Vela 2.0 decoder sizes: off.** Their records show
   decisions and span sets changing, so `--enable-shared-context` is an
   explicit choice there.
+- **State-once Decision models: always branched.** A Decision 3.0 package
+  whose `attention_mode` is `prefix_bidir`, `prefix_causal` or `causal` lets
+  no state token see a question. Every request reads its
+  state once, images and videos included, and branches each question from
+  it, whatever the setting; on, whole requests also share forwards. Branched
+  answers equal those of each question run alone up to rounding
+  ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/state-once.md)),
+  and `usage.input_tokens` counts the state once.
 - Encoders read a request whole and have no shared-context path.
 
 ## Faster kernels at the published precision

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "4905de382e4434229fe7331e2a3ad45140d54351"
   source_file: "docs/tutorials/algorithm/looper/confidence.md"

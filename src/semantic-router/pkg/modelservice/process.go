@@ -128,8 +128,9 @@ func (p *processPlan) writeModelsFile(path string) error {
 // serves the router alone over its private socket, so the bound only has to
 // hold the largest request the router sends: a request stage's bundle, which
 // can carry images (two at the 20 MB per-image cap of the common chat APIs,
-// base64-encoded, fit).
-const ManagedRequestBytes = 64 << 20
+// base64-encoded, fit), or a public System One request at its 48 MiB limit
+// whose multipart images the router forwards as base64.
+const ManagedRequestBytes = 96 << 20
 
 // managedBundleTasks caps the tasks of a managed runtime's bundles. A request
 // stage sends each process one bundle with every call it makes, and PII alone

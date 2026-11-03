@@ -4,7 +4,6 @@ import (
 	"context"
 	"maps"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -58,7 +57,7 @@ func NewCapabilityProber(cfg *config.Config, router RouterReadinessSource) *Capa
 	probes := []capabilityProbe{{
 		name: probeSRBench,
 		check: func(ctx context.Context) bool {
-			token := strings.TrimSpace(os.Getenv(cfg.SRBenchTokenEnv))
+			token := srBenchToken(cfg)
 			return token != "" && probeHTTP(ctx, cfg.SRBenchURL+SRBenchAPIPath+"/health", token)
 		},
 	}}

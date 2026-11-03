@@ -180,7 +180,7 @@ func TestClientDecideOverUnixSocket(t *testing.T) {
 
 func TestManagedCommandAndModelsFile(t *testing.T) {
 	got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "/cache", 0), " ")
-	if want := "vllm-srun serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 67108864 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
+	if want := "vllm-srun serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 100663296 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
 		t.Fatalf("command\n got %s\nwant %s", got, want)
 	}
 	if got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-bundle-tasks 1024 --threads 4") {
@@ -430,7 +430,7 @@ func TestCardAcceptsOnlyARuntimeOfItsOwnContractVersion(t *testing.T) {
 	for version, served := range map[string]string{
 		RuntimeAPIVersion: "",
 		"3.0.1":           "serves contract 3.0.1",
-		"3.1.0":           "serves contract 3.1.0",
+		"3.0.0":           "serves contract 3.0.0",
 		"3":               "serves contract 3",
 		"2.4.0":           "serves contract 2.4.0",
 		"4.0.0":           "serves contract 4.0.0",

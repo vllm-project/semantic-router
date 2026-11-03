@@ -75,7 +75,7 @@ Decide each row and tell the user what you chose.
 | Decision | Default | Otherwise |
 | --- | --- | --- |
 | Channel | stable, when it has this skill's commands (step 3); else dev | The user names a version or channel. |
-| Platform | `auto`: inspect the execution target | `/dev/kfd` and a `/dev/dri/render*` node exist: `--platform rocm` (AMD Instinct MI300X and MI325X are validated). `nvidia-smi -L` lists a GPU and `docker info` lists an `nvidia` runtime (the NVIDIA Container Toolkit): `--platform cuda` (works, not yet validated). macOS: always `cpu`. |
+| Platform | `auto`: inspect the execution target | `/dev/kfd` and a `/dev/dri/render*` node exist: `--platform rocm` (AMD Instinct MI300X and MI325X are validated). `nvidia-smi -L` lists a GPU and `docker info` lists an `nvidia` runtime (the NVIDIA Container Toolkit): `--platform cuda` (validated; H200, A100, Tesla T4 records; fused kernels without bit-exact evidence stay off the exact profile). macOS: always `cpu`. |
 | Gateway | standalone (no flag): the Router serves the API itself | `--gateway extproc` puts Envoy in front. Use it only when the user needs Envoy's rate limiting, mTLS, JWT or OIDC, advanced route matching, or an Envoy-based gateway they already run. |
 | Target | Docker on this machine | The user asks for a Kubernetes cluster: write the configuration (step 4), then follow [Deployment](https://vllm-sr.ai/install/agent/vllm-sr/references/deployment-loop.md#kubernetes) instead of steps 5 and 6. |
 | Model | the endpoint the user gave | None given: look for one on this host (below) and confirm it with the user. None at all: ask. For a local trial, offer [Ollama](https://vllm-sr.ai/docs/installation/ollama). |

@@ -40,7 +40,6 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 		}
 	}
 	for _, route := range []struct{ method, path string }{
-		{http.MethodGet, "/api/ml-pipeline/availability"},
 		{http.MethodGet, "/api/ml-pipeline/jobs"},
 		{http.MethodGet, "/api/ml-pipeline/jobs/job-1"},
 		{http.MethodPost, "/api/ml-pipeline/benchmark"},
@@ -56,26 +55,21 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 	}
 }
 
-func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
-	disabled, disabledCfg := setupRouteInventoryServerWithConfig(t, func(cfg *config.Config) {
+func TestMLPipelineRoutesFollowTheFeatureFlag(t *testing.T) {
+	disabled, _ := setupRouteInventoryServerWithConfig(t, func(cfg *config.Config) {
 		cfg.MLPipelineEnabled = false
 	})
-	if disabledCfg.MLPipelineAvailable {
-		t.Fatal("MLPipelineAvailable = true, want false while the feature is disabled")
-	}
-	if disabledCfg.MLPipelineUnavailableReason == "" {
-		t.Fatal("MLPipelineUnavailableReason is empty while the feature is disabled")
-	}
 	if _, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/jobs"); lookup != auth.RouteNotFound {
 		t.Errorf("disabled ML route lookup = %v, want RouteNotFound", lookup)
 	}
-	if policy, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/availability"); lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
-		t.Errorf("disabled availability route = %v with policy %+v, want RouteFound under PermMlPipeline", lookup, policy)
+	// Availability is reported by /api/v1/capabilities; the ML-only endpoint is retired.
+	if _, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/availability"); lookup != auth.RouteNotFound {
+		t.Errorf("retired availability route lookup = %v, want RouteNotFound", lookup)
 	}
 
-	_, enabledCfg := setupRouteInventoryServerWithConfig(t)
-	if !enabledCfg.MLPipelineAvailable || enabledCfg.MLPipelineUnavailableReason != "" {
-		t.Errorf("enabled config = %+v, want available with an empty reason", enabledCfg)
+	enabled, _ := setupRouteInventoryServerWithConfig(t)
+	if policy, lookup := enabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/jobs"); lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
+		t.Errorf("enabled ML route = %v with policy %+v, want RouteFound under PermMlPipeline", lookup, policy)
 	}
 }
 

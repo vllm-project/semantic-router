@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 使用 agentgateway 部署
 description: 将 Semantic Router 作为 ExtProc 服务接入 agentgateway 的 Kubernetes 数据面。
 translation:

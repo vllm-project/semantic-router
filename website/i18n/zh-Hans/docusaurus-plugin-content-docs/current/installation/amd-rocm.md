@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: AMD ROCm 部署
 description: 连接 AMD vLLM 后端，并在 AMD GPU 上运行 Vela 路由模型。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/amd-rocm.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 AMD ROCm 部署

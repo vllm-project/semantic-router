@@ -60,12 +60,17 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 
 // validateDecisionDeployment checks the deployment a decision question or
 // selector asks: a declared model_runtime deployment, or, when it names none,
-// the decision model, which must support the requested task.
+// the decision model. Either way the deployment answers questions, so its
+// input is a scan budget or nothing.
 func validateDecisionDeployment(cfg *RouterConfig, deployment, asker string) error {
 	if deployment != "" {
 		return validateModelRuntimeReference(cfg, deployment)
 	}
-	if _, _, _, err := cfg.DecisionModelDeployment(); err != nil {
+	name, resolved, _, err := cfg.DecisionModelDeployment()
+	if err != nil {
+		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
+	}
+	if err := resolved.ValidateDecisionInput(name); err != nil {
 		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
 	}
 	return nil
@@ -250,7 +255,9 @@ func validateDecisionSelectorConfig(decisionName string, modelRefs []ModelRef, a
 	if cfg.TimeoutMs < 0 || cfg.TimeoutMs > MaxDecisionTimeoutMs {
 		return fmt.Errorf("%s: timeout_ms must be within [1, %d] when set", path, MaxDecisionTimeoutMs)
 	}
-	if len(modelRefs) < MinDecisionChoices || len(modelRefs) > MaxDecisionChoices {
+	// A model-free built-in Recipe asset receives its candidates through
+	// assignments; the choice range applies once they are bound.
+	if len(modelRefs) > 0 && (len(modelRefs) < MinDecisionChoices || len(modelRefs) > MaxDecisionChoices) {
 		return fmt.Errorf("%s: needs %d..%d modelRefs to choose from", path, MinDecisionChoices, MaxDecisionChoices)
 	}
 	models := make(map[string]struct{}, len(modelRefs))

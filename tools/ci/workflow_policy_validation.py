@@ -128,7 +128,7 @@ def validate_status_publisher(
         "actions": "read",
         "checks": "write",
         "issues": "write",
-        "pull-requests": "read",
+        "pull-requests": "write",
     }:
         errors.append("ci-status.yml must limit its publisher token permissions")
     steps = job.get("steps", [])
@@ -197,13 +197,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         errors.append("missing pull-request dispatcher")
         return
     gate = dispatcher.jobs.get("pr-gate", {})
-    if (
-        gate.get("name") != PR_EXECUTION_NAME
-        or gate.get("if") != "always()"
-        or needs(gate) != {"ci"}
-    ):
+    if gate.get("name") != PR_EXECUTION_NAME or needs(gate) != {"ci"}:
         errors.append(
             "pr.yml must retain strict execution and a legacy PR Gate until the base publisher exists"
+        )
+    if gate.get("if") != "${{ !cancelled() }}":
+        errors.append(
+            "pr.yml gate must reconcile failures without blocking workflow cancellation"
         )
     validate_status_publisher(workflows, errors)
     validate_publisher_bootstrap(workflows, errors)
@@ -234,9 +234,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         return
     expected = set(ALL_DISPATCH_JOBS)
     gate = shared.jobs.get("gate", {})
-    if needs(gate) != expected or gate.get("if") != "always()":
+    if needs(gate) != expected:
         errors.append(
             "ci.yml gate must aggregate every executor and build prerequisite"
+        )
+    if gate.get("if") != "${{ !cancelled() }}":
+        errors.append(
+            "ci.yml gate must reconcile failures without blocking workflow cancellation"
         )
     validate_gate_transport(gate, errors)
     text = shared.path.read_text()
@@ -544,6 +548,11 @@ def validate_mergify_contract(errors: list[str]) -> None:
         )
         if any(f"check-success = {context}" in serialized for context in obsolete):
             errors.append(f".mergify.yml: {section} retains compatibility contexts")
+    if not default_rule.get("max_checks_retries"):
+        errors.append(
+            ".mergify.yml: the default queue rule must set max_checks_retries "
+            "above 0, or Mergify checks in place and the queue waits for /ci run"
+        )
     pull_request_rules = data.get("pull_request_rules", [])
     queue_rules = [
         rule

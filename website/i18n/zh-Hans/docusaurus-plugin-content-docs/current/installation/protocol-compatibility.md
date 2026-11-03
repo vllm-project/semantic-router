@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 协议兼容性矩阵
 description: 将面向客户端的推理 API 与受支持的后端模型协议匹配，并理解跨协议功能边界。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/protocol-compatibility.md"
-  outdated: false
+  outdated: true
 ---
 
 # 协议兼容性矩阵

@@ -143,7 +143,10 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	defer release()
-	if r.URL.Path == "/v1/systemone" || r.URL.Path == "/v1/decisions" || r.URL.Path == "/v1/systemone/models" {
+	// With Chat routing off (Engine mode) the System One model list also
+	// answers GET /v1/models, which the System One SDKs read.
+	systemOneModels := r.Method == http.MethodGet && r.URL.Path == "/v1/models" && serving.RoutingDisabled && serving.SystemOne != nil
+	if r.URL.Path == "/v1/systemone" || r.URL.Path == "/v1/decisions" || r.URL.Path == "/v1/systemone/models" || systemOneModels {
 		if serving.SystemOne == nil {
 			http.NotFound(w, r)
 			return

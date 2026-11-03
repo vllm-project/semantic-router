@@ -152,7 +152,7 @@ def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": [huge]}
     )
-    assert status == 400 and "8,000,000 bytes" in body["error"]["message"]
+    assert status == 400 and "16,777,216 bytes" in body["error"]["message"]
     assert (body["error"]["reason"], body["error"]["limit"]) == (
         "image_too_large",
         img.MAX_IMAGE_BYTES,
@@ -617,8 +617,10 @@ def test_every_model_records_goldens_and_kernel_choices(model):
     if model.repo_id == "vllm-sr/d3-edge":
         expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
         devices.add("cuda:sm_89")
-    elif model.repo_id == "vllm-sr/d3":
+    elif model.repo_id in ("vllm-sr/d3", "vllm-sr/d3-turbo"):
         expected.add("cpu:x86_64:avx512:bf16_native")
+    elif model.repo_id == "vllm-sr/d3-ultra":
+        expected.update({"cpu:x86_64:avx512:bf16_native", "rocm:gfx942"})
     assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {

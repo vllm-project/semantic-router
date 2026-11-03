@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型性能评测
 sidebar_label: 模型评测
 translation:

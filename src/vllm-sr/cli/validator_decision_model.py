@@ -310,8 +310,11 @@ def _selector_errors(
             _reference_error(deployments, decision_model) if decision_model else None
         )
     models = [ref.model for ref in decision.modelRefs or []]
-    if message is None and not (
-        MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
+    # A model-free built-in Recipe receives its candidates through assignments.
+    if (
+        message is None
+        and models
+        and not MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
     ):
         message = (
             f"needs {MIN_SELECTOR_CANDIDATES}..{MAX_SELECTOR_CANDIDATES} "
@@ -338,22 +341,25 @@ def validate_systemone_listener_models(
         if public_name:
             identities.setdefault(public_name, []).append((key, deployment))
     errors = []
-    native_names = {
-        model.name
-        for model in config.providers.models
-        if model.api_format == "systemone"
-    }
-    native_names.update(
+    # A routed entrypoint is not one deployment. A provider alias is checked
+    # with native execution, published or not; a remote alias has no deployment.
+    skipped = {
         name
         for entry in config.entrypoints
         if entry.api == "systemone"
         for name in entry.model_names
+    }
+    skipped.update(
+        model.name
+        for model in config.providers.models
+        if model.api_format == "systemone"
     )
     for listener in config.listeners:
         if listener.systemone is None:
             continue
+        field = f"listeners.{listener.name}.systemone.models"
         for public_name in listener.systemone.models:
-            if public_name in native_names:
+            if public_name in skipped:
                 continue
             candidates = identities.get(public_name, [])
             message = None
@@ -363,10 +369,8 @@ def validate_systemone_listener_models(
                 message = f"public System One model {public_name!r} names multiple deployments; assign distinct public_name values"
             elif candidates[0][1].get("provider") != MODEL_RUNTIME_PROVIDER:
                 message = f"public System One model {public_name!r} requires a model_runtime deployment"
+            else:
+                message = _reference_error(deployments, candidates[0][0])
             if message:
-                errors.append(
-                    ValidationError(
-                        message, field=f"listeners.{listener.name}.systemone.models"
-                    )
-                )
+                errors.append(ValidationError(message, field=field))
     return errors

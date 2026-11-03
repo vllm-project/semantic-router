@@ -121,19 +121,21 @@ jobs:
       - name: Allocate CPUs for serial long-context probes
         if: matrix.source == 'built-in-latest' && matrix.recipes == 'mom-v1'
         run: |
-          # This shard runs one probe at a time, including full-context embeddings.
+          # These shards run one probe at a time, including long-context reads.
           cpu_threads="$(nproc)"
           printf 'VLLM_SRUN_CPU_THREADS=%s\n' "$cpu_threads" >> "$GITHUB_ENV"
           printf 'Serial long-context worker threads: %s\n' "$cpu_threads"
       - name: Run maintained recipe probes
         env:
           RECIPE_CONFORMANCE_RECIPES: ${{ matrix.recipes }}
+          RECIPE_CONFORMANCE_PROBE_SHARD: ${{ matrix.probe_shard }}
           RECIPE_CONFORMANCE_RECIPES_ROOT: ${{ matrix.recipes_root }}
           RECIPE_CONFORMANCE_REPORT_DIR: >-
             ${{ github.workspace }}/.agent-harness/recipe-conformance/${{ matrix.report_dir }}
         run: |
           make recipe-conformance-live-cpu \
             RECIPE_CONFORMANCE_RECIPES="$RECIPE_CONFORMANCE_RECIPES" \
+            RECIPE_CONFORMANCE_PROBE_SHARD="$RECIPE_CONFORMANCE_PROBE_SHARD" \
             RECIPE_CONFORMANCE_RECIPES_ROOT="$RECIPE_CONFORMANCE_RECIPES_ROOT" \
             RECIPE_CONFORMANCE_REPORT_DIR="$RECIPE_CONFORMANCE_REPORT_DIR"
 

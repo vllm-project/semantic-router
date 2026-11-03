@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 description: 分步指南：用 Ollama 服务本地模型，并通过设置控制面板或 YAML 配置将其连接到 vLLM Semantic Router。
 translation:

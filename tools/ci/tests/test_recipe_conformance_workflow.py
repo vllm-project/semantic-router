@@ -79,7 +79,7 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
         artifacts = {
             "recipe-conformance-inventory",
             "recipe-conformance-live-standalone-0",
-            "recipe-conformance-live-built-in-latest-0",
+            "recipe-conformance-live-built-in-latest-mom-v1-0",
             "recipe-conformance-report",
         }
         selected = set()

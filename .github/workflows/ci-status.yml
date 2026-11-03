@@ -31,7 +31,8 @@ jobs:
       actions: read
       checks: write
       issues: write
-      pull-requests: read
+      # PR guidance uses /issues APIs but still writes to a PR resource.
+      pull-requests: write
     steps:
       - name: Check out the trusted status publisher
         uses: actions/checkout@v4

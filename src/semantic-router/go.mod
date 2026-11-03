@@ -18,6 +18,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
+	github.com/klauspost/compress v1.18.4
 	github.com/lib/pq v1.10.9
 	github.com/mark3labs/mcp-go v0.42.0-beta.1
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.4.10-0.20240819025435-512e3b98866a

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 阅读报告和 Dashboard
 translation:
   source_commit: "31fa0fdab6787b3b149894db259af13c8ce42f5a"

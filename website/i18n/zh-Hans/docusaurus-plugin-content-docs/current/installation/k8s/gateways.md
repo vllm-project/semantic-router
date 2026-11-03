@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Kubernetes 网关
 description: 选择 Kubernetes 网关如何通过 Envoy ExtProc 调用 Semantic Router。
 translation:

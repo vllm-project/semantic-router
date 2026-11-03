@@ -29,7 +29,7 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
+| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none) and the longest they wait for a model (`systemone.max_deadline_ms`, 10 minutes by default), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |

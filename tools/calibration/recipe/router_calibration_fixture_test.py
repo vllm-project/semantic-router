@@ -729,13 +729,12 @@ fixtures:
         )
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
-        self.assertEqual(len(probes), 315)
-        added_probes = probes[269:280]
+        self.assertEqual(len(probes), 366)
+        added_probes = probes[326:336]
         self.assertEqual(
-            {probe.decision_id for probe in probes[280:285]},
+            {probe.decision_id for probe in probes[336:340]},
             {
                 "contract-direct-result-repair",
-                "contract-personal-action-care",
                 "contract-plural-workflow-start",
                 "contract-single-worker-workflow",
                 "contract-quoted-result-repair",
@@ -753,25 +752,23 @@ fixtures:
                 "contract-correction-prohibited",
                 "contract-formatting-revision",
                 "contract-quoted-correction",
-                "contract-consequential-advice",
                 "contract-personal-support",
             },
         )
         self.assertEqual(
-            {probe.decision_id for probe in probes[307:]},
+            {probe.decision_id for probe in probes[362:]},
             {
-                f"{recipe}_v2_facts_{domain}"
-                for recipe in ("balance", "accuracy")
+                f"accuracy_v2_facts_{domain}"
                 for domain in ("health", "law", "business", "economics")
             },
         )
         # Pin all maintained message fixtures, including the bounded Vault context
         # and meaningful repeated-text records used by context-band probes.
         receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(receipt["message_probes"], 90)
-        self.assertEqual(receipt["generated_probes"], 42)
+        self.assertEqual(receipt["message_probes"], 109)
+        self.assertEqual(receipt["generated_probes"], 44)
         self.assertEqual(receipt["image_parts"], 53)
-        self.assertEqual(receipt["text_bytes"], 18_744_960)
+        self.assertEqual(receipt["text_bytes"], 19_066_897)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -791,11 +788,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f",
+            "ef27688478105c3b0b038749d2b4cb3b9b31c962f977d5dd4b4c1627a918715f",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "07215aca085c3e8e2b912551c5c5cee1407c341048acb2f71b4b86186d6e5773",
+            "445b438c780a06fb165298b303d712a0aa4d6fc3f4cc4001ff3750af7d7ac681",
         )
         by_id = {probe.probe_id: probe for probe in probes}
         self.assertEqual(len(by_id), len(probes))

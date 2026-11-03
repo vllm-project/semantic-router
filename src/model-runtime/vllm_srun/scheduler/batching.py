@@ -14,7 +14,9 @@ model, whose rows give the same answer alone or in any batch, merges the
 requests already queued without waiting and keeps its forwards short
 (``merged``), so its answers never change. With shared context, a
 multi-question request whose common state pays off runs as one packed
-shared-context tree instead (``SharedContext``).
+shared-context tree instead (``SharedContext``); on a model whose items each
+name their own context (``LoadedModel.merges_shared_batches``: state-once
+models), whole requests share those forwards (``shared_batches``).
 
 The golden check plans its requests as references: each alone, in the
 forwards the model's released runtime runs for one request (``reference``),
@@ -183,6 +185,40 @@ def _turn(sub: tuple[Batch, ...]) -> Batch:
     )
 
 
+def shared_batches(trees: list[Batch], budget: int, max_rows: int) -> list[Batch]:
+    """Shared-context batches of one request each, packed into batches of several requests.
+
+    Only for a model whose items each name their own context. A request's
+    items stay together; requests go longest first into batches of at most
+    ``budget`` tokens (the sum of their items' costs: a state-once question
+    costs its block and its share of the state) and ``max_rows`` items. A
+    request costlier than ``budget``, or with more items than ``max_rows``,
+    runs alone.
+    """
+    units = sorted(trees, key=lambda batch: -sum(cost(item) for item in batch.items()))
+    batches: list[Batch] = []
+    current: list[Batch] = []
+    tokens = rows = 0
+    for unit in units:
+        size = sum(cost(item) for item in unit.items())
+        count = len(unit.items())
+        if current and (tokens + size > budget or rows + count > max_rows):
+            batches.append(_shared(current))
+            current, tokens, rows = [], 0, 0
+        current.append(unit)
+        tokens, rows = tokens + size, rows + count
+    if current:
+        batches.append(_shared(current))
+    return batches
+
+
+def _shared(units: list[Batch]) -> Batch:
+    return Batch(
+        parts=[part for unit in units for part in unit.parts],
+        shared_prefix=max(unit.shared_prefix for unit in units),
+    )
+
+
 @dataclass(frozen=True)
 class SharePolicy:
     mode: str = "tree"
@@ -321,9 +357,17 @@ class Batcher:
                 )
             else:
                 rest.append(job)
+        model = self.model
+        if len(trees) > 1 and model is not None and model.merges_shared_batches:
+            budget = min(
+                token_budget or self.max_num_batched_tokens, self.max_num_batched_tokens
+            )
+            family = model.coalesced_token_budget()
+            trees = shared_batches(
+                trees, min(budget, family) if family else budget, self.max_num_seqs
+            )
         if not rest:
             return trees
-        model = self.model
         if model is not None and model.batch_invariant:
             cap = min(
                 token_budget or MERGED_BATCH_TOKENS,

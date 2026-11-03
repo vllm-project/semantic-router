@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 后端目标兼容性
 description: 查看哪些后端目标形式能在 Docker、Helm、Operator、控制面板和配方工作流中保留。
 translation:

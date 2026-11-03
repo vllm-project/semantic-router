@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
   source_file: "docs/tutorials/plugin/memory.md"

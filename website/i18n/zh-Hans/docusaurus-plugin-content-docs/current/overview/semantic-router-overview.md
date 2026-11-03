@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 2
 title: 系统概览
 description: vLLM Semantic Router 的数据面、控制面、配置模型和请求生命周期。
