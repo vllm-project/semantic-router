@@ -193,6 +193,34 @@ def test_a_blank_state_is_refused_as_the_other_vela_families_refuse_it(
         assert (status, body["error"]["code"]) == (400, "invalid_request")
 
 
+BOX = {"type": "box", "instructions": "Where is the cat?"}
+
+
+def test_box_requests_plan_spans_and_strip_the_opt_in_key(runtimes) -> None:
+    # A Box question sends the request through plan_resolved: the base alone for the decisions
+    # (adapters off, the opt-in key stripped), span questions as on any other request.
+    vela, d3 = runtimes
+    span = {"type": "span", "criteria": ["thing"]}
+    care = {**NOUL, "decision_adapter": True}
+    questions = {"attack": NOUL, "care": care, "where": BOX, "s": span}
+    status, got = call(vela, {"state": STATE, "questions": questions})
+    assert status == 200
+    base_questions = Gates.strip({"attack": NOUL, "care": care, "where": BOX})
+    _, want = call(d3, {"state": STATE, "questions": base_questions})
+    for key in ("attack", "care", "where"):
+        assert got["answers"][key] == want["answers"][key]
+    assert "error" not in got["answers"]["care"]
+    assert "s" in got["spans"] and "error" not in got["answers"]["s"]
+    assert list(got["answers"]) == list(questions)
+
+
+def test_a_blank_state_is_refused_on_box_requests_too(runtimes) -> None:
+    status, body = call(
+        runtimes[0], {"state": "  ", "questions": {"x": NOUL, "where": BOX}}
+    )
+    assert (status, body["error"]["code"]) == (400, "invalid_request")
+
+
 def test_the_opt_in_key_is_stripped_for_the_base(runtimes) -> None:
     vela, d3 = runtimes
     questions = {"care": {**NOUL, "decision_adapter": True}}

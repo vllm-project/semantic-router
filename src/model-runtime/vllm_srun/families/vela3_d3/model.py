@@ -21,7 +21,7 @@ import torch
 
 from ...errors import QuestionError, question_error
 from ...plugins.base import AdapterGate, Expired, ForwardBatch, ImageInputs, SurfacePlan
-from ...plugins.decisions import RequestPlan
+from ...plugins.decisions import RequestPlan, ResolvedDecision
 from ..decision3.family import BATCH_SIZE, Decision3Model, Item
 from ..decision3.state_once import StateOnceModel
 from .gates import Gates
@@ -173,7 +173,24 @@ def finish_spans(
     return response
 
 
-class GatedDecisions(Decision3Model):
+def with_adapter(item: Item, adapter: str | None, **changes: Any) -> GatedItem:
+    """``item`` as a ``GatedItem`` that runs ``adapter`` (``changes`` replace other fields)."""
+    return GatedItem(
+        **({f.name: getattr(item, f.name) for f in fields(Item)} | changes),
+        adapter=adapter,
+    )
+
+
+class VelaPlanning(Decision3Model):
+    """Planning every vela3/3 model shares, over its base's own planning.
+
+    Each entry point (``plan``, ``plan_images``, ``plan_resolved``) refuses a
+    blank state, plans the span questions itself and hands the others to the
+    base without the package's ``decision_adapter`` key; ``_decisions`` says how
+    a size marks its gated rows. Span questions with images, videos or assets
+    fail alone (``SPAN_IMAGES``).
+    """
+
     gates: Gates
     span_setup: SpanSetup
 
@@ -187,19 +204,22 @@ class GatedDecisions(Decision3Model):
         plan = self._decisions(state, rest, scan) if rest else None
         return with_spans(plan, state, asked, list(questions), self.span_setup)
 
+    def _base_plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None
+    ) -> RequestPlan[Item]:
+        """The base's own ``plan`` (the class after this one in the model's MRO)."""
+        return super().plan(state, Gates.strip(questions), scan)
+
     def _decisions(
         self, state: Any, questions: dict[str, Any], scan: int | None
     ) -> RequestPlan[Item]:
+        """The base's plan of the non-span questions, each row marked with its gated adapter."""
         assigned = self.gates.assign(questions)
-        plan = super().plan(state, Gates.strip(questions), scan)
+        plan = self._base_plan(state, questions, scan)
         if not assigned:
             return plan
         items = [
-            GatedItem(
-                **{f.name: getattr(item, f.name) for f in fields(Item)},
-                adapter=assigned.get(item.question_id),
-            )
-            for item in plan.items
+            with_adapter(item, assigned.get(item.question_id)) for item in plan.items
         ]
         return replace(plan, items=items)
 
@@ -223,14 +243,33 @@ class GatedDecisions(Decision3Model):
             plan, state, asked, list(questions), self.span_setup, SPAN_IMAGES
         )
 
-    def exact_batches(self, items: list[Item]) -> list[list[int]]:
-        return span_batches(items, super().exact_batches)
-
-    def run(self, items: list[Item]) -> list[list[float] | None]:
-        return run_spans(items, super().run, self.span_setup)
-
-    def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
-        return run_spans(items, super().run_approximate, self.span_setup)
+    def plan_resolved(self, request: ResolvedDecision) -> RequestPlan[Item]:
+        """A request with assets or Box / track questions: the base's resolved planning for the
+        decisions (every adapter off, as the package answers it), the span questions here.
+        """
+        refuse_blank(request.state)
+        asked, rest = split_spans(request.questions)
+        plan = (
+            super().plan_resolved(
+                replace(
+                    request,
+                    questions=Gates.strip(rest),
+                    uses=[use for use in request.uses if use.question not in asked],
+                    targets={k: t for k, t in request.targets.items() if k in rest},
+                )
+            )
+            if rest
+            else None
+        )
+        media = request.images or request.videos or request.uses
+        return with_spans(
+            plan,
+            request.state,
+            asked,
+            list(request.questions),
+            self.span_setup,
+            SPAN_IMAGES if media else None,
+        )
 
     def answer(self, item: Any, values: Any) -> dict[str, Any]:
         if isinstance(item, SpanItem):
@@ -239,6 +278,17 @@ class GatedDecisions(Decision3Model):
 
     def finish_surface(self, plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
         return finish_spans(super().finish_surface(plan, results), plan, results)
+
+
+class GatedDecisions(VelaPlanning):
+    def exact_batches(self, items: list[Item]) -> list[list[int]]:
+        return span_batches(items, super().exact_batches)
+
+    def run(self, items: list[Item]) -> list[list[float] | None]:
+        return run_spans(items, super().run, self.span_setup)
+
+    def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
+        return run_spans(items, super().run_approximate, self.span_setup)
 
     def _packs(self, items: list[Item]) -> bool:
         if any(adapter_of(item) is not None for item in items):
@@ -292,7 +342,7 @@ class GatedDecisions(Decision3Model):
 BASE_ONLY_TYPES = frozenset({"box", "track"})
 
 
-class TurboDecisions(StateOnceModel):
+class TurboDecisions(VelaPlanning, StateOnceModel):
     """vela3-turbo: d3-turbo's state-once answers, then the gated rows again with their adapter on.
 
     A request's questions run through the base's state-once path with every
@@ -306,23 +356,10 @@ class TurboDecisions(StateOnceModel):
     questions take the base alone.
     """
 
-    gates: Gates
-    span_setup: SpanSetup
-
-    def plan(
-        self, state: Any, questions: dict[str, Any], scan: int | None = None
-    ) -> RequestPlan[Item]:
-        refuse_blank(state)
-        if not isinstance(questions, dict):
-            return super().plan(state, questions, scan)
-        asked, rest = split_spans(questions)
-        plan = self._decisions(state, rest, scan) if rest else None
-        return with_spans(plan, state, asked, list(questions), self.span_setup)
-
     def _decisions(
         self, state: Any, questions: dict[str, Any], scan: int | None
     ) -> RequestPlan[Item]:
-        plan = super().plan(state, Gates.strip(questions), scan)
+        plan = self._base_plan(state, questions, scan)
         if any(
             isinstance(q, dict) and q.get("type") in BASE_ONLY_TYPES
             for q in questions.values()
@@ -330,11 +367,7 @@ class TurboDecisions(StateOnceModel):
             return plan
         assigned = self.gates.assign(questions)
         replays = [
-            GatedItem(
-                **{f.name: getattr(item, f.name) for f in fields(Item)}
-                | {"state": None, "cost": None},
-                adapter=assigned[item.question_id],
-            )
+            with_adapter(item, assigned[item.question_id], state=None, cost=None)
             for item in plan.items
             if item.question_id in assigned
             and item.media is None
@@ -347,34 +380,6 @@ class TurboDecisions(StateOnceModel):
             items=[*plan.items, *replays],
             input_tokens=plan.input_tokens + sum(len(item.ids) for item in replays),
         )
-
-    def plan_images(
-        self,
-        state: Any,
-        questions: dict[str, Any],
-        images: list[Any],
-        videos: list[Any] | None = None,
-    ) -> RequestPlan[Item]:
-        refuse_blank(state)
-        if not isinstance(questions, dict):
-            return super().plan_images(state, questions, images, videos)
-        asked, rest = split_spans(questions)
-        plan = (
-            super().plan_images(state, Gates.strip(rest), images, videos)
-            if rest
-            else None
-        )
-        return with_spans(
-            plan, state, asked, list(questions), self.span_setup, SPAN_IMAGES
-        )
-
-    def answer(self, item: Any, values: Any) -> dict[str, Any]:
-        if isinstance(item, SpanItem):
-            return {"type": "noul", "noul": values["noul"]}
-        return super().answer(item, values)
-
-    def finish_surface(self, plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
-        return finish_spans(super().finish_surface(plan, results), plan, results)
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         return span_batches(items, self._decision_batches)
