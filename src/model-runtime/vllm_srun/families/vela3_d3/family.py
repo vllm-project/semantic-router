@@ -29,10 +29,10 @@ from ...registry import builtin
 from ...registry.resolve import download
 from ..decision3.family import Decision3Family, Decision3Model
 from ..decision3.package import STATE_ONCE_MODES
+from ..vela3.request import PRESETS
 from . import package as pkg
 from .gates import Gates
 from .model import GatedDecisions, SpanSetup, TurboDecisions
-from ..vela3.request import PRESETS
 from .spans import ADAPTERS, Policy, Renderer, SpanReader
 
 
