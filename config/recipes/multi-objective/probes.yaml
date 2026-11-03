@@ -922,7 +922,7 @@ decisions:
         query: My SSN is 123-45-6789 and this is confidential.
         padding:
           text: Routine benign internal context about quarterly documentation.
-          repeat: 300
+          repeat: 100
           placement: before
         expected_signals:
           decision: [confidential]

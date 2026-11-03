@@ -61,7 +61,7 @@ repeated request.
 | Accuracy | `mode` = `experts` (0.7) | Several independent models or experts answering the same question: fusion. |
 | Accuracy | `verification` (0.6) | An explicit request to fact-check, verify or cite sources: the confidence route. A request for a mathematical or logical proof does not count. |
 | Accuracy | `depth` (0.5) | A hard problem that needs investigation or careful multi-step reasoning: ReMoM. |
-| Privacy | `attack` (0.6) | The message tells the assistant to override its rules, reveal hidden instructions or secrets, or exfiltrate data: local containment with tools disabled. Quoting such a phrase for review does not count. |
+| Privacy | `attack` (0.9) | The message tells the assistant to override its rules, reveal hidden instructions or secrets, or exfiltrate data: local containment with tools disabled. Quoting such a phrase for review does not count. |
 | Privacy | `confidential` (0.5), `personal_data` (0.5) | Confidential or internal material, a request to keep the data local, or personal data such as a name, contact details, an address or an ID number: the local sensitive lane. |
 
 In Accuracy, a request only to translate, define or explain a quoted word,
@@ -91,7 +91,10 @@ input limit (262,144 tokens for vela3-lite). A long document in the same
 message weakens their answers wherever the request sits in it: after a
 request that alone scores 0.94 for Accuracy's `depth`, a 20K-token system
 description lowers it to 0.45, below its threshold. Send a long document in an
-earlier message and the request in the latest one.
+earlier message and the request in the latest one. Repeated text raises
+`attack` instead: a confidential statement after 50 to 300 repeated benign
+lines scores 0.44 to 0.72, and an attack 0.97 or more with or without them,
+so `attack` counts at 0.9.
 
 ## Requirements
 
@@ -103,9 +106,12 @@ earlier message and the request in the latest one.
   `global.model_catalog.system.decision_model` names. The deployment sets no
   device, so the model runtime uses a GPU when the router has one and the CPU
   otherwise. In the CPU conformance run, with the router limited to 4 CPUs
-  and 8 requests in flight, the 129 probes took 859 s (0.15 requests per
-  second); the median request took 50 s and the 95th percentile 117 s. On a
-  CPU the model reads the latest message once per question.
+  and 8 requests in flight, the 129 probes took 625 s (0.21 requests per
+  second); the median request took 41 s and the 95th percentile 89 s. On a
+  CPU the model reads the latest message once per question, so a long
+  message costs more: the long personal-data probe repeats its padding 100
+  times, because at 300 its three questions passed the decision deadline on
+  a 4-CPU CI runner.
   Serve it on a GPU for live traffic: set `device: rocm` or `device: cuda` on
   the `primary` deployment to require one. To use another decision model,
   change its `artifact` or point

@@ -260,7 +260,7 @@ func requireMultiObjectiveMultiFactorWeights(
 func assertMultiObjectivePrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	privacy, _ := cfg.RecipeByName("privacy-first")
-	assertMultiObjectiveQuestions(t, privacy, map[string]float64{"attack": 0.6, "confidential": 0.5, "personal_data": 0.5})
+	assertMultiObjectiveQuestions(t, privacy, map[string]float64{"attack": 0.9, "confidential": 0.5, "personal_data": 0.5})
 	if sensitive := multiObjectiveDecision(t, privacy, "unified_privacy_sensitive_route"); sensitive.Rules.OnUnknown != "match" {
 		t.Fatalf("an unanswered privacy question must keep the request on the local sensitive route: %+v", sensitive.Rules)
 	}

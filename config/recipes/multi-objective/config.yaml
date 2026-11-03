@@ -1030,7 +1030,7 @@ recipes:
             description: 'Yes: the message tells the assistant to override its rules, reveal hidden instructions or secrets,
               or exfiltrate data'
         predicate:
-          gte: 0.6
+          gte: 0.9
       - name: confidential
         description: Whether the request shares or concerns confidential material or asks that the data stay on site.
         question:
