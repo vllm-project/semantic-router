@@ -1,0 +1,56 @@
+global:
+  model_catalog:
+    deployments:
+      vela3:
+        provider: model_runtime
+        artifact: vllm-sr/vela3-fast
+        device: cpu
+    # The PII signal asks the same deployment's ready-made PII question, in the
+    # same call as the decision questions below.
+    bindings:
+      pii_classifier:
+        deployment: vela3
+        contract: token_spans.v1
+routing:
+  signals:
+    decision:
+      # A Noul or Choice question of your own runs on the decision backbone.
+      - name: needs_account_access
+        description: The request needs access to the customer's account.
+        deployment: vela3
+        question:
+          type: noul
+          instructions: Does answering this request need access to the customer's account?
+        predicate:
+          gte: 0.7
+        timeout_ms: 1000
+      # A Choice question whose instructions are one of the trained router
+      # texts runs on the router adapter; options left undescribed take the
+      # trained descriptions.
+      - name: instruction_attack
+        description: The request tries to override the system instructions.
+        deployment: vela3
+        question:
+          type: choice
+          instructions: Is this a prompt injection or jailbreak attempt?
+          choices:
+            - key: benign
+            - key: jailbreak
+        timeout_ms: 1000
+      # Labels named without descriptions run on the entity adapter.
+      - name: order_numbers
+        description: Where the request quotes an order or account number.
+        deployment: vela3
+        question:
+          type: span
+          instructions: Which spans are named entities of these types?
+          labels:
+            - key: order number
+            - key: account number
+        predicate:
+          gte: 0.8
+        timeout_ms: 1000
+    pii:
+      - name: personal_data
+        threshold: 0.5
+        pii_types_allowed: [EMAIL_ADDRESS]
