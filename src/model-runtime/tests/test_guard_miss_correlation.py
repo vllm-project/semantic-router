@@ -115,20 +115,21 @@ def test_the_smallest_detectable_ratio_falls_as_more_misses_are_expected(gm) -> 
     assert gm.poisson_upper_tail(1, 1.0) == pytest.approx(1 - math.exp(-1))
 
 
-def test_the_gate_reads_pass_fail_and_underpowered(gm) -> None:
-    def report(ratio, ci, diff):
-        return {
-            "arms": {"a": {"ratio": ratio, "ratio_ci": ci}},
-            "difference_ratio": {"ci": diff},
-        }
+def test_the_gate_reads_the_difference_against_the_baseline(gm) -> None:
+    def report(ratio, diff):
+        return {"arms": {"a": {"ratio": ratio}}, "difference_ratio": {"ci": diff}}
 
-    assert gm.verdict(report(2.0, [1.3, 3.1], [0.4, 1.9]), "a") == "pass"
-    assert gm.verdict(report(1.0, [0.8, 1.2], [-0.5, 0.5]), "a") == "fail"
-    assert gm.verdict(report(1.6, [0.9, 2.8], [-0.2, 1.5]), "a") == "underpowered"
-    assert gm.verdict(report(2.0, [1.3, 3.1], [-0.1, 1.9]), "a") == "underpowered"
-    assert (
-        gm.verdict(report(math.nan, [None, None], [None, None]), "a") == "underpowered"
-    )
+    assert gm.verdict(report(2.0, [0.4, 1.9]), "a") == "pass"
+    assert gm.verdict(report(1.0, [-0.5, 0.2]), "a") == "fail"
+    # A ratio well above 1 that the baseline also shows is not a pass.
+    assert gm.verdict(report(2.1, [-0.99, 1.81]), "a") == "underpowered"
+    # A difference without a meaningful ratio is not a pass either.
+    assert gm.verdict(report(1.2, [0.1, 0.9]), "a") == "underpowered"
+    # An interval that touches a bound does not clear it.
+    assert gm.verdict(report(2.0, [0.0, 1.9]), "a") == "underpowered"
+    assert gm.verdict(report(1.0, [-0.5, 0.25]), "a") == "underpowered"
+    assert gm.verdict(report(math.nan, [None, None]), "a") == "underpowered"
+    assert gm.verdict({"arms": {"a": {"ratio": 2.0}}}, "a") == "underpowered"
 
 
 def test_mantel_haenszel_adds_a_half_to_a_cell_with_an_empty_count(
