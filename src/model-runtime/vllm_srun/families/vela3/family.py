@@ -334,6 +334,14 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
     def run(self, items: list[Vela3Item]) -> list[Output]:
         return self.networks.run(items)
 
+    def run_approximate(self, items: list[Vela3Item]) -> list[Output]:
+        """On a GPU, batches that merge requests share forwards between their equal calls.
+
+        A CPU gains no throughput from them and holds the dense masks of long
+        rows in host memory, so its forwards stay those of ``run``.
+        """
+        return self.networks.run(items, merged=self.engine_model.device.type != "cpu")
+
     # -- planning ------------------------------------------------------------
 
     def plan(
@@ -442,6 +450,7 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
             else:
                 key = ("span", question.id)
             groups.setdefault(key, []).append(entry)
+        turns: dict[tuple[str, int], int] = {}
         for key, members in groups.items():
             first = members[0]
             row = Row(
@@ -470,7 +479,9 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
                 continue
             placed = Placed(row, layout, [])
             for adapter in adapters:
-                call = Call(adapter, budget_tokens, SPAN_ROWS)
+                turn = turns.get((adapter, budget_tokens), 0)
+                turns[adapter, budget_tokens] = turn + 1
+                call = Call(adapter, budget_tokens, SPAN_ROWS, turn)
                 placed.calls.append(
                     list(range(len(items), len(items) + len(sequences)))
                 )
