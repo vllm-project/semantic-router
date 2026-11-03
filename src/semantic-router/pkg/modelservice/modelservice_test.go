@@ -147,8 +147,21 @@ func sampleRequest(state string) Request {
 	}}
 }
 
+// shortSocketPath returns a unix socket path inside the darwin sun_path limit.
+// t.TempDir() embeds the test name, which pushes the path past the 104-byte
+// limit on macOS and makes net.Listen fail with "bind: invalid argument".
+func shortSocketPath(t *testing.T, name string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "sr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, name)
+}
+
 func TestClientDecideOverUnixSocket(t *testing.T) {
-	socket := filepath.Join(t.TempDir(), "runtime.sock")
+	socket := shortSocketPath(t, "runtime.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
