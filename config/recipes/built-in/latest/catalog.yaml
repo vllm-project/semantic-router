@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
+  sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 protocols:
 - id: vllm-sr/systemone@1
   display_name: System One
@@ -1146,7 +1146,51 @@ providers:
     monogram: G
     monochrome: true
   conformance:
-    status: unverified
+    status: live_verified
+    verified_at: '2026-09-22'
+  models:
+  - catalog: openai/gpt-oss-120b
+    relationship: managed_cloud
+    id: openai/gpt-oss-120b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      completion_per_1m: 0.6
+    lifecycle: active
+    verification:
+      status: reproduced
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
+  - catalog: openai/gpt-oss-20b
+    relationship: managed_cloud
+    id: openai/gpt-oss-20b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.075
+      completion_per_1m: 0.3
+    lifecycle: active
+    verification:
+      status: reproduced
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
+  - catalog: qwen/qwen3.8-27b
+    relationship: managed_cloud
+    id: qwen/qwen3.8-27b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.8
+      completion_per_1m: 4.0
+    lifecycle: experimental
+    verification:
+      status: reproduced
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
 - id: hugging-face
   display_name: Hugging Face
   description: Models served through the Hugging Face router.
@@ -9747,7 +9791,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9814,7 +9858,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9884,7 +9928,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9969,7 +10013,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -10022,7 +10066,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
