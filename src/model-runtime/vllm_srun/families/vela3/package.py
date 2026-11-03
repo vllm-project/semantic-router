@@ -214,10 +214,12 @@ class Vela3Package:
         return (self.root / BACKBONE_FILE,)
 
 
-def read_sums(root: Path) -> dict[str, str]:
-    """The package's ``SHA256SUMS`` by file name, empty when it has none."""
+def read_sums(root: Path, *, required: bool = False) -> dict[str, str]:
+    """The package's ``SHA256SUMS`` by file name; empty when it has none, a ``PackageError`` if ``required``."""
     path = root / SUMS_FILE
     if not path.is_file():
+        if required:
+            raise PackageError(f"the package has no {SUMS_FILE}")
         return {}
     sums = {}
     for line in path.read_text(encoding="utf-8").splitlines():

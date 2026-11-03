@@ -57,11 +57,10 @@ from .package import (
     member_of_vision,
     verify,
 )
-from .request import DECISION, ROUTER, Asked, Read, Reader, text
+from .request import DECISION, PRESETS, ROUTER, Asked, Read, Reader, text
 from .routing import SPAN_BUDGET, SPAN_ROWS, Router
 
 QUESTION_TYPES = ("choice", "noul", "span")
-PRESETS = ("pii", "halu")
 TOKEN_CACHE = 8192
 # A question reads a part whole up to this many windows' worth of tokens by
 # default (``max_scan_tokens``); a request may set another budget. A question

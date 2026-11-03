@@ -33,7 +33,7 @@ from ...systemone import require_full_input
 from ..decision3.family import Item
 from ..decision3.prompt import render
 from ..vela2.words import words_of
-from ..vela3.request import threshold_of
+from ..vela3.request import expand_preset, threshold_of
 from ..vela3.routing import RELATION_WORDING
 from .decode import decode, evidence_spans
 
@@ -52,9 +52,6 @@ FIELDS = frozenset(
         "require_full_input",
     }
 )
-# The vela3 family's presets: a router label set asked with its trained question and descriptions.
-PRESETS = ("pii", "halu")
-PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
 # A span question reads its whole target, in windows: the one overflow it takes.
 WINDOWED = "window"
 ANSWERING = re.compile(
@@ -74,27 +71,6 @@ def is_span(question: Any) -> bool:
     return isinstance(question, dict) and (
         question.get("type") == "span" or "preset" in question
     )
-
-
-def expand_preset(question: dict[str, Any], span: dict[str, Any]) -> dict[str, Any]:
-    """A preset question as the span question it names (the vela3 family's rules)."""
-    name = question["preset"]
-    if name not in PRESETS or name not in span["schemas"]:
-        raise invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
-    if set(question) - {"preset", "type", *PRESET_KEPT}:
-        raise invalid(
-            "a preset question takes only preset, type, over, threshold, overflow "
-            "and require_full_input"
-        )
-    if question.get("type") not in (None, "span"):
-        raise invalid(f"preset {name} is a span question")
-    schema = span["schemas"][name]
-    return {
-        "type": "span",
-        "instructions": schema["question"],
-        "criteria": dict(schema["labels"]),
-        **{key: question[key] for key in PRESET_KEPT if key in question},
-    }
 
 
 @dataclass(frozen=True)
@@ -380,7 +356,7 @@ def plan_question(
 ) -> SpanItem:
     """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid."""
     if "preset" in question:
-        question = expand_preset(question, policy.span)
+        question = expand_preset(question, policy.span["schemas"])
     unknown = sorted(set(question) - FIELDS)
     if unknown:
         raise invalid(f"span questions do not take {unknown}")

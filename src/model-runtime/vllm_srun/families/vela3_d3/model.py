@@ -294,6 +294,12 @@ class VelaPlanning(Decision3Model):
 
 
 class GatedDecisions(VelaPlanning):
+    """vela3-lite, -mini and -flash: the base's own batches, each gated row with its adapter on.
+
+    Span rows run their own noncausal passes, and a batch that holds a gated
+    row is not packed.
+    """
+
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         return span_batches(items, super().exact_batches)
 

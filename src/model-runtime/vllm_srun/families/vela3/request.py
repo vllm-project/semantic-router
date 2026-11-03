@@ -43,6 +43,8 @@ SPAN_FIELDS = frozenset(
 SET_FIELDS = frozenset({"type", "instructions", "criteria", "labels", "threshold"})
 OVERFLOW = ("window", "truncate")
 PRESETS = ("pii", "halu")
+# The fields a preset question keeps; its instructions and labels are the preset's.
+PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
 NOUL_OPTIONS = (("no", ""), ("yes", ""))
 
 
@@ -249,24 +251,8 @@ class Reader:
     # -- spans -----------------------------------------------------------------
 
     def _preset(self, question: dict[str, Any]) -> dict[str, Any]:
-        name = question["preset"]
-        if name not in PRESETS:
-            raise _invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
-        kept = {"over", "threshold", "overflow", "require_full_input"}
-        if set(question) - kept - {"preset", "type"}:
-            raise _invalid(
-                "a preset question takes only preset, type, over, threshold and overflow"
-            )
-        if question.get("type") not in (None, "span"):
-            raise _invalid(f"preset {name} is a span question")
-        schema = self.router.span["schemas"][name]
-        return {
-            "type": "span",
-            "instructions": schema["question"],
-            "criteria": dict(schema["labels"]),
-            "preset": name,
-            **{key: question[key] for key in kept if key in question},
-        }
+        expanded = expand_preset(question, self.router.span["schemas"])
+        return {**expanded, "preset": question["preset"]}
 
     def _span(
         self, question_id: str, question: dict[str, Any], state: State | None
@@ -328,6 +314,25 @@ def _overflow(question: dict[str, Any]) -> str:
     if overflow not in OVERFLOW:
         raise _invalid(f"overflow must be one of {list(OVERFLOW)}")
     return str(overflow)
+
+
+def expand_preset(question: dict[str, Any], schemas: dict[str, Any]) -> dict[str, Any]:
+    """A preset question as the span question it names: the package's trained question and labels for it."""
+    name = question["preset"]
+    if name not in PRESETS or name not in schemas:
+        raise _invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
+    if set(question) - {"preset", "type", *PRESET_KEPT}:
+        allowed = ", ".join(("preset", "type", *PRESET_KEPT))
+        raise _invalid(f"a preset question takes only {allowed}")
+    if question.get("type") not in (None, "span"):
+        raise _invalid(f"preset {name} is a span question")
+    schema = schemas[name]
+    return {
+        "type": "span",
+        "instructions": schema["question"],
+        "criteria": dict(schema["labels"]),
+        **{key: question[key] for key in PRESET_KEPT if key in question},
+    }
 
 
 def threshold_of(question: dict[str, Any]) -> float | None:

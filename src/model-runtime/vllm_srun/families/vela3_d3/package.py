@@ -197,9 +197,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
     else:
-        if not (root / SUMS_FILE).is_file():
-            raise PackageError(f"the package has no {SUMS_FILE}")
-        sums = read_sums(root)
+        sums = read_sums(root, required=True)
         mismatched = sorted(
             name for name, digest in files.items() if sums.get(name) != digest
         )

@@ -1042,8 +1042,15 @@ per pass); the replay's answer replaces the base's and its tokens count in
 the usage. Span passes add nothing to `usage.input_tokens` on any size, on
 purpose: the packages' runtime does not count them either, and every
 parity request's input tokens agree with it (the vela3 family counts its
-span windows). Requests with images take the base alone and refuse span
-questions. Span answers follow the contract (`spans`, `thresholds`, a Noul of
+span windows). Requests with images, videos or assets and Box / track
+questions take the base alone; those with media refuse span questions. On
+every path a blank state is refused and span questions are planned before
+the base sees the rest.
+A span question reads its whole target in windows, so `overflow` takes only
+`window`, and each window goes through the base's length check
+(`max_length_exceeded`). `{"preset": "pii"}` and `"halu"` ask the package's
+trained question and label set, as on the vela3 family; the card lists the
+presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
 its compatibility block at U+F900, unlike the word splitter's). Open labels
 without a description run by name: the packages' label-definition writers
