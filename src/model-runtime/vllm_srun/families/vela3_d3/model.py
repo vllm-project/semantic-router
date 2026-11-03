@@ -25,17 +25,11 @@ from ...plugins.decisions import RequestPlan, ResolvedDecision
 from ..decision3.family import BATCH_SIZE, Decision3Model, Item
 from ..decision3.state_once import StateOnceModel
 from .gates import Gates
-from .spans import (
-    Definitions,
-    Policy,
-    Renderer,
-    SpanItem,
-    SpanReader,
-    invalid,
-    is_span,
-    plan_question,
-)
-from .spans import answer as span_answer
+from .span_policy import Definitions, Policy
+from .span_read import SpanReader
+from .span_read import answer as span_answer
+from .span_render import Renderer
+from .spans import SpanItem, invalid, is_span, plan_question
 
 
 @dataclass(frozen=True)
@@ -54,7 +48,7 @@ def adapter_of(item: Item) -> str | None:
 
 @dataclass(frozen=True)
 class SpanSetup:
-    """What a model needs to plan and run span questions (``spans.py``)."""
+    """What a model needs to plan and run span questions (``spans.py`` and its ``span_*`` modules)."""
 
     policy: Policy
     renderer: Renderer

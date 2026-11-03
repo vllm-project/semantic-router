@@ -121,6 +121,22 @@ def test_refuses_unpaired_lora_factors(written, tmp_path) -> None:
         family(root).verify(PackageRef(root))
 
 
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda span: span.pop("default_question"),
+        lambda span: span.update(threshold="high"),
+        lambda span: span["schemas"]["pii"].pop("labels"),
+        lambda span: span["ner"].pop("threshold_names_only"),
+    ],
+)
+def test_refuses_a_malformed_span_section(written, tmp_path, change) -> None:
+    root = copy(written, tmp_path)
+    edit_config(root, lambda config: change(config["span"]))
+    with pytest.raises(PackageError, match="span is malformed"):
+        family(root).verify(PackageRef(root))
+
+
 def test_refuses_an_unpinned_base(written, tmp_path) -> None:
     root = copy(written, tmp_path)
     edit_config(root, lambda c: c["base"].update(revision="main"))

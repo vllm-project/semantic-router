@@ -9,8 +9,10 @@ import numpy as np
 import pytest
 from vllm_srun.errors import QuestionError
 from vllm_srun.families.decision3.prompt import render
-from vllm_srun.families.vela3_d3 import spans
-from vllm_srun.families.vela3_d3.spans import Policy, Renderer, Window, combine
+from vllm_srun.families.vela3_d3 import span_render, spans
+from vllm_srun.families.vela3_d3.span_policy import Policy, SpanConfig
+from vllm_srun.families.vela3_d3.span_read import combine
+from vllm_srun.families.vela3_d3.span_render import Renderer, Window
 from vllm_srun.plugins.base import AdapterGate
 from vllm_srun.testing import vela3_d3 as fixture
 
@@ -25,8 +27,8 @@ STATE = {
 SPAN_CONFIG = fixture.vela3_config({})["span"]
 
 
-def policy(heads=("span", "ner", "rel")) -> Policy:
-    return Policy(SPAN_CONFIG, set(heads))
+def policy(heads=("span", "ner", "relation")) -> Policy:
+    return Policy(SpanConfig.parse(SPAN_CONFIG), set(heads))
 
 
 # ------------------------------------------------------------------ routing and thresholds
@@ -39,8 +41,8 @@ def policy(heads=("span", "ner", "rel")) -> Policy:
         (["evidence"], None, "span"),
         (["answer"], "Which spans are named entities?", "span"),
         (["drug"], None, "ner"),
-        (["drug"], "Which spans are the dose of the drug?", "rel"),
-        (["drug"], "Which spans are related to the dose?", "rel"),
+        (["drug"], "Which spans are the dose of the drug?", "relation"),
+        (["drug"], "Which spans are related to the dose?", "relation"),
         (
             ["drug"],
             "Which spans relate to the dose?",
@@ -75,8 +77,8 @@ def test_thresholds_follow_the_label_set_and_the_route() -> None:
     assert p.threshold("span", None, named, 10) == 0.5
     assert p.threshold("ner", None, described, 10) == 0.6
     assert p.threshold("ner", None, named, 10) == 0.65
-    assert p.threshold("rel", None, named, 10) == 0.4
-    assert p.threshold("rel", None, named * 2, 10) == 0.45
+    assert p.threshold("relation", None, named, 10) == 0.4
+    assert p.threshold("relation", None, named * 2, 10) == 0.45
 
 
 # ------------------------------------------------------------------ validation
@@ -167,20 +169,20 @@ def test_long_targets_read_in_word_aligned_windows(model) -> None:
     windows, count = renderer.windows(
         [("user", text)], "user", "Which spans?", [("x", "")]
     )
-    assert count > spans.MAX_TARGET and len(windows) > 1
+    assert count > span_render.MAX_TARGET and len(windows) > 1
     covered = {offsets for window in windows for offsets in window.word_offsets}
     assert min(covered)[0] == 0 and max(covered)[1] == len(text)
     assert all(len(window.word_offsets) for window in windows)
 
 
 def test_windows_start_a_stride_apart_on_word_starts() -> None:
-    assert spans.windows(np.arange(5000), 5000) == [
+    assert span_render.windows(np.arange(5000), 5000) == [
         (0, 1799),
         (1536, 3335),
         (3072, 4871),
         (4608, 5000),
     ]
-    assert spans.windows(np.arange(100), 100) == [(0, 100)]
+    assert span_render.windows(np.arange(100), 100) == [(0, 100)]
 
 
 class Capture(Renderer):
@@ -230,7 +232,7 @@ def test_open_labels_without_descriptions_leave_the_ner_head_unless_it_takes_nam
     None
 ):
     config = {**SPAN_CONFIG, "ner": {**SPAN_CONFIG["ner"], "names_only_route": "span"}}
-    strict = Policy(config, {"span", "ner", "rel"})
+    strict = Policy(SpanConfig.parse(config), {"span", "ner", "relation"})
     asked = {"type": "span", "criteria": ["drug"]}
     item = spans.plan_question("q", asked, STATE, strict, Capture(), lambda n, o: {})
     assert item.route == "span"
@@ -323,7 +325,7 @@ def test_each_route_runs_its_adapter_under_the_noncausal_mask(
         },
     }
     plan = model.plan(STATE, questions)
-    assert [item.route for item in plan.items] == ["span", "ner", "rel"]
+    assert [item.route for item in plan.items] == ["span", "ner", "relation"]
     model.run(list(plan.items))
     assert [(gate.name, flag) for gate, flag in seen] == [
         ("span", True),

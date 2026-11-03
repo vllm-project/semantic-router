@@ -33,6 +33,7 @@ from ...registry.artifacts import (
 )
 from ...registry.resolve import REVISION
 from ..vela3.package import CONFIG_FILE, SUMS_FILE, package_file, read_sums
+from .span_policy import SpanConfig
 
 FORMAT = "vela3/3"
 # Read for images only (a non-goal here): never loaded.
@@ -74,6 +75,7 @@ class Vela3D3Package:
 
     root: Path
     vela3: dict[str, Any]
+    span: SpanConfig
     base: Base
     adapters: dict[str, Adapter]
     heads: dict[str, str]
@@ -208,6 +210,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
     return Vela3D3Package(
         root=root,
         vela3=vela3,
+        span=SpanConfig.parse(vela3["span"]),
         base=base,
         adapters=adapters,
         heads=heads,

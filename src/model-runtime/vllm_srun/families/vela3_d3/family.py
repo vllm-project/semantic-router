@@ -33,7 +33,9 @@ from ..vela3.request import PRESETS
 from . import package as pkg
 from .gates import Gates
 from .model import GatedDecisions, SpanSetup, TurboDecisions, Vela3D3Model
-from .spans import ADAPTERS, Policy, Renderer, SpanReader
+from .span_policy import ROUTES, Policy
+from .span_read import SpanReader
+from .span_render import Renderer
 
 
 class Vela3D3Family(ModelFamily):
@@ -127,16 +129,16 @@ class Vela3D3Family(ModelFamily):
         )
         assert isinstance(model, Vela3D3Model)
         heads = {
-            route: _head(details.root / details.heads[name], engine_model.device)
-            for route, name in ADAPTERS.items()
-            if name in details.heads
+            route: _head(details.root / details.heads[route], engine_model.device)
+            for route in ROUTES
+            if route in details.heads
         }
         model.attach(
             Gates.from_config(
                 details.vela3, details.router_questions, details.adapters
             ),
             SpanSetup(
-                policy=Policy(details.vela3["span"], set(heads)),
+                policy=Policy(details.span, set(heads)),
                 renderer=Renderer(model.tokenizer, model.codes),
                 reader=SpanReader(engine_model, heads),
                 definitions=_names_only,
@@ -151,9 +153,7 @@ class Vela3D3Family(ModelFamily):
             model_sha256=package.model_sha256,
             manifest_sha256=package.manifest_sha256,
             question_types=(*model.info.question_types, "span"),
-            presets=tuple(
-                name for name in PRESETS if name in details.vela3["span"]["schemas"]
-            ),
+            presets=tuple(name for name in PRESETS if name in details.span.schemas),
         )
         return model
 
