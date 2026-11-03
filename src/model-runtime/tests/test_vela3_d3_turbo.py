@@ -232,6 +232,16 @@ def test_the_opt_in_key_is_stripped_for_the_base(runtimes) -> None:
     assert got["answers"] == want["answers"]
 
 
+def test_only_the_d3_sizes_take_the_opt_in_key(runtimes) -> None:
+    vela, d3 = runtimes
+    questions = {"care": {**NOUL, "decision_adapter": True}}
+    _, got = call(vela, {"state": STATE, "questions": questions})
+    status, refused = call(d3, {"state": STATE, "questions": questions})
+    assert "error" not in got["answers"]["care"]
+    assert status == 400
+    assert "do not take ['decision_adapter']" in refused["error"]["message"]
+
+
 def test_a_state_once_base_needs_noncausal_replays(written, tmp_path) -> None:
     root = tmp_path / "vela3-turbo"
     shutil.copytree(written, root)

@@ -496,6 +496,14 @@ components:
         preset:
           type: string
           description: A question the model defines; the model fills in its type, instructions and criteria.
+        decision_adapter:
+          type: boolean
+          default: false
+          description: |
+            Vela 3.0 d3 sizes (family `vela3_d3`): true answers a Choice, Noul or Score question that is not a
+            router question with the opt-in decision adapter of a package that declares `decision_opt_in` (its
+            `decision_optin` adapter, else its router adapter); a package without one answers it as if false.
+            Other models answer the field with invalid_question.
     ChoiceOption:
       type: object
       additionalProperties: false

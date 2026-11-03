@@ -1163,6 +1163,12 @@ type Question struct {
 	// 1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
 	Criteria *interface{} `json:"criteria,omitempty"`
 
+	// DecisionAdapter Vela 3.0 d3 sizes (family `vela3_d3`): true answers a Choice, Noul or Score question that is not a
+	// router question with the opt-in decision adapter of a package that declares `decision_opt_in` (its
+	// `decision_optin` adapter, else its router adapter); a package without one answers it as if false.
+	// Other models answer the field with invalid_question.
+	DecisionAdapter *bool `json:"decision_adapter,omitempty"`
+
 	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
 	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 	Head *QuestionHead `json:"head,omitempty"`
