@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -191,7 +192,7 @@ func anthropicRequestContentType(body json.RawMessage) (string, error) {
 	case "redacted_thinking":
 		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
 	default:
-		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic content type is unsupported", nil)
+		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic content type "+strconv.Quote(typeName)+" is unsupported", nil)
 	}
 }
 
@@ -206,7 +207,7 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 	case "redacted_thinking":
 		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
 	default:
-		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic response content type is unsupported", nil)
+		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic response content type "+strconv.Quote(typeName)+" is unsupported", nil)
 	}
 }
 
@@ -298,7 +299,7 @@ func decodeAnthropicTypedContent(
 		}
 		return llmprotocol.Content{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: block.ToolUseID, Content: resultContent, IsError: block.IsError}, Cache: decodeAnthropicCacheControl(block.CacheControl)}, nil
 	default:
-		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic content type is unsupported", nil)
+		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic content type "+strconv.Quote(typeName)+" is unsupported", nil)
 	}
 }
 
