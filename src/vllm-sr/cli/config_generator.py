@@ -291,7 +291,7 @@ def generate_envoy_config_from_user_config(
 
     # Write output
     try:
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(rendered)
         if log_summary:
             log.info(f"Generated Envoy config: {output_path}")
