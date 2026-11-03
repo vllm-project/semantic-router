@@ -136,6 +136,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	body []byte,
 	ctx *RequestContext,
 ) (*llmprotocol.Request, *ext_proc.ProcessingResponse) {
+	r.ensureRequestIdentity(ctx)
 	if ctx.SourceFormat == "" {
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}

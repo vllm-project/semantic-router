@@ -38,15 +38,15 @@ global:
   router:
     learning:
       enabled: true
+      identity:
+        headers:
+          session: x-session-id
+          conversation: x-conversation-id
       adaptation:
         enabled: false
       protection:
         enabled: true
         scope: conversation
-        identity:
-          headers:
-            session: x-session-id
-            conversation: x-conversation-id
         tuning:
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
@@ -56,6 +56,14 @@ global:
 
 This enables protection independently of online model-choice adaptation. Both
 components otherwise default to enabled when the master switch is enabled.
+
+Set identity on `learning.identity`. `learning.protection.identity` is still
+accepted as an alias of that block. `identity.headers.agent` is optional and
+has no default header name. Protection holds each named agent on its own model.
+The same header is recorded as Replay `agent_id` beside the shared `session_id`,
+and previous-model and idle observations stay on that session and agent, even
+when protection is off or the conversation header is absent. A request that
+omits the agent header keeps the existing session key.
 
 ## Scopes
 
@@ -83,13 +91,14 @@ given, even when a decision routes the subagent's request elsewhere. Name the
 header that identifies each agent to hold them separately:
 
 ```yaml
-protection:
-  enabled: true
-  scope: session
+learning:
   identity:
     headers:
       session: x-claude-code-session-id
       agent: x-claude-code-agent-id
+  protection:
+    enabled: true
+    scope: session
 ```
 
 Claude Code sends `x-claude-code-agent-id` only on subagent requests, so the

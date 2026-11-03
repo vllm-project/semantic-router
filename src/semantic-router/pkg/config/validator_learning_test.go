@@ -189,6 +189,9 @@ global:
 	if got := cfg.RouterLearning.Protection.HeaderName("conversation"); got != routerLearningDefaultConversationHeader {
 		t.Fatalf("expected default conversation header %q, got %q", routerLearningDefaultConversationHeader, got)
 	}
+	if got := cfg.RouterLearning.Protection.HeaderName("agent"); got != "" {
+		t.Fatalf("expected no default agent header, got %q", got)
+	}
 }
 
 func TestParseYAMLBytesDisablesLearningComponentsIndependently(t *testing.T) {

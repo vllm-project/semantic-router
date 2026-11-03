@@ -23873,6 +23873,9 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "agent_id": {
+                            "type": "string"
+                          },
                           "baseline_cost": {
                             "nullable": true,
                             "type": "number"
@@ -28260,6 +28263,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent_id": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -28623,6 +28629,9 @@
                     "actual_cost": {
                       "nullable": true,
                       "type": "number"
+                    },
+                    "agent_id": {
+                      "type": "string"
                     },
                     "baseline_cost": {
                       "nullable": true,

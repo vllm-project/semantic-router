@@ -22,7 +22,8 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata
+	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata,
+	agent_id
 `
 
 type postgresRowScanner interface {
@@ -79,6 +80,7 @@ type postgresRecordRow struct {
 	turnIndex                    sql.NullInt64
 	previousResponseID           sql.NullString
 	conversationID               sql.NullString
+	agentID                      sql.NullString
 	recipe                       sql.NullString
 	endedAt                      sql.NullTime
 	terminalReason               sql.NullString
@@ -220,6 +222,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		emptyStringSQL(record.record.Recipe),
 		record.safetyEvidenceJSON,
 		record.routingMetadataJSON,
+		emptyStringSQL(record.record.AgentID),
 	}
 }
 
@@ -319,6 +322,7 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.recipe,
 		&row.safetyEvidenceJSON,
 		&row.routingMetadataJSON,
+		&row.agentID,
 	}
 }
 
@@ -411,6 +415,9 @@ func (row *postgresRecordRow) assignReplaySessionIdentifiers() {
 	}
 	if row.conversationID.Valid {
 		row.record.ConversationID = row.conversationID.String
+	}
+	if row.agentID.Valid {
+		row.record.AgentID = row.agentID.String
 	}
 }
 

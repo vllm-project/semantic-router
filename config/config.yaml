@@ -2121,6 +2121,13 @@ global:
           pretrained_path: models/model-selection/mlp.pt
     learning:
       enabled: true
+      identity:
+        headers:
+          session: x-session-id
+          conversation: x-conversation-id
+          # Optional. Names one agent inside the session, such as a delegated
+          # subagent. Claude Code sends this header on subagent calls only.
+          agent: x-claude-code-agent-id
       adaptation:
         enabled: true
         candidate_set: decision
@@ -2128,12 +2135,12 @@ global:
       protection:
         enabled: true
         scope: conversation
+        # Legacy alias of learning.identity. New configs should set identity once,
+        # directly under learning.
         identity:
           headers:
             session: x-session-id
             conversation: x-conversation-id
-            # Optional: holds each named agent (a delegated subagent) on its own
-            # model inside the session. Claude Code sends this on subagent calls.
             agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300

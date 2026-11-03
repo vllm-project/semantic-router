@@ -105,3 +105,47 @@ func TestPostgresMetadataIntegration(t *testing.T) {
 		}
 	}
 }
+
+// StorageIntegration: postgres
+func TestPostgresAgentIDRoundTrip(t *testing.T) {
+	storagetest.Require(t, "postgres")
+	raw := os.Getenv("ROUTER_REPLAY_TEST_POSTGRES_CONFIG")
+	if raw == "" {
+		storagetest.Unavailable(t, "postgres", "set ROUTER_REPLAY_TEST_POSTGRES_CONFIG to run against PostgreSQL")
+	}
+	var cfg PostgresConfig
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		t.Fatal("ROUTER_REPLAY_TEST_POSTGRES_CONFIG must be a JSON PostgresConfig")
+	}
+	cfg.TableName = fmt.Sprintf("replay_agent_%d", time.Now().UnixNano())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	postgres, err := NewPostgresStore(&cfg, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		//nolint:gosec // generated table name was validated by NewPostgresStore
+		if _, dropErr := postgres.db.ExecContext(cleanupCtx, "DROP TABLE IF EXISTS "+cfg.TableName); dropErr != nil {
+			t.Errorf("drop owned test table: %v", dropErr)
+		}
+		_ = postgres.Close()
+	})
+
+	input := postgresMetadataFixture()
+	input.ID = "agent-round-trip"
+	input.SessionID = "configured-run"
+	input.AgentID = "thread-review"
+	if id, addErr := postgres.Add(ctx, input); addErr != nil || id != input.ID {
+		t.Fatalf("Add returned id=%q err=%v", id, addErr)
+	}
+	got, found, err := postgres.Get(ctx, input.ID)
+	if err != nil || !found {
+		t.Fatalf("Get agent row: found=%v err=%v", found, err)
+	}
+	if got.AgentID != "thread-review" || got.SessionID != "configured-run" {
+		t.Fatalf("postgres agent round trip session=%q agent=%q", got.SessionID, got.AgentID)
+	}
+}

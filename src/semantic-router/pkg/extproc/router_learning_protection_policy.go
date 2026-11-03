@@ -61,6 +61,18 @@ func newProtectionPolicy(
 	policy.Action = action
 	policy.Reason = reason
 	policy.Scope = scope
+	sessionID := ""
+	conversationID := ""
+	agentID := ""
+	if ctx != nil && ctx.requestIdentityReady {
+		sessionID = ctx.requestIdentity.SessionID
+		conversationID = ctx.requestIdentity.ConversationID
+		agentID = ctx.requestIdentity.AgentID
+	} else if ctx != nil {
+		sessionID = strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session")))
+		conversationID = strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation")))
+		agentID = strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent")))
+	}
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		nil,
 		newRouterLearningIdentityDiagnostics(routerLearningIdentity{
@@ -68,9 +80,9 @@ func newProtectionPolicy(
 			sessionHeader:      cfg.HeaderName("session"),
 			conversationHeader: cfg.HeaderName("conversation"),
 			agentHeader:        cfg.HeaderName("agent"),
-			sessionID:          strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
-			conversationID:     strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
-			agentID:            strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
+			sessionID:          sessionID,
+			conversationID:     conversationID,
+			agentID:            agentID,
 		}),
 	)
 	return policy

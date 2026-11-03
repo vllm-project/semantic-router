@@ -98,6 +98,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
+	r.ensureRequestIdentity(ctx)
 	if ctx != nil && ctx.RouterReplayPluginConfig == nil && r != nil && r.Config != nil {
 		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
@@ -137,21 +138,23 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	if r == nil || ctx == nil || record == nil {
 		return
 	}
+	identity := r.ensureRequestIdentity(ctx)
+	if identity.SessionID != "" {
+		record.SessionID = identity.SessionID
+	}
+	if identity.ConversationID != "" {
+		record.ConversationID = identity.ConversationID
+	}
+	if identity.AgentID != "" {
+		record.AgentID = identity.AgentID
+	}
+	// Persist the key the gate resolved, so outcome ingest can land feedback
+	// in the same window even when the session id alone keys it wider.
 	cfg := config.RouterLearningProtectionConfig{}
 	if r.Config != nil {
 		cfg = r.Config.RouterLearning.Protection
 	}
-	identity, ok := r.protectionIdentity(ctx, cfg)
-	if !ok {
-		return
-	}
-	record.SessionID = identity.sessionID
-	if identity.conversationID != "" {
-		record.ConversationID = identity.conversationID
-	}
-	// Persist the key the gate resolved, so outcome ingest can land feedback
-	// in the same window even when the session id alone keys it wider.
-	if record.Learning != nil {
+	if _, ok := r.protectionIdentity(ctx, cfg); ok && record.Learning != nil {
 		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
 	}
 }

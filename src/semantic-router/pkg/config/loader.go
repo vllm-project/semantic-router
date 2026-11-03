@@ -483,9 +483,14 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	if err := rejectUnknownMapFields(
 		"global.router.learning",
 		learning,
-		[]string{"enabled", "adaptation", "protection", "state_store"},
+		[]string{"enabled", "adaptation", "identity", "protection", "state_store"},
 	); err != nil {
 		return err
+	}
+	if identity, ok := learning["identity"]; ok {
+		if err := rejectUnsupportedIdentityMap("global.router.learning.identity", nestedStringMap(identity)); err != nil {
+			return err
+		}
 	}
 	if err := rejectUnknownMapFields(
 		"global.router.learning.adaptation",
@@ -538,6 +543,20 @@ func rejectUnsupportedDecisionAdaptationFields(raw map[string]interface{}) error
 	return nil
 }
 
+func rejectUnsupportedIdentityMap(prefix string, identityMap map[string]interface{}) error {
+	if len(identityMap) == 0 {
+		return nil
+	}
+	if err := rejectUnknownMapFields(prefix, identityMap, []string{"headers"}); err != nil {
+		return err
+	}
+	return rejectUnknownMapFields(
+		prefix+".headers",
+		nestedStringMap(identityMap["headers"]),
+		[]string{"session", "conversation", "agent"},
+	)
+}
+
 func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]interface{}, allowed []string) error {
 	if len(raw) == 0 {
 		return nil
@@ -546,15 +565,7 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		return err
 	}
 	if identity, ok := raw["identity"]; ok {
-		identityMap := nestedStringMap(identity)
-		if err := rejectUnknownMapFields(prefix+".identity", identityMap, []string{"headers"}); err != nil {
-			return err
-		}
-		if err := rejectUnknownMapFields(
-			prefix+".identity.headers",
-			nestedStringMap(identityMap["headers"]),
-			[]string{"session", "conversation", "agent"},
-		); err != nil {
+		if err := rejectUnsupportedIdentityMap(prefix+".identity", nestedStringMap(identity)); err != nil {
 			return err
 		}
 	}

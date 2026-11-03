@@ -34,14 +34,17 @@ func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map
 func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {
 	adaptation := mustMapAt(t, learning, "adaptation")
 	protection := mustMapAt(t, learning, "protection")
-	identity := mustMapAt(t, protection, "identity")
+	identity := mustMapAt(t, learning, "identity")
 	identityHeaders := mustMapAt(t, identity, "headers")
+	protectionIdentity := mustMapAt(t, protection, "identity")
 
 	assertMapCoversStructFields(t, learning, reflect.TypeOf(RouterLearningConfig{}), "global.router.learning")
+	assertMapCoversStructFields(t, identity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.identity")
+	assertMapCoversStructFields(t, identityHeaders, reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.identity.headers")
 	assertMapCoversStructFields(t, adaptation, reflect.TypeOf(RouterLearningAdaptationConfig{}), "global.router.learning.adaptation")
 	assertMapCoversStructFields(t, protection, reflect.TypeOf(RouterLearningProtectionConfig{}), "global.router.learning.protection")
-	assertMapCoversStructFields(t, identity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.protection.identity")
-	assertMapCoversStructFields(t, identityHeaders, reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.protection.identity.headers")
+	assertMapCoversStructFields(t, protectionIdentity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.protection.identity")
+	assertMapCoversStructFields(t, mustMapAt(t, protectionIdentity, "headers"), reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.protection.identity.headers")
 	assertMapCoversStructFields(t, mustMapAt(t, protection, "tuning"), reflect.TypeOf(RouterLearningProtectionTuning{}), "global.router.learning.protection.tuning")
 }
 

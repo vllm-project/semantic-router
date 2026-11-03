@@ -244,6 +244,7 @@ func (r *OpenAIRouter) buildSelectionContext(
 		recipeName = reqCtx.Routing.RecipeName()
 	}
 	inputTokens, expectedOutputTokens := selectionTokenBudget(reqCtx)
+	stateKey := r.selectionObservationKey(reqCtx, sessionID)
 
 	return &selection.SelectionContext{
 		Query:                      query,
@@ -260,8 +261,8 @@ func (r *OpenAIRouter) buildSelectionContext(
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 		UserID:                     userID,
 		SessionID:                  sessionID,
-		SessionStateKey:            sessiontelemetry.RoutingSessionKey(recipeName, sessionID),
-		AgenticSession:             r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
+		SessionStateKey:            stateKey,
+		AgenticSession:             r.buildAgenticSessionContextForKey(reqCtx, modelRefs, sessionID, userID, stateKey),
 		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
@@ -289,7 +290,7 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		return nil
 	}
 	return r.buildAgenticSessionContextForKey(reqCtx, modelRefs, sessionID, userID,
-		sessiontelemetry.RoutingSessionKey(reqCtx.Routing.RecipeName(), sessionID))
+		r.selectionObservationKey(reqCtx, sessionID))
 }
 
 func (r *OpenAIRouter) buildAgenticSessionContextForKey(

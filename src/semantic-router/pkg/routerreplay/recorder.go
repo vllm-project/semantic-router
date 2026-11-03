@@ -645,6 +645,9 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	if r.SessionID != "" {
 		fields["session_id"] = r.SessionID
 	}
+	if r.AgentID != "" {
+		fields["agent_id"] = r.AgentID
+	}
 	if r.ConversationID != "" {
 		fields["conversation_id"] = r.ConversationID
 	}

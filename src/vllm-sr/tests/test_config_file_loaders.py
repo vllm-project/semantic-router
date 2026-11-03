@@ -231,6 +231,13 @@ def test_parse_user_config_accepts_decision_learning_controls(
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     data.setdefault("global", {}).setdefault("router", {})["learning"] = {
         "enabled": True,
+        "identity": {
+            "headers": {
+                "session": "x-session-id",
+                "conversation": "x-conversation-id",
+                "agent": "x-claude-code-agent-id",
+            }
+        },
         "adaptation": {
             "enabled": True,
             "strategy": "routing_sampling",

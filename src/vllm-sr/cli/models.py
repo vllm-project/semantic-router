@@ -1752,7 +1752,12 @@ class RouterLearningAdaptationConfig(BaseModel):
 
 
 class RouterLearningIdentityHeadersConfig(BaseModel):
-    """Header names used by Router Learning protection identity."""
+    """Header names used by Router Learning identity.
+
+    ``agent`` is optional and has no default. Protection holds a named agent
+    on its own model. Replay records the same value, and previous-model and
+    idle observations stay on that session and agent even when protection is off.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1762,7 +1767,7 @@ class RouterLearningIdentityHeadersConfig(BaseModel):
 
 
 class RouterLearningIdentityConfig(BaseModel):
-    """Identity configuration used by Router Learning protection."""
+    """Identity headers shared by protection, Replay, and session observations."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1827,9 +1832,26 @@ class RouterLearningConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: Optional[StrictBool] = None
+    identity: Optional[RouterLearningIdentityConfig] = None
     adaptation: Optional[RouterLearningAdaptationConfig] = None
     protection: Optional[RouterLearningProtectionConfig] = None
     state_store: Optional[RouterLearningStateStoreConfig] = None
+
+    @model_validator(mode="after")
+    def validate_identity_alias(self):
+        alias = None
+        if self.protection is not None:
+            alias = self.protection.identity
+        identity_conflict = (
+            self.identity is not None
+            and alias is not None
+            and self.identity.model_dump() != alias.model_dump()
+        )
+        if identity_conflict:
+            raise ValueError(
+                "global.router.learning.identity conflicts with global.router.learning.protection.identity"
+            )
+        return self
 
 
 class OutputContractChoiceSetSpec(BaseModel):
