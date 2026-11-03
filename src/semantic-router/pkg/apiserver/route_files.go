@@ -30,6 +30,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore/docformat"
 )
 
 const (
@@ -39,14 +40,20 @@ const (
 )
 
 // allowedExtensions defines the document types that can be uploaded for
-// vector-store ingestion.
-var allowedExtensions = map[string]bool{
-	".txt":  true,
-	".md":   true,
-	".json": true,
-	".csv":  true,
-	".html": true,
-	".htm":  true,
+// vector-store ingestion. They are the formats the text extractor reads.
+var allowedExtensions = documentExtensionSet(docformat.Extensions())
+
+// documentExtensionSet turns a list of formats into the set of extensions the
+// upload route accepts.
+func documentExtensionSet(formats []string) map[string]bool {
+	extensions := make(map[string]bool, len(formats))
+	for _, format := range formats {
+		ext := docformat.Normalize(format)
+		if ext != "" {
+			extensions[ext] = true
+		}
+	}
+	return extensions
 }
 
 // imageExtensions defines the image types accepted for purpose "vision". They
@@ -94,14 +101,7 @@ func (s *ClassificationAPIServer) uploadLimits() (int64, map[string]bool) {
 	}
 	documentExtensions := allowedExtensions
 	if len(cfg.VectorStore.SupportedFormats) > 0 {
-		documentExtensions = make(map[string]bool, len(cfg.VectorStore.SupportedFormats))
-		for _, format := range cfg.VectorStore.SupportedFormats {
-			ext := strings.ToLower(strings.TrimSpace(format))
-			if ext != "" && !strings.HasPrefix(ext, ".") {
-				ext = "." + ext
-			}
-			documentExtensions[ext] = true
-		}
+		documentExtensions = documentExtensionSet(cfg.VectorStore.SupportedFormats)
 	}
 	return uploadMaxBytes(cfg.VectorStore.MaxFileSizeMB), documentExtensions
 }

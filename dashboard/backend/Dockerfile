@@ -94,6 +94,7 @@ COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trai
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/topiccontinuity/ /app/src/semantic-router/pkg/topiccontinuity/
+COPY src/semantic-router/pkg/vectorstore/docformat/ /app/src/semantic-router/pkg/vectorstore/docformat/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
 
 # Copy go.mod and go.sum first for better caching
