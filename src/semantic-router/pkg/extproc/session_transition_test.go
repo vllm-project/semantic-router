@@ -166,6 +166,31 @@ func TestPopulateSessionTransitionFieldsAuthenticatedPrincipal(t *testing.T) {
 	})
 }
 
+// Both entry points read the tenant beside the principal, so sticky identity
+// sees the same tenant on the fast-extract path and the full parse.
+func TestPopulateSessionFieldsAuthenticatedTenant(t *testing.T) {
+	populate := map[string]func(*RequestContext){
+		"session transition": populateSessionTransitionFields,
+		"pinned session":     populatePinnedSessionFromHeaders,
+	}
+	for name, run := range populate {
+		t.Run(name, func(t *testing.T) {
+			ctx := &RequestContext{Headers: map[string]string{
+				headers.XSessionID: "pinned-session", headers.AuthzUserID: "user-42", "X-Authz-Tenant-Id": "tenant-a",
+			}}
+			run(ctx)
+			if ctx.AuthenticatedTenant != "tenant-a" {
+				t.Fatalf("AuthenticatedTenant = %q, want %q", ctx.AuthenticatedTenant, "tenant-a")
+			}
+			absent := &RequestContext{Headers: map[string]string{headers.AuthzUserID: "user-42"}}
+			run(absent)
+			if absent.AuthenticatedTenant != "" {
+				t.Fatalf("AuthenticatedTenant = %q, want empty with no tenant header", absent.AuthenticatedTenant)
+			}
+		})
+	}
+}
+
 func TestPopulatePinnedSessionFromHeadersProvenanceAndPrincipal(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{
 		headers.XSessionID:  "pinned-session",

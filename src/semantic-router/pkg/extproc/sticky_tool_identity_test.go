@@ -152,9 +152,11 @@ func TestResolveStickyToolIdentity_NilContext_Err(t *testing.T) {
 func TestResolveStickyToolIdentity_KeysAreOpaque_NoPlaintextLeakage(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
 	const principal = "extremely-identifiable-user-id-42"
+	const tenant = "extremely-identifiable-tenant-id-7"
 	const sessionID = "extremely-identifiable-session-id-99"
 	ctx := &RequestContext{
 		AuthenticatedPrincipal: principal,
+		AuthenticatedTenant:    tenant,
 		SessionID:              sessionID,
 		SessionProvenance:      SessionProvenanceResponseAPI,
 	}
@@ -167,6 +169,9 @@ func TestResolveStickyToolIdentity_KeysAreOpaque_NoPlaintextLeakage(t *testing.T
 	}
 	if strings.Contains(got.StorageKey, sessionID) {
 		t.Fatalf("StorageKey leaks the raw session ID: %q", got.StorageKey)
+	}
+	if strings.Contains(got.StorageKey, tenant) || strings.Contains(got.QuotaKey.Principal, tenant) {
+		t.Fatalf("keys leak the raw tenant: %+v", got)
 	}
 	if strings.Contains(got.QuotaKey.Principal, principal) {
 		t.Fatalf("QuotaKey.Principal leaks the raw principal: %q", got.QuotaKey.Principal)
@@ -213,6 +218,59 @@ func TestResolveStickyToolIdentity_DifferentPrincipalsDifferentQuotaKeys(t *test
 	b := ResolveStickyToolIdentity(ctxB, "recipe-a", "policy-fp")
 	if a.QuotaKey == b.QuotaKey {
 		t.Fatal("different principals must produce different quota keys")
+	}
+}
+
+// A user ID is unique only within its tenant: the same user and session in
+// another tenant, or with no tenant, gets its own storage key and quota bucket.
+func TestResolveStickyToolIdentity_TenantsNeverShareKeys(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
+	storage := map[string]string{}
+	quota := map[sessiontools.QuotaKey]string{}
+	for _, tenant := range []string{"tenant-a", "tenant-b", ""} {
+		ctx := trustedHeaderCtx()
+		ctx.AuthenticatedTenant = tenant
+		got := ResolveStickyToolIdentity(ctx, "recipe-a", "policy-fp")
+		if !got.Trusted {
+			t.Fatalf("tenant %q: expected trusted, got %+v", tenant, got)
+		}
+		if other, seen := storage[got.StorageKey]; seen {
+			t.Fatalf("tenants %q and %q share a storage key", other, tenant)
+		}
+		if other, seen := quota[got.QuotaKey]; seen {
+			t.Fatalf("tenants %q and %q share a quota bucket", other, tenant)
+		}
+		storage[got.StorageKey], quota[got.QuotaKey] = tenant, tenant
+
+		ctx.SessionID = "another-session"
+		if again := ResolveStickyToolIdentity(ctx, "recipe-a", "policy-fp"); again.QuotaKey != got.QuotaKey {
+			t.Fatalf("tenant %q: one principal's sessions must share its quota bucket", tenant)
+		}
+	}
+}
+
+// Moving characters between the tenant, principal, and session never
+// produces the same identity, although each pair below joins to the same
+// string with a separator.
+func TestResolveStickyToolIdentity_FieldBoundariesAreUnambiguous(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
+	identities := []struct{ tenant, principal, session string }{
+		{"a", "b:c", "s"},
+		{"a:b", "c", "s"},
+		{"a", "b", "c:s"},
+		{"", "a:b", "c:s"},
+	}
+	storage := map[string]bool{}
+	quota := map[sessiontools.QuotaKey]bool{}
+	for _, id := range identities {
+		got := ResolveStickyToolIdentity(&RequestContext{
+			AuthenticatedTenant: id.tenant, AuthenticatedPrincipal: id.principal,
+			SessionID: id.session, SessionProvenance: SessionProvenanceHeader,
+		}, "recipe-a", "policy-fp")
+		if storage[got.StorageKey] || quota[got.QuotaKey] {
+			t.Fatalf("identity %+v collides with another identity's keys", id)
+		}
+		storage[got.StorageKey], quota[got.QuotaKey] = true, true
 	}
 }
 

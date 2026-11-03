@@ -1,21 +1,8 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"strings"
-)
-
-// ErrToolSelectionStickyUnsupported is returned when sticky.enabled is true.
-// Phases 1–2 (issue #3347) ship the config/state/trust contract and planner — no
-// request path consumes ResolveStickyToolIdentity or the sessiontools store
-// yet — so accepting sticky.enabled: true would construct successfully and
-// then silently never activate sticky selection for any request. Fail
-// closed at validation time instead of shipping a silent no-op; this is
-// lifted only by Phase 3 (#4519), which integrates reuse, authorization,
-// invalidation, recovery and fallback together.
-var ErrToolSelectionStickyUnsupported = errors.New(
-	"tool_selection plugin: sticky.enabled is not supported in this release (runtime integration scheduled for Phase 3, issue #4519)",
 )
 
 func (c *ToolSelectionPluginConfig) Validate() error {
@@ -76,25 +63,19 @@ func (c *ToolSelectionPluginConfig) validateModeConstraints(mode string) error {
 	return nil
 }
 
-// validateSticky enforces sticky's bounds and, separately, whether sticky
-// may be enabled at all. It assumes the caller already rejected
-// sticky.enabled under a disabled plugin (Validate does, above); this only
-// runs when c.Enabled is true. Bounds are validated whenever a sticky
-// block is present, regardless of its own Enabled value, so a disabled-but-
-// malformed block cannot slip through unnoticed and start passing
-// validation the moment it is switched on. sticky.enabled: true itself is
-// rejected: see ErrToolSelectionStickyUnsupported.
+// validateSticky enforces sticky's bounds. It assumes the caller already
+// rejected sticky.enabled under a disabled plugin (Validate does, above);
+// this only runs when c.Enabled is true. Bounds are validated whenever a
+// sticky block is present, regardless of its own Enabled value, so a
+// disabled-but-malformed block cannot slip through unnoticed and start
+// passing validation the moment it is switched on. Whether the decision and
+// store can serve sticky selection needs the whole configuration; see
+// ValidateStickyToolSelectionSupport.
 func (c *ToolSelectionPluginConfig) validateSticky() error {
 	if c.Sticky == nil {
 		return nil
 	}
-	if err := c.validateStickyBounds(); err != nil {
-		return err
-	}
-	if c.Sticky.Enabled {
-		return ErrToolSelectionStickyUnsupported
-	}
-	return nil
+	return c.validateStickyBounds()
 }
 
 func (c *ToolSelectionPluginConfig) validateStickyBounds() error {

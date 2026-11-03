@@ -9,7 +9,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -86,6 +85,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 		scopedDB = db
 	}
 
+	sticky := r.newStickyToolScope(request, ctx, ts, toolsCfg, stickyCatalogFromDatabase(db))
 	selectedTools, strategyOut, confidence, latency, toolErr := r.findToolsForQueryExt(
 		request,
 		classificationText,
@@ -98,18 +98,34 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 		scopedDB,
 		minSim,
 	)
+	return r.finalizeToolSelection(request, response, ctx, toolSelectionResult{
+		tools: selectedTools, strategyID: strategyOut, confidence: confidence, latency: latency,
+		classificationText: classificationText, err: toolErr,
+		fallbackOverride: ts.FallbackToEmpty, errorFallbackToEmpty: r.effectiveToolSelectionFallback(ts),
+	}, sticky)
+}
 
-	emitToolObservability(response, ctx, strategyOut, confidence, latency)
-	metrics.RecordToolsRetrieval(strategyOut, latency.Seconds())
-
-	if toolErr != nil {
-		return r.handleToolSelectionError(request, response, ctx, toolErr, r.effectiveToolSelectionFallback(ts))
+// stickyCatalogFromDatabase snapshots the database's current definitions for
+// sticky eligibility and rehydration. A definition that cannot cross the
+// provider boundary is not eligible.
+func stickyCatalogFromDatabase(db *tools.ToolsDatabase) []llmprotocol.Tool {
+	catalog := make([]llmprotocol.Tool, 0)
+	for _, tool := range db.GetAllTools() {
+		semantic, err := tools.SemanticTool(tool)
+		if err != nil {
+			continue
+		}
+		catalog = append(catalog, semantic)
 	}
+	return catalog
+}
 
-	if err := r.applySelectedTools(request, selectedTools, strategyOut, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
-		return err
+// toolSelectionFilterThreshold is filter mode's effective relevance threshold.
+func toolSelectionFilterThreshold(ts *config.ToolSelectionPluginConfig) float32 {
+	if ts.RelevanceThreshold != nil {
+		return *ts.RelevanceThreshold
 	}
-	return commitToolSelection(request, ctx)
+	return 0.25
 }
 
 func (r *OpenAIRouter) runToolSelectionPluginFilter(
@@ -118,12 +134,15 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
 	ts *config.ToolSelectionPluginConfig,
+	toolsCfg *config.ToolsPluginConfig,
 ) error {
-	thresh := float32(0.25)
-	if ts.RelevanceThreshold != nil {
-		thresh = *ts.RelevanceThreshold
+	// A sticky decision ranks only the offered tools it may emit, so an
+	// ineligible tool never takes part in relevance.
+	offered := request.Tools
+	sticky := r.newStickyToolScope(request, ctx, ts, toolsCfg, request.Tools)
+	if sticky != nil {
+		offered = sticky.eligible
 	}
-
 	start := time.Now()
 	// The embedder (and its remote provider) is built once per router, not per
 	// request; a nil embedder (provider construction failed at startup) errors
@@ -131,23 +150,14 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	filtered, confidence, ferr := filterRequestToolsAgainstQuerySemantic(
 		ctx.embeddingContext(),
 		classificationText,
-		request.Tools,
+		offered,
 		r.toolEmbedder,
-		thresh,
+		toolSelectionFilterThreshold(ts),
 		ts.PreserveCount,
 	)
-	latency := time.Since(start)
-
-	strategyLabel := config.ToolSelectionModeFilter
-	emitToolObservability(response, ctx, strategyLabel, confidence, latency)
-	metrics.RecordToolsRetrieval(strategyLabel, latency.Seconds())
-
-	if ferr != nil {
-		return r.handleToolSelectionError(request, response, ctx, ferr, r.effectiveToolSelectionFallback(ts))
-	}
-
-	if err := r.applySelectedTools(request, filtered, strategyLabel, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
-		return err
-	}
-	return commitToolSelection(request, ctx)
+	return r.finalizeToolSelection(request, response, ctx, toolSelectionResult{
+		tools: filtered, strategyID: config.ToolSelectionModeFilter, confidence: confidence,
+		latency: time.Since(start), classificationText: classificationText, err: ferr,
+		fallbackOverride: ts.FallbackToEmpty, errorFallbackToEmpty: r.effectiveToolSelectionFallback(ts),
+	}, sticky)
 }

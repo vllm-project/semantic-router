@@ -234,6 +234,28 @@ function getToolsPluginFieldSchema(): FieldSchema[] {
       placeholder: 'Tool name to block',
     },
     {
+      key: 'trusted_facts',
+      label: 'Trusted Facts',
+      type: 'object',
+      fields: [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        {
+          key: 'enforcement',
+          label: 'Enforcement',
+          type: 'select',
+          options: ['advisory', 'authoritative', 'disabled'],
+        },
+        {
+          key: 'trust_sources',
+          label: 'Trust Sources',
+          type: 'string[]',
+          placeholder: 'operator-policy',
+        },
+        { key: 'freshness_seconds', label: 'Freshness Seconds', type: 'number', placeholder: '60' },
+        { key: 'stage_roles', label: 'Stage Roles', type: 'string[]', placeholder: 'candidate' },
+      ],
+    },
+    {
       key: 'strategy',
       label: 'Retrieval Strategy',
       type: 'string',

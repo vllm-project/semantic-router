@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -49,14 +50,15 @@ const (
 type ResolvedStickyIdentity struct {
 	// StorageKey addresses this session's sticky state in the configured
 	// store. Opaque: derived entirely from HMAC-SHA256 digests of the
-	// principal and session ID, plus the (already-hashed) policy
+	// tenant, principal, and session ID, plus the (already-hashed) policy
 	// fingerprint and the operator-chosen recipe name — never the raw
-	// principal or session ID.
+	// tenant, principal, or session ID.
 	StorageKey string
 	// QuotaKey is the cardinality-bucket identity for
 	// config.ToolSessionStoreConfig's max_sessions_per_identity bound (see
 	// sessiontools.Store.CompareAndSwap). QuotaKey.Principal is the same
-	// opaque HMAC digest embedded in StorageKey, not the raw principal.
+	// opaque HMAC digest of tenant and principal embedded in StorageKey,
+	// not the raw principal, so tenants never share a quota bucket.
 	QuotaKey sessiontools.QuotaKey
 	// Trusted reports whether sticky state may be read or written for this
 	// request. False for any request that fails the trust rules below,
@@ -74,6 +76,11 @@ type ResolvedStickyIdentity struct {
 // state requires an isolated recipe partition); policyFingerprint is the
 // effective selection-policy fingerprint (pkg/tools.ToolPolicyFingerprint)
 // for the matched decision.
+//
+// The identity is the trusted tenant and principal together: a user ID is
+// unique only within its tenant, so two tenants' users with the same ID
+// never share state or a session quota. Requests without a tenant share one
+// tenant of their own.
 //
 // Every returned key is an HMAC-SHA256 keyed digest of the raw identity,
 // never the raw identity itself. Callers must never log, return to a
@@ -97,8 +104,8 @@ func ResolveStickyToolIdentity(ctx *RequestContext, recipeName string, policyFin
 		return ResolvedStickyIdentity{Reason: stickyToolIdentityReasonMissingSecret}
 	}
 
-	principalHMAC := stickyToolHMACHex(secret, ctx.AuthenticatedPrincipal)
-	sessionHMAC := stickyToolHMACHex(secret, ctx.AuthenticatedPrincipal+":"+ctx.SessionID)
+	principalHMAC := stickyToolHMACHex(secret, stickyToolIdentityInput(ctx.AuthenticatedTenant, ctx.AuthenticatedPrincipal))
+	sessionHMAC := stickyToolHMACHex(secret, stickyToolIdentityInput(ctx.AuthenticatedTenant, ctx.AuthenticatedPrincipal, ctx.SessionID))
 	fingerprintPrefix := truncateStickyToolString(policyFingerprint, stickyToolIdentityFingerprintPrefixLen)
 
 	storageKey := strings.Join([]string{
@@ -163,6 +170,19 @@ func stickyToolIdentitySecret() (string, bool) {
 	}
 	secret := strings.TrimSpace(os.Getenv("USER_SCOPE_NAMESPACE_SECRET"))
 	return secret, secret != ""
+}
+
+// stickyToolIdentityInput encodes identity fields for hashing with each
+// field's length before it, so no choice of field values can make two
+// different identities encode the same way.
+func stickyToolIdentityInput(fields ...string) string {
+	var b strings.Builder
+	for _, field := range fields {
+		b.WriteString(strconv.Itoa(len(field)))
+		b.WriteByte(':')
+		b.WriteString(field)
+	}
+	return b.String()
 }
 
 func stickyToolHMACHex(secret, input string) string {

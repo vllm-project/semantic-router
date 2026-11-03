@@ -349,3 +349,76 @@ func TestToolCatalogFingerprint_SensitiveToLargeIntegerSchemaChange(t *testing.T
 		t.Fatal("a large-integer schema change must invalidate the catalog fingerprint")
 	}
 }
+
+// A custom tool is a different definition from a same-named function tool,
+// and so is a custom tool with another input grammar. Function-tool
+// fingerprints do not change from the fields they lack.
+func TestToolDefinitionFingerprint_SensitiveToKindAndCustomFormat(t *testing.T) {
+	function := sampleTool("search")
+	custom := function
+	custom.Kind = llmprotocol.ToolKindCustom
+	custom.InputSchema = nil
+	grammar := custom
+	grammar.CustomFormat = &llmprotocol.CustomToolFormat{Syntax: "lark", Definition: "start: WORD"}
+	other := grammar
+	other.CustomFormat = &llmprotocol.CustomToolFormat{Syntax: "lark", Definition: "start: NUMBER"}
+	fingerprints := map[string]bool{}
+	for _, tool := range []llmprotocol.Tool{function, custom, grammar, other} {
+		fingerprints[ToolDefinitionFingerprint(tool)] = true
+	}
+	if len(fingerprints) != 4 {
+		t.Fatalf("kind and custom format must each change the fingerprint, got %d distinct of 4", len(fingerprints))
+	}
+	withoutKind := function
+	withoutKind.Kind = ""
+	if ToolDefinitionFingerprint(function) != ToolDefinitionFingerprint(withoutKind) {
+		t.Fatal("function tools must fingerprint without a kind field")
+	}
+}
+
+// The effective policy fingerprint covers inherited defaults, the tools
+// plugin's allow and block rules, its mode, and its trusted-facts
+// declaration, and ignores set order.
+func TestEffectiveToolPolicyFingerprint_CoversResolvedPolicy(t *testing.T) {
+	selection := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd, TopK: 3}
+	toolsPolicy := func(edit func(*config.ToolsPluginConfig)) *config.ToolsPluginConfig {
+		c := &config.ToolsPluginConfig{
+			Enabled: true, Mode: config.ToolsPluginModeFiltered,
+			AllowTools: []string{"a", "b"}, BlockTools: []string{"c"},
+			TrustedFacts: &config.TrustedFactsConfig{
+				Enabled: true, Enforcement: config.TrustedEnforcementAuthoritative,
+				TrustSources: []string{config.TrustedSourceOperatorPolicy},
+				StageRoles:   []string{config.TrustedStageCandidate, config.TrustedStageFinal},
+			},
+		}
+		edit(c)
+		return c
+	}
+	base := EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(*config.ToolsPluginConfig) {}))
+	reordered := EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(c *config.ToolsPluginConfig) {
+		c.AllowTools = []string{"b", "a"}
+		c.TrustedFacts.StageRoles = []string{config.TrustedStageFinal, config.TrustedStageCandidate}
+	}))
+	if base != reordered {
+		t.Fatal("set order must not change the effective policy fingerprint")
+	}
+	topK := *selection
+	topK.TopK = 4
+	changes := map[string]string{
+		"top_k":    EffectiveToolPolicyFingerprint(&topK, false, toolsPolicy(func(*config.ToolsPluginConfig) {})),
+		"fallback": EffectiveToolPolicyFingerprint(selection, true, toolsPolicy(func(*config.ToolsPluginConfig) {})),
+		"allow":    EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(c *config.ToolsPluginConfig) { c.AllowTools = []string{"a"} })),
+		"block":    EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(c *config.ToolsPluginConfig) { c.BlockTools = nil })),
+		"mode":     EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(c *config.ToolsPluginConfig) { c.Mode = config.ToolsPluginModePassthrough })),
+		"trust sources": EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(c *config.ToolsPluginConfig) {
+			c.TrustedFacts.TrustSources = append(c.TrustedFacts.TrustSources, config.TrustedSourceRuntimeFresh)
+		})),
+		"freshness": EffectiveToolPolicyFingerprint(selection, false, toolsPolicy(func(c *config.ToolsPluginConfig) { c.TrustedFacts.FreshnessSeconds = 30 })),
+		"no tools":  EffectiveToolPolicyFingerprint(selection, false, nil),
+	}
+	for name, fingerprint := range changes {
+		if fingerprint == base {
+			t.Errorf("%s change must change the effective policy fingerprint", name)
+		}
+	}
+}
