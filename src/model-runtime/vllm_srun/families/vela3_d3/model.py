@@ -86,9 +86,14 @@ def with_spans(
     asked: dict[str, Any],
     order: list[str],
     setup: SpanSetup,
+    length_error: Callable[[int], QuestionError | None],
     refuse: str | None = None,
 ) -> RequestPlan[Item]:
-    """``plan`` (None: no base question) with the span questions' items, or errors, in request order."""
+    """``plan`` (None: no base question) with the span questions' items, or errors, in request order.
+
+    Every window of a span question goes through the base's ``length_error``:
+    only the target part is windowed, so the other parts can still overflow it.
+    """
     items: list[Item] = list(plan.items) if plan is not None else []
     errors = dict(plan.errors) if plan is not None else {}
     complete = set(plan.complete_inputs) if plan is not None else set()
@@ -96,16 +101,18 @@ def with_spans(
         try:
             if refuse is not None:
                 raise invalid(refuse)
-            items.append(
-                plan_question(
-                    question_id,
-                    question,
-                    state,
-                    setup.policy,
-                    setup.renderer,
-                    setup.definitions,
-                )
+            item = plan_question(
+                question_id,
+                question,
+                state,
+                setup.policy,
+                setup.renderer,
+                setup.definitions,
             )
+            refused = length_error(max(len(window.ids) for window in item.windows))
+            if refused is not None:
+                raise refused
+            items.append(item)
         except QuestionError as exc:
             errors[question_id] = question_error("span", exc)
         else:
@@ -202,7 +209,9 @@ class VelaPlanning(Decision3Model):
             return super().plan(state, questions, scan)
         asked, rest = split_spans(questions)
         plan = self._decisions(state, rest, scan) if rest else None
-        return with_spans(plan, state, asked, list(questions), self.span_setup)
+        return with_spans(
+            plan, state, asked, list(questions), self.span_setup, self.length_error
+        )
 
     def _base_plan(
         self, state: Any, questions: dict[str, Any], scan: int | None
@@ -240,7 +249,13 @@ class VelaPlanning(Decision3Model):
             else None
         )
         return with_spans(
-            plan, state, asked, list(questions), self.span_setup, SPAN_IMAGES
+            plan,
+            state,
+            asked,
+            list(questions),
+            self.span_setup,
+            self.length_error,
+            SPAN_IMAGES,
         )
 
     def plan_resolved(self, request: ResolvedDecision) -> RequestPlan[Item]:
@@ -268,6 +283,7 @@ class VelaPlanning(Decision3Model):
             asked,
             list(request.questions),
             self.span_setup,
+            self.length_error,
             SPAN_IMAGES if media else None,
         )
 

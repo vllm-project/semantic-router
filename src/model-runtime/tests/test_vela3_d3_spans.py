@@ -387,6 +387,29 @@ def test_decisions_beside_span_questions_answer_as_before(runtime) -> None:
     assert mixed["usage"]["input_tokens"] == alone["usage"]["input_tokens"]
 
 
+def test_span_windows_go_through_the_base_length_check(runtime) -> None:
+    # Only the target part is windowed: the other parts go whole into every window, so a long
+    # user part with a short target overflows the base's limit (4,096 tokens on the fixture).
+    long_user = " ".join(["alpha"] * 1000)
+    state = {"user": long_user, "answer": "Adults can take up to 4 grams."}
+    questions = {
+        "over_answer": {"type": "span", "criteria": ["dose"], "over": "answer"},
+        "over_user": {"type": "span", "criteria": ["dose"], "over": "user"},
+        "decision": {"type": "noul", "instructions": "Is this hard?"},
+    }
+    status, body = call(runtime, {"state": state, "questions": questions})
+    assert status == 200
+    refused = body["answers"]["over_answer"]
+    assert (refused["error"], refused["reason"]) == (
+        "max_length_exceeded",
+        "question_tokens",
+    )
+    assert "over_answer" not in body.get("spans", {})
+    assert body["answers"]["decision"]["error"] == "max_length_exceeded"
+    assert "error" not in body["answers"]["over_user"]
+    assert "over_user" in body["spans"]
+
+
 def test_a_request_of_span_questions_only_is_answered(runtime) -> None:
     status, body = call(
         runtime,
