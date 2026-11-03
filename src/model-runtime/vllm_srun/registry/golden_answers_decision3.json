@@ -47,7 +47,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native:intel": {
     "difficulty": {
      "confidence": 0.6377870543924282,
      "legend": {
@@ -236,7 +236,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native:intel": {
     "difficulty": {
      "confidence": 0.5297194296346442,
      "legend": {
@@ -425,7 +425,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native:intel": {
     "difficulty": {
      "confidence": 0.5962198320384222,
      "legend": {
@@ -568,7 +568,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native:intel": {
     "difficulty": {
      "confidence": 0.37337791926380104,
      "legend": {
@@ -711,7 +711,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native:intel": {
     "difficulty": {
      "confidence": 0.49249773239558436,
      "legend": {
@@ -854,7 +854,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native:intel": {
     "difficulty": {
      "confidence": 0.3472401100437711,
      "legend": {

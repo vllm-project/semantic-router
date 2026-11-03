@@ -332,8 +332,13 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 
 `Accelerator.golden_reference(device)` names an optional hardware-qualified
 golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
-instruction set and native or emulated BF16 capability, for example
-`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+instruction set, native or emulated BF16 capability and, on x86, the vendor,
+for example `cpu:x86_64:avx512:bf16_native:intel`. The vendor is there because
+an AVX-512 Xeon and an AVX-512 Ryzen give the same BF16 products but different
+FP32 ones. Readiness uses the most specific recorded key, dropping trailing
+fields one at a time, then the device-class reference, so an entry recorded
+without a vendor still serves both vendors. Device inventory architecture names
+stay unchanged.
 
 `tools/golden_answers.py --record` writes both the generic device-class baseline
 and any qualified reference. The first generic baseline is preserved within a

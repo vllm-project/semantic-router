@@ -138,8 +138,9 @@ precision it does not list.
 `auto_priority` if `device: auto` may pick it; without it, only a request that
 names the device uses it. The optional
 `golden_reference(device)` hook names a hardware reference for readiness; the
-default is `accelerator:arch`. If that key is absent, the runtime uses the
-existing device-class reference.
+default is `accelerator:arch`. The runtime uses the most specific recorded key,
+dropping trailing `:` fields one at a time, and otherwise the device-class
+reference.
 
 **4. Register it** in your `pyproject.toml`:
 
