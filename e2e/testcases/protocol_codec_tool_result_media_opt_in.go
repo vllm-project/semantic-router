@@ -83,15 +83,19 @@ func testProtocolCodecToolResultMediaOptIn(ctx context.Context, client *kubernet
 }
 
 func assertImageFollowsToolMessage(raw []byte) error {
-	var request struct {
-		Messages []struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"messages"`
+	// The simulator returns the captured request under body.
+	var captured struct {
+		Body struct {
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		} `json:"body"`
 	}
-	if err := json.Unmarshal(raw, &request); err != nil {
+	if err := json.Unmarshal(raw, &captured); err != nil {
 		return fmt.Errorf("backend request is not Chat JSON: %w", err)
 	}
+	request := captured.Body
 	for i, message := range request.Messages {
 		if message.Role != "tool" {
 			continue
