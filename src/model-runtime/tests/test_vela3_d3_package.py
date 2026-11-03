@@ -61,15 +61,13 @@ def test_verifies_the_package_its_adapters_and_its_base(written) -> None:
     assert verified.family == "vela3_d3"
     assert details.base.repo_id == fixture.BASE_REPO
     assert details.base.revision == FAKE_BASE_REVISION
-    assert details.base_package.family == "decision3"
+    base = verified.details["base"]
+    assert base.family == "decision3"
     assert set(details.adapters) == set(fixture.ADAPTERS)
     decision = details.adapters["decision"]
-    assert (decision.rank, decision.alpha, decision.first) == (4, 8, 0)
-    assert decision.scaling == 2.0
-    assert all(module.startswith("layers.") for module in decision.modules)
+    assert (decision.rank, decision.alpha) == (4, 8)
     assert set(details.heads) == {"span", "ner", "relation"}
-    assert details.router_question_ids == frozenset(fixture.ROUTER_QUESTION_IDS)
-    assert verified.max_input_tokens == details.base_package.max_input_tokens
+    assert verified.max_input_tokens == base.max_input_tokens
 
 
 def test_identity_covers_the_base(written, tmp_path) -> None:

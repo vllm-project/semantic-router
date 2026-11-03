@@ -83,7 +83,6 @@ class Vela3D3Family(ModelFamily):
             raise PackageError(
                 f"{package.repo_id}@{package.revision} differs from the built-in identity"
             )
-        details = replace(details, base_package=base_package, model_sha256=model_sha256)
         name = (
             package.repo_id
             or (details.vela3.get("size") or {}).get("name")
@@ -99,13 +98,13 @@ class Vela3D3Family(ModelFamily):
             max_input_tokens=base_package.max_input_tokens,
             licence=base_package.licence,
             loaded_parameters=pinned.loaded_parameters if pinned else None,
-            details={"package": details},
+            details={"package": details, "base": base_package},
         )
 
     def describe(self, package: VerifiedPackage) -> ModelSpec:
         """The base's own spec with every text adapter as a gated adapter on its Linears."""
         details: pkg.Vela3D3Package = package.details["package"]
-        spec = Decision3Family(self.options).describe(details.base_package)
+        spec = Decision3Family(self.options).describe(package.details["base"])
         gated = {
             name: GatedAdapterSpec(
                 details.root / adapter.file, adapter.rank, adapter.alpha
@@ -124,7 +123,7 @@ class Vela3D3Family(ModelFamily):
         details: pkg.Vela3D3Package = package.details["package"]
         loader = _GatedBase(self.options)
         loader.replays = (details.vela3.get("decisions") or {}).get("attention")
-        model = loader.load(details.base_package, spec, engine_model)
+        model = loader.load(package.details["base"], spec, engine_model)
         assert isinstance(model, GatedDecisions | TurboDecisions)
         model.gates = Gates.from_config(
             details.vela3, details.router_questions, details.adapters

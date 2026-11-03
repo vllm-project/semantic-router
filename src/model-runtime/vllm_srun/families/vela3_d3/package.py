@@ -37,9 +37,8 @@ from ..vela3.package import CONFIG_FILE, SUMS_FILE, package_file, read_sums
 FORMAT = "vela3/3"
 # Read for images only (a non-goal here): never loaded.
 IMAGE_ADAPTERS = frozenset({"image_halu"})
-# The span heads by engine name and where vela3_config.json names their files.
-HEAD_FIELDS = {"span": (), "ner": ("ner",), "relation": ("relation",)}
-MATRIX = 2  # a LoRA factor's dimensions
+# The span heads besides ``span.head_file``, each under its own ``span`` key.
+OTHER_HEADS = ("ner", "relation")
 
 
 def member_of(root: Path) -> bool:
@@ -61,36 +60,26 @@ class Base:
 
 @dataclass(frozen=True)
 class Adapter:
-    """One gated LoRA adapter: its file, rank, alpha, first layer and the modules it wraps."""
+    """One gated LoRA adapter: its file, rank and alpha."""
 
     name: str
     file: str
     rank: int
     alpha: float
-    first: int
-    modules: tuple[str, ...]
-
-    @property
-    def scaling(self) -> float:
-        return self.alpha / self.rank
 
 
 @dataclass(frozen=True)
 class Vela3D3Package:
-    """A verified ``vela3/3`` package; ``base_package`` is its verified Decision 3.0 base."""
+    """A verified ``vela3/3`` package (its base is verified by the ``decision3`` family)."""
 
     root: Path
     vela3: dict[str, Any]
-    config: dict[str, Any]
     base: Base
     adapters: dict[str, Adapter]
     heads: dict[str, str]
-    router_question_ids: frozenset[str]
     router_questions: dict[str, Any]
     files: dict[str, str]
     weights_sha256: str
-    base_package: Any = None
-    model_sha256: str = ""
 
 
 def _base(vela3: dict[str, Any]) -> Base:
@@ -108,12 +97,10 @@ def _heads(vela3: dict[str, Any]) -> dict[str, str]:
     if not isinstance(span, dict):
         raise PackageError(f"{CONFIG_FILE}: span must describe the span heads")
     heads = {"span": package_file(span.get("head_file"), "span.head_file")}
-    for name, path in HEAD_FIELDS.items():
-        if not path:
-            continue
-        entry = span.get(path[0])
+    for name in OTHER_HEADS:
+        entry = span.get(name)
         if isinstance(entry, dict) and entry.get("head_file"):
-            heads[name] = package_file(entry["head_file"], f"span.{path[0]}.head_file")
+            heads[name] = package_file(entry["head_file"], f"span.{name}.head_file")
     return heads
 
 
@@ -149,11 +136,13 @@ def adapter_of(root: Path, name: str, spec: Any) -> Adapter:
     for module in modules:
         down = list(header[f"{module}.A"].get("shape") or ())
         up = list(header[f"{module}.B"].get("shape") or ())
-        if len(down) != MATRIX or len(up) != MATRIX or down[0] != rank or up[1] != rank:
-            raise PackageError(
-                f"adapter {name}: factor shapes at {module} do not fit rank {rank}"
-            )
-    return Adapter(name, file, rank, alpha, first, modules)
+        match down, up:
+            case [down_rank, _], [_, up_rank] if down_rank == up_rank == rank:
+                continue
+        raise PackageError(
+            f"adapter {name}: factor shapes at {module} do not fit rank {rank}"
+        )
+    return Adapter(name, file, rank, alpha)
 
 
 def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
@@ -203,8 +192,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         )
         if mismatched:
             raise PackageError(f"files differ from {SUMS_FILE}: {mismatched[:5]}")
-    config = read_json(root / "config.json", mapping=True)
-    if config.get("model_type") != "qwen3_5":
+    if read_json(root / "config.json", mapping=True).get("model_type") != "qwen3_5":
         raise PackageError("config.json does not describe a Qwen3.5 model")
     ids = vela3.get("router_question_ids")
     if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
@@ -220,11 +208,9 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
     return Vela3D3Package(
         root=root,
         vela3=vela3,
-        config=config,
         base=base,
         adapters=adapters,
         heads=heads,
-        router_question_ids=frozenset(ids),
         router_questions=questions,
         files=files,
         weights_sha256=sha256_json({name: files[name] for name in weights}),
