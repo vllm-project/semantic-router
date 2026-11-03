@@ -21,11 +21,18 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
+from ...registry.artifacts import (
+    SUMS_FILE,
+    named_files,
+    package_file,
+    read_json,
+    read_sums,
+    safe_relative,
+    sha256_json,
+)
 
 ENCODER = "vela3-encoder/1"
 CONFIG_FILE = "vela3_config.json"
-SUMS_FILE = "SHA256SUMS"
 BACKBONE_FILE = "model.safetensors"
 COMMON_FILES = ("config.json", CONFIG_FILE, "router_questions.json", "tokenizer.json")
 LORA_TARGETS = (
@@ -98,13 +105,6 @@ class Roster:
     router_tasks: dict[str, tuple[str, tuple[str, ...]]]
 
 
-def package_file(value: Any, where: str) -> str:
-    """``value`` as a file of the package (a safe relative path), or a ``PackageError`` naming ``where``."""
-    if not isinstance(value, str) or not safe_relative(value):
-        raise PackageError(f"{CONFIG_FILE}: {where} must name a file in the package")
-    return value
-
-
 def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     """The routing roster and every adapter's file, by adapter name; files the package lacks route off."""
     present = {name for name in _named(config) if (Path(root) / name).is_file()}
@@ -113,7 +113,7 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     files: dict[str, str] = {}
 
     def take(name: str, value: Any, where: str) -> str | None:
-        file = package_file(value, where)
+        file = package_file(value, f"{CONFIG_FILE}: {where}")
         if file not in present:
             return None
         files[name] = file
@@ -147,7 +147,8 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
             for index in range(len(listed))
         ]
         if not all(
-            package_file(f, f"router.task_adapters.{task}") in present for f in listed
+            package_file(f, f"{CONFIG_FILE}: router.task_adapters.{task}") in present
+            for f in listed
         ):
             continue
         for name, file in zip(names, listed, strict=True):
@@ -212,22 +213,6 @@ class Vela3Package:
     @property
     def weights(self) -> tuple[Path, ...]:
         return (self.root / BACKBONE_FILE,)
-
-
-def read_sums(root: Path, *, required: bool = False) -> dict[str, str]:
-    """The package's ``SHA256SUMS`` by file name; empty when it has none, a ``PackageError`` if ``required``."""
-    path = root / SUMS_FILE
-    if not path.is_file():
-        if required:
-            raise PackageError(f"the package has no {SUMS_FILE}")
-        return {}
-    sums = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        digest, _, name = line.strip().partition(" ")
-        name = name.strip().lstrip("*")
-        if digest and name:
-            sums[name] = digest
-    return sums
 
 
 def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:

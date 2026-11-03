@@ -839,17 +839,15 @@ class NativeEngineModel(EngineModel):
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         adapter = batch.adapter
+        padded_text = not (
+            batch.shared_prefix or batch.packed or batch.images is not None
+        )
         if adapter is not None:
             if adapter.name not in self.gated:
                 raise ValueError(f"the model has no gated adapter {adapter.name!r}")
-            if batch.shared_prefix or batch.packed or batch.images is not None:
+            if not padded_text:
                 raise ValueError("an adapter gate runs padded text rows only")
-        if batch.noncausal and (
-            batch.shared_prefix
-            or batch.packed
-            or batch.images is not None
-            or batch.states is not None
-        ):
+        if batch.noncausal and not (padded_text and batch.states is None):
             raise ValueError("a noncausal forward runs padded text rows only")
 
         def run() -> ForwardOutput:
@@ -873,25 +871,35 @@ class NativeEngineModel(EngineModel):
         with torch.inference_mode(), self.autocast():
             if batch.images is not None:
                 hidden = self._forward_images(batch, input_ids, attention_mask, padded)
-            elif self.graphs is not None and not batch.noncausal:
+            elif batch.noncausal:
+                # A noncausal request runs eager: the graphs and fast masks hold the model's own layout.
+                hidden = self._forward_noncausal(input_ids, attention_mask, padded)
+            elif self.graphs is not None:
                 hidden = self.graphs(input_ids, attention_mask, batch.lengths)
-            elif self.masks is not None and not batch.noncausal:
+            elif self.masks is not None:
                 hidden = self.backbone(
                     input_ids,
                     attention_mask,
                     masks=self.masks.build(attention_mask, padded),
                 )
-            elif self.noncausal or batch.noncausal:
-                full, linear = noncausal_masks(attention_mask, padded)
-                hidden = self.backbone(
-                    input_ids, attention_mask, masks={"full": full, "linear": linear}
-                )
+            elif self.noncausal:
+                hidden = self._forward_noncausal(input_ids, attention_mask, padded)
             else:
                 hidden = self.backbone(input_ids, attention_mask)
             rows = torch.arange(hidden.shape[0], device=hidden.device)
             gathered = hidden[rows[:, None], gather]
             queried = hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def _forward_noncausal(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
+    ) -> torch.Tensor:
+        """The backbone under the noncausal full-attention mask (eager)."""
+        full, linear = noncausal_masks(attention_mask, padded)
+        hidden: torch.Tensor = self.backbone(
+            input_ids, attention_mask, masks={"full": full, "linear": linear}
+        )
+        return hidden
 
     def _forward_images(
         self,

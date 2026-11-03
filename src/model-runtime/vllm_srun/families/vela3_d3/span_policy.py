@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 from ...errors import PackageError
-from ..vela3.routing import RELATION_WORDING
+from ..vela3_shared import RELATION_WORDING
 
 # A route names the adapter it runs and the head that reads it.
 Route = Literal["span", "ner", "relation"]

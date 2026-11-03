@@ -26,16 +26,19 @@ from typing import Any
 
 from ...errors import PackageError
 from ...registry.artifacts import (
+    SUMS_FILE,
     named_files,
+    package_file,
     read_json,
+    read_sums,
     safetensors_header,
     sha256_json,
 )
 from ...registry.resolve import REVISION
-from ..vela3.package import CONFIG_FILE, SUMS_FILE, package_file, read_sums
 from .span_policy import SpanConfig
 
 FORMAT = "vela3/3"
+CONFIG_FILE = "vela3_config.json"
 # Read for images only (a non-goal here): never loaded.
 IMAGE_ADAPTERS = frozenset({"image_halu"})
 # The span heads besides ``span.head_file``, each under its own ``span`` key.
@@ -98,11 +101,15 @@ def _heads(vela3: dict[str, Any]) -> dict[str, str]:
     span = vela3.get("span")
     if not isinstance(span, dict):
         raise PackageError(f"{CONFIG_FILE}: span must describe the span heads")
-    heads = {"span": package_file(span.get("head_file"), "span.head_file")}
+    heads = {
+        "span": package_file(span.get("head_file"), f"{CONFIG_FILE}: span.head_file")
+    }
     for name in OTHER_HEADS:
         entry = span.get(name)
         if isinstance(entry, dict) and entry.get("head_file"):
-            heads[name] = package_file(entry["head_file"], f"span.{name}.head_file")
+            heads[name] = package_file(
+                entry["head_file"], f"{CONFIG_FILE}: span.{name}.head_file"
+            )
     return heads
 
 
@@ -110,7 +117,7 @@ def adapter_of(root: Path, name: str, spec: Any) -> Adapter:
     """Read one adapter's header and check it against its ``vela3_config.json`` entry (no tensor is read)."""
     if not isinstance(spec, dict):
         raise PackageError(f"{CONFIG_FILE}: adapters.{name} must be an object")
-    file = package_file(spec.get("file"), f"adapters.{name}.file")
+    file = package_file(spec.get("file"), f"{CONFIG_FILE}: adapters.{name}.file")
     header = safetensors_header(root / file)
     metadata = header.pop("__metadata__", None) or {}
     try:
@@ -161,21 +168,28 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         )
     heads = _heads(vela3)
     questions_file = package_file(
-        vela3.get("router_questions_file"), "router_questions_file"
+        vela3.get("router_questions_file"), f"{CONFIG_FILE}: router_questions_file"
     )
     definitions = vela3.get("definitions") or {}
     data = ["config.json", CONFIG_FILE, questions_file]
     if definitions.get("cache_file"):
-        data.append(package_file(definitions["cache_file"], "definitions.cache_file"))
+        data.append(
+            package_file(
+                definitions["cache_file"], f"{CONFIG_FILE}: definitions.cache_file"
+            )
+        )
     weights = [
-        package_file((spec or {}).get("file"), f"adapters.{name}.file")
+        package_file((spec or {}).get("file"), f"{CONFIG_FILE}: adapters.{name}.file")
         for name, spec in specs.items()
         if name not in IMAGE_ADAPTERS
     ]
     weights += list(heads.values())
     if definitions.get("writer") == "grafted_head":
         weights.append(
-            package_file(definitions.get("lm_head_file"), "definitions.lm_head_file")
+            package_file(
+                definitions.get("lm_head_file"),
+                f"{CONFIG_FILE}: definitions.lm_head_file",
+            )
         )
     weights = sorted(set(weights))
     files = named_files(root, [*data, *weights])

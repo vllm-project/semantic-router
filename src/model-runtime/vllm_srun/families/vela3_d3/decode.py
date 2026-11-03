@@ -30,7 +30,7 @@ from typing import Any
 
 import numpy as np
 
-from ..vela2.words import decode_spans
+from ..vela2.words import Dialect, decode_spans
 
 # The released decoder's class, code point for code point. Unlike the word splitter's (vela2 ``words._CJK``,
 # whose compatibility block starts at U+8C48), the decoder's starts at U+F900.
@@ -43,6 +43,8 @@ UNIT = re.compile(
     rf"|(?:(?![{CJK}])[^\W_]|[@._\-+])+"
     rf"|\S"
 )
+# The released decoder (``span_decode_v2``): its own unit class, and no URL-tail trim.
+DIALECT = Dialect(UNIT, url_tails=False)
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]+|\n|$)")
 PARAGRAPH_BREAK = re.compile(r"(\n\s*\n|\n)")
 
@@ -80,8 +82,7 @@ def decode(
             list(names),
             text,
             threshold,
-            unit_pattern=UNIT,
-            url_tails=False,
+            dialect=DIALECT,
         )
     ]
 

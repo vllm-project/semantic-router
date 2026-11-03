@@ -19,7 +19,6 @@ questions that are not router questions are invalid on this model, as are
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -32,6 +31,7 @@ from ...systemone import (
     require_full_input,
 )
 from ..vela2.request import Question, State, read_state, resolve_over
+from ..vela3_shared import expand_preset, text, threshold_of
 from .routing import ROUTER_TYPES, Router, RouterQuestion, SpanRoute
 
 DECISION, ROUTER, SPAN = "decision", "router", "span"
@@ -42,17 +42,7 @@ SPAN_FIELDS = frozenset(
 )
 SET_FIELDS = frozenset({"type", "instructions", "criteria", "labels", "threshold"})
 OVERFLOW = ("window", "truncate")
-PRESETS = ("pii", "halu")
-# The fields a preset question keeps; its instructions and labels are the preset's.
-PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
 NOUL_OPTIONS = (("no", ""), ("yes", ""))
-
-
-def text(value: Any) -> str:
-    """Model text: a string as it is, anything else as compact JSON (``ub_d3_common.text``)."""
-    if isinstance(value, str):
-        return value
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 def _invalid(message: str, reason: str | None = None) -> QuestionError:
@@ -314,36 +304,3 @@ def _overflow(question: dict[str, Any]) -> str:
     if overflow not in OVERFLOW:
         raise _invalid(f"overflow must be one of {list(OVERFLOW)}")
     return str(overflow)
-
-
-def expand_preset(question: dict[str, Any], schemas: dict[str, Any]) -> dict[str, Any]:
-    """A preset question as the span question it names: the package's trained question and labels for it."""
-    name = question["preset"]
-    if name not in PRESETS or name not in schemas:
-        raise _invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
-    if set(question) - {"preset", "type", *PRESET_KEPT}:
-        allowed = ", ".join(("preset", "type", *PRESET_KEPT))
-        raise _invalid(f"a preset question takes only {allowed}")
-    if question.get("type") not in (None, "span"):
-        raise _invalid(f"preset {name} is a span question")
-    schema = schemas[name]
-    return {
-        "type": "span",
-        "instructions": schema["question"],
-        "criteria": dict(schema["labels"]),
-        **{key: question[key] for key in PRESET_KEPT if key in question},
-    }
-
-
-def threshold_of(question: dict[str, Any]) -> float | None:
-    """A question's threshold override, ``None`` when it sets none."""
-    threshold = question.get("threshold")
-    if threshold is None:
-        return None
-    if (
-        isinstance(threshold, bool)
-        or not isinstance(threshold, (int, float))
-        or not 0.0 <= threshold <= 1.0
-    ):
-        raise _invalid("threshold must be a number in [0, 1]")
-    return float(threshold)

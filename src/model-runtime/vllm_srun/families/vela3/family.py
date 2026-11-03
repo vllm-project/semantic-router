@@ -45,6 +45,7 @@ from ..vela2.encoder_layout import (
 from ..vela2.layout import Row, SchemaTooLongError, Tokens, fail_unscanned, read_parts
 from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
+from ..vela3_shared import PRESETS, text
 from .answers import Answerer
 from .network import DECISION_BUDGET, Call, Networks, Output, Vela3Item
 from .package import (
@@ -57,7 +58,7 @@ from .package import (
     member_of_vision,
     verify,
 )
-from .request import DECISION, PRESETS, ROUTER, Asked, Read, Reader, text
+from .request import DECISION, ROUTER, Asked, Read, Reader
 from .routing import SPAN_BUDGET, SPAN_ROWS, Router
 
 QUESTION_TYPES = ("choice", "noul", "span")

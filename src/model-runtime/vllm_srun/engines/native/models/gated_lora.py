@@ -1,8 +1,8 @@
 """Gated LoRA: several adapters on one backbone's Linears, at most one on per forward, on some rows only.
 
-The Vela 3.0 d3 sizes (``vela3/3``) switch an adapter on for the rows of
-some questions of a batch and leave the base computation untouched
-everywhere else. ``GatedLinear`` is the released ``MultiLoRA`` in eval mode:
+A family switches an adapter on for some rows of a batch
+(``ForwardBatch.adapter``) and leaves the base computation untouched
+everywhere else. ``GatedLinear`` computes, in eval mode:
 
     y = base(x) + ((x.float() @ A.T) @ B.T * alpha / r).to(y.dtype)
 

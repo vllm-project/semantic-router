@@ -19,7 +19,7 @@ from typing import Any
 from ...errors import QuestionError
 from ...systemone import listed_options, named_options, require_full_input
 from ..decision3.family import Item
-from ..vela3.request import expand_preset, text, threshold_of
+from ..vela3_shared import expand_preset, text, threshold_of
 from .span_policy import Definitions, Policy, Route
 from .span_render import Renderer, Window
 

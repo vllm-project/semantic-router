@@ -55,6 +55,22 @@ URL_TRAIL = frozenset(".,;:!?)")
 
 
 @dataclass(frozen=True)
+class Dialect:
+    """How a package's decoder groups words into units and trims spans.
+
+    ``units`` splits the text into the units whose words vote together;
+    ``url_tails`` trims a URL span's trailing punctuation and CJK tail.
+    """
+
+    units: re.Pattern[str]
+    url_tails: bool
+
+
+# The Vela 2.0 packages' decoder (``vela2_inference.py``).
+VELA2 = Dialect(_UNIT, url_tails=True)
+
+
+@dataclass(frozen=True)
 class Words:
     """The words of a text that overlap its tokens.
 
@@ -104,11 +120,11 @@ def words_of(text: str, token_offsets: NDArray[np.int32] | None) -> Words:
 
 
 def _word_units(
-    text: str, offsets: NDArray[np.int32], unit_pattern: re.Pattern[str]
+    text: str, offsets: NDArray[np.int32], units: re.Pattern[str]
 ) -> NDArray[np.intp]:
-    """The unit (of ``unit_pattern``) each word's first non-space character belongs to, -1 for none."""
+    """The unit (of ``units``) each word's first non-space character belongs to, -1 for none."""
     bounds = np.asarray(
-        [match.span() for match in unit_pattern.finditer(text)], np.int64
+        [match.span() for match in units.finditer(text)], np.int64
     ).reshape(-1, 2)
     first = offsets[:, 0].astype(np.int64)
     for index in np.nonzero([text[a].isspace() for a in first.tolist()])[0]:
@@ -158,8 +174,7 @@ def decode_spans(
     text: str,
     threshold: float,
     *,
-    unit_pattern: re.Pattern[str] = _UNIT,
-    url_tails: bool = True,
+    dialect: Dialect = VELA2,
 ) -> list[DecodedSpan]:
     """Labelled spans from word x label probabilities (the packages' word readout decoder).
 
@@ -170,8 +185,7 @@ def decode_spans(
     that hold a labelled word can change. Consecutive words with the same label
     form a span, whose probability is the mean over its words.
 
-    ``unit_pattern`` and ``url_tails`` let another package's decoder (its
-    unit class, whether it trims URL tails) run the same rules.
+    ``dialect`` is the package's unit split and trimming (``VELA2`` here).
     """
     probs = np.asarray(probabilities, dtype=np.float32)
     offsets = np.asarray(offsets)
@@ -184,7 +198,7 @@ def decode_spans(
     labelled = np.nonzero(label >= 0)[0]
     if not len(labelled):
         return []
-    unit = _word_units(text, offsets, unit_pattern)
+    unit = _word_units(text, offsets, dialect.units)
     change = np.ones(count, bool)
     change[1:] = unit[1:] != unit[:-1]
     run_start = np.nonzero(change)[0]
@@ -212,7 +226,10 @@ def decode_spans(
         if value < 0:
             continue
         start, end = trim(
-            text, int(offsets[begin, 0]), int(offsets[stop - 1, 1]), url_tails=url_tails
+            text,
+            int(offsets[begin, 0]),
+            int(offsets[stop - 1, 1]),
+            url_tails=dialect.url_tails,
         )
         if end <= start:
             continue
