@@ -454,7 +454,7 @@ func buildAnthropicRequestWire(
 	if instructionErr := encodeAnthropicInstructions(&wire, request); instructionErr != nil {
 		return anthropicRequestWire{}, diagnostics, instructionErr
 	}
-	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
+	if messagesErr := appendAnthropicMessages(&wire, responsesAssistantTurns(request)); messagesErr != nil {
 		return anthropicRequestWire{}, diagnostics, messagesErr
 	}
 	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {

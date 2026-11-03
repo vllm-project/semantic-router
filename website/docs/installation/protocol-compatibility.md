@@ -299,6 +299,13 @@ when the backend does not report a cache-write count. Reported zero and positive
 counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
 rejects, without treating unknown usage as a measured zero.
 
+Codex sends each step of its history as separate items: reasoning, the
+assistant message and every call. Toward Chat and Messages backends the Router
+joins adjacent items in that order into one assistant turn, as those formats
+represent a step. Sent one message per item, a backend such as vLLM renders
+each item as its own turn, and the model, seeing turns that end in text with
+no call, can end its own turn the same way, which ends the Codex run.
+
 Codex can also request reasoning summaries. The Router forwards
 `reasoning.summary` to a Responses backend. A Chat Completions or Messages
 backend cannot request a summary, so the Router accepts the turn and reports
