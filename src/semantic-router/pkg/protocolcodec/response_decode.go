@@ -249,6 +249,27 @@ func (accumulator *responseAccumulator) appendOutputText(event llmprotocol.Event
 }
 
 func (accumulator *responseAccumulator) appendReasoning(event llmprotocol.Event) error {
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		item, err := accumulator.item(event.ItemIndex)
+		if err != nil {
+			return err
+		}
+		content := item.contents[event.ContentIndex]
+		if content == nil {
+			detail := *event.Content.ReasoningDetail
+			item.contents[event.ContentIndex] = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning, ReasoningDetail: &detail}
+			return nil
+		}
+		if content.ReasoningDetail == nil {
+			return invalidProviderResponse("stream_content_kind_mismatch", "Upstream stream changed a reasoning block kind")
+		}
+		merged, err := llmprotocol.MergeReasoningDetail(*content.ReasoningDetail, *event.Content.ReasoningDetail)
+		if err != nil {
+			return invalidProviderResponse("reasoning_detail_identity_mismatch", "Upstream reasoning detail changed identity or type")
+		}
+		content.ReasoningDetail = &merged
+		return nil
+	}
 	signature := ""
 	reasoning := llmprotocol.ReasoningScope("")
 	if event.Content != nil {

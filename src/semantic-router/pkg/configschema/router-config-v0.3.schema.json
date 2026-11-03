@@ -1264,6 +1264,16 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "allow_lossy_translation": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "tool_result.is_error",
+              "messages[].role"
+            ]
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -6530,6 +6540,10 @@
           "minLength": 1
         },
         "conversation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent": {
           "type": "string",
           "minLength": 1
         }

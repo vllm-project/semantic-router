@@ -58,14 +58,14 @@ func TestSRBenchExperimentRoutesRejectInvalidPathsAndMethods(t *testing.T) {
 		method, path, allow string
 		status              int
 	}{
-		{http.MethodPost, "/datasets/selection", "GET", http.StatusMethodNotAllowed},
-		{http.MethodPost, "/replay-options", "GET", http.StatusMethodNotAllowed},
-		{http.MethodPost, "/comparison-options", "GET", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/datasets/selection", "GET, HEAD", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/replay-options", "GET, HEAD", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/comparison-options", "GET, HEAD", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/runs/run-1/replay-options", "", http.StatusNotFound},
 		{http.MethodGet, "/runs/run-1/candidate-plan", "POST", http.StatusMethodNotAllowed},
-		{http.MethodDelete, "/experiments", "GET, POST", http.StatusMethodNotAllowed},
-		{http.MethodPost, "/experiments/" + experiment, "GET, DELETE", http.StatusMethodNotAllowed},
-		{http.MethodDelete, "/experiments/" + experiment + "/runs", "GET, POST", http.StatusMethodNotAllowed},
+		{http.MethodDelete, "/experiments", "GET, HEAD, POST", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/experiments/" + experiment, "GET, HEAD, DELETE", http.StatusMethodNotAllowed},
+		{http.MethodDelete, "/experiments/" + experiment + "/runs", "GET, HEAD, POST", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/experiments/" + strings.ToUpper(experiment), "", http.StatusNotFound},
 		{http.MethodGet, "/experiments/" + experiment[:len(experiment)-1], "", http.StatusNotFound},
 		{http.MethodGet, "/experiments/" + experiment + "0", "", http.StatusNotFound},

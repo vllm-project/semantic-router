@@ -74,7 +74,8 @@ type RouterLearningProtectionConfig struct {
 }
 
 // RouterLearningIdentityConfig declares where protection reads stable client
-// identity. The runtime currently uses the session and conversation keys.
+// identity. The runtime uses the session and conversation keys, and the agent
+// key when one is configured.
 type RouterLearningIdentityConfig struct {
 	Headers RouterLearningIdentityHeadersConfig `yaml:"headers,omitempty"`
 }
@@ -86,6 +87,10 @@ type RouterLearningIdentityConfig struct {
 type RouterLearningIdentityHeadersConfig struct {
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
+	// Agent names an optional header that identifies one agent inside a
+	// session, such as a delegated subagent. Requests that carry it are held
+	// per agent; requests without it keep the session or conversation key.
+	Agent *string `yaml:"agent,omitempty"`
 }
 
 // RouterLearningProtectionTuning exposes the stable protection knobs.
@@ -234,6 +239,11 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 			}
 		}
 		return routerLearningDefaultConversationHeader
+	case "agent":
+		if cfg.Identity.Headers.Agent != nil {
+			return strings.TrimSpace(*cfg.Identity.Headers.Agent)
+		}
+		return ""
 	default:
 		return ""
 	}

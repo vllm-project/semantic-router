@@ -215,6 +215,12 @@ def backend_projection(data):
             or entry.func.id != "_vela"
         ):
             raise ValueError("Vela release entries require an updated task projection")
+        # The vela3v image package answers none of the shared System One
+        # question kinds - its image serving path is not implemented - so the
+        # projection lists the text-encoder entries only; it gains its own
+        # kinds once image serving declares them.
+        if ast.literal_eval(entry.args[4]) != "ultrabert":
+            continue
         models.append(
             {
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",

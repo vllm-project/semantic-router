@@ -2069,6 +2069,13 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
+    # of rejecting them. tool_result.is_error omits the Anthropic failed tool
+    # call flag that OpenAI Chat and Responses backends cannot carry, and
+    # messages[].role sends Anthropic system messages inside the conversation to
+    # those backends as user text, for chat templates that accept a system
+    # message only first. Empty keeps every lossy translation failing closed.
+    allow_lossy_translation: []
     model_selection:
       method: hybrid
       enabled: true
@@ -2125,6 +2132,9 @@ global:
           headers:
             session: x-session-id
             conversation: x-conversation-id
+            # Optional: holds each named agent (a delegated subagent) on its own
+            # model inside the session. Claude Code sends this on subagent calls.
+            agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
