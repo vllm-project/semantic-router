@@ -2074,7 +2074,9 @@ global:
     # call flag that OpenAI Chat and Responses backends cannot carry, and
     # messages[].role sends Anthropic system messages inside the conversation to
     # those backends as user text, for chat templates that accept a system
-    # message only first. Empty keeps every lossy translation failing closed.
+    # message only first. tool_result.content sends images and files from tool
+    # results to Chat backends as a user message after the results. Empty keeps
+    # every lossy translation failing closed.
     allow_lossy_translation: []
     model_selection:
       method: hybrid

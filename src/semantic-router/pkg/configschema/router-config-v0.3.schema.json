@@ -1270,7 +1270,8 @@
             "type": "string",
             "enum": [
               "tool_result.is_error",
-              "messages[].role"
+              "messages[].role",
+              "tool_result.content"
             ]
           },
           "type": "array"
