@@ -1009,6 +1009,12 @@ question), and `run` batches each call as the released runtime does, by
 length under its token budget; calls never share a forward. The padded
 layout passes the modeling code's additive float masks, so the forwards are
 bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+The CPU never holds those masks at `[rows, 1, width, width]`: global layers
+read the `[rows, 1, 1, width]` key mask and local layers attend 1,024 queries
+per SDPA call over every key with their rows of the dense mask. A tail under
+768 queries joins the call before it, because the CPU kernel blocks shorter
+calls differently, so each query's reduction, and every answer, stays
+unchanged.
 The span and router layout, word units and span decoder are the Vela 2.0
 family's, which the package copies verbatim.
 
